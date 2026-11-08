@@ -36,6 +36,25 @@ pub(crate) fn metadata_fingerprint(metadata: &fs::Metadata) -> io::Result<u64> {
     Ok(hash.finish())
 }
 
+fn copy_resource_bytes(
+    bytes: &[u8],
+    out: &mut impl io::Write,
+    budget: &std::sync::atomic::AtomicU64,
+) -> io::Result<()> {
+    use std::sync::atomic::Ordering;
+    let mut left = budget.load(Ordering::Relaxed);
+    loop {
+        let next = left.checked_sub(bytes.len() as u64).ok_or_else(|| {
+            io::Error::new(io::ErrorKind::FileTooLarge, "pack exceeds unpack budget")
+        })?;
+        match budget.compare_exchange_weak(left, next, Ordering::Relaxed, Ordering::Relaxed) {
+            Ok(_) => break,
+            Err(current) => left = current,
+        }
+    }
+    out.write_all(bytes)
+}
+
 enum Storage {
     Directory(PathBuf),
     #[cfg(not(target_arch = "wasm32"))]
@@ -107,13 +126,14 @@ impl std::fmt::Debug for ResourceSource {
 /// separate locations. Archive resources never acquire a filesystem pathname.
 #[derive(Clone, Debug)]
 pub struct ResourceRoot(Arc<Root>);
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct Root {
     prepared: PathBuf,
     cache: PathBuf,
     source: ResourceSource,
     data: ResourceSource,
     data_changes: ResourceSource,
+    runtime_block_sprites: Vec<String>,
 }
 impl ResourceRoot {
     pub fn directory(path: PathBuf) -> Self {
@@ -127,6 +147,7 @@ impl ResourceRoot {
             source,
             data,
             data_changes: ResourceSource::default(),
+            runtime_block_sprites: Vec::new(),
         }))
     }
     /// Passive server data is independent of the client's selected asset packs.
@@ -137,7 +158,34 @@ impl ResourceRoot {
             source: self.0.source.clone(),
             data,
             data_changes,
+            runtime_block_sprites: self.0.runtime_block_sprites.clone(),
         }))
+    }
+    /// Add generated client textures as the highest asset layer, keeping the
+    /// prepared tables and passive server data on their original sources.
+    pub fn with_runtime_textures(
+        mut self,
+        textures: BTreeMap<String, Resource>,
+        block_sprites: Vec<String>,
+    ) -> Self {
+        if textures.is_empty() {
+            return self;
+        }
+        let root = Arc::make_mut(&mut self.0);
+        let source = &root.source;
+        let mut files: BTreeMap<_, _> = source
+            .list("")
+            .into_iter()
+            .map(|name| (name.clone(), Resource::file(source.clone(), name)))
+            .collect();
+        files.extend(textures);
+        root.source = ResourceSource::indexed(files);
+        root.runtime_block_sprites = block_sprites;
+        self
+    }
+    /// Runtime block sprites to stitch even when no baked model names them.
+    pub fn runtime_block_sprites(&self) -> &[String] {
+        &self.0.runtime_block_sprites
     }
     pub fn data_changes(&self) -> &ResourceSource {
         &self.0.data_changes
@@ -304,6 +352,39 @@ impl ResourceSource {
                 .get(name)
                 .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, name.to_owned()))?
                 .read(),
+        }
+    }
+    /// Copy a resource under a shared output budget, streaming archive entries.
+    pub fn copy_to(
+        &self,
+        name: &str,
+        out: &mut impl io::Write,
+        budget: &std::sync::atomic::AtomicU64,
+    ) -> io::Result<()> {
+        if !stays_inside(name) {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "unsafe resource name",
+            ));
+        }
+        match self.0.as_ref() {
+            Storage::Archive(archive) => archive.copy_to(name, out, budget).map(|_| ()),
+            Storage::Prefix { source, prefix } => {
+                source.copy_to(&format!("{prefix}{name}"), out, budget)
+            }
+            Storage::Index(files) => match &files
+                .get(name)
+                .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, name.to_owned()))?
+                .0
+            {
+                ResourceStorage::File { source, name } => source.copy_to(name, out, budget),
+                ResourceStorage::Bytes(bytes) => copy_resource_bytes(bytes, out, budget),
+            },
+            Storage::Directory(root) => copy_resource_bytes(
+                &horizon_core::prepared_files::read(&root.join(name))?,
+                out,
+                budget,
+            ),
         }
     }
     pub fn read_to_string(&self, name: &str) -> io::Result<String> {
@@ -540,6 +621,32 @@ mod tests {
     };
 
     struct Fixture(PathBuf);
+
+    #[test]
+    fn runtime_textures_join_the_asset_generation_without_changing_data() {
+        let source = ResourceSource::indexed(BTreeMap::from([(
+            "assets/demo/textures/block/original.png".into(),
+            Resource::bytes(vec![1]),
+        )]));
+        let data = ResourceSource::default();
+        let root = ResourceRoot::new("prepared".into(), "cache".into(), source.clone())
+            .with_data(data.clone(), ResourceSource::default());
+        let name = "assets/demo/textures/block/generated.png";
+        let texture = |byte| BTreeMap::from([(name.into(), Resource::bytes(vec![byte]))]);
+        let first = root
+            .clone()
+            .with_runtime_textures(texture(2), vec!["demo:block/generated".into()]);
+        let second = root.with_runtime_textures(texture(3), vec!["demo:block/generated".into()]);
+        assert_eq!(first.source().list("assets/").len(), 2);
+        assert_eq!(first.source().read(name).unwrap(), [2]);
+        assert!(!source.contains(name));
+        assert!(first.data().same_generation(&data));
+        assert_eq!(first.runtime_block_sprites(), ["demo:block/generated"]);
+        assert_ne!(
+            first.source().fingerprint_under("assets", &["textures"]),
+            second.source().fingerprint_under("assets", &["textures"]),
+        );
+    }
     impl Fixture {
         fn new() -> Self {
             static NEXT: AtomicU64 = AtomicU64::new(0);

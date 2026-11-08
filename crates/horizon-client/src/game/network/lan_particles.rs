@@ -12,6 +12,7 @@ use horizon_core::{
 };
 use horizon_protocol::{
     entity_data::{
+        LEGACY_AMBIENT_ENTITY_EFFECT_PARTICLE_ID, LEGACY_ENTITY_EFFECT_PARTICLE_ID,
         MOD_PARTICLE_ID, Particle, ParticleData, PositionSource as NetworkPositionSource,
     },
     packets::play::{self, Clientbound as C},
@@ -105,6 +106,17 @@ fn rgba(argb: i32) -> [f32; 4] {
 }
 fn rgb(c: [f32; 4]) -> [f32; 3] {
     [c[0], c[1], c[2]]
+}
+fn legacy_effect_options(particle: &Particle) -> Option<ParticleOptions> {
+    let ambient = match particle.id {
+        LEGACY_ENTITY_EFFECT_PARTICLE_ID => false,
+        LEGACY_AMBIENT_ENTITY_EFFECT_PARTICLE_ID => true,
+        _ => return None,
+    };
+    Some(ParticleOptions {
+        legacy_entity_effect: Some(ambient),
+        ..ParticleOptions::simple(ParticleType::EntityEffect)
+    })
 }
 
 /// `ServerLevel.sendParticles` of one soul particle moving by `velocity`
@@ -380,6 +392,13 @@ impl Game<'_> {
         self.lan.as_ref()?.hub.particle(options, state)
     }
 
+    /// This window plays on an older release's server through the adapter.
+    fn older_server(&self) -> bool {
+        self.remote.as_ref().is_some_and(|r| {
+            r.session.server_version() != horizon_protocol::adapter::ServerVersion::Current
+        })
+    }
+
     /// The options a server's particle stands for (None for a type or data
     /// this client doesn't draw).
     pub(super) fn received_particle(
@@ -387,6 +406,11 @@ impl Game<'_> {
         p: &Particle,
         at: [f64; 3],
     ) -> Option<ParticleOptions> {
+        // The adapter's markers mean something only on an older server's connection: a
+        // 26.3 server's ids and durations are read as they are.
+        if let Some(options) = legacy_effect_options(p).filter(|_| self.older_server()) {
+            return Some(options);
+        }
         if p.id == MOD_PARTICLE_ID
             && let Some(ParticleData::Mod(name)) = &p.data
         {
@@ -432,9 +456,10 @@ impl Game<'_> {
             Some(ParticleData::GeyserBase(water_blocks, burst_impulse_base)) => {
                 ParticleOptions::geyser_base(ty, *water_blocks, *burst_impulse_base)
             }
-            Some(ParticleData::Trail(target, color, duration)) => {
-                ParticleOptions::trail(*target, *color as u32 & 0xFF_FFFF, *duration)
-            }
+            Some(ParticleData::Trail(target, color, duration)) => ParticleOptions {
+                legacy_trail_lifetime: *duration == -1 && self.older_server(),
+                ..ParticleOptions::trail(*target, *color as u32 & 0xFF_FFFF, *duration)
+            },
             Some(ParticleData::Vibration { source, ticks }) => ParticleOptions::vibration(
                 particle_position_source(source),
                 self.vibration_destination(source)?,
@@ -839,6 +864,32 @@ mod tests {
     use horizon_client::particles::{ParticleOptions, ParticleType};
     use horizon_core::random::LegacyRandom;
     use horizon_protocol::packets::play;
+
+    #[test]
+    fn legacy_effect_markers_select_providers_without_a_registry_lookup() {
+        for (id, ambient) in [
+            (LEGACY_ENTITY_EFFECT_PARTICLE_ID, false),
+            (LEGACY_AMBIENT_ENTITY_EFFECT_PARTICLE_ID, true),
+        ] {
+            let options = legacy_effect_options(&Particle { id, data: None }).unwrap();
+            assert_eq!(options.ty, ParticleType::EntityEffect);
+            assert_eq!(options.legacy_entity_effect, Some(ambient));
+        }
+        assert!(
+            legacy_effect_options(&Particle {
+                id: MOD_PARTICLE_ID,
+                data: None
+            })
+            .is_none()
+        );
+        assert!(
+            legacy_effect_options(&Particle {
+                id: 28,
+                data: Some(ParticleData::Color(-1))
+            })
+            .is_none()
+        );
+    }
 
     /// The Nether's evaporation smoke (ALTERNATIVE, dist 1, speed 0) lands
     /// inside the block from its corner and stands still; DEFAULT spreads

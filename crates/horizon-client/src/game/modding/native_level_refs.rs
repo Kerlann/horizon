@@ -12,8 +12,9 @@ use horizon_items::items::ItemStack;
 use horizon_world::registry::BlockStateId;
 use mod_api::mod_chunk_tickets::ModTicket;
 use mod_api::{
-    BlockHit, BlockTransformPreview, ChunkRef, ChunkStatus, Hand, LevelRef, LightLayer,
-    NativeTicketOwner, PlayerRef, TicketController, Vec3,
+    BlockHit, BlockTransformPreview, ChunkRef, ChunkStatus, DimensionKey, Hand,
+    LevelRef, LightLayer, MapState, NativeClipBlock, NativeClipFluid, NativeTicketOwner, PlayerRef,
+    RespawnData, TicketController, Vec3,
 };
 
 fn block_pos([x, y, z]: [i32; 3]) -> BlockPos {
@@ -591,6 +592,136 @@ impl Game<'_> {
             .is_loaded_at(pos[0], pos[1], pos[2])
             .then(|| world_brightness(world, layer, pos))
     }
+    /// `BlockAndTintGetter.canSeeSky`: the sky light at `pos` is full. None as for
+    /// `level_brightness`.
+    pub(super) fn level_can_see_sky(&self, level: LevelRef, pos: [i32; 3]) -> Option<bool> {
+        Some(self.level_brightness(level, LightLayer::Sky, pos)? >= 15)
+    }
+    /// `LivingEntity.hasLineOfSight`'s clip between two points (collider shapes, no fluids):
+    /// whether it misses. None as for `level_clip`.
+    pub(super) fn level_line_of_sight(
+        &self,
+        level: LevelRef,
+        from: [f64; 3],
+        to: [f64; 3],
+    ) -> Option<bool> {
+        let hit = self.level_clip(
+            level,
+            from,
+            to,
+            NativeClipBlock::Collider,
+            NativeClipFluid::None,
+        )?;
+        Some(hit.miss)
+    }
+    /// Whether `level` is a current handle on the server: what the world's own data (its
+    /// respawn data and maps, shared by its levels) needs.
+    fn native_world_data_allowed(&self, level: LevelRef) -> bool {
+        self.is_logical_server() && self.native_lifecycle.epoch() == Some(level.epoch())
+    }
+    /// `LevelData.getRespawnData`: the world spawn and its facing. None on a client, for a
+    /// stale handle, and before the world has chosen its spawn.
+    pub(super) fn level_respawn_data(&self, level: LevelRef) -> Option<RespawnData> {
+        if !self.native_world_data_allowed(level) {
+            return None;
+        }
+        let [yaw, pitch] = self.level.world_spawn_angle;
+        Some(RespawnData {
+            pos: self.level.world_spawn?,
+            yaw,
+            pitch,
+        })
+    }
+    /// `/setworldspawn`'s write (`set_world_spawn`), for the Overworld's handle. False for
+    /// another level, a stale handle, a client, a non-finite angle and a position outside the
+    /// spawnable bounds.
+    pub(super) fn level_set_respawn_data(
+        &mut self,
+        level: LevelRef,
+        pos: [i32; 3],
+        yaw: f32,
+        pitch: f32,
+    ) -> bool {
+        if !self.native_world_data_allowed(level)
+            || level.dimension() != DimensionKey::OVERWORLD
+            || !(yaw.is_finite() && pitch.is_finite())
+            || self.level_in_spawnable_bounds(level, pos) != Some(true)
+        {
+            return false;
+        }
+        self.set_world_spawn(pos, [yaw, pitch]);
+        true
+    }
+    /// Map `id`'s saved data as it stands (`with_map`). None on a client, for a stale handle
+    /// and for a map nothing made.
+    pub(super) fn level_map_data(&self, level: LevelRef, id: i32) -> Option<MapState> {
+        if !self.native_world_data_allowed(level) {
+            return None;
+        }
+        self.with_map(id, |map| MapState {
+            center: map.center,
+            scale: map.scale,
+            dimension: map.dimension.clone(),
+            locked: map.locked,
+            tracking: map.tracking,
+            unlimited: map.unlimited,
+            colors: map.colors.clone(),
+        })
+    }
+    /// Repaint map `id` (`MapData::paint`). False for another length, a stale handle, a
+    /// client, a map nothing made and a map whose pixels are all as given.
+    pub(super) fn level_set_map_data(&mut self, level: LevelRef, id: i32, colors: &[u8]) -> bool {
+        if !self.native_world_data_allowed(level) {
+            return false;
+        }
+        self.map(id)
+            .and_then(|map| map.paint(colors))
+            .unwrap_or(false)
+    }
+    /// The due tick path for the block at `pos` now (`Behaviours::due_block_tick`). False for
+    /// a refused write, a stale or parked handle, a client and an unloaded or out-of-height
+    /// position.
+    pub(super) fn level_block_tick(&mut self, level: LevelRef, pos: [i32; 3]) -> bool {
+        if !self.native_level_tick_allowed(level, pos) {
+            return false;
+        }
+        let at = block_pos(pos);
+        self.with_level(|b, level, ticks| b.due_block_tick(level, ticks, at));
+        let _ = self.process_level_events();
+        true
+    }
+    /// `tickChunk`'s random tick of `pos` now (`Behaviours::random_tick`). False as for
+    /// `level_block_tick`.
+    pub(super) fn level_block_random_tick(&mut self, level: LevelRef, pos: [i32; 3]) -> bool {
+        if !self.native_level_tick_allowed(level, pos) {
+            return false;
+        }
+        let at = block_pos(pos);
+        self.with_level(|b, level, ticks| b.random_tick(level, ticks, at));
+        let _ = self.process_level_events();
+        true
+    }
+    /// Whether a tick may run at `pos`: a current handle of the level in place on the server,
+    /// a loaded position inside the build height.
+    fn native_level_tick_allowed(&self, level: LevelRef, pos: [i32; 3]) -> bool {
+        self.native_world_data_allowed(level)
+            && self.dim.key() == level.dimension()
+            && self.world.loaded(pos[0], pos[2])
+            && self.world.shape.contains_y(pos[1])
+    }
+    /// `ServerLevel.findLightningTargetAround` (`lightning_target`) for the column at `pos`,
+    /// in the level in place. None for another level, a stale handle, a client and an
+    /// unloaded column.
+    pub(super) fn level_lightning_target(
+        &mut self,
+        level: LevelRef,
+        pos: [i32; 3],
+    ) -> Option<[i32; 3]> {
+        if !self.native_world_data_allowed(level) || self.dim.key() != level.dimension() {
+            return None;
+        }
+        self.lightning_target(pos[0], pos[2])
+    }
     /// The lowest block `y` and the height of the level
     /// (`LevelHeightAccessor.getMinY`, `getHeight`). Reads any loaded server level
     /// or the client's current level. None for a stale handle, before client login,
@@ -876,6 +1007,92 @@ mod tests {
                 assert_eq!(unavailable.signal(host, [1, y, 1], Direction::East), None);
                 assert!(!unavailable.has_neighbor_signal(host, [2, y, 1]));
             }
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn respawn_data_maps_and_ticks_write_through_the_handle_and_refuse_others() {
+        use horizon_client::chunk::Chunk;
+        use std::sync::Arc;
+
+        with_game(|game| {
+            let level = game.level("minecraft:overworld").unwrap();
+            let stale = LevelRef::new(
+                NativeWorldEpoch::new(level.epoch().get() + 1),
+                level.dimension(),
+            );
+            let nether = LevelRef::new(level.epoch(), mod_api::DimensionKey::NETHER);
+
+            // RespawnData.of: the yaw wraps to -180..180 and the pitch clamps to -90..90.
+            assert!(level.set_respawn_data(game, [10, 70, -4], 270.0, 120.0));
+            let data = level.respawn_data(game).unwrap();
+            assert_eq!(data.pos, [10, 70, -4]);
+            assert_eq!((data.yaw, data.pitch), (-90.0, 90.0));
+            assert_eq!(
+                game.level.world_spawn,
+                Some([10, 70, -4]),
+                "level.dat's spawn"
+            );
+            assert!(
+                !nether.set_respawn_data(game, [0, 64, 0], 0.0, 0.0),
+                "Overworld only"
+            );
+            assert!(!level.set_respawn_data(game, [0, 64, 0], f32::NAN, 0.0));
+            assert!(!level.set_respawn_data(game, [30_000_001, 64, 0], 0.0, 0.0));
+            assert!(!stale.set_respawn_data(game, [0, 64, 0], 0.0, 0.0));
+            assert_eq!(stale.respawn_data(game), None);
+            assert_eq!(
+                level.respawn_data(game).unwrap().pos,
+                [10, 70, -4],
+                "refusals change nothing"
+            );
+
+            // A map repainted through the handle reads back and is marked to save and redraw.
+            let fresh = crate::game::maps::MapData::fresh(0.0, 0.0, 0, "minecraft:overworld");
+            let id = game.new_map_id(fresh);
+            let mut colors = level.map_data(game, id).unwrap().colors;
+            assert_eq!(colors.len(), 128 * 128);
+            colors[5 + 2 * 128] = 34;
+            assert!(level.set_map_data(game, id, &colors));
+            assert!(
+                !level.set_map_data(game, id, &colors),
+                "nothing left to change"
+            );
+            assert!(!level.set_map_data(game, id, &colors[..10]));
+            let read = level.map_data(game, id).unwrap();
+            assert_eq!(read.colors[5 + 2 * 128], 34);
+            assert_eq!((read.center, read.scale), ([0, 0], 0));
+            assert_eq!(stale.map_data(game, id), None);
+            assert!(!stale.set_map_data(game, id, &colors));
+            assert_eq!(level.map_data(game, i32::MAX), None, "a map nothing made");
+
+            // Ticks run only in the level in place, at a loaded position inside its height.
+            let height = level.height(game).unwrap();
+            assert!(!level.block_tick(game, [0, height.0, 0]));
+            assert!(!level.block_random_tick(game, [0, height.0, 0]));
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            assert!(level.block_tick(game, [0, height.0, 0]));
+            assert!(level.block_random_tick(game, [0, height.0, 0]));
+            assert!(
+                !level.block_tick(game, [0, height.0 - 1, 0]),
+                "below the world"
+            );
+            assert!(
+                !level.block_random_tick(game, [1_000_000, 64, 1_000_000]),
+                "unloaded"
+            );
+            assert!(!stale.block_tick(game, [0, height.0, 0]));
+            assert!(
+                !nether.block_random_tick(game, [0, height.0, 0]),
+                "a level not in place"
+            );
+            assert_eq!(stale.can_see_sky(game, [0, height.0, 0]), None);
+            assert_eq!(stale.line_of_sight(game, [0.5; 3], [4.5, 0.5, 0.5]), None);
+            assert_eq!(stale.lightning_target(game, [0, 64, 0]), None);
+            assert_eq!(nether.lightning_target(game, [0, 64, 0]), None);
         });
     }
 

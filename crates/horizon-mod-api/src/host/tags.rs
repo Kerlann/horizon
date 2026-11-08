@@ -14,8 +14,9 @@ pub trait TagsHost {
     #[access(WorldOnly)]
     fn unresolved_fluid_id(&self, fluid: UnresolvedFluid) -> String;
     /// Side: both.
-    /// Whether the resolved block is in the world's merged block tag. Unknown tags return false;
-    /// unavailable authoritative tags or owning-thread block mappings return None.
+    /// Whether the resolved block is in the world's merged block tag, on a client the tag its
+    /// server sent. Unknown tags return false; unavailable tags or owning-thread block mappings
+    /// return None.
     #[access(Metadata)]
     fn block_in_tag(&self, block: BlockKey, tag: &str) -> Option<bool>;
     /// Side: both.
@@ -33,8 +34,8 @@ pub trait TagsHost {
     fn state_fluid_state(&self, state: BlockState) -> Option<FluidState>;
     /// Side: both.
     /// Whether `fluid` is in the fluid tag `tag` (`FluidState.is(TagKey)`, `minecraft:water` or
-    /// `water`), over the merged fluid tags. An unknown tag is false. None as for
-    /// `native_block_in_tag`.
+    /// `water`), over the merged fluid tags, on a client those its server sent. An unknown tag
+    /// is false. None as for `native_block_in_tag`.
     #[access(Metadata)]
     fn fluid_in_tag(&self, fluid: &str, tag: &str) -> Option<bool>;
     /// Side: both.

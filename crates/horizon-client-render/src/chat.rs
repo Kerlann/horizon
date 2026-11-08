@@ -1482,6 +1482,11 @@ impl ChatScreen {
             self.edited(m, c);
         }
     }
+    /// An edit of the input box from outside its own keys: the suggestions follow it.
+    pub fn edit_input(&mut self, m: &Measure, c: &Commands, f: impl FnOnce(&mut TextField)) {
+        f(&mut self.input);
+        self.edited(m, c);
+    }
     /// Typed text (`charTyped` per character).
     pub fn type_text(&mut self, m: &Measure, c: &Commands, text: &str) {
         for ch in text.chars() {

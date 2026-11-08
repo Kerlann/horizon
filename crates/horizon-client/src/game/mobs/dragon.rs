@@ -9,7 +9,7 @@
 use super::api_values::TryIntoApi;
 use super::commands::Target;
 use super::{
-    Dim, Game,
+    Game,
     creatures::{Finalized, SpawnSite},
     potions::{Victim, mob_can_be_affected},
 };
@@ -21,6 +21,7 @@ use horizon_client::{
     mobs::{Damage, DamageKind, Who},
     particles::{ParticleOptions, ParticleType},
     projectiles::{Projectile, ProjectileKind},
+    random_source,
     text::Text,
 };
 use horizon_core::nbt::Tag;
@@ -1279,7 +1280,7 @@ impl Game<'_> {
     pub(super) fn tick_fight(&mut self) {
         // A dragon outside the End (`/summon`) has no fight: `ServerLevel.getDragonFight` is
         // null there, but `EnderDragon.aiStep` still flies it.
-        if self.dim != Dim::End {
+        if !self.dimension_type().has_ender_dragon_fight {
             self.tick_dragon();
             return;
         }
@@ -1404,7 +1405,7 @@ impl Game<'_> {
     /// `EndCrystal.tick` in every dimension: the time (the spin and bob),
     /// and fire at its block where there is a dragon fight (the End).
     pub(super) fn tick_crystals(&mut self) {
-        let fire = (self.dim == Dim::End)
+        let fire = (self.dimension_type().has_ender_dragon_fight)
             .then(|| self.pack.assets.registry.default_state("minecraft:fire"))
             .flatten();
         for i in 0..self.crystals.len() {
@@ -3312,7 +3313,11 @@ impl Game<'_> {
     /// (`EnderDragonFight.dragonEvent`, visible while the fight is not won
     /// and the player is alive within 192 blocks of (0, 128, 0)).
     pub(super) fn dragon_boss_progress(&self, at: [f64; 3], alive: bool) -> Option<f32> {
-        if self.dim != Dim::End || !alive || !self.fight.loaded || self.fight.killed {
+        if !self.dimension_type().has_ender_dragon_fight
+            || !alive
+            || !self.fight.loaded
+            || self.fight.killed
+        {
             return None;
         }
         let near = at[0].powi(2) + (at[1] - 128.0).powi(2) + at[2].powi(2) <= 192.0 * 192.0;
@@ -4098,9 +4103,7 @@ impl Game<'_> {
             return false;
         }
         // EndCrystal's constructor: `this.random.nextInt(100000)`, the crystal's own random.
-        let drawn = super::dispenser::entity_random()
-            .next_int_bound(100_000)
-            .unwrap_or(0);
+        let drawn = random_source::entity().next_int_bound(100_000).unwrap_or(0);
         let at = Vec3::new(x + 0.5, y, z + 0.5);
         let time = Crystal::start_time(at, drawn, self.clock.still());
         // EndCrystal's constructor takes an id from the entity counter, so
@@ -4118,7 +4121,7 @@ impl Game<'_> {
         // EndCrystalItem.useOn: ENTITY_PLACE at the block above, by the player.
         self.post_block_game_event("minecraft:entity_place", above, self.sculk_actor(), None);
         self.world.modified.insert((above[0] >> 4, above[2] >> 4));
-        if self.dim == Dim::End {
+        if self.dimension_type().has_ender_dragon_fight {
             self.try_respawn();
         }
         if !self.creative {
@@ -4451,7 +4454,7 @@ impl Game<'_> {
     /// It becomes the fight's dragon (`dragonUUID = dragon.getUUID()`).
     fn create_new_dragon(&mut self) {
         let yaw = self.world.random.next_float() * 360.0;
-        let seed = self.world.random.next_long();
+        let seed = random_source::unique_seed();
         let mut dragon = Dragon::new(Vec3::new(0.0, 128.0, 0.0), yaw, seed);
         dragon.join = horizon_client::join_seq::JoinSeq::next();
         dragon.id = self.next_entity + 1;
@@ -4506,7 +4509,7 @@ impl Game<'_> {
     /// The dragon is the End fight's own (`EnderDragon.dragonFight`, set
     /// only for the dragon whose UUID is the fight's `dragonUUID`).
     fn is_fight_dragon(&mut self) -> bool {
-        if self.dim != Dim::End {
+        if !self.dimension_type().has_ender_dragon_fight {
             return false;
         }
         match (self.dragon.as_ref().map(|d| d.id), self.fight.dragon_uuid) {
@@ -4534,11 +4537,13 @@ impl Game<'_> {
                     c.position.x.floor() as i32 >> 4,
                     c.position.z.floor() as i32 >> 4,
                 ));
-                let _ = self.server_explode(
+                let _ = self.server_explode_from(
                     [c.position.x, c.position.y, c.position.z],
                     6.0,
                     super::explosion::BlockInteraction::Keep,
                     false,
+                    super::explosion::ExplosionSource::default()
+                        .with_silence(self.entity_silent(c.id)),
                 );
             }
         }
@@ -4669,7 +4674,7 @@ impl Game<'_> {
             }
         }
         // The dragon's own random (`Entity.random`), not the level's.
-        let seed = super::dispenser::entity_random().next_long();
+        let seed = random_source::unique_seed();
         let mut dragon = Dragon::new(position, yaw, seed);
         dragon.join = horizon_client::join_seq::JoinSeq::next();
         dragon.id = self.next_entity + 1;

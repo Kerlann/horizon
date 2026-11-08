@@ -69,6 +69,11 @@ impl TryIntoEngine<()> for mod_api::Block {
                 .as_ref()
                 .map(|v| v.try_into_engine(&()))
                 .transpose()?,
+            // The API declaration has no per-entity or interaction shapes; only
+            // content files (`horizon-mod-package`) declare them.
+            outline_context_shapes: Default::default(),
+            collision_context_shapes: Default::default(),
+            interaction_shapes: None,
             state_properties: self
                 .state_properties
                 .iter()

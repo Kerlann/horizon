@@ -180,10 +180,9 @@ pub type Api<'a> = &'a dyn Fn(&str) -> Result<Option<serde_json::Value>, String>
 /// The real API, unauthenticated (`HORIZON_GITHUB_TOKEN` is used when set, for CI).
 pub fn api(path: &str) -> Result<Option<serde_json::Value>, String> {
     let url = format!("https://api.github.com/{path}");
-    match backend::get(&url) {
-        Ok(response) => response.into_json().map(Some).map_err(|e| e.to_string()),
-        Err(e) if e.ends_with("answered 404") => Ok(None),
-        Err(e) if e.ends_with("answered 429") => Err(RATE_LIMIT.into()),
+    match backend::get_unless_missing(&url) {
+        Ok(Some(response)) => response.into_json().map(Some).map_err(|e| e.to_string()),
+        Ok(None) => Ok(None),
         Err(e) if e.contains("rate limit") => Err(RATE_LIMIT.into()),
         Err(e) => Err(e),
     }

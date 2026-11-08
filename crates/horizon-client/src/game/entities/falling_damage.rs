@@ -139,10 +139,14 @@ impl Game<'_> {
             let name = self.res.facts().get(state).name.clone();
             // LevelChunk.setBlockState creates the new block entity even when
             // the falling entity has no supplied data.
-            if let Some(entity) = self.new_block_entity(&name) {
-                let key = (pos[0], pos[1], pos[2]);
-                let mut tag = horizon_client::save::encode_block_entity(key, &entity, &name);
+            let key = (pos[0], pos[1], pos[2]);
+            if !self.world.block_entities.stateful_entity(state.0)
+                && let Some(entity) = self.new_block_entity_for_state(state)
+            {
                 self.world.block_entities.insert(key, entity);
+            }
+            if let Some(entity) = self.world.block_entities.get(&key) {
+                let mut tag = horizon_client::save::encode_block_entity(key, entity, &name);
                 // FallingBlockEntity.tick copies each supplied field over the
                 // new block entity's saved defaults before loadWithComponents.
                 if let Some(horizon_core::nbt::Tag::Compound(carried)) = block
@@ -201,26 +205,20 @@ impl Game<'_> {
         }) {
             return;
         }
-        let original = amount;
-        let amount = if self.armor[0].is_some() {
-            amount * 0.75
-        } else {
-            amount
+        let Some(id) = self.motion.health.damage.id(kind) else {
+            return;
         };
-        let rules = self.world.health_rules;
-        let hurt = match (self.player.as_mut(), self.motion.health.damage.id(kind)) {
-            (Some(p), Some(id)) => p
-                .hurt(
-                    crate::game::entity::damage_level_of!(self),
-                    &self.motion.health,
-                    rules,
-                    id,
-                    amount,
-                )
-                .unwrap_or(false),
-            _ => false,
-        };
-        if hurt {
+        let outcome = self
+            .hurt_player_equipment(
+                id,
+                amount,
+                None,
+                false,
+                0,
+                &horizon_client::health::NO_ATTACK,
+            )
+            .unwrap_or_default();
+        if outcome.hurt {
             // LivingEntity.hurtServer: ENTITY_HURT_PLAYER, the falling block
             // (`DamageSources.fallingBlock(this)` and the like) being both the
             // causing and the direct entity.
@@ -234,10 +232,205 @@ impl Game<'_> {
                 direct: Some(block.clone()),
                 is_direct: true,
                 source: Some(block),
-                original,
-                actual: amount,
+                original: amount,
+                actual: outcome.dealt,
                 blocked: false,
             });
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use crate::game::{Game, native_entity_refs::tests::with_game};
+    use horizon_client::{items::ItemStack, motion::PlayerMotion};
+    use horizon_core::{equipment_slot::EquipmentSlot, geometry::Vec3};
+    use mod_api::{
+        ArmorHurtEvent, Flow, Hooks, ItemDamagedEvent, LevelRandomHost, LivingIncomingDamageEvent,
+        ServerHost,
+    };
+    use std::sync::{Arc, Mutex};
+
+    const ANVIL: &str = "minecraft:falling_anvil";
+
+    /// What the probe answers and what it heard of a hit.
+    #[derive(Default)]
+    struct Log {
+        refuse_hit: bool,
+        cancel_wear: bool,
+        new_damage: Option<f32>,
+        incoming: u32,
+        /// `armor_hurt`: each call's slots and vanilla damage.
+        armor: Vec<Vec<(EquipmentSlot, f32)>>,
+        /// `item_damaged`: the points, and whether its host names the acting player.
+        worn: Vec<(i32, bool)>,
+    }
+    struct Probe(Arc<Mutex<Log>>);
+    #[mod_api::__subscriptions]
+    impl Hooks for Probe {
+        fn living_incoming_damage(
+            &self,
+            _: &mut dyn LevelRandomHost,
+            _: &mut LivingIncomingDamageEvent<'_>,
+        ) -> Flow {
+            let mut log = self.0.lock().unwrap();
+            log.incoming += 1;
+            if log.refuse_hit {
+                Flow::Cancel
+            } else {
+                Flow::Continue
+            }
+        }
+        fn armor_hurt(&self, _: &mut dyn ServerHost, event: &mut ArmorHurtEvent<'_>) -> Flow {
+            let mut log = self.0.lock().unwrap();
+            let call = event.entries.iter().map(|e| (e.slot, e.damage)).collect();
+            log.armor.push(call);
+            if let Some(new_damage) = log.new_damage {
+                for entry in event.entries.iter_mut() {
+                    entry.new_damage = new_damage;
+                }
+            }
+            if log.cancel_wear {
+                Flow::Cancel
+            } else {
+                Flow::Continue
+            }
+        }
+        fn item_damaged(
+            &self,
+            host: &mut dyn ServerHost,
+            event: &mut ItemDamagedEvent<'_>,
+        ) -> Flow {
+            let acting = host.players().acting_player().is_some();
+            self.0.lock().unwrap().worn.push((event.amount, acting));
+            Flow::Continue
+        }
+    }
+
+    /// Runs `test` as a helmeted server player, with the probe's log.
+    fn with_player(test: impl FnOnce(&mut Game<'_>, &Mutex<Log>)) {
+        let log = Arc::new(Mutex::new(Log::default()));
+        let mods: mod_api::Mods = vec![mod_api::ModEntry::new(
+            "probe",
+            Box::new(Probe(log.clone())),
+        )]
+        .into();
+        mod_api::testing::with_mods(mods, || {
+            with_game(|game| {
+                game.lan_acting_uuid = Some(123);
+                game.lan_acting_entity = Some(20);
+                game.lan_acting_name = Some("Steve".into());
+                game.lan_acting_permission = Some(0);
+                test(game, &log);
+            })
+        });
+    }
+    /// A new player in `helmet`, and a log with no answers: a hit of 8 wears 2 points.
+    fn start(game: &mut Game<'_>, log: &Mutex<Log>, helmet: Option<ItemStack>) {
+        game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
+        game.armor[0] = helmet;
+        game.apply_equipment();
+        game.refresh_armor_protection();
+        *log.lock().unwrap() = Log::default();
+    }
+    fn hit(game: &mut Game<'_>) {
+        game.falling_hurt_player(Vec3::ZERO, 8.0, ANVIL);
+    }
+    fn health(game: &Game<'_>) -> f32 {
+        game.player.as_ref().unwrap().health.health()
+    }
+    fn iron_helmet() -> ItemStack {
+        ItemStack::new("minecraft:iron_helmet", 1)
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_canceled_wear_leaves_the_helmet_and_its_share_of_the_hit() {
+        with_player(|game, log| {
+            start(game, log, Some(iron_helmet()));
+            log.lock().unwrap().cancel_wear = true;
+            hit(game);
+            assert_eq!(game.armor[0], Some(iron_helmet()));
+            {
+                let log = log.lock().unwrap();
+                assert_eq!(
+                    log.armor,
+                    [
+                        vec![(EquipmentSlot::Head, 2.0)],
+                        vec![(EquipmentSlot::Head, 1.5)]
+                    ]
+                );
+                assert!(log.worn.is_empty());
+                assert_eq!(log.incoming, 1);
+            }
+            // 8 less the helmet's quarter is 6; 2 armor points leave 98.4% of it.
+            assert!((health(game) - 14.096).abs() < 0.001, "{}", health(game));
+
+            // Both equipment operations already ran; draining events cannot repeat them.
+            let events = std::mem::take(&mut game.player.as_mut().unwrap().events);
+            game.wear_armor(&events);
+            assert_eq!(log.lock().unwrap().armor.len(), 2);
+            assert_eq!(game.armor[0], Some(iron_helmet()));
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn the_answered_wear_runs_on_the_real_host_before_the_cooldown_refuses() {
+        with_player(|game, log| {
+            start(game, log, Some(iron_helmet()));
+            log.lock().unwrap().new_damage = Some(7.0);
+            hit(game);
+            assert_eq!(game.armor[0].as_ref().unwrap().damage, 14);
+            assert_eq!(log.lock().unwrap().worn, [(7, true), (7, true)]);
+            let after_first = health(game);
+
+            // The cooldown takes the same hit whole, after `hurtHelmet` has worn the piece.
+            log.lock().unwrap().new_damage = None;
+            hit(game);
+            assert_eq!(game.armor[0].as_ref().unwrap().damage, 16);
+            assert_eq!(health(game), after_first);
+            assert_eq!(log.lock().unwrap().incoming, 2);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_helmet_the_hit_breaks_stops_protecting_in_that_hit() {
+        with_player(|game, log| {
+            let mut helmet = iron_helmet();
+            helmet.damage = game.items().get(&helmet.item).unwrap().max_damage - 1;
+            helmet.enchant("minecraft:protection", 4);
+            start(game, log, Some(helmet));
+            let status = &game.player.as_ref().unwrap().status;
+            assert_eq!(status.protection(ANVIL), 4.0);
+            hit(game);
+            assert_eq!(game.armor[0], None);
+            // The quarter stays: `hurtServer` takes it whatever the helmet became.
+            assert_eq!(health(game), 14.0);
+            assert_eq!(log.lock().unwrap().incoming, 1);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn no_helmet_or_a_refused_hit_fires_no_helmet_wear() {
+        with_player(|game, log| {
+            start(game, log, None);
+            hit(game);
+            assert!(log.lock().unwrap().armor.is_empty());
+            assert_eq!(health(game), 12.0);
+
+            start(game, log, Some(iron_helmet()));
+            log.lock().unwrap().refuse_hit = true;
+            hit(game);
+            assert!(log.lock().unwrap().armor.is_empty());
+            assert_eq!(game.armor[0], Some(iron_helmet()));
+            assert_eq!(health(game), 20.0);
+        });
+    }
+}
+
+#[cfg(test)]
+#[path = "falling_damage/helmet_tests.rs"]
+mod helmet_tests;

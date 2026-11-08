@@ -1,4 +1,8 @@
-//! A point listener, beside the helper injection in `count.rs`.
+//! API and area slots and the internals source callback share one unified manifest.
+mod area;
+pub use area::area;
+mod count;
+pub use count::count;
 #[derive(Default)]
 struct Check;
 

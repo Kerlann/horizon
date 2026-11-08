@@ -1,6 +1,6 @@
 //! Per-tick client visuals: the particle engine, `ClientLevel.animateTick`,
 //! campfire smoke and rain splashes (`ClientLevel.tickWeatherEffects`).
-use super::{Dim, Game};
+use super::{Dim, Game, host::draw::GameCameraDrawContext};
 use horizon_client::assets::Properties;
 use horizon_client::camera::NearPlane;
 use horizon_client::fog::{
@@ -17,7 +17,9 @@ use horizon_client::{
 };
 use horizon_client::{
     hud_overlays,
-    screen_effects::{ScreenInputs, ScreenQuad, lightmap_brightness, nausea_has_effect},
+    screen_effects::{
+        CameraQuads, ScreenInputs, ScreenQuad, lightmap_brightness, nausea_has_effect,
+    },
 };
 use horizon_core::{
     position::BlockPos,
@@ -28,6 +30,13 @@ use horizon_world::{
 };
 use mod_api::BlockScreenEffect;
 
+/// `ScreenEffectRenderer.submit`'s block overlays in the order it draws them, which
+/// `BlockScreenEffects::custom` and `ScreenInputs::custom` follow.
+const BLOCK_OVERLAYS: [BlockScreenEffect; 3] = [
+    BlockScreenEffect::Block,
+    BlockScreenEffect::Water,
+    BlockScreenEffect::Fire,
+];
 /// The block overlays of `ScreenEffectRenderer` a frame shows.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct BlockScreenEffects {
@@ -37,6 +46,9 @@ struct BlockScreenEffects {
     water: bool,
     /// The player burns, seen in first person.
     on_fire: bool,
+    /// The state and position of each overlay in [`BLOCK_OVERLAYS`] a mod draws itself
+    /// (`custom_draw`), shown or canceled.
+    custom: [Option<(BlockStateId, BlockPos)>; 3],
 }
 /// `getHeight(Heightmap.Types.MOTION_BLOCKING, x, z)` from the chunk's
 /// heightmap: one above the highest block in `blocks_motion_in_heightmap` or
@@ -274,7 +286,14 @@ impl Game<'_> {
     }
     /// `ScreenEffectRenderer` + `Hud` camera overlays for this frame.
     /// `scale` is the player's `LivingEntity.getScale`.
-    pub(super) fn screen_quads(&self, partial: f32, size: [u32; 2], scale: f32) -> Vec<ScreenQuad> {
+    /// `hand_projection` is the frame's `camera::hand_projection`, which mods draw under.
+    pub(super) fn screen_quads(
+        &self,
+        partial: f32,
+        size: [u32; 2],
+        scale: f32,
+        hand_projection: [f32; 16],
+    ) -> Vec<ScreenQuad> {
         let Some(p) = self.player.as_ref() else {
             return Vec::new();
         };
@@ -283,7 +302,8 @@ impl Game<'_> {
             p.position.y + f64::from(p.dimensions.eye_height),
             p.position.z,
         ];
-        let effects = self.block_screen_effects(p, eye, partial, size, scale);
+        let mut effects = self.block_screen_effects(p, eye, partial, size, scale);
+        let custom = self.custom_screen_effects(&mut effects, partial, hand_projection);
         // ScreenEffectRenderer: the block's particle material.
         let block_overlay = effects
             .block
@@ -328,10 +348,53 @@ impl Game<'_> {
             on_fire: effects.on_fire,
             fire_lower: f32::from(self.settings.extras.pvp.tweaks.fire_lower) / 100.0,
             gui_overlays: &gui_overlays,
+            custom: [&custom[0], &custom[1], &custom[2]],
         })
     }
+    /// `block_screen_effect_draw` for each overlay in `effects` a mod draws itself: what it drew,
+    /// by [`BLOCK_OVERLAYS`]. An overlay replaced there leaves `effects`.
+    fn custom_screen_effects(
+        &self,
+        effects: &mut BlockScreenEffects,
+        partial: f32,
+        hand_projection: [f32; 16],
+    ) -> [Vec<ScreenQuad>; 3] {
+        let mut drawn = <[Vec<ScreenQuad>; 3]>::default();
+        if effects.custom == [None; 3] {
+            return drawn;
+        }
+        let mut quads = CameraQuads::new(hand_projection);
+        for (i, effect) in BLOCK_OVERLAYS.into_iter().enumerate() {
+            let Some((state, pos)) = effects.custom[i] else {
+                continue;
+            };
+            let mut replace_vanilla = false;
+            self.native_block_screen_effect_draw(super::native_hooks::BlockScreenEffectDrawCall {
+                effect,
+                state,
+                pos,
+                partial_tick: partial,
+                hide_gui: self.ui.hide_gui,
+                draw: &mut GameCameraDrawContext {
+                    game: self,
+                    surface: &mut quads,
+                },
+                replace_vanilla: &mut replace_vanilla,
+            });
+            drawn[i] = quads.take();
+            if replace_vanilla {
+                match effect {
+                    BlockScreenEffect::Block => effects.block = None,
+                    BlockScreenEffect::Water => effects.water = false,
+                    BlockScreenEffect::Fire => effects.on_fire = false,
+                }
+            }
+        }
+        drawn
+    }
     /// The block overlays `ScreenEffectRenderer` draws this frame for player `p` with its eye
-    /// at `eye`, less those a mod canceled in `extract_block_screen_effect`.
+    /// at `eye`, less those a mod canceled in `extract_block_screen_effect`, with those a mod
+    /// said it draws itself.
     fn block_screen_effects(
         &self,
         p: &PlayerMotion,
@@ -346,6 +409,7 @@ impl Game<'_> {
         let spectator = self.spectator();
         let modded = mod_api::__private::listened(mod_api::HookId::ExtractBlockScreenEffect);
         let mut block = None;
+        let mut custom = [None; 3];
         if !spectator {
             // Frustum.getNearPlaneBounds, moved to the eye.
             let (near_min, near_max) = horizon_client::camera::near_plane_bounds(
@@ -393,7 +457,15 @@ impl Game<'_> {
                     != horizon_client::blocks::RenderShape::Invisible
                     && self.state_view_blocking(state, pos, near_plane)
                 {
-                    if !modded || self.screen_effect_kept(BlockScreenEffect::Block, state, pos) {
+                    if !modded
+                        || self.screen_effect_kept(
+                            BlockScreenEffect::Block,
+                            state,
+                            pos,
+                            partial,
+                            &mut custom[0],
+                        )
+                    {
                         block = Some(state);
                     }
                     break;
@@ -410,6 +482,8 @@ impl Game<'_> {
                     BlockScreenEffect::Water,
                     self.world.block(eye_block[0], eye_block[1], eye_block[2]),
                     eye_block,
+                    partial,
+                    &mut custom[1],
                 ));
         // ModelBakery.FIRE_1, told to mods as the fire block at the player's block.
         let feet = [p.position.x, p.position.y, p.position.z].map(|c| c.floor() as i32);
@@ -419,28 +493,44 @@ impl Game<'_> {
             && p.fire_ticks > 0
             && (!modded
                 || fire().is_none_or(|fire| {
-                    self.screen_effect_kept(BlockScreenEffect::Fire, fire, feet)
+                    self.screen_effect_kept(
+                        BlockScreenEffect::Fire,
+                        fire,
+                        feet,
+                        partial,
+                        &mut custom[2],
+                    )
                 }));
         BlockScreenEffects {
             block,
             water,
             on_fire,
+            custom,
         }
     }
-    /// `extract_block_screen_effect` for one overlay: false when a mod canceled it.
+    /// `extract_block_screen_effect` for one overlay: false when a mod canceled it. `custom`
+    /// takes the overlay's state and position when a mod set `custom_draw`, canceled or not.
     fn screen_effect_kept(
         &self,
         effect: BlockScreenEffect,
         state: BlockStateId,
         pos: [i32; 3],
+        partial_tick: f32,
+        custom: &mut Option<(BlockStateId, BlockPos)>,
     ) -> bool {
-        let mut canceled = false;
+        let pos = BlockPos::new(pos[0], pos[1], pos[2]);
+        let (mut canceled, mut custom_draw) = (false, false);
         self.native_extract_block_screen_effect(
             effect,
             state,
-            BlockPos::new(pos[0], pos[1], pos[2]),
+            pos,
+            partial_tick,
             &mut canceled,
+            &mut custom_draw,
         );
+        if custom_draw {
+            *custom = Some((state, pos));
+        }
         !canceled
     }
     /// `Lightmap.getBrightness(getMaxLocalRawBrightness(eye))`.

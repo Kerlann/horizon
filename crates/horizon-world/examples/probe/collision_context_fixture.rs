@@ -15,7 +15,7 @@ use {
         block_collision::{BlockCollisionRegistry, DynamicCollisionWorld, ShulkerCollisionState},
         chunk::BlockState,
         collision::CachedCollisionRegistry,
-        collision_context::{CollisionContext, CollisionEntity, CollisionItem},
+        collision_context::{CollisionContext, CollisionEntity, CollisionItem, EntityContextKind},
         dynamic_support::DynamicSupportWorld,
         entity_obstruction::EntityIdentity,
         fluid::{FluidKind, FluidState},
@@ -244,6 +244,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         let f: Value = serde_json::from_str(line)?;
         let player = CollisionEntity {
             identity: EntityIdentity(1),
+            kind: EntityContextKind::Player,
             y: number(&f["y"]),
             descending: f["descending"].as_bool().unwrap(),
             main_hand: Some(CollisionItem {
@@ -253,6 +254,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         let marker = CollisionEntity {
             identity: EntityIdentity(2),
+            kind: EntityContextKind::Other,
             main_hand: None,
             ..player
         };

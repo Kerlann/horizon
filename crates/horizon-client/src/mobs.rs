@@ -1266,6 +1266,9 @@ pub struct Extra {
     pub items: Vec<Option<crate::items::ItemStack>>,
     /// Occupied InventoryCarrier stacks: Piglin/trader (8 slots), Pillager (5).
     pub inventory: Vec<crate::items::ItemStack>,
+    /// `AbstractHorse.temper` of every equine (horses, llamas, camels).
+    /// Loaded signed values are independent of the gameplay modification cap.
+    pub equine_temper: i32,
     pub tame: bool,
     pub sitting: bool,
     /// `Parrot.partyParrot` and `jukebox`: the playing jukebox it dances to.
@@ -1799,6 +1802,9 @@ pub struct Mob {
     pub profile: Option<horizon_protocol::entity_data::Profile>,
     /// The packs' random texture variants it wears (`random_textures::choose`).
     pub random_textures: random_textures::Choice,
+    /// What `entity_size` answered for its pose and vanilla size (`EntityEvent.Size`):
+    /// `dims` uses it while it holds.
+    pub size_answer: Option<crate::pose::SizeAnswer>,
 }
 impl crate::entity_rules::EntityRules for Mob {
     fn is_no_gravity(&self) -> bool {
@@ -1979,9 +1985,12 @@ pub enum MobEvent {
         slot: usize,
         stack: Option<crate::items::ItemStack>,
     },
-    /// `InfestedMobEffect.onMobHurt`: the mob was hurt while infested.
+    /// `InfestedMobEffect.onMobHurt`: the mob was hurt while infested and its
+    /// draws (`infested_silverfish`) spawn silverfish at `at`, half its height
+    /// up where it was hurt, each thrown with its velocity.
     Infested {
-        mob: u32,
+        at: [f64; 3],
+        velocities: Vec<Vec3>,
     },
     /// `LivingEntity.hurtArmor` (`doHurtEquipment`): a hit that landed on a mob
     /// wearing body armour (a horse's) leaves the piece owing
@@ -1992,6 +2001,14 @@ pub enum MobEvent {
         mob: u32,
         amount: f32,
         kind: DamageKind,
+    },
+    /// `LivingEntity.updateFallFlying`: every 20 glide ticks the glider in
+    /// `slot` (the one `Util.getRandom` picked) takes one point of wear,
+    /// `ItemStack.hurtAndBreak(1, this, slot)`. The host applies it with the
+    /// item's maximum and Unbreaking.
+    GliderWear {
+        mob: u32,
+        slot: horizon_core::equipment_slot::EquipmentSlot,
     },
     /// `OfferFlowerGoal.stop`: the item goes to the target's antenna (saddle)
     /// slot if it is empty, as a guaranteed drop.
@@ -2133,8 +2150,8 @@ pub enum MobEvent {
         kind: String,
     },
     /// The centre, the radius and the kind of the mob blowing up (it may be
-    /// gone from the list by the time the blast is handled).
-    Explode([f64; 3], f32, Species),
+    /// gone from the list by the time the blast is handled), and its `Silent`.
+    Explode([f64; 3], f32, Species, bool),
     /// `Creeper.spawnLingeringCloud`, right after its `Explode`: an `AreaEffectCloud` at the
     /// creeper with its active effects `(id, remaining ticks, amplifier)`, in their mixed colour.
     LingeringCloud {
@@ -2273,6 +2290,12 @@ pub enum MobEvent {
         mob: u32,
         item: Arc<str>,
         count: u32,
+        at: [f64; 3],
+    },
+    /// `Entity.spawnAtLocation` with the complete stack and its components.
+    DropStack {
+        mob: u32,
+        stack: crate::items::ItemStack,
         at: [f64; 3],
     },
     /// `new ItemEntity(.., stack)` thrown by `mob` (`setThrower`): `Dolphin.ItemGoal.drop`.
@@ -2521,6 +2544,12 @@ pub enum MobEvent {
     VillagerMeet {
         mob: u32,
         other: u32,
+    },
+    /// `Villager.customServerAiStep`: deliver the pending TRADE reputation
+    /// event for the actual player recorded by rewardTradeXp.
+    VillagerTrade {
+        mob: u32,
+        player: [i32; 4],
     },
     /// `AbstractVillager.getOffers` for a villager whose offers are not made
     /// yet: the level rolls them (the brain has no trade data), so the
@@ -3233,6 +3262,7 @@ pub fn apply_brain_events(
                     attacker: mob as i32,
                     // Pufferfish.touch uses DamageSources.sting: the fish, no projectile.
                     projectile: None,
+                    direct: None,
                     held: [held, None],
                     player_uuid: None,
                 };
@@ -3438,7 +3468,7 @@ pub struct MobWorld<'a> {
     pub day_time: i64,
     pub raining: bool,
     pub thundering: bool,
-    pub nether: bool,
+    pub level: horizon_core::LevelKey,
     pub block_tags: &'a HashMap<String, std::collections::HashSet<String>>,
     /// Each block's `fallOn` rule (the player's landing registry).
     pub landing: &'a horizon_world::block_landing::BlockLandingRegistry,
@@ -3454,8 +3484,8 @@ pub struct MobWorld<'a> {
     /// `getCurrentDifficultyAt` at the mob being ticked (near the player
     /// outside the mob tick).
     pub difficulty: spawning::LocalDifficulty,
-    /// The End (its dimension type's monster spawn light rules).
-    pub end: bool,
+    /// The level's dimension type.
+    pub dimension_type: &'a horizon_world::dimension_type::DimensionFacts,
     /// The world seed (slime chunks).
     pub world_seed: i64,
     /// `Level.getSeaLevel` (63 in the overworld, -63 in a flat world).
@@ -3568,6 +3598,35 @@ impl<'a> Teams<'a> {
         }
     }
 }
+/// `InfestedMobEffect.onMobHurt`'s draws from the bearer's random
+/// (`mob.getRandom()`): a 10% chance of one or two silverfish, each thrown
+/// along `look` (`spawnSilverfish`). Their velocities; none when the chance
+/// fails.
+pub fn infested_silverfish(random: &mut LegacyRandom, look: [f64; 3]) -> Vec<Vec3> {
+    if random.next_float() > 0.1 {
+        return Vec::new();
+    }
+    let count = 1 + random.next_int_bound(2).unwrap_or(0);
+    (0..count)
+        .map(|_| {
+            // Mth.randomBetween(-PI / 2, PI / 2), then in floats (JOML
+            // Vector3f): the look direction `.mul(0.3f).mul(1, 1.5f, 1)`,
+            // `.rotateY(angle)`.
+            let half = std::f32::consts::FRAC_PI_2;
+            let angle = random.next_float() * (2.0 * half) - half;
+            let sin = horizon_assets::math::joml_sin(angle);
+            let cos = horizon_assets::math::cos_from_sin(sin, angle);
+            let x = look[0] as f32 * 0.3;
+            let y = look[1] as f32 * 0.3 * 1.5;
+            let z = look[2] as f32 * 0.3;
+            Vec3::new(
+                f64::from(x * cos + z * sin),
+                f64::from(y),
+                f64::from(-x * sin + z * cos),
+            )
+        })
+        .collect()
+}
 /// `Entity.random` of a client's copy of entity `id` first seen at `position`: vanilla's is its
 /// own (`RandomSource.create()`), drawn on by nothing else; this one is seeded from the two.
 pub fn entity_random(id: u32, position: Vec3) -> LegacyRandom {
@@ -3679,6 +3738,7 @@ impl Mob {
             cape: None,
             profile: None,
             random_textures: Default::default(),
+            size_answer: None,
             attrs: Attrs {
                 speed: kind.speed,
                 attack_damage: kind.attack_damage,
@@ -3870,11 +3930,19 @@ impl Mob {
         self.damage_with(level, amount, source, None)
     }
     /// `LivingEntity.isInvulnerableTo` and dead or removed: only #bypasses_invulnerability gets
-    /// past the flag. The guard every damage hook runs after (`LivingIncomingDamageEvent`).
+    /// past the flag. Fire-immune mobs also refuse fire, except a ghast's reflected fireball.
+    /// The guard every damage hook runs after (`LivingIncomingDamageEvent`).
     pub fn refuses_damage(&self, source: &Damage) -> bool {
         !self.alive()
             || self.removed
             || (self.invulnerable_flag && !source.kind.bypasses_invulnerability())
+            || (source.is_fire() && self.kind.flags.fire_immune && !self.reflected_fireball(source))
+    }
+    /// `Ghast.isReflectedFireball`: its fire immunity does not refuse a player's return hit.
+    fn reflected_fireball(&self, source: &Damage) -> bool {
+        &*self.kind.id == "minecraft:ghast"
+            && source.kind == DamageKind::Fireball
+            && source.attacker == Some(Who::Player)
     }
     /// `LivingEntity.hurtServer`'s partial mob adapter, with health reductions inline.
     /// `damage` by a source with a weapon: `armor_effectiveness` runs the
@@ -3923,12 +3991,7 @@ impl Mob {
         }
         // Ghast.isReflectedFireball: a fireball a player turned back is
         // no fire to it, and kills it (Ghast.hurtServer: 1000 damage).
-        let reflected = &*self.kind.id == "minecraft:ghast"
-            && source.kind == DamageKind::Fireball
-            && source.attacker == Some(Who::Player);
-        if source.is_fire() && (self.kind.flags.fire_immune) && !reflected {
-            return false;
-        }
+        let reflected = self.reflected_fireball(&source);
         if !ai::accepts_damage(self, &source, amount, level.attack().player_uuid) {
             return false;
         }
@@ -4187,6 +4250,13 @@ impl Mob {
                         .push(MobEvent::Sound(sound, at, ai::sound_volume(self), pitch));
                 }
             }
+            // playSecondaryHurtSound: a thorns hit sounds where the mob
+            // stands, silent or not.
+            if source.kind == DamageKind::Thorns {
+                let at = [self.position.x, self.position.y, self.position.z];
+                self.outbox
+                    .push(MobEvent::Sound("enchant.thorns.hit", at, 1.0, 1.0));
+            }
         }
         // IronGolem.hurtServer: a new crack level plays the damage sound.
         if let Some(before) = crackiness
@@ -4197,8 +4267,25 @@ impl Mob {
             self.outbox
                 .push(MobEvent::Sound("entity.iron_golem.damage", at, 1.0, 1.0));
         }
+        // LivingEntity.hurtServer ends with MobEffectInstance.onMobHurt, so
+        // Infested draws from the mob's random here, before a subclass's own
+        // draws after `super.hurtServer` (an enderman's or a shulker's
+        // teleport), and its silverfish come out where the mob was hurt.
         if success && self.has_effect("minecraft:infested") {
-            self.outbox.push(MobEvent::Infested { mob: self.id });
+            let look = self.view_vector();
+            let velocities = infested_silverfish(&mut self.random, look);
+            if !velocities.is_empty() {
+                let at = [
+                    self.position.x,
+                    self.position.y + f64::from(self.height()) / 2.0,
+                    self.position.z,
+                ];
+                self.outbox.push(MobEvent::Infested { at, velocities });
+            }
+        }
+        // Shulker.hurtServer: the low-health teleport roll after `super.hurtServer`.
+        if success && self.species() == Species::Shulker {
+            shulker::after_hurt(self);
         }
         // Squid.hurtServer: a squid hurt after a living entity hit it squirts ink.
         if matches!(self.species(), Species::Squid | Species::GlowSquid)
@@ -6073,6 +6160,52 @@ mod magic_absorb_tests {
         assert!(m.extra.effect_chains.is_empty());
         assert!(m.extra.ambient_effects.is_empty());
         assert!(m.extra.hidden_effects.is_empty());
+    }
+
+    /// `LivingEntity.playSecondaryHurtSound`: a `thorns` hit that lands whole
+    /// sounds `enchant.thorns.hit` where the mob stands, after its own hurt
+    /// sound and for a silent mob too (`level.playSound`, not the mob's). The
+    /// rest of a stronger hit inside the hurt cooldown makes no sound, and
+    /// another kind of hit makes none.
+    #[test]
+    fn a_thorns_hit_sounds_where_the_mob_stands() {
+        let mut fixture = crate::health::TestLevel::new(0);
+        let level = &mut fixture.level();
+        let thorns = Damage {
+            kind: DamageKind::Thorns,
+            attacker: Some(Who::Player),
+            from: Some([4.0, 2.0, 3.0]),
+            attacker_species: None,
+        };
+        let sounds = |m: &Mob| -> Vec<(&'static str, [f64; 3], f32, f32)> {
+            m.outbox
+                .iter()
+                .filter_map(|e| match e {
+                    MobEvent::Sound(s, at, volume, pitch) => Some((*s, *at, *volume, *pitch)),
+                    _ => None,
+                })
+                .collect()
+        };
+        let mut m = witch();
+        m.position = Vec3::new(1.0, 2.0, 3.0);
+        m.silent = true;
+        assert!(m.damage(level, 4.0, thorns));
+        assert_eq!(
+            sounds(&m),
+            vec![("enchant.thorns.hit", [1.0, 2.0, 3.0], 1.0, 1.0)]
+        );
+        m.outbox.clear();
+        m.damage(level, 8.0, thorns);
+        assert!(sounds(&m).is_empty(), "inside the hurt cooldown");
+
+        let mut loud = witch();
+        assert!(loud.damage(level, 4.0, thorns));
+        let heard = sounds(&loud);
+        assert_eq!(heard.last().map(|s| s.0), Some("enchant.thorns.hit"));
+        let mut hit = witch();
+        assert!(hit.damage(level, 4.0, Damage::player([4.0, 2.0, 3.0])));
+        assert_eq!(heard.len(), sounds(&hit).len() + 1, "{heard:?}");
+        assert!(sounds(&hit).iter().all(|s| s.0 != "enchant.thorns.hit"));
     }
 
     /// `Witch.getDamageAfterMagicAbsorb`: `#witch_resistant_to` (`magic`,

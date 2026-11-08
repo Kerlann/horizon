@@ -13,8 +13,8 @@ The opening, then Play ([clip](docs/opening.webm)):
 
 ## What it does
 
-- **Versions**: lists the published builds of horizon-rust/horizon (the current Nightly, the last
-  week's, then the releases from before), installs the build for this platform into its own
+- **Versions**: lists game builds published by arismoko/horizon, when available,
+  installs the build for this platform into its own
   folder, and removes it again. **Import a game build…** takes a `horizon-client` you have (one
   built on your fork's Actions, or the zip holding it) and installs it as `imported-<date>-<sha>`:
   a copy of the selected release or Nightly's folder, game files included, with that program as the
@@ -65,7 +65,8 @@ The opening, then Play ([clip](docs/opening.webm)):
   modpack goes to the Modpacks page; installed packs show their source and checksum, with Update,
   **Update all** and Remove ([docs/mod-browser.md](../docs/mod-browser.md)).
 - **Modpacks**: import a Java modpack (a Modrinth `.mrpack`, a CurseForge zip, or a Prism,
-  MultiMC or CurseForge instance folder) and see its coverage report: per mod, ported, partial,
+  MultiMC or CurseForge instance folder; the page lists the ones other launchers keep on this
+  computer, each a click away) and see its coverage report: per mod, ported, partial,
   not yet or not needed, with the reason ([docs/modpacks.md](../docs/modpacks.md)). **Port**
   gets the jars of what this computer can port today (content mods with data and assets only)
   the player's own way: copied from a folder they have, or downloaded from the pack's own links

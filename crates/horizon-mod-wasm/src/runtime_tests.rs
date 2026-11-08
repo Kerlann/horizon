@@ -1121,6 +1121,67 @@ fn returned_builtin_proxy_does_not_keep_its_group_alive() {
     );
 }
 
+#[test]
+fn ordinary_callable_loopback_invokes_native_and_refuses_expired_value() {
+    use mod_api::wire::{Reader, WireError, Writer};
+    use mod_points::{callable::FunctionSource, snapshot::with_root};
+    use std::cell::{Cell, RefCell};
+    fn decode(input: &mut Reader<'_>) -> Result<u32, WireError> {
+        input.take()
+    }
+    fn encode(value: &u32, out: &mut Writer) {
+        out.put(value);
+    }
+    let invoke = crate::boundary::import_id("RowFunction", "invoke").unwrap();
+    let module = module(&format!(
+        r#"
+        local.get 0 i32.eqz if
+          i32.const 0 local.get 1 i64.load i64.store
+        end
+        i32.const 8 i32.const 4 i32.store
+        i32.const 12 i32.const 41 i32.store
+        i64.const 8796093022208
+        i32.const {invoke} i32.const 0 i32.const 16 i32.const 2048 i32.const 512 call $host
+        i64.extend_i32_u i64.or
+    "#
+    ));
+    let count = Cell::new(0);
+    let callback = RefCell::new(|x: u32| {
+        count.set(count.get() + 1);
+        x + 1
+    });
+    let result = with_root(&callback, |root| {
+        module
+            .call(
+                CallClass::Hook,
+                Frame::default(),
+                0,
+                None,
+                |out| {
+                    let source = unsafe { FunctionSource::new(&root, decode, encode) }.unwrap();
+                    out.put(&source);
+                },
+                |input| input.take::<Result<Vec<u8>, mod_api::RowError>>(),
+            )
+            .unwrap()
+            .unwrap()
+    });
+    assert_eq!(result, 42u32.to_le_bytes());
+    assert_eq!(count.get(), 1);
+    let refused = module
+        .call(
+            CallClass::Hook,
+            Frame::default(),
+            1,
+            None,
+            |_| {},
+            |input| input.take::<Result<Vec<u8>, mod_api::RowError>>(),
+        )
+        .unwrap();
+    assert!(matches!(refused, Err(mod_api::RowError::Stale)));
+    assert_eq!(count.get(), 1);
+}
+
 fn row_window_guest() -> WasmMod {
     let window = crate::boundary::import_id("RowPages", "window").unwrap();
     module(&format!(
@@ -1141,10 +1202,11 @@ fn row_window_guest() -> WasmMod {
 
 #[test]
 fn ordinary_row_pages_import_checks_its_native_root_and_returns_owned_rows() {
-    use mod_points::snapshot::{Builder, PageSource, Snapshot, Window, key, with_root};
-    fn read(root: &u32, _: Window, rows: &mut Builder) -> Result<(), mod_api::RowError> {
+    use mod_points::snapshot::{PageSource, Snapshot, Window, key, with_root};
+    fn read(root: &u32, window: Window) -> Result<Vec<mod_api::Row>, mod_api::RowError> {
+        let mut rows = window.builder();
         rows.value(None, 0, const { key("u32") }, root)?;
-        Ok(())
+        Ok(window.finish(rows))
     }
     let module = row_window_guest();
     let root = Box::new(42u32);
@@ -1185,7 +1247,7 @@ fn ordinary_row_pages_import_checks_its_native_root_and_returns_owned_rows() {
 
 #[test]
 fn row_pages_refuses_an_encoded_temporary_dropped_before_the_first_window_fetch() {
-    use mod_points::snapshot::{Builder, PageSource, Window, key, with_root};
+    use mod_points::snapshot::{PageSource, Window, key, with_root};
     struct Encoded<'a> {
         root: Box<u32>,
         dropped: &'a std::cell::Cell<bool>,
@@ -1201,9 +1263,10 @@ fn row_pages_refuses_an_encoded_temporary_dropped_before_the_first_window_fetch(
             // mutation. The value guard, not the call marker, bounds this temporary's borrow.
             with_root(&*self.root, |value| {
                 let pages = unsafe {
-                    PageSource::new(&value, |root, _: Window, rows: &mut Builder| {
+                    PageSource::new(&value, |root, window: Window| {
+                        let mut rows = window.builder();
                         rows.value(None, 0, const { key("u32") }, root)?;
-                        Ok(())
+                        Ok(window.finish(rows))
                     })
                 }
                 .unwrap();

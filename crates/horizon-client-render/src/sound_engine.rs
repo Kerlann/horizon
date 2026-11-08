@@ -914,6 +914,9 @@ pub trait Backend {
     fn unpause(&mut self, channel: ChannelId);
     /// `Channel.stopped`.
     fn stopped(&mut self, channel: ChannelId) -> bool;
+    /// Whether the channel plays clearly through a mod's muffle (`Audio::muffle`): its sound
+    /// event is one the mod exempted. A backend without a muffle ignores it.
+    fn set_unmuffled(&mut self, _channel: ChannelId, _unmuffled: bool) {}
 }
 /// A `SoundEventListener.onPlaySound` call.
 #[derive(Clone, Debug, PartialEq)]
@@ -986,6 +989,7 @@ pub struct SoundEngine {
     /// The client's loop context, rebuilt with each resource generation, for the
     /// sound hooks (`hooks`). Absent on a server, which has no sound.
     loop_context: Option<horizon_world::native_load_context::LoopContext>,
+    unmuffled: Vec<String>,
 }
 fn handle_channel(h: &Handle) -> Option<ChannelId> {
     h.channel
@@ -1016,6 +1020,20 @@ impl SoundEngine {
             listener_reserve: 0,
             notifications: Vec::new(),
             loop_context: None,
+            unmuffled: Vec::new(),
+        }
+    }
+    /// Sound events exempt from muffling, including channels already playing.
+    pub fn set_unmuffled(&mut self, events: Vec<String>, backend: &mut impl Backend) {
+        self.unmuffled = events;
+        for (id, handle) in &self.instance_to_channel {
+            let (Some(instance), Some(channel)) = (
+                self.instances.get(id),
+                self.handles.get(handle).and_then(handle_channel),
+            ) else {
+                continue;
+            };
+            backend.set_unmuffled(channel, self.unmuffled.contains(&instance.identifier));
         }
     }
     /// Isolate a fixture's dispatch from process-wide native installation.
@@ -1404,6 +1422,7 @@ impl SoundEngine {
         }
         let position = instance.position;
         let looping = instance.looping && instance.delay <= 0;
+        let unmuffled = self.unmuffled.contains(&instance.identifier);
         let streaming = sound.stream;
         let pool = usize::from(streaming);
         // With the `uiSoundReserve` extra, sounds out in the world leave a few static channels free, so a flood of
@@ -1456,6 +1475,7 @@ impl SoundEngine {
         backend.set_looping(channel, looping && !streaming);
         backend.set_position(channel, position);
         backend.set_relative(channel, relative);
+        backend.set_unmuffled(channel, unmuffled);
         backend.start(channel, &sound, looping);
         self.notify_source_started(id, channel, streaming);
         if tickable {
@@ -1670,27 +1690,6 @@ impl SoundEngine {
     pub fn active_instances(&self) -> Vec<InstanceId> {
         self.instance_to_channel.iter().map(|(i, _)| *i).collect()
     }
-    /// A fresh unseeded random (`RandomSource.create()`).
-    pub fn unseeded() -> LegacyRandom {
-        LegacyRandom::new(unique_seed())
-    }
-}
-/// `RandomSupport.generateUniqueSeed`.
-pub fn unique_seed() -> i64 {
-    use std::sync::atomic::{AtomicI64, Ordering};
-    static UNIQUIFIER: AtomicI64 = AtomicI64::new(8_682_522_807_148_012);
-    let mut current = UNIQUIFIER.load(Ordering::Relaxed);
-    let next = loop {
-        let next = current.wrapping_mul(1_181_783_497_276_652_981);
-        match UNIQUIFIER.compare_exchange(current, next, Ordering::Relaxed, Ordering::Relaxed) {
-            Ok(_) => break next,
-            Err(v) => current = v,
-        }
-    };
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map_or(0, |d| d.as_nanos() as i64);
-    next ^ nanos
 }
 /// The `SoundManager` calls game code makes.
 pub trait Sounds {
@@ -1864,7 +1863,7 @@ mod tests {
             silent: false,
             underwater: false,
         };
-        let mut s = SoundInstance::riding_happy_ghast(&ghast, SoundEngine::unseeded());
+        let mut s = SoundInstance::riding_happy_ghast(&ghast, crate::random_source::create());
         assert_eq!(s.volume, 0.0);
         let mut ctx = TickContext {
             ridden: Some(ghast),
@@ -1911,7 +1910,7 @@ mod tests {
             attack_scale: 0.0,
             sniffer_digging: true,
         };
-        let mut s = SoundInstance::sniffer(3, SoundEngine::unseeded());
+        let mut s = SoundInstance::sniffer(3, crate::random_source::create());
         assert_eq!(s.position, [0.0; 3]);
         assert!(!s.looping);
         let mut ctx = TickContext {
@@ -1926,7 +1925,7 @@ mod tests {
         s.tick(&ctx);
         assert!(s.stopped);
         // Removed (missing): stop.
-        let mut s = SoundInstance::sniffer(3, SoundEngine::unseeded());
+        let mut s = SoundInstance::sniffer(3, crate::random_source::create());
         ctx.mobs.clear();
         s.tick(&ctx);
         assert!(s.stopped);
@@ -1940,7 +1939,7 @@ mod tests {
             silent: false,
             underwater: true,
         };
-        let mut s = SoundInstance::riding_nautilus(&nautilus, SoundEngine::unseeded());
+        let mut s = SoundInstance::riding_nautilus(&nautilus, crate::random_source::create());
         let mut ctx = TickContext {
             ridden: Some(nautilus),
             ..TickContext::default()
@@ -2043,7 +2042,7 @@ mod tests {
             position: [10.0, 64.0, 5.0],
             speed: 0.0,
         };
-        let mut s = SoundInstance::minecart(&cart, SoundEngine::unseeded());
+        let mut s = SoundInstance::minecart(&cart, crate::random_source::create());
         assert!(s.can_start_silent);
         assert_eq!(s.volume, 0.0);
 
@@ -2083,8 +2082,10 @@ mod tests {
             position: [0.0, 60.0, 0.0],
             speed: 0.4,
         };
-        let mut surface = SoundInstance::riding_minecart(&cart, false, SoundEngine::unseeded());
-        let mut underwater = SoundInstance::riding_minecart(&cart, true, SoundEngine::unseeded());
+        let mut surface =
+            SoundInstance::riding_minecart(&cart, false, crate::random_source::create());
+        let mut underwater =
+            SoundInstance::riding_minecart(&cart, true, crate::random_source::create());
 
         let mut ctx = TickContext {
             vehicle: Some(99),

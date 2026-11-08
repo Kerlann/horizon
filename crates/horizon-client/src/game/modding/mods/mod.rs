@@ -1116,6 +1116,9 @@ impl Game<'_> {
     }
     /// Apply the player's switches at the canonical native and wasm dispatch boundary.
     pub(super) fn sync_native_switches(&self) {
+        self.instance_groups
+            .borrow_mut()
+            .retire_disabled(&self.settings.mods.disabled);
         self.mods.apply_code_switches(&self.settings.mods.disabled);
     }
 }
@@ -1416,6 +1419,142 @@ mod tests {
             Some(20.0),
             "the live map answers the same row"
         );
+    }
+
+    /// A mod that adds an attribute vanilla zombies lack (#846,
+    /// `EntityAttributeModificationEvent`) changes the zombie type's default:
+    /// a zombie spawned after load answers it through the live attribute map
+    /// and carries it in its finalize defaults, while the rest of its row
+    /// and its spawn fields stay the zombie's.
+    #[test]
+    fn a_mods_attribute_addition_reaches_new_vanilla_zombies() {
+        use horizon_client::mobs::Mob;
+        use horizon_core::geometry::Vec3;
+        use horizon_world::attribute_map::ValueKind;
+        use horizon_world::attributes::entity::Catalog;
+        use mod_api::{Hooks, ModEntry, Registrar, RegistrationContext};
+
+        struct Lucky;
+        #[mod_api::__subscriptions]
+        impl Hooks for Lucky {
+            fn register(&self, registrar: &mut dyn Registrar, _: &RegistrationContext) {
+                registrar
+                    .modify_entity_attributes(
+                        "minecraft:zombie",
+                        vec![("minecraft:luck".to_string(), Some(2.5))],
+                    )
+                    .unwrap();
+            }
+        }
+        crate::game::api_values::install_parts(&[ModEntry::new("lucky", Box::new(Lucky))]).unwrap();
+
+        let bits = |n: f64| format!("{:016x}", n.to_bits());
+        let catalog = Arc::new(
+            Catalog::from_json(&serde_json::json!({
+                "data_version": horizon_world::DATA_VERSION,
+                "attributes": [
+                    {"id": "minecraft:max_health", "default": bits(20.0), "min": bits(1.0), "max": bits(1024.0), "syncable": true},
+                    {"id": "minecraft:movement_speed", "default": bits(0.7), "min": bits(0.0), "max": bits(1024.0), "syncable": true},
+                    {"id": "minecraft:luck", "default": bits(0.0), "min": bits(-1024.0), "max": bits(1024.0), "syncable": true}
+                ],
+                "entities": {
+                    "minecraft:zombie": {
+                        "minecraft:max_health": bits(20.0),
+                        "minecraft:movement_speed": bits(0.23000000417232513)
+                    }
+                }
+            }))
+            .unwrap(),
+        );
+        let read = |catalog: &Arc<Catalog>, name: &str| {
+            horizon_client::living_attributes::LivingAttributes::default().read(
+                catalog,
+                "minecraft:zombie",
+                name,
+                ValueKind::Computed,
+                Vec::new,
+            )
+        };
+        assert_eq!(
+            read(&catalog, "minecraft:luck"),
+            None,
+            "vanilla zombies lack it"
+        );
+
+        // core.motion, then rest.mobs, as the resource load runs them.
+        let modifications = mod_api::__private::entity_attribute_modifications();
+        assert_eq!(modifications.len(), 1);
+        let added = Arc::new(
+            super::super::resource_load::with_mod_attribute_additions(&catalog, modifications)
+                .unwrap(),
+        );
+        let mut types: std::collections::HashMap<_, _> = living_mod_types()
+            .into_iter()
+            .map(|(id, kind)| (id, Arc::unwrap_or_clone(kind)))
+            .collect();
+        super::super::resource_load::take_modified_attribute_rows(
+            &mut types,
+            &added,
+            modifications,
+        );
+
+        let zombie = Mob::new(
+            7,
+            Arc::new(types["minecraft:zombie"].clone()),
+            Vec3::ZERO,
+            0.0,
+        );
+        assert_eq!(read(&added, "minecraft:luck"), Some(2.5), "the live map");
+        assert_eq!(
+            zombie.kind.attributes.get("minecraft:luck"),
+            Some(&2.5),
+            "the finalize defaults"
+        );
+        assert_eq!(read(&added, "minecraft:max_health"), Some(20.0));
+        assert_eq!(zombie.health, 20.0, "the spawn's health");
+        assert_eq!(zombie.attrs.speed, 0.23000000417232513);
+        // Types nobody modified keep their rows.
+        assert_eq!(
+            types["minecraft:villager"].attributes.get("minecraft:luck"),
+            None
+        );
+    }
+
+    /// An addition the catalog cannot place (an attribute it does not know,
+    /// or a type with no attribute row) refuses the resource load, naming
+    /// the type.
+    #[test]
+    fn a_mods_attribute_addition_to_an_unknown_row_refuses_the_load() {
+        use horizon_world::attributes::entity::Catalog;
+        use mod_api::__private::EntityAttributeModification;
+
+        let catalog = Catalog::from_json(&serde_json::json!({
+            "data_version": horizon_world::DATA_VERSION,
+            "attributes": [
+                {"id": "minecraft:luck", "default": "0000000000000000", "min": "c090000000000000", "max": "4090000000000000", "syncable": true}
+            ],
+            "entities": {"minecraft:zombie": {}}
+        }))
+        .unwrap();
+        let addition = |entity: &str, attribute: &str| EntityAttributeModification {
+            entity: entity.into(),
+            attributes: vec![(attribute.into(), None)],
+        };
+        let error = super::super::resource_load::with_mod_attribute_additions(
+            &catalog,
+            &[addition("minecraft:zombie", "lucky:magic_resistance")],
+        )
+        .err()
+        .unwrap();
+        assert!(error.contains("minecraft:zombie"), "{error}");
+        assert!(error.contains("lucky:magic_resistance"), "{error}");
+        let error = super::super::resource_load::with_mod_attribute_additions(
+            &catalog,
+            &[addition("ruby:ghoul", "minecraft:luck")],
+        )
+        .err()
+        .unwrap();
+        assert!(error.contains("ruby:ghoul"), "{error}");
     }
 
     /// A content mod's type from the wandering trader, the neutral template

@@ -7,7 +7,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 /// Shown once, before the first native mod is installed.
-pub const NOTICE: &str = "Native mods aren't sandboxed: they run with full access to your computer, like any program. Install only mods whose authors you trust. To play with one, build the game on the Mods page; the first build downloads Rust and takes 20 to 30 minutes.";
+pub const NOTICE: &str = "Native mods aren't sandboxed: they run with full access to your computer, like any program. Install only mods whose authors you trust. To play with one, build the game on the Mods page; a build may download Rust and other build tools.";
 
 /// A native mod: its id, its version and a digest of its files (None for a build from before
 /// `native-mods.json` kept them).
@@ -228,14 +228,9 @@ fn record(version: &str) -> Option<serde_json::Value> {
     serde_json::from_str(&fs::read_to_string(path).ok()?).ok()
 }
 
-/// How many seconds build `version` took, when its record says.
-pub fn built_secs(version: &str) -> Option<u64> {
-    record(version)?["secs"].as_u64()
-}
-
 /// The profile native build `version` was built with (`native-mods.json`'s `profile`).
 pub fn built_profile(version: &str) -> Option<native_mods::Profile> {
-    native_mods::Profile::parse(record(version)?["profile"].as_str()?)
+    serde_json::from_value(record(version)?.get("profile")?.clone()).ok()
 }
 
 /// `state`, once the mode counts: a build made in another mode than `chosen` is not this mode's

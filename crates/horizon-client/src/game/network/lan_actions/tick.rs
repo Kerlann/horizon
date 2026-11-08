@@ -3,6 +3,8 @@ use super::*;
 impl Game<'_> {
     /// Per tick, for every guest: dig, use items, pick up drops, die.
     pub(in crate::game) fn tick_guests(&mut self) {
+        // `EntityEvent.Size` for the poses the guests' moves set since the last tick.
+        self.native_guest_sizes();
         self.tick_guest_cameras();
         self.lan_merchant_tick();
         self.lan_stations_tick();
@@ -112,7 +114,13 @@ impl Game<'_> {
             let using = play.using.is_some();
             let delayed = play.destroy_delay > 0 || play.use_delay > 0 || play.attack_ticks < 100;
             if digging.is_some() || using || delayed {
+                let players = if using {
+                    self.stab_players_for(conn)
+                } else {
+                    Vec::new()
+                };
                 self.as_guest(conn, |g| {
+                    let outer = std::mem::replace(&mut g.stab_players, players);
                     g.attack_ticks = g.attack_ticks.saturating_add(1);
                     if let Some((pos, face)) = digging {
                         g.forced_hit = Some(Hit {
@@ -130,10 +138,12 @@ impl Game<'_> {
                     g.forced_hit = None;
                     g.right = g.using.is_some();
                     g.tick_using();
+                    g.stab_players = outer;
                     if g.use_delay > 0 {
                         g.use_delay -= 1;
                     }
                 });
+                self.land_player_stabs();
                 // ServerPlayerGameMode.handleBlockBreakAction: creative and
                 // instant survival STARTs finish without a STOP from the client.
                 // tick_mining clears mining on completion; forget the START too,

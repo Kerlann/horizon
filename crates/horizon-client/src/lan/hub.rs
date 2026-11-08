@@ -736,7 +736,7 @@ impl Hub {
             sync,
             rule_registry: crate::gamerules::rule_registry(),
             ticks: 0,
-            sound_seeds: Mutex::new(LegacyRandom::new(crate::sound_engine::unique_seed())),
+            sound_seeds: Mutex::new(crate::random_source::create()),
             sound_order: Mutex::default(),
             immediate_respawn: false,
             reduced_debug_info: false,
@@ -2019,7 +2019,7 @@ impl Hub {
                     permission,
                     dedicated,
                     &self.sync.builtin,
-                    &self.mod_commands.0,
+                    &super::commands::with_session_tools(&self.mod_commands.0),
                     &self.sync.features,
                     &self.rule_registry,
                 )
@@ -2306,6 +2306,7 @@ impl Hub {
                 NetEvent::Packet(conn, packet, bytes) => {
                     let exceeded =
                         self.update_guest(conn, |g| {
+                            g.sender.undrained.taken(bytes);
                             // A kicked player's packets wait for nothing.
                             if !g.left_reason.is_empty() {
                                 return false;
@@ -3162,8 +3163,14 @@ impl Hub {
             return;
         };
         if !bulk.is_empty() {
-            // (what changed in them one at a time went with them)
-            log.retain(|p| bulk.binary_search(&(p.0 >> 4, p.2 >> 4)).is_err());
+            // (what changed in them one at a time went with them, but for one-shot fields: a chunk has none)
+            log.retain(|p| {
+                bulk.binary_search(&(p.0 >> 4, p.2 >> 4)).is_err()
+                    || matches!(
+                        world.block_entities.get(p),
+                        Some(crate::containers::BlockEntity::Mod(m)) if m.has_client_update_fields()
+                    )
+            });
         }
         if log.is_empty() {
             return;
@@ -3247,7 +3254,7 @@ impl Hub {
                 }
                 // A decorated pot is no block entity: its tag is the chunk's saved one.
                 let tag = match world.block_entities.get(&(x, y, z)) {
-                    Some(entity) => self.encoder.update_tag((x, y, z), entity),
+                    Some(entity) => self.encoder.change_tag((x, y, z), entity),
                     None => world
                         .chunks
                         .get(&(x >> 4, z >> 4))
@@ -5383,10 +5390,10 @@ fn wrap_degrees(degrees: f32) -> f32 {
 const PACKETS_PER_TICK: usize = 400;
 /// The packets a player may have waiting (a second of its budget) before it is
 /// disconnected, as vanilla's rate-limit does: no real client gets near it.
-const INBOX_LIMIT: usize = 20 * PACKETS_PER_TICK;
+pub(crate) const INBOX_LIMIT: usize = 20 * PACKETS_PER_TICK;
 /// The same in bytes on the wire: 8000 full books would hold gigabytes. A
 /// real client's largest packets (a 100-page book) are a few hundred kB.
-const INBOX_BYTES: usize = 16 << 20;
+pub(crate) const INBOX_BYTES: usize = 16 << 20;
 
 /// The `minecraft:gravity` attribute of a player.
 const PLAYER_GRAVITY: f64 = 0.08;
@@ -5518,6 +5525,119 @@ mod tests {
     use super::*;
     use crate::fast_hash::FxHashSet;
 
+    /// Queued one-shot fields wait out a change nobody sees, go in one built tag to
+    /// every viewer, and are not sent again; a column sent whole doesn't lose them.
+    #[test]
+    fn client_update_fields_reach_every_viewer_once_and_wait_without_viewers() {
+        use crate::block_entity_types::BlockEntityTypes;
+        use crate::containers::{BlockEntity, ModBlockEntity, ModBlockEntityFields};
+        use horizon_core::nbt::{Compound, JavaString};
+        use std::sync::atomic::AtomicUsize;
+        static BUILT: AtomicUsize = AtomicUsize::new(0);
+        let (mut hub, first) = hub_with_a_guest();
+        let builtin = horizon_protocol::registry::Builtin::parse(
+            r#"{"minecraft:block_entity_type":{"entries":{"test:machine":{"protocol_id":49}}}}"#,
+        )
+        .unwrap();
+        let types = BlockEntityTypes::new(
+            [("test:machine".into(), "test:machine".into())].into(),
+            builtin
+                .get("minecraft:block_entity_type")
+                .unwrap()
+                .names
+                .clone(),
+        );
+        let states = ["minecraft:air", "test:machine"].map(|n| (Arc::<str>::from(n), false, None));
+        hub.encoder = ChunkEncoder::with_types(states, &builtin, &[], &[], Some(&types));
+        hub.encoder.mod_update_tag = Some(|_, entity| {
+            BUILT.fetch_add(1, Ordering::Relaxed);
+            Some(entity.nbt.clone())
+        });
+        let pos = (1, 64, 3);
+        let progress = (JavaString::from("progress"), Tag::Int(7));
+        let effect = (JavaString::from("effect"), Tag::Int(23));
+        let mut world = World::new(horizon_world::registry::BlockStateId(0), 0);
+        let mut chunk = Chunk::empty(0, 0);
+        chunk.set(pos.0, pos.1, pos.2, 1);
+        world.chunks.insert((0, 0), Arc::new(chunk));
+        let machine = ModBlockEntity::new(
+            "test:machine".into(),
+            ModBlockEntityFields {
+                nbt: Compound::from([progress.clone()]),
+                ..Default::default()
+            },
+        );
+        let revision = machine.revision();
+        machine.set_client_update_fields(Compound::from([effect.clone()]));
+        world
+            .block_entities
+            .insert(pos, BlockEntity::Mod(Box::new(machine)));
+        world.block_log = Some(vec![pos]);
+        // Nobody has the chunk yet: no tag is built, and the fields wait.
+        hub.broadcast_block_changes(&mut world);
+        assert_eq!(BUILT.load(Ordering::Relaxed), 0);
+        assert!(first.try_recv().is_err());
+        hub.guests.update(0, |g| _ = g.sent_chunks.insert((0, 0)));
+        let (tx, second) = std::sync::mpsc::channel();
+        let mut other = Guest::new(
+            crate::lan::Joined {
+                conn: 2,
+                uuid: 2,
+                name: "Ada".into(),
+                properties: Vec::new(),
+                info: horizon_protocol::packets::configuration::ClientInformation::new(8),
+                brand: "vanilla".into(),
+                sender: crate::lan::PlayerSender::new(tx, Arc::default()),
+                latency: Arc::new(std::sync::atomic::AtomicI32::new(0)),
+                address: "127.0.0.1:25566".parse().unwrap(),
+                expected: false,
+            },
+            2,
+            [0.5, 64.0, 0.5],
+            8,
+        );
+        other.placed = true;
+        other.dimension = "minecraft:overworld".into();
+        other.sent_chunks.insert((0, 0));
+        hub.guests.push(other);
+        let tags = |rx: &std::sync::mpsc::Receiver<crate::lan::Out>| {
+            let mut tags = Vec::new();
+            while let Ok(out) = rx.try_recv() {
+                let crate::lan::Out::Packet(body) = out else {
+                    continue;
+                };
+                let mut r = horizon_protocol::buf::Reader::new(&body);
+                let id = r.varint().unwrap();
+                if let Ok(C::BlockEntityData(packet)) = C::decode(id, r.rest()) {
+                    assert_eq!(packet.pos, [pos.0, pos.1, pos.2]);
+                    tags.push(packet.tag);
+                }
+            }
+            tags
+        };
+        // The column goes whole in the same broadcast: the change is kept for the fields.
+        world.bulk_log.insert((0, 0));
+        world.block_log.as_mut().unwrap().extend([pos, pos]);
+        hub.broadcast_block_changes(&mut world);
+        let once = Tag::Compound(Compound::from([progress.clone(), effect]));
+        for viewer in [&first, &second] {
+            assert_eq!(tags(viewer), std::slice::from_ref(&once));
+        }
+        let built = BUILT.load(Ordering::Relaxed);
+        world.block_log.as_mut().unwrap().push(pos);
+        hub.broadcast_block_changes(&mut world);
+        let plain = Tag::Compound(Compound::from([progress.clone()]));
+        for viewer in [&first, &second] {
+            assert_eq!(tags(viewer), std::slice::from_ref(&plain));
+        }
+        assert_eq!(BUILT.load(Ordering::Relaxed), built + 1);
+        let BlockEntity::Mod(machine) = &world.block_entities[&pos] else {
+            unreachable!();
+        };
+        assert_eq!(machine.revision(), revision);
+        assert_eq!(machine.nbt, Compound::from([progress]));
+    }
+
     /// A hub with one placed guest, the speed effect registered, and what the
     /// guest is sent.
     fn hub_with_a_guest() -> (Hub, std::sync::mpsc::Receiver<crate::lan::Out>) {
@@ -5527,6 +5647,64 @@ mod tests {
             horizon_protocol::registry::Ids::from_names(vec!["minecraft:speed".to_string()]),
         );
         hub_with_sync(sync)
+    }
+
+    #[test]
+    fn modprofile_guest_tree_survives_refresh_with_permissions() {
+        for level in 0..=4 {
+            let mut sync = SyncData::empty();
+            sync.commands = Some(crate::lan::commands::CommandTree {
+                root: serde_json::json!({"type":"root","children":{}}),
+            });
+            let (mut hub, rx) = hub_with_sync(sync);
+            hub.guests.update(0, |guest| guest.permission = level);
+            for refresh in [false, true] {
+                if refresh {
+                    hub.set_mod_commands(7, serde_json::json!({"children":{"plugin":{"type":"literal","executable":true}}}));
+                } else {
+                    hub.send_commands(0);
+                }
+                let crate::lan::Out::Packet(body) = rx.try_recv().unwrap() else {
+                    panic!("packet");
+                };
+                let mut reader = horizon_protocol::buf::Reader::new(&body);
+                let id = reader.varint().unwrap();
+                let play::Clientbound::Commands(packet) =
+                    play::Clientbound::decode(id, &body[reader.position()..]).unwrap()
+                else {
+                    panic!("commands");
+                };
+                let root = &packet.nodes[packet.root as usize];
+                let profile = root
+                    .children
+                    .iter()
+                    .map(|&i| &packet.nodes[i as usize])
+                    .find(|n| n.name == "modprofile");
+                if level < 3 {
+                    assert!(profile.is_none());
+                } else {
+                    let profile = profile.expect("admins receive modprofile on join and refresh");
+                    assert!(profile.restricted && !profile.executable);
+                    let actions: Vec<_> = profile
+                        .children
+                        .iter()
+                        .map(|&i| {
+                            let node = &packet.nodes[i as usize];
+                            assert!(node.executable);
+                            node.name.as_str()
+                        })
+                        .collect();
+                    assert_eq!(actions, ["report", "start", "stop"]);
+                }
+                if refresh {
+                    assert!(
+                        root.children
+                            .iter()
+                            .any(|&i| packet.nodes[i as usize].name == "plugin")
+                    );
+                }
+            }
+        }
     }
 
     #[test]

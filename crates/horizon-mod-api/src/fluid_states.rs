@@ -16,6 +16,35 @@ pub enum FluidDefinition {
     TankOnly,
 }
 
+/// What a registered fluid is, apart from any level or entity. Vanilla reads the entity
+/// behaviours off `FluidTags.WATER` and `FluidTags.LAVA`, so `minecraft:flowing_water` answers as
+/// `minecraft:water`. The empty fluid and a tank-only fluid emit no light, nothing can be done in
+/// them and their fall modifier scales nothing.
+#[derive(Clone, Debug, PartialEq)]
+// exhaustive: the game builds it with a literal; mods only read it
+pub struct FluidTypeProperties {
+    /// `FluidType.getDescriptionId`: `fluid_type.<mod>.<name>`, vanilla's by its block
+    /// (`block.minecraft.water`, `block.minecraft.air` for the empty fluid).
+    pub description_id: String,
+    /// `FluidType.getLightLevel`: what the fluid's block emits, 0 through 15.
+    pub light_level: u8,
+    /// `FluidType.getFallDistanceModifier`: what an entity's fall distance is multiplied by
+    /// each tick in the fluid: water's 0 resets it, lava's 0.5 halves it.
+    pub fall_distance_modifier: f32,
+    /// `FluidType.canPushEntity`: whether its current moves entities.
+    pub can_push_entity: bool,
+    /// `FluidType.canSwim`: whether a sprinting entity swims in it.
+    pub can_swim: bool,
+    /// `FluidType.canDrownIn`: whether an entity's air runs out with its eyes in it.
+    pub can_drown: bool,
+    /// `FluidType.canExtinguish`: whether it puts out a burning entity.
+    pub can_extinguish: bool,
+    /// `FluidType.canHydrate`: whether it keeps farmland wet.
+    pub can_hydrate: bool,
+    /// `FluidType.supportsBoating`: whether a boat floats on it.
+    pub supports_boating: bool,
+}
+
 /// Why fluid-state constraints could not be validated.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -59,6 +88,11 @@ impl FluidStates<'_> {
     pub fn definition(&self, fluid: FluidKey) -> Option<FluidDefinition> {
         self.backend?.fluid_state_definition(fluid)
     }
+    /// The fluid's type properties, or none without a resolved registry or for a key it
+    /// doesn't hold. Resolve a name with `Host::fluid_key`, which is none for an unknown one.
+    pub fn type_properties(&self, fluid: FluidKey) -> Option<FluidTypeProperties> {
+        self.backend?.fluid_type_properties(fluid)
+    }
     /// Validate partial constraints in input order, without matching a particular state.
     /// Tank-only or unavailable definitions return `NoWorldState`; use `definition`
     /// to distinguish them. Indices identify the first offending constraint.
@@ -83,6 +117,7 @@ mod tests {
         crate::impl_host_areas!(Unavailable);
         let key = FluidKey(0);
         assert_eq!(Unavailable.fluid_states().definition(key), None);
+        assert_eq!(Unavailable.fluid_states().type_properties(key), None);
         assert_eq!(
             Unavailable.fluid_states().validate(key, &[]),
             Err(FluidStateError::NoWorldState)

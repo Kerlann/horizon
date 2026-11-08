@@ -84,39 +84,55 @@ impl Game<'_> {
             Backing::Trident(i) => self.tridents[i].guest.map_or(Target::Player, Target::Guest),
             Backing::Rocket(i) => {
                 let r = &self.rockets[i];
-                match r.owner? {
-                    Who::Player => r.guest.map_or(Target::Player, Target::Guest),
-                    Who::Mob(id) => Target::Mob(id),
+                match r.owner {
+                    Some(Who::Player) => r.guest.map_or(Target::Player, Target::Guest),
+                    Some(Who::Mob(id)) => Target::Mob(id),
+                    None => self.target_by_uuid(ints_uuid(r.owner_uuid?))?,
                 }
             }
         };
         self.native_owner_entity(target)
     }
 
-    /// The owner fields for `Projectile.setOwner(owner)`. None for an owner
-    /// that is stale or not a player or mob: Horizon keeps only those.
-    fn native_projectile_owner_fields(&mut self, owner: Option<EntityRef>) -> Option<OwnerFields> {
+    /// Resolves hit credit, persistent identity, and a separate non-living
+    /// vehicle identity for collision exclusion. None for a stale owner or hook.
+    fn native_projectile_owner_fields(
+        &mut self,
+        owner: Option<EntityRef>,
+    ) -> Option<(OwnerFields, Option<u32>)> {
         let Some(owner) = owner else {
-            return Some((None, None, None));
+            return Some(((None, None, None), None));
         };
-        let guest = match self.native_entity_target(owner)? {
-            Target::Player => (Who::Player, self.lan_acting),
-            Target::Guest(conn) => (Who::Player, Some(conn)),
-            Target::Mob(id) => (Who::Mob(id), None),
-            _ => return None,
+        let target = self.native_entity_target(owner)?;
+        let vehicle = match target {
+            Target::Boat(id) | Target::Cart(id) => Some(id),
+            _ => None,
+        };
+        let (who, guest) = match target {
+            Target::Player => (Some(Who::Player), self.lan_acting),
+            Target::Guest(conn) => (Some(Who::Player), Some(conn)),
+            Target::Mob(id) => (Some(Who::Mob(id)), None),
+            Target::Hook(_) => return None,
+            _ => (None, None),
         };
         let uuid = uuid_ints(self.entity_uuid(owner)?);
-        Some((Some(guest.0), Some(uuid), guest.1))
+        Some(((who, Some(uuid), guest), vehicle))
     }
 
     /// `Projectile.setOwner` on the thing a handle names. False when the
     /// owner does not fit: a trident a player threw always has a player owner.
-    fn native_projectile_apply_owner(&mut self, backing: Backing, fields: OwnerFields) -> bool {
-        let (who, _, guest) = fields;
+    fn native_projectile_apply_owner(
+        &mut self,
+        backing: Backing,
+        owner: (OwnerFields, Option<u32>),
+    ) -> bool {
+        let (fields, vehicle) = owner;
+        let (who, uuid, guest) = fields;
         match backing {
             Backing::List(i) => {
                 self.creatures.projectiles.update(i, |p| {
                     (p.owner, p.owner_uuid, p.guest) = fields;
+                    p.owner_vehicle = vehicle;
                     // `AbstractArrow.setOwner(Entity)`: a player's arrow may be picked up.
                     if let Some(a) = &mut p.arrow {
                         a.set_owner(who);
@@ -130,16 +146,15 @@ impl Game<'_> {
                 self.tridents[i].guest = guest;
             }
             Backing::Rocket(i) => {
-                let r = &mut self.rockets[i];
-                (r.owner, r.guest) = (who, guest);
+                self.rockets[i].set_owner(who, uuid, guest);
             }
         }
         true
     }
 
-    /// `Projectile.setOwner`. False for a stale projectile, or an owner that is
-    /// stale or neither a player nor a mob (a trident a player threw takes a
-    /// player only). Does not touch `leftOwner`.
+    /// `Projectile.setOwner`. False for a stale projectile or owner, or an
+    /// owner that is a fishing hook (a trident a player threw takes a player
+    /// only). Does not touch `leftOwner`.
     pub(super) fn projectile_set_owner(
         &mut self,
         projectile: ProjectileRef,
@@ -177,7 +192,7 @@ impl Game<'_> {
         let Some(backing) = self.native_projectile_backing(projectile) else {
             return false;
         };
-        let Some(owner) = self.native_projectile_owner_fields(new_owner) else {
+        let Some((owner, vehicle)) = self.native_projectile_owner_fields(new_owner) else {
             return false;
         };
         if !power.iter().all(|v| v.is_finite()) {
@@ -203,10 +218,13 @@ impl Game<'_> {
         match backing {
             // `deflect` takes the `EntityReference` overload of `setOwner`: an
             // arrow's pickup does not change, unlike `set_owner`.
-            Backing::List(i) => self
-                .creatures
-                .projectiles
-                .update(i, |p| p.deflect(turn, power, owner, by_attack)),
+            Backing::List(i) => self.creatures.projectiles.update(i, |p| {
+                let applied = p.deflect(turn, power, owner, by_attack);
+                if applied {
+                    p.owner_vehicle = vehicle;
+                }
+                applied
+            }),
             Backing::Trident(i) => {
                 if owner.0 != Some(Who::Player) {
                     return false;
@@ -224,7 +242,7 @@ impl Game<'_> {
                 if let Some((velocity, _)) = turn.apply(r.velocity, power, &mut r.random) {
                     r.velocity = velocity;
                 }
-                (r.owner, r.guest) = (owner.0, owner.2);
+                r.set_owner(owner.0, owner.1, owner.2);
                 true
             }
         }
@@ -370,6 +388,107 @@ mod tests {
     use horizon_core::random::RandomSource;
     use mod_api::NativeWorldEpoch;
 
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn a_boat_owned_snowball_excludes_its_owner_until_it_leaves() {
+        use horizon_client::projectiles::{Hit, ProjectileWorld};
+        use horizon_core::geometry::Aabb;
+        struct Air(Vec<(Who, Aabb)>);
+        impl ProjectileWorld for Air {
+            fn clip(&self, _: Vec3, _: Vec3) -> Option<(Vec3, [i32; 3], [i32; 3])> {
+                None
+            }
+            fn in_water(&self, _: Aabb) -> bool {
+                false
+            }
+            fn targets(&self) -> &[(Who, Aabb)] {
+                &self.0
+            }
+        }
+        with_game(|game| {
+            game.options.dedicated = Some(Vec::new());
+            let boat_id = game.take_entity_id();
+            game.boats.push(super::super::boats::Boat::new(
+                boat_id,
+                "oak".into(),
+                Vec3::ZERO,
+                0.0,
+            ));
+            let boat = game.entity(boat_id).unwrap();
+            let id = game.take_entity_id();
+            let mut p = Projectile::new(ProjectileKind::Snowball, Vec3::new(-1.1, 0.2, 0.0), None);
+            p.id = id;
+            p.velocity = Vec3::new(1.0, 0.0, 0.0);
+            game.creatures.projectiles.push(p);
+            let entity = game.entity(id).unwrap();
+            let projectile = game.projectile(entity).unwrap();
+            assert!(game.projectile_set_owner(projectile, Some(boat)));
+            assert_eq!(game.projectile_owner(projectile), Some(boat));
+            let scene = Air(game.vehicle_targets());
+            let mut p = game.creatures.projectiles[0].clone();
+            assert!(!p.left_owner);
+            assert_eq!(p.owner, None, "a vehicle must not credit a living attacker");
+            assert_eq!(p.owner_uuid, Some(game.uuid_for(boat_id)));
+            let mut control = p.clone();
+            control.owner = Some(Who::Mob(boat_id));
+            assert_eq!(control.tick(&scene).1, Hit::None);
+            let mut returned = p.clone();
+            returned.left_owner = true;
+            assert!(
+                matches!(returned.tick(&scene).1, Hit::Entity { who: Who::Mob(id), .. } if id == boat_id)
+            );
+            assert_eq!(p.tick(&scene).1, Hit::None);
+            // Reload mid-flight, before leftOwner: the UUID restores exclusion too.
+            let keys = std::collections::HashSet::from([(-1, 0)]);
+            let (_, tag) = game.save_projectile(0, &keys).unwrap();
+            game.creatures.projectiles.clear();
+            game.load_listed("minecraft:snowball", Some([1, 2, 3, 4]), None, tag)
+                .unwrap();
+            let mut loaded = game.creatures.projectiles[0].clone();
+            assert!(!loaded.left_owner);
+            assert_eq!(loaded.owner, None);
+            assert_eq!(loaded.tick(&scene).1, Hit::None);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn a_vehicle_owned_trident_does_not_scale_damage_as_a_living_attacker() {
+        use horizon_client::projectiles::Hit;
+        with_game(|game| {
+            game.options.dedicated = Some(Vec::new());
+            game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
+            game.world.health_rules.difficulty = horizon_world::food::Difficulty::Easy;
+            let boat_id = game.take_entity_id();
+            game.boats.push(super::super::boats::Boat::new(
+                boat_id,
+                "oak".into(),
+                Vec3::ZERO,
+                0.0,
+            ));
+            let boat = game.entity(boat_id).unwrap();
+            game.add_projectile(Projectile::new(
+                ProjectileKind::Trident,
+                Vec3::new(3.0, 0.0, 0.0),
+                None,
+            ));
+            let id = game.creatures.projectiles[0].id;
+            let projectile = game.projectile(game.entity(id).unwrap()).unwrap();
+            assert!(game.projectile_set_owner(projectile, Some(boat)));
+            let p = game.creatures.projectiles[0].clone();
+            game.projectile_hit(
+                &p,
+                Hit::Entity {
+                    who: Who::Player,
+                    at: Vec3::ZERO,
+                },
+            )
+            .unwrap();
+            // Vanilla's 8 damage is not Easy's living-attacker reduction to 5.
+            assert_eq!(game.player.as_ref().unwrap().health.health(), 12.0);
+        });
+    }
+
     fn arrow(owner: Who) -> Projectile {
         let kind = ProjectileKind::Arrow {
             base_damage: 2.0,
@@ -408,7 +527,22 @@ mod tests {
             assert!(handle.set_owner(game, Some(mob)));
             assert_eq!(handle.owner(game), Some(mob));
             assert_eq!(game.creatures.projectiles[0].owner, Some(Who::Mob(99)));
-            assert!(!handle.set_owner(game, Some(entity)));
+            // A non-living owner has collision identity but no living hit credit.
+            let boat_id = game.take_entity_id();
+            game.boats.push(super::super::boats::Boat::new(
+                boat_id,
+                "oak".into(),
+                Vec3::ZERO,
+                0.0,
+            ));
+            let boat = game.entity(boat_id).unwrap();
+            assert!(handle.set_owner(game, Some(boat)));
+            assert_eq!(handle.owner(game), Some(boat));
+            assert_eq!(game.creatures.projectiles[0].owner, None);
+            assert_eq!(game.creatures.projectiles[0].owner_vehicle, Some(boat_id));
+            let saved = game.uuid_for(boat_id);
+            assert_eq!(game.creatures.projectiles[0].owner_uuid, Some(saved));
+            assert!(handle.set_owner(game, Some(mob)));
 
             assert_eq!(handle.pierce_level(game), Ok(0));
             let role = game.options.execution_role;
@@ -611,6 +745,27 @@ mod tests {
                 rocket_random.next_float()
             );
             assert_eq!(rocket.owner(game), None);
+
+            // A rocket keeps an owner that is neither player nor mob, across a
+            // save too, but a player's trident still refuses one.
+            let boat_id = game.take_entity_id();
+            game.boats.push(super::super::boats::Boat::new(
+                boat_id,
+                "oak".into(),
+                Vec3::ZERO,
+                0.0,
+            ));
+            let boat = game.entity(boat_id).unwrap();
+            assert!(!trident.set_owner(game, Some(boat)));
+            assert!(rocket.set_owner(game, Some(boat)));
+            assert_eq!(rocket.owner(game), Some(boat));
+            assert_eq!(game.rockets[0].owner, None);
+            let saved = game.uuid_for(boat_id);
+            let tag = game.rockets[0].to_nbt([9; 4], None, None);
+            let back = Rocket::from_nbt(
+                horizon_client::entity_nbt::firework_rocket_from_nbt(&tag, None).unwrap(),
+            );
+            assert_eq!(back.owner_uuid, Some(saved));
         });
     }
 

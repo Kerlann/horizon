@@ -635,6 +635,9 @@ mod api {
         #[derive(Clone, Copy)]
         pub struct Hand;
     }
+    pub mod widgets {
+        pub struct TextEdit;
+    }
     pub mod hud_layout {
         pub struct HealthInputs;
         pub struct GuiDraw;

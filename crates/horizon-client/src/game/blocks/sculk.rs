@@ -608,7 +608,11 @@ impl Game<'_> {
             player: mob.is_some_and(|m| m.rider.is_some()),
         }
     }
-    pub(super) fn who_context(&self, who: Option<Who>, state: Option<BlockStateId>) -> Context {
+    pub(in crate::game) fn who_context(
+        &self,
+        who: Option<Who>,
+        state: Option<BlockStateId>,
+    ) -> Context {
         match who {
             Some(Who::Player) => self.player_context(state),
             Some(Who::Mob(id)) => self.mob_context(id, state),

@@ -3,6 +3,10 @@
 //! (`game`). None of it is part of the API a mod is written against.
 use crate::*;
 
+/// The game's profiler control and reports, not a mod-facing API contract.
+#[path = "profiler.rs"]
+pub mod profiler;
+
 /// Switch an installed mod's dispatches on or off, returning whether it was found.
 pub fn set_mod_enabled(id: &str, on: bool) -> bool {
     crate::set_mod_enabled(id, on)

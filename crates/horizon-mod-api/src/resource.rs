@@ -213,6 +213,37 @@ impl ItemResource {
     pub fn bar(&self, host: &dyn Host) -> Option<ItemBar> {
         backend_of(host)?.item_resource_bar(&self.0)
     }
+    /// Standard tooltip text, with explicit advanced and creative flags and the client's
+    /// current viewer context. Uses the same line builder as inventory tooltips and skips
+    /// mod callbacks, so a tooltip hook can safely request another item's base lines.
+    /// Returns None without a client backend, or when the item cannot be resolved.
+    pub fn tooltip(
+        &self,
+        host: &dyn crate::ClientHost,
+        advanced: bool,
+        creative: bool,
+    ) -> Option<Vec<crate::TooltipElement>> {
+        backend_of(host)?.item_resource_tooltip(&self.0, advanced, creative)
+    }
+    /// Roll compatible enchantments from the named enchantment tag with the active server
+    /// level's random source. Returns a detached resource, converting a book to an enchanted
+    /// book when selected. None means the request was refused or the roll chose nothing.
+    /// A valid roll consumes random draws even if the caller discards the result.
+    /// To store the result, use the normal transactional item-place or capability write.
+    pub fn enchant_randomly(
+        &self,
+        host: &mut dyn ServerHost,
+        level: crate::LevelRef,
+        power: i32,
+        pool: &crate::Identifier,
+    ) -> Result<Option<Self>, crate::StackWriteError> {
+        let Some(backend) = crate::backend_mut_of(host) else {
+            return Ok(None);
+        };
+        Ok(backend
+            .item_resource_enchant_randomly(&self.0, level, power, pool)?
+            .map(Self))
+    }
     /// Whether an enchantment on this item has effect `effect` (`EnchantmentHelper.has`), by the
     /// enchantments' definitions, data packs' included, not their ids.
     pub fn has_enchantment_effect(&self, host: &dyn Host, effect: EnchantmentEffect) -> bool {

@@ -660,7 +660,7 @@ fn air_event_skips_the_item_and_non_success_client_answers_try_the_other_hand() 
                         ..Controls::default()
                     };
                     game.offhand = Some(ItemStack::new("minecraft:shield", 1));
-                    game.remote_use_hands();
+                    game.remote_use_hands(mod_api::InteractionAttempt::Press);
                     assert_eq!(
                         observer.0.lock().unwrap().steps,
                         [Step::Air(side, Hand::Main), Step::Air(side, Hand::Off)]

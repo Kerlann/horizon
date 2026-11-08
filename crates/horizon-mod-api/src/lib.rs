@@ -62,15 +62,16 @@ pub enum GameRuleError {
     Duplicate,
 }
 
-/// Why an entity type's attribute declaration was refused
-/// ([`Registrar::declare_entity_attributes`](EntityAttributesRegistrar::declare_entity_attributes)).
+/// Why an entity type's attribute declaration or addition was refused
+/// ([`Registrar::declare_entity_attributes`](EntityAttributesRegistrar::declare_entity_attributes),
+/// [`Registrar::modify_entity_attributes`](EntityAttributesRegistrar::modify_entity_attributes)).
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum EntityAttributeError {
-    /// The entity type's id is invalid, empty, or in a namespace the declaring
-    /// mod does not own.
+    /// The entity type's id is invalid or empty, or, for a declared set, in a
+    /// namespace the declaring mod does not own.
     InvalidId,
-    /// The set declares the same attribute twice.
+    /// The set names the same attribute twice.
     DuplicateAttribute,
     /// A base value is not finite.
     NotFinite,
@@ -296,6 +297,20 @@ impl<'a> ModBlockEntityView<'a> {
     /// Id.
     pub fn id(&self) -> &str {
         self.entity.id()
+    }
+    /// Replace the one-shot fields the block's next change sends clients; an empty compound
+    /// clears them. They go over what `block_entity_update_tag` gives (or alone, without
+    /// one) in the single packet every current viewer gets, and are gone. Call
+    /// `block_entity_sync` to send them: until a change reaches a viewer they wait, however
+    /// many chunks are sent, and they end with the block entity. They are for a one-shot
+    /// effect, not state: nothing saves, clones or compares them, and the revision stays.
+    /// A client merges them into its copy's `nbt` as any update field, where they stay until
+    /// sent again: a changing value, such as a counter, tells one effect from the next.
+    /// Fields that would take the packet past what a client reads (2 MiB of network NBT) are
+    /// dropped with a warning, and the change goes without them. A transaction that rolls the
+    /// block entity back also drops a batch queued before it.
+    pub fn set_client_update_fields(&mut self, fields: Compound) {
+        self.entity.client_update_fields = Some(fields);
     }
 }
 impl std::ops::Deref for ModBlockEntityView<'_> {
@@ -2259,6 +2274,26 @@ impl ProjectileRef {
     }
 }
 
+/// A cast fishing hook of the open world (vanilla's `FishingHook`), narrowed
+/// from an entity with `host.fishing_hook(entity)`. It does not narrow to a
+/// [`ProjectileRef`]: a hook's owner is always the player who cast it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+// exhaustive: its fields are private, so mods cannot build or destructure it
+pub struct FishingHookRef(EntityRef);
+
+impl FishingHookRef {
+    /// Create a handle for the game.
+    // hidden: a game-side helper, not part of the mod surface
+    #[doc(hidden)]
+    pub fn new(entity: EntityRef) -> Self {
+        Self(entity)
+    }
+    /// The same entity as an [`EntityRef`].
+    pub fn entity(self) -> EntityRef {
+        self.0
+    }
+}
+
 /// A villager or wandering trader (vanilla's `AbstractVillager`, a `Merchant`),
 /// narrowed from an entity with `host.merchant(entity)`. If a villager's saved
 /// profession is unresolved, offers read empty and merchant mutations are
@@ -2888,6 +2923,35 @@ pub enum NativeSupportType {
     Rigid,
 }
 
+/// What made a `tags_updated` notice fire (`TagsUpdatedEvent`'s two subclasses).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TagsUpdateCause {
+    /// `TagsUpdatedEvent.ServerDataLoad`: a server built its data tables.
+    ServerDataLoad {
+        /// False on a world's first open, true after `/reload`.
+        reload: bool,
+    },
+    /// `TagsUpdatedEvent.ClientPacketReceived`: a client applied the tags its server sent.
+    ClientPacketReceived {
+        /// The server is the single player window's own.
+        integrated_server: bool,
+    },
+}
+
+impl TagsUpdateCause {
+    /// `TagsUpdatedEvent.shouldUpdateStaticData`: whether to update static data, which single
+    /// player's two threads share, so that there only the server side updates it.
+    pub fn should_update_static_data(self) -> bool {
+        !matches!(
+            self,
+            Self::ClientPacketReceived {
+                integrated_server: true
+            }
+        )
+    }
+}
+
 /// Why a mod removes an entity (`Entity.RemovalReason`): the two reasons
 /// that destroy it. The unloading and dimension-change reasons belong to the
 /// game.
@@ -3056,6 +3120,40 @@ pub struct NativeClipHit {
     pub inside: bool,
     /// Whether the hit is the world border.
     pub world_border: bool,
+}
+
+/// The world's respawn data (`LevelData.RespawnData`): where a player without a spawn point of
+/// their own appears, and facing which way. Horizon keeps it in the Overworld.
+#[derive(Clone, Copy, Debug, PartialEq)]
+// exhaustive: the game builds it with a literal; mods only read it
+pub struct RespawnData {
+    /// The spawn block.
+    pub pos: [i32; 3],
+    /// The yaw in degrees, -180 to 180 (`Mth.wrapDegrees`).
+    pub yaw: f32,
+    /// The pitch in degrees, -90 to 90.
+    pub pitch: f32,
+}
+
+/// A map's saved data (`MapItemSavedData`) as it stands: where it is, how far it reaches and
+/// its pixels. The markers (players, banners, frames) are not part of it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+// exhaustive: the game builds it with a literal; mods only read it
+pub struct MapState {
+    /// The centre block `[x, z]`.
+    pub center: [i32; 2],
+    /// A map pixel is `1 << scale` blocks, 0 to 4.
+    pub scale: u8,
+    /// The dimension it shows, `minecraft:overworld`.
+    pub dimension: String,
+    /// A locked map (a cartography table's glass pane) no longer reveals the world.
+    pub locked: bool,
+    /// Whether it shows its holders' markers.
+    pub tracking: bool,
+    /// Whether it shows them however far away they are.
+    pub unlimited: bool,
+    /// 128 by 128 map colour ids, row by row (`x + z * 128`).
+    pub colors: Vec<u8>,
 }
 
 /// One entity a level ray passes through (`LevelRef::ray_trace_entities`): what
@@ -4313,6 +4411,30 @@ pub enum InteractionKey {
     Use,
     /// `key.pickItem`: only with a block or entity aimed at.
     PickBlock,
+}
+
+/// What caused a client interaction mapping to act on this tick.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum InteractionAttempt {
+    /// A queued press of the mapping.
+    Press,
+    /// A repeat or continuation from a mapping that is still held.
+    Held,
+}
+
+/// A proposed window-side block mining operation.
+#[derive(Clone, Copy, Debug, PartialEq)]
+// exhaustive: the game fills all fields; mods only read the snapshot
+pub struct ClientMiningPrediction {
+    /// The targeted block.
+    pub pos: [i32; 3],
+    /// The outward unit normal of the hit face.
+    pub face: [i32; 3],
+    /// Whether this operation begins a break rather than advancing a retained target.
+    pub starting: bool,
+    /// The proposed resulting break fraction, from zero to one.
+    pub progress: f32,
 }
 
 /// The behaviour about to run in `UseItemOnBlockEvent`.

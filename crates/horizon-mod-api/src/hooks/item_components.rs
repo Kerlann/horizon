@@ -24,4 +24,16 @@ current item classes do not require a player argument; Parts see the host's curr
 player. These reads use a world-phase host; tag-based repair checks need its authoritative world tags.
 Duration and bar reads need an engine backend and return `None` for an unknown item."#]
     fn item_components_note2();
+    #[notes = r#"## Tooltip lines and random enchanting
+
+`ItemResource::tooltip(client, advanced, creative)` returns styled text and line colours
+for overlays that need the ordinary inventory tooltip. It uses the client's current viewer
+and the requested flags. The base lines do not call mod listeners or lay out a tooltip, so
+calling this from a tooltip listener does not dispatch that listener again.
+
+`ItemResource::enchant_randomly(server, level, power, pool)` rolls from the specified
+enchantment tag with the active server level's random source and the stack's effective
+enchantability. It returns a detached result. Use the normal item-place or capability
+transaction to replace a stored stack. Discarding the result does not rewind the random source."#]
+    fn item_components_note3();
 }

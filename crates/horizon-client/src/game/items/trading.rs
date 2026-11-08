@@ -340,7 +340,6 @@ impl Game<'_> {
         for (id, r) in std::mem::take(&mut session.sequences) {
             self.rand_sequences.give_back(id, r);
         }
-        let traded = std::mem::take(&mut session.last_traded);
         let Some(id) = state.mob else { return };
         let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) else {
             return;
@@ -357,9 +356,6 @@ impl Game<'_> {
         let trade = m.extra.trade.get_or_insert_default();
         trade.xp = session.xp;
         trade.offers = session.offers.clone();
-        if traded && session.villager {
-            self.villager_traded(id);
-        }
     }
     /// Opens a merchant menu without a mob (horizon-ctl `trade`).
     pub(super) fn open_merchant(&mut self, profession: &str, variant: &str, level: i32) {
@@ -509,6 +505,11 @@ impl Game<'_> {
         offers: &mut [MerchantOffer],
         traded: &[usize],
     ) {
+        if !traded.is_empty()
+            && let Some(id) = mob
+        {
+            self.villager_trade_pending(id);
+        }
         for index in traded {
             let Some(offer) = offers.get_mut(*index) else {
                 continue;

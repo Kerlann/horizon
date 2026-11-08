@@ -96,7 +96,41 @@ pub struct Dimensions {
     pub height: f32,
     pub eye_height: f32,
 }
+/// What `entity_size` (`EntityEvent.Size`) answered for an entity whose size vanilla
+/// recalculated (`Entity.refreshDimensions`) to `vanilla` (width, height, eye height) in
+/// `pose`: `size` replaces it while both still hold. Any change to either goes back to
+/// vanilla's until the hook is asked again; `size` is `None` when the listeners left it.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct SizeAnswer {
+    pub pose: mod_api::Pose,
+    pub vanilla: [f32; 3],
+    pub size: Option<[f32; 3]>,
+}
+impl SizeAnswer {
+    /// Whether this answer is for `pose` and vanilla's `vanilla`.
+    pub fn asked(&self, pose: mod_api::Pose, vanilla: [f32; 3]) -> bool {
+        self.pose == pose && self.vanilla == vanilla
+    }
+    /// The size to use instead of `vanilla` in `pose`, if this answer still holds.
+    pub fn holds(&self, pose: mod_api::Pose, vanilla: [f32; 3]) -> Option<[f32; 3]> {
+        self.size.filter(|_| self.asked(pose, vanilla))
+    }
+    /// The size the entity had with this answer: the listeners', else vanilla's.
+    pub fn effective(&self) -> [f32; 3] {
+        self.size.unwrap_or(self.vanilla)
+    }
+}
 impl Dimensions {
+    pub fn to_array(self) -> [f32; 3] {
+        [self.width, self.height, self.eye_height]
+    }
+    pub fn from_array([width, height, eye_height]: [f32; 3]) -> Self {
+        Self {
+            width,
+            height,
+            eye_height,
+        }
+    }
     /// `Avatar.getDefaultDimensions` with the living scale applied, including
     /// the fixed DYING entry that is not a movement stance.
     pub fn avatar(pose: mod_api::Pose, scale: f32) -> Self {
@@ -142,6 +176,13 @@ impl PlayerMotion {
     pub fn refresh_dimensions(&mut self) -> Result<()> {
         self.scale = self.attribute("minecraft:scale")? as f32;
         self.dimensions = self.pose.dimensions(self.scale);
+        // `EntityEvent.Size`: an `entity_size` answer for this pose and size still holds.
+        if let Some(size) = self
+            .size_answer
+            .and_then(|answer| answer.holds(self.pose.into(), self.dimensions.to_array()))
+        {
+            self.dimensions = crate::pose::Dimensions::from_array(size);
+        }
         Ok(())
     }
     pub fn set_pose(&mut self, pose: Pose) -> Result<()> {

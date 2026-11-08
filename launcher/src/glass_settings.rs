@@ -263,17 +263,15 @@ impl Launcher {
         )
     }
 
-    /// The Game card's Native mods row. The mockup has an on/off switch; native mods are always
-    /// on here, so the row picks the profile they build with, as the Mods page does.
+    /// The selected instance's saved preference, also offered by a needed Mods picker.
     fn native_mods_row(&mut self, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
-        let profile = native_mods::Profile::chosen(&self.settings);
+        let profile = self.native_profile();
         let picker = segments(
             "settings-native-profile",
             &[
                 (native_mods::Profile::Optimized, "Optimized"),
                 (native_mods::Profile::Balanced, "Balanced"),
-                (native_mods::Profile::Developer, "Developer"),
             ],
             profile,
             &t,
@@ -281,22 +279,23 @@ impl Launcher {
                 let this = cx.entity().downgrade();
                 move |choice, _, cx| {
                     let _ = this.update(cx, |this, cx| {
-                        this.settings.native_profile = Some(choice);
-                        this.native_done = None;
-                        this.save_settings();
+                        this.choose_native_profile(choice);
                         cx.notify();
                     });
                 }
             },
         );
         let said = crate::build_mode::mode_note(profile);
+        let instance = self
+            .selected_instance()
+            .map_or(tr("Default"), |i| i.name.as_str());
         ui::setting_row(
             tr("Native mods"),
             Some(
                 div()
-                    .child(format!(
-                        "{} {said}",
-                        tr("Experimental. Builds the native mods you trust into a game of their own.")
+                    .child(trf(
+                        "Build-mode preference for {instance}. {detail}",
+                        &[("instance", instance), ("detail", said)],
                     ))
                     .into_any_element(),
             ),

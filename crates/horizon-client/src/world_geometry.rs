@@ -128,7 +128,8 @@ impl WorldGeometry {
             return Err(InstanceError::CapacityExceeded);
         }
         validate_instances(instances)?;
-        self.submit_validated_model(batch, instances, cull, stage)
+        let mut stage = stage;
+        self.submit_validated_model(batch, instances, cull, |_, copy| stage(copy))
     }
     /// Submit copies validated when written into persistent storage.
     pub fn submit_validated_model(
@@ -136,7 +137,7 @@ impl WorldGeometry {
         batch: ModelBatch,
         instances: &[ModelInstance],
         cull: Option<&impl crate::gfx::Cull>,
-        mut stage: impl FnMut(&ModelCopy) -> bool,
+        mut stage: impl FnMut(usize, &ModelCopy) -> bool,
     ) -> Result<(), InstanceError> {
         if instances.is_empty() {
             return Ok(());
@@ -149,7 +150,7 @@ impl WorldGeometry {
         }
         let start = self.copies.len();
         let accepted = self.accepted_models;
-        for instance in instances {
+        for (index, instance) in instances.iter().enumerate() {
             if !copy_visible(
                 batch.bounds,
                 instance.transform,
@@ -175,7 +176,7 @@ impl WorldGeometry {
                 light: pack_light(instance.light),
                 overlay: pack_overlay(instance.overlay),
             };
-            if !stage(&copy) {
+            if !stage(index, &copy) {
                 self.copies.push(copy);
             }
             self.accepted_models += 1;

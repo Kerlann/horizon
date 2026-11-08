@@ -47,6 +47,26 @@ pub struct CommandTree {
     pub(super) root: Value,
 }
 
+/// Extend mod commands with game-session tooling, never vanilla's parity tree.
+pub(super) fn with_session_tools(extra: &Value) -> Value {
+    use crate::command::vanilla::{MODPROFILE_ACTIONS, MODPROFILE_PERMISSION};
+    let children: serde_json::Map<_, _> = MODPROFILE_ACTIONS
+        .into_iter()
+        .map(|(name, _)| {
+            (
+                name.to_owned(),
+                serde_json::json!({"type":"literal", "executable":true}),
+            )
+        })
+        .collect();
+    let mut root = extra.clone();
+    root["children"]["modprofile"] = serde_json::json!({
+        "type":"literal", "permissions":{"permission":{"level":MODPROFILE_PERMISSION.1}},
+        "children": children
+    });
+    root
+}
+
 /// A node of the filtered tree.
 struct Node {
     name: String,

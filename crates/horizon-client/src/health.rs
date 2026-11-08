@@ -14,7 +14,7 @@ use horizon_world::{
     damage_source::{Catalog, DamageSource, DamageTypeId, Scaling},
     food::{Difficulty, FoodData},
     living_damage::DamageStat,
-    living_hurt::{HurtState, HurtTag, HurtWorld},
+    living_hurt::{HurtState, HurtTag, HurtWorld, PendingHurt},
     player_health::{PlayerAttributeHealth, PlayerFloatIds},
     player_hurt::{CausingEntity, PlayerHurtWorld, ServerPlayerHurtWorld},
     server_player_combat::{CombatEnvironment, ServerPlayerCombat},
@@ -378,6 +378,9 @@ pub struct Attack {
     pub attacker: i32,
     /// The projectile delivering this hit, if any (`DamageSource.getDirectEntity`).
     pub projectile: Option<i32>,
+    /// An explicitly supplied direct entity, including 0 for no direct entity.
+    /// None uses the normal melee/projectile factory rules.
+    pub direct: Option<i32>,
     /// The verified causing player's UUID, when the attacker is a player.
     pub player_uuid: Option<[i32; 4]>,
     /// What it holds, or none when it is not known (no native mod listens: the game only
@@ -388,6 +391,7 @@ pub struct Attack {
 pub static NO_ATTACK: Attack = Attack {
     attacker: 0,
     projectile: None,
+    direct: None,
     player_uuid: None,
     held: [None, None],
 };
@@ -423,6 +427,9 @@ impl Attack {
     /// This impact's direct entity for `damage_type`: the projectile when the
     /// type names one, else 0. Melee uses the attacker and does not call this.
     pub fn projectile_direct(&self, damage_type: &str) -> i32 {
+        if let Some(direct) = self.direct {
+            return direct;
+        }
         if names_its_projectile(damage_type) {
             self.projectile.unwrap_or(0)
         } else {
@@ -804,65 +811,136 @@ impl PlayerMotion {
         living_cause: bool,
         causing: i32,
     ) -> Result<BlockOutcome> {
-        if self.client_side {
-            return Ok(BlockOutcome::default());
-        }
-        let source = resources
-            .damage
-            .source::<()>(source, None, None, None)
-            .ok_or("unknown resident damage source")?;
-        let before = self.health.health() + self.health.absorption();
-        let fire_ticks = self.fire_ticks;
-        let source_name = source.definition().name.clone();
-        let totem_ready = self.health.totem_ready;
-        let totem_off_hand = self.health.totem_off_hand;
-        let invulnerable = self.invulnerable;
-        let victim = self.victim();
-        let h = &mut self.health;
-        let mut environment = Environment {
-            level: level.reborrow(),
-            entity: self.entity_id,
-            victim,
-            causing,
-            invulnerable,
-            client_loaded: self.client_loaded,
+        let hit = self.start_hurt(
+            level,
+            resources,
             rules,
             source,
+            amount,
+            blocking,
             living_cause,
-            events: &mut self.events,
-            dead: &mut h.dead,
-            sync_velocity: &mut h.sync_velocity,
-            game_time: h.game_time,
-            status: self.status.clone(),
+            causing,
+            false,
+        )?;
+        self.finish_hurt(level, resources, rules, hit)
+    }
+    /// `hurtServer` up to `hurtHelmet`, for a player who wears a `helmet`; the arguments are
+    /// `hurt_caused_by`'s. The caller has the player and the level back to wear the helmet
+    /// with ([`PausedHurt::helmet_damage`]), and ends the hit with [`Self::finish_hurt`].
+    pub fn start_hurt(
+        &mut self,
+        level: &mut DamageLevel<'_>,
+        resources: &HealthResources,
+        rules: HealthRules,
+        source: DamageTypeId,
+        amount: f32,
+        blocking: Option<Blocking>,
+        living_cause: bool,
+        causing: i32,
+        helmet: bool,
+    ) -> Result<PausedHurt> {
+        let mut hit = PausedHurt {
+            pending: None,
+            selected: None,
+            inner: None,
+            source,
+            source_name: String::new(),
+            amount,
+            before: self.health.health() + self.health.absorption(),
+            fire_ticks: self.fire_ticks,
+            helmet,
+            living_cause,
+            causing,
             blocking,
             blocked: 0.0,
             shield_damage: 0,
             fully_blocked: false,
             block_sound: false,
             knocked: false,
-            totem: totem_ready,
-            totem_off_hand,
             totem_fired: false,
             canceled: false,
+            dealt: 0.0,
         };
-        let hurt = ServerPlayerCombat::new(
-            &mut self.attributes,
-            &mut h.data,
-            &mut h.food,
-            h.ids,
-            &mut environment,
-        )?
-        .hurt(&mut h.hurt, amount)?;
+        if self.client_side {
+            return Ok(hit);
+        }
+        hit.source_name = resources
+            .damage
+            .definition(source)
+            .ok_or("unknown resident damage source")?
+            .name
+            .clone();
+        hit.pending = self.in_combat(level, resources, rules, &mut hit, |combat, state| {
+            Ok(combat.hurt_until_helmet(state, amount)?)
+        })?;
+        Ok(hit)
+    }
+    /// Select the inner hit before synchronous ordinary equipment wear.
+    pub fn select_equipment_hurt(
+        &mut self,
+        level: &mut DamageLevel<'_>,
+        resources: &HealthResources,
+        rules: HealthRules,
+        hit: &mut PausedHurt,
+    ) -> Result<Option<f32>> {
+        let Some(pending) = hit.pending.take() else {
+            return Ok(None);
+        };
+        hit.selected = self.in_combat(level, resources, rules, hit, |combat, state| {
+            Ok(horizon_world::living_hurt::select_equipment_hurt(
+                state, combat, pending,
+            )?)
+        })?;
+        if let Some(selected) = &hit.selected {
+            let damage = selected.damage;
+            hit.inner = self.in_combat(level, resources, rules, hit, |combat, _| {
+                Ok(combat.prepare_equipment_inner()?)
+            })?;
+            if hit.inner == Some(false) {
+                return Ok(Some(damage));
+            }
+        }
+        Ok(None)
+    }
+    /// The rest of a hit from `hurtHelmet` on, against the player as the helmet's wear left
+    /// them: its armor and protection, and whatever a listener changed.
+    pub fn finish_hurt(
+        &mut self,
+        level: &mut DamageLevel<'_>,
+        resources: &HealthResources,
+        rules: HealthRules,
+        mut hit: PausedHurt,
+    ) -> Result<BlockOutcome> {
+        if self.client_side {
+            return Ok(BlockOutcome::default());
+        }
+        let hurt = if let Some(selected) = hit.selected.take() {
+            let inner = hit.inner;
+            self.in_combat(level, resources, rules, &mut hit, |combat, state| {
+                Ok(combat.finish_selected_equipment(state, selected, inner)?)
+            })?
+        } else {
+            match hit.pending.take() {
+                Some(pending) => {
+                    self.in_combat(level, resources, rules, &mut hit, |combat, state| {
+                        Ok(combat.hurt_after_helmet(state, pending)?)
+                    })?
+                }
+                None => false,
+            }
+        };
+        let h = &mut self.health;
         let outcome = BlockOutcome {
             hurt,
-            blocked: environment.blocked,
-            shield_damage: environment.shield_damage,
-            fully_blocked: environment.fully_blocked,
-            sound: environment.block_sound,
-            knockback: environment.knocked,
-            canceled: environment.canceled,
+            blocked: hit.blocked,
+            shield_damage: hit.shield_damage,
+            fully_blocked: hit.fully_blocked,
+            sound: hit.block_sound,
+            knockback: hit.knocked,
+            canceled: hit.canceled,
+            dealt: hit.dealt,
         };
-        if environment.totem_fired {
+        if hit.totem_fired {
             h.totem_used = true;
             h.totem_ready = false;
         }
@@ -898,18 +976,85 @@ impl PlayerMotion {
         }
         self.hurt_log.push(HurtRecord {
             game_time: h.game_time,
-            source: source_name,
-            amount,
+            source: hit.source_name,
+            amount: hit.amount,
             blocked: outcome.blocked,
-            taken: before - after,
+            taken: hit.before - after,
             hurt: outcome.hurt,
             armor,
             toughness,
             health: after,
-            fire_ticks,
+            fire_ticks: hit.fire_ticks,
             knockback: None,
         });
         Ok(outcome)
+    }
+    /// `run` on the player's combat, the hit's own state lent to it and kept for its next half.
+    fn in_combat<R>(
+        &mut self,
+        level: &mut DamageLevel<'_>,
+        resources: &HealthResources,
+        rules: HealthRules,
+        hit: &mut PausedHurt,
+        run: impl FnOnce(
+            &mut ServerPlayerCombat<'_, Environment<'_>, Attributes>,
+            &mut State,
+        ) -> Result<R>,
+    ) -> Result<R> {
+        let source = resources
+            .damage
+            .source::<()>(hit.source, None, None, None)
+            .ok_or("unknown resident damage source")?;
+        let victim = self.victim();
+        let h = &mut self.health;
+        let mut environment = Environment {
+            level: level.reborrow(),
+            entity: self.entity_id,
+            victim,
+            causing: hit.causing,
+            invulnerable: self.invulnerable,
+            client_loaded: self.client_loaded,
+            rules,
+            source,
+            living_cause: hit.living_cause,
+            events: &mut self.events,
+            dead: &mut h.dead,
+            sync_velocity: &mut h.sync_velocity,
+            game_time: h.game_time,
+            status: self.status.clone(),
+            helmet: hit.helmet,
+            blocking: hit.blocking.take(),
+            blocked: hit.blocked,
+            shield_damage: hit.shield_damage,
+            fully_blocked: hit.fully_blocked,
+            block_sound: hit.block_sound,
+            knocked: hit.knocked,
+            totem: h.totem_ready,
+            totem_off_hand: h.totem_off_hand,
+            totem_fired: hit.totem_fired,
+            canceled: hit.canceled,
+            dealt: hit.dealt,
+        };
+        let result = run(
+            &mut ServerPlayerCombat::new(
+                &mut self.attributes,
+                &mut h.data,
+                &mut h.food,
+                h.ids,
+                &mut environment,
+            )?,
+            &mut h.hurt,
+        )?;
+        hit.blocking = environment.blocking;
+        hit.blocked = environment.blocked;
+        hit.shield_damage = environment.shield_damage;
+        hit.fully_blocked = environment.fully_blocked;
+        hit.block_sound = environment.block_sound;
+        hit.knocked = environment.knocked;
+        hit.totem_fired = environment.totem_fired;
+        hit.canceled = environment.canceled;
+        hit.dealt = environment.dealt;
+        Ok(result)
     }
     pub fn set_health(&mut self, value: f32, absorption: bool) -> Result<()> {
         let h = &mut self.health;
@@ -952,6 +1097,8 @@ pub(crate) struct Environment<'a> {
     pub(crate) game_time: i64,
     /// Resistance, fire resistance and armor protection (effects.rs).
     pub(crate) status: crate::effects::StatusFlags,
+    /// The head slot holds something, for a hit that stops at `hurtHelmet`.
+    pub(crate) helmet: bool,
     /// The raised blocking item, if any, and what it blocked.
     pub(crate) blocking: Option<Blocking>,
     pub(crate) blocked: f32,
@@ -969,6 +1116,42 @@ pub(crate) struct Environment<'a> {
     pub(crate) totem_fired: bool,
     /// A native mod canceled the hit (`living_incoming_damage`).
     pub(crate) canceled: bool,
+    /// The damage `ENTITY_HURT_PLAYER` is told of.
+    pub(crate) dealt: f32,
+}
+/// A hit on a player stopped at `hurtHelmet` ([`PlayerMotion::start_hurt`]): the hit's own
+/// state, which borrows nothing, so the game can run the helmet's wear on its real host.
+/// Everything the player and level hold is read again when it resumes.
+#[derive(Debug)]
+pub struct PausedHurt {
+    /// None for a hit refused before `hurtHelmet`.
+    selected: Option<horizon_world::living_hurt::SelectedHurt<()>>,
+    inner: Option<bool>,
+    pending: Option<PendingHurt<()>>,
+    source: DamageTypeId,
+    source_name: String,
+    amount: f32,
+    /// Health and absorption, and the fire ticks, before the hit.
+    before: f32,
+    fire_ticks: i32,
+    helmet: bool,
+    living_cause: bool,
+    causing: i32,
+    blocking: Option<Blocking>,
+    blocked: f32,
+    shield_damage: i32,
+    fully_blocked: bool,
+    block_sound: bool,
+    knocked: bool,
+    totem_fired: bool,
+    canceled: bool,
+    dealt: f32,
+}
+impl PausedHurt {
+    /// What `hurtHelmet` is given, if this hit wears the helmet.
+    pub fn helmet_damage(&self) -> Option<f32> {
+        self.pending.as_ref()?.helmet_damage()
+    }
 }
 /// `LivingEntity.applyItemBlocking` inputs for a raised `BlocksAttacks` item:
 /// reductions whose damage-type sets are already matched against the source.
@@ -1042,6 +1225,8 @@ pub struct BlockOutcome {
     pub knockback: bool,
     /// A native mod canceled the hit: its attacker must not be credited.
     pub canceled: bool,
+    /// The damage `ENTITY_HURT_PLAYER` is told of: past the block and the helmet.
+    pub dealt: f32,
 }
 struct MatchedSets;
 impl horizon_world::blocking_rules::TypeMatchWorld for MatchedSets {
@@ -1344,8 +1529,9 @@ impl HurtWorld for Environment<'_> {
         Ok(false)
     }
     fn helmet_empty(&mut self, _: &mut State) -> io::Result<bool> {
-        Ok(true)
+        Ok(!self.helmet)
     }
+    /// The game wears it between the hit's halves ([`PlayerMotion::start_hurt`]).
     fn hurt_helmet(&mut self, _: &mut State, _: f32) -> io::Result<()> {
         Ok(())
     }
@@ -1444,6 +1630,7 @@ impl HurtWorld for Environment<'_> {
         amount: f32,
         blocked: bool,
     ) -> io::Result<()> {
+        self.dealt = amount;
         self.event(HealthEvent::Criterion {
             source: self.source.type_id(),
             original,
@@ -1507,6 +1694,7 @@ mod tests {
         let attack = Attack {
             attacker: 7,
             projectile: None,
+            direct: None,
             player_uuid: None,
             held: [Some(sword.clone()), None],
         };
@@ -1524,6 +1712,7 @@ mod tests {
         let attack = Attack {
             attacker: 0,
             projectile: Some(12),
+            direct: None,
             player_uuid: None,
             held: [None, None],
         };

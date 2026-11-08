@@ -223,6 +223,7 @@ impl Game<'_> {
                             g.mining = Some(Mining {
                                 pos,
                                 progress: 0.0,
+                                per_tick: 0.0,
                                 ticks: 0,
                             });
                             return StartDig::Air;
@@ -231,6 +232,7 @@ impl Game<'_> {
                         g.mining = Some(Mining {
                             pos,
                             progress: 0.0,
+                            per_tick: 0.0,
                             ticks: 0,
                         });
                         StartDig::Accepted
@@ -254,13 +256,22 @@ impl Game<'_> {
                     // and an instant one leave no block behind for a later STOP.
                     if matches!(start, Some(StartDig::Accepted)) {
                         let one_hit = self
-                            .as_guest(conn, |g| g.destroy_progress(pos))
-                            .is_some_and(|p| p >= 1.0);
+                            .as_guest(conn, |g| {
+                                let per_tick = g.destroy_progress(pos);
+                                if let Some(mining) = g.mining.as_mut() {
+                                    mining.per_tick = per_tick;
+                                }
+                                per_tick >= 1.0
+                            })
+                            .unwrap_or(false);
                         if !one_hit
                             && let Some(host) = self.lan.as_mut()
                             && let Some(play) = host.play.get_mut(&conn)
                         {
                             play.destroy_pos = Some(pos);
+                        }
+                        if !one_hit {
+                            self.guest_dig_feedback(conn);
                         }
                     }
                 }
@@ -293,25 +304,10 @@ impl Game<'_> {
                         conn,
                         &C::BlockUpdate(play::BlockUpdate { pos: a.pos, state }),
                     );
-                    let entity_id = host.hub.guests[gi].entity_id;
-                    self.destroy_block_progress(entity_id, a.pos, -1);
-                    let Some(host) = self.lan.as_mut() else {
+                    self.guest_crack_progress(conn, a.pos, -1);
+                    let Some(host) = self.lan.as_ref() else {
                         return;
                     };
-                    host.hub.broadcast_near(
-                        [
-                            f64::from(a.pos[0]),
-                            f64::from(a.pos[1]),
-                            f64::from(a.pos[2]),
-                        ],
-                        64.0,
-                        &C::BlockDestruction(play::BlockDestruction {
-                            id: entity_id,
-                            pos: a.pos,
-                            progress: 255,
-                        }),
-                        Some(conn),
-                    );
                     if mod_api::__private::listened(mod_api::HookId::BlockDamageAbort) {
                         let guest = &host.hub.guests[gi];
                         let (uuid, name) = (guest.uuid, guest.name.clone());

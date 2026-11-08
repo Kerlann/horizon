@@ -46,11 +46,13 @@ pub(super) fn target_id(t: Target) -> Option<u32> {
         | Target::Crystal(id)
         | Target::Dragon(id)
         | Target::Tnt(id)
+        | Target::Cushion(id)
         | Target::Falling(id)
         | Target::Rocket(id)
         | Target::Trident(id)
         | Target::Spawner(id)
-        | Target::Cloud(id) => Some(id),
+        | Target::Cloud(id)
+        | Target::Hook(id) => Some(id),
         Target::Player | Target::Guest(_) => None,
     }
 }

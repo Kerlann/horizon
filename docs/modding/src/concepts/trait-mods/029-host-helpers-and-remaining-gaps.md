@@ -6,6 +6,8 @@
 unions of those traits, so a mod calls through them and never names an area trait. Each helper keeps its
 receiver and documentation; a helper without `self` (`config_files`) takes
 `&self` in `Host`. Level services stay on the level hosts above.
+For the per-method comparison with NeoForge's block, item, entity, block-entity and fluid extension interfaces,
+including which gaps are tracked, see [NeoForge extension coverage](../../reference/neoforge-extensions.md).
 For item registry facts, `host.item_crafting_remainder(&stack)` returns a count-one
 plain remainder stack, or `None` when there is none or the item is unknown. Horizon
 currently stores only the remainder item id, not a template's count or components.
@@ -47,6 +49,6 @@ The following catalog hooks are not in the trait:
   and `block_highlight`.
 - `biome_colors`, `camera_distance`, `compute_fog_color`, `compute_fov`,
   `data_pack_files`, `mob_submit`, `mouse_button_pre`, `mouse_button_post`, `player_respawned`
-  and `server_data_loaded`.
+  and `tags_updated`.
 
 The client `render_tooltip_texture` hook (NeoForge's `RenderTooltipEvent.Texture`) picks a tooltip box's look. Setting `texture` to a tooltip style `<namespace>:<name>` draws the GUI sprites `<namespace>:tooltip/<name>_background` and `_frame` from the resource packs, nine-sliced by their `gui.scaling` metadata or stretched without it, as vanilla draws an item's `tooltip_style`; the atlas a resource reload restitches is the one drawn. Left `None`, the box keeps Horizon's solid fills, whose background and top and bottom border gradient colours it changes as mutable ARGB `u32` values; it does not change text colours. It covers solid-fill item tooltips (including creative, recipe book, chat, trading and bundle-selected item names), screen text boxes, and native panel tooltips. The stack is `None` for text-only boxes, including recipe-book item lines where the stack is discarded before drawing. Sprite-based screen tooltips (including options and title screens) use a separate renderer and are not covered.

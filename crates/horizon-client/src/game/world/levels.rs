@@ -308,7 +308,7 @@ impl Game<'_> {
         let mut world = World::new(self.res.facts().air, self.level.seed);
         world.attachments = save.load_attachments();
         world.shape = self.level_shapes.get(dim.id());
-        world.fast_lava = dim == Dim::Nether;
+        world.fast_lava = self.dimension_type_of(dim).fast_lava;
         Ok(Parked {
             world,
             streaming,
@@ -541,15 +541,34 @@ impl Game<'_> {
         // (each `ServerLevel.tick` only reads `runsNormally`), and the native
         // `ServerTickStart` before that level work, where NeoForge fires
         // `ServerTickEvent.Pre`. A paused pass and a held server tick nothing.
-        let running = (!paused && !self.agent.hold_server).then(|| self.clock.world_runs());
+        let running = if !paused && !self.agent.hold_server {
+            self.clock.check_sprint_completion();
+            if let Some(report) = self.clock.take_sprint_report() {
+                // ServerTickRateManager.finishTickSprint: the server's sendSuccess.
+                self.console_broadcast = Some(true);
+                self.sprint_report(&report);
+                self.console_broadcast = None;
+                self.send_admin_feedback(None);
+                self.admin_feedback.clear();
+                // Then onTickRateChanged, its mods outside the server's broadcast.
+                self.on_tick_rate_changed();
+            }
+            Some(self.clock.tick_world_runs())
+        } else {
+            None
+        };
         let server = self.serving.is_some() || self.options.dedicated.is_some();
         // A config edited while the server is paused (empty) still reloads.
+        // The parts outside every level get spans of their own, so that a slow
+        // tick's line and `horizon-report` say when a mod's tick hook took it.
         if server {
+            let _span = horizon_client::spans::guard("mod_configs_poll");
             self.native_configs_poll();
         }
         if let Some(running) = running
             && server
         {
+            let _span = horizon_client::spans::guard("mods_server_tick_start");
             self.native_lifecycle_server_tick_start(running);
         }
         let observe_level =
@@ -616,23 +635,35 @@ impl Game<'_> {
                         moved = true;
                     }
                 }
-                if moved {
+                if moved && k + 1 < n {
                     self.enter_level(dim)?;
                 }
             }
+        }
+        if let Some(&first) = order.first()
+            && self.dim != first
+        {
+            let _ = self.enter_level(first);
         }
         self.level_pass = Pass::default();
         if result.is_err() {
             self.native_lifecycle.cancel_server_tick();
         }
         result?;
-        if let Err(error) = self.close_idle_levels() {
+        let closed = {
+            let _span = horizon_client::spans::guard("close_idle_levels");
+            self.close_idle_levels()
+        };
+        if let Err(error) = closed {
             self.native_lifecycle.cancel_server_tick();
             return Err(error);
         }
         // `ServerTickEnd`: an errored tick or an idle-close failure (at
         // the `?` above) never reaches this site.
-        self.native_lifecycle_server_tick_end(paused);
+        {
+            let _span = horizon_client::spans::guard("mods_server_tick_end");
+            self.native_lifecycle_server_tick_end(paused);
+        }
         Ok(())
     }
 
@@ -687,8 +718,7 @@ impl Game<'_> {
         result
     }
 
-    /// The end of `MinecraftServer.runServer`'s loop for a server thread: a
-    /// finished `/tick sprint` reports to the operators as the server, then
+    /// The end of `MinecraftServer.runServer`'s loop for a server thread:
     /// the next tick starts one tick length after this one, or straight away
     /// while the sprint runs (`checkShouldSprintThisTick`). A server more
     /// than two seconds behind skips the ticks it missed: that returns how far
@@ -698,14 +728,6 @@ impl Game<'_> {
         next: &mut Instant,
         paused: bool,
     ) -> Option<Duration> {
-        if let Some(report) = self.clock.take_sprint_report() {
-            // ServerTickRateManager.finishTickSprint: the server's sendSuccess.
-            self.console_broadcast = Some(true);
-            self.sprint_report(&report);
-            self.console_broadcast = None;
-            self.send_admin_feedback(None);
-            self.admin_feedback.clear();
-        }
         let now = Instant::now();
         if !paused && self.clock.sprinting() {
             *next = now;

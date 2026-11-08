@@ -15,6 +15,9 @@
 
 include!(concat!(env!("OUT_DIR"), "/points_generated.rs"));
 
+/// Native scoped callable sources for generated point bridges.
+#[doc(hidden)]
+pub mod callable;
 mod registry;
 pub mod snapshot;
 

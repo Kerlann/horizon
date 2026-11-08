@@ -10,6 +10,11 @@ pub trait ProjectilesServerHost {
     /// handle or a client.
     #[access(WorldOnly)]
     fn projectile(&self, entity: EntityRef) -> Option<ProjectileRef>;
+    /// Side: server.
+    /// Narrows an entity to a cast fishing hook. None for another kind, a
+    /// stale handle, a client, or a hook taken out for its tick.
+    #[access(WorldOnly)]
+    fn fishing_hook(&self, entity: EntityRef) -> Option<FishingHookRef>;
 }
 /// The handles' reads of the `projectiles` area, implemented by the game and reached through [`Backend`].
 // hidden: a handle's backend, reached through `Backend`; mods call the handle, never this trait
@@ -37,6 +42,21 @@ pub trait ProjectilesBackend {
     /// `AbstractArrow.isCritArrow`, for an arrow.
     #[access(WorldOnly)]
     fn projectile_critical(&self, projectile: ProjectileRef) -> Option<bool>;
+    /// Side: server.
+    /// `FishingHook.getPlayerOwner`: the player who cast it. None for a stale
+    /// handle.
+    #[access(WorldOnly)]
+    fn fishing_hook_player_owner(&self, hook: FishingHookRef) -> Option<EntityRef>;
+    /// Side: server.
+    /// `FishingHook.getHookedIn`: what it holds. None when it holds nothing,
+    /// what it holds is gone, or for a stale handle.
+    #[access(WorldOnly)]
+    fn fishing_hook_hooked_in(&self, hook: FishingHookRef) -> Option<EntityRef>;
+    /// Side: server.
+    /// `FishingHook.isOpenWaterFishing`, which the `fishing` loot's
+    /// `in_open_water` predicate reads. None for a stale handle.
+    #[access(WorldOnly)]
+    fn fishing_hook_open_water(&self, hook: FishingHookRef) -> Option<bool>;
 }
 /// The handles' writes of the `projectiles` area, implemented by the game and reached through [`BackendMut`].
 // hidden: a handle's backend, reached through `Backend`; mods call the handle, never this trait
@@ -44,9 +64,9 @@ pub trait ProjectilesBackend {
 #[horizon_mod_api_macros::host_area]
 pub trait ProjectilesBackendMut {
     /// Side: server.
-    /// `Projectile.setOwner`. False for a stale projectile, or an owner that is
-    /// stale or neither a player nor a mob (a trident a player threw takes a
-    /// player only). Does not touch `leftOwner`.
+    /// `Projectile.setOwner`. False for a stale projectile or owner, or an
+    /// owner that is a fishing hook (a trident a player threw takes a player
+    /// only). Does not touch `leftOwner`.
     #[access(WorldOnly)]
     fn projectile_set_owner(&mut self, projectile: ProjectileRef, owner: Option<EntityRef>)
     -> bool;

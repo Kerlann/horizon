@@ -46,6 +46,12 @@ pub struct ParticleOptions {
     /// sent to clients; the resolved point is used for local rendering
     /// (`ParticleEngine::vibration` is the same particle).
     pub vibration: Option<(PositionSource, [f64; 3], i32)>,
+    /// Pre-1.20.5 entity-effect providers use spawn velocity as RGB; true is ambient.
+    pub legacy_entity_effect: Option<bool>,
+    /// A pre-1.21.4 server's trail, which had no duration: TrailParticle.Provider chose
+    /// `nextInt(40) + 10` after constructing the particle. Set by the client for an older
+    /// server only, never read from the wire.
+    pub legacy_trail_lifetime: bool,
 }
 impl ParticleOptions {
     /// Construct an option for a retained vanilla or custom sprite-provider key.
@@ -60,6 +66,8 @@ impl ParticleOptions {
             item: None,
             geyser: None,
             vibration: None,
+            legacy_entity_effect: None,
+            legacy_trail_lifetime: false,
         }
     }
     /// `GeyserParticleOptions(type, waterBlocks)`.

@@ -32,6 +32,8 @@ pub enum RowError {
     Budget,
     /// The requested child depth exceeds the boundary's nesting limit.
     Depth,
+    /// The callable is already mutably borrowed by an invocation.
+    Reentrant,
     /// The provider does not expose this operation or node kind.
     Unsupported,
 }
@@ -61,6 +63,15 @@ impl From<crate::wire::ScopeError> for RowError {
             crate::wire::ScopeError::WrongThread => Self::WrongThread,
         }
     }
+}
+
+/// A scoped callable exchanging owned ordinary Wire values. The argument bytes encode one
+/// tuple of arguments; the returned bytes encode its result. Providers reject malformed or
+/// trailing input before invoking native code. A retained callable cannot extend its native
+/// borrow and cannot be called from another thread.
+pub trait RowFunction: Send + Sync {
+    /// Invoke the callable, or return a typed refusal without exposing native memory.
+    fn invoke(&self, arguments: Vec<u8>) -> Result<Vec<u8>, RowError>;
 }
 
 /// A read-only source of owned, flattened row windows. The interface carries no engine type.

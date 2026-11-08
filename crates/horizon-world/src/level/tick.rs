@@ -1970,6 +1970,19 @@ impl Behaviours {
     ) {
         self.sim(level, ticks).lightning_clear_copper(struck);
     }
+    /// `ServerLevel.tickBlock` for the block at `pos` now, as a due tick from the queue runs it:
+    /// the level's say first (a mod block's part), else `BlockState.tick`. The queue is not
+    /// read or changed.
+    pub fn due_block_tick<L: LevelAccess + ?Sized>(
+        &self,
+        level: &mut L,
+        ticks: &mut Ticks,
+        pos: BlockPos,
+    ) {
+        let mut sim = self.sim(level, ticks);
+        let state = sim.state(pos);
+        sim.tick_due_block(state, pos);
+    }
     /// Run one scheduled block tick at `pos` immediately (no queue check).
     pub fn scheduled_block_tick<L: LevelAccess + ?Sized>(
         &self,

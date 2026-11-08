@@ -480,9 +480,13 @@ impl Game<'_> {
                 let Some(i) = self.boats.iter().position(|boat| boat.id == id) else {
                     return true;
                 };
-                self.boats.update(i, |b| b.leash = Some(Holder::Player));
                 let player_uuid = self.acting_player_uuid();
-                self.boats.update(i, |b| b.leash_player = Some(player_uuid));
+                self.boats.update(i, |b| {
+                    // LeashData.setLeashHolder forgets a holder still waiting in the save.
+                    b.leash = Some(Holder::Player);
+                    b.leash_pending = None;
+                    b.leash_player = Some(player_uuid);
+                });
                 self.lead_sound("tied", at);
                 // The lead is always used up.
                 if let Some(stack) = self.held_mut().as_mut() {

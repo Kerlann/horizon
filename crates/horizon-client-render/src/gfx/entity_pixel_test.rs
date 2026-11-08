@@ -592,6 +592,7 @@ fn scrgb_center(instanced: bool, light: u32) -> std::result::Result<f32, String>
         &frame.queue,
         wgpu::TextureFormat::Rgba8Unorm,
         super::hdr::Output::ScRgb,
+        false,
     );
     hdr.paper_white = 203.0;
     hdr.peak = 1000.0;

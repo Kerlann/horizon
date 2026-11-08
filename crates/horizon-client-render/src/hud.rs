@@ -320,7 +320,7 @@ fn within_budget(source: &ResourceSource, files: &[&String], budget: u64) -> Has
 }
 /// A PNG's width and height from its first 24 bytes (`IHDR`), before any
 /// pixel buffer is made.
-fn png_bytes_size(data: &[u8]) -> Option<(u32, u32)> {
+pub fn png_bytes_size(data: &[u8]) -> Option<(u32, u32)> {
     let header = data.get(..24)?;
     if header[..8] != *b"\x89PNG\r\n\x1a\n" || header[12..16] != *b"IHDR" {
         return None;
@@ -522,6 +522,39 @@ fn cit_sprite(
     let flags = mcmeta.as_deref().and_then(TextureFlags::from_mcmeta);
     Some(((name.to_owned(), w, h, pixels), flags, animation.is_some()))
 }
+/// The texture of every `bitmap` font provider. A provider's `file` may name
+/// any texture, so a pack's glyph sheet need not live under `textures/font`.
+fn bitmap_font_textures(root: &ResourceSource) -> Vec<String> {
+    let defs = root
+        .namespaces("assets")
+        .into_iter()
+        .flat_map(|ns| root.list(&format!("assets/{ns}/font/")))
+        .filter(|path| path.ends_with(".json"));
+    let mut out = Vec::new();
+    let mut seen = HashSet::new();
+    for def in defs {
+        let Ok(bytes) = root.read(&def) else { continue };
+        let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
+        let Ok(json) = serde_json::from_slice::<serde_json::Value>(bytes) else {
+            continue;
+        };
+        for p in json["providers"].as_array().into_iter().flatten() {
+            if p["type"] != "bitmap" {
+                continue;
+            }
+            let Some(file) = p["file"].as_str() else {
+                continue;
+            };
+            let (ns, path) = file.split_once(':').unwrap_or(("minecraft", file));
+            let path = format!("assets/{ns}/textures/{path}");
+            if root.contains(&path) && seen.insert(path.clone()) {
+                out.push(path);
+            }
+        }
+    }
+    out
+}
+
 /// Folders of `assets/minecraft/textures/` that [`HudAtlas::pack`] walks for
 /// the full atlas. A pack may add others through `atlases/blocks.json`.
 const WALKED_TEXTURE_FOLDERS: &[&str] = &[
@@ -1092,6 +1125,14 @@ impl HudAtlas {
         for folder in folders {
             walk(root, &format!("{textures}/{folder}"), &mut files);
         }
+        if folders.contains(&"font") {
+            let mut seen: HashSet<String> = files.iter().cloned().collect();
+            files.extend(
+                bitmap_font_textures(root)
+                    .into_iter()
+                    .filter(|p| seen.insert(p.clone())),
+            );
+        }
         // Native and content resources may use any namespace in the resolved pack.
         for namespace in root
             .namespaces("assets")
@@ -1433,8 +1474,9 @@ impl HudAtlas {
         let white = sprites["horizon/white"];
         let glint = Self::glint_texture(root, defaults, "enchanted_glint_item");
         let glint_armor = Self::glint_texture(root, defaults, "enchanted_glint_armor");
-        let font = crate::font::Font::load(
+        let font = crate::font::Font::load_over(
             root,
+            defaults,
             &sprites,
             &pixels,
             (width, height),
@@ -2359,17 +2401,19 @@ impl HudUniform {
         }
     }
 }
+use crate::gfx::hud_coverage::{self, Pipeline};
+
 pub struct HudRenderer {
     pub sprite_animations: Vec<(Rect, crate::sprites::SpriteAnimation, (usize, usize, u32))>,
     /// The shared atlas texture, for run-time glyph uploads.
     pub atlas_texture: Option<wgpu::Texture>,
-    pipeline: wgpu::RenderPipeline,
+    pipeline: Pipeline,
     /// `RenderPipelines.CROSSHAIR`.
-    invert_pipeline: wgpu::RenderPipeline,
-    additive_pipeline: wgpu::RenderPipeline,
-    depth_pipeline: wgpu::RenderPipeline,
-    vignette_pipeline: wgpu::RenderPipeline,
-    end_portal_pipeline: wgpu::RenderPipeline,
+    invert_pipeline: Pipeline,
+    additive_pipeline: Pipeline,
+    depth_pipeline: Pipeline,
+    vignette_pipeline: Pipeline,
+    end_portal_pipeline: Pipeline,
     /// The layout of `group`, which the CIT glint pipelines share.
     layout: wgpu::BindGroupLayout,
     group: wgpu::BindGroup,
@@ -2379,6 +2423,7 @@ pub struct HudRenderer {
     buffer: wgpu::Buffer,
     capacity: u64,
     format: wgpu::TextureFormat,
+    coverage: bool,
     atlas_view: wgpu::TextureView,
     /// The resource pack's text shader, when it has one that works.
     pack_text: Option<pack_text::PackText>,
@@ -2393,6 +2438,7 @@ impl HudRenderer {
         view: &wgpu::TextureView,
         glint_view: &wgpu::TextureView,
         glint_sampler: &wgpu::Sampler,
+        coverage: bool,
     ) -> Result<Self> {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Horizon HUD"),
@@ -2505,7 +2551,7 @@ impl HudRenderer {
         let attributes =
             wgpu::vertex_attr_array![0=>Float32x2,1=>Float32x2,2=>Unorm8x4,3=>Float32,4=>Float32x2];
         let create = |label, blend, fragment_entry, depth: bool| {
-            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+            let desc = wgpu::RenderPipelineDescriptor {
                 label: Some(label),
                 layout: Some(&pipeline_layout),
                 vertex: wgpu::VertexState {
@@ -2539,7 +2585,9 @@ impl HudRenderer {
                 }),
                 multiview_mask: None,
                 cache: None,
-            })
+            };
+            let source = wgpu::ShaderSource::Wgsl(include_str!("hud.wgsl").into());
+            Pipeline::new(device, &desc, source, coverage).expect("the HUD's coverage")
         };
         let pipeline = create("HUD", wgpu::BlendState::ALPHA_BLENDING, "fs_main", false);
         let depth_pipeline = create(
@@ -2630,6 +2678,7 @@ impl HudRenderer {
             buffer,
             capacity,
             format,
+            coverage,
             atlas_view: view.clone(),
             pack_text: None,
             zoom: 1.0,
@@ -2644,7 +2693,7 @@ impl HudRenderer {
         textures: Option<&cit_glint::GlintTextures>,
     ) {
         self.cit_glint = textures.and_then(|t| {
-            cit_glint::CitGlintPass::new(device, queue, self.format, &self.layout, t)
+            cit_glint::CitGlintPass::new(device, queue, self.format, &self.layout, t, self.coverage)
         });
     }
     /// Draw the GUI's text with `shader` (`HudAtlas::text_shader`), or natively.
@@ -2654,7 +2703,7 @@ impl HudRenderer {
         shader: Option<&horizon_shaders::CoreProgram>,
     ) {
         self.pack_text = shader.and_then(|shader| {
-            pack_text::PackText::new(device, self.format, &self.atlas_view, shader)
+            pack_text::PackText::new(device, self.format, &self.atlas_view, shader, self.coverage)
         });
     }
     pub fn animate_sprites(
@@ -2803,6 +2852,7 @@ impl HudRenderer {
         self.draw_range(
             encoder,
             target,
+            None,
             depth,
             batch,
             size,
@@ -2816,6 +2866,7 @@ impl HudRenderer {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         target: &wgpu::TextureView,
+        coverage: Option<&wgpu::TextureView>,
         depth: &wgpu::TextureView,
         batch: &HudBatch,
         size: [u32; 2],
@@ -2825,7 +2876,7 @@ impl HudRenderer {
         if vertices.is_empty() || size.contains(&0) {
             return;
         }
-        let attachments = [Some(wgpu::RenderPassColorAttachment {
+        let mut attachments = vec![Some(wgpu::RenderPassColorAttachment {
             view: target,
             resolve_target: None,
             depth_slice: None,
@@ -2834,6 +2885,9 @@ impl HudRenderer {
                 store: wgpu::StoreOp::Store,
             },
         })];
+        if let Some(view) = coverage {
+            attachments.push(Some(hud_coverage::attachment(view)));
+        }
         let runs = batch.runs_in(vertices);
         let mut at = 0;
         while at < runs.len() {
@@ -2885,16 +2939,17 @@ impl HudRenderer {
                     Blend::EndPortal => &self.end_portal_pipeline,
                     Blend::CitGlint(blend) => {
                         if let Some(cit) = &self.cit_glint {
-                            cit.draw(&mut pass, *blend, range.clone());
+                            cit.draw(&mut pass, *blend, range.clone(), coverage.is_some());
                         }
                         continue;
                     }
                 };
+                let pipeline = pipeline.get(coverage.is_some());
                 match &self.pack_text {
                     Some(pack_text) if *blend == Blend::Alpha => {
                         for (part, text) in pack_text::text_runs(&batch.vertices, range.clone()) {
                             if text {
-                                pack_text.draw(&mut pass, part);
+                                pack_text.draw(&mut pass, part, coverage.is_some());
                                 pass.set_bind_group(0, &self.group, &[]);
                             } else {
                                 pass.set_pipeline(pipeline);
@@ -2912,6 +2967,10 @@ impl HudRenderer {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "hud/coverage_tests.rs"]
+mod coverage_tests;
 
 #[cfg(test)]
 mod tests {
@@ -4108,6 +4167,30 @@ texture=wide",
             assert_eq!(((r.w, r.h), r.texels(size)), (gui, texels), "{name}");
         }
     }
+    /// A bitmap font's `file` may be any texture, not only one under
+    /// `textures/font`; the atlas packs it so the font can read its glyphs
+    /// from there instead of copying them into the run-time region.
+    #[test]
+    fn a_bitmap_font_sheet_outside_font_is_packed() {
+        let root = std::env::temp_dir().join(format!("horizon-font-pack-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        write_png(&root, "hud/sheet", 16, 8);
+        let def = root.join("assets/minecraft/font/default.json");
+        fs::create_dir_all(def.parent().unwrap()).unwrap();
+        fs::write(
+            &def,
+            r#"{"providers":[{"type":"bitmap","file":"minecraft:hud/sheet.png","ascent":7,"chars":["ab"]}]}"#,
+        )
+        .unwrap();
+        let atlas = HudAtlas::build(&ResourceSource::directory(root.clone())).unwrap();
+        let _ = fs::remove_dir_all(&root);
+        let rect = atlas
+            .sprites
+            .get("hud/sheet")
+            .expect("the font sheet is packed");
+        assert_eq!(rect.texels((atlas.width, atlas.height)), (16, 8));
+    }
+
     /// A content mod's GUI textures join the atlas under its namespace;
     /// its other textures and vanilla's names stay as they were.
     #[test]
@@ -4229,6 +4312,56 @@ texture=wide",
             .write_image_data(&pixels)
             .unwrap();
         root
+    }
+    /// A pack layer that adds a font provider over the game's own resources:
+    /// its `font/default.json` names `minecraft:font/test.png`, which only the
+    /// game's root holds (`HudAtlas::build_over`'s `defaults`).
+    fn pack_font_over_defaults(name: &str) -> (PathBuf, PathBuf) {
+        let base = std::env::temp_dir().join(format!(
+            "horizon-font-fallback-{name}-{}",
+            std::process::id()
+        ));
+        let pack = base.join("pack");
+        let vanilla = base.join("vanilla");
+        fs::create_dir_all(pack.join("assets/minecraft/font")).unwrap();
+        fs::create_dir_all(vanilla.join("assets/minecraft/textures/font")).unwrap();
+        fs::write(
+            pack.join("assets/minecraft/font/default.json"),
+            r#"{"providers":[{"type":"bitmap","file":"minecraft:font/test.png","ascent":7,"chars":["ab"]}]}"#,
+        )
+        .unwrap();
+        let mut pixels = vec![0u8; 16 * 8 * 4];
+        for y in 0..8 {
+            for x in (0..3).chain(8..13) {
+                pixels[(y * 16 + x) * 4 + 3] = 255;
+            }
+        }
+        let mut encoder = png::Encoder::new(
+            fs::File::create(vanilla.join("assets/minecraft/textures/font/test.png")).unwrap(),
+            16,
+            8,
+        );
+        encoder.set_color(png::ColorType::Rgba);
+        encoder.set_depth(png::BitDepth::Eight);
+        encoder
+            .write_header()
+            .unwrap()
+            .write_image_data(&pixels)
+            .unwrap();
+        (pack, vanilla)
+    }
+    #[test]
+    fn a_pack_overlay_reads_font_sheets_from_the_game_below_it() {
+        let (pack, vanilla) = pack_font_over_defaults("sheets");
+        let atlas = HudAtlas::build_over(
+            &ResourceSource::directory(pack.clone()),
+            &ResourceSource::directory(vanilla.clone()),
+        )
+        .unwrap();
+        let glyph = atlas.font.glyph('a');
+        let _ = fs::remove_dir_all(pack.parent().unwrap());
+        assert!(glyph.rect.is_some(), "text draws, not the missing glyph");
+        assert!(glyph.advance > 0.0);
     }
     #[test]
     fn the_fonts_only_atlas_measures_text_like_the_full_one() {

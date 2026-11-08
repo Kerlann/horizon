@@ -147,38 +147,40 @@ impl Game<'_> {
         // reaches a text box by characters, as a key's own text does, so the
         // open screen hears of each of them first and a cancelled one never
         // reaches the box.
-        let Some(text) = self.screen_text_typed(&text) else {
-            return;
-        };
-        if text.is_empty() || !self.text_field_focused() {
+        self.screen_text_each(&text, |game, c| game.ime_type(c));
+    }
+
+    /// A committed character into the focused text box.
+    fn ime_type(&mut self, text: &str) {
+        if !self.text_field_focused() {
             return;
         }
-        if self.dialog_type(&text) {
+        if self.dialog_type(text) {
             return;
         }
         if self.title.is_some() {
-            self.title_edit(Some(&text), false);
+            self.title_edit(Some(text), false);
         } else if self.book.is_some() {
-            self.book_input(None, Some(&text));
+            self.book_input(None, Some(text));
         } else if self.sign_edit.is_some() {
-            self.sign_input(None, Some(&text));
+            self.sign_input(None, Some(text));
         } else {
             match self.screen {
-                Screen::Chat => self.chat_type(&text),
-                Screen::CommandBlock => self.command_block_type(&text),
-                Screen::Social => self.social_type(&text),
-                Screen::DebugOptions => self.debug_options_type(&text),
-                Screen::Options => self.ui.options.type_text(&self.gui.atlas, &text),
-                Screen::WorldOptions => self.world_options_text(Some(&text)),
-                Screen::BlockEditor => self.block_editor_type(&text),
+                Screen::Chat => self.chat_type(text),
+                Screen::CommandBlock => self.command_block_type(text),
+                Screen::Social => self.social_type(text),
+                Screen::DebugOptions => self.debug_options_type(text),
+                Screen::Options => self.ui.options.type_text(&self.gui.atlas, text),
+                Screen::WorldOptions => self.world_options_text(Some(text)),
+                Screen::BlockEditor => self.block_editor_type(text),
                 Screen::Inventory | Screen::Creative if self.mod_browser_typing() => {
-                    self.mod_browser_text(Some(&text), false)
+                    self.mod_browser_text(Some(text), false)
                 }
-                Screen::Creative => self.creative_search_edit(Some(&text)),
+                Screen::Creative => self.creative_search_edit(Some(text)),
                 Screen::Inventory if self.recipe_search_focused() => {
-                    self.recipe_text(Some(&text), false)
+                    self.recipe_text(Some(text), false)
                 }
-                Screen::Inventory => self.station_text(Some(&text), false),
+                Screen::Inventory => self.station_text(Some(text), false),
                 _ => {}
             }
         }

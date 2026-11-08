@@ -66,6 +66,8 @@ impl<C: ?Sized> TryIntoEngine<C> for ApiOptions {
             item: self.item.clone(),
             geyser: self.geyser,
             vibration: self.vibration.clone(),
+            legacy_entity_effect: self.legacy_entity_effect,
+            legacy_trail_lifetime: self.legacy_trail_lifetime,
         })
     }
 }
@@ -88,6 +90,8 @@ impl TryIntoApi for EngineOptions {
             item: self.item.clone(),
             geyser: self.geyser,
             vibration: self.vibration.clone(),
+            legacy_entity_effect: self.legacy_entity_effect,
+            legacy_trail_lifetime: self.legacy_trail_lifetime,
         })
     }
 }

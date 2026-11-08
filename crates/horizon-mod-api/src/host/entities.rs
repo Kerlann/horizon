@@ -154,6 +154,35 @@ pub trait EntitiesBackend {
     /// one. Mobs and players.
     #[access(WorldOnly)]
     fn entity_damage_cooldown_time(&self, entity: EntityRef) -> Option<i32>;
+    /// Side: server.
+    /// `Entity.isInvulnerableTo` for a source of `damage_type`: #842's own
+    /// decision, the guard every mob damage hook runs after — dead or
+    /// removed, fire immunity, or the `Invulnerable` flag nothing but
+    /// `#bypasses_invulnerability` gets past. None for a stale handle or a
+    /// kind with no such decision (the player's paths answer their refusals
+    /// at hurt time). #924.
+    #[access(WorldOnly)]
+    fn entity_invulnerable_to_damage(&self, entity: EntityRef, damage_type: &str) -> Option<bool>;
+    /// Side: server.
+    /// Whether `source`'s damage may hit `entity` through their teams
+    /// (`Player.canHarmPlayer`, `Team.allowFriendlyFire`,
+    /// `DamageSource.doTeamsAllowDamage`): allies without friendly fire
+    /// cannot. Entities without a team always can. None for a stale handle.
+    /// #924.
+    #[access(WorldOnly)]
+    fn entity_entities_team_damage_allowed(
+        &self,
+        entity: EntityRef,
+        source: EntityRef,
+    ) -> Option<bool>;
+    /// Side: server.
+    /// `Entity.isInvulnerableToPiercingWeapon` (`isInvulnerable`): the
+    /// `Invulnerable` flag; the temporary window `Entity.invulnerableTime`
+    /// opens does not exist yet (#916), so no hit answers through it. None
+    /// for a stale handle or a kind without the flag. #924.
+    #[access(WorldOnly)]
+    fn entity_invulnerable_to_piercing_weapon(&self, entity: EntityRef) -> Option<bool>;
+
     /// Side: both.
     /// The entity's velocity in blocks a tick (`Entity.getDeltaMovement`). A
     /// player's is the move its client last reported (`getKnownMovement`); an
@@ -459,6 +488,27 @@ pub trait EntitiesBackendMut {
     #[access(WorldOnly)]
     fn entity_set_damage_cooldown_time(&mut self, entity: EntityRef, ticks: i32) -> bool;
     /// Side: server.
+    /// `Entity.hurtServer(level, source, amount)` of `amount` from a source
+    /// of `damage_type` (`minecraft:generic`'s shape), `direct` the entity
+    /// that dealt it (a shot arrow) and `causing` the one responsible for it
+    /// (its shooter): the engine's own hurt paths take it — the damage type,
+    /// the attacker, armor, the damage cooldown and every existing hurt hook
+    /// kept, the damage event the hit already broadcasts is the broadcast —
+    /// by kind: the player's and mobs' for the living, the item, vehicle,
+    /// dragon and crystal branches for the damageable rest. True when the
+    /// damage was taken. None for a stale handle, false for a kind that
+    /// cannot be hurt or an unregistered damage type. Stale direct/causing
+    /// handles are treated as absent sources. #924.
+    #[access(WorldOnly)]
+    fn entity_hurt(
+        &mut self,
+        entity: EntityRef,
+        damage_type: &str,
+        amount: f32,
+        direct: Option<EntityRef>,
+        causing: Option<EntityRef>,
+    ) -> Option<bool>;
+    /// Side: server.
     /// Sets the entity's velocity (`Entity.setDeltaMovement`); clients see it
     /// as they see the entity move. False for a player (its client moves
     /// it), an entity Horizon doesn't simulate, a value that isn't finite,
@@ -529,12 +579,14 @@ pub trait EntitiesBackendMut {
     /// Side: server.
     /// Attempts to board a vehicle through the shared server mount path.
     ///
-    /// Players and mobs can ride a mob, boat or minecart. Returns false for
+    /// Players and mobs can ride a mob, boat, minecart or generic seat entity
+    /// (an armor stand, display, marker or interaction). Returns false for
     /// unsupported entity pairs, stale or held-out handles, a full stored
     /// vehicle, a cycle, or a canceled mount or dismount. Mob vehicle capacity
     /// follows its species; minecarts store one passenger and boats store one
-    /// mob and up to two passengers in total. `force` bypasses normal
-    /// admission checks, not these storage limits. Player boarding cooldown and the strider's
+    /// mob and up to two passengers in total. Generic seats admit one passenger unless forced.
+    /// `force` bypasses normal admission checks, not these storage limits.
+    /// Player boarding cooldown and the strider's
     /// eye-in-lava admission check are not yet represented by the game.
     #[access(WorldOnly)]
     fn entity_start_riding(&mut self, entity: EntityRef, vehicle: EntityRef, force: bool) -> bool;

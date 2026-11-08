@@ -212,6 +212,8 @@ pub trait InstanceGroups {
     /// Allocate up to 16,384 copies, initially length zero. Each mod may reserve 65,536
     /// copies total (an empty group reserves one slot). Only visible copies in the drawn
     /// length, not capacity, consume the view budget. At most 16,384 groups per view.
-    /// Create at setup/reload, not each frame. Copies upload in full each drawn frame.
+    /// Create at setup/reload, not each frame. Visible GPU-routed copies upload each drawn frame.
+    /// Reload, world close, disabling the owning mod, or explicit destroy retires the group.
+    /// Re-enabling a mod never revives its old handles; recreate groups after publication.
     fn create_group(&self, model: ModelRef, capacity: u32) -> Result<InstanceGroupRef, GroupError>;
 }

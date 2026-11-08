@@ -7,8 +7,8 @@ memoizer or polling import.
 
 ## Publish after the final server data
 
-Listen to `server_data_loaded`. It runs after the recipes and tags have been
-published, both on first open and after a successful reload. Build the whole next
+Listen to `tags_updated` on the server side. It runs after the recipes and tags have
+been published, both on first open and after a successful reload. Build the whole next
 table before taking the write lock, then replace the old table in one operation.
 An empty table must replace the old one too: pack overrides and removals matter.
 Tag-only reloads also rebuild the ingredients. A failed engine reload does not fire

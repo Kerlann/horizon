@@ -1,6 +1,8 @@
 //! Disposable native compilation outputs only. Installed games and player data are never targets.
 //! Keep Cargo's profile directories and lock files in place: unlinking a locked inode would let
 //! another Cargo acquire a replacement lock while cleanup was still deleting its outputs.
+use cap_fs_ext::DirExt;
+use cap_std::fs::Dir;
 use std::fs::{self, File, Metadata};
 use std::io;
 use std::path::{Path, PathBuf};
@@ -22,6 +24,7 @@ impl From<io::Error> for Error {
 
 pub(crate) struct Cache {
     root: PathBuf,
+    directory: Dir,
     _lease: Locked,
 }
 
@@ -113,12 +116,31 @@ impl Cache {
         let root = build_dir.canonicalize()?.join("native");
         checked(&root, true)?;
         fs::create_dir_all(&root)?;
-        let root = root.canonicalize()?;
+        let anchor = root.ancestors().last().expect("canonical root is absolute");
+        let mut directory = Dir::open_ambient_dir(anchor, cap_std::ambient_authority())?;
+        for component in root.strip_prefix(anchor).expect("root anchor").components() {
+            directory = directory.open_dir_nofollow(component.as_os_str())?;
+        }
         let lease = lock(&root.join(".build.lock"))?;
         Ok(Self {
             root,
+            directory,
             _lease: lease,
         })
+    }
+
+    /// Create and open cache subdirectories without following a redirected component.
+    pub(crate) fn directory(&self, parts: &[&str]) -> Result<Dir, Error> {
+        let mut directory = self.directory.try_clone()?;
+        for part in parts {
+            match directory.create_dir(part) {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {}
+                Err(error) => return Err(error.into()),
+            }
+            directory = directory.open_dir_nofollow(part)?;
+        }
+        Ok(directory)
     }
 
     pub(crate) fn bytes(&self) -> Result<u64, Error> {

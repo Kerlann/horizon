@@ -12,8 +12,8 @@ may pass or fail; one marked `harness` is a parity harness's step, run by its ha
 environment it sets, and is skipped here; one marked `gpu` needs a graphics adapter and runs only where
 the runner has a Vulkan driver (an ICD file), and must pass there.
 
-Only test names, results and panic locations are printed, never a test's output or panic message:
-the prepared data is Mojang's, and a failing assertion could quote it.
+Only test names, results, panic locations and explicitly marked screen-effect event loop errors
+are printed: the prepared data is Mojang's, and a failing assertion could quote it.
 """
 
 import os
@@ -82,6 +82,8 @@ def run(package, skip):
             results[found[1]] = found[2] == "ok"
         elif found := PANIC.match(line):
             print(f"  {found[1]} panicked at {found[2]}")
+        elif line.startswith("screen-effect event loop error: "):
+            print(line)
         elif SUMMARY.match(line):
             summaries.append(line)
     if not summaries:

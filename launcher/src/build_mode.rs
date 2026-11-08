@@ -7,6 +7,12 @@ use crate::glass_ui as ui;
 use native_mods::{Profile, Route, Stage};
 use native_status::State;
 
+/// The running or finished native snapshot; serialize readers to avoid racing cache leases.
+pub(super) struct RouteMemo {
+    key: String,
+    result: Option<Result<native_mods::Routes, String>>,
+}
+
 /// What a mod in the list is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum ModKind {
@@ -90,7 +96,7 @@ fn percent(progress: Option<native_mods::Progress>) -> u32 {
 pub(super) fn mode_note(profile: Profile) -> &'static str {
     match profile {
         Profile::Optimized => tr(
-            "The fastest game. Uses the prebuilt game, so most mods are ready in seconds.",
+            "Best performance, longest build",
         ),
         Profile::Balanced => tr(
             "Builds the game on this computer. Quicker to rebuild after a change; the game runs about 13% slower.",
@@ -115,6 +121,7 @@ impl Launcher {
         let t = self.theme;
         let pal = Pal::of(&t);
         let instance = self.selected_instance()?;
+        let routes = self.native_routes(cx);
         let state = self.native_state_of(instance);
         let mine = self.native_for.as_deref() == Some(instance.id.as_str());
         let building = self.native_step.as_ref().filter(|_| mine);
@@ -124,7 +131,9 @@ impl Launcher {
             .flex_col()
             .gap(px(12.))
             .child(self.mode_head(state, error, mine, pal, cx))
-            .child(self.mode_cards(self.native_step.is_some(), cx));
+            .when(native_mods::needs_picker(&routes, false, false), |card| {
+                card.child(self.mode_cards(self.native_step.is_some(), cx))
+            });
         card = match building {
             Some(step) => card.child(self.panel().child(self.building_card(step, pal, cx))),
             None => card.child(self.mode_status(error, mine, pal, cx)),
@@ -135,11 +144,38 @@ impl Launcher {
         Some(card)
     }
 
+    pub(super) fn native_profile(&self) -> Profile {
+        self.selected_instance()
+            .map_or(Profile::Balanced, |instance| instance.native_profile)
+            .picker_choice(false)
+    }
+
+    pub(super) fn choose_native_profile(&mut self, profile: Profile) {
+        let Some(id) = self.selected_instance().map(|instance| instance.id.clone()) else {
+            return;
+        };
+        match instances::edit(&id, |meta| meta.native_profile = Some(profile)) {
+            Ok(_) => {
+                self.native_done = None;
+                self.reload_instances();
+            }
+            Err(error) => self.native_error = Some(error),
+        }
+    }
+
     /// Where the instance's native mods stand, read again only when what it depends on changes.
     fn native_state_of(&self, instance: &instances::Instance) -> State {
         let version = self.version_of(instance).cloned();
         let home = self.mods.home();
-        let profile = Profile::chosen(&self.settings);
+        let profile = self
+            .mods
+            .native_routes
+            .borrow()
+            .as_ref()
+            .and_then(|memo| memo.result.as_ref()?.as_ref().ok())
+            .map_or(Profile::Optimized, |routes| {
+                instance.native_profile.for_picker(routes, false, false)
+            });
         let key = format!(
             "{}{profile:?}",
             native_status::fingerprint(&home, version.as_deref())
@@ -229,11 +265,14 @@ impl Launcher {
     fn mode_cards(&self, locked: bool, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         let pal = Pal::of(&t);
-        let chosen = Profile::chosen(&self.settings);
+        let chosen = self.native_profile();
+        let offered_profiles = Profile::ALL
+            .into_iter()
+            .filter(|profile| profile.picker_choice(false) == *profile);
         div()
             .flex()
             .gap(px(10.))
-            .children(Profile::ALL.map(|profile| {
+            .children(offered_profiles.map(|profile| {
                 let on = profile == chosen;
                 let kind = match profile {
                     Profile::Optimized => tr("Prebuilt"),
@@ -303,9 +342,7 @@ impl Launcher {
                         if this.native_step.is_some() {
                             return;
                         }
-                        this.settings.native_profile = Some(profile);
-                        this.native_done = None;
-                        this.save_settings();
+                        this.choose_native_profile(profile);
                         cx.notify();
                     },
                 ))
@@ -366,9 +403,6 @@ impl Launcher {
         let progress = self.native_progress;
         let percent = percent(progress);
         let stage = progress.map(|p| p.stage);
-        let secs = self
-            .native_started
-            .map_or(0, |(started, _)| started.elapsed().as_secs());
         let pills = div()
             .flex()
             .items_center()
@@ -456,30 +490,50 @@ impl Launcher {
                     .child(icons),
             )
             .child(bar)
-            .child(
-                text_in(13., pal.muted)
-                    .truncate()
-                    .child(format!("{step} - {}", native_mods::duration_label(secs))),
-            )
+            .child(text_in(13., pal.muted).truncate().child(step.to_owned()))
     }
 
-    /// Each turned-on native mod's structural route, read again when files or consent change.
-    fn native_routes(&self) -> native_mods::Routes {
+    /// Each turned-on native mod's route; filesystem and release reads never run while drawing.
+    fn native_routes(&self, cx: &mut Context<Self>) -> native_mods::Routes {
         let home = self.mods.home();
+        let plays = self
+            .selected_instance()
+            .and_then(|instance| self.version_of(instance));
+        let base = native_mods::base_for(plays.map(String::as_str), &self.installed, false);
         let key = format!(
             "{}{:?}",
-            native_status::fingerprint(&home, None),
+            native_status::fingerprint(&home, base.as_deref()),
             self.settings.native_mods_allowed_at
         );
         let mut memo = self.mods.native_routes.borrow_mut();
-        match memo.as_ref() {
-            Some((k, routes)) if *k == key => routes.clone(),
-            _ => {
-                let routes = native_mods::routes(&home);
-                *memo = Some((key, routes.clone()));
-                routes
+        if let Some(previous) = memo.as_ref() {
+            let Some(result) = &previous.result else {
+                return native_mods::Routes::default();
+            };
+            if previous.key == key {
+                return result.as_ref().ok().cloned().unwrap_or_default();
             }
         }
+        *memo = Some(RouteMemo {
+            key: key.clone(),
+            result: None,
+        });
+        drop(memo);
+        let work = cx.background_executor().spawn(async move {
+            native_mods::routes(&home, base.as_deref()).map_err(String::from)
+        });
+        cx.spawn(async move |this, cx| {
+            let result = work.await;
+            let _ = this.update(cx, |this, cx| {
+                *this.mods.native_routes.borrow_mut() = Some(RouteMemo {
+                    key,
+                    result: Some(result),
+                });
+                cx.notify();
+            });
+        })
+        .detach();
+        native_mods::Routes::default()
     }
 
     /// The chip that says how `mod_id` reaches the game, with its menu when open.
@@ -490,23 +544,13 @@ impl Launcher {
         let state = self.native_state_of(instance);
         let busy = self.native_step.is_some();
         let building = busy && self.native_for.as_deref() == Some(instance.id.as_str());
-        let routes = self.native_routes();
+        let routes = self.native_routes(cx);
         let route = routes
             .mods
             .iter()
             .find(|(id, _)| id == mod_id)
             .map(|(_, r)| r)?;
-        let profile = Profile::chosen(&self.settings);
-        let last = self
-            .version_of(instance)
-            .and_then(|v| native_status::built_secs(v))
-            .map(|secs| {
-                trf(
-                    " The last build took {time}.",
-                    &[("time", &native_mods::duration_label(secs))],
-                )
-            })
-            .unwrap_or_default();
+        let profile = self.native_profile();
         let (glyph, color, headline, reason) = if building {
             (
                 "refresh",
@@ -535,19 +579,19 @@ impl Launcher {
                     "flash",
                     pal.accent,
                     tr("Can use the prebuilt game"),
-                    tr("Can use the prebuilt game, in seconds, if one exists for your Horizon and it serves every mod you turned on. Otherwise the whole game builds.").to_string(),
+                    tr("Can use the prebuilt game if one exists for your Horizon and it serves every enabled mod.").to_string(),
                 ),
                 Route::Game { reason } if profile == Profile::Optimized => (
                     "hammer",
                     pal.warn,
                     tr("Needs a full game build"),
-                    format!("{reason}{last}"),
+                    reason.to_string(),
                 ),
                 Route::Game { reason } => (
                     "clock",
                     pal.muted,
                     tr("Needs rebuild"),
-                    format!("{reason}{last} {}", tr("Press Build to rebuild with your changes.")),
+                    format!("{reason} {}", tr("Press Build to rebuild with your changes.")),
                 ),
             }
         };

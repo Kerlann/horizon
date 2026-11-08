@@ -2,7 +2,7 @@ use mod_api::{
     RowError, RowPages, RowWindow,
     wire::{Id, ResourceCodec, ResourceScope, WireError},
 };
-use mod_points::snapshot::{Builder, PageSource, Snapshot, Window, key, with_root};
+use mod_points::snapshot::{PageSource, Snapshot, Window, key, with_root};
 use std::{
     any::{Any, TypeId},
     cell::{Cell, RefCell},
@@ -23,7 +23,8 @@ struct Root {
     values: RefCell<Vec<u32>>,
     reads: Cell<usize>,
 }
-fn read(root: &Root, window: Window, out: &mut Builder) -> Result<(), RowError> {
+fn read(root: &Root, window: Window) -> Result<Vec<mod_api::Row>, RowError> {
+    let mut out = window.builder();
     root.reads.set(root.reads.get() + 1);
     if window.node() != 0 {
         return Err(RowError::Bounds);
@@ -48,7 +49,7 @@ fn read(root: &Root, window: Window, out: &mut Builder) -> Result<(), RowError> 
             )?;
         }
     }
-    Ok(())
+    Ok(window.finish(out))
 }
 fn request() -> RowWindow {
     RowWindow {
@@ -195,11 +196,12 @@ fn window_bounds_are_checked_before_reading_and_overruns_expose_no_partial_rows(
             Err(RowError::Bounds)
         ));
     });
-    fn spill(_: &(), _: Window, out: &mut Builder) -> Result<(), RowError> {
+    fn spill(_: &(), window: Window) -> Result<Vec<mod_api::Row>, RowError> {
+        let mut out = window.builder();
         let parent = out.node(None, 0, key("R"))?;
         let child = out.node(Some(parent), 0, key("R"))?;
         out.node(Some(child), 0, key("R"))?;
-        Ok(())
+        Ok(window.finish(out))
     }
     with_root(&(), |unit| {
         let deep: Arc<dyn RowPages> = unsafe { PageSource::new(&unit, spill) }.unwrap();
@@ -222,9 +224,10 @@ fn window_bounds_are_checked_before_reading_and_overruns_expose_no_partial_rows(
     });
     with_root(&huge, |text| {
         let bytes = unsafe {
-            PageSource::new(&text, |root, _, out| {
+            PageSource::new(&text, |root, window| {
+                let mut out = window.builder();
                 out.value(None, 0, key("String"), root)?;
-                Ok(())
+                Ok(window.finish(out))
             })
         }
         .unwrap();

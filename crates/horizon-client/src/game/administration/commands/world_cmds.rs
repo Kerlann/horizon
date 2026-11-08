@@ -123,7 +123,9 @@ impl Game<'_> {
 
     // ---- /damage ----------------------------------------------------------------
 
-    fn damage_kind(ty: &str) -> DamageKind {
+    /// The `DamageKind` of a damage type id, for the sources the engine's own
+    /// hurt paths take (`DamageCommand`'s and `EntityRef::hurt`'s).
+    pub(in crate::game) fn damage_kind(ty: &str) -> DamageKind {
         match ty.trim_start_matches("minecraft:") {
             "player_attack" => DamageKind::PlayerAttack,
             "mace_smash" => DamageKind::MaceSmash,
@@ -196,7 +198,59 @@ impl Game<'_> {
         // Destruction can remove the target before its success message is built.
         let discarded_name = matches!(target, Target::Item(_) | Target::Boat(_) | Target::Cart(_))
             .then(|| self.target_name(target));
-        let hurt = match target {
+        let hurt = self.hurt_target(target, amount, &ty, by, cause, from);
+        if !hurt {
+            return Err(err("commands.damage.invulnerable", &[]));
+        }
+        let name = discarded_name.unwrap_or_else(|| self.target_name(target));
+        self.feedback(Text::translate(
+            "commands.damage.success",
+            &[
+                Text::literal(horizon_client::snbt::java_float(amount)),
+                name,
+            ],
+        ));
+        Ok(1)
+    }
+
+    /// `DamageCommand.damage`'s routing, the engine's one damage entry by
+    /// kind: the player and mob hurt paths (the direct and causing entity
+    /// and the source position kept, the death message and thorns credited
+    /// to the causing one), the item, vehicle, dragon and crystal branches.
+    /// False when the kind refuses the damage. `EntityRef::hurt` (#924)
+    /// enters here too — there is no second damage pipeline.
+    pub(in crate::game) fn hurt_target(
+        &mut self,
+        target: Target,
+        amount: f32,
+        ty: &str,
+        by: Option<Target>,
+        cause: Option<Target>,
+        from: Option<[f64; 3]>,
+    ) -> bool {
+        // Resolve the damage registry at the shared command/API boundary before
+        // any target-specific path can mutate state or map it to a DamageKind.
+        if self.motion.health.damage.id(ty).is_none() {
+            return false;
+        }
+        let attacker = cause.or(by).and_then(|t| self.network_entity_id(t));
+        let mut attack = self.attack_of(attacker.unwrap_or(0));
+        attack.direct = Some(by.and_then(|t| self.network_entity_id(t)).unwrap_or(0));
+        self.with_attack(attack, |g| {
+            g.hurt_target_from_source(target, amount, ty, by, cause, from)
+        })
+    }
+
+    fn hurt_target_from_source(
+        &mut self,
+        target: Target,
+        amount: f32,
+        ty: &str,
+        by: Option<Target>,
+        cause: Option<Target>,
+        from: Option<[f64; 3]>,
+    ) -> bool {
+        match target {
             // The causing mob is the one the hit is credited to and thorns
             // answer; the source position gives the knockback its direction.
             Target::Player | Target::Guest(_) => {
@@ -220,18 +274,21 @@ impl Game<'_> {
                 .and_then(|conn| self.command_guest(conn))
                 .map(|g| crate::game::combat::PlayerCredit(g.uuid));
                 let now = self.world.game_time;
+                let attack = self.current_attack();
                 self.for_player(target, |g| {
-                    if g.spectator() {
-                        return false;
-                    }
-                    if let Some(name) = named {
-                        g.note_direct_entity(&ty, name);
-                    }
-                    let hurt = g.hurt_player_from(amount, from, &ty, attacker);
-                    if hurt && let Some(credit) = by_player {
-                        g.combat.note_hurt_by_player(credit, now);
-                    }
-                    hurt
+                    g.with_attack(attack, |g| {
+                        if g.spectator() {
+                            return false;
+                        }
+                        if let Some(name) = named {
+                            g.note_direct_entity(ty, name);
+                        }
+                        let hurt = g.hurt_player_from(amount, from, ty, attacker);
+                        if hurt && let Some(credit) = by_player {
+                            g.combat.note_hurt_by_player(credit, now);
+                        }
+                        hurt
+                    })
                 })
                 .unwrap_or(false)
             }
@@ -246,7 +303,7 @@ impl Game<'_> {
                     _ => None,
                 };
                 let damage = Damage {
-                    kind: Self::damage_kind(&ty),
+                    kind: Self::damage_kind(ty),
                     attacker,
                     from,
                     attacker_species,
@@ -258,8 +315,11 @@ impl Game<'_> {
                     _ => None,
                 };
                 if let Some(conn) = guest {
+                    let attack = self.current_attack();
                     let hurt = self
-                        .as_guest(conn, |g| g.command_damage_mob(id, amount, damage))
+                        .as_guest(conn, |g| {
+                            g.with_attack(attack, |g| g.command_damage_mob(id, amount, damage))
+                        })
                         .unwrap_or(false);
                     if hurt && let Some(host) = self.lan.as_mut() {
                         host.mob_players.insert(id, conn);
@@ -269,15 +329,15 @@ impl Game<'_> {
                     self.command_damage_mob(id, amount, damage)
                 }
             }
-            Target::Item(id) => self.command_damage_item(id, amount, &ty, cause.or(by)),
+            Target::Item(id) => self.command_damage_item(id, amount, ty, cause.or(by)),
             Target::Boat(_) | Target::Cart(_) => {
-                self.command_damage_vehicle(target, amount, &ty, cause.or(by))
+                self.command_damage_vehicle(target, amount, ty, cause.or(by))
             }
             Target::Dragon(id) => self.command_damage_dragon(
                 id,
                 amount,
-                &ty,
-                Self::damage_kind(&ty),
+                ty,
+                Self::damage_kind(ty),
                 (
                     by,
                     cause.or(by),
@@ -285,22 +345,10 @@ impl Game<'_> {
                 ),
             ),
             Target::Crystal(id) => {
-                self.command_damage_crystal(id, &ty, Self::damage_kind(&ty), cause.or(by))
+                self.command_damage_crystal(id, ty, Self::damage_kind(ty), cause.or(by))
             }
             _ => false,
-        };
-        if !hurt {
-            return Err(err("commands.damage.invulnerable", &[]));
         }
-        let name = discarded_name.unwrap_or_else(|| self.target_name(target));
-        self.feedback(Text::translate(
-            "commands.damage.success",
-            &[
-                Text::literal(horizon_client::snbt::java_float(amount)),
-                name,
-            ],
-        ));
-        Ok(1)
     }
 
     /// `VehicleEntity.hurtServer`: report acceptance even when the vehicle survives.
@@ -455,7 +503,8 @@ impl Game<'_> {
     /// `Zombie.hurtServer`'s reinforcement requests before the command returns.
     /// Health-changing hits also raise their damage vibration before return.
     fn command_damage_mob(&mut self, id: u32, amount: f32, damage: Damage) -> bool {
-        let attack = self.attack_of_who(damage.attacker);
+        let mut attack = self.attack_of_who(damage.attacker);
+        attack.direct = self.combat.attack().direct;
         let mut reinforcements = Vec::new();
         let mut health_changed = false;
         let hurt = self.mobs.iter_mut().find(|m| m.id == id).is_some_and(|m| {
@@ -1015,10 +1064,23 @@ impl Game<'_> {
         // An unbounded selector reaches every loaded level, so the target may
         // be in another one than the command's (EntitySelector.findEntities,
         // AttributeCommand acting on the entity itself).
-        self.in_target_level(target, |g| {
-            g.attribute_in_level(id, ctx, target, &attribute)
-        })
-        .unwrap_or(Ok(0))
+        let reply = if matches!(target, Target::Guest(_)) {
+            self.for_player(target, |g| {
+                g.attribute_in_level(id, ctx, Target::Player, &attribute)
+            })
+        } else {
+            self.in_target_level(target, |g| {
+                g.attribute_in_level(id, ctx, target, &attribute)
+            })
+        }
+        .unwrap_or(Ok(None))?;
+        // Command success belongs to the issuer, after the actual target's
+        // body/level is restored. Internal system messages still use for_player.
+        let Some((value, message)) = reply else {
+            return Ok(0);
+        };
+        self.feedback(message);
+        Ok(value)
     }
     /// `/attribute` on a target, with the target's own level in place.
     fn attribute_in_level(
@@ -1027,7 +1089,7 @@ impl Game<'_> {
         ctx: &Context,
         target: Target,
         attribute: &str,
-    ) -> R<i32> {
+    ) -> R<Option<(i32, Text)>> {
         let name = self.target_name(target);
         let description = Self::attribute_description(attribute);
         let short = attribute.trim_start_matches("minecraft:").to_owned();
@@ -1052,7 +1114,7 @@ impl Game<'_> {
         match target {
             Target::Player => {
                 let Some(player) = self.player.as_mut() else {
-                    return Ok(0);
+                    return Ok(None);
                 };
                 let Some(key) = player.attributes.key(attribute) else {
                     return Err(no_attribute(&name, &description));
@@ -1074,11 +1136,10 @@ impl Game<'_> {
                         } else {
                             "commands.attribute.base_value.get.success"
                         };
-                        self.feedback(Text::translate(
-                            k,
-                            &[description, name, java_double_text(v)],
-                        ));
-                        Ok((v * scale) as i32)
+                        Ok(Some((
+                            (v * scale) as i32,
+                            Text::translate(k, &[description, name, java_double_text(v)]),
+                        )))
                     }
                     "attribute.base.set" => {
                         self.write_attribute(target, attribute, AttributeWrite::Base(value_arg))
@@ -1089,11 +1150,13 @@ impl Game<'_> {
                         {
                             let _ = player.clamp_health_to_max();
                         }
-                        self.feedback(Text::translate(
-                            "commands.attribute.base_value.set.success",
-                            &[description, name, java_double_text(value_arg)],
-                        ));
-                        Ok(1)
+                        Ok(Some((
+                            1,
+                            Text::translate(
+                                "commands.attribute.base_value.set.success",
+                                &[description, name, java_double_text(value_arg)],
+                            ),
+                        )))
                     }
                     "attribute.base.reset" => {
                         self.write_attribute(target, attribute, AttributeWrite::ResetBase)
@@ -1109,11 +1172,13 @@ impl Game<'_> {
                                 v
                             })
                             .unwrap_or(0.0);
-                        self.feedback(Text::translate(
-                            "commands.attribute.base_value.reset.success",
-                            &[description, name, java_double_text(v)],
-                        ));
-                        Ok(1)
+                        Ok(Some((
+                            1,
+                            Text::translate(
+                                "commands.attribute.base_value.reset.success",
+                                &[description, name, java_double_text(v)],
+                            ),
+                        )))
                     }
                     "attribute.modifier.add" => {
                         let added = AttributeWrite::add(
@@ -1135,11 +1200,13 @@ impl Game<'_> {
                                 ],
                             ));
                         }
-                        self.feedback(Text::translate(
-                            "commands.attribute.modifier.add.success",
-                            &[Text::literal(modifier_id), description, name],
-                        ));
-                        Ok(1)
+                        Ok(Some((
+                            1,
+                            Text::translate(
+                                "commands.attribute.modifier.add.success",
+                                &[Text::literal(modifier_id), description, name],
+                            ),
+                        )))
                     }
                     "attribute.modifier.remove" => {
                         let removed = self.write_attribute(
@@ -1157,11 +1224,13 @@ impl Game<'_> {
                                 ],
                             ));
                         }
-                        self.feedback(Text::translate(
-                            "commands.attribute.modifier.remove.success",
-                            &[Text::literal(modifier_id), description, name],
-                        ));
-                        Ok(1)
+                        Ok(Some((
+                            1,
+                            Text::translate(
+                                "commands.attribute.modifier.remove.success",
+                                &[Text::literal(modifier_id), description, name],
+                            ),
+                        )))
                     }
                     _ => {
                         let Some(handle) = player.attributes.get_instance(Some(key)).ok().flatten()
@@ -1189,16 +1258,18 @@ impl Game<'_> {
                                 ],
                             ));
                         };
-                        self.feedback(Text::translate(
-                            "commands.attribute.modifier.value.get.success",
-                            &[
-                                Text::literal(modifier_id),
-                                description,
-                                name,
-                                java_double_text(v),
-                            ],
-                        ));
-                        Ok((v * scale) as i32)
+                        Ok(Some((
+                            (v * scale) as i32,
+                            Text::translate(
+                                "commands.attribute.modifier.value.get.success",
+                                &[
+                                    Text::literal(modifier_id),
+                                    description,
+                                    name,
+                                    java_double_text(v),
+                                ],
+                            ),
+                        )))
                     }
                 }
             }
@@ -1218,10 +1289,11 @@ impl Game<'_> {
                     (&name, &description),
                     (value_arg, scale, &modifier_id, &op),
                 )
+                .map(Some)
             }
             Target::Mob(mob_id) => {
-                let Some(m) = self.mobs.iter_mut().find(|m| m.id == mob_id) else {
-                    return Ok(0);
+                let Some(m) = self.mobs.iter().find(|m| m.id == mob_id) else {
+                    return Ok(None);
                 };
                 // The attributes the mob's gameplay reads live in `finalize`;
                 // the command edits that store, never a copy of it.
@@ -1250,21 +1322,22 @@ impl Game<'_> {
                         } else {
                             "commands.attribute.base_value.get.success"
                         };
-                        self.feedback(Text::translate(
-                            k,
-                            &[description, name, java_double_text(current)],
-                        ));
-                        Ok((current * scale) as i32)
+                        Ok(Some((
+                            (current * scale) as i32,
+                            Text::translate(k, &[description, name, java_double_text(current)]),
+                        )))
                     }
                     "attribute.base.set" => {
                         // AttributeInstance keeps the raw base and clamps only the
                         // effective value.
                         self.write_attribute(target, attribute, AttributeWrite::Base(value_arg));
-                        self.feedback(Text::translate(
-                            "commands.attribute.base_value.set.success",
-                            &[description, name, java_double_text(value_arg)],
-                        ));
-                        Ok(1)
+                        Ok(Some((
+                            1,
+                            Text::translate(
+                                "commands.attribute.base_value.set.success",
+                                &[description, name, java_double_text(value_arg)],
+                            ),
+                        )))
                     }
                     "attribute.base.reset" => {
                         self.write_attribute(target, attribute, AttributeWrite::ResetBase);
@@ -1273,11 +1346,13 @@ impl Game<'_> {
                             .iter()
                             .find(|m| m.id == mob_id)
                             .map_or(0.0, |m| finalize::base_value(m, attr));
-                        self.feedback(Text::translate(
-                            "commands.attribute.base_value.reset.success",
-                            &[description, name, java_double_text(v)],
-                        ));
-                        Ok(1)
+                        Ok(Some((
+                            1,
+                            Text::translate(
+                                "commands.attribute.base_value.reset.success",
+                                &[description, name, java_double_text(v)],
+                            ),
+                        )))
                     }
                     "attribute.modifier.add" => {
                         let added = AttributeWrite::add(
@@ -1294,11 +1369,13 @@ impl Game<'_> {
                                 &[Text::literal(modifier_id.clone()), description, name],
                             ));
                         }
-                        self.feedback(Text::translate(
-                            "commands.attribute.modifier.add.success",
-                            &[Text::literal(modifier_id.clone()), description, name],
-                        ));
-                        Ok(1)
+                        Ok(Some((
+                            1,
+                            Text::translate(
+                                "commands.attribute.modifier.add.success",
+                                &[Text::literal(modifier_id.clone()), description, name],
+                            ),
+                        )))
                     }
                     "attribute.modifier.remove" => {
                         let removed = self.write_attribute(
@@ -1309,11 +1386,13 @@ impl Game<'_> {
                         if removed != Some(true) {
                             return Err(no_modifier);
                         }
-                        self.feedback(Text::translate(
-                            "commands.attribute.modifier.remove.success",
-                            &[Text::literal(modifier_id.clone()), description, name],
-                        ));
-                        Ok(1)
+                        Ok(Some((
+                            1,
+                            Text::translate(
+                                "commands.attribute.modifier.remove.success",
+                                &[Text::literal(modifier_id.clone()), description, name],
+                            ),
+                        )))
                     }
                     _ => {
                         // Permanent entries stay authoritative. The modeled baby
@@ -1327,16 +1406,18 @@ impl Game<'_> {
                         let Some(v) = amount else {
                             return Err(no_modifier);
                         };
-                        self.feedback(Text::translate(
-                            "commands.attribute.modifier.value.get.success",
-                            &[
-                                Text::literal(modifier_id.clone()),
-                                description,
-                                name,
-                                java_double_text(v),
-                            ],
-                        ));
-                        Ok((v * scale) as i32)
+                        Ok(Some((
+                            (v * scale) as i32,
+                            Text::translate(
+                                "commands.attribute.modifier.value.get.success",
+                                &[
+                                    Text::literal(modifier_id.clone()),
+                                    description,
+                                    name,
+                                    java_double_text(v),
+                                ],
+                            ),
+                        )))
                     }
                 }
             }
@@ -1379,7 +1460,7 @@ impl Game<'_> {
         attribute: &str,
         (name, description): (&Text, &Text),
         (value_arg, scale, modifier_id, op): (f64, f64, &str, &str),
-    ) -> R<i32> {
+    ) -> R<(i32, Text)> {
         let no_attribute = || {
             text_error(
                 "commands.attribute.failed.no_attribute",
@@ -1506,8 +1587,7 @@ impl Game<'_> {
                 )
             }
         };
-        self.feedback(Text::translate(message, &args));
-        Ok(result)
+        Ok((result, Text::translate(message, &args)))
     }
 
     // ---- /ride ----------------------------------------------------------------------------
@@ -1518,6 +1598,12 @@ impl Game<'_> {
             return Ok(0);
         };
         let name = self.target_name(target);
+        // A server player other than the one in place (the console's, a function's or another
+        // player's /ride): their riding state is their own, so the command runs as them, as
+        // `native_mount` does. In vanilla every ServerPlayer rides alike.
+        if let Target::Guest(_) = target {
+            return self.ride_guest(id, ctx, target, name);
+        }
         if id == "ride.dismount" {
             let Some(v) = self.ride_vehicle(target) else {
                 return Err(err("commands.ride.not_riding", &[&name.plain()]));
@@ -1539,6 +1625,59 @@ impl Game<'_> {
             return Ok(0);
         };
         let vehicle_name = self.target_name(vehicle);
+        self.ride_mount(target, vehicle)?;
+        self.feedback(Text::translate(
+            "commands.ride.mount.success",
+            &[name, vehicle_name],
+        ));
+        Ok(1)
+    }
+
+    /// `cmd_ride` for a server player not in place (`Target::Guest`): `RideCommand.dismount` and
+    /// `RideCommand.mount` run as that player, through `for_player`.
+    fn ride_guest(&mut self, id: &str, ctx: &Context, target: Target, name: Text) -> R<i32> {
+        if id == "ride.dismount" {
+            let not_riding = || err("commands.ride.not_riding", &[&name.plain()]);
+            let vehicle_name = self
+                .for_player(target, |g| {
+                    let vehicle = g.ride_vehicle(Target::Player)?;
+                    let vehicle_name = g.target_name(vehicle);
+                    g.stop_riding();
+                    Some(vehicle_name)
+                })
+                .flatten()
+                .ok_or_else(not_riding)?;
+            self.feedback(Text::translate(
+                "commands.ride.dismount.success",
+                &[name, vehicle_name],
+            ));
+            return Ok(1);
+        }
+        let vehicles = self.entities(ctx, "vehicle", false)?;
+        let Some(vehicle) = vehicles.first().copied() else {
+            return Ok(0);
+        };
+        let vehicle_name = self.target_name(vehicle);
+        self.for_player(target, |g| g.ride_mount(Target::Player, vehicle))
+            .unwrap_or_else(|| {
+                Err(err(
+                    "commands.ride.mount.failure.generic",
+                    &[&name.plain(), &vehicle_name.plain()],
+                ))
+            })?;
+        self.feedback(Text::translate(
+            "commands.ride.mount.success",
+            &[name, vehicle_name],
+        ));
+        Ok(1)
+    }
+
+    /// `RideCommand.mount` once the targets are known: `target` (the player
+    /// in place or a mob) rides `vehicle`, as `startRiding(vehicle, true,
+    /// true)` forces it (also for `native_mount`).
+    pub(in crate::game) fn ride_mount(&mut self, target: Target, vehicle: Target) -> R<()> {
+        let name = self.target_name(target);
+        let vehicle_name = self.target_name(vehicle);
         if let Some(current) = self.ride_vehicle(target) {
             let current = self.target_name(current);
             return Err(err(
@@ -1546,7 +1685,8 @@ impl Game<'_> {
                 &[&name.plain(), &current.plain()],
             ));
         }
-        if vehicle == Target::Player {
+        // RideCommand.mount: `vehicle.getType() == EntityType.PLAYER`, any server player.
+        if matches!(vehicle, Target::Player | Target::Guest(_)) {
             return Err(err("commands.ride.mount.failure.cant_ride_players", &[]));
         }
         // getSelfAndPassengers: the vehicle is the target or rides it.
@@ -1563,11 +1703,7 @@ impl Game<'_> {
                 &[&name.plain(), &vehicle_name.plain()],
             ));
         }
-        self.feedback(Text::translate(
-            "commands.ride.mount.success",
-            &[name, vehicle_name],
-        ));
-        Ok(1)
+        Ok(())
     }
 
     /// Entity.getVehicle: the player's mount, or a mob's.
@@ -1582,6 +1718,10 @@ impl Game<'_> {
             Target::Boat(id)
         } else if self.carts.iter().any(|c| c.id == id) {
             Target::Cart(id)
+        } else if self.armor_stands.iter().any(|a| a.id == id) {
+            Target::Stand(id)
+        } else if self.others.iter().any(|o| o.id == id) {
+            Target::Other(id)
         } else {
             Target::Mob(id)
         })
@@ -2293,6 +2433,274 @@ mod vehicle_damage_command_tests {
                 assert_eq!(damage, 0.0);
             }
             assert_eq!(game.world.game_time, clock);
+        });
+    }
+    fn attribute_guests(
+        game: &mut Game<'_>,
+    ) -> Vec<std::sync::mpsc::Receiver<horizon_client::lan::Out>> {
+        use horizon_client::lan::{Joined, NetConfig, PlayerSender, guest::Guest, hub::HubConfig};
+        use horizon_protocol::packets::configuration::ClientInformation;
+        use std::sync::{atomic::AtomicI32, mpsc};
+        game.world_root = game.options.game_dir.as_ref().unwrap().join("h082-world");
+        std::fs::create_dir_all(&game.world_root).unwrap();
+        game.lan_host(
+            crate::game::lan::LanSettings {
+                port: 0,
+                guest_commands: true,
+                force_game_mode: false,
+            },
+            NetConfig {
+                announce: false,
+                ..NetConfig::loopback(0, "attribute-test".into(), 2)
+            },
+            HubConfig {
+                default_game_mode: 1,
+                guest_commands: true,
+                force_game_mode: false,
+                hardcore: false,
+                view_distance: 2,
+                simulation_distance: 2,
+                dimension: "minecraft:overworld".into(),
+                allow_flight: false,
+                seed: 0,
+                max_players: 3,
+                integrated: false,
+                levels: Default::default(),
+            },
+        )
+        .unwrap();
+        let mut receivers = Vec::new();
+        for (conn, name, position) in [
+            (2, "Bob", [7.5, 100.0, 4.5]),
+            (3, "Carol", [10.5, 100.0, 4.5]),
+        ] {
+            let (tx, rx) = mpsc::channel();
+            let mut guest = Guest::new(
+                Joined {
+                    conn,
+                    uuid: horizon_protocol::crypto::offline_uuid(name),
+                    name: name.into(),
+                    properties: Vec::new(),
+                    info: ClientInformation::new(2),
+                    brand: "test".into(),
+                    sender: PlayerSender::new(tx, Arc::default()),
+                    latency: Arc::new(AtomicI32::new(0)),
+                    address: "127.0.0.1:25565".parse().unwrap(),
+                    expected: false,
+                },
+                conn as i32,
+                position,
+                2,
+            );
+            guest.dimension = "minecraft:overworld".into();
+            guest.placed = true;
+            guest.loaded = true;
+            guest.game_mode = 1;
+            game.lan.as_mut().unwrap().hub.guests.push(guest);
+            receivers.push(rx);
+        }
+        let host = game.lan.as_mut().unwrap();
+        for name in ["Bob", "Carol"] {
+            host.hub
+                .ops
+                .insert(horizon_protocol::crypto::offline_uuid(name), 2);
+        }
+        host.hub.refresh_permissions();
+        assert!(host.hub.guests.iter().all(|guest| guest.permission == 2));
+        receivers
+    }
+    fn attribute_chat_count(rx: &std::sync::mpsc::Receiver<horizon_client::lan::Out>) -> usize {
+        use horizon_client::lan::Out;
+        use horizon_protocol::packets::play::Clientbound;
+        let mut bodies = Vec::new();
+        for out in rx.try_iter() {
+            match out {
+                Out::Packet(body) => bodies.push(body),
+                Out::Packets(more) => bodies.extend(more),
+                Out::Disconnect(_) => panic!("actual registered guest disconnected"),
+            }
+        }
+        bodies
+            .iter()
+            .filter(|body| {
+                let mut r = horizon_protocol::buf::Reader::new(body);
+                let id = r.varint().unwrap();
+                matches!(
+                    Clientbound::decode(id, r.rest()).unwrap(),
+                    Clientbound::SystemChat(_)
+                )
+            })
+            .count()
+    }
+    #[test]
+    #[ignore = "needs prepared resources; real registered Guest context and issuer feedback"]
+    fn direct_guest_attributes_adopt_the_target_and_restore_the_issuer() {
+        use crate::game::commands::Target;
+        use horizon_client::motion::PlayerMotion;
+        use horizon_core::geometry::Vec3;
+        with_game(|game| {
+            game.player = Some(PlayerMotion::new(game.motion, Vec3::new(4.5, 100.0, 4.5)).unwrap());
+            game.creative = true;
+            assert!(game.run_command("fill 0 99 0 15 99 15 stone"));
+            assert!(game.run_command("attribute @s minecraft:armor base set 2"));
+            let host_uuid = game.acting_uuid();
+            let clock = game.world.game_time;
+            let dimension = game.dim;
+            let receivers = attribute_guests(game);
+            for (conn, name) in [(2, "Bob"), (3, "Carol")] {
+                let g = game.command_guest(conn).unwrap();
+                assert_eq!(g.uuid, horizon_protocol::crypto::offline_uuid(name));
+                assert_eq!(g.health, 20.0);
+                assert!(g.loaded && g.placed);
+                assert_eq!(g.game_mode, 1);
+                assert_eq!(
+                    game.for_player(Target::Guest(conn), |g| g
+                        .player
+                        .as_mut()
+                        .unwrap()
+                        .attribute("minecraft:armor")
+                        .unwrap()),
+                    Some(0.0)
+                );
+            }
+            // Existing guest-issued Player path is positive before direct Guest dispatch.
+            assert_eq!(
+                game.for_player(Target::Guest(2), |g| g
+                    .run_command("attribute @s minecraft:armor base set 3")),
+                Some(true)
+            );
+            assert_eq!(
+                game.for_player(Target::Guest(2), |g| g
+                    .player
+                    .as_mut()
+                    .unwrap()
+                    .attribute("minecraft:armor")
+                    .unwrap()),
+                Some(3.0)
+            );
+            for rx in &receivers {
+                attribute_chat_count(rx);
+            }
+            game.chat_capture = Some(Vec::new());
+            let accepted = game.run_command("attribute Bob minecraft:armor base set 4");
+            let issuer = game.chat_capture.take().unwrap();
+            // This assertion fails old on the actual guest model, not feedback alone.
+            assert_eq!(
+                game.for_player(Target::Guest(2), |g| g
+                    .player
+                    .as_mut()
+                    .unwrap()
+                    .attribute("minecraft:armor")
+                    .unwrap()),
+                Some(4.0)
+            );
+            assert!(accepted);
+            assert_eq!(issuer.len(), 1);
+            assert!(issuer[0].plain().contains("Bob"));
+            assert_eq!(
+                attribute_chat_count(&receivers[0]),
+                0,
+                "success belongs to issuer, not Bob"
+            );
+            assert_eq!(
+                game.player
+                    .as_mut()
+                    .unwrap()
+                    .attribute("minecraft:armor")
+                    .unwrap(),
+                2.0
+            );
+            assert_eq!(
+                game.for_player(Target::Guest(3), |g| g
+                    .player
+                    .as_mut()
+                    .unwrap()
+                    .attribute("minecraft:armor")
+                    .unwrap()),
+                Some(0.0)
+            );
+            assert_eq!(
+                game.for_player(Target::Guest(2), |g| g
+                    .player
+                    .as_mut()
+                    .unwrap()
+                    .attribute("minecraft:max_health")
+                    .unwrap()),
+                Some(20.0)
+            );
+            game.chat_capture = Some(Vec::new());
+            assert!(
+                !game.run_command("attribute Bob minecraft:armor modifier remove h082:missing")
+            );
+            let errors = game.chat_capture.take().unwrap();
+            assert_eq!(errors.len(), 1);
+            assert!(errors[0].plain().contains("h082:missing"));
+            assert_eq!(
+                attribute_chat_count(&receivers[0]),
+                0,
+                "error returns to issuer"
+            );
+            game.chat_capture = Some(Vec::new());
+            assert!(game.run_command("attribute Bob minecraft:armor base reset"));
+            assert_eq!(game.chat_capture.take().unwrap().len(), 1);
+            assert_eq!(
+                game.for_player(Target::Guest(2), |g| g
+                    .player
+                    .as_mut()
+                    .unwrap()
+                    .attribute("minecraft:armor")
+                    .unwrap()),
+                Some(0.0)
+            );
+            assert_eq!(game.acting_uuid(), host_uuid);
+            assert_eq!(game.lan_acting, None);
+            assert_eq!(game.dim, dimension);
+            assert_eq!(game.world.game_time, clock);
+            assert_eq!(game.player.as_ref().unwrap().health.health(), 20.0);
+        });
+    }
+    #[test]
+    #[ignore = "needs prepared resources; existing target/operation reply controls"]
+    fn existing_attribute_operations_keep_their_exact_success_messages() {
+        use horizon_client::motion::PlayerMotion;
+        use horizon_core::geometry::Vec3;
+        with_game(|game| {
+            game.player = Some(PlayerMotion::new(game.motion, Vec3::new(4.5, 200.0, 4.5)).unwrap());
+            assert!(
+                game.run_command("summon pig 6.5 200 4.5 {UUID:[I;82,0,0,1],NoAI:1b,NoGravity:1b}")
+            );
+            assert!(
+                game.run_command("summon armor_stand 8.5 200 4.5 {UUID:[I;82,0,0,2],NoGravity:1b}")
+            );
+            for target in [
+                "@s",
+                "00000052-0000-0000-0000-000000000001",
+                "00000052-0000-0000-0000-000000000002",
+            ] {
+                for operation in [
+                    "get",
+                    "base get",
+                    "base set 2",
+                    "base get",
+                    "base reset",
+                    "modifier add h082:reply 1 add_value",
+                    "modifier value get h082:reply",
+                    "get",
+                    "modifier remove h082:reply",
+                ] {
+                    let command = format!("attribute {target} minecraft:armor {operation}");
+                    game.chat_capture = Some(Vec::new());
+                    game.cmds.results = Some(Vec::new());
+                    assert!(game.run_command(&command), "{command}");
+                    let messages = game.chat_capture.take().unwrap();
+                    assert_eq!(messages.len(), 1, "{command}");
+                    let components: Vec<_> = messages.iter().map(|m| m.component()).collect();
+                    println!(
+                        "H082_EXISTING {}",
+                        serde_json::json!({"command":command,"messages":components,"results":game.cmds.results.take().unwrap()})
+                    );
+                }
+            }
         });
     }
 }

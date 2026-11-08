@@ -103,6 +103,8 @@ impl Game<'_> {
     fn entity_nbt_in_level(&mut self, t: Target) -> Option<Tag> {
         let player_uuid = self.saved_player_uuid();
         Some(match t {
+            // `FishingHook.shouldBeSaved` is false, and it keeps no compound here.
+            Target::Hook(_) => return None,
             Target::Guest(_) => {
                 return self
                     .for_player(t, |g| g.command_target_nbt(Target::Player))
@@ -159,15 +161,7 @@ impl Game<'_> {
                 let uuid = self.uuid_for(id);
                 let i = self.boats.iter().position(|b| b.id == id)?;
                 let b = &self.boats[i];
-                let mut tag = entity_nbt::boat_to_nbt(
-                    &b.entity_type(),
-                    b.position,
-                    b.velocity,
-                    [b.yaw, b.pitch],
-                    uuid,
-                    self.persist.raw.get(&id),
-                    b.chest.then_some(&b.items[..]),
-                );
+                let mut tag = b.to_nbt(uuid, self.persist.raw.get(&id));
                 // AbstractBoat.addAdditionalSaveData: the live or pending leash.
                 self.write_boat_leash(&mut tag, i);
                 tag
@@ -245,6 +239,11 @@ impl Game<'_> {
             Target::Tnt(id) => {
                 let i = self.tnts.iter().position(|t| t.id == id)?;
                 self.tnt_nbt(i)
+            }
+            Target::Cushion(id) => {
+                let uuid = self.uuid_for(id);
+                let c = self.cushions.iter().find(|c| c.id == id)?;
+                entity_nbt::cushion_to_nbt(c, uuid, self.persist.raw.get(&id))
             }
             Target::Falling(id) => {
                 let f = self.falling.iter().find(|f| f.id == id)?.clone();
@@ -366,7 +365,7 @@ impl Game<'_> {
                 if let Some(k) = kind {
                     set_key(&mut tag, "id", Tag::String(k.as_str().into()));
                 }
-                let new = entity_nbt::mob_from_nbt(
+                let mut new = entity_nbt::mob_from_nbt(
                     &tag,
                     self.res.mob_types(),
                     id,
@@ -385,16 +384,30 @@ impl Game<'_> {
                             tag.get("Brain").and_then(|brain| brain.get("memories")),
                             Some(Tag::Compound(_))
                         );
+                    // Runtime identity and lifetime stay on the resident owner.
+                    new.join = slot.join;
+                    let old = horizon_client::join_seq::store_back(slot, new);
                     // Runtime-only state (AI, animation) carries over.
-                    let old = std::mem::replace(slot, new);
                     if keep_liked_player {
                         slot.extra.tame = old.extra.tame;
                         slot.extra.owner = old.extra.owner;
+                        if let (Some(st), Some(was)) =
+                            (slot.extra.allay.as_mut(), old.extra.allay.as_ref())
+                        {
+                            st.liked_player_ttl = was.liked_player_ttl;
+                        }
                     }
                     // Entity.load mutates the existing living entity; its damage
                     // cooldown and previous-hit amount are not read from saved NBT.
                     slot.invulnerable = old.invulnerable;
                     slot.last_hurt = old.last_hurt;
+                    // Entity.load updates saved data on the existing entity;
+                    // lastTradedPlayer is transient and survives a live NoAI edit.
+                    if slot.species() == horizon_client::mobs::Species::Villager {
+                        horizon_client::mobs::villager::ext_mut(slot).last_traded_player =
+                            horizon_client::mobs::villager::ext(&old)
+                                .and_then(|ext| ext.last_traded_player);
+                    }
                     slot.ai = old.ai;
                     // Mob.readAdditionalSaveData updates persistent home fields,
                     // while retaining the rest of the live AI/runtime state.
@@ -436,11 +449,11 @@ impl Game<'_> {
                 }
             }
             Target::Item(id) => {
-                let new = entity_nbt::item_entity_from_nbt(&tag, id, 0.0).ok_or_else(stale)?;
+                let mut new = entity_nbt::item_entity_from_nbt(&tag, id, 0.0).ok_or_else(stale)?;
                 if let Some(slot) = self.dropped.iter_mut().find(|e| e.id == id) {
-                    let bob = slot.bob_offset;
-                    *slot = new;
-                    slot.bob_offset = bob;
+                    new.join = slot.join;
+                    new.bob_offset = slot.bob_offset;
+                    horizon_client::join_seq::store_back(slot, new);
                 }
             }
             Target::Fangs(id) => {
@@ -461,7 +474,8 @@ impl Game<'_> {
                 if let Some(slot) = self.armor_stands.iter_mut().find(|a| a.id == id) {
                     // Entity.load keeps the existing entity's firstTick state.
                     new.first_tick = slot.first_tick;
-                    *slot = new;
+                    new.join = slot.join;
+                    horizon_client::join_seq::store_back(slot, new);
                 }
             }
             Target::Frame(id) => {
@@ -471,6 +485,7 @@ impl Game<'_> {
                     // Entity.load cannot change the runtime type; saveWithoutId
                     // deliberately omitted the decoder's type discriminator.
                     new.glow = old.glow;
+                    new.join = old.join;
                     // ItemFrame.readAdditionalSaveData: ItemStack.matches includes
                     // count, item and components, before adopting the new stack.
                     if old.item.as_ref().is_some_and(|a| {
@@ -483,12 +498,12 @@ impl Game<'_> {
                     }
                     let item = new.item.take();
                     new.set_item(item);
-                    self.item_frames[i] = new;
+                    horizon_client::join_seq::store_back(&mut self.item_frames[i], new);
                 }
             }
             Target::Boat(id) => {
                 // AbstractBoat.readAdditionalSaveData over Entity.load: the
-                // position, rotation, motion, NoGravity and a chest boat's items.
+                // position, rotation, motion, NoGravity, Fire and a chest boat's items.
                 let (position, velocity, yaw) =
                     entity_nbt::boat_from_nbt(&tag).ok_or_else(stale)?;
                 let uuid = self.uuid_for(id);
@@ -505,12 +520,51 @@ impl Game<'_> {
                     b.previous_yaw = yaw;
                     b.pitch = entity_nbt::rotation(&tag)[1];
                     b.no_gravity = entity_nbt::flag(&tag, "NoGravity");
+                    b.fire_ticks = crate::game::boats::saved_fire(&tag);
                     if b.chest {
                         b.items =
                             save::decode_items(tag.get("Items"), crate::game::boats::CHEST_SLOTS);
                     }
                 });
                 set_key(&mut tag, "UUID", Tag::IntArray(uuid.to_vec()));
+            }
+            Target::Falling(id) => {
+                // Use load_falling's existing converters, but mutate the resident
+                // instance: loading/spawning would allocate a new id and join.
+                let (state, position, velocity, age, fall_distance) =
+                    entity_nbt::falling_block_from_nbt(&tag).ok_or_else(stale)?;
+                let state = self.state_from_nbt(&state).ok_or_else(stale)?;
+                let (no_gravity, drop_item) = entity_nbt::falling_block_flags(&tag);
+                let damage = horizon_client::falling_block::Damage::from_nbt(
+                    &tag,
+                    self.res.facts().get(state).name.ends_with("anvil"),
+                );
+                let uuid = self.uuid_for(id);
+                let index = self
+                    .falling
+                    .iter()
+                    .position(|f| f.id == id)
+                    .ok_or_else(stale)?;
+                self.falling.update(index, |falling| {
+                    falling.state = state;
+                    falling.position = position;
+                    falling.previous = position;
+                    falling.velocity = velocity;
+                    falling.rotation = entity_nbt::rotation(&tag);
+                    falling.age = age;
+                    falling.no_gravity = no_gravity;
+                    falling.drop_item = drop_item;
+                    falling.fall_distance = fall_distance;
+                    falling.damage = damage;
+                    // Keep id/join, start_pos, portal state and stuck multiplier.
+                    set_key(&mut tag, "UUID", Tag::IntArray(uuid.to_vec()));
+                    set_key(
+                        &mut tag,
+                        "id",
+                        Tag::String("minecraft:falling_block".into()),
+                    );
+                    falling.saved = Some(Box::new((uuid, tag.clone())));
+                });
             }
             Target::Tnt(id) => {
                 // Entity.load and PrimedTnt.readAdditionalSaveData mutate the
@@ -568,6 +622,7 @@ impl Game<'_> {
         | Target::Boat(id)
         | Target::Cart(id)
         | Target::Tnt(id)
+        | Target::Cushion(id)
         | Target::Other(id)
         | Target::Fangs(id) = t
         {
@@ -603,6 +658,7 @@ impl Game<'_> {
             // `tags_of` reads a primed TNT's compound; without this arm
             // `/tag` wrote nothing and still reported success.
             | Target::Tnt(id)
+            | Target::Cushion(id)
             | Target::Orb(id)
             | Target::Projectile(id)
             | Target::Crystal(id)
@@ -664,6 +720,25 @@ impl Game<'_> {
             .comparator_outputs
             .get(&pos)
             .copied()
+            .or_else(|| {
+                let saved = self
+                    .world
+                    .chunks
+                    .get(&(p[0] >> 4, p[2] >> 4))?
+                    .saved
+                    .as_deref()?;
+                let tag = saved.block_entities.iter().find(|t| {
+                    [t.get("x"), t.get("y"), t.get("z")]
+                        .map(|v| save::number(v).unwrap_or(0) as i32)
+                        == p
+                        && save::text(t.get("id")).as_deref() == Some("minecraft:comparator")
+                })?;
+                let tag = horizon_client::block_entity_nbt::canonical(tag)?;
+                match tag.get("OutputSignal") {
+                    Some(Tag::Int(v)) => Some(*v),
+                    _ => None,
+                }
+            })
             .unwrap_or(0);
         Some(Tag::compound([
             ("id", Tag::String("minecraft:comparator".into())),
@@ -789,6 +864,13 @@ impl Game<'_> {
         let name = self.data_block_name(p);
         let e = self.world.block_entities.get(&key)?;
         let mut tag = save::block_entity_data(key, e, &name, self.world.block_lock(key));
+        if name == "minecraft:hopper" {
+            set_key(
+                &mut tag,
+                "TransferCooldown",
+                Tag::Int(self.hopper_cooldown(key)),
+            );
+        }
         if let (Some(custom), Tag::Compound(map)) = (self.world.block_names.get(&key), &mut tag) {
             map.entry("CustomName".into())
                 .or_insert_with(|| Tag::String(custom.as_str().into()));
@@ -829,6 +911,10 @@ impl Game<'_> {
                     return Ok(());
                 }
                 if let Some((_, mut new)) = save::decode_block_entity(&tag) {
+                    if self.data_block_name(*p) == "minecraft:hopper" {
+                        self.hoppers
+                            .insert(key, super::super::machines::HopperState::load(&tag));
+                    }
                     self.take_loot_table(key, &tag, &mut new);
                     self.load_block_name(key, &new, &tag);
                     if let (Some(BlockEntity::Mod(current)), BlockEntity::Mod(loaded)) =
@@ -1314,6 +1400,8 @@ impl Game<'_> {
             Some(Target::Other(id))
         } else if self.tnts.iter().any(|t| t.id == id) {
             Some(Target::Tnt(id))
+        } else if self.cushions.iter().any(|c| c.id == id) {
+            Some(Target::Cushion(id))
         } else if self.falling.iter().any(|f| f.id == id) {
             Some(Target::Falling(id))
         } else if self.rockets.iter().any(|r| r.id == id) {
@@ -1798,6 +1886,9 @@ mod saved_tag_tests;
 mod mod_block_entity_tests;
 
 #[cfg(test)]
+mod residency_tests;
+
+#[cfg(test)]
 mod arrow_owner_tests {
     use super::Target;
     use crate::game::{Audio, Game, Options, Progress, Settings, load_resources};
@@ -2027,5 +2118,154 @@ mod modern_literal_tests {
         }
         assert_eq!(game.world.game_time, clock);
         assert!(differences.is_empty(), "{}", differences.join("\n"));
+    }
+}
+
+#[cfg(test)]
+mod falling_live_adoption_tests {
+    use crate::game::{Audio, Game, Options, Progress, Settings, commands::Target, load_resources};
+    use horizon_client::chunk::Chunk;
+    use horizon_core::nbt::Tag;
+    use horizon_core::{
+        geometry::Vec3,
+        position::{BlockPos, ChunkPos},
+    };
+    use std::sync::Arc;
+    fn with_game(test: impl FnOnce(&mut Game<'_>)) {
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            horizon_assets::resource_source::ResourceRoot::directory(root.clone()),
+            Vec::new(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            crate::game::execution_role::ExecutionRole::IntegratedServer,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.game_dir = Some(
+            std::path::PathBuf::from(std::env::var_os("HORIZON_HOME").unwrap())
+                .join(format!("h098-{:?}", std::thread::current().id())),
+        );
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&horizon_assets::resource_source::ResourceSource::directory(
+                root.clone(),
+            )),
+            None,
+        )
+        .unwrap();
+        game.build_registries();
+        game.set_allow_commands(true);
+
+        game.world
+            .chunks
+            .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        game.block_ticks
+            .add_empty_chunk(ChunkPos::new(0, 0))
+            .unwrap();
+        assert!(game.run_command("difficulty normal"));
+        if !game.streaming.forced.contains(&(0, 0)) {
+            assert!(game.run_command("forceload add 0 0"));
+        }
+        test(&mut game);
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn commands_mutate_the_resident_falling_model_without_rejoining() {
+        with_game(|game| {
+            let uuid = "000003d4-0000-0000-0000-000000000001";
+            assert!(game.run_command("summon falling_block 4.5 200 5.5 {UUID:[I;980,0,0,1],BlockState:\"minecraft:gravel\",Time:5,DropItem:1b,NoGravity:1b,Motion:[0d,0d,0d],Tags:[keep],Silent:1b}"));
+            assert!(game.run_command(&format!(
+                "execute as {uuid} if entity @s[type=falling_block]"
+            )));
+            let index = game
+                .falling
+                .iter()
+                .position(|f| game.persist.uuid_of(f.id) == Some([980, 0, 0, 1]))
+                .unwrap();
+            game.falling.update(index, |falling| {
+                falling.start_pos = BlockPos::new(9, 201, 11);
+                falling.stuck = Vec3::new(0.2, 0.3, 0.4);
+                falling.portal.cooldown = 17;
+                falling.portal.process = Some(horizon_client::nether_portal::Process {
+                    entry: BlockPos::new(8, 199, 8),
+                    time: 7,
+                    inside: true,
+                });
+            });
+            let before = game.falling[index].clone();
+            assert!(before.join.is_joined());
+            assert_eq!((before.age, before.drop_item), (5, true));
+            let next_id = game.next_entity;
+            let clock = game.world.game_time;
+            assert!(!game.run_command(&format!("data merge entity {uuid} {{Time:5}}")));
+            assert!(
+                game.run_command(&format!("data merge entity {uuid} {{Time:12}}")),
+                "valid Time update must reach model"
+            );
+            assert_eq!(game.falling[index].age, 12);
+            assert!(game.run_command(&format!("data merge entity {uuid} {{DropItem:0b}}")));
+            assert!(!game.falling[index].drop_item);
+            let f = &game.falling[index];
+            assert_eq!(
+                (f.id, f.join, f.start_pos, f.stuck),
+                (before.id, before.join, before.start_pos, before.stuck)
+            );
+            assert_eq!(
+                (
+                    f.position,
+                    f.previous,
+                    f.velocity,
+                    f.rotation,
+                    f.state,
+                    f.no_gravity,
+                    f.damage,
+                    f.fall_distance
+                ),
+                (
+                    before.position,
+                    before.position,
+                    before.velocity,
+                    before.rotation,
+                    before.state,
+                    before.no_gravity,
+                    before.damage,
+                    before.fall_distance
+                )
+            );
+            assert_eq!(f.portal.cooldown, before.portal.cooldown);
+            let (a, b) = (f.portal.process.unwrap(), before.portal.process.unwrap());
+            assert_eq!((a.entry, a.time, a.inside), (b.entry, b.time, b.inside));
+            assert_eq!(f.saved.as_ref().unwrap().0, [980, 0, 0, 1]);
+            assert_eq!(game.persist.uuid_of(f.id), Some([980, 0, 0, 1]));
+            let saved = game.command_target_nbt(Target::Falling(f.id)).unwrap();
+            assert_eq!(saved.get("Time"), Some(&Tag::Int(12)));
+            assert_eq!(saved.get("DropItem"), Some(&Tag::Byte(0)));
+            assert_eq!(
+                saved.get("BlockState"),
+                Some(&Tag::String("minecraft:gravel".into()))
+            );
+            assert_eq!(
+                saved.get("Tags"),
+                Some(&Tag::List(vec![Tag::String("keep".into())]))
+            );
+            assert_eq!(saved.get("Silent"), Some(&Tag::Byte(1)));
+            assert_eq!(game.falling.len(), 1);
+            assert_eq!(game.next_entity, next_id);
+            assert_eq!(game.world.game_time, clock);
+        });
     }
 }

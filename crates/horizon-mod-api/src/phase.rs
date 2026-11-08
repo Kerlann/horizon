@@ -781,7 +781,11 @@ mod tests {
         use ModPhase::*;
         for phase in [Packages, Registration, Setup, Config, Reloading, World] {
             let _owner = PhaseOwner::new(phase);
-            for operation in ["fluid_state_definition", "fluid_state_validate"] {
+            for operation in [
+                "fluid_state_definition",
+                "fluid_state_validate",
+                "fluid_type_properties",
+            ] {
                 let result = std::panic::catch_unwind(|| {
                     check_access(operation, LoadAccess::Metadata);
                 });

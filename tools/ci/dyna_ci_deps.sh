@@ -19,7 +19,8 @@ if [ ! -f "$prefix/.dyna-hash" ] || [ "$(< "$prefix/.dyna-hash")" != "$hash" ]; 
   apt-get "${opts[@]}" update
   apt-get "${opts[@]}" -y --download-only --no-install-recommends install \
     pkg-config libasound2-dev libudev-dev libxkbcommon-x11-dev libwayland-dev \
-    libx11-xcb-dev libfontconfig-dev libvulkan-dev
+    libx11-xcb-dev libfontconfig-dev libvulkan-dev \
+    libxcursor1 libxi6 libxrandr2
   for deb in "$aptroot"/archives/*.deb; do
     # Build-essential already supplies matching libc, loader and system headers.
     case "${deb##*/}" in libc6_*|libc6-dev_*|linux-libc-dev_*) continue ;; esac

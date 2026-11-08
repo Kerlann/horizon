@@ -10,6 +10,7 @@ use horizon_client::{
     hud::{HudBatch, Rect, rgba},
     items::ItemStack,
     menu::place::{PostPlace, Stacked},
+    random_source,
     recipe_book::{Book, BookType, ClientBook, Collection, Entry, GhostTarget, Tab},
     recipe_book_screen::{
         self as screen, ButtonView, Call, Drawn, GhostView, ItemCall, OverlayRecipe, OverlayView,
@@ -65,7 +66,7 @@ struct View {
 pub(super) struct RecipeUi {
     book: Option<Book>,
     tab: Option<Tab>,
-    search: Option<EditBox>,
+    pub(super) search: Option<EditBox>,
     page: usize,
     /// Ticks, for the ghost and button cycling (`RecipeBookComponent.time`).
     time: f32,
@@ -222,7 +223,7 @@ impl Game<'_> {
         let index = &self.stations().recipe_index;
         let book = self.recipe_ui.book.as_ref();
         // SmithingTrimDemoSlotDisplay draws from a random of its own.
-        let mut random = super::dispenser::entity_random();
+        let mut random = random_source::entity();
         let mut items = Vec::new();
         for id in recipes {
             let Some(station) = index.toast_station(id) else {
@@ -1399,8 +1400,7 @@ impl Game<'_> {
                         .map(|e| vec![book.entries[e.0].result.clone()])
                         .collect();
                     let stack = screen::display_stack(&results, self.swap_index());
-                    let names = |id: &str| self.pack.names.display_item(id);
-                    let item = horizon_client::stations::hover_name(&names, &stack);
+                    let item = horizon_client::stations::hover_name(&self.pack.names, &stack);
                     let (x, y) = Self::button_pos(xo, yo, n);
                     in_book(
                         Narratable::recipe(item, b.entries.len() > 1, [x, y, 25.0, 25.0]),

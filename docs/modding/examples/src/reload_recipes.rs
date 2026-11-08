@@ -55,8 +55,10 @@ impl Hooks for Processing {
         self.clear();
     }
 
-    fn server_data_loaded(&self, host: &mut dyn ServerHost, _: &mut ServerDataLoadedEvent) {
-        self.publish(host);
+    fn tags_updated(&self, host: HostSide<'_>, _: &mut TagsUpdatedEvent) {
+        if let HostSide::Server(host) = host {
+            self.publish(host);
+        }
     }
 
     fn server_stopped(&self, _: &mut dyn ServerHost, _: &mut ServerStoppedEvent) {

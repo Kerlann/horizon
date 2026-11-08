@@ -592,6 +592,14 @@ pub fn game_dispatcher() -> &'static Dispatcher {
         DEDICATED_COMMANDS.load(std::sync::atomic::Ordering::Relaxed),
     )
 }
+/// Profiler permission in parser and report-format clientbound trees.
+pub const MODPROFILE_PERMISSION: (u8, &str) = (3, "admins");
+/// Session-only profiler literals and their execution identifiers.
+pub const MODPROFILE_ACTIONS: [(&str, &str); 3] = [
+    ("start", "modprofile.start"),
+    ("stop", "modprofile.stop"),
+    ("report", "modprofile.report"),
+];
 /// Build the command tree for one server session's registry.
 pub fn session_dispatcher(registry: &RuleRegistry, features: &[String]) -> Dispatcher {
     let dev = std::env::var_os("HORIZON_DEV_COMMANDS").is_some();
@@ -605,6 +613,13 @@ pub fn session_dispatcher(registry: &RuleRegistry, features: &[String]) -> Dispa
     );
     if horizon {
         horizon_commands(&mut tree, 0);
+    }
+    // Game-session tooling, not part of vanilla's reference/parity dispatcher.
+    let profile = tree.literal(0, "modprofile");
+    tree.requires(profile, MODPROFILE_PERMISSION.0);
+    for (name, id) in MODPROFILE_ACTIONS {
+        let node = tree.literal(profile, name);
+        tree.executes(node, id);
     }
     tree
 }

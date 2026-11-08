@@ -225,6 +225,7 @@ pub(super) struct GuestSwap {
     cooldown_events: Vec<(std::sync::Arc<str>, i32)>,
     /// The player-source sounds queued for that guest.
     player_sounds: Vec<(String, [f64; 3], f32, f32)>,
+    block_sounds: Vec<(String, [f64; 3], f32, f32)>,
     /// The host's count of swings started, kept while the guest acts.
     swings: u32,
     /// How many projectiles there were: those added since are the guest's.
@@ -1916,6 +1917,7 @@ mod tests {
             mining: Some(Mining {
                 pos,
                 progress: 0.5,
+                per_tick: 0.0,
                 ticks: 8,
             }),
             destroy_pos: Some(pos),

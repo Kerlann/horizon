@@ -40,8 +40,11 @@ impl Game<'_> {
         // mob can be mutably borrowed alongside the shared MobWorld, just as
         // the mob tick does. No mod hook fires during pathfinding.
         let mut mobs = self.mobs.lift();
+        #[cfg(test)]
+        super::entity::taken_pass_tests::after_take(self);
         let moved = mobs[index].nav_move_to(&self.mob_world_base(&[]), at, speed);
-        self.mobs = mobs;
+        self.mobs
+            .restore(mobs, horizon_client::join_seq::RestoreOrder::SurvivorsFirst);
         moved
     }
 
@@ -176,7 +179,9 @@ mod tests {
             let entity = game.entity(99).unwrap();
             let mob = game.mob(entity).unwrap();
             assert_eq!(mob.is_done(game), Some(true));
-            assert!(mob.move_to(game, [10.5, 65.0, 3.5], 1.25));
+            crate::game::entity::taken_pass_tests::assert_mob_spawn_survives(game, |game| {
+                assert!(mob.move_to(game, [10.5, 65.0, 3.5], 1.25));
+            });
             assert_eq!(mob.is_done(game), Some(false));
             assert_eq!(game.mobs[0].ai.nav.speed_modifier, 1.25);
             assert!(!mob.move_to(game, [f64::NAN, 65.0, 3.5], 1.0));

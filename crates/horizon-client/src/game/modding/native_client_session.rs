@@ -213,6 +213,7 @@ pub(super) mod tests {
                 game.mining = Some(super::super::Mining {
                     pos: [4, 65, -2],
                     progress,
+                    per_tick: 0.0,
                     ticks: 3,
                 });
                 assert_eq!(

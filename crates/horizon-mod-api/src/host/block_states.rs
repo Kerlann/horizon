@@ -152,6 +152,11 @@ pub trait BlockStatesBackend {
     #[access(Metadata)]
     fn fluid_state_definition(&self, fluid: FluidKey) -> Option<FluidDefinition>;
     /// Side: both.
+    /// A registered fluid's level-independent type properties.
+    /// None means the owning host has no resolved registry or `fluid` isn't in it.
+    #[access(Metadata)]
+    fn fluid_type_properties(&self, fluid: FluidKey) -> Option<FluidTypeProperties>;
+    /// Side: both.
     /// Validate partial property constraints in input order with indexed errors.
     /// An unavailable or tank-only definition returns NoWorldState.
     #[access(Metadata)]

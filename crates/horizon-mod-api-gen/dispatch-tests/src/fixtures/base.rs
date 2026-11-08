@@ -704,6 +704,11 @@ mod stubs {
         Use,
         PickBlock,
     }
+    #[derive(Clone, Copy)]
+    pub(super) enum InteractionAttempt {
+        Press,
+        Held,
+    }
     pub(super) struct NativeMobRender<'a>(pub &'a ());
     pub(super) struct NativeShake;
     pub(super) struct Music;

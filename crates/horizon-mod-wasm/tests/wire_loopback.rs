@@ -165,6 +165,7 @@ fn __horizon_mod_hooks() -> Box<dyn Hooks> {
             _: &mod_api::RegistrationContext,
         ) {
             REGISTERED_ITEM.set(Some(registrar.item_key("minecraft:stone")));
+            REGISTERED_BLOCK.set(Some(registrar.block_key("minecraft:stone")));
             REGISTERED_EFFECT.set(Some(registrar.effect_key("minecraft:poison")));
             let kind = registrar.block_entity_type("counter").blocks(&[]).build();
             REGISTERED_KIND.set(Some(kind));
@@ -641,6 +642,7 @@ fn wire_loopback_nested_tuple_reference_writes_back() {
 }
 thread_local! {
     static REGISTERED_ITEM:std::cell::Cell<Option<mod_api::ItemKey>> = const {std::cell::Cell::new(None)};
+    static REGISTERED_BLOCK:std::cell::Cell<Option<mod_api::BlockKey>> = const {std::cell::Cell::new(None)};
     static REGISTERED_EFFECT:std::cell::Cell<Option<mod_api::EffectKey>> = const {std::cell::Cell::new(None)};
     static APPEND_ATTACK:std::cell::Cell<u8> = const {std::cell::Cell::new(0)};
     static REGISTERED_KIND:std::cell::Cell<Option<mod_api::BlockEntityTypeKey>> = const {std::cell::Cell::new(None)};
@@ -676,6 +678,7 @@ fn wire_loopback_registration_attaches_subscribed_part() {
 #[test]
 fn wire_loopback_tagged_frame_enum_preserves_side() {
     use mod_api::BlockEntityPart;
+    install_counter();
     let index = guest::add_handler(vec![guest::view::<dyn mod_api::BlockEntityPart>(Arc::new(
         MachineBlock,
     ))]);
@@ -689,6 +692,7 @@ fn wire_loopback_tagged_frame_enum_preserves_side() {
     };
     let mut event = mod_api::BlockEntityEvent {
         block: "test:machine",
+        state: mod_api::BlockStateRecord::new(REGISTERED_BLOCK.get().unwrap(), 0).into(),
     };
     assert!(
         proxy

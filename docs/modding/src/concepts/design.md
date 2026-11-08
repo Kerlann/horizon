@@ -80,7 +80,7 @@ and [Parts](trait-mods.md#parts).
 | --- | --- | --- | --- |
 | Block, block entity, item, entity and menu Parts | `Registrar::attach_block_part`, `attach_block_entity_part`, `attach_item_part`, `attach_entity_part`, `attach_menu_part` | Startup on the sides that load the mod | After resolution against the game's registries. Each Part method runs on the side declared for that hook. |
 | Capability providers | `provide_block_entity_capability`, `provide_item_capability`, `provide_entity_capability` on the registrar | Startup registration, server provider calls | After the game resolves the registrations. A capability query supplies the holder and a server host. |
-| Block entity types and default entity attributes | `declare_block_entity_type`, `declare_entity_attributes` | Startup declarations on the sides that load the mod | When the registered types and defaults are resolved against the content tables. |
+| Block entity types and default entity attributes | `declare_block_entity_type`, `declare_entity_attributes`, `modify_entity_attributes` | Startup declarations on the sides that load the mod | When the registered types and defaults are resolved against the content tables. |
 | Game rules and categories | `game_rule_bool`, `game_rule_category` | Startup, before the game validates and installs the rule schema | When the game uses the installed schema to load rule values and build the rule UI. |
 | Dimension and chunk generation code, structure types, ticket controllers | `register_dimension`, `register_chunk_generator`, `register_structure_type`, `register_ticket_controller` | Startup declarations, consumed by world setup and generation | When the world resolves its dimension, structure or ticket registrations. |
 | Controls bindings | `Registrar::register_key_mapping` | Startup registration, client consumer | When the client installs the bindings in Controls and restores saved bindings. |
@@ -212,7 +212,7 @@ API's own, converted on the game side.
 
 ## Injections stay, and the API comes first
 
-`[[native.injection]]` stays as the native-only escape hatch for what the API does not yet reach. The rule is
+`[[inject]]` is the shared native/wasm escape hatch for what the API does not yet reach. The rule is
 API first: a mod needing something the API lacks asks for the hook that replaces the injection, and the
 injection is the stopgap until it exists. The [injections chapter](../injections.md) holds the current forms,
 the decision ladder and the hook-request format.
@@ -223,7 +223,7 @@ Compiling a native mod against a game already built is the route that makes nati
 rests on the one before:
 
 1. **The prebuilt game.** The game as a dylib with its metadata, built daily and published as prerelease
-   builds, so a native mod compiles against it in seconds instead of rebuilding the game.
+   builds, so a native mod compiles against it instead of rebuilding the game.
 2. **Slots.** Injection targets compiled into the prebuilt game, so a mixin does not force a rebuild. The
    generated slot points exist; filling them from a mod follows.
 3. **The internals tier.** A per-mod declared list of game internals the prebuilt game exposes. It is native

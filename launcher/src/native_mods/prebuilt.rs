@@ -1,6 +1,6 @@
 //! The prebuilt game (#589): mods that need nothing but the mod API compile against a downloaded
 //! build of the game (`tools/prebuilt_game.py`, released daily by `prebuilt-game.yml`) with rustc
-//! alone, in seconds, instead of building the game from source. The route is chosen before
+//! alone instead of building the game from source. The route is chosen before
 //! anything runs: a mod set the prebuilt game can't serve, or a revision with no prebuilt
 //! release, builds from source, and the build log says why. A prebuilt build that fails is an
 //! error like any other build's, never retried from source.
@@ -94,24 +94,49 @@ pub(super) fn source_refusal(
     projects: &[api::Project<'_>],
 ) -> Result<Option<SourceReason>, String> {
     let catalog = internals::Catalog::read(game)?;
-    for project in projects {
-        let manifest = &project.bundle.manifest;
-        if super::slots::routes(&catalog, manifest)
-            .map_err(|error| error.to_string())?
-            .iter()
-            .any(|route| {
-                matches!(
-                    route,
-                    horizon_mod_package::manifest::inject::Route::Source(_)
-                )
-            })
-        {
-            return Ok(Some(SourceReason::Injections {
-                mod_id: manifest.id.clone(),
-            }));
+    for (_, route) in slot_routes(&catalog, projects) {
+        match route {
+            super::Route::Game { reason } => return Ok(Some(reason)),
+            super::Route::Invalid { reason } => return Err(reason),
+            super::Route::Prebuilt => {}
         }
     }
     Ok(None)
+}
+
+/// One slot/source decision per project, including named refusals. Cargo restrictions are
+/// reported separately by `project_refusal`; both consumers use the same slot router here.
+pub(super) fn slot_routes(
+    catalog: &internals::Catalog,
+    projects: &[api::Project<'_>],
+) -> Vec<(String, super::Route)> {
+    projects
+        .iter()
+        .map(|project| {
+            let manifest = &project.bundle.manifest;
+            let route = match super::slots::routes(catalog, manifest) {
+                Ok(routes)
+                    if routes.iter().any(|route| {
+                        matches!(
+                            route,
+                            horizon_mod_package::manifest::inject::Route::Source(_)
+                        )
+                    }) =>
+                {
+                    super::Route::Game {
+                        reason: SourceReason::Injections {
+                            mod_id: manifest.id.clone(),
+                        },
+                    }
+                }
+                Ok(_) => super::Route::Prebuilt,
+                Err(error) => super::Route::Invalid {
+                    reason: error.to_string(),
+                },
+            };
+            (manifest.id.clone(), route)
+        })
+        .collect()
 }
 
 /// Why `project` alone can't build against the prebuilt game, or `None` when it can.
@@ -179,9 +204,7 @@ pub(super) fn fetch(
         return Ok(Err(SourceReason::Host));
     };
     let name = native::prebuilt_archive(host.target, matches!(target, Target::Server));
-    let dir = super::root()
-        .join("prebuilt")
-        .join(format!("{revision}-{}", name.trim_end_matches(".tar.gz")));
+    let dir = cache_dir(revision, &name);
     if dir.join(IDENTITY).is_file() {
         return Ok(Ok(dir));
     }
@@ -292,13 +315,73 @@ pub fn prebuilt_availability(revision: &str, target: Target) -> Option<SourceRea
         return Some(SourceReason::Host);
     };
     let name = native::prebuilt_archive(host.target, matches!(target, Target::Server));
-    let cached = super::root()
-        .join("prebuilt")
-        .join(format!("{revision}-{}", name.trim_end_matches(".tar.gz")));
+    let cached = cache_dir(revision, &name);
     if cached.join(IDENTITY).is_file() {
         return None;
     }
     release_sum(revision, &name).err()
+}
+
+fn cache_dir(revision: &str, name: &str) -> PathBuf {
+    super::root()
+        .join("prebuilt")
+        .join(format!("{revision}-{}", name.trim_end_matches(".tar.gz")))
+}
+
+/// Read checked SDK metadata; the caller owns consent and the native-cache lease.
+pub(super) fn planning_catalog(
+    lease: &crate::native_cache::Cache,
+    revision: &str,
+) -> Result<internals::Catalog, SourceReason> {
+    let host = rust_toolchain::host().ok_or(SourceReason::Host)?;
+    let name = native::prebuilt_archive(host.target, false);
+    let game = cache_dir(revision, &name);
+    if game.join(IDENTITY).is_file() {
+        if let Ok(catalog) = internals::Catalog::read(&game) {
+            return Ok(catalog);
+        }
+    }
+    let expected = release_sum(revision, &name)?;
+    let download = |why| SourceReason::Download { why };
+    let unit = format!("catalog-{revision}-{}", host.target);
+    let cache = super::root().join("internals-sync").join(&unit);
+    let directory = lease
+        .directory(&["internals-sync", &unit])
+        .map_err(|error| download(super::cache_error(error)))?;
+    catalog_pair(&directory, &cache, &name, &expected, || {
+        crate::backend::get(&format!("{}/{name}", release_url(revision)))
+            .map_err(download)
+            .map(|response| response.into_reader())
+    })
+}
+
+fn catalog_pair<R: Read>(
+    directory: &cap_std::fs::Dir,
+    path: &Path,
+    name: &str,
+    expected: &str,
+    fetch: impl FnOnce() -> Result<R, SourceReason>,
+) -> Result<internals::Catalog, SourceReason> {
+    let download = |why| SourceReason::Download { why };
+    if directory.read_to_string("archive.sha256").ok().as_deref() == Some(expected) {
+        if let Ok(catalog) = internals::Catalog::read(path) {
+            return Ok(catalog);
+        }
+    }
+    let reader = fetch()?;
+    // A failed second rename must never leave an old marker authorizing a mixed pair.
+    match directory.remove_file("archive.sha256") {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(download(error.to_string())),
+    }
+    horizon_mod_package::internals::cache_catalogs(directory, name, reader, expected)
+        .map_err(|error| download(error.to_string()))?;
+    let catalog = internals::Catalog::read(path).map_err(download)?;
+    directory
+        .write("archive.sha256", expected)
+        .map_err(|error| download(error.to_string()))?;
+    Ok(catalog)
 }
 
 /// `name`'s sum in a `sha256sum` listing.
@@ -588,6 +671,152 @@ pub(super) fn compile(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn plans_all_private_sources_and_keeps_named_refusals_invalid() {
+        use serde_json::json;
+        let root = super::super::tests::dir("slot-planning");
+        let mut bundles = Vec::new();
+        for (id, mut entry) in [
+            (
+                "slotted",
+                json!({"at":"Example::slotted","kind":"head","access":"internals"}),
+            ),
+            (
+                "private_head",
+                json!({"at":"Example::private","kind":"head","access":"internals"}),
+            ),
+            (
+                "unlisted_call",
+                json!({"at":"Example::calls","kind":"before_call","access":"internals","call":"unlisted","nth":0,"ctx":"context"}),
+            ),
+            (
+                "api_refusal",
+                json!({"at":"Example::private","kind":"head","access":"api"}),
+            ),
+            (
+                "argument",
+                json!({"at":"Example::calls","kind":"modify_call_arg","access":"internals"}),
+            ),
+        ] {
+            let dir = root.join(id);
+            super::super::tests::write_bundle(&dir, id, "");
+            fs::write(
+                dir.join("Cargo.toml"),
+                "[package]\nname='mod_project'\n[dependencies]\nhorizon-mod-api='0.1'\n",
+            )
+            .unwrap();
+            let mut bundle = super::super::bundle_in(&dir).unwrap().unwrap();
+            entry["id"] = json!("probe");
+            entry["hash"] = json!("signature");
+            entry["with"] = json!("handler");
+            bundle.manifest.inject = vec![serde_json::from_value(entry).unwrap()];
+            bundles.push(bundle);
+        }
+        let catalog = internals::Catalog {
+            internals: ["Example::slotted", "Example::private", "Example::calls"].into_iter().map(|path| serde_json::from_value(json!({"path":path,"kind":"method","signature":"fn tick()","hash":"signature"})).unwrap()).collect(),
+            points: serde_json::from_value(json!([{"name":"tick","target":"Example::slotted","raw":true,"at_return":true,"listener":"Head","return_listener":"Return"}])).unwrap(),
+            ..Default::default()
+        };
+        let projects: Vec<_> = bundles
+            .iter()
+            .map(|bundle| api::Project::read(bundle).unwrap())
+            .collect();
+        let routes = slot_routes(&catalog, &projects);
+        let classes: Vec<_> = routes
+            .iter()
+            .map(|(_, route)| match route {
+                super::super::Route::Prebuilt => "prebuilt",
+                super::super::Route::Game { .. } => "source",
+                super::super::Route::Invalid { .. } => "invalid",
+            })
+            .collect();
+        assert_eq!(
+            classes,
+            ["prebuilt", "source", "source", "invalid", "invalid"]
+        );
+        let causes: Vec<_> = routes
+            .iter()
+            .filter(|(_, route)| matches!(route, super::super::Route::Game { .. }))
+            .map(|(id, _)| id.as_str())
+            .collect();
+        assert_eq!(causes, ["private_head", "unlisted_call"]);
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn a_partial_catalog_pair_cannot_reuse_its_previous_marker() {
+        use super::super::{inject::POINTS, internals::INTERNALS};
+        fn packed(internals: &str, points: &str) -> Vec<u8> {
+            let mut tar = tar::Builder::new(flate2::write::GzEncoder::new(
+                Vec::new(),
+                flate2::Compression::fast(),
+            ));
+            for (name, text) in [("internals.json", internals), ("points.json", points)] {
+                let mut header = tar::Header::new_gnu();
+                header.set_size(text.len() as u64);
+                header.set_mode(0o644);
+                header.set_cksum();
+                tar.append_data(&mut header, name, text.as_bytes()).unwrap();
+            }
+            tar.into_inner().unwrap().finish().unwrap()
+        }
+        let root = super::super::tests::dir("catalog-pair");
+        let lease = crate::native_cache::Cache::acquire(&root).unwrap();
+        let directory = lease.directory(&["internals-sync", "catalog"]).unwrap();
+        let path = root.join("native/internals-sync/catalog");
+        let old = packed("[]", r#"{"points":[],"sites":[]}"#);
+        let old_hash = format!("{:x}", Sha256::digest(&old));
+        catalog_pair(&directory, &path, "game", &old_hash, || Ok(old.as_slice())).unwrap();
+        directory.remove_file(POINTS).unwrap();
+        let requests = std::cell::Cell::new(0);
+        catalog_pair(&directory, &path, "game", &old_hash, || {
+            requests.set(requests.get() + 1);
+            Ok(old.as_slice())
+        })
+        .unwrap();
+        assert_eq!(requests.get(), 1);
+        directory.remove_file(POINTS).unwrap();
+        directory.create_dir(POINTS).unwrap();
+        let new = packed(
+            r#"[{"path":"Changed","kind":"struct","signature":"struct Changed","hash":"new"}]"#,
+            r#"{"points":[],"sites":[]}"#,
+        );
+        let new_hash = format!("{:x}", Sha256::digest(&new));
+        assert!(catalog_pair(&directory, &path, "game", &new_hash, || Ok(new.as_slice())).is_err());
+        assert!(!directory.try_exists("archive.sha256").unwrap());
+        assert!(directory
+            .read_to_string(INTERNALS)
+            .unwrap()
+            .contains("Changed"));
+        directory.remove_dir(POINTS).unwrap();
+        directory
+            .write(POINTS, r#"{"points":[],"sites":[]}"#)
+            .unwrap();
+        assert!(
+            catalog_pair(&directory, &path, "game", &old_hash, || Ok(old.as_slice()))
+                .unwrap()
+                .internals
+                .is_empty()
+        );
+        let invalid = packed("[]", r#"{"points":"not a list","sites":[]}"#);
+        let invalid_hash = format!("{:x}", Sha256::digest(&invalid));
+        assert!(catalog_pair(&directory, &path, "game", &invalid_hash, || {
+            Ok(invalid.as_slice())
+        })
+        .is_err());
+        assert!(!directory.try_exists("archive.sha256").unwrap());
+        #[cfg(unix)]
+        {
+            std::os::unix::fs::symlink("internals-sync/catalog", root.join("native/redirect"))
+                .unwrap();
+            assert!(lease.directory(&["redirect", "child"]).is_err());
+            assert!(!path.join("child").exists());
+        }
+        drop(directory);
+        drop(lease);
+        fs::remove_dir_all(root).unwrap();
+    }
 
     /// What [`refusal`] says of one mod whose Cargo.toml is `cargo`.
     fn refusal_of(cargo: &str) -> Option<SourceReason> {

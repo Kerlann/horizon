@@ -51,16 +51,14 @@ refuse the manifest. Native mods may declare top-level `internals`, an array of 
 | `game` | string | not empty, the Minecraft version (`"26.3"`) |
 | `horizon` | string | the exact Horizon commit, 40 lowercase hex characters |
 | `mixins` | string | the exact horizon-mixins commit, 40 lowercase hex characters |
-| `injection` | array of tables | optional injections, written as `[[native.injection]]` |
 | `module` | array of tables | optional support modules, written as `[[native.module]]` |
 
-An injection has a unique, nonempty `id` and a `kind`; it selects exactly one of `hook` or `target`, and
-exactly one of `helper` or `raw`. A helper is a selected `.rs` file under `src/`, or `build.rs`.
+Both access modes use the same top-level declarations.
 API function listeners use top-level `[[inject]]`: `id`, `at`, lowercase `kind`, `with`, and `hash`,
 with optional `access` (default `api`) and `priority` (default 0). `head` and `return` are supported
 for API slots; internals slots also accept the listed call kinds with `call`, `nth` and `ctx`.
 Unknown fields are refused by the schema. API function declarations use only `[[inject]]`.
-See [Injections](../injections.md) for the fields, bindings and point injections, and
+See [Injections](../injections.md) for the fields and point injections, and
 [Native mods](../how-to/native-mods.md#named-hook-points) for the named hook contracts.
 
 A module has a unique, nonempty `id` (one id space with the injections), a `file` naming the game source

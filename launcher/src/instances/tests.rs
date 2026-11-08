@@ -67,6 +67,64 @@ fn player_home(home: &Path) {
 }
 
 #[test]
+fn build_choices_start_balanced_and_are_remembered_per_instance() {
+    use crate::native_mods::Profile;
+    let root = scratch("native-build-choices");
+    let game = root.join("game");
+    let data = root.join("launcher");
+    for id in ["first", "second"] {
+        fs::create_dir_all(game.join("instances").join(id)).unwrap();
+    }
+    for instance in list_in(&game, &data) {
+        assert_eq!(instance.native_profile, Profile::Balanced);
+    }
+    let choose = |id, profile| {
+        edit_in(&game, &data, id, |meta| meta.native_profile = Some(profile)).unwrap()
+    };
+    choose("first", Profile::Developer);
+    choose("second", Profile::Optimized);
+    let before = fs::read(data.join("instances.json")).unwrap();
+    for unknown in [serde_json::json!("future"), serde_json::json!(42)] {
+        let mut stored: serde_json::Value = serde_json::from_slice(&before).unwrap();
+        stored["instances"]["first"]["native_profile"] = unknown;
+        stored["instances"]["first"]["version"] = serde_json::json!("kept-version");
+        fs::write(
+            data.join("instances.json"),
+            serde_json::to_vec(&stored).unwrap(),
+        )
+        .unwrap();
+        edit_in(&game, &data, "second", |meta| {
+            meta.name = Some("Still here".into())
+        })
+        .unwrap();
+        let loaded = list_in(&game, &data);
+        assert_eq!(
+            find_in(&loaded, "first").unwrap().native_profile,
+            Profile::Balanced
+        );
+        assert_eq!(
+            find_in(&loaded, "first").unwrap().version.as_deref(),
+            Some("kept-version")
+        );
+        let neighbour = find_in(&loaded, "second").unwrap();
+        assert_eq!(neighbour.native_profile, Profile::Optimized);
+        assert_eq!(neighbour.name, "Still here");
+    }
+    fs::write(data.join("instances.json"), before).unwrap();
+    choose("second", Profile::Balanced);
+    let again = list_in(&game, &data);
+    assert_eq!(
+        find_in(&again, "first").unwrap().native_profile,
+        Profile::Developer
+    );
+    assert_eq!(
+        find_in(&again, "second").unwrap().native_profile,
+        Profile::Balanced
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn a_new_player_name_replaces_the_kept_one_everywhere() {
     let root = scratch("newname");
     let (home, data) = (root.join("horizon"), root.join("launcher"));

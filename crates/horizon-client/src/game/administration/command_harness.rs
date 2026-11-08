@@ -163,7 +163,7 @@ impl Game<'_> {
             if g.lan.is_none() {
                 return Err("command harness: no hub".into());
             }
-            g.start_server_trip(conn, plan.dim, Some(plan));
+            g.start_server_trip(conn, plan.dim, Some(plan), false);
             Ok(())
         })
     }
@@ -267,9 +267,19 @@ impl Game<'_> {
                     self.chat_capture = Some(Vec::new());
                     self.cmds.results = Some(Vec::new());
                     self.harness_owner(|g| {
+                        let previous = g.command_source;
+                        if op["source"].as_str() == Some("console") {
+                            // Actual server source; permission-only `as_console`
+                            // otherwise keeps the connected owner's entity.
+                            g.command_source = Some(super::commands::execute::Source {
+                                silent: false,
+                                ..g.server_source()
+                            });
+                        }
                         g.as_console(|g| {
                             g.run_command(command.strip_prefix('/').unwrap_or(command))
                         });
+                        g.command_source = previous;
                         Ok(())
                     })?;
                     let messages = self.chat_capture.take().unwrap_or_default();
@@ -647,6 +657,46 @@ impl Game<'_> {
                                     .map(|p| p.conn)
                             })
                             .ok_or("boat click: owner not connected")?;
+                        g.lan_guest_packet(
+                            conn,
+                            horizon_protocol::packets::play::Serverbound::Interact(
+                                horizon_protocol::packets::play::Interact {
+                                    id: id as i32,
+                                    hand: 0,
+                                    location: [0.0; 3],
+                                    secondary: false,
+                                },
+                            ),
+                        );
+                        Ok(())
+                    })?;
+                }
+                "mob_interact" => {
+                    // The owner's real Interact packet on a live mob, by UUID.
+                    let uuid = u128::from_str_radix(
+                        &op["uuid"]
+                            .as_str()
+                            .ok_or("mob click: missing UUID")?
+                            .replace('-', ""),
+                        16,
+                    )?;
+                    self.in_owner_level(|g| -> Result<()> {
+                        let id = g
+                            .mob_by_uuid(horizon_client::lan::playerdata::uuid_ints(uuid))
+                            .filter(|id| g.mobs.iter().any(|m| m.id == *id && !m.removed))
+                            .ok_or("mob click: missing live mob")?;
+                        let owner = g.serving.as_ref().ok_or("mob click: no server")?.owner;
+                        let conn = g
+                            .lan
+                            .as_ref()
+                            .and_then(|h| {
+                                h.hub
+                                    .guests
+                                    .iter()
+                                    .find(|p| p.uuid == owner && p.placed)
+                                    .map(|p| p.conn)
+                            })
+                            .ok_or("mob click: owner not connected")?;
                         g.lan_guest_packet(
                             conn,
                             horizon_protocol::packets::play::Serverbound::Interact(

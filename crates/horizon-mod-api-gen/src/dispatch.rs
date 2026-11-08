@@ -837,7 +837,12 @@ fn stack_crossing_routed(
         let stack = contains_boundary(ty, STACK_VALUES);
         let infallible = contains_boundary(ty, INFALLIBLE_VALUES);
         let mutable = matches!(ty, Type::Reference(r) if r.mutability.is_some());
-        if surfaces.contains_key(name.as_str()) || (!stack && !block && !infallible && !mutable) {
+        // A `&mut dyn Context` is the game's own drawing surface: it is passed through, never copied.
+        let surface = matches!(ty, Type::Reference(r) if matches!(*r.elem, Type::TraitObject(_)));
+        if surfaces.contains_key(name.as_str())
+            || surface
+            || (!stack && !block && !infallible && !mutable)
+        {
             arguments.push(name.clone());
             continue;
         }

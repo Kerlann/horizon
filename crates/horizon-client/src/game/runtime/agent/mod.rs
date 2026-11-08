@@ -490,6 +490,9 @@ impl Game<'_> {
                 "food": p.health.food.food,
                 "saturation": p.health.food.saturation,
                 "shield_cooldown": self.shield_cooldown,
+                // ItemCooldowns.getCooldownPercent of the shield: what this window's hotbar draws
+                // over it (on a server's client, only what the server's Cooldown packets told it).
+                "shield_cooldown_shown": self.cooldowns.percent("minecraft:shield", 0.0),
                 "xp": { "level": self.experience.level, "progress": self.experience.progress, "total": self.experience.total },
                 "effects": self.potions.effects.list.iter().map(|e| json!({ "id": e.id, "duration_ticks": e.duration, "amplifier": e.amplifier })).collect::<Vec<_>>(),
             })
@@ -1643,7 +1646,7 @@ impl Game<'_> {
                 if text == "\\b" {
                     title.backspace();
                 } else {
-                    title.type_text(text);
+                    self.screen_text_each(text, |game, c| game.title_edit(Some(c), false));
                 }
                 ok(json!({ "ok": true, "menu": self.title_value() }))
             }

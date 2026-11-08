@@ -5,6 +5,7 @@ mod exports;
 mod game_modules;
 #[doc(hidden)]
 pub use dispatch_fixtures::layout as dispatch_fixture_layout;
+pub use game_modules::materialize_game_modules;
 mod host;
 mod layout;
 mod parts;
@@ -605,6 +606,8 @@ mod dispatch;
 mod host_param;
 mod index;
 pub mod native_patch;
+/// Generate codecs for ordinary scoped native callable resources.
+pub mod native_callable;
 /// Canonical identities for native row layouts.
 pub mod native_schema;
 pub mod native_value;
@@ -623,6 +626,8 @@ pub mod sites;
 pub mod staging;
 pub use build::{generate, generate_points, generate_render};
 pub use notes::generate as generate_hook_notes;
+mod staged;
+pub use staged::{MODS_STAGE, staged_mods};
 
 /// Generate the dispatch test fixture without preventing xtask from filling new placeholders.
 #[doc(hidden)]

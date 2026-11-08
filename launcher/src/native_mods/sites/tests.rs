@@ -1,4 +1,5 @@
 use super::*;
+use horizon_mod_package::Manifest;
 use std::{fs, path::Path, process::Command};
 
 #[path = "slot_lists.rs"]
@@ -82,11 +83,6 @@ fn unchanged_callback_compiles_against_both_canonical_facades() {
             "call":"horizon_client::game::Game::step", "ctx":"statement", "hash":"place", "private":private,
             "listener":format!("horizon_client::game::__{physical}Listener"), "record":format!("horizon_client::game::__{physical}Args"), "output":"u32"
         })).unwrap();
-        let legacy: Injection = serde_json::from_value(serde_json::json!({"id":"legacy", "kind":"BEFORE_CALL", "target":site.target, "selector":site.selector, "raw":"with"})).unwrap();
-        assert_eq!(
-            find(std::slice::from_ref(&site), &legacy).is_none(),
-            private
-        );
         let (mut exports, mut constructors, mut crates) =
             (BTreeSet::new(), BTreeSet::new(), BTreeSet::new());
         site.facade(&mut exports, &mut constructors, &mut crates);
@@ -158,40 +154,83 @@ fn site_routes_validate_freshness_and_execute_every_kind_adapter() {
     let condition =
         "pub fn hook(receiver: &mut u32, args: &Args) -> bool { *receiver += 10; args.value == 0 }";
     for case in [
-        Case { kind: "BEFORE_CALL", body: before, output: "u32", initial: 2, expected: "30", state: 11 },
-        Case { kind: "MODIFY_ARG", body: before, output: "u32", initial: 2, expected: "30", state: 11 },
-        Case { kind: "AFTER_CALL", body: "pub fn hook(receiver: &mut u32, value: &u32) { assert_eq!(*value, 20); *receiver += 10; }", output: "u32", initial: 2, expected: "20", state: 11 },
-        Case { kind: "MODIFY_EXPRESSION_VALUE", body: "pub fn hook(receiver: &mut u32, value: u32) -> u32 { *receiver += 10; value + 7 }", output: "u32", initial: 2, expected: "27", state: 11 },
-        Case { kind: "WRAP_OPERATION", body: "pub fn hook(receiver: &mut u32, args: &mut Args, original: &mut dyn FnMut(&mut u32, &mut Args) -> u32) -> u32 { let first = original(receiver, args); args.value += 1; first + original(receiver, args) }", output: "u32", initial: 2, expected: "50", state: 2 },
-        Case { kind: "WRAP_WITH_CONDITION", body: condition, output: "()", initial: 2, expected: "()", state: 10 },
-        Case { kind: "WRAP_WITH_CONDITION", body: condition, output: "()", initial: 0, expected: "()", state: 11 },
+        Case { kind: "before_call", body: before, output: "u32", initial: 2, expected: "30", state: 11 },
+        Case { kind: "modify_call_arg", body: before, output: "u32", initial: 2, expected: "30", state: 11 },
+        Case { kind: "after_call", body: "pub fn hook(receiver: &mut u32, value: &u32) { assert_eq!(*value, 20); *receiver += 10; }", output: "u32", initial: 2, expected: "20", state: 11 },
+        Case { kind: "modify_value", body: "pub fn hook(receiver: &mut u32, value: u32) -> u32 { *receiver += 10; value + 7 }", output: "u32", initial: 2, expected: "27", state: 11 },
+        Case { kind: "wrap_call", body: "pub fn hook(receiver: &mut u32, args: &mut Args, original: &mut dyn FnMut(&mut u32, &mut Args) -> u32) -> u32 { let first = original(receiver, args); args.value += 1; first + original(receiver, args) }", output: "u32", initial: 2, expected: "50", state: 2 },
+        Case { kind: "wrap_if", body: condition, output: "()", initial: 2, expected: "()", state: 10 },
+        Case { kind: "wrap_if", body: condition, output: "()", initial: 0, expected: "()", state: 11 },
     ] {
         let kind = case.kind;
-        let text = format!("{base}[[native.injection]]\nid='test'\ntarget=\"horizon_client::game::Game<'_>::run\"\nselector='self . step'\nkind='{kind}'\nraw='hook'\nfingerprint='0123456789abcdef'\n");
+        let text = format!("{base}[[inject]]\nid='test'\nat=\"horizon_client::game::Game<'_>::run\"\nkind='{kind}'\nwith='hook'\naccess='internals'\nhash='signature'\ncall='horizon_client::game::Game::step'\nnth=0\nctx='statement'\n");
         let mut manifest = Manifest::parse(&text).unwrap();
-        assert!(super::super::inject::raw_of(&[], &manifest).is_empty());
-        let injection = of(&manifest).next().unwrap();
         site.output = case.output.into();
-        check(std::slice::from_ref(&site), &manifest, injection).unwrap();
-        exercise(&dir, &site.registration(0, &manifest, injection), &site.constructor(), &case);
-        let native = manifest.native.as_mut().unwrap();
-        native.injection[0].fingerprint = Some("ffffffffffffffff".into());
-        assert!(matches!(check(std::slice::from_ref(&site), &manifest, of(&manifest).next().unwrap()), Err(Error::Changed { .. })));
-        let native = manifest.native.as_mut().unwrap();
-        native.injection[0].fingerprint = None;
-        native.injection[0].ordinal = Some(9);
-        let error = check(std::slice::from_ref(&site), &manifest, of(&manifest).next().unwrap()).unwrap_err();
-        assert!(error.to_string().contains("E_NOT_SITE"));
-        assert!(error.to_string().contains("slots/example.txt"));
-        if kind == "WRAP_WITH_CONDITION" {
-            manifest.native.as_mut().unwrap().injection[0].ordinal = Some(0);
-            site.output = "u32".into();
-            assert!(matches!(check(std::slice::from_ref(&site), &manifest, of(&manifest).next().unwrap()), Err(Error::SiteKind { .. })));
+        let catalog = super::super::internals::Catalog {
+            discovery: false,
+            points: vec![],
+            sites: vec![site.clone()],
+            internals: serde_json::from_value(serde_json::json!([{
+                "path":"horizon_client::game::Game::run", "kind":"method", "signature":"fn run(&mut self)", "hash":"signature"
+            }])).unwrap(),
+        };
+        use horizon_mod_package::manifest::inject::{InjectError, NoSlotReason};
+        if kind == "modify_call_arg" {
+            assert!(matches!(super::super::slots::check(&catalog, &manifest), Err(InjectError::NoSlot { reason: NoSlotReason::SourcePending, .. })));
+            continue;
         }
-        assert!(Manifest::parse(&text.replace(&format!("kind='{kind}'"), "kind='HEAD'")).is_err());
+        super::super::slots::check(&catalog, &manifest).unwrap();
+        let registration = super::super::api::main_rs("/* MOD_SLOTS */", &[&manifest], &[], &catalog.sites);
+        exercise(&dir, &registration, &site.constructor(), &case);
+        manifest.inject[0].hash = "changed".into();
+        assert!(matches!(super::super::slots::check(&catalog, &manifest), Err(InjectError::Changed { .. })));
+        manifest.inject[0].hash = "signature".into();
+        manifest.inject[0].ctx = Some("changed".into());
+        assert!(matches!(super::super::slots::check(&catalog, &manifest), Err(InjectError::Lost { .. })));
+        manifest.inject[0].ctx = Some("statement".into());
+        manifest.inject[0].nth = Some(9);
+        assert!(matches!(super::super::slots::check(&catalog, &manifest), Err(InjectError::Moved { .. })));
+        if kind == "wrap_if" {
+            manifest.inject[0].nth = Some(0);
+            let mut nonunit = catalog;
+            nonunit.sites[0].output = "u32".into();
+            assert!(matches!(super::super::slots::check(&nonunit, &manifest), Err(InjectError::Invalid { field: "kind", .. })));
+        }
+        assert!(Manifest::parse(&text.replace(&format!("kind='{kind}'"), "kind='head'")).is_err());
         assert!(Manifest::parse(&(text + "cancellable=true\n")).is_err());
     }
     fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
+fn source_call_identity_does_not_require_a_legacy_selector() {
+    use super::super::{internals::Catalog, slots};
+    use horizon_mod_package::manifest::inject::{InjectError, Route};
+    let manifest = Manifest::parse("id='example'\nname='Example'\nversion='1.0.0'\napi='0.2'\ncapabilities=['registries']\n[native]\ngame='26.3'\nhorizon='0123456789012345678901234567890123456789'\nmixins='0123456789012345678901234567890123456789'\n[[inject]]\nid='condition'\nat='game::run'\nkind='wrap_if'\nwith='hook'\naccess='internals'\nhash='signature'\ncall='game::step'\nnth=0\nctx='statement'\n").unwrap();
+    // Staged source sites use resolved call identity, not legacy self.step selectors.
+    let site: Site = serde_json::from_value(serde_json::json!({
+        "name":"Sprivate", "target":"game::run", "ordinal":0,
+        "call":"game::step", "ctx":"statement", "hash":"place", "private":true,
+        "listener":"game::__SprivateListener", "record":"game::__SprivateArgs", "output":"()"
+    }))
+    .unwrap();
+    let mut catalog = Catalog {
+        internals: serde_json::from_value(serde_json::json!([{
+            "path":"game::run", "kind":"fn", "signature":"fn run()", "hash":"signature"
+        }]))
+        .unwrap(),
+        sites: vec![site],
+        ..Catalog::default()
+    };
+    assert!(matches!(
+        slots::routes(&catalog, &manifest).unwrap().as_slice(),
+        [Route::Source(_)]
+    ));
+    catalog.sites[0].output = "u32".into();
+    assert!(matches!(
+        slots::check(&catalog, &manifest),
+        Err(InjectError::Invalid { field: "kind", .. })
+    ));
 }
 
 #[test]

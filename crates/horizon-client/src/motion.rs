@@ -468,6 +468,9 @@ pub struct PlayerMotion {
     pub local_crouching: bool,
     pub pose: crate::pose::Pose,
     pub dimensions: crate::pose::Dimensions,
+    /// What `entity_size` answered for this body's pose and vanilla size (see
+    /// `game/modding/entity_sizes.rs`); `refresh_dimensions` keeps it while it holds.
+    pub size_answer: Option<crate::pose::SizeAnswer>,
     /// The `minecraft:scale` the dimensions were last built with
     /// (`Entity.refreshDimensions`), for the poses the body takes before it
     /// next refreshes.
@@ -701,6 +704,7 @@ impl PlayerMotion {
             local_crouching: false,
             pose: crate::pose::Pose::Standing,
             dimensions: crate::pose::Pose::Standing.dimensions(1.0),
+            size_answer: None,
             scale: 1.0,
             swimming: false,
             is_passenger: false,
@@ -1075,6 +1079,7 @@ impl MotionWorld<'_, '_, '_> {
         CollisionContext::for_entity(
             CollisionEntity {
                 identity: EntityIdentity(0),
+                kind: horizon_world::collision_context::EntityContextKind::Player,
                 y: self.player.position.y,
                 descending: self.player.shift_key_down,
                 main_hand: Some(CollisionItem::EMPTY),

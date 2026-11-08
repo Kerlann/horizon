@@ -215,6 +215,21 @@ impl BlockEntityDrawContext for GameBlockEntityDrawContext<'_, '_> {
             .native_draw_model_part(&mut *self.surface, part, sprite, tint)
     }
 }
+/// [`CameraDrawContext`] on the game's `crate::screen_effects::CameraQuads`.
+pub(crate) struct GameCameraDrawContext<'a, 'g> {
+    pub(crate) game: &'a Game<'g>,
+    pub(crate) surface: &'a mut crate::screen_effects::CameraQuads,
+}
+impl CameraDrawContext for GameCameraDrawContext<'_, '_> {
+    fn quad(&mut self, corners: [[f32; 3]; 4], argb: u32) -> bool {
+        self.game
+            .native_camera_quad(&mut *self.surface, corners, argb)
+    }
+    fn sprite(&mut self, name: &str, corners: [[f32; 3]; 4], uv: [[f32; 2]; 4], argb: u32) -> bool {
+        self.game
+            .native_camera_sprite(&mut *self.surface, name, corners, uv, argb)
+    }
+}
 /// [`WorldDrawContext`] on the game's `crate::world_geometry::WorldGeometry`.
 pub(crate) struct GameWorldDrawContext<'a, 'g> {
     pub(crate) game: &'a Game<'g>,

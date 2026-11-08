@@ -53,3 +53,20 @@ install that finishes after a world opens waits until the world closes before ac
 
 Villager handles preserve the full signed integer level (at least 1), including values above the
 five vanilla trade tiers. Higher levels use the master badge and do not gain further vanilla trades.
+
+### Measuring native mod calls
+
+An administrator with permission level 3 can run `/modprofile start`, exercise the mod,
+then run `/modprofile stop`. Profiling is off by default. Starting twice or stopping without
+an active session reports an error. `/modprofile report` prints the last completed summary
+without writing a file or stopping an active session. Feedback goes only to the sender.
+The same controls work through `horizon-ctl command modprofile start` (and `stop` or `report`).
+
+Stop saves one local, atomically written `profiles/modprofile-<timestamp>-<counter>.json`
+under the game's folder. The export is bounded to 8 MiB; a save failure is reported and the
+stopped summary remains available. Load the file locally in Firefox Profiler's Marker Table;
+Horizon never uploads it. The raw Gecko version 37 markers contain mod/hook/Part identities,
+counts, exact nanosecond timings and log2 histograms, never arguments or player/world data.
+Timings are inclusive: an outer call includes nested calls. These are process-wide aggregates,
+not invocation traces or sampling shares. This first command release measures native guarded
+calls only; wasm timing and a dedicated profiling guide follow separately.

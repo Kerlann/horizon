@@ -9,7 +9,22 @@ use horizon_release_sign::{PublicKey, SIGNATURE, SIGNATURE_V2, SUMS};
 
 /// Where a release's attached file downloads from (GitHub's fixed address for it).
 pub fn asset_url(tag: &str, name: &str) -> String {
-    format!("https://github.com/{REPO}/releases/download/{tag}/{name}")
+    // Metadata supplies path components, never URL syntax or another repository.
+    let component = |text: &str| -> String {
+        text.bytes()
+            .map(|b| match b {
+                b'a'..=b'z' | b'A'..=b'Z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'@' | b'+' => {
+                    (b as char).to_string()
+                }
+                _ => format!("%{b:02X}"),
+            })
+            .collect()
+    };
+    format!(
+        "https://github.com/{REPO}/releases/download/{}/{}",
+        component(tag),
+        component(name)
+    )
 }
 
 /// The signed SHA-256 of `asset` in release `tag`, fetching its SHA256SUMS and SHA256SUMS.sig
@@ -60,6 +75,12 @@ mod tests {
     use horizon_release_sign::{sha256_hex, sums_file, SigningKey};
 
     #[test]
+    fn metadata_cannot_escape_the_fork_download_path() {
+        assert_eq!(asset_url("v1/../../other?x#y", "a%b.zip"),
+            "https://github.com/arismoko/horizon/releases/download/v1%2F..%2F..%2Fother%3Fx%23y/a%25b.zip");
+    }
+
+    #[test]
     fn the_launcher_ships_with_a_release_key() {
         // With no key in release-keys.txt every release after the pinned ones would be refused:
         // this fails until the release environment's public key is listed (docs/security.md).
@@ -89,7 +110,7 @@ mod tests {
         let signature = key.sign("v2099.01.01", sums.as_bytes());
         // GitHub as it answers for a signed release (any tag: the files are what a replay would serve).
         let signed = |url: &str| -> Result<Option<Vec<u8>>, String> {
-            assert!(url.starts_with("https://github.com/horizon-rust/horizon/releases/download/"));
+            assert!(url.starts_with("https://github.com/arismoko/horizon/releases/download/"));
             Ok(Some(
                 if url.ends_with(".sig") {
                     signature.clone()

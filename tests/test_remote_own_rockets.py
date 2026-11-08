@@ -54,10 +54,19 @@ mod horizon_world {
 }
 // Storage is not the subject of this physics fixture. Real numbered-list
 // identity and restoration have separate production tests.
+mod horizon_client {
+    pub mod join_seq { pub enum RestoreOrder { SurvivorsFirst } }
+}
 trait Lift: Default + Sized {
     fn lift(&mut self) -> Self { std::mem::take(self) }
+    fn restore(&mut self, taken: Self, order: horizon_client::join_seq::RestoreOrder);
 }
-impl<T> Lift for Vec<T> {}
+impl<T> Lift for Vec<T> {
+    fn restore(&mut self, taken: Self, _: horizon_client::join_seq::RestoreOrder) {
+        assert!(self.is_empty(), "this physics fixture injects no nested spawn");
+        *self = taken;
+    }
+}
 struct ItemStack { item: String }
 struct Remote { entity_id: i32 }
 mod horizon_core {

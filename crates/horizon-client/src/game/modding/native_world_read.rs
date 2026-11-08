@@ -120,16 +120,27 @@ impl Game<'_> {
         mod_api::__private::unresolved_fluid_name(fluid)
     }
 
-    /// The merged tag tables, once the world has built them. None on a server's client, whose
-    /// tags are not the server's, and before the world has loaded its tags (the world lock is
-    /// installed after they are built).
+    /// The tag tables mods read: on a client the tags its server sent, once they are installed
+    /// (`install_remote_tags`), elsewhere the merged tables, once the world has built them (the
+    /// world lock is installed after they are built). None before that.
     pub(super) fn native_tag_items(&self) -> Option<&Items> {
-        (!self.options.execution_role.is_client() && self.session_lock.is_some())
-            .then(|| self.items())
+        if self.options.execution_role.is_client() {
+            return self.remote.as_ref()?.tags.as_ref();
+        }
+        self.session_lock.is_some().then(|| self.items())
     }
 
-    /// Whether the resolved block is in the world's merged block tag. Unknown tags return false;
-    /// unavailable authoritative tags or owning-thread block mappings return None.
+    /// `items`' block tags, over this game's resolved block keys.
+    pub(super) fn block_tag_sets(
+        &self,
+        items: &Items,
+    ) -> std::collections::HashMap<String, std::collections::HashSet<BlockKey>> {
+        prepare_block_tags(items)
+    }
+
+    /// Whether the resolved block is in the world's merged block tag, on a client the tag its
+    /// server sent. Unknown tags return false; unavailable tags or owning-thread block mappings
+    /// return None.
     pub(super) fn block_in_tag(&self, block: BlockKey, tag: &str) -> Option<bool> {
         self.native_tag_items()?;
         block_in_tag(block, tag)
@@ -152,8 +163,8 @@ impl Game<'_> {
     }
 
     /// Whether `fluid` is in the fluid tag `tag` (`FluidState.is(TagKey)`, `minecraft:water` or
-    /// `water`), over the merged fluid tags. An unknown tag is false. None as for
-    /// `block_in_tag`.
+    /// `water`), over the merged fluid tags, on a client those its server sent. An unknown tag
+    /// is false. None as for `block_in_tag`.
     pub(super) fn fluid_in_tag(&self, fluid: &str, tag: &str) -> Option<bool> {
         Some(fluid_in_tag(self.native_tag_items()?, fluid, tag))
     }

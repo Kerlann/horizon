@@ -371,6 +371,7 @@ impl Game<'_> {
         let entity_events = std::mem::take(&mut self.guest_entity_events);
         let cooldown_events = std::mem::take(&mut self.guest_cooldowns);
         let player_sounds = std::mem::take(&mut self.guest_player_sounds);
+        let block_sounds = std::mem::take(&mut self.guest_block_sounds);
         let equipment_breaks = std::mem::take(&mut self.guest_equipment_breaks);
         let swings = self.swings_started;
         let projectiles = self.creatures.projectiles.len();
@@ -462,6 +463,7 @@ impl Game<'_> {
             modifiers,
             cooldown_events,
             player_sounds,
+            block_sounds,
             combat: host_combat,
             building_boxes,
         })
@@ -581,6 +583,7 @@ impl Game<'_> {
             modifiers,
             cooldown_events,
             player_sounds,
+            block_sounds,
         } = swap;
         // `ServerPlayer.permissions()` back to the host's after the turn.
         self.ui.registries.permission = permission;
@@ -638,6 +641,13 @@ impl Game<'_> {
             std::mem::replace(&mut self.guest_player_sounds, player_sounds)
         {
             let sound = LevelSound::new(&name, at, volume, pitch).in_source(SoundSource::Players);
+            self.send_level_sound(sound, Some(conn));
+        }
+        // Block-source sounds exclude the acting player, like player sounds.
+        for (name, at, volume, pitch) in
+            std::mem::replace(&mut self.guest_block_sounds, block_sounds)
+        {
+            let sound = LevelSound::new(&name, at, volume, pitch).in_source(SoundSource::Blocks);
             self.send_level_sound(sound, Some(conn));
         }
         let outgoing = std::mem::replace(&mut self.guest_packets, packets);
@@ -833,6 +843,8 @@ impl Game<'_> {
             self.eye = eye.1;
             std::mem::swap(&mut self.player, &mut player);
             if let Some(mut m) = player {
+                // Travel can end a glide on a climbable before the next action.
+                g.fall_flying = m.fall_flying;
                 g.health = m.health.health();
                 g.food = m.health.food.food;
                 g.saturation = m.health.food.saturation;

@@ -24,6 +24,9 @@ concurrency:
   # progress finishes, and only the newest waiting push runs next, so main is always checked.
   group: dyna-checks-${{ github.event.pull_request.number || (github.event_name == 'push' && github.ref == 'refs/heads/main' && 'main') || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  # sccache (shared per Dyna host) cannot cache incremental compiles, so every Rust job builds non-incremental.
+  CARGO_INCREMENTAL: 0
 jobs:
   # Dyna runners accept dispatches, not scheduled events.
   nightly-dispatch:
@@ -52,8 +55,6 @@ jobs:
       ignored_matrix: ${{ steps.matrix.outputs.matrix || '{"shard":[]}' }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
       # The pool's switch and lease are read live: `vars` is fixed when the run is created, and a main run
       # that waits in the concurrency group would otherwise see a lease that expired while it waited.
       # A fork's pull request gets no token to read them and stays on GitHub's runners.
@@ -106,14 +107,15 @@ jobs:
     # A cold lint (two full clippy graphs) takes 40+ minutes on GitHub runners: room to finish, main to save its cache.
     timeout-minutes: ${{ github.event_name == 'pull_request' && 75 || 100 }}
     env:
-      # Keep incremental check state too: changed workspace crates can reuse unchanged queries.
-      CARGO_INCREMENTAL: 1
       # Like verify, avoid scheduling eight large rustc processes inside a 16 GiB slot.
       JOBS: ${{ needs.changes.outputs.self_hosted == 'true' && '-j4' || '' }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      # Only this commit's own history (rust_changes.py's merge base, check_public_tree.py's range and HEAD
+      # ancestry), not every branch and tag: a full checkout fetched them all and took over a minute.
+      - name: Fetch this commit's history
+        if: github.event_name == 'pull_request'
+        run: git fetch -q --no-tags --unshallow origin "$(git rev-parse HEAD)"
       - name: Does this pull request need Rust checks?
         if: github.event_name == 'pull_request'
         id: rust
@@ -234,8 +236,10 @@ jobs:
       JOBS: ${{ needs.changes.outputs.self_hosted == 'true' && '-j4' || '' }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      # Only this commit's own history (rust_changes.py's merge base, check_public_tree.py's range and HEAD
+      # ancestry), not every branch and tag: a full checkout fetched them all and took over a minute.
+      - name: Fetch this commit's history
+        run: git fetch -q --no-tags --unshallow origin "$(git rev-parse HEAD)"
       - uses: actions/setup-python@v5
         if: runner.environment == 'github-hosted'
         with:
@@ -309,6 +313,9 @@ jobs:
       - name: Test Rust documentation examples
         if: steps.rust.outputs.required != 'false'
         run: cargo +stable test $JOBS --workspace --doc
+      - name: Report test compiler cache
+        if: ${{ !cancelled() && steps.rust.outputs.required != 'false' && needs.changes.outputs.self_hosted == 'true' }}
+        run: sccache --show-stats | tee -a "$GITHUB_STEP_SUMMARY"
       # Last, and whatever happened above: a tooling failure must never skip the Rust tests.
       - name: Test offline research tooling
         if: ${{ !cancelled() }}
@@ -336,7 +343,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           persist-credentials: false
       - name: Install Dyna runner dependencies
         run: bash tools/ci/dyna_ci_deps.sh
@@ -404,8 +410,11 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      # Only this commit's own history (rust_changes.py's merge base, check_public_tree.py's range and HEAD
+      # ancestry), not every branch and tag: a full checkout fetched them all and took over a minute.
+      - name: Fetch this commit's history
+        if: github.event_name == 'pull_request'
+        run: git fetch -q --no-tags --unshallow origin "$(git rev-parse HEAD)"
       - name: Does this pull request change the launcher or a crate it builds?
         if: github.event_name == 'pull_request'
         id: launcher
@@ -458,7 +467,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
           persist-credentials: false
       - name: Install Dyna runner dependencies
         run: bash tools/ci/dyna_ci_deps.sh

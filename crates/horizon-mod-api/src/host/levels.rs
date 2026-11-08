@@ -408,6 +408,32 @@ pub trait LevelsBackend {
     /// World-space block collision boxes under an empty collision context, without entities or border. Refuses a stale or nonresident level and invalid or overlarge boxes.
     #[access(WorldOnly)]
     fn level_collision_boxes(&self, level: LevelRef, aabb: [f64; 6]) -> Option<Vec<[f64; 6]>>;
+    /// Side: server.
+    /// The world's respawn data (`LevelData.getRespawnData`): the world spawn and the way a
+    /// player appearing there faces, as `/setworldspawn` sets them. Horizon keeps one world
+    /// spawn, in the Overworld, so every level of a world answers the same. None on a client,
+    /// for a stale handle, and before the world has chosen its spawn.
+    #[access(WorldOnly)]
+    fn level_respawn_data(&self, level: LevelRef) -> Option<RespawnData>;
+    /// Side: server.
+    /// Map `id`'s saved data (`ServerLevel.getMapData(new MapId(id))`): read from memory, or
+    /// from `data/minecraft/maps/<id>.dat` when nothing has loaded it yet, without keeping it.
+    /// Maps belong to the world, not to a level. None on a client, for a stale handle and for
+    /// a map id nothing ever made.
+    #[access(WorldOnly)]
+    fn level_map_data(&self, level: LevelRef, id: i32) -> Option<MapState>;
+    /// Side: server.
+    /// `BlockAndTintGetter.canSeeSky`: the sky light at `pos` is full (15), so nothing above
+    /// blocks it. None as for `brightness`.
+    #[access(WorldOnly)]
+    fn level_can_see_sky(&self, level: LevelRef, pos: [i32; 3]) -> Option<bool>;
+    /// Side: server.
+    /// Whether nothing solid lies on the segment `from`..`to`, as
+    /// `LivingEntity.hasLineOfSight` clips between two eyes (`ClipContext.Block.COLLIDER`,
+    /// `ClipContext.Fluid.NONE`): `clip`'s miss. Fluids, entities and the border don't block it.
+    /// None as for `clip`.
+    #[access(WorldOnly)]
+    fn level_line_of_sight(&self, level: LevelRef, from: [f64; 3], to: [f64; 3]) -> Option<bool>;
     /// Side: both.
     /// Whether any block collision shape shares volume with `aabb` (`[min_x, min_y, min_z, max_x,
     /// max_y, max_z]`): the block half of `CollisionGetter.noCollision(aabb)`, negated. The same
@@ -519,6 +545,50 @@ pub trait LevelsBackendMut {
         tool: Option<&ItemStack>,
         collect: bool,
     ) -> Result<Option<Vec<ItemStack>>, StackWriteError>;
+    /// Side: server.
+    /// `LevelData.setRespawnData(RespawnData.of(..))`, as `/setworldspawn` does: the world spawn
+    /// moves to `pos`, facing `yaw` (wrapped to -180..180) and `pitch` (clamped to -90..90), a
+    /// player whose own respawn point was the old world spawn follows it, and `spawn_change`
+    /// fires. Only the Overworld's handle, where Horizon keeps the world spawn. False for
+    /// another level, a stale handle, a client, a non-finite angle and a position outside the
+    /// spawnable bounds.
+    #[access(WorldOnly)]
+    fn level_set_respawn_data(
+        &mut self,
+        level: LevelRef,
+        pos: [i32; 3],
+        yaw: f32,
+        pitch: f32,
+    ) -> bool;
+    /// Side: server.
+    /// Repaint map `id` with `colors` (128 by 128 colour ids, row by row), pixel by pixel as
+    /// `MapItemSavedData.setColor` does: each changed pixel marks the map to save, to redraw and
+    /// to send to the players carrying or framing it. True when a pixel changed. False for
+    /// another length, a stale handle, a client and a map id nothing made.
+    #[access(WorldOnly)]
+    fn level_set_map_data(&mut self, level: LevelRef, id: i32, colors: &[u8]) -> bool;
+    /// Side: server.
+    /// Run the block at `pos`'s scheduled tick now (`ServerLevel.tickBlock`): the path a due
+    /// tick from the queue takes, the block's part first, else `BlockState.tick`, with the same
+    /// random draws and level events. The queue is not read or changed; `schedule_block_tick`
+    /// queues one. False for a refused write, a stale or parked handle, a client and an
+    /// unloaded or out-of-height position.
+    #[access(WorldOnly)]
+    fn level_block_tick(&mut self, level: LevelRef, pos: [i32; 3]) -> bool;
+    /// Side: server.
+    /// Random-tick `pos` now, as `ServerLevel.tickChunk` does for a position it picked: the
+    /// block's `randomTick` when it ticks randomly (its part first), then lava's fluid random
+    /// tick, with the same random draws and level events. False as for `block_tick`.
+    #[access(WorldOnly)]
+    fn level_block_random_tick(&mut self, level: LevelRef, pos: [i32; 3]) -> bool;
+    /// Side: server.
+    /// `ServerLevel.findLightningTargetAround`: the closest lightning rod near the column at
+    /// `pos`'s `x` and `z`, else a living entity under open sky within 3 blocks of it, picked
+    /// with the level random as vanilla does (so this moves later draws), else the top of the
+    /// column. Strikes nothing. None for a refused level, a stale or parked handle, a client and
+    /// an unloaded column.
+    #[access(WorldOnly)]
+    fn level_lightning_target(&mut self, level: LevelRef, pos: [i32; 3]) -> Option<[i32; 3]>;
     /// Side: server.
     /// What the block at `pos` would drop (`Block.getDrops(state, level, pos, blockEntity,
     /// entity, tool)`), without breaking it or spawning anything: its loot table rolled with

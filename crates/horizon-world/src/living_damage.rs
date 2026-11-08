@@ -300,6 +300,14 @@ pub(crate) fn actually_hurt_after_immunity_check<W: DamageWorld>(
 ) -> Result<(), W::Error> {
     let after_armor = world.after_armor(damage)?;
     container.record_reduction(Reduction::Armor, damage - after_armor);
+    actually_hurt_after_armor(world, container, after_armor, player)
+}
+pub(crate) fn actually_hurt_after_armor<W: DamageWorld>(
+    world: &mut W,
+    container: &mut DamageContainer,
+    after_armor: f32,
+    player: bool,
+) -> Result<(), W::Error> {
     let magic = world.after_magic(after_armor)?;
     container.record_reduction(Reduction::MobEffects, magic.mob_effects);
     container.record_reduction(

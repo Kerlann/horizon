@@ -220,6 +220,19 @@ impl MapData {
             texture_dirty: true,
         }
     }
+    /// `MapItemSavedData.setColor` for every pixel of `colors` (128 by 128, row by row): each
+    /// changed one marks the map to save, redraw and send. Whether one changed; None for
+    /// another length.
+    pub(super) fn paint(&mut self, colors: &[u8]) -> Option<bool> {
+        if colors.len() != self.colors.len() {
+            return None;
+        }
+        let mut changed = false;
+        for (i, &color) in colors.iter().enumerate() {
+            changed |= self.update_color((i % 128) as i32, (i / 128) as i32, color);
+        }
+        Some(changed)
+    }
     fn update_color(&mut self, x: i32, y: i32, color: u8) -> bool {
         let i = (x + y * 128) as usize;
         if self.colors[i] == color {
@@ -843,6 +856,18 @@ impl Game<'_> {
     }
     fn map_path(&self, name: &str) -> std::path::PathBuf {
         self.world_root.join("data/minecraft/maps").join(name)
+    }
+    /// `f` of map `id`'s data: the loaded map, else its `.dat` read without keeping it, so a
+    /// read needs no `&mut`. None for a map id nothing made.
+    pub(super) fn with_map<R>(&self, id: i32, f: impl FnOnce(&MapData) -> R) -> Option<R> {
+        if let Some(map) = self.maps.data.get(&id) {
+            return Some(f(map));
+        }
+        if self.maps.missing.contains(&id) {
+            return None;
+        }
+        let saved = horizon_client::save::read_dat(&self.map_path(&format!("{id}.dat")))?;
+        Some(f(&MapData::from_nbt(&saved)?))
     }
     /// The map's data, loaded from `data/minecraft/maps/<id>.dat` on first use.
     pub(super) fn map(&mut self, id: i32) -> Option<&mut MapData> {
@@ -1647,7 +1672,7 @@ impl Game<'_> {
         let slot = match self.maps.slots.show(&id) {
             Some(slot) => slot,
             None => {
-                let (slot, _) = self.maps.slots.claim(id);
+                let (slot, _) = self.maps.slots.claim(id)?;
                 if let Some(m) = self.maps.data.get_mut(&id) {
                     m.texture_dirty = true;
                 }
@@ -1906,6 +1931,26 @@ mod save_tests;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn painting_a_map_marks_only_what_changed_and_refuses_another_size() {
+        let mut map = MapData::fresh(0.0, 0.0, 0, "minecraft:overworld");
+        map.dirty = false;
+        map.texture_dirty = false;
+        let mut colors = vec![0; 128 * 128];
+        assert_eq!(
+            map.paint(&colors),
+            Some(false),
+            "an unchanged map stays clean"
+        );
+        assert!(!map.dirty && !map.texture_dirty);
+        // x 5, z 2: index 5 + 2 * 128, as the map's rows run.
+        colors[5 + 2 * 128] = 34;
+        assert_eq!(map.paint(&colors), Some(true));
+        assert_eq!(map.colors[5 + 2 * 128], 34);
+        assert!(map.dirty && map.texture_dirty, "saved and redrawn");
+        assert_eq!(map.paint(&colors[..100]), None);
+    }
 
     #[test]
     fn a_mod_icon_sits_where_a_vanilla_decoration_would() {

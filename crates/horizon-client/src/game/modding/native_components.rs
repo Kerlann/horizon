@@ -187,6 +187,46 @@ impl Game<'_> {
     pub(in crate::game) fn enchantments_compatible(&self, a: &str, b: &str) -> bool {
         world_stations!(self).enchantments.compatible(a, b)
     }
+    /// Roll through the game's enchantment registry and the active level's random source.
+    pub(in crate::game) fn item_resource_enchant_randomly(
+        &mut self,
+        stack: &ItemStack,
+        level: mod_api::LevelRef,
+        power: i32,
+        pool: &mod_api::Identifier,
+    ) -> Result<Option<ItemStack>, mod_api::StackWriteError> {
+        if level.dimension() != self.dim.key() || self.native_level_world(level).is_none() {
+            return Ok(None);
+        }
+        let items = world_items!(self);
+        let enchantments = &world_stations!(self).enchantments;
+        let pool = enchantments.tag(&pool.to_string());
+        if pool.is_empty() {
+            return Ok(None);
+        }
+        let data = stack.data();
+        let value = if let Some(own) = data.and_then(|d| d.other("minecraft:enchantable")) {
+            own.get("value")
+                .and_then(horizon_items::properties::component_int)
+                .and_then(|value| u32::try_from(value).ok())
+                .unwrap_or_default()
+        } else if data.is_some_and(|d| d.other("!minecraft:enchantable").is_some()) {
+            0
+        } else {
+            enchantments.enchantable(&stack.item)
+        };
+        let picked = enchantments.select_with_value(
+            items,
+            &mut self.world.random,
+            &stack.item,
+            power,
+            pool,
+            value,
+        );
+        Ok(horizon_client::stations::apply_enchantment_list(
+            stack, picked,
+        ))
+    }
     /// Whether an enchantment on `stack` has effect component `effect`, by the world's
     /// enchantment definitions (`EnchantmentHelper.has`), behind
     /// `ItemResource::has_enchantment_effect`, through the opaque backend. API
@@ -290,6 +330,75 @@ mod equippable_slot_tests {
 
 #[cfg(test)]
 mod enchantment_conflict_tests {
+    use super::ItemStack;
+    use crate::game::api_values::{stack_value, test_snapshot};
+    use crate::game::native_entity_refs::tests::with_game;
+    use horizon_core::random::RandomSource;
+    use mod_api::{Identifier, ItemResource, LevelRef, NativeWorldEpoch};
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn enchanting_a_resource_uses_the_active_levels_random_and_preserves_the_input() {
+        with_game(|game| {
+            let level = game.level("minecraft:overworld").unwrap();
+            let stale = LevelRef::new(
+                NativeWorldEpoch::new(level.epoch().get() + 1),
+                level.dimension(),
+            );
+            let stack = ItemStack::new("minecraft:book", 1);
+            let resource = ItemResource::of(&test_snapshot(&stack));
+            let pool = Identifier::parse("minecraft:in_enchanting_table").unwrap();
+            let missing = Identifier::parse("fixture:missing").unwrap();
+            let mut expected_random = game.world.random.clone();
+
+            assert!(
+                resource
+                    .enchant_randomly(game, stale, 30, &pool)
+                    .unwrap()
+                    .is_none()
+            );
+            assert!(
+                resource
+                    .enchant_randomly(game, level, 30, &missing)
+                    .unwrap()
+                    .is_none()
+            );
+            assert_eq!(
+                game.world.random.clone().next_long(),
+                expected_random.clone().next_long()
+            );
+
+            // Vanilla still rolls enchantments and advances the RNG at zero power.
+            let power = 0;
+            let definitions = &game.stations().enchantments;
+            let expected = definitions.select(
+                game.items(),
+                &mut expected_random,
+                &stack.item,
+                power,
+                definitions.tag("minecraft:in_enchanting_table"),
+            );
+            assert!(!expected.is_empty());
+            let result = resource
+                .enchant_randomly(game, level, power, &pool)
+                .unwrap()
+                .unwrap();
+            let result = stack_value(result.as_stack()).unwrap();
+            assert_eq!(&*result.item, "minecraft:enchanted_book");
+            assert_eq!(result.stored_enchantments().len(), expected.len());
+            for (id, level) in expected {
+                assert!(result.stored_enchantments().contains(&(id, level)));
+            }
+            assert!(
+                stack_value(resource.as_stack())
+                    .unwrap()
+                    .all_enchantments()
+                    .is_empty()
+            );
+            assert_eq!(game.world.random.next_long(), expected_random.next_long());
+        });
+    }
+
     /// `Enchantment.areCompatible`: the same enchantment twice and the exclusive sets conflict,
     /// others and unknown ids do not.
     #[test]

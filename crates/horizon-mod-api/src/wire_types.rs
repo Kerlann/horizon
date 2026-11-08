@@ -225,6 +225,7 @@ entity_handles!(
     crate::ItemEntityRef,
     crate::DisplayRef,
     crate::ProjectileRef,
+    crate::FishingHookRef,
     crate::MerchantRef,
     crate::MinecartRef
 );
@@ -630,6 +631,8 @@ impl Wire for crate::ParticleOptions {
         out.put(&self.item);
         out.put(&self.geyser);
         out.put(&self.vibration);
+        out.put(&self.legacy_entity_effect);
+        out.put(&self.legacy_trail_lifetime);
     }
     fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
         Ok(Self {
@@ -642,6 +645,8 @@ impl Wire for crate::ParticleOptions {
             item: input.take()?,
             geyser: input.take()?,
             vibration: input.take()?,
+            legacy_entity_effect: input.take()?,
+            legacy_trail_lifetime: input.take()?,
         })
     }
 }
@@ -816,6 +821,7 @@ impl Wire for crate::ModBlockEntity {
         out.put(&self.fields.data);
         out.put(&self.revision.identity());
         out.put(&self.revision.changes());
+        out.put(&self.client_update_fields);
     }
     fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
         Ok(Self {
@@ -826,6 +832,7 @@ impl Wire for crate::ModBlockEntity {
                 data: input.take()?,
             },
             revision: crate::containers::ModRevision::from_snapshot(input.take()?, input.take()?),
+            client_update_fields: input.take()?,
         })
     }
 }
@@ -880,6 +887,11 @@ impl Wire for crate::ItemPlace {
                 out.put(menu);
                 out.put(slot)
             }
+            Equipment { entity, slot } => {
+                out.put(&9u32);
+                out.put(entity);
+                out.put(slot)
+            }
             Mod { provider, key } => {
                 out.put(&8u32);
                 out.put_str(provider);
@@ -919,6 +931,10 @@ impl Wire for crate::ItemPlace {
                 },
                 7 => MenuSlot {
                     menu: input.take()?,
+                    slot: input.take()?,
+                },
+                9 => Equipment {
+                    entity: input.take()?,
                     slot: input.take()?,
                 },
                 8 => Mod {

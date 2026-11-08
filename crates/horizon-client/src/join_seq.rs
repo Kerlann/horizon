@@ -15,6 +15,9 @@ use std::{
     slice::SliceIndex,
 };
 
+#[path = "join_seq/residency.rs"]
+pub mod residency;
+
 static NEXT: AtomicU64 = AtomicU64::new(1);
 
 /// When an entity joined: a number above every earlier join's. Zero means it
@@ -138,8 +141,22 @@ macro_rules! impl_joined {
 /// let list = JoinList::<u32>::default();
 /// let _: Vec<u32> = list.into();
 /// ```
-#[derive(Clone, Debug)]
-pub struct JoinList<T, const DIRECT: bool = true>(Vec<T>);
+/// Mutable access (`get_mut`, `IndexMut`, and edit callbacks) is state-only.
+/// Whole-value replacement silently changes membership without journal events.
+/// Bound owners must prohibit replacement or explicitly retire/install identities;
+/// Game bindings must audit and test every such call site before enabling emission.
+#[derive(Debug)]
+pub struct JoinList<T, const DIRECT: bool = true>(Vec<T>, Option<residency::Binding<T>>);
+impl<T: Clone, const DIRECT: bool> Clone for JoinList<T, DIRECT> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), None)
+    }
+}
+impl<T, const DIRECT: bool> Drop for JoinList<T, DIRECT> {
+    fn drop(&mut self) {
+        self.clear();
+    }
+}
 
 /// A singleton resident owner with explicit membership operations.
 /// State borrows remain audited: callers must not replace the whole entity or
@@ -160,11 +177,49 @@ pub struct JoinList<T, const DIRECT: bool = true>(Vec<T>);
 /// let mut owner = ResidentSlot::<u32>::default();
 /// owner.take();
 /// ```
-pub struct ResidentSlot<T>(Option<T>);
+pub struct ResidentSlot<T>(Option<T>, Option<residency::Binding<T>>);
 
 impl<T> Default for ResidentSlot<T> {
     fn default() -> Self {
-        Self(None)
+        Self(None, None)
+    }
+}
+impl<T> Drop for ResidentSlot<T> {
+    fn drop(&mut self) {
+        self.discard();
+    }
+}
+impl<T> ResidentSlot<T> {
+    /// Bind the singleton to its owning dimension and journal.
+    pub fn bind_residency(
+        &mut self,
+        journal: &residency::Journal,
+        owner: residency::Owner,
+        identity: fn(&T) -> (u32, JoinSeq),
+    ) {
+        self.emit_current(residency::Change::Remove);
+        self.1 = Some(journal.bind(owner, identity));
+        self.emit_current(residency::Change::Install);
+    }
+    fn emit_current(&self, change: fn(residency::Identity) -> residency::Change) {
+        if let (Some(binding), Some(entity)) = (&self.1, &self.0) {
+            binding.entity(entity, change);
+        }
+    }
+    /// Report the existing allocator's delayed zero-to-live id assignment.
+    pub fn id_assigned(&self) {
+        self.emit_current(residency::Change::Install);
+    }
+    /// Finish a consumed extraction after its terminal work has completed.
+    pub fn retire_extracted(&self, id: u32, join: JoinSeq) {
+        if let Some(binding) = &self.1 {
+            binding.identity(id, join, residency::Change::Remove);
+        }
+    }
+    /// Physically discard the owner, if present.
+    pub fn discard(&mut self) {
+        self.emit_current(residency::Change::Remove);
+        self.0 = None;
     }
 }
 
@@ -187,15 +242,20 @@ impl<T: Joined> ResidentSlot<T> {
     /// Explicitly retire any previous owner and install its replacement.
     pub fn replace(&mut self, mut entity: T) {
         JoinList::<T>::number(&mut entity);
+        self.discard();
         self.0 = Some(entity);
+        self.emit_current(residency::Change::Install);
     }
-    /// Move the owner out without dropping it.
+    /// Temporarily move the owner out without retiring its membership.
     pub fn extract(&mut self) -> Option<T> {
+        self.emit_current(residency::Change::Extract);
         self.0.take()
     }
-    /// Physically discard the owner, if present.
-    pub fn discard(&mut self) {
-        drop(self.extract());
+    /// Return an extracted owner, replacing any intervening singleton as before.
+    pub fn put_back(&mut self, entity: T) {
+        self.discard();
+        self.0 = Some(entity);
+        self.emit_current(residency::Change::PutBack);
     }
     /// Borrow entity state; identity and whole-value replacement stay audited.
     pub fn as_mut(&mut self) -> Option<&mut T> {
@@ -249,6 +309,19 @@ impl<T> Default for ResidentList<T> {
 }
 
 impl<T: Joined> ResidentList<T> {
+    /// Bind this family's storage to its owning dimension and journal.
+    pub fn bind_residency(
+        &mut self,
+        journal: &residency::Journal,
+        owner: residency::Owner,
+        identity: fn(&T) -> (u32, JoinSeq),
+    ) {
+        self.0.bind_residency(journal, owner, identity);
+    }
+    /// Report the existing allocator's delayed zero-to-live id assignment.
+    pub fn id_assigned(&self, index: usize) {
+        self.0.id_assigned(index);
+    }
     /// Find an owner using the same lookup as the joined entity lists.
     pub fn locate(&self, join: JoinSeq) -> Option<usize> {
         self.0.locate(join)
@@ -268,12 +341,12 @@ impl<T: Joined> ResidentList<T> {
         self.0.retain(keep);
     }
     pub fn retain_mut(&mut self, keep: impl FnMut(&mut T) -> bool) {
-        self.0.0.retain_mut(keep);
+        self.0.retain_where(keep);
     }
     pub fn clear(&mut self) {
         self.0.clear();
     }
-    pub fn drain(&mut self, range: impl RangeBounds<usize>) -> std::vec::Drain<'_, T> {
+    pub fn drain(&mut self, range: impl RangeBounds<usize>) -> std::vec::IntoIter<T> {
         self.0.drain(range)
     }
     pub fn update<R>(&mut self, index: usize, edit: impl FnOnce(&mut T) -> R) -> R {
@@ -315,17 +388,64 @@ impl<'a, T> IntoIterator for &'a ResidentList<T> {
 
 impl<T, const DIRECT: bool> Default for JoinList<T, DIRECT> {
     fn default() -> Self {
-        Self(Vec::new())
+        Self(Vec::new(), None)
     }
 }
 
 impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
+    /// Associate storage with its owning dimension; old membership leaves first.
+    pub fn bind_residency(
+        &mut self,
+        journal: &residency::Journal,
+        owner: residency::Owner,
+        identity: fn(&T) -> (u32, JoinSeq),
+    ) {
+        self.bind_to(journal.bind(owner, identity));
+    }
+    fn bind_to(&mut self, binding: residency::Binding<T>) {
+        if let Some(old) = &self.1 {
+            old.all(&self.0, residency::Change::Remove);
+        }
+        binding.all(&self.0, residency::Change::Install);
+        self.1 = Some(binding);
+    }
+    /// Report the existing allocator's delayed zero-to-live id assignment.
+    pub fn id_assigned(&self, index: usize) {
+        if let Some(binding) = &self.1 {
+            binding.entity(&self.0[index], residency::Change::Install);
+        }
+    }
+    /// Finish a consumed extraction after its terminal work has completed.
+    pub fn retire_extracted(&self, id: u32, join: JoinSeq) {
+        if let Some(binding) = &self.1 {
+            binding.identity(id, join, residency::Change::Remove);
+        }
+    }
     /// Lift a whole pass, leaving an empty spawn buffer behind.
     pub fn lift(&mut self) -> Self {
+        let taken = std::mem::take(self);
+        self.1 = taken.1.clone();
+        if let Some(binding) = &self.1 {
+            binding.marker(residency::Change::Lifted);
+        }
+        taken
+    }
+    /// Move a pass already obtained by `lift`, leaving its temporary holder
+    /// empty and unbound. This emits no new marker: consume the moved pass with
+    /// `restore` to close its existing lift. Resident storage must use `lift`.
+    pub fn take_owned_pass(&mut self) -> Self {
         std::mem::take(self)
     }
     /// Restore a lifted pass using its established spawn-buffer ordering.
+    /// An unbound staged batch is admitted without closing another pass.
     pub fn restore(&mut self, mut taken: Self, order: RestoreOrder) {
+        let closes_lift = taken.1.is_some();
+        match (&self.1, &taken.1) {
+            (Some(a), Some(b)) => assert!(a.same(b), "restoring a different entity owner"),
+            (Some(binding), None) => taken.bind_to(binding.clone()),
+            (None, Some(binding)) => self.bind_to(binding.clone()),
+            (None, None) => {}
+        }
         match order {
             RestoreOrder::SurvivorsFirst => {
                 taken.append(self);
@@ -334,39 +454,96 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
             RestoreOrder::SpawnsFirst if self.is_empty() => *self = taken,
             RestoreOrder::SpawnsFirst => self.append(&mut taken),
         }
+        if closes_lift && let Some(binding) = &self.1 {
+            binding.marker(residency::Change::Restored);
+        }
     }
     pub fn with_capacity(capacity: usize) -> Self {
-        Self(Vec::with_capacity(capacity))
+        Self(Vec::with_capacity(capacity), None)
     }
     /// Move a batch back without changing its join numbers or order.
     pub fn append(&mut self, other: &mut Self) {
+        let same = match (&self.1, &other.1) {
+            (Some(a), Some(b)) => a.same(b),
+            (None, None) => true,
+            _ => false,
+        };
+        if !same {
+            if let Some(binding) = &other.1 {
+                binding.all(&other.0, residency::Change::Remove);
+            }
+            if let Some(binding) = &self.1 {
+                binding.all(&other.0, residency::Change::Install);
+            }
+        }
         self.0.append(&mut other.0);
     }
     pub fn remove(&mut self, index: usize) -> T {
-        self.0.remove(index)
+        let entity = self.0.remove(index);
+        if let Some(binding) = &self.1 {
+            binding.entity(&entity, residency::Change::Remove);
+        }
+        entity
     }
-    /// Extract selected owners in list order, compacting survivors in place.
+    /// Extract selected owners eagerly in list order, compacting survivors in place.
     /// The predicate cannot replace an entity or change its identity.
-    pub fn extract_if(&mut self, mut take: impl FnMut(&T) -> bool) -> impl Iterator<Item = T> {
-        self.0.extract_if(.., move |entity| take(entity))
+    pub fn extract_if(&mut self, mut take: impl FnMut(&T) -> bool) -> std::vec::IntoIter<T> {
+        let binding = &self.1;
+        self.0
+            .extract_if(.., |entity| {
+                let removed = take(entity);
+                if removed && let Some(binding) = binding {
+                    binding.entity(entity, residency::Change::Remove);
+                }
+                removed
+            })
+            .collect::<Vec<_>>()
+            .into_iter()
     }
     pub fn swap_remove(&mut self, index: usize) -> T {
-        self.0.swap_remove(index)
+        let entity = self.0.swap_remove(index);
+        if let Some(binding) = &self.1 {
+            binding.entity(&entity, residency::Change::Remove);
+        }
+        entity
     }
     pub fn pop(&mut self) -> Option<T> {
-        self.0.pop()
+        let entity = self.0.pop()?;
+        if let Some(binding) = &self.1 {
+            binding.entity(&entity, residency::Change::Remove);
+        }
+        Some(entity)
     }
     pub fn clear(&mut self) {
-        self.0.clear();
+        self.truncate(0);
     }
     pub fn truncate(&mut self, len: usize) {
+        if let Some(binding) = &self.1 {
+            binding.all(&self.0[len.min(self.0.len())..], residency::Change::Remove);
+        }
         self.0.truncate(len);
     }
-    pub fn retain(&mut self, keep: impl FnMut(&T) -> bool) {
-        self.0.retain(keep);
+    pub fn retain(&mut self, mut keep: impl FnMut(&T) -> bool) {
+        self.retain_where(|entity| keep(entity));
     }
-    pub fn drain(&mut self, range: impl RangeBounds<usize>) -> std::vec::Drain<'_, T> {
-        self.0.drain(range)
+    fn retain_where(&mut self, mut keep: impl FnMut(&mut T) -> bool) {
+        let binding = &self.1;
+        self.0.retain_mut(|entity| {
+            let before = binding.as_ref().map(|b| b.read(entity));
+            let retained = keep(entity);
+            if !retained && let (Some(binding), Some((id, join))) = (binding, before) {
+                binding.identity(id, join, residency::Change::Remove);
+            }
+            retained
+        });
+    }
+    /// Remove the range before returning, even if the owned iterator is forgotten.
+    pub fn drain(&mut self, range: impl RangeBounds<usize>) -> std::vec::IntoIter<T> {
+        let drained: Vec<_> = self.0.drain(range).collect();
+        if let Some(binding) = &self.1 {
+            binding.all(drained.as_slice(), residency::Change::Remove);
+        }
+        drained.into_iter()
     }
     pub fn swap(&mut self, a: usize, b: usize) {
         self.0.swap(a, b);
@@ -375,7 +552,7 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
 
 impl<T> JoinList<T> {
     pub fn retain_mut(&mut self, keep: impl FnMut(&mut T) -> bool) {
-        self.0.retain_mut(keep);
+        self.retain_where(keep);
     }
     /// Run an audited state edit without returning a mutable entity reference.
     /// Whole-entity replacement belongs to the owning residency boundary.
@@ -467,14 +644,16 @@ fn checked_edit<T: horizon_mod_runtime::attachments::HasAttachmentLifetime, R>(
     result
 }
 
-/// Carry lifetime authority from a stored owner into its unbound tick clone.
+/// Carry lifetime authority from a stored owner into its unbound replacement.
+/// Return the previous state with an unbound slot, so a decoder replacement
+/// can retain runtime-only state without retiring the resident owner.
 pub fn store_back<T: horizon_mod_runtime::attachments::HasAttachmentLifetime>(
     old: &mut T,
     mut new: T,
-) {
+) -> T {
     debug_assert!(!new.attachment_lifetime().is_bound());
     std::mem::swap(old.attachment_lifetime(), new.attachment_lifetime());
-    *old = new;
+    std::mem::replace(old, new)
 }
 
 impl<T, const DIRECT: bool> Deref for JoinList<T, DIRECT> {
@@ -514,13 +693,21 @@ impl<T: Joined, const DIRECT: bool> JoinList<T, DIRECT> {
     /// Temporarily lift one numbered owner without treating it as a retirement.
     pub fn extract(&mut self, join: JoinSeq) -> Option<T> {
         let index = self.locate(join)?;
-        Some(self.0.remove(index))
+        let entity = self.0.remove(index);
+        if let Some(binding) = &self.1 {
+            binding.entity(&entity, residency::Change::Extract);
+        }
+        Some(entity)
     }
 
     /// Return an extracted owner at its former position, preserving its number.
     /// If other mutations shortened the list, restore it at the end instead.
     pub fn put_back(&mut self, index: usize, entity: T) {
-        self.0.insert(index.min(self.0.len()), entity);
+        let index = index.min(self.0.len());
+        self.0.insert(index, entity);
+        if let Some(binding) = &self.1 {
+            binding.entity(&self.0[index], residency::Change::PutBack);
+        }
     }
 
     fn number(entity: &mut T) {
@@ -531,10 +718,16 @@ impl<T: Joined, const DIRECT: bool> JoinList<T, DIRECT> {
     pub fn push(&mut self, mut entity: T) {
         Self::number(&mut entity);
         self.0.push(entity);
+        if let Some(binding) = &self.1 {
+            binding.entity(self.0.last().unwrap(), residency::Change::Install);
+        }
     }
     pub fn insert(&mut self, index: usize, mut entity: T) {
         Self::number(&mut entity);
         self.0.insert(index, entity);
+        if let Some(binding) = &self.1 {
+            binding.entity(&self.0[index], residency::Change::Install);
+        }
     }
     pub fn extend(&mut self, entities: impl IntoIterator<Item = T>) {
         for entity in entities {
@@ -596,8 +789,11 @@ impl<'a, T> IntoIterator for &'a mut JoinList<T> {
 impl<T, const DIRECT: bool> IntoIterator for JoinList<T, DIRECT> {
     type Item = T;
     type IntoIter = std::vec::IntoIter<T>;
-    fn into_iter(self) -> Self::IntoIter {
-        self.0.into_iter()
+    fn into_iter(mut self) -> Self::IntoIter {
+        if let Some(binding) = &self.1 {
+            binding.all(&self.0, residency::Change::Remove);
+        }
+        std::mem::take(&mut self.0).into_iter()
     }
 }
 
@@ -895,6 +1091,596 @@ mod tests {
             [fresh, joins[0], joins[1]]
         );
         assert!(joins.into_iter().all(|join| join < fresh));
+    }
+
+    fn journal_list() -> (JoinList<Entity>, residency::Journal) {
+        let journal = residency::Journal::default();
+        let mut list: JoinList<_> = (1..=3).map(entity).collect();
+        list.bind_residency(&journal, journal_owner(), |e| (e.value, e.join));
+        (list, journal)
+    }
+    fn journal_owner() -> residency::Owner {
+        residency::Owner {
+            dimension: mod_api::DimensionKey::OVERWORLD,
+            kind: residency::Kind::Mob,
+        }
+    }
+    fn key(entity: &Entity) -> residency::Identity {
+        residency::Identity::new(entity.value, entity.join).unwrap()
+    }
+    fn changes(journal: &residency::Journal) -> Vec<residency::Change> {
+        let mut events = Vec::new();
+        journal.drain_into(&mut events);
+        events
+            .into_iter()
+            .map(|e| {
+                assert_eq!(e.owner, journal_owner());
+                e.change
+            })
+            .collect()
+    }
+
+    #[test]
+    fn journal_owned_pass_handoff_closes_each_lift_exactly_once() {
+        use residency::Change::{Lifted, Restored};
+        let (mut list, journal) = journal_list();
+        let original: Vec<_> = list.iter().map(key).collect();
+        changes(&journal);
+        let mut pass = list.lift();
+        list.restore(pass.take_owned_pass(), RestoreOrder::SurvivorsFirst);
+        assert!(pass.is_empty());
+        let next = list.lift();
+        list.restore(next, RestoreOrder::SurvivorsFirst);
+        drop(pass);
+        assert_eq!(list.iter().map(key).collect::<Vec<_>>(), original);
+        assert_eq!(changes(&journal), [Lifted, Restored, Lifted, Restored]);
+    }
+
+    #[test]
+    fn journal_records_every_permanent_list_operation_and_only_removed_owners() {
+        use residency::Change::{Install, Remove};
+        let (mut list, journal) = journal_list();
+        let keys: Vec<_> = list.iter().map(key).collect();
+        assert_eq!(
+            changes(&journal),
+            keys.iter().copied().map(Install).collect::<Vec<_>>()
+        );
+        list.insert(1, entity(4));
+        let inserted = key(&list[1]);
+        assert_eq!(list.remove(1).value, 4);
+        assert_eq!(list.swap_remove(1).value, 2);
+        assert_eq!(list.pop().unwrap().value, 3);
+        list.truncate(100);
+        list.clear();
+        assert!(list.pop().is_none());
+        assert_eq!(
+            changes(&journal),
+            [
+                Install(inserted),
+                Remove(inserted),
+                Remove(keys[1]),
+                Remove(keys[2]),
+                Remove(keys[0])
+            ]
+        );
+        list.extend((5..=8).map(entity));
+        let keys: Vec<_> = list.iter().map(key).collect();
+        changes(&journal);
+        list.retain_mut(|e| e.value != 6);
+        assert_eq!(list.extract_if(|e| e.value == 7).next().unwrap().value, 7);
+        drop(list.drain(..1));
+        list.retain(|_| false);
+        assert!(list.is_empty());
+        assert_eq!(
+            changes(&journal),
+            [
+                Remove(keys[1]),
+                Remove(keys[2]),
+                Remove(keys[0]),
+                Remove(keys[3])
+            ]
+        );
+        list.push(entity(9));
+        let last = key(&list[0]);
+        assert_eq!(list.into_iter().next().unwrap().value, 9);
+        assert_eq!(changes(&journal), [Install(last), Remove(last)]);
+        let (list, journal) = journal_list();
+        let keys: Vec<_> = list.iter().map(key).collect();
+        changes(&journal);
+        drop(list);
+        assert_eq!(
+            changes(&journal),
+            keys.into_iter().map(Remove).collect::<Vec<_>>()
+        );
+        for id in [0, 7] {
+            let mut list = JoinList::default();
+            list.push(entity(id));
+            list.bind_residency(&journal, journal_owner(), |e| (e.value, e.join));
+            let expected: Vec<_> = residency::Identity::new(id, list[0].join)
+                .map(Remove)
+                .into_iter()
+                .collect();
+            changes(&journal);
+            list.retain_mut(|e| {
+                e.value = 70;
+                e.join = JoinSeq::next();
+                false
+            });
+            assert_eq!(changes(&journal), expected);
+        }
+    }
+
+    #[test]
+    fn journal_panicking_extract_if_keeps_events_and_survivors_in_sync() {
+        let (mut list, journal) = journal_list();
+        let keys: Vec<_> = list.iter().map(key).collect();
+        changes(&journal);
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            list.extract_if(|e| {
+                assert_ne!(e.value, 2, "predicate panic");
+                true
+            });
+        }));
+        assert!(result.is_err());
+        assert_eq!(changes(&journal), [residency::Change::Remove(keys[0])]);
+        assert_eq!(list.iter().map(key).collect::<Vec<_>>(), keys[1..]);
+    }
+
+    #[test]
+    fn journal_forgotten_drain_preserves_the_undrained_owner() {
+        let (mut list, journal) = journal_list();
+        list.truncate(1);
+        let survivor = key(&list[0]);
+        changes(&journal);
+        std::mem::forget(list.drain(0..0));
+        assert_eq!(list.iter().map(key).collect::<Vec<_>>(), [survivor]);
+        assert!(changes(&journal).is_empty());
+    }
+
+    #[test]
+    fn journal_forgotten_extract_if_preserves_the_unselected_owner() {
+        let (mut list, journal) = journal_list();
+        list.truncate(1);
+        let survivor = key(&list[0]);
+        changes(&journal);
+        std::mem::forget(list.extract_if(|_| false));
+        assert_eq!(list.iter().map(key).collect::<Vec<_>>(), [survivor]);
+        assert!(changes(&journal).is_empty());
+    }
+
+    #[test]
+    fn journal_extraction_has_distinct_put_back_and_retirement_terminals() {
+        use residency::Change::{Extract, PutBack, Remove};
+        let (mut list, journal) = journal_list();
+        let keys: Vec<_> = list.iter().map(key).collect();
+        changes(&journal);
+        let first = list.extract(keys[0].join).unwrap();
+        assert_eq!(list.locate(keys[0].join), None);
+        list.put_back(0, first);
+        assert_eq!(
+            snapshot(&list).iter().map(|e| e.0).collect::<Vec<_>>(),
+            [1, 2, 3]
+        );
+        let _ = list.extract(keys[1].join).unwrap();
+        list.retire_extracted(2, keys[1].join);
+        assert_eq!(
+            changes(&journal),
+            [
+                Extract(keys[0]),
+                PutBack(keys[0]),
+                Extract(keys[1]),
+                Remove(keys[1])
+            ]
+        );
+        assert_eq!(list.locate(keys[1].join), None);
+    }
+
+    #[test]
+    fn journal_lift_and_both_restore_orders_never_reinstall_survivors() {
+        use residency::Change::{Install, Lifted, Remove, Restored};
+        for (order, expected) in [
+            (RestoreOrder::SurvivorsFirst, [1, 3, 4]),
+            (RestoreOrder::SpawnsFirst, [4, 1, 3]),
+        ] {
+            let (mut list, journal) = journal_list();
+            let removed = key(&list[1]);
+            changes(&journal);
+            let mut taken = list.lift();
+            list.push(entity(4));
+            let spawned = key(&list[0]);
+            let _ = taken.remove(1);
+            list.restore(taken, order);
+            assert_eq!(
+                changes(&journal),
+                [Lifted, Install(spawned), Remove(removed), Restored]
+            );
+            assert_eq!(list.iter().map(|e| e.value).collect::<Vec<_>>(), expected);
+        }
+    }
+
+    #[test]
+    fn journal_restore_admits_an_unbound_batch_without_reinstalling_the_spawn_buffer() {
+        use residency::Change::Install;
+        for (order, expected) in [
+            (RestoreOrder::SurvivorsFirst, [4, 5, 1, 2, 3]),
+            (RestoreOrder::SpawnsFirst, [1, 2, 3, 4, 5]),
+        ] {
+            let (mut list, journal) = journal_list();
+            changes(&journal);
+            let staged: JoinList<_> = (4..=5).map(entity).collect();
+            let admitted: Vec<_> = staged.iter().map(key).collect();
+            list.restore(staged, order);
+            assert_eq!(
+                changes(&journal),
+                [Install(admitted[0]), Install(admitted[1])]
+            );
+            assert_eq!(list.iter().map(|e| e.value).collect::<Vec<_>>(), expected);
+        }
+    }
+
+    #[test]
+    fn journal_unbound_admission_preserves_an_enclosing_lift() {
+        use residency::Change::{Install, Lifted, Restored};
+        for order in [RestoreOrder::SurvivorsFirst, RestoreOrder::SpawnsFirst] {
+            let (mut list, journal) = journal_list();
+            let original = snapshot(&list);
+            changes(&journal);
+            let outer = list.lift();
+            assert_eq!(changes(&journal), [Lifted]);
+            let staged: JoinList<_> = [entity(4)].into_iter().collect();
+            let admitted = key(&staged[0]);
+            list.restore(staged, order);
+            assert_eq!(changes(&journal), [Install(admitted)]);
+            assert_eq!(list.locate(original[0].1), None);
+            assert_eq!(snapshot(&outer), original);
+            let inner = list.lift();
+            list.restore(inner, order);
+            assert_eq!(changes(&journal), [Lifted, Restored]);
+            list.restore(outer, order);
+            assert_eq!(changes(&journal), [Restored]);
+            let mut expected = original;
+            let added = (admitted.id.get(), admitted.join);
+            match order {
+                RestoreOrder::SurvivorsFirst => expected.push(added),
+                RestoreOrder::SpawnsFirst => expected.insert(0, added),
+            }
+            assert_eq!(snapshot(&list), expected);
+        }
+    }
+
+    #[test]
+    fn journal_snapshots_are_detached_and_delayed_ids_install_only_after_assignment() {
+        use residency::Change::{Install, Remove};
+        let (mut list, journal) = journal_list();
+        changes(&journal);
+        let mut snapshot = list.clone();
+        snapshot.clear();
+        snapshot.push(entity(99));
+        drop(snapshot.into_iter());
+        assert!(changes(&journal).is_empty());
+        list.clear();
+        changes(&journal);
+        list.push(entity(0));
+        let join = list[0].join;
+        assert!(changes(&journal).is_empty());
+        list.update(0, |e| e.value = 7);
+        list.id_assigned(0);
+        let assigned = residency::Identity::new(7, join).unwrap();
+        list.clear();
+        assert_eq!(changes(&journal), [Install(assigned), Remove(assigned)]);
+    }
+
+    #[test]
+    fn journal_epoch_rebind_reinstalls_live_members_and_updates_the_producer() {
+        use residency::Change::Install;
+        let (mut list, mut journal) = journal_list();
+        let stale = journal.clone();
+        journal.reset_epoch();
+        list.push(entity(4));
+        assert!(changes(&journal).is_empty());
+        assert!(changes(&stale).is_empty());
+        let keys: Vec<_> = list.iter().map(key).collect();
+        list.bind_residency(&journal, journal_owner(), |e| (e.value, e.join));
+        assert_eq!(
+            changes(&journal),
+            keys.into_iter().map(Install).collect::<Vec<_>>()
+        );
+        assert!(changes(&stale).is_empty());
+        list.push(entity(5));
+        assert_eq!(changes(&journal), [Install(key(&list[4]))]);
+    }
+
+    #[test]
+    fn journal_singleton_replacement_and_extraction_have_distinct_terminals() {
+        use residency::Change::{Extract, Install, PutBack, Remove};
+        let journal = residency::Journal::default();
+        let mut slot = super::ResidentSlot::default();
+        slot.bind_residency(&journal, journal_owner(), |e: &Entity| (e.value, e.join));
+        slot.install(entity(1)).unwrap();
+        let first = key(slot.as_ref().unwrap());
+        assert!(!slot.install(entity(99)).unwrap_err().join.is_joined());
+        assert_eq!(changes(&journal), [Install(first)]);
+        let held = slot.extract().unwrap();
+        assert_eq!(slot.locate(first.join), None);
+        slot.replace(entity(2));
+        let nested = key(slot.as_ref().unwrap());
+        slot.put_back(held);
+        assert_eq!(key(slot.as_ref().unwrap()), first);
+        assert_eq!(
+            changes(&journal),
+            [
+                Extract(first),
+                Install(nested),
+                Remove(nested),
+                PutBack(first)
+            ]
+        );
+        slot.replace(entity(4));
+        let replacement = key(slot.as_ref().unwrap());
+        assert_eq!(changes(&journal), [Remove(first), Install(replacement)]);
+        assert_eq!(slot.locate(first.join), None);
+        let _ = slot.extract().unwrap();
+        slot.retire_extracted(4, replacement.join);
+        slot.discard();
+        assert_eq!(
+            changes(&journal),
+            [Extract(replacement), Remove(replacement)]
+        );
+        slot.replace(entity(3));
+        let last = key(slot.as_ref().unwrap());
+        assert_eq!(changes(&journal), [Install(last)]);
+        drop(slot);
+        assert_eq!(changes(&journal), [Remove(last)]);
+    }
+
+    #[test]
+    fn journal_singleton_delayed_id_and_rebind_report_the_actual_owner() {
+        use residency::{
+            Change::{Install, Remove},
+            Event, Kind, Owner,
+        };
+        let journal = residency::Journal::default();
+        let home = Owner {
+            kind: Kind::Dragon,
+            ..journal_owner()
+        };
+        let away = Owner {
+            dimension: mod_api::DimensionKey::NETHER,
+            ..home
+        };
+        let mut slot = super::ResidentSlot::default();
+        slot.replace(entity(0));
+        slot.bind_residency(&journal, home, |e| (e.value, e.join));
+        assert!(changes(&journal).is_empty());
+        let join = slot.as_ref().unwrap().join;
+        slot.as_mut().unwrap().value = 7;
+        slot.id_assigned();
+        let identity = residency::Identity::new(7, join).unwrap();
+        let mut events = Vec::new();
+        journal.drain_into(&mut events);
+        assert_eq!(
+            events,
+            [Event {
+                owner: home,
+                change: Install(identity)
+            }]
+        );
+        events.clear();
+        slot.bind_residency(&journal, away, |e| (e.value, e.join));
+        journal.drain_into(&mut events);
+        assert_eq!(
+            events,
+            [
+                Event {
+                    owner: home,
+                    change: Remove(identity)
+                },
+                Event {
+                    owner: away,
+                    change: Install(identity)
+                }
+            ]
+        );
+        events.clear();
+        slot.discard();
+        drop(slot);
+        journal.drain_into(&mut events);
+        assert_eq!(
+            events,
+            [Event {
+                owner: away,
+                change: Remove(identity)
+            }]
+        );
+    }
+
+    #[test]
+    fn journal_resident_wrapper_shares_lift_and_delayed_assignment_protocol() {
+        use residency::Change::{Install, Lifted, Remove, Restored};
+        let journal = residency::Journal::default();
+        let mut list: super::ResidentList<_> = (1..=2).map(entity).collect();
+        list.bind_residency(&journal, journal_owner(), |e| (e.value, e.join));
+        let original: Vec<_> = list.iter().map(key).collect();
+        assert_eq!(
+            changes(&journal),
+            original.into_iter().map(Install).collect::<Vec<_>>()
+        );
+        let taken = list.lift();
+        list.push(entity(3));
+        let spawned = key(&list[0]);
+        list.restore(taken, super::RestoreOrder::SurvivorsFirst);
+        assert_eq!(list.iter().map(|e| e.value).collect::<Vec<_>>(), [1, 2, 3]);
+        assert_eq!(changes(&journal), [Lifted, Install(spawned), Restored]);
+        list.clear();
+        changes(&journal);
+        list.push(entity(0));
+        let join = list[0].join;
+        list.update(0, |e| e.value = 7);
+        list.id_assigned(0);
+        list.clear();
+        let assigned = residency::Identity::new(7, join).unwrap();
+        assert_eq!(changes(&journal), [Install(assigned), Remove(assigned)]);
+    }
+
+    const SINGLETON_OWNER: residency::Owner = residency::Owner {
+        dimension: mod_api::DimensionKey::OVERWORLD,
+        kind: residency::Kind::Dragon,
+    };
+
+    fn slot_lookup(
+        table: &mut residency::table::EntityTable,
+        slot: &super::ResidentSlot<Entity>,
+        id: u32,
+    ) -> residency::table::EntityLookup<u32> {
+        table.entity_lookup(&SINGLETON_OWNER.dimension, id, |at| {
+            if at.owner != SINGLETON_OWNER {
+                return None;
+            }
+            slot.locate(at.join).map(|_| {
+                let entity = slot.as_ref().unwrap();
+                residency::table::SourceEntity {
+                    id: entity.value,
+                    value: entity.value,
+                }
+            })
+        })
+    }
+
+    #[test]
+    fn journal_singleton_table_keeps_extraction_and_intervening_replacement_distinct() {
+        use residency::table::{EntityLookup, EntityTable};
+        let journal = residency::Journal::default();
+        let mut table = EntityTable::new(journal.clone());
+        let mut slot = super::ResidentSlot::default();
+        slot.bind_residency(&journal, SINGLETON_OWNER, |e: &Entity| (e.value, e.join));
+        slot.replace(entity(7));
+        assert!(matches!(
+            slot_lookup(&mut table, &slot, 7),
+            EntityLookup::Found { value: 7, .. }
+        ));
+        let held = slot.extract().unwrap();
+        assert_eq!(slot_lookup(&mut table, &slot, 7), EntityLookup::Taken);
+        slot.replace(entity(8));
+        assert!(matches!(
+            slot_lookup(&mut table, &slot, 8),
+            EntityLookup::Found { value: 8, .. }
+        ));
+        slot.put_back(held);
+        assert_eq!(slot_lookup(&mut table, &slot, 8), EntityLookup::Missing);
+        assert!(matches!(
+            slot_lookup(&mut table, &slot, 7),
+            EntityLookup::Found { value: 7, .. }
+        ));
+        slot.discard();
+        assert_eq!(slot_lookup(&mut table, &slot, 7), EntityLookup::Missing);
+        table.end_tick().unwrap();
+    }
+
+    #[test]
+    fn journal_singleton_epoch_rebind_replaces_the_retired_producer() {
+        use residency::table::{EntityLookup, EntityTable};
+        let journal = residency::Journal::default();
+        let mut table = EntityTable::new(journal.clone());
+        let mut slot = super::ResidentSlot::default();
+        slot.bind_residency(&journal, SINGLETON_OWNER, |e: &Entity| (e.value, e.join));
+        slot.replace(entity(7));
+        assert!(matches!(
+            slot_lookup(&mut table, &slot, 7),
+            EntityLookup::Found { .. }
+        ));
+        table.reset();
+        slot.replace(entity(8));
+        assert_eq!(slot_lookup(&mut table, &slot, 8), EntityLookup::Missing);
+        let join = slot.as_ref().unwrap().join;
+        slot.bind_residency(&table.producer(), SINGLETON_OWNER, |e| (e.value, e.join));
+        assert_eq!(slot.as_ref().unwrap().join, join);
+        assert!(matches!(
+            slot_lookup(&mut table, &slot, 8),
+            EntityLookup::Found { value: 8, .. }
+        ));
+        slot.replace(entity(9));
+        assert_eq!(slot_lookup(&mut table, &slot, 8), EntityLookup::Missing);
+        assert!(matches!(
+            slot_lookup(&mut table, &slot, 9),
+            EntityLookup::Found { value: 9, .. }
+        ));
+        assert!(changes(&journal).is_empty());
+        table.end_tick().unwrap();
+    }
+
+    #[test]
+    fn journal_same_owner_transfer_between_games_updates_both_sinks() {
+        use residency::Change::{Install, Remove};
+        let (mut source, old_journal) = journal_list();
+        let keys: Vec<_> = source.iter().map(key).collect();
+        changes(&old_journal);
+        let new_journal = residency::Journal::default();
+        let mut target = JoinList::default();
+        target.bind_residency(&new_journal, journal_owner(), |e: &Entity| {
+            (e.value, e.join)
+        });
+        target.append(&mut source);
+        assert!(source.is_empty());
+        assert_eq!(target.iter().map(key).collect::<Vec<_>>(), keys);
+        assert_eq!(
+            changes(&old_journal),
+            keys.iter().copied().map(Remove).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            changes(&new_journal),
+            keys.into_iter().map(Install).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    fn journal_batch_transfer_changes_dimension_without_changing_identity() {
+        use residency::{
+            Change::{Install, Remove},
+            Event, Kind, Owner,
+        };
+        let (mut source, journal) = journal_list();
+        let keys: Vec<_> = source.iter().map(key).collect();
+        changes(&journal);
+        let destination = Owner {
+            dimension: mod_api::DimensionKey::NETHER,
+            kind: Kind::Other,
+        };
+        let mut target = JoinList::default();
+        target.bind_residency(&journal, destination, |e: &Entity| (e.value, e.join));
+        target.append(&mut source);
+        assert!(source.is_empty());
+        assert_eq!(target.iter().map(key).collect::<Vec<_>>(), keys);
+        let expected: Vec<_> = keys
+            .iter()
+            .map(|&k| Event {
+                owner: journal_owner(),
+                change: Remove(k),
+            })
+            .chain(keys.iter().map(|&k| Event {
+                owner: destination,
+                change: Install(k),
+            }))
+            .collect();
+        let mut events = Vec::new();
+        journal.drain_into(&mut events);
+        assert_eq!(events, expected);
+        // Opening/resetting a level may rebind retained storage to its dimension.
+        target.bind_residency(&journal, journal_owner(), |e| (e.value, e.join));
+        let expected: Vec<_> = keys
+            .iter()
+            .map(|&k| Event {
+                owner: destination,
+                change: Remove(k),
+            })
+            .chain(keys.iter().map(|&k| Event {
+                owner: journal_owner(),
+                change: Install(k),
+            }))
+            .collect();
+        events.clear();
+        journal.drain_into(&mut events);
+        assert_eq!(events, expected);
+        assert_eq!(target.iter().map(key).collect::<Vec<_>>(), keys);
     }
 }
 

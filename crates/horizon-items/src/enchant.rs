@@ -3,6 +3,7 @@
 //! rules used by the enchanting table, display names, and evaluation of the
 //! value/attribute effect components (`LevelBasedValue`, `EnchantmentValueEffect`
 //! and the loot-condition subset that enchantment requirements use).
+use crate::item_data::Levels;
 use crate::items::{ItemStack, Items};
 use horizon_core::random::{LegacyRandom, RandomSource};
 use serde_json::Value;
@@ -226,8 +227,8 @@ impl Enchantments {
     ) -> crate::Result<Self> {
         Self::load_with(root, &horizon_world::loot::PackOverlay::NONE, defaults)
     }
-    /// Load from a resource root; `overlay` (a world's data packs' content
-    /// files) joins the game's own enchantment tags in pack order, a
+    /// `RegistryDataLoader.load`: load from a resource root; `overlay` (world-pack content
+    /// files) overrides definitions and joins enchantment tags in pack order, a
     /// `replace` file dropping the lower sources' (`TagLoader.load`).
     pub fn load_with(
         root: &Path,
@@ -610,12 +611,31 @@ impl Enchantments {
         cost: i32,
         pool: &[Arc<str>],
     ) -> Vec<(Arc<str>, u32)> {
+        self.select_with_value(items, random, item, cost, pool, self.enchantable(item))
+    }
+
+    /// Select with the enchantability of the stack after its component patch.
+    pub fn select_with_value<R: RandomSource>(
+        &self,
+        items: &Items,
+        random: &mut R,
+        item: &str,
+        cost: i32,
+        pool: &[Arc<str>],
+        value: u32,
+    ) -> Levels {
         let mut results = Vec::new();
-        let value = self.enchantable(item) as i32;
+        let Ok(value) = i32::try_from(value) else {
+            return results;
+        };
         if value == 0 {
             return results;
         }
-        let mut cost = cost + 1 + next_int(random, value / 4 + 1) + next_int(random, value / 4 + 1);
+        let bound = value / 4 + 1;
+        let mut cost = cost
+            .wrapping_add(1)
+            .wrapping_add(next_int(random, bound))
+            .wrapping_add(next_int(random, bound));
         let span = (random.next_float() + random.next_float() - 1.0) * 0.15;
         cost = ((cost as f32 + cost as f32 * span).round() as i32).max(1);
         let mut available = self.available_results(items, cost, item, pool);
@@ -1018,6 +1038,128 @@ pub mod tests {
         let defaults = horizon_world::item_defaults::read(&root).unwrap();
         let error = Enchantments::load(&root, &defaults).err().unwrap();
         assert!(error.to_string().contains("example:invalid"));
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn world_pack_definitions_join_catalog_in_overlay_priority() {
+        let root = std::env::temp_dir().join(format!(
+            "horizon-enchantment-overlay-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let write = |path: &str, value: &Value| {
+            let path = root.join(path);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(&path, serde_json::to_vec(value).unwrap()).unwrap();
+            std::fs::read(path).unwrap()
+        };
+        let definition = |description: &str, max_level| {
+            json!({
+                "description": description, "supported_items": "minecraft:diamond_sword",
+                "weight": 1, "max_level": max_level,
+                "min_cost": {"base": 1, "per_level_above_first": 0},
+                "max_cost": {"base": 1, "per_level_above_first": 0},
+                "anvil_cost": 1, "slots": ["mainhand"],
+                "effects": {"minecraft:damage": [{"effect": {"type": "minecraft:add", "value": 2.0}}]}
+            })
+        };
+        write(
+            "data/minecraft/enchantment/mending.json",
+            &definition("Vanilla retained", 1),
+        );
+        write(
+            "data/minecraft/enchantment/sharpness.json",
+            &definition("Vanilla base", 5),
+        );
+        write(
+            "data/minecraft/tags/enchantment/fixture.json",
+            &json!({"values": ["minecraft:mending"]}),
+        );
+        write(
+            "data/minecraft/tags/damage_type/fixture.json",
+            &json!({"values": ["minecraft:generic"]}),
+        );
+        write(
+            "data/minecraft/tags/entity_type/fixture.json",
+            &json!({"values": ["minecraft:pig"]}),
+        );
+        let custom = write(
+            "packs/custom/data/wpenchant/enchantment/loaded.json",
+            &definition("Custom loaded", 1),
+        );
+        let low = write(
+            "packs/low/data/minecraft/enchantment/sharpness.json",
+            &definition("Lower override", 2),
+        );
+        let high = write(
+            "packs/high/data/minecraft/enchantment/sharpness.json",
+            &definition("Higher override", 3),
+        );
+        let tag = write(
+            "packs/custom/data/wpenchant/tags/enchantment/fixture.json",
+            &json!({"values": ["wpenchant:loaded"]}),
+        );
+        let files = vec![
+            ("enchantment/wpenchant:loaded".to_owned(), vec![custom]),
+            (
+                "enchantment/minecraft:sharpness".to_owned(),
+                vec![low, high],
+            ),
+            ("tags/wpenchant:enchantment/fixture".to_owned(), vec![tag]),
+        ];
+        write("items.json", &json!({}));
+        let defaults = horizon_world::item_defaults::read(&root).unwrap();
+        let base = Enchantments::load(&root, &defaults);
+        let loaded = Enchantments::load_with(
+            &root,
+            &horizon_world::loot::PackOverlay {
+                files: &files,
+                ..horizon_world::loot::PackOverlay::NONE
+            },
+            &defaults,
+        );
+        assert_eq!(
+            loaded.get("minecraft:mending").unwrap().description,
+            "Vanilla retained"
+        );
+        assert_eq!(loaded.damage_tags, base.damage_tags);
+        assert_eq!(loaded.entity_tags, base.entity_tags);
+        assert_eq!(
+            loaded.tag("minecraft:fixture"),
+            base.tag("minecraft:fixture")
+        );
+        assert!(loaded.in_tag("wpenchant:fixture", "wpenchant:loaded"));
+        assert!(loaded.get("wpenchant:missing").is_none());
+        let custom = loaded
+            .get("wpenchant:loaded")
+            .expect("actual overlay definition must enter the catalog");
+        assert_eq!(custom.description, "Custom loaded");
+        assert_eq!(custom.max_level, 1);
+        assert_eq!(
+            loaded.get("minecraft:sharpness").unwrap().description,
+            "Higher override"
+        );
+        assert_eq!(loaded.get("minecraft:sharpness").unwrap().max_level, 3);
+        assert_eq!(
+            loaded.modify_value_with(
+                "wpenchant:loaded",
+                1,
+                "minecraft:damage",
+                &EffectContext::default(),
+                &mut LegacyRandom::new(0),
+                1.0
+            ),
+            3.0
+        );
+        assert!(
+            Enchantments::load(&root, &defaults)
+                .get("wpenchant:loaded")
+                .is_none()
+        );
         std::fs::remove_dir_all(root).unwrap();
     }
 

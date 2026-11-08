@@ -13,7 +13,7 @@ my_mod/
   data/my_mod/
   Cargo.toml             # one crate; Cargo metadata is not mod identity
   src/lib.rs             # impl Hooks
-  src/frame.rs           # optional raw injection helper
+  src/frame.rs           # optional injection callback module
 ```
 
 Without `Cargo.toml`, it is a content mod. Code requires both `Cargo.toml` and `[native]`;
@@ -38,5 +38,5 @@ Unknown fields are refused. `icon.png` has no manifest key: when present it must
 nonzero square PNG, at most 512 × 512 pixels and 256 KiB encoded. It is optional for both content
 and code mods; the scaffold does not create one.
 
-Raw injections belong in the same manifest as `[[native.injection]]` tables. The decision ladder, the fields and the
+Injections belong in the same manifest as top-level `[[inject]]` tables, with `access = "api"` or `"internals"`. The decision ladder, the fields and the
 forms are in the modding book: [Injections](../../injections.md).

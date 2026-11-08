@@ -1,6 +1,6 @@
 name: mixins-check
-# A native mod with a point injection and a helper injection, built through the launcher's source
-# route and horizon-mixins at this commit (tools/ci/mixins_check.sh), so a change that breaks
+# A native mod with a unified API slot and internals source listener, built through the launcher
+# and horizon-mixins at this commit (tools/ci/mixins_check.sh), so a change that breaks
 # native mods' staging fails here and not on a player's machine (#1102). Compile-only: no game
 # runs and no vanilla data is read. Checked on main pushes and dispatches, not on pull requests.
 on:
@@ -10,9 +10,12 @@ on:
 permissions:
   contents: read
 concurrency:
-  # One run per ref: a newer main push supersedes an older one's run.
+  # One run per ref, queued: a started run finishes, and a newer main push replaces only the waiting one.
   group: mixins-check-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
+env:
+  # sccache (shared per Dyna host) cannot cache incremental compiles, so every Rust job builds non-incremental.
+  CARGO_INCREMENTAL: 0
 jobs:
   mixins-check:
     runs-on: ubuntu-latest

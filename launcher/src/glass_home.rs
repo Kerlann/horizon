@@ -954,6 +954,7 @@ mod tests {
             icon: None,
             group: None,
             version: None,
+            native_profile: native_mods::Profile::Balanced,
             played: Duration::ZERO,
             last_played: last,
             launch: Default::default(),

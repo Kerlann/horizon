@@ -1026,6 +1026,7 @@ impl Game<'_> {
                     0xFF00_0000 | (outline & 0xFF_FFFF)
                 },
                 light,
+                tier: 0,
             };
             push_text(&glyph, &call, &mut draw.vertices);
             x += width;
@@ -1926,6 +1927,7 @@ mod tests {
                     &[],
                     &game.mods,
                     listeners,
+                    &[],
                     &game.pack.assets,
                     &game.res,
                     &game.pack.context,
@@ -1949,6 +1951,7 @@ mod tests {
                 &[],
                 &game.mods,
                 listeners,
+                &[],
                 &game.pack.assets,
                 &game.res,
                 &game.pack.context,

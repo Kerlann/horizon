@@ -110,6 +110,8 @@ impl Game<'_> {
         ),
     ) -> Result<()> {
         let mut mobs = self.mobs.lift();
+        #[cfg(test)]
+        super::entity::taken_pass_tests::after_take(self);
         let mut uuids = std::mem::take(&mut self.persist.uuids);
         let mut next_entity = self.next_entity;
         let mut random = self.world.random.clone();
@@ -136,7 +138,8 @@ impl Game<'_> {
             host.added
         };
         mobs.extend(added);
-        self.mobs = mobs;
+        self.mobs
+            .restore(mobs, horizon_client::join_seq::RestoreOrder::SurvivorsFirst);
         self.persist.uuids = uuids;
         self.next_entity = next_entity;
         self.world.random = random;
@@ -490,5 +493,21 @@ mod tests {
         state.follow_chunks(&chunks);
         assert_eq!(sorted(&state.unscanned), [(5, 5)]);
         assert!(state.scanned.is_empty());
+    }
+}
+
+#[cfg(test)]
+mod nested_spawn_tests {
+    use super::*;
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn lifted_heart_callback_keeps_nested_spawns_until_the_next_pass() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            let mut heart = CreakingHeart::default();
+            crate::game::entity::taken_pass_tests::assert_mob_spawn_survives(game, |game| {
+                game.with_heart((0, 80, 0), &mut heart, false, |_, _, _, _, _| {})
+                    .unwrap();
+            });
+        });
     }
 }

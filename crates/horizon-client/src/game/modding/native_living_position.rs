@@ -145,12 +145,15 @@ impl Game<'_> {
                     return false;
                 }
                 let mut mobs = self.mobs.lift();
+                #[cfg(test)]
+                super::entity::taken_pass_tests::after_take(self);
                 let w = self.mob_world_base(&[]);
                 let mut events = Vec::new();
                 let moved = mobs.iter_mut().find(|m| m.id == id).is_some_and(|m| {
                     horizon_client::mobs::living::random_teleport(m, &w, at, avoid, &mut events)
                 });
-                self.mobs = mobs;
+                self.mobs
+                    .restore(mobs, horizon_client::join_seq::RestoreOrder::SurvivorsFirst);
                 let _ = self.handle_mob_events(events);
                 moved
             }
@@ -359,7 +362,9 @@ mod tests {
             let at = |game: &Game<'_>| game.mobs.iter().find(|m| m.id == 12).unwrap().position;
             // From six blocks up it lands on the floor, one block lower per
             // step down (`randomTeleport`).
-            assert!(zombie.random_teleport(game, [4.5, 70.0, 4.5], None));
+            crate::game::entity::taken_pass_tests::assert_mob_spawn_survives(game, |game| {
+                assert!(zombie.random_teleport(game, [4.5, 70.0, 4.5], None));
+            });
             assert_eq!(at(game), Vec3::new(4.5, 64.0, 4.5));
             assert_eq!(
                 game.mobs.iter().find(|m| m.id == 12).unwrap().previous,

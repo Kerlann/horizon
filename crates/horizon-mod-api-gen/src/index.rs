@@ -49,6 +49,27 @@ pub(super) struct Index<'a> {
     pub(super) read: std::cell::RefCell<Vec<std::path::PathBuf>>,
 }
 
+/// The file a module's `#[path = "..."]` names.
+fn path_attribute(attrs: &[syn::Attribute]) -> Option<String> {
+    attrs.iter().find_map(|attr| match &attr.meta {
+        syn::Meta::NameValue(meta) if meta.path.is_ident("path") => match &meta.value {
+            syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Str(file),
+                ..
+            }) => Some(file.value()),
+            _ => None,
+        },
+        _ => None,
+    })
+}
+
+/// The directory below the crate root that holds `path`'s last module, with its slash.
+fn parent_dir(path: &[String]) -> String {
+    path.split_last().map_or(String::new(), |(_, dir)| {
+        dir.iter().map(|d| format!("{d}/")).collect()
+    })
+}
+
 impl<'a> Index<'a> {
     pub(super) fn new(root: &'a Path, included: &'a [(&'a str, &'a str)]) -> Self {
         Self {
@@ -79,16 +100,26 @@ impl<'a> Index<'a> {
             None => self.parse(krate, "lib.rs")?,
             Some((last, parent)) => {
                 let parent = self.module(krate, parent)?;
-                let inline = self.modules[parent]
+                let declared = self.modules[parent]
                     .items
                     .iter()
                     .find_map(|item| match item {
-                        Item::Mod(item) if item.ident == last.as_str() => item.content.clone(),
+                        Item::Mod(item) if item.ident == last.as_str() => {
+                            Some((item.content.clone(), path_attribute(&item.attrs)))
+                        }
                         _ => None,
                     });
-                match inline {
-                    Some((_, items)) => self.expand_includes(items)?,
-                    None => {
+                match declared {
+                    Some((Some((_, items)), _)) => self.expand_includes(items)?,
+                    // `#[path]` is relative to the declaring file's directory: `parent.rs`
+                    // sits beside it, `parent/mod.rs` below.
+                    Some((None, Some(file))) => {
+                        let beside = parent_dir(&path[..path.len() - 1]);
+                        let below = parent_dir(path);
+                        self.parse(krate, &format!("{beside}{file}"))
+                            .or_else(|_| self.parse(krate, &format!("{below}{file}")))?
+                    }
+                    _ => {
                         let dir = path.join("/");
                         self.parse(krate, &format!("{dir}.rs"))
                             .or_else(|_| self.parse(krate, &format!("{dir}/mod.rs")))?

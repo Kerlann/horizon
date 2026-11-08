@@ -1079,6 +1079,9 @@ impl Game<'_> {
             .chain(self.crystals.iter().map(|e| e.id))
             .chain(self.dragon.iter().map(|e| e.id))
             .chain(self.ominous_spawners.iter().map(|e| e.id))
+            // Cast hooks live with their players, not in the saveable lists.
+            // Keep both their identities and attachment holders until they leave.
+            .chain(self.fishing_hooks_here().map(|(hook, _)| hook.id()))
     }
     /// The ids of every entity in the level that is not removed: one walk.
     pub(super) fn live_entity_ids(&self) -> HashSet<u32> {
@@ -1801,7 +1804,7 @@ impl Entity for Projectile {
                 game.load_arrow(tag, uuid, player_uuid)
             }
             "minecraft:llama_spit" | "minecraft:shulker_bullet" => {
-                game.load_spit_or_bullet(tag, player_uuid)
+                game.load_spit_or_bullet(tag, uuid, player_uuid)
             }
             "minecraft:fireball"
             | "minecraft:small_fireball"

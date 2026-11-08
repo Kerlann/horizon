@@ -9,15 +9,14 @@ use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 
-pub const REPO: &str = "horizon-rust/horizon";
-/// The fork the launcher reads `links.json` from and sends bug reports to.
-pub const LINKS_REPO: &str = "arismoko/horizon";
+/// Authority for game, launcher and native SDK release reads on this fork.
+pub const REPO: &str = "arismoko/horizon";
 
 /// Where a crash is reported.
 pub fn issues_url() -> String {
-    format!("https://github.com/{LINKS_REPO}/issues")
+    format!("https://github.com/{REPO}/issues")
 }
-pub const README_URL: &str = "https://github.com/horizon-rust/horizon/blob/main/launcher/README.md";
+pub const README_URL: &str = "https://github.com/arismoko/horizon/blob/main/launcher/README.md";
 /// The players' page on connecting an AI agent (the website's docs/agents.md).
 pub const AGENT_DOCS_URL: &str = "https://playhorizon.dev/docs/agents";
 /// This launcher's version: the release workflow sets `HORIZON_LAUNCHER_VERSION` from the
@@ -685,9 +684,10 @@ pub fn compare_versions(a: &str, b: &str) -> std::cmp::Ordering {
 /// Every published release of the repository, both kinds, as GitHub's JSON (kept on disk with its
 /// ETag, and read through Kira's mirror past GitHub's rate limit: [`crate::github`]).
 fn release_list() -> Result<serde_json::Value, String> {
-    crate::github::json(&format!(
+    Ok(crate::github::json_optional(&format!(
         "https://api.github.com/repos/{REPO}/releases?per_page=100"
-    ))
+    ))?
+    .unwrap_or_else(|| serde_json::json!([])))
 }
 
 /// The releases in `list` whose tag passes `keep`, newest first, with the asset named `asset`.
@@ -703,12 +703,9 @@ pub(crate) fn parse_releases(
             continue;
         }
         let found = r["assets"].as_array().into_iter().flatten().find_map(|a| {
-            (Some(a["name"].as_str()?) == asset).then(|| {
-                Some((
-                    a["browser_download_url"].as_str()?.to_string(),
-                    a["size"].as_u64()?,
-                ))
-            })?
+            let name = a["name"].as_str()?;
+            (Some(name) == asset)
+                .then(|| Some((crate::signed::asset_url(tag, name), a["size"].as_u64()?)))?
         });
         out.push(Release {
             tag: tag.into(),
@@ -796,12 +793,12 @@ fn game_releases_with(
 /// `launcher@` and `launcher-v` tags are looked up one by one (a draft's tag is skipped: it has no
 /// public release).
 fn launcher_releases_in(list: &serde_json::Value) -> Vec<Release> {
-    launcher_releases_in_with(list, |url| crate::github::json(&url))
+    launcher_releases_in_with(list, |url| crate::github::json_optional(&url))
 }
 
 fn launcher_releases_in_with(
     list: &serde_json::Value,
-    json: impl Fn(String) -> Result<serde_json::Value, String>,
+    json: impl Fn(String) -> Result<Option<serde_json::Value>, String>,
 ) -> Vec<Release> {
     let found = parse_releases(list, launcher_asset(), is_launcher_tag);
     if found.iter().any(|r| r.asset.is_some()) {
@@ -812,13 +809,13 @@ fn launcher_releases_in_with(
     for prefix in [LAUNCHER_TAG_PREFIX, OLD_LAUNCHER_TAG_PREFIX] {
         // Every `launcher@` tag is newer than every `launcher-v` one: those only when there is none.
         if tags.is_empty() {
-            if let Ok(refs) = json(format!("{api}/git/matching-refs/tags/{prefix}")) {
+            if let Ok(Some(refs)) = json(format!("{api}/git/matching-refs/tags/{prefix}")) {
                 tags = newest_launcher_tags(&refs);
             }
         }
     }
     for tag in tags.into_iter().take(3) {
-        if let Ok(release) = json(format!("{api}/releases/tags/{tag}")) {
+        if let Ok(Some(release)) = json(format!("{api}/releases/tags/{tag}")) {
             let one = parse_releases(
                 &serde_json::json!([release]),
                 launcher_asset(),
@@ -904,7 +901,7 @@ impl Links {
 
 /// The links from main, or the built-in ones when offline.
 pub fn links() -> Links {
-    let url = format!("https://raw.githubusercontent.com/{LINKS_REPO}/main/launcher/links.json");
+    let url = format!("https://raw.githubusercontent.com/{REPO}/main/launcher/links.json");
     get(&url)
         .ok()
         .and_then(|r| r.into_string().ok())
@@ -1678,16 +1675,17 @@ pub(crate) fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
     copy_dir_except(from, to, None)
 }
 
-/// Copy a folder, leaving out one directory when given.
+/// Copy a folder, leaving out one directory or file when given.
 pub(crate) fn copy_dir_except(from: &Path, to: &Path, skip: Option<&Path>) -> std::io::Result<()> {
     fs::create_dir_all(to)?;
     for entry in fs::read_dir(from)? {
         let entry = entry?;
+        if Some(entry.path().as_path()) == skip {
+            continue;
+        }
         let target = to.join(entry.file_name());
         if entry.file_type()?.is_dir() {
-            if Some(entry.path().as_path()) != skip {
-                copy_dir_except(&entry.path(), &target, skip)?;
-            }
+            copy_dir_except(&entry.path(), &target, skip)?;
         } else {
             horizon_prepare::clone_or_copy(&entry.path(), &target)?;
         }
@@ -1724,7 +1722,9 @@ fn reuse_prepared(versions: &Path, tag: &str) -> Option<String> {
         let n = COPIES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let partial = to.with_file_name(format!(".{version}.partial-{}-{n}", std::process::id()));
         let _ = fs::remove_dir_all(&partial);
-        let copied = copy_dir(&from, &partial).and_then(|_| {
+        // Without the data file: it names its own root, so the copy could not use it.
+        let data_file = from.join(horizon_core::prepared_files::FILE_NAME);
+        let copied = copy_dir_except(&from, &partial, Some(&data_file)).and_then(|_| {
             if to.join(RESOURCES_MANIFEST).exists() {
                 return Ok(false); // Prepared meanwhile, by another copy or the player.
             }
@@ -1742,11 +1742,37 @@ fn reuse_prepared(versions: &Path, tag: &str) -> Option<String> {
 }
 
 /// What an install does once its folder is in place (an imported build's too, `build_import`):
-/// another installed version's resources if it has none, and whatever its resources lack.
+/// another installed version's resources if it has none, whatever its resources lack, then its
+/// data file.
 pub(crate) fn reuse_prepared_for(tag: &str) {
     reuse_prepared(&versions_dir(), tag);
     complete_assets(tag);
     forget_prepared();
+    let resources = resources(tag);
+    let spawned = std::thread::Builder::new()
+        .name("Prepared data file".into())
+        .spawn(move || {
+            if let Err(e) = write_data_file(&resources) {
+                eprintln!("{}: not written: {e}", resources.display());
+            }
+        });
+    if let Err(e) = spawned {
+        eprintln!("{tag}: the data file was not written: {e}");
+    }
+}
+
+/// Writes a prepared version's `horizon-data.bin` so its first start already reads one file, not
+/// thousands: over a minute under Windows Defender (#1961), and a player who updates would pay it
+/// after every update. After `complete_assets`, as the file answers "missing" for what it lacks.
+/// The game still writes it when this didn't finish. Only looks for the file, as
+/// `prepared_files::open` keeps it open for the whole run, which would stop a removal on Windows.
+fn write_data_file(resources: &Path) -> std::io::Result<()> {
+    use horizon_core::prepared_files;
+    if !prepared_at(resources) || resources.join(prepared_files::FILE_NAME).exists() {
+        return Ok(());
+    }
+    let readers = std::thread::available_parallelism().map_or(1, |n| n.get().min(8));
+    prepared_files::write_with_readers(resources, readers)
 }
 
 /// `reuse_prepared` for every installed version that is not prepared, oldest first, so a
@@ -1934,13 +1960,14 @@ fn complete_assets_in(
         return;
     }
     let mut tried = TRIED.lock().unwrap_or_else(|e| e.into_inner());
-    let lacking = lacking();
-    if tried.contains(&root) || lacking.is_empty() {
+    let to_add = lacking();
+    if tried.contains(&root) || to_add.is_empty() {
         return;
     }
     tried.push(root.clone());
     let folders = folders();
-    for (what, _, copy) in lacking {
+    let lacked = to_add.len();
+    for (what, _, copy) in to_add {
         let mut first_error = None;
         let added = folders.iter().any(|folder| {
             let copied = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -1954,6 +1981,16 @@ fn complete_assets_in(
                 "{tag}: {what} not added: {}",
                 first_error.unwrap_or_else(|| "no Minecraft folder found".into())
             ));
+        }
+    }
+    // The data file answers "missing" for what it lacks, so one from before these copies would
+    // hide them. Only when something was added: a version that stays lacking keeps its file.
+    if lacking().len() < lacked {
+        let data_file = resources.join(horizon_core::prepared_files::FILE_NAME);
+        if let Err(e) = fs::remove_file(&data_file) {
+            if e.kind() != std::io::ErrorKind::NotFound {
+                log(format!("{}: not removed: {e}", data_file.display()));
+            }
         }
     }
 }
@@ -4162,6 +4199,8 @@ pub enum Msg {
     PackLine(String),
     /// A modpack step ended: the pack as it now is.
     PackDone(Result<Box<crate::modpacks::Imported>, String>),
+    /// The modpacks other launchers keep on this computer (`modpacks::found_on_this_computer`).
+    FoundPacks(Vec<crate::other_launchers::Found>),
     /// Where the native-mods build is (`native_mods::Step::label`).
     NativeProgress(String, crate::native_mods::Progress),
     /// The native-mods build ended: the version built, or why not.
@@ -4408,9 +4447,6 @@ pub struct Settings {
     /// Native mods are always on: an older file's `native_mods` switch is ignored.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub native_mods_noticed: bool,
-    /// The profile native builds compile with (`native_mods::Profile::chosen`); none is the default.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub native_profile: Option<crate::native_mods::Profile>,
     /// First-use native code permission for this launcher install, Unix seconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_mods_allowed_at: Option<u64>,
@@ -4475,12 +4511,6 @@ impl Settings {
                 if fields.get(key).is_some_and(|v| !v.is_number()) {
                     fields.remove(key);
                 }
-            }
-            // A build mode this launcher doesn't know is the default one.
-            if fields.get("native_profile").is_some_and(|p| {
-                serde_json::from_value::<crate::native_mods::Profile>(p.clone()).is_err()
-            }) {
-                fields.remove("native_profile");
             }
             // A language this launcher doesn't have yet follows the system's.
             if fields.get("language").is_some_and(|l| {
@@ -6014,15 +6044,17 @@ pub fn {f}("
                     .borrow_mut()
                     .push(url.rsplit('/').next().unwrap_or("").to_string());
                 if url.ends_with("matching-refs/tags/launcher@") {
-                    Ok(serde_json::json!(if with_new {
+                    Ok(Some(serde_json::json!(if with_new {
                         vec![serde_json::json!({"ref": "refs/tags/launcher@0.2.0"})]
                     } else {
                         Vec::new()
-                    }))
+                    })))
                 } else if url.ends_with("matching-refs/tags/launcher-v") {
-                    Ok(serde_json::json!([{"ref": "refs/tags/launcher-v0.17.0"}]))
+                    Ok(Some(
+                        serde_json::json!([{"ref": "refs/tags/launcher-v0.17.0"}]),
+                    ))
                 } else {
-                    Ok(release(url.rsplit('/').next().unwrap_or("")))
+                    Ok(Some(release(url.rsplit('/').next().unwrap_or(""))))
                 }
             })
             .into_iter()
@@ -6326,6 +6358,33 @@ pub fn {f}("
     }
 
     #[test]
+    fn a_prepared_version_gets_a_data_file_that_holds_its_files() {
+        use horizon_core::prepared_files::FILE_NAME;
+        let resources =
+            std::env::temp_dir().join(format!("horizon-launcher-data-file-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&resources);
+        let recipe = resources.join("data/minecraft/recipe/stick.json");
+        fs::create_dir_all(recipe.parent().unwrap()).unwrap();
+        fs::write(&recipe, "{\"stick\":1}").unwrap();
+
+        // Not prepared yet: nothing to hold.
+        write_data_file(&resources).unwrap();
+        assert!(!resources.join(FILE_NAME).exists());
+
+        fs::write(resources.join(RESOURCES_MANIFEST), "{}").unwrap();
+        write_data_file(&resources).unwrap();
+        let written = fs::read(resources.join(FILE_NAME)).unwrap();
+        let held = b"{\"stick\":1}";
+        assert!(written.windows(held.len()).any(|w| w == held));
+
+        // One already there stays: the game judges whether it can use it.
+        fs::write(resources.join(FILE_NAME), "kept").unwrap();
+        write_data_file(&resources).unwrap();
+        assert_eq!(fs::read(resources.join(FILE_NAME)).unwrap(), b"kept");
+        fs::remove_dir_all(&resources).unwrap();
+    }
+
+    #[test]
     fn a_new_version_reuses_resources_prepared_by_a_compatible_one() {
         let versions =
             std::env::temp_dir().join(format!("horizon-launcher-test-{}", std::process::id()));
@@ -6368,6 +6427,13 @@ pub fn {f}("
         prepared("v2026.10.13", "26.3");
         release("v2026.10.12", "26.2");
         prepared("v2026.10.12", "26.2");
+        // A data file names its own root: the new version writes its own.
+        let data_file = horizon_core::prepared_files::FILE_NAME;
+        write(
+            "v2026.10.13",
+            &format!(".local/horizon-client/26.3/{data_file}"),
+            "written for v2026.10.13",
+        );
         release("v2026.10.13.1", "26.3");
         assert_eq!(
             reuse_prepared(&versions, "v2026.10.13.1"),
@@ -6376,6 +6442,12 @@ pub fn {f}("
         assert!(is_prepared("v2026.10.13.1"));
         assert!(resources_at(&versions.join("v2026.10.13.1"))
             .join("worldgen/biomes.json")
+            .exists());
+        assert!(!resources_at(&versions.join("v2026.10.13.1"))
+            .join(data_file)
+            .exists());
+        assert!(resources_at(&versions.join("v2026.10.13"))
+            .join(data_file)
             .exists());
         let left: Vec<_> = fs::read_dir(versions.join("v2026.10.13.1/.local/horizon-client"))
             .unwrap()
@@ -6678,12 +6750,21 @@ pub fn {f}("
 
         // Resources prepared without any of them: a folder without an asset store is skipped.
         release("v0.2.1", true);
+        let data_file = horizon_core::prepared_files::FILE_NAME;
+        write(
+            resources_at(&versions.join("v0.2.1")).join(data_file),
+            b"older",
+        );
         complete_assets_in(
             &versions,
             "v0.2.1",
             || vec![empty.clone(), store.clone()],
             &log,
         );
+        // Written before them, it would answer "missing" for what was just added.
+        assert!(!resources_at(&versions.join("v0.2.1"))
+            .join(data_file)
+            .exists());
         assert_eq!(
             *lines.borrow(),
             [
@@ -6704,8 +6785,16 @@ pub fn {f}("
         // No asset store anywhere: one line each, the version stays prepared, and no second try.
         lines.borrow_mut().clear();
         release("v0.2.2", true);
+        write(
+            resources_at(&versions.join("v0.2.2")).join(data_file),
+            b"kept",
+        );
         complete_assets_in(&versions, "v0.2.2", || vec![empty.clone()], &log);
         complete_assets_in(&versions, "v0.2.2", || vec![empty.clone()], &log);
+        // Nothing was added: its data file is still good.
+        assert!(resources_at(&versions.join("v0.2.2"))
+            .join(data_file)
+            .exists());
         let what = lines
             .borrow()
             .iter()

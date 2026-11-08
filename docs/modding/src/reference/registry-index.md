@@ -202,7 +202,7 @@ a separate per-pin source and check cache in the launcher's `native/internals-sy
 never in the normal game or prebuilt target directories. The pin's source must be cached or
 downloadable; an unavailable source is `E_INTERNAL_SOURCE_UNAVAILABLE`, not a fallback to another
 pin. Compiler or catalog errors leave the manifest untouched. Raw listeners retain their generated
-typed constructors; source-spliced helper/module injections are explicitly refused, so their
+typed constructors; source-routed listeners and support modules are explicitly refused, so their
 manually declared internals cannot be accidentally removed. Use `internals add` for those mods.
 
 `internals add` and `update` download the same prebuilt archive layout as the launcher, check its `SHA256SUMS`, and

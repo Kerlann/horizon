@@ -835,13 +835,16 @@ fn server_reload_retains_listeners_for_other_hooks() {
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn server_completion_reads_published_data_without_world_access_on_first_open() {
     use mod_api::__private::{ModPhase, PhaseOwner};
-    use mod_api::{ServerDataLoadedEvent, ServerHost};
+    use mod_api::{HostSide, TagsUpdateCause, TagsUpdatedEvent};
     use std::panic::{AssertUnwindSafe, catch_unwind};
 
-    struct Probe(Arc<Mutex<Vec<bool>>>);
+    struct Probe(Arc<Mutex<Vec<TagsUpdateCause>>>);
     #[mod_api::__subscriptions]
     impl Hooks for Probe {
-        fn server_data_loaded(&self, host: &mut dyn ServerHost, event: &mut ServerDataLoadedEvent) {
+        fn tags_updated(&self, host: HostSide<'_>, event: &mut TagsUpdatedEvent) {
+            let HostSide::Server(host) = host else {
+                panic!("a data load is the server's");
+            };
             assert!(!host.recipes_of_type("minecraft:smelting").is_empty());
             let refused =
                 catch_unwind(AssertUnwindSafe(|| host.level("minecraft:overworld"))).unwrap_err();
@@ -851,7 +854,7 @@ fn server_completion_reads_published_data_without_world_access_on_first_open() {
                 .or_else(|| refused.downcast_ref::<&str>().copied())
                 .unwrap();
             assert!(text.contains("Reloading"), "{text}");
-            self.0.lock().unwrap().push(event.reload);
+            self.0.lock().unwrap().push(event.cause);
         }
     }
     let seen = Arc::new(Mutex::new(Vec::new()));
@@ -867,9 +870,15 @@ fn server_completion_reads_published_data_without_world_access_on_first_open() {
             game.load_world(request(&root)).unwrap();
             assert_eq!(mod_api::__private::current_phase(), ModPhase::Setup);
             game.mod_phase = PhaseOwner::new(ModPhase::World);
-            game.native_server_data_loaded(true);
+            game.native_tags_updated(TagsUpdateCause::ServerDataLoad { reload: true });
             assert_eq!(mod_api::__private::current_phase(), ModPhase::World);
-            assert_eq!(*seen.lock().unwrap(), [false, true]);
+            assert_eq!(
+                *seen.lock().unwrap(),
+                [
+                    TagsUpdateCause::ServerDataLoad { reload: false },
+                    TagsUpdateCause::ServerDataLoad { reload: true },
+                ]
+            );
         })
     });
 }

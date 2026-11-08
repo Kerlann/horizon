@@ -327,7 +327,7 @@ mod tests {
                 .arg("--manifest-path")
                 .arg(dir.join("Cargo.toml"))
                 .env("CARGO_TARGET_DIR", dir.join("target"));
-            let error = super::super::logged(|| {
+            let error = super::super::logged(|_| {
                 super::super::run_checked(
                     command,
                     "Compiling the fixture",

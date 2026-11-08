@@ -110,8 +110,8 @@ pub(super) struct Mods {
     /// The selected instance's native build state, and the `native_status::fingerprint` it was
     /// read for: read again only when that changes.
     pub(super) native_state: std::cell::RefCell<Option<(String, native_status::State)>>,
-    /// Each native mod's route under the chosen build mode, and what it was read for.
-    pub(super) native_routes: std::cell::RefCell<Option<(String, native_mods::Routes)>>,
+    /// Native routes read by a worker for this instance's files, consent and game version.
+    pub(super) native_routes: std::cell::RefCell<Option<crate::build_mode::RouteMemo>>,
     /// Installed wasm declarations, reread only when the instance's files or enable list change.
     /// The mod whose route menu is open.
     pub(super) route_open: Option<String>,

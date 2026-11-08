@@ -185,6 +185,8 @@ impl Game<'_> {
             .map(|m| super::creatures::seen(m, self.level.player_uuid))
             .collect();
         let mut mobs = self.mobs.lift();
+        #[cfg(test)]
+        super::entity::taken_pass_tests::after_take(self);
         let mut lent = horizon_client::health::LentLevel::take(&mut self.world);
         let mut w = self.mob_world_base(&snapshot);
         let pos = mobs[index].position;
@@ -221,7 +223,8 @@ impl Game<'_> {
         };
         drop(w);
         lent.give_back(&mut self.world);
-        self.mobs = mobs;
+        self.mobs
+            .restore(mobs, horizon_client::join_seq::RestoreOrder::SurvivorsFirst);
         self.handle_mob_events(events).ok();
         removed
     }
@@ -850,7 +853,9 @@ mod tests {
                 }
             ));
             // Remove: the species' melee attack goes, and only that one.
-            assert_eq!(zombie.remove_goal(game, "melee_attack"), Some(1));
+            crate::game::entity::taken_pass_tests::assert_mob_spawn_survives(game, |game| {
+                assert_eq!(zombie.remove_goal(game, "melee_attack"), Some(1));
+            });
             assert!(!has(game, zombie, "melee_attack"));
             assert_eq!(zombie.remove_goal(game, "melee_attack"), Some(0));
             assert_eq!(zombie.remove_target_goal(game, "hurt_by_target"), Some(1));

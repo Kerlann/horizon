@@ -2848,6 +2848,8 @@ dependencies = [
 name = "horizon-mod-package"
 version = "0.1.0"
 dependencies = [
+ "cap-std",
+ "flate2",
  "horizon-core",
  "horizon-shader-api",
  "log",
@@ -2857,6 +2859,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "tar",
  "toml 1.1.8+spec-1.1.0",
  "wasmparser",
  "zip",

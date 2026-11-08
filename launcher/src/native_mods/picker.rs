@@ -80,9 +80,17 @@ impl Profile {
     /// A saved choice applies only while its picker is visible; otherwise use the prebuilt route.
     pub fn for_picker(self, routes: &Routes, folders: bool, developer_mode: bool) -> Self {
         if needs_picker(routes, folders, developer_mode) {
-            self
+            self.picker_choice(developer_mode)
         } else {
             Self::Optimized
+        }
+    }
+
+    /// Developer is offered only while its switch is on; keep the saved preference intact.
+    pub fn picker_choice(self, developer_mode: bool) -> Self {
+        match (self, developer_mode) {
+            (Self::Developer, false) => Self::Balanced,
+            _ => self,
         }
     }
 }
@@ -98,12 +106,19 @@ mod tests {
                 mods,
                 unavailable: None,
             };
-            for saved in Profile::ALL {
+            for (saved, ordinary) in [
+                (Profile::Optimized, Profile::Optimized),
+                (Profile::Balanced, Profile::Balanced),
+                (Profile::Developer, Profile::Balanced),
+            ] {
                 assert!(!needs_picker(&routes, false, false));
                 assert_eq!(saved.for_picker(&routes, false, false), Profile::Optimized);
                 for (folders, developer) in [(true, false), (false, true), (true, true)] {
                     assert!(needs_picker(&routes, folders, developer));
-                    assert_eq!(saved.for_picker(&routes, folders, developer), saved);
+                    assert_eq!(
+                        saved.for_picker(&routes, folders, developer),
+                        if developer { saved } else { ordinary }
+                    );
                 }
             }
         }

@@ -422,7 +422,7 @@ const LOW_IO: libc::c_long = (2 << 13) | 7;
 /// Runs `cmd` (a build) below the player's own programs, so the desktop and a game in play stay
 /// smooth while it compiles; with the computer otherwise idle it still gets every core. Unix: nice
 /// 19, and on Linux the lowest best-effort I/O level (not the idle class, which gets the disk only
-/// when nothing else uses it, so a game streaming chunks could stall a build for minutes);
+/// when nothing else uses it, so a game streaming chunks could stall a build);
 /// Windows: below-normal priority, keeping [`crate::process::hide_console`]'s no-console flag
 /// (`creation_flags` sets the whole value, so this sets both).
 pub fn low_priority(cmd: &mut Command) -> &mut Command {
@@ -842,7 +842,7 @@ pub fn blocked_by_app_control(text: &str) -> bool {
 /// headless server build links none of those (`--no-default-features`, docs/server.md).
 /// Desktop distributions ship the libraries but not these files, and SteamOS has GCC without
 /// the C library's headers (`stdint.h` not found in `ring`, #4770), so a build without them
-/// failed minutes in. `ok` runs a check; `os` is `/etc/os-release`, which picks the install
+/// failed after starting. `ok` runs a check; `os` is `/etc/os-release`, which picks the install
 /// command.
 fn linux_needs(ok: impl Fn(&str, &[&str]) -> bool, os: &str, full: bool) -> Result<(), String> {
     let cc = ok("cc", &["--version"]);

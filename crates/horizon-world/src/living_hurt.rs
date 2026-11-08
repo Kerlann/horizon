@@ -132,20 +132,63 @@ fn after_pre<S>(s: &mut HurtState<S>, container: &DamageContainer, cooldown: i32
         s.cooldown = ticks;
     }
 }
+/// A hit stopped where `hurtServer` calls `hurtHelmet`: what its guards, the incoming damage
+/// and the block left. It owns no borrow, so a caller can wear the helmet on a world
+/// [`hurt_until_helmet`] could not reach, then resume with [`hurt_after_helmet`], which runs
+/// none of that again.
+#[derive(Clone, Copy, Debug)]
+pub struct PendingHurt<U> {
+    pub(crate) container: DamageContainer,
+    damage: f32,
+    original: f32,
+    item: U,
+    blocked_amount: f32,
+    helmet: bool,
+}
+impl<U> PendingHurt<U> {
+    /// What `hurtHelmet` is given, if the source damages a helmet and one is worn.
+    pub fn helmet_damage(&self) -> Option<f32> {
+        self.helmet.then_some(self.damage)
+    }
+}
 pub fn hurt_server<W: HurtWorld>(
     s: &mut HurtState<W::Source>,
     w: &mut W,
-    mut damage: f32,
+    damage: f32,
 ) -> Result<bool, W::Error> {
-    if w.invulnerable(s)? || w.dead_or_dying(s)? {
+    let hit = hurt_until_helmet(s, w, damage)?;
+    hurt_from_helmet(s, w, hit)
+}
+/// The rest of a hit [`hurt_until_helmet`] left, with `w` wearing the helmet; false for one it
+/// refused.
+pub fn hurt_from_helmet<W: HurtWorld>(
+    s: &mut HurtState<W::Source>,
+    w: &mut W,
+    hit: Option<PendingHurt<W::UseItem>>,
+) -> Result<bool, W::Error> {
+    let Some(hit) = hit else {
         return Ok(false);
+    };
+    if let Some(damage) = hit.helmet_damage() {
+        w.hurt_helmet(s, damage)?;
+    }
+    hurt_after_helmet(s, w, hit)
+}
+/// `hurtServer` up to `hurtHelmet`; none for a hit refused on the way.
+pub fn hurt_until_helmet<W: HurtWorld>(
+    s: &mut HurtState<W::Source>,
+    w: &mut W,
+    mut damage: f32,
+) -> Result<Option<PendingHurt<W::UseItem>>, W::Error> {
+    if w.invulnerable(s)? || w.dead_or_dying(s)? {
+        return Ok(None);
     }
     if w.tag(s, HurtTag::Fire)? && w.fire_resistance(s)? {
-        return Ok(false);
+        return Ok(None);
     }
     let mut container = DamageContainer::new(damage);
     if w.hurt_start(s, &mut container)? {
-        return Ok(false);
+        return Ok(None);
     }
     damage = container.new_damage();
     if w.sleeping(s)? {
@@ -159,37 +202,101 @@ pub fn hurt_server<W: HurtWorld>(
     let item = w.use_item(s)?;
     let blocked_amount = w.apply_blocking(s, damage)?;
     damage -= blocked_amount;
-    let blocked = blocked_amount > 0.0;
     container.record_block(blocked_amount);
     if w.tag(s, HurtTag::Freezing)? && w.freeze_hurts_extra(s)? {
         damage *= 5.0;
     }
-    if w.tag(s, HurtTag::DamagesHelmet)? && !w.helmet_empty(s)? {
-        w.hurt_helmet(s, damage)?;
-        damage *= 0.75;
+    let helmet = w.tag(s, HurtTag::DamagesHelmet)? && !w.helmet_empty(s)?;
+    Ok(Some(PendingHurt {
+        container,
+        damage,
+        original,
+        item,
+        blocked_amount,
+        helmet,
+    }))
+}
+/// `hurtServer` from just after `hurtHelmet`, on the live state.
+pub fn hurt_after_helmet<W: HurtWorld>(
+    s: &mut HurtState<W::Source>,
+    w: &mut W,
+    hit: PendingHurt<W::UseItem>,
+) -> Result<bool, W::Error> {
+    let Some(mut selected) = select_equipment_hurt(s, w, hit)? else {
+        return Ok(false);
+    };
+    w.actually_hurt(s, &mut selected.hit.container, selected.damage)?;
+    finish_equipment_hurt(s, w, selected)
+}
+/// A cooldown decision retained while the owner wears ordinary equipment.
+#[derive(Debug)]
+pub struct SelectedHurt<U> {
+    pub hit: PendingHurt<U>,
+    pub damage: f32,
+    fresh: bool,
+    cooldown: i32,
+}
+pub fn select_equipment_hurt<W: HurtWorld>(
+    s: &mut HurtState<W::Source>,
+    w: &mut W,
+    mut hit: PendingHurt<W::UseItem>,
+) -> Result<Option<SelectedHurt<W::UseItem>>, W::Error> {
+    if hit.helmet {
+        hit.damage *= 0.75;
     }
-    if !damage.is_finite() {
-        damage = f32::MAX;
+    if !hit.damage.is_finite() {
+        hit.damage = f32::MAX;
     }
     let fresh = !(s.cooldown as f32 > 10.0 && !w.tag(s, HurtTag::BypassesCooldown)?);
-    container.record_should_cause_side_effects(fresh);
-    if !fresh {
-        if damage <= s.last_hurt {
-            return Ok(false);
-        }
-        container.record_reduction(Reduction::Invulnerability, s.last_hurt);
-        let cooldown = s.cooldown;
-        container.set_post_attack_invulnerability_ticks(cooldown);
-        w.actually_hurt(s, &mut container, damage - s.last_hurt)?;
-        s.last_hurt = damage;
-        after_pre(s, &container, cooldown);
-    } else {
-        // A fresh hit's cooldown: vanilla's 20, or what `LivingIncomingDamageEvent` set.
-        let cooldown = container.post_attack_invulnerability_ticks();
-        s.last_hurt = damage;
+    hit.container.record_should_cause_side_effects(fresh);
+    let (damage, cooldown) = if fresh {
+        let cooldown = hit.container.post_attack_invulnerability_ticks();
+        s.last_hurt = hit.damage;
         s.cooldown = cooldown;
-        w.actually_hurt(s, &mut container, damage)?;
-        after_pre(s, &container, cooldown);
+        (hit.damage, cooldown)
+    } else {
+        if hit.damage <= s.last_hurt {
+            return Ok(None);
+        }
+        hit.container
+            .record_reduction(Reduction::Invulnerability, s.last_hurt);
+        let cooldown = s.cooldown;
+        hit.container
+            .set_post_attack_invulnerability_ticks(cooldown);
+        (hit.damage - s.last_hurt, cooldown)
+    };
+    Ok(Some(SelectedHurt {
+        hit,
+        damage,
+        fresh,
+        cooldown,
+    }))
+}
+pub fn finish_equipment_hurt<W: HurtWorld>(
+    s: &mut HurtState<W::Source>,
+    w: &mut W,
+    selected: SelectedHurt<W::UseItem>,
+) -> Result<bool, W::Error> {
+    let SelectedHurt {
+        hit,
+        fresh,
+        cooldown,
+        ..
+    } = selected;
+    let PendingHurt {
+        container,
+        damage,
+        original,
+        item,
+        blocked_amount,
+        ..
+    } = hit;
+    let blocked = blocked_amount > 0.0;
+    if !fresh {
+        s.last_hurt = damage;
+    }
+    after_pre(s, &container, cooldown);
+    if fresh {
         s.hurt_duration = 10;
         s.hurt_time = s.hurt_duration;
     }

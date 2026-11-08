@@ -16,6 +16,17 @@ const MIN_TAG_COST: usize = 8;
 /// take ~32 bytes each here; capped, one value's tags take at most ~8 MiB.
 pub const NBT_MAX_TAGS: usize = NBT_QUOTA / MIN_TAG_COST;
 
+/// Whether a peer can read `tag` as network NBT: written within [`NBT_QUOTA`], then read back by
+/// [`Reader::nbt`] under the receiver's own limits (`NbtAccounter.defaultQuota` and its tag count).
+pub fn check_network_nbt(tag: &Tag) -> Result<()> {
+    let limits = nbt::Limits {
+        max_bytes: NBT_QUOTA,
+        ..nbt::Limits::default()
+    };
+    let bytes = nbt::write_network(tag, limits).map_err(|e| Error::new(format!("NBT: {e}")))?;
+    Reader::new(&bytes).nbt().map(drop)
+}
+
 /// A cursor over a received packet body.
 pub struct Reader<'a> {
     data: &'a [u8],
