@@ -335,6 +335,14 @@ pub fn effects_color<'a>(effects: impl Iterator<Item = (&'a str, i32)>) -> u32 {
         _ => BASE_POTION_COLOR,
     }
 }
+/// Borrow an effect by its completed engine registry index.
+pub fn effect_by_index(index: usize) -> Option<&'static EffectDef> {
+    if index < EFFECTS.len() {
+        EFFECTS.get(index)
+    } else {
+        mod_effects().get(index - EFFECTS.len())
+    }
+}
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -390,14 +398,5 @@ mod tests {
         let ids: Vec<_> = all_effects().map(|e| e.id).collect();
         assert_eq!(ids.len(), EFFECTS.len() + 1);
         assert_eq!(ids.last(), Some(&"ruby:glow"));
-    }
-}
-
-/// Borrow an effect by its completed engine registry index.
-pub fn effect_by_index(index: usize) -> Option<&'static EffectDef> {
-    if index < EFFECTS.len() {
-        EFFECTS.get(index)
-    } else {
-        mod_effects().get(index - EFFECTS.len())
     }
 }
