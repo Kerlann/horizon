@@ -911,10 +911,12 @@ mod order_tests {
             game.push_piston_entities(pushes);
             moved.push(game.tnts[0].position.x - before);
         }
-        // The near stone's box reaches x 5.5 into a TNT from x 5.01: 0.49 plus
-        // PUSH_OFFSET; the far stone's old box stops it at x 6.
+        // The near stone's box reaches the TNT's centre at x 5.5: half its
+        // vanilla EntityTypes.TNT width (0.98F, widened to double) plus
+        // PUSH_OFFSET. The far stone's old box stops it at x 6.
+        let expected = f64::from(0.98_f32) * 0.5 + 0.01;
         assert!(
-            (moved[0] - 0.5).abs() < 1e-9,
+            (moved[0] - expected).abs() < 1e-9,
             "far stone gone first: {}",
             moved[0]
         );

@@ -99,7 +99,6 @@ horizon-client game::persist::baby_modifier_mutation_tests::the_baby_speed_modif
 horizon-client game::persist::sulfur_body_attribute_tests::a_bodiless_cube_keeps_its_command_knockback_resistance_effect #2185
 horizon-client game::persist::sulfur_body_attribute_tests::command_knockback_changes_reach_the_cache_without_archetype_values #2185
 horizon-client game::potions::mob_absorption_max_tests::absorption_follows_the_max_absorption_it_adds_and_leaves #2185
-horizon-client game::piston_push::order_tests::a_pushed_entity_meets_the_other_moving_blocks_as_they_are_at_its_push #2186
 horizon-client game::piston_push::order_tests::a_pushed_tnt_bounces_on_slime #2186
 horizon-client game::potent_sulfur::pass_tests::nausea_listener_moving_a_mob_invalidates_the_pass_grid #2186
 horizon-client game::potions::tests::lifecycle_cloud_commands_and_parked_owners #2186
