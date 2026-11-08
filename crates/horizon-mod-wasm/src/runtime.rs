@@ -89,6 +89,10 @@ pub(crate) struct State {
     phase_previous: std::collections::BTreeMap<(u32, usize), Option<(u32, u64, Instant)>>,
     #[cfg(feature = "boundary-profile")]
     phase_stats: std::collections::BTreeMap<(u32, u32), (u64, u64, u128)>,
+    #[cfg(feature = "boundary-profile")]
+    delay_import: Option<u32>,
+    #[cfg(feature = "boundary-profile")]
+    host_export_ns: std::collections::BTreeMap<u32, (u64, u128, u128, u128)>,
     group: usize,
     lending: Arc<AtomicUsize>,
 }
@@ -127,6 +131,10 @@ impl Default for State {
             phase_previous: Default::default(),
             #[cfg(feature = "boundary-profile")]
             phase_stats: Default::default(),
+            #[cfg(feature = "boundary-profile")]
+            delay_import: None,
+            #[cfg(feature = "boundary-profile")]
+            host_export_ns: Default::default(),
             group: 0,
             lending: Arc::default(),
         }
@@ -394,6 +402,10 @@ fn host(
                 return Err(WireError::Trailing.into());
             }
             let fuel = caller.as_context_mut().get_fuel().ok();
+            eprintln!(
+                "diagnostic host export (calls, encode ns, invoke ns, decode ns): {:?}",
+                caller.data().host_export_ns
+            );
             let n = caller
                 .data()
                 .export_stats
@@ -432,6 +444,13 @@ fn host(
             }
         }
         return Ok(0);
+    }
+    #[cfg(feature = "boundary-profile")]
+    if caller.data().delay_import == Some(id) {
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_micros(1) {
+            std::hint::spin_loop();
+        }
     }
     let end = (ptr as usize)
         .checked_add(len as usize)
@@ -658,6 +677,10 @@ impl WasmMod {
                 Ok(wasmtime::UpdateDeadline::Continue(1))
             });
         }
+        #[cfg(feature = "boundary-profile")]
+        if std::env::var_os("BENCH_DELAY_IMPORT").is_some() {
+            group.store.data_mut().delay_import = crate::boundary::import_id("Host", "dimension");
+        }
         group.store.data_mut().memory = Some(group.memory);
         let mut exports = Vec::new();
         for (name, instance) in group.members.clone() {
@@ -849,13 +872,32 @@ impl WasmMod {
                 }
             }
             w.clear();
+            #[cfg(feature = "boundary-profile")]
+            let start = Instant::now();
             if let Some(handler) = handler {
                 w.put(&handler);
             }
             args(&mut w);
+            #[cfg(feature = "boundary-profile")]
+            let encoded_ns = start.elapsed().as_nanos();
+            #[cfg(feature = "boundary-profile")]
+            let start = Instant::now();
             self.invoke(&mut store, id, &w, &mut output)?;
+            #[cfg(feature = "boundary-profile")]
+            let invoked_ns = start.elapsed().as_nanos();
+            #[cfg(feature = "boundary-profile")]
+            let start = Instant::now();
             let mut r = Reader::new(&output);
             let value = reply(&mut r)?;
+            #[cfg(feature = "boundary-profile")]
+            {
+                let decoded_ns = start.elapsed().as_nanos();
+                let stats = store.data_mut().host_export_ns.entry(id).or_default();
+                stats.0 += 1;
+                stats.1 += encoded_ns;
+                stats.2 += invoked_ns;
+                stats.3 += decoded_ns;
+            }
             if !r.rest().is_empty() {
                 return Err(WireError::Trailing.into());
             }
