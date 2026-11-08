@@ -85,13 +85,12 @@ impl Plan {
             return Err("field grant without receiver".into());
         }
         let selected: BTreeSet<_> = grants.iter().map(|g| (g.case, g.ordinal)).collect();
-        if let Some(id) = receiver {
-            if selected
+        if let Some(id) = receiver
+            && selected
                 .iter()
                 .any(|g| !layouts[id].fields.iter().any(|f| (f.case, f.ordinal) == *g))
-            {
-                return Err("unknown receiver member".into());
-            }
+        {
+            return Err("unknown receiver member".into());
         }
         let mut fields = vec![HashSet::new(); layouts.len()];
         let mut reachable = BTreeSet::new();
