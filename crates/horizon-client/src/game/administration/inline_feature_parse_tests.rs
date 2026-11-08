@@ -43,7 +43,7 @@ fn game() -> Game<'static> {
     .unwrap();
     // As a world opens: the live features are installed while it is
     // prepared, then its registries are built (`load_world_state`).
-    growth::install_live_features(&game.res, &game.pack, &game.options);
+    growth::install_live_features(&game.res, &game.pack, &game.options, &Default::default());
     assert!(
         game.res.behaviours().live_features().is_some(),
         "live features"

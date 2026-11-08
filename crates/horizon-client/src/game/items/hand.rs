@@ -55,7 +55,7 @@ fn reach_pick(
 /// `AttackRange.isInRange`: float bounds, then inclusive double comparison.
 fn attack_range_contains(range: &serde_json::Value, distance: f64, creative: bool) -> bool {
     let (min, max, margin) = attack_reach(range, creative);
-    distance >= f64::from(min - margin) && distance <= f64::from(max + margin)
+    in_attack_range(distance, (min, max, margin), 0.0)
 }
 
 /// `FirstPersonHandsAndItems.shouldInstantlyReplaceVisibleItem`'s
@@ -97,7 +97,12 @@ pub(super) fn matches_for_swap(a: Option<&ItemStack>, b: Option<&ItemStack>) -> 
 /// `attack_reach` (or `AttackRange.defaultFor`'s, from the entity interaction
 /// range): the eye's distance to the box, inclusive.
 fn in_attack_range(distance: f64, (min, max, margin): (f32, f32, f32), buffer: f64) -> bool {
-    distance >= f64::from(min - margin) - buffer && distance <= f64::from(max + margin) + buffer
+    mod_api::ItemAttackRange {
+        min,
+        max,
+        hitbox_margin: margin,
+    }
+    .contains(distance, buffer)
 }
 
 impl Game<'_> {
@@ -126,7 +131,22 @@ impl Game<'_> {
         let Some(eye) = self.eye_position() else {
             return false;
         };
-        let range = self.held().and_then(|stack| {
+        let stack = self.held().cloned();
+        let default = self.interaction_range("minecraft:entity_interaction_range", 3.0, 5.0);
+        let reach = self.stack_attack_range(stack.as_ref(), true, self.creative, default);
+        let distance = target.distance_squared_to_point(v3(eye)).sqrt();
+        reach.contains(distance, 3.0)
+    }
+
+    /// The same effective component view for a detached stack and normal held-stack attacks.
+    pub(super) fn stack_attack_range(
+        &self,
+        stack: Option<&ItemStack>,
+        player: bool,
+        creative: bool,
+        default: f64,
+    ) -> mod_api::ItemAttackRange {
+        let range = stack.and_then(|stack| {
             self.pack
                 .item_renderer
                 .models
@@ -134,15 +154,19 @@ impl Game<'_> {
                 .get("minecraft:attack_range")
                 .cloned()
         });
-        let reach = match &range {
-            Some(r) => attack_reach(r, self.creative),
-            None => {
-                let range = self.interaction_range("minecraft:entity_interaction_range", 3.0, 5.0);
-                (0.0, range as f32, 0.0)
-            }
-        };
-        let distance = target.distance_squared_to_point(v3(eye)).sqrt();
-        in_attack_range(distance, reach, 3.0)
+        let (mut min, mut max, hitbox_margin) = range
+            .as_ref()
+            .map_or((0.0, default as f32, 0.0), |r| attack_reach(r, creative));
+        if !player && let Some(range) = &range {
+            let factor = range["mob_factor"].as_f64().unwrap_or(1.0) as f32;
+            min *= factor;
+            max *= factor;
+        }
+        mod_api::ItemAttackRange {
+            min,
+            max,
+            hitbox_margin,
+        }
     }
 
     /// `Player.isWithinEntityInteractionRange(box, buffer)` for the player in

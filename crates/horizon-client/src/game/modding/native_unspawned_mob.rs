@@ -35,6 +35,14 @@ static NEXT_LEND: AtomicU64 = AtomicU64::new(1);
 #[derive(Default)]
 pub(in crate::game) struct LentMobs(Vec<Lent>);
 
+#[cfg(test)]
+impl LentMobs {
+    /// Whether no lend is open.
+    pub(in crate::game) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
 /// One lend: the handle's numbers, what every lend answers, and the copy of the
 /// mob when the game keeps one (not for the ender dragon).
 struct Lent {

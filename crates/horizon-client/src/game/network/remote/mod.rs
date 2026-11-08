@@ -2613,18 +2613,18 @@ impl Game<'_> {
         keep_world: bool,
         reason: horizon_client::level_loading::Reason,
     ) {
-        // A level past the three built-in ones has the sea level its server says
-        // (`CommonPlayerSpawnInfo.seaLevel`); the built-in levels' are fixed.
-        if let Ok(key) = horizon_core::LevelKey::parse(&spawn.dimension)
-            && !matches!(
+        // Every level has the sea level its server says (`CommonPlayerSpawnInfo.seaLevel`): the
+        // table may still hold a local world's (a superflat Overworld's).
+        if let Ok(key) = horizon_core::LevelKey::parse(&spawn.dimension) {
+            horizon_world::level::register_sea_level(key, spawn.sea_level);
+            if !matches!(
                 key,
                 horizon_core::LevelKey::OVERWORLD
                     | horizon_core::LevelKey::NETHER
                     | horizon_core::LevelKey::END
-            )
-        {
-            horizon_world::level::register_sea_level(key, spawn.sea_level);
-            Dim::add_extra(&spawn.dimension);
+            ) {
+                Dim::add_extra(&spawn.dimension);
+            }
         }
         // The replacement player starts with its inventory menu, even if the
         // server switched levels without closing the previous container.
@@ -2928,8 +2928,10 @@ impl Game<'_> {
         let block = self.world.block(pos[0], pos[1], pos[2]);
         if let Some(BlockEntity::Mod(m)) = self.world.block_entities.get_mut(&key) {
             if m.id() == name
-                && horizon_client::block_entity_types::type_for(&self.res.facts().get(block).name)
-                    == Some(name)
+                && horizon_client::block_entity_types::valid(
+                    &self.res.facts().get(block).name,
+                    name,
+                ) == Some(true)
             {
                 m.merge_update_tag(fields);
             }

@@ -19,6 +19,27 @@ impl std::fmt::Display for NativeComponentError {
 }
 impl std::error::Error for NativeComponentError {}
 
+/// Use the attack calculations with a private RNG snapshot, never the world's live source.
+fn stack_attack_bonus_preview(
+    enchantments: &horizon_items::enchant::Enchantments,
+    stack: &ItemStack,
+    ctx: &horizon_items::enchant::EffectContext<'_>,
+    random: &horizon_core::random::LegacyRandom,
+    base: f32,
+) -> f32 {
+    let mut random = random.clone();
+    let enchanted =
+        super::enchant_effects::stack_enchanted_damage(enchantments, stack, ctx, &mut random, base)
+            - base;
+    let (fall, flying) = ctx.direct_motion.unwrap_or_default();
+    let smash = if &*stack.item == "minecraft:mace" && super::mace::can_smash(fall, flying) {
+        super::mace::stack_smash_damage(enchantments, stack, fall, ctx, &mut random)
+    } else {
+        0.0
+    };
+    enchanted + smash
+}
+
 impl Game<'_> {
     /// Item `item`'s default value of component `component`, in its prototype
     /// (`Item.components().get`): `minecraft:max_damage` on an iron sword is `250`, data
@@ -140,6 +161,162 @@ impl Game<'_> {
             .and_then(horizon_items::properties::component_int)?;
         horizon_items::properties::damage_bar(damage, max_damage)
     }
+    /// Actor state shared by detached stack queries, without swapping equipment or players.
+    fn item_combat_actor(&self, actor: mod_api::LivingRef) -> Option<(bool, bool, f64, bool)> {
+        use super::commands::Target;
+        let target = self.native_living_read_target(actor)?;
+        Some(match target {
+            Target::Player => {
+                let p = self.player.as_ref()?;
+                (true, self.creative, p.fall_distance, p.fall_flying)
+            }
+            Target::Guest(conn) => {
+                let guest = self.command_guest(conn)?;
+                let p = guest.motion.as_ref()?;
+                (true, guest.creative(), p.fall_distance, p.fall_flying)
+            }
+            Target::Mob(id) => {
+                let mob = self.mobs.iter().find(|m| m.id == id && !m.removed)?;
+                (false, false, mob.fall_distance, mob.extra.fall_flying)
+            }
+            Target::Stand(_) | Target::Dragon(_) => (false, false, 0.0, false),
+            _ => return None,
+        })
+    }
+    /// Effective components, including defaults and removals, in the gameplay component view.
+    pub(in crate::game) fn item_combat_component(
+        &self,
+        stack: &ItemStack,
+        id: &str,
+    ) -> Option<serde_json::Value> {
+        self.pack
+            .item_renderer
+            .models
+            .components_view(&horizon_client::item_render::stack_view(stack))
+            .get(id)
+            .cloned()
+    }
+    pub(in crate::game) fn item_resource_entity_attack_range(
+        &self,
+        stack: &ItemStack,
+        attacker: mod_api::LivingRef,
+    ) -> Option<mod_api::ItemAttackRange> {
+        self.items().get(&stack.item)?;
+        let (player, creative, _, _) = self.item_combat_actor(attacker)?;
+        let default =
+            self.living_attribute_value(attacker, "minecraft:entity_interaction_range")?;
+        Some(self.stack_attack_range(Some(stack), player, creative, default))
+    }
+    pub(in crate::game) fn item_resource_damage_source(
+        &self,
+        stack: &ItemStack,
+        attacker: mod_api::LivingRef,
+    ) -> Option<mod_api::ItemDamageSource> {
+        self.items().get(&stack.item)?;
+        let (player, _, fall, flying) = self.item_combat_actor(attacker)?;
+        let name = self.stack_melee_damage_type(Some(stack), (fall, flying), player);
+        self.health_resources.damage.id(&name)?;
+        Some(mod_api::ItemDamageSource {
+            damage_type: mod_api::Identifier::parse(&name).ok()?,
+            direct: Some(attacker.entity()),
+            causing: Some(attacker.entity()),
+            position: None,
+        })
+    }
+    pub(in crate::game) fn item_resource_can_be_hurt_by(
+        &self,
+        stack: &ItemStack,
+        source: &mod_api::ItemDamageSource,
+    ) -> Option<bool> {
+        self.stack_can_be_hurt_by(stack, &source.damage_type.to_string())
+    }
+    /// `ItemStack.canBeHurtBy`, shared by armour wear and detached stack reads.
+    pub(in crate::game) fn stack_can_be_hurt_by(
+        &self,
+        stack: &ItemStack,
+        name: &str,
+    ) -> Option<bool> {
+        self.items().get(&stack.item)?;
+        let catalog = &self.health_resources.damage;
+        let damage = catalog.id(name)?;
+        let component = self.item_combat_component(stack, "minecraft:damage_resistant");
+        let matches = |id: &str| {
+            let (tag, id) = id.strip_prefix('#').map_or((false, id), |id| (true, id));
+            let Ok(id) = horizon_core::identifier::Identifier::parse(id) else {
+                return false;
+            };
+            let id = id.to_string();
+            if tag {
+                catalog.in_tag(damage, &id)
+            } else {
+                id == name
+            }
+        };
+        let resistant = component
+            .as_ref()
+            .and_then(|v| v.get("types"))
+            .is_some_and(|types| {
+                types.as_str().is_some_and(matches)
+                    || types.as_array().is_some_and(|ids| {
+                        ids.iter()
+                            .filter_map(serde_json::Value::as_str)
+                            .any(matches)
+                    })
+            });
+        Some(!resistant)
+    }
+    /// Materialize the effective enchantments for both attacks and detached previews.
+    pub(in crate::game) fn item_combat_stack(&self, stack: &ItemStack) -> ItemStack {
+        let mut effective = stack.clone();
+        let enchantments = self
+            .item_combat_component(stack, "minecraft:enchantments")
+            .unwrap_or_else(|| serde_json::json!({}));
+        let tag = horizon_client::scoreboard::json_to_tag(
+            &serde_json::json!({"minecraft:enchantments": enchantments}),
+        );
+        let (_, extra) = horizon_items::item_data::decode_components(Some(&tag));
+        effective.data_mut().enchantments =
+            extra.map_or_else(Vec::new, |data| data.enchantments.clone());
+        effective
+    }
+    pub(in crate::game) fn item_resource_attack_damage_bonus(
+        &self,
+        stack: &ItemStack,
+        attacker: mod_api::LivingRef,
+        target: mod_api::EntityRef,
+        base_damage: f32,
+    ) -> Option<f32> {
+        let (_, _, fall, flying) = self.item_combat_actor(attacker)?;
+        if self.entity_level(attacker.entity())?.dimension() != self.dim.key()
+            || self.entity_level(target)?.dimension() != self.dim.key()
+        {
+            return None;
+        }
+        self.native_entity_read_target(target)?;
+        let target = self.entity_kind(target)?;
+        let actor = self.entity_kind(attacker.entity())?;
+        let source = self.item_resource_damage_source(stack, attacker)?;
+        let source = source.damage_type.to_string();
+        let effective = self.item_combat_stack(stack);
+        let ctx = horizon_items::enchant::EffectContext {
+            this: Some(&target),
+            attacker: Some(&actor),
+            direct_attacker: Some(&actor),
+            is_direct: true,
+            damage_type: Some(&source),
+            items: Some(world_items!(self)),
+            direct_motion: Some((fall, flying)),
+            ..Default::default()
+        };
+        Some(stack_attack_bonus_preview(
+            &world_stations!(self).enchantments,
+            &effective,
+            &ctx,
+            &self.world.random,
+            base_damage,
+        ))
+    }
+
     /// Whether enchantments `a` and `b` may share an item (`Enchantment.areCompatible`), by the
     /// world's enchantment definitions. API @API:item_components@.
     pub(in crate::game) fn enchantments_compatible(&self, a: &str, b: &str) -> bool {
@@ -628,5 +805,345 @@ mod item_resource_property_tests {
             game.session_lock = None;
         });
         fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod combat_query_tests {
+    use super::super::api_values::test_snapshot;
+    use super::super::native_entity_refs::tests::with_game;
+    use super::*;
+    use horizon_client::motion::PlayerMotion;
+    use horizon_core::geometry::{Aabb, Vec3};
+    use horizon_core::random::RandomSource;
+
+    fn actor(game: &mut Game<'_>) -> mod_api::LivingRef {
+        game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
+        game.lan_acting_uuid = Some(123);
+        game.lan_acting_entity = Some(20);
+        mod_api::LivingRef::new(game.entity(20).unwrap())
+    }
+    fn resource(stack: &ItemStack) -> mod_api::ItemResource {
+        mod_api::ItemResource::of(&test_snapshot(stack))
+    }
+    fn patch(stack: &mut ItemStack, id: &str, value: serde_json::Value) {
+        stack
+            .data_mut()
+            .set_other(id, Some(horizon_client::scoreboard::json_to_tag(&value)));
+    }
+
+    #[test]
+    fn stack_combat_random_preview_repeats_without_consuming_attack_rng() {
+        use horizon_core::random::LegacyRandom;
+        use horizon_items::enchant::{EffectContext, Enchantments};
+        let definition = serde_json::json!({
+            "max_level": 1,
+            "effects": {"minecraft:damage": [{
+                "requirements": {"condition": "minecraft:random_chance", "chance": 0.5},
+                "effect": {"type": "minecraft:add", "value": 5.0}
+            }]}
+        });
+        let enchantments = Enchantments::default()
+            .with_entries([("test:random_damage", &definition)])
+            .unwrap();
+        let mut stack = ItemStack::new("minecraft:diamond_sword", 1);
+        stack.enchant("test:random_damage", 1);
+        for (seed, expected) in [(0, 0.0), (4096, 5.0)] {
+            let mut live = LegacyRandom::new(seed);
+            let ctx = EffectContext::default();
+            for _ in 0..3 {
+                assert_eq!(
+                    stack_attack_bonus_preview(&enchantments, &stack, &ctx, &live, 7.0),
+                    expected
+                );
+            }
+            // The actual attack still sees the first random draw after all previews.
+            assert_eq!(
+                super::super::enchant_effects::stack_enchanted_damage(
+                    &enchantments,
+                    &stack,
+                    &ctx,
+                    &mut live,
+                    7.0
+                ) - 7.0,
+                expected
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn stack_combat_queries_match_attacks_and_preserve_equipment_and_rng() {
+        with_game(|game| {
+            let attacker = actor(game);
+            let target = attacker.entity();
+            let sword = ItemStack::new("minecraft:diamond_sword", 1);
+            game.inventory[game.selected] = Some(sword.clone());
+            let plain = resource(&sword);
+            assert_eq!(
+                plain.attack_damage_bonus(game, attacker, target, 7.0),
+                Some(0.0)
+            );
+            assert_eq!(
+                plain
+                    .damage_source(game, attacker)
+                    .unwrap()
+                    .damage_type
+                    .to_string(),
+                "minecraft:player_attack"
+            );
+            let range = plain.entity_attack_range(game, attacker).unwrap();
+            assert_eq!((range.min, range.max, range.hitbox_margin), (0.0, 3.0, 0.0));
+            let mut weapon = sword.clone();
+            weapon.enchant("minecraft:sharpness", 3);
+            let enchanted = resource(&weapon);
+            let mut random = game.world.random.clone();
+            assert_eq!(
+                enchanted.attack_damage_bonus(game, attacker, target, 7.0),
+                Some(2.0)
+            );
+            assert_eq!(game.world.random.next_float(), random.next_float());
+            assert_eq!(
+                game.held().unwrap().enchantments().len(),
+                0,
+                "query did not equip the weapon"
+            );
+            game.inventory[game.selected] = Some(weapon.clone());
+            assert_eq!(
+                enchanted
+                    .attack_damage_bonus(game, attacker, target, 7.0)
+                    .unwrap(),
+                game.enchanted_damage("minecraft:player", 7.0) - 7.0
+            );
+            patch(
+                &mut weapon,
+                "!minecraft:enchantments",
+                serde_json::json!({}),
+            );
+            // Explicit removal is tested on a stack without a simultaneous positive override.
+            weapon.data_mut().enchantments.clear();
+            assert_eq!(
+                resource(&weapon).attack_damage_bonus(game, attacker, target, 7.0),
+                Some(0.0)
+            );
+
+            let mut spear = ItemStack::new("minecraft:wooden_spear", 1);
+            patch(
+                &mut spear,
+                "minecraft:attack_range",
+                serde_json::json!({"min_reach": 2.0, "max_reach": 4.5, "hitbox_margin": 0.125}),
+            );
+            let range = resource(&spear)
+                .entity_attack_range(game, attacker)
+                .unwrap();
+            assert_eq!(
+                (range.min, range.max, range.hitbox_margin),
+                (2.0, 4.5, 0.125)
+            );
+            game.inventory[game.selected] = Some(spear.clone());
+            let eye = game.eye_position().unwrap();
+            for distance in [1.875, 4.625, 7.625, 7.626] {
+                let box_ = Aabb::new(
+                    Vec3::new(eye[0] - 0.3, eye[1] - 1.0, eye[2] + distance),
+                    Vec3::new(eye[0] + 0.3, eye[1] + 1.0, eye[2] + distance + 0.6),
+                );
+                assert_eq!(
+                    game.within_attack_range(&box_),
+                    range.contains(distance, 3.0)
+                );
+            }
+            spear.data_mut().set_other("minecraft:attack_range", None);
+            patch(&mut spear, "!minecraft:attack_range", serde_json::json!({}));
+            assert_eq!(
+                resource(&spear)
+                    .entity_attack_range(game, attacker)
+                    .unwrap(),
+                plain.entity_attack_range(game, attacker).unwrap()
+            );
+
+            let mut mace = ItemStack::new("minecraft:mace", 1);
+            mace.enchant("minecraft:density", 2);
+            game.player.as_mut().unwrap().fall_distance = 4.0;
+            let preview = resource(&mace);
+            assert_eq!(
+                preview
+                    .damage_source(game, attacker)
+                    .unwrap()
+                    .damage_type
+                    .to_string(),
+                "minecraft:mace_smash"
+            );
+            assert_eq!(
+                preview.attack_damage_bonus(game, attacker, target, 6.0),
+                Some(18.0)
+            );
+            game.inventory[game.selected] = Some(mace.clone());
+            assert_eq!(game.smash_damage_bonus("minecraft:player"), 18.0);
+            patch(
+                &mut mace,
+                "minecraft:damage_type",
+                serde_json::json!("minecraft:magic"),
+            );
+            let overridden = resource(&mace).damage_source(game, attacker).unwrap();
+            assert_eq!(overridden.damage_type.to_string(), "minecraft:magic");
+            assert_eq!(overridden.direct, Some(target));
+            assert_eq!(overridden.causing, Some(target));
+            game.inventory[game.selected] = Some(mace);
+            assert_eq!(
+                super::super::creatures::source_damage_type(game.attack_source([0.0; 3])),
+                "minecraft:magic"
+            );
+
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:zombie")
+                .unwrap()
+                .clone();
+            game.mobs
+                .push(horizon_client::mobs::Mob::new(21, kind, Vec3::ZERO, 0.0));
+            let zombie = mod_api::LivingRef::new(game.entity(21).unwrap());
+            assert_eq!(
+                plain
+                    .damage_source(game, zombie)
+                    .unwrap()
+                    .damage_type
+                    .to_string(),
+                "minecraft:mob_attack"
+            );
+            assert_eq!(plain.entity_attack_range(game, zombie).unwrap().max, 3.0);
+            let mob_spear = resource(&ItemStack::new("minecraft:wooden_spear", 1))
+                .entity_attack_range(game, zombie)
+                .unwrap();
+            assert_eq!(
+                (mob_spear.min, mob_spear.max, mob_spear.hitbox_margin),
+                (1.0, 2.25, 0.125)
+            );
+            assert_eq!(
+                enchanted.attack_damage_bonus(game, zombie, target, 7.0),
+                Some(2.0)
+            );
+            let stale = mod_api::LivingRef::new(mod_api::EntityRef::new(
+                mod_api::NativeWorldEpoch::new(999),
+                20,
+            ));
+            assert!(plain.entity_attack_range(game, stale).is_none());
+            assert!(plain.damage_source(game, stale).is_none());
+            assert!(
+                plain
+                    .attack_damage_bonus(game, stale, target, 1.0)
+                    .is_none()
+            );
+            assert!(
+                plain
+                    .attack_damage_bonus(game, attacker, stale.entity(), 1.0)
+                    .is_none()
+            );
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn stack_combat_immunity_honors_default_override_tag_and_removal() {
+        with_game(|game| {
+            let attacker = actor(game);
+            let mut stack = ItemStack::new("minecraft:netherite_chestplate", 1);
+            let mut source = resource(&stack).damage_source(game, attacker).unwrap();
+            source.damage_type = mod_api::Identifier::parse("minecraft:lava").unwrap();
+            assert_eq!(resource(&stack).can_be_hurt_by(game, &source), Some(false));
+            assert!(game.items().resists_fire(&stack, "minecraft:lava"));
+            source.damage_type = mod_api::Identifier::parse("minecraft:cactus").unwrap();
+            assert_eq!(resource(&stack).can_be_hurt_by(game, &source), Some(true));
+            patch(
+                &mut stack,
+                "minecraft:damage_resistant",
+                serde_json::json!({"types": ["minecraft:cactus"]}),
+            );
+            assert_eq!(resource(&stack).can_be_hurt_by(game, &source), Some(false));
+            assert!(game.items().resists_cactus(&stack));
+            source.damage_type = mod_api::Identifier::parse("minecraft:lava").unwrap();
+            assert_eq!(resource(&stack).can_be_hurt_by(game, &source), Some(true));
+            patch(
+                &mut stack,
+                "minecraft:damage_resistant",
+                serde_json::json!({"types": "#minecraft:is_fire"}),
+            );
+            assert_eq!(resource(&stack).can_be_hurt_by(game, &source), Some(false));
+            stack
+                .data_mut()
+                .set_other("minecraft:damage_resistant", None);
+            patch(
+                &mut stack,
+                "!minecraft:damage_resistant",
+                serde_json::json!({}),
+            );
+            assert_eq!(resource(&stack).can_be_hurt_by(game, &source), Some(true));
+            source.damage_type = mod_api::Identifier::parse("test:unknown").unwrap();
+            assert_eq!(resource(&stack).can_be_hurt_by(game, &source), None);
+        });
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn stack_combat_prototype_overrides_and_removals_match_attacks() {
+        with_game(|game| {
+            let attacker = actor(game);
+            let target = attacker.entity();
+            let prototypes = std::sync::Arc::make_mut(
+                &mut std::sync::Arc::get_mut(&mut game.pack.item_renderer)
+                    .expect("fixture owns its renderer")
+                    .models
+                    .prototypes,
+            );
+            let prototype = prototypes.get_mut("minecraft:diamond_sword").unwrap();
+            prototype.insert(
+                "minecraft:enchantments".into(),
+                serde_json::json!({"minecraft:sharpness": 3}),
+            );
+            prototype.insert(
+                "minecraft:damage_type".into(),
+                serde_json::json!("minecraft:magic"),
+            );
+            let mut sword = ItemStack::new("minecraft:diamond_sword", 1);
+            let defaults = resource(&sword);
+            assert_eq!(
+                defaults.attack_damage_bonus(game, attacker, target, 7.0),
+                Some(2.0)
+            );
+            assert_eq!(
+                defaults
+                    .damage_source(game, attacker)
+                    .unwrap()
+                    .damage_type
+                    .to_string(),
+                "minecraft:magic"
+            );
+            game.inventory[game.selected] = Some(sword.clone());
+            assert_eq!(game.enchanted_damage("minecraft:player", 7.0), 9.0);
+            assert_eq!(
+                super::super::creatures::source_damage_type(game.attack_source([0.0; 3])),
+                "minecraft:magic"
+            );
+            patch(&mut sword, "!minecraft:enchantments", serde_json::json!({}));
+            patch(&mut sword, "!minecraft:damage_type", serde_json::json!({}));
+            let removed = resource(&sword);
+            assert_eq!(
+                removed.attack_damage_bonus(game, attacker, target, 7.0),
+                Some(0.0)
+            );
+            assert_eq!(
+                removed
+                    .damage_source(game, attacker)
+                    .unwrap()
+                    .damage_type
+                    .to_string(),
+                "minecraft:player_attack"
+            );
+            game.inventory[game.selected] = Some(sword);
+            assert_eq!(game.enchanted_damage("minecraft:player", 7.0), 7.0);
+            assert_eq!(
+                super::super::creatures::source_damage_type(game.attack_source([0.0; 3])),
+                "minecraft:player_attack"
+            );
+        });
     }
 }

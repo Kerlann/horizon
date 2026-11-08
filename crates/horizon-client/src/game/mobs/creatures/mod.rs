@@ -721,24 +721,19 @@ impl Game<'_> {
         let at = [m.position.x, m.position.y, m.position.z];
         let amount = ((damage / 4.0) as u32).max(1);
         let name = damage_type(kind, false);
-        let fire = self
-            .health_resources
-            .damage
-            .id(name)
-            .is_some_and(|d| self.health_resources.damage.in_tag(d, "minecraft:is_fire"));
         // A piece's maximum, or none when it may not lose durability at all.
         // `doHurtEquipment` starts from the item's `equippable` component
         // (`Equippable equippable = item.get(DataComponents.EQUIPPABLE)`), so a
         // damageable item with no such component — a sword put in a horse's body
         // slot by `/item replace` — never wears; `equip_damage_on_hurt` alone
         // cannot say that, since it defaults to true when the component is absent.
-        fn wearable(me: &Game<'_>, stack: &ItemStack, fire: bool, name: &str) -> Option<u32> {
+        fn wearable(me: &Game<'_>, stack: &ItemStack, name: &str) -> Option<u32> {
             let info = me.res.items().get(&stack.item)?;
             if info.equip_slot.is_none()
                 || !info.equip_damage_on_hurt
                 || info.max_damage == 0
                 || !horizon_client::stations::is_damageable(me.res.items(), stack)
-                || (fire && me.res.items().resists_fire(stack, name))
+                || !me.stack_can_be_hurt_by(stack, name).unwrap_or(true)
             {
                 return None;
             }
@@ -752,7 +747,7 @@ impl Game<'_> {
         else {
             return;
         };
-        if wearable(self, &body, fire, name).is_none() {
+        if wearable(self, &body, name).is_none() {
             return;
         }
         // ArmorHurtEvent for a mob's body armor.
@@ -11659,6 +11654,53 @@ mod armor_destroy_tests {
             assert_eq!(
                 game.mobs[0].item_by_slot(EquipmentSlot::Body),
                 Some(resistant)
+            );
+            let source = mod_api::ItemDamageSource {
+                damage_type: mod_api::Identifier::parse("minecraft:lava").unwrap(),
+                direct: None,
+                causing: None,
+                position: None,
+            };
+            let mut vulnerable = ItemStack::new("minecraft:netherite_chestplate", 1);
+            vulnerable.data_mut().set_other(
+                "!minecraft:damage_resistant",
+                Some(horizon_core::nbt::Tag::compound(
+                    [] as [(&str, horizon_core::nbt::Tag); 0]
+                )),
+            );
+            assert_eq!(
+                game.item_resource_can_be_hurt_by(&vulnerable, &source),
+                Some(true)
+            );
+            game.mobs[0].set_equipment_stack(EquipmentSlot::Body as usize, Some(vulnerable));
+            game.hurt_mob_armor(21, 4.0, DamageKind::Lava);
+            assert_eq!(
+                game.mobs[0]
+                    .item_by_slot(EquipmentSlot::Body)
+                    .unwrap()
+                    .damage,
+                1
+            );
+            let mut resistant = ItemStack::new("minecraft:netherite_chestplate", 1);
+            resistant.data_mut().set_other(
+                "minecraft:damage_resistant",
+                Some(horizon_core::nbt::Tag::compound([(
+                    "types",
+                    horizon_core::nbt::Tag::String("#minecraft:is_fire".into()),
+                )])),
+            );
+            assert_eq!(
+                game.item_resource_can_be_hurt_by(&resistant, &source),
+                Some(false)
+            );
+            game.mobs[0].set_equipment_stack(EquipmentSlot::Body as usize, Some(resistant));
+            game.hurt_mob_armor(21, 4.0, DamageKind::Lava);
+            assert_eq!(
+                game.mobs[0]
+                    .item_by_slot(EquipmentSlot::Body)
+                    .unwrap()
+                    .damage,
+                0
             );
             let mut armor = ItemStack::new("minecraft:wolf_armor", 1);
             armor.damage = game.items().get(&armor.item).unwrap().max_damage - 1;

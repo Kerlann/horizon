@@ -415,9 +415,10 @@ impl Game<'_> {
                             st.liked_player_ttl = was.liked_player_ttl;
                         }
                     }
-                    // Entity.load mutates the existing living entity; its
-                    // previous-hit amount is not read from saved NBT (its hurt
-                    // immunity is, as `invulnerable_time`).
+                    // LivingEntity's damage cooldown and previous-hit amount
+                    // are runtime state. Entity's separate immunity window is
+                    // loaded from the saved `invulnerable_time` key above.
+                    slot.invulnerable = old.invulnerable;
                     slot.last_hurt = old.last_hurt;
                     // Entity.load updates saved data on the existing entity;
                     // lastTradedPlayer is transient and survives a live NoAI edit.

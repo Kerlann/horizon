@@ -510,19 +510,20 @@ impl StructureRegistry {
                 },
                 _ => Placement::Unsupported,
             };
+            let mut structures = Vec::new();
+            for entry in v["structures"].as_array().into_iter().flatten() {
+                // StructureSelectionEntry.CODEC uses ExtraCodecs.POSITIVE_INT.
+                let weight = entry["weight"]
+                    .as_i64()
+                    .filter(|w| (1..=i64::from(i32::MAX)).contains(w))
+                    .ok_or(DecodeError::Field("structure set positive int weight"))?;
+                if let Some(definition) = entry["structure"].as_str().and_then(index) {
+                    structures.push((definition, weight as i32));
+                }
+            }
             out.push(StructureSet {
                 name: name.clone(),
-                structures: v["structures"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|e| {
-                        Some((
-                            index(e["structure"].as_str()?)?,
-                            e["weight"].as_i64().unwrap_or(1) as i32,
-                        ))
-                    })
-                    .collect(),
+                structures,
                 placement,
                 salt: p["salt"].as_i64().unwrap_or(0) as i32,
                 frequency: frequency as f32,
@@ -1047,17 +1048,10 @@ pub(crate) fn create_starts_with_saved(
         let mut options = set.structures.clone();
         let mut random = WorldgenRandom::new(LegacyRandom::new(0));
         random.set_large_feature_seed(seed, chunk.x, chunk.z);
-        let mut total: i32 = options.iter().map(|o| o.1).sum();
         while !options.is_empty() {
-            let mut choice = random.next_int_bound(total).unwrap_or(0);
-            let mut index = 0;
-            for option in &options {
-                choice -= option.1;
-                if choice < 0 {
-                    break;
-                }
-                index += 1;
-            }
+            let Some(index) = pick_structure(&options, &mut random) else {
+                break;
+            };
             let selected = options[index];
             if let Some(start) = try_generate(
                 registry, resources, bindings, context, selected.0, chunk, false,
@@ -1066,12 +1060,24 @@ pub(crate) fn create_starts_with_saved(
                 break;
             }
             options.remove(index);
-            total -= selected.1;
         }
     }
     starts.extend(saved);
     starts
 }
+// StructureSet uses a list of positive-int entries, not WeightedList: vanilla
+// does not reject oversized totals in its codec. Keep vanilla's int draw below
+// the limit; above it use one unsigned nextLong modulo the i64 total, just as
+// the other wide structure selectors do.
+fn pick_structure(options: &[(usize, i32)], random: &mut impl RandomSource) -> Option<usize> {
+    let total: i64 = options.iter().map(|o| i64::from(o.1)).sum();
+    let mut choice = crate::worldgen::weighted::draw(total, random)?;
+    options.iter().position(|option| {
+        choice -= i64::from(option.1);
+        choice < 0
+    })
+}
+
 /// `Structure.generate` of one structure for one chunk: what the chunk's
 /// structure set would build there, or, for `/place structure`, the start this
 /// structure builds in any chunk (the set's placement is not consulted, and
@@ -1733,13 +1739,20 @@ mod tests {
     }
 
     fn try_registry(placement: Value) -> Result<StructureRegistry, DecodeError> {
+        try_weight_registry(placement, json!(1))
+    }
+
+    fn try_weight_registry(
+        placement: Value,
+        weight: Value,
+    ) -> Result<StructureRegistry, DecodeError> {
         let structures = BTreeMap::from([(
             "t:s".to_owned(),
             json!({"type": "minecraft:igloo", "biomes": []}).to_string(),
         )]);
         let sets = BTreeMap::from([(
             "t:set".to_owned(),
-            json!({"structures": [{"structure": "t:s", "weight": 1}],
+            json!({"structures": [{"structure": "t:s", "weight": weight}],
                 "placement": placement})
             .to_string(),
         )]);
@@ -1750,6 +1763,52 @@ mod tests {
             &|_| Ok(BTreeSet::new()),
             &ModStructureTypes::new(),
         )
+    }
+
+    #[test]
+    fn structure_weights_decode_positive_int() {
+        let placement = json!({"type": "minecraft:dimension_origin"});
+        for weight in [
+            json!(-1),
+            json!(0),
+            json!(2147483648_i64),
+            json!(u64::MAX),
+            json!(1.5),
+            json!("1"),
+            Value::Null,
+        ] {
+            assert!(
+                try_weight_registry(placement.clone(), weight.clone()).is_err(),
+                "{weight}"
+            );
+        }
+        for weight in [1, i32::MAX] {
+            assert!(try_weight_registry(placement.clone(), json!(weight)).is_ok());
+        }
+    }
+
+    #[test]
+    fn structure_weights_wide_pick_matches_old_small_lists() {
+        for weights in [[1, 1, 1], [1, 2, 5], [7, 3, 1]] {
+            let options: Vec<_> = weights.into_iter().enumerate().collect();
+            for seed in -20..20 {
+                let mut old = LegacyRandom::new(seed);
+                let mut new = old.clone();
+                let mut choice = old.next_int_bound(weights.iter().sum()).unwrap();
+                let expected = weights.iter().position(|w| {
+                    choice -= w;
+                    choice < 0
+                });
+                assert_eq!(pick_structure(&options, &mut new), expected);
+                assert_eq!(new.next_long(), old.next_long());
+            }
+        }
+        let mut options = vec![(0, i32::MAX), (1, i32::MAX), (2, i32::MAX)];
+        let mut random = LegacyRandom::new(71);
+        while !options.is_empty() {
+            let index = pick_structure(&options, &mut random).unwrap();
+            options.remove(index);
+        }
     }
 
     #[test]

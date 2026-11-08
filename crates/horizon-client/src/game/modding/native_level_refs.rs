@@ -766,10 +766,22 @@ impl Game<'_> {
     pub(super) fn level_day_time(&self, level: LevelRef) -> Option<i64> {
         self.native_level_read_world(level)?;
         if self.is_logical_server() {
-            Some(self.world.day_time)
+            Some(self.command_clock_time("minecraft:overworld"))
         } else {
             self.remote.as_ref().map(|r| r.overworld_clock_time())
         }
+    }
+    /// The time of the level's own clock (its dimension type's `default_clock`) in ticks: what the
+    /// level's sky, spawning and beds go by, and what `/time` sets there. None for a level without
+    /// a default clock, a stale handle and a client.
+    pub(super) fn level_clock_time(&self, level: LevelRef) -> Option<i64> {
+        self.native_level_read_world(level)?;
+        if !self.is_logical_server() {
+            return None;
+        }
+        let dim = super::Dim::from_id(level.dimension_id());
+        self.dimension_type_of(dim).default_clock.as_ref()?;
+        Some(self.command_clock_time(&self.level_clock_name(dim)))
     }
 }
 
@@ -784,6 +796,27 @@ mod tests {
     use super::super::{Dim, native_entity_refs::tests::with_game};
     use horizon_core::position::BlockPos;
     use mod_api::{ChunkRef, LevelRef, LightLayer, NativeWorldEpoch};
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_level_with_its_own_clock_counts_apart_from_the_overworlds() {
+        with_game(|game| {
+            game.world.day_time = 100;
+            game.enter_level(Dim::End).unwrap();
+            assert_eq!(game.active_clock(), "minecraft:the_end");
+            assert_eq!(game.world.day_time, 0, "the End's clock has its own total");
+            game.world.day_time = 50;
+            assert_eq!(game.command_clock_time("minecraft:overworld"), 100);
+            game.enter_level(Dim::Nether).unwrap();
+            assert_eq!(
+                game.world.day_time, 100,
+                "a level without a clock follows the Overworld's"
+            );
+            assert_eq!(game.command_clock_time("minecraft:the_end"), 50);
+            game.enter_level(Dim::Overworld).unwrap();
+            assert_eq!(game.world.day_time, 100);
+        });
+    }
 
     #[test]
     fn biome_search_budget_bounds_columns_and_heights_before_sampling() {

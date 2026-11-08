@@ -416,7 +416,12 @@ mod live_dungeon_spawner_tests {
                 .join(format!("h173-{:?}", std::thread::current().id())),
         );
         options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
-        crate::game::growth::install_live_features(&loaded.resources, &loaded.pack, &options);
+        crate::game::growth::install_live_features(
+            &loaded.resources,
+            &loaded.pack,
+            &options,
+            &Default::default(),
+        );
         let mut game = Game::new(
             &loaded.resources,
             loaded.pack,

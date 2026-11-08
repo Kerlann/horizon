@@ -536,7 +536,7 @@ fn creative_tabs_keep_vanilla_items_missing_from_search() {
         effects: Vec::new(),
         entity_types: Vec::new(),
         block_entity_types: Vec::new(),
-        block_entity_membership: BTreeMap::new(),
+        block_entity_factories: BTreeMap::new(),
         menu_types: Vec::new(),
         states: 0,
         defaults: BTreeMap::new(),

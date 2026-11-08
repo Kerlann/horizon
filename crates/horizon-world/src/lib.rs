@@ -101,6 +101,7 @@ pub mod movement_statistics;
 pub mod movement_support;
 pub mod native_load_context;
 pub mod native_load_hooks;
+pub mod native_worldgen_hooks;
 pub mod object_open_map;
 pub mod object_open_set;
 pub mod piston_movement;

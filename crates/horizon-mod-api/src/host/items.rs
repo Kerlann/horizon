@@ -101,6 +101,36 @@ pub trait ItemsBackend {
     /// Side: both. The effective vanilla bar, before client drawing hooks.
     #[access(WorldOnly)]
     fn item_resource_bar(&self, stack: &ItemStack) -> Option<ItemBar>;
+    /// Side: both. Effective stack range for the supplied actor.
+    #[access(WorldOnly)]
+    fn item_resource_entity_attack_range(
+        &self,
+        stack: &ItemStack,
+        attacker: LivingRef,
+    ) -> Option<ItemAttackRange>;
+    /// Side: both. Effective stack melee source for the supplied actor.
+    #[access(WorldOnly)]
+    fn item_resource_damage_source(
+        &self,
+        stack: &ItemStack,
+        attacker: LivingRef,
+    ) -> Option<ItemDamageSource>;
+    /// Side: both. Item immunity to the supplied damage source.
+    #[access(WorldOnly)]
+    fn item_resource_can_be_hurt_by(
+        &self,
+        stack: &ItemStack,
+        source: &ItemDamageSource,
+    ) -> Option<bool>;
+    /// Side: both. Attack bonus preview without consuming world RNG or equipping the stack.
+    #[access(WorldOnly)]
+    fn item_resource_attack_damage_bonus(
+        &self,
+        stack: &ItemStack,
+        attacker: LivingRef,
+        target: EntityRef,
+        base_damage: f32,
+    ) -> Option<f32>;
     /// Side: client. The item's standard tooltip lines before mod callbacks or drawing.
     #[access(WorldOnly)]
     fn item_resource_tooltip(

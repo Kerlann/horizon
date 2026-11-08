@@ -774,7 +774,7 @@ struct Plan<'a> {
     effects: Vec<&'a MobEffect>,
     entity_types: Vec<&'a EntityType>,
     block_entity_types: Vec<&'a BlockEntityType>,
-    block_entity_membership: BTreeMap<&'a str, &'a str>,
+    block_entity_factories: BTreeMap<&'a str, &'a str>,
     menu_types: Vec<&'a MenuType>,
     /// Vanilla's state count (the tables' length before).
     states: usize,
@@ -1138,7 +1138,7 @@ impl<'a> Plan<'a> {
             })
             .collect();
         block_entity_types.sort_by(|(_, a), (_, b)| a.id.cmp(&b.id));
-        let mut block_entity_membership = BTreeMap::new();
+        let mut block_entity_factories = BTreeMap::new();
         if !block_entity_types.is_empty() {
             let registry = read_json(&base.join("registries.json"))?;
             let Some(J::Obj(entries)) = registry
@@ -1174,7 +1174,7 @@ impl<'a> Plan<'a> {
                         .into());
                     }
                     if let Some(previous) =
-                        block_entity_membership.insert(block.as_str(), kind.id.as_str())
+                        block_entity_factories.insert(block.as_str(), kind.id.as_str())
                     {
                         return Err(format!(
                             "block {block} belongs to both block entity types {previous} and {}",
@@ -1508,7 +1508,7 @@ impl<'a> Plan<'a> {
                 .into_iter()
                 .map(|(_, kind)| kind)
                 .collect(),
-            block_entity_membership,
+            block_entity_factories,
             menu_types: menu_types(mods),
             states: names.len(),
             defaults,
@@ -3317,7 +3317,7 @@ pub fn build(
     }
     overlay.write(
         BLOCK_ENTITY_TYPES,
-        &serde_json::to_vec(&plan.block_entity_membership)?,
+        &serde_json::to_vec(&plan.block_entity_factories)?,
     )?;
     // clients must agree on the block states and the items', mob effects',
     // entity types', block entity types' and menu types' network ids.
@@ -3498,7 +3498,8 @@ pub fn resource_root(
     Ok(out)
 }
 
-/// Canonical block-to-declared-block-entity-type mapping, sorted by block id.
+/// Declared native factory assignments, sorted by block id. Validity is extended
+/// after content resolution in the canonical `block_entity_types` table.
 pub const BLOCK_ENTITY_TYPES: &str = "horizon-block-entity-types.json";
 
 /// The length of a root's folder name: the start of its stamp.

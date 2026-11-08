@@ -678,9 +678,107 @@ fn register_block_entity_types(
                 .map(|block| (block.clone(), kind.id.clone()))
         })
         .collect();
-    let types = BlockEntityTypes::new(membership, names.clone());
+    let mut types = BlockEntityTypes::new(membership, names.clone());
+    let blocks = builtin.get("minecraft:block");
+    for block in blocks
+        .into_iter()
+        .flat_map(|ids| &ids.names)
+        .filter(|name| name.starts_with("minecraft:"))
+    {
+        if let Some(kind) = horizon_client::lan::chunks::block_entity_type(block) {
+            types.template(block.clone(), block.clone(), kind.to_owned());
+        }
+    }
+    for block in mods.iter().flat_map(|m| &m.content.blocks) {
+        if let Some(kind) = horizon_client::lan::chunks::block_entity_type(&block.template) {
+            types.template(block.id.clone(), block.template.clone(), kind.to_owned());
+        }
+    }
     mod_api::__private::resolve_block_entity_types(types.names(), |id| types.key(id))
         .map_err(|errors| errors.join("\n"))?;
+    let additions: Vec<(String, String)> = if let Some(current) = block_entity_types::current() {
+        current
+            .memberships()
+            .map(|(block, kind)| (kind.to_owned(), block.to_owned()))
+            .collect()
+    } else {
+        let keys: Vec<_> = types
+            .names()
+            .filter_map(mod_api::__private::block_entity_type_key)
+            .collect();
+        let mut additions = Vec::new();
+        Game::native_block_entity_type_add_blocks(
+            &RegistrationContext::new(),
+            &keys,
+            &mut additions,
+        );
+        additions
+            .into_iter()
+            .map(|(kind, block)| {
+                Ok((
+                    mod_api::__private::block_entity_type_name(kind)
+                        .ok_or("unknown block entity type key")?
+                        .to_owned(),
+                    mod_api::__private::block_key_id(block)
+                        .ok_or("unknown block key")?
+                        .to_owned(),
+                ))
+            })
+            .collect::<horizon_client::Result<_>>()?
+    };
+    if additions.is_empty() {
+        block_entity_types::install(types)?;
+        return Ok(());
+    }
+    // Empty registration needs no block IDs or class data; requested additions do.
+    let blocks = blocks.ok_or("missing block registry")?;
+    let behavior: serde_json::Value =
+        horizon_world::json_file::read(&root.join("block-behaviours.json"))?;
+    let classes: std::collections::BTreeMap<&str, Vec<&str>> = behavior["blocks"]
+        .as_array()
+        .ok_or("missing block behaviors")?
+        .iter()
+        .filter_map(|entry| {
+            Some((
+                entry["name"].as_str()?,
+                entry["class"]
+                    .as_array()?
+                    .iter()
+                    .filter_map(|v| v.as_str())
+                    .collect(),
+            ))
+        })
+        .collect();
+    // Use the original valid sets for every addition; listener order cannot relax the constraint.
+    let bases: std::collections::BTreeMap<String, String> = types
+        .names()
+        .filter_map(|kind| {
+            let mut valid = types
+                .memberships()
+                .filter(|(_, k)| *k == kind)
+                .filter_map(|(b, _)| classes.get(b));
+            let first = valid.next()?;
+            let rest: Vec<_> = valid.collect();
+            first
+                .iter()
+                .find(|class| rest.iter().all(|chain| chain.contains(class)))
+                .map(|class| (kind.to_owned(), (*class).to_owned()))
+        })
+        .collect();
+    for (kind, block) in additions {
+        let (kind, block) = (kind.as_str(), block.as_str());
+        if blocks.id(block).is_none() {
+            return Err(format!("unknown block {block}").into());
+        }
+        if let Some(base) = bases.get(kind)
+            && !classes
+                .get(block)
+                .is_some_and(|chain| chain.contains(&base.as_str()))
+        {
+            return Err(format!("block {block} must inherit {base} to be valid for {kind}").into());
+        }
+        types.add_valid(block, kind)?;
+    }
     block_entity_types::install(types)?;
     Ok(())
 }
@@ -863,13 +961,16 @@ fn not_built(
 pub(super) struct PreparedLoopContext {
     game: Arc<horizon_world::native_load_context::LoopContext>,
     audio: Option<horizon_world::native_load_context::LoopContext>,
+    /// A server's context for the features it generates (`alter_ground`).
+    worldgen: Option<horizon_world::native_load_context::WorldgenContext>,
 }
 
 impl Game<'_> {
     /// Build this game's loop context over the loaded registries and the mods'
     /// current settings. Called where a resource generation starts or reloads: a
     /// client at window start and after a resource reload, a server when it starts
-    /// its mods and on `/reload`. A client hands a second one to its audio.
+    /// its mods and on `/reload`. A client hands a second one to its audio; a
+    /// server publishes one for its world generation.
     pub(super) fn refresh_loop_context(&mut self) -> horizon_client::Result<()> {
         let context = self.prepare_loop_context(&self.options.resources)?;
         self.install_loop_context(context);
@@ -893,9 +994,13 @@ impl Game<'_> {
             .execution_role
             .is_client()
             .then(|| item_data.loop_context(side, ids.iter().copied()));
+        let worldgen = self
+            .is_logical_server()
+            .then(|| item_data.worldgen_context(ids.iter().copied()));
         Ok(PreparedLoopContext {
             game: Arc::new(item_data.loop_context(side, ids.iter().copied())),
             audio,
+            worldgen,
         })
     }
 
@@ -906,6 +1011,9 @@ impl Game<'_> {
         }
         if let Some(audio) = context.audio {
             self.audio.set_loop_context(audio);
+        }
+        if let Some(worldgen) = context.worldgen {
+            horizon_world::native_worldgen_hooks::publish_context(Arc::new(worldgen));
         }
     }
 

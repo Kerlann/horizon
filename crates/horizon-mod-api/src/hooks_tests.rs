@@ -389,6 +389,12 @@ fn dimension_types_take_a_host(
     Some((ty.coordinate_scale, ty.fast_lava, nether_like))
 }
 
+/// Compile-only: a mod reads the time of a level's own clock from a handle on a shared host.
+#[allow(dead_code)]
+fn clock_time_takes_a_host(host: &dyn Host, level: LevelRef) -> Option<i64> {
+    level.clock_time(host)
+}
+
 /// Compile-only: a mod reads a level's sea level from a handle on a shared host.
 #[allow(dead_code)]
 fn sea_level_takes_a_host(host: &dyn Host, level: LevelRef) -> Option<i32> {

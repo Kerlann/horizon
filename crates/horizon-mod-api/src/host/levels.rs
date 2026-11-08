@@ -225,6 +225,13 @@ pub trait LevelsBackend {
     /// displayed dimension has a different default clock. API 381.
     #[access(WorldOnly)]
     fn level_day_time(&self, level: LevelRef) -> Option<i64>;
+    /// Side: server.
+    /// The time of the level's own clock in ticks: the clock its dimension type names as
+    /// `default_clock`, which its sky, spawning and beds go by and `/time` sets there. A mod's
+    /// level with a `day_cycle` clock of its own counts it apart from the Overworld's; a level
+    /// without a default clock, like the Nether, is None, as is a stale handle and a client.
+    #[access(WorldOnly)]
+    fn level_clock_time(&self, level: LevelRef) -> Option<i64>;
     /// Side: both.
     /// `FluidState.getFlow` at `pos`: the current that pushes an entity there, after the
     /// `fluid_flow` hook, as entities feel it. Zero where no fluid flows. None as for

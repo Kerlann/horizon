@@ -14,7 +14,10 @@ use horizon_core::position::BlockPos;
 const KIND: &str = "minecraft:campfire_cooking";
 
 fn is_campfire(name: &str) -> bool {
-    name == "minecraft:campfire" || name == "minecraft:soul_campfire"
+    matches!(
+        horizon_client::block_entity_types::factory_block(name),
+        "minecraft:campfire" | "minecraft:soul_campfire"
+    )
 }
 
 impl Game<'_> {

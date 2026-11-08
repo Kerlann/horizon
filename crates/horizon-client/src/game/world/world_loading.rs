@@ -81,25 +81,19 @@ impl WorldRequest {
                 res.item_defaults(),
             );
         };
-        // Bone meal's and saplings' features, over the plain worldgen bundle.
-        let live_features = || growth::install_live_features(res, pack, options);
+        // The live features (bone meal's and saplings') are installed by `prepare_world`, over
+        // the world's own data packs.
         if res.threads() <= 1 {
             loot();
-            let prepared = self.prepare_world(res, pack, options, settings, upgrade)?;
-            live_features();
-            return Ok(prepared);
+            return self.prepare_world(res, pack, options, settings, upgrade);
         }
-        // Neither needs the world: they load beside it (the generator's decoration keeps one
-        // core busy) and are done before it opens. A bundle both read loads once.
+        // The loot data does not need the world: it loads beside it (the generator's decoration
+        // keeps one core busy) and is done before it opens.
         std::thread::scope(|scope| {
             let loot = scope.spawn(loot);
-            let live_features = scope.spawn(live_features);
             let prepared = self.prepare_world(res, pack, options, settings, upgrade);
-            for helper in [loot, live_features] {
-                helper
-                    .join()
-                    .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
-            }
+            loot.join()
+                .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
             prepared
         })
     }
@@ -273,6 +267,20 @@ impl WorldRequest {
             level.dimension = d.clone();
             level.position = None;
         }
+        // Bone meal's and saplings' features, over the world's data packs like its generator:
+        // a pack's tree is a feature here too. The same entries, so the bundle loads once.
+        growth::install_live_features(
+            res,
+            pack,
+            options,
+            &live_feature_overrides(
+                &save_root,
+                &options.resources,
+                res.biomes(),
+                &level.enabled_features,
+                &pack.additional_data,
+            ),
+        );
         let shapes = level_shapes(
             &save_root,
             &options.resources,
@@ -595,6 +603,19 @@ pub(super) fn packed_biomes(
         return base.clone();
     }
     Arc::new(base.with_packs(packed.iter().map(|(i, v)| (i.as_str(), v))))
+}
+/// The worldgen entries the world's generator reads, for the live feature
+/// registry: the same biome table and packs as `make_streaming`'s, so both share
+/// one loaded bundle.
+fn live_feature_overrides(
+    world_root: &std::path::Path,
+    resources: &std::path::Path,
+    base: &Arc<horizon_client::biome::Biomes>,
+    enabled_features: &[String],
+    additional: &[Arc<horizon_client::datapack::DataPack>],
+) -> horizon_world::worldgen::overrides::WorldgenOverrides {
+    let biomes = packed_biomes(world_root, resources, base, enabled_features, additional);
+    worldgen_overrides_of(world_root, resources, &biomes, enabled_features, additional).0
 }
 /// The Create screen's chosen packs' worldgen entries over the game's own
 /// (`applyNewPackConfig` reloads the world with the new pack config): the

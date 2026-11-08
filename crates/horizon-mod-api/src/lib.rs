@@ -1912,10 +1912,11 @@ impl MobRef {
     }
 }
 
-/// A mob the game has made but not yet added to a level (`finalize_spawn`'s mob), lent to one
-/// hook call. It is not an [`EntityRef`]: the mob is in no level yet, so no entity lookup finds
-/// it. Reads take `&dyn Host` (`mob.kind(host)`); the [`UnspawnedMobEdits`] handed out with it
-/// makes the edits. Every read and edit after the hook returns, or with another lend's handle,
+/// A mob the game has made but not yet added to a level (`finalize_spawn`'s and
+/// `mob_spawn_position_check`'s mob), lent to one hook call. It is not an [`EntityRef`]: the
+/// mob is in no level yet, so no entity lookup finds it. Reads take `&dyn Host`
+/// (`mob.kind(host)`); where a hook hands out an [`UnspawnedMobEdits`] with it, that makes the
+/// edits. Every read and edit after the hook returns, or with another lend's handle,
 /// is refused with [`UnspawnedMobError::Expired`], so a copy kept past the call changes nothing.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
@@ -3110,6 +3111,25 @@ impl NativeDifficulty {
 pub enum NativeSpawner {
     /// A spawner or trial spawner block at this position.
     Block(BlockPos),
+}
+
+/// The spawner block that asked for a spawn check (`MobSpawnEvent.PositionCheck.getSpawner`):
+/// what `mob_spawn_placement_check` and `mob_spawn_position_check` get when a block spawns the
+/// mob. Natural spawning, chunk generation, patrols, sieges, reinforcements and a spawner
+/// minecart have none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum Spawner {
+    /// A monster spawner block (`SpawnerBlockEntity`).
+    Block {
+        /// Where the block is.
+        pos: BlockPos,
+    },
+    /// A trial spawner block (`TrialSpawnerBlockEntity`).
+    Trial {
+        /// Where the block is.
+        pos: BlockPos,
+    },
 }
 
 /// What a mod answers a spawn check (`MobSpawnEvent.PositionCheck.Result` and

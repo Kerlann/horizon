@@ -191,6 +191,15 @@ pub fn main_with(
     {
         log::warn!("Native data-load hooks already installed; keeping the first callbacks");
     }
+    if horizon_world::native_worldgen_hooks::install(
+        horizon_world::native_worldgen_hooks::NativeWorldgenHooks {
+            alter_ground: mod_api::ground::alter_ground,
+        },
+    )
+    .is_err()
+    {
+        log::warn!("Native worldgen hooks already installed; keeping the first callbacks");
+    }
     if horizon_items::native_enchantment_hooks::install(
         crate::enchantment_levels::get_enchantment_level,
     )

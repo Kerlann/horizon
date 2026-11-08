@@ -143,6 +143,8 @@ impl VanillaTerrain {
             let block = facts.get(state);
             if let Some(declared) = crate::block_entity_types::type_for(&block.name) {
                 *kind = Some(declared);
+            } else if let Some(kind_id) = crate::lan::chunks::block_entity_type(&block.name) {
+                *kind = Some(kind_id);
             } else if let Some(form) = block.sign_form() {
                 *kind = Some(form.block_entity_type());
             }

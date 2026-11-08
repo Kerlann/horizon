@@ -301,7 +301,9 @@ impl Game<'_> {
             return Ok(());
         };
         let state = self.world.block(key.0, key.1, key.2);
-        if &*self.res.facts().get(state).name != "minecraft:creaking_heart" {
+        if horizon_client::block_entity_types::factory_block(&self.res.facts().get(state).name)
+            != "minecraft:creaking_heart"
+        {
             // The block is gone: preRemoveSideEffects.
             self.world.block_entities.forget(&key);
             self.with_heart(key, &mut heart, false, |h, _, _, host, out| {

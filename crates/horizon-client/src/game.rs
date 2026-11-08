@@ -12325,10 +12325,6 @@ impl Game<'_> {
             .definition(source)
             .map(|d| d.name.clone())
             .unwrap_or_default();
-        let fire = self
-            .health_resources
-            .damage
-            .in_tag(source, "minecraft:is_fire");
         // The pieces that may wear (`doHurtEquipment`'s checks).
         let mut eligible: [Option<ItemStack>; 4] = std::array::from_fn(|i| {
             let stack = self.armor[i].clone().filter(|_| slots.contains(&i))?;
@@ -12341,7 +12337,7 @@ impl Game<'_> {
                 || component("minecraft:unbreakable").is_some()
                 || component("!minecraft:max_damage").is_some()
                 || component("!minecraft:damage").is_some()
-                || (fire && world_items!(self).resists_fire(&stack, &name))
+                || !self.stack_can_be_hurt_by(&stack, &name).unwrap_or(true)
             {
                 return None;
             }
@@ -14673,7 +14669,8 @@ impl Game<'_> {
             horizon_client::title::DIFFICULTIES[usize::from(self.ui.difficulty) & 3].into();
         self.level.time = self.world.game_time;
         self.level.weather = self.world.weather;
-        self.level.day_time = self.world.day_time;
+        // level.dat holds the Overworld clock's total, whichever level is in place.
+        self.level.day_time = self.command_clock_time("minecraft:overworld");
         // A server has no player of its own; `enter_guest` puts one in
         // `self.player` only while a command reads it.
         if self.player.is_none() && self.options.dedicated.is_some() {

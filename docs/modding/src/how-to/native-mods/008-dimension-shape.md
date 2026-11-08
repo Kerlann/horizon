@@ -131,6 +131,15 @@ Terrain and aquifers are built with the generator's own sea level, which for a n
 which `DimensionSettings::sea_level` never changes: it only gives `level.sea_level(host)` a value for a generator that has
 none, so it does not move where the water is.
 
+### Day clocks
+
+Each level goes by its dimension type's `default_clock`: the Overworld by `minecraft:overworld`, the End by
+`minecraft:the_end`, a level without one (the Nether) by the Overworld's. Every clock the world has met runs at its
+own rate and keeps its own total, saved in `world_clocks.dat`, so a level with a clock of its own has its own day:
+its sky, its spawning and its beds follow that clock, and `/time` in the level sets it.
+`level.clock_time(host)` reads the level's own clock in ticks (None for a level without a default clock);
+`level.day_time(host)` stays the Overworld's, whichever level is asked.
+
 ### Which level a hook is in
 
 The block-behaviour hooks (`neighbor_changed`, `random_tick`, `crop_grow`, `block_changed` and the rest) name their

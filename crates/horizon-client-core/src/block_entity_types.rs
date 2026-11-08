@@ -4,9 +4,18 @@ use std::{
     sync::{Arc, OnceLock},
 };
 
+/// A block's factory and accepted entity types, frozen together at startup.
+#[derive(Debug, PartialEq, Eq)]
+struct BlockMembership {
+    declared: Option<String>,
+    template: Option<String>,
+    factory_kind: Option<String>,
+    valid: BTreeSet<String>,
+}
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct BlockEntityTypes {
-    blocks: BTreeMap<String, String>,
+    blocks: BTreeMap<String, BlockMembership>,
     /// Names in protocol order: a reload may not change numeric wire IDs either.
     wire: Vec<Arc<str>>,
     keys: BTreeSet<Arc<str>>,
@@ -17,11 +26,107 @@ impl BlockEntityTypes {
     pub fn new(blocks: BTreeMap<String, String>, wire: Vec<String>) -> Self {
         let wire: Vec<Arc<str>> = wire.into_iter().map(Into::into).collect();
         let keys = wire.iter().filter(|id| !id.is_empty()).cloned().collect();
+        let blocks = blocks
+            .into_iter()
+            .map(|(block, kind)| {
+                (
+                    block,
+                    BlockMembership {
+                        declared: Some(kind.clone()),
+                        template: None,
+                        factory_kind: Some(kind.clone()),
+                        valid: [kind].into(),
+                    },
+                )
+            })
+            .collect();
         Self { blocks, wire, keys }
     }
 
+    /// The declared native factory; added validity never changes this selection.
     pub fn type_for(&self, block: &str) -> Option<&str> {
-        self.blocks.get(block).map(String::as_str)
+        self.blocks.get(block)?.declared.as_deref()
+    }
+
+    /// Record a vanilla factory inherited from a content block's template.
+    pub fn template(&mut self, block: String, template: String, kind: String) {
+        let valid = if block == template
+            || matches!(kind.as_str(), "minecraft:sign" | "minecraft:hanging_sign")
+        {
+            [kind.clone()].into()
+        } else {
+            BTreeSet::new()
+        };
+        self.blocks.entry(block).or_insert_with(|| BlockMembership {
+            declared: None,
+            template: Some(template),
+            factory_kind: Some(kind),
+            valid,
+        });
+    }
+
+    /// Extend validity without changing the block's factory.
+    pub fn add_valid(&mut self, block: &str, kind: &str) -> Result<(), &'static str> {
+        if !self.keys.contains(kind) {
+            return Err("unknown block entity type");
+        }
+        self.blocks
+            .entry(block.to_owned())
+            .or_insert_with(|| BlockMembership {
+                declared: None,
+                template: None,
+                factory_kind: None,
+                valid: BTreeSet::new(),
+            })
+            .valid
+            .insert(kind.to_owned());
+        Ok(())
+    }
+
+    /// Explicit membership, including a negative result for known entity blocks.
+    pub fn valid(&self, block: &str, kind: &str) -> Option<bool> {
+        Some(self.blocks.get(block)?.valid.contains(kind))
+    }
+
+    /// Whether a type beyond the selected factory has been accepted.
+    pub fn additional_valid(&self, block: &str, kind: &str) -> bool {
+        self.blocks.get(block).is_some_and(|entry| {
+            entry.factory_kind.as_deref() != Some(kind) && entry.valid.contains(kind)
+        })
+    }
+
+    /// The original vanilla template, independent of added valid types.
+    pub fn template_for(&self, block: &str) -> Option<&str> {
+        self.blocks.get(block)?.template.as_deref()
+    }
+
+    /// Whether the selected factory's type is valid for this block.
+    pub fn factory_valid(&self, block: &str) -> Option<bool> {
+        let entry = self.blocks.get(block)?;
+        Some(entry.valid.contains(entry.factory_kind.as_deref()?))
+    }
+
+    /// Deterministic validity entries for connection identity and startup validation.
+    pub fn memberships(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.blocks.iter().flat_map(|(block, entry)| {
+            entry
+                .valid
+                .iter()
+                .map(move |kind| (block.as_str(), kind.as_str()))
+        })
+    }
+
+    /// Memberships that contribute beyond the built-in vanilla table.
+    pub fn identity_memberships(&self) -> impl Iterator<Item = (&str, &str)> {
+        self.blocks.iter().flat_map(|(block, entry)| {
+            entry
+                .valid
+                .iter()
+                .filter(move |kind| {
+                    !block.starts_with("minecraft:") || entry.factory_kind.as_ref() != Some(*kind)
+                })
+                .map(move |kind| (block.as_str(), kind.as_str()))
+        })
     }
 
     /// Registered names in protocol order, excluding empty slots.
@@ -47,9 +152,31 @@ impl BlockEntityTypes {
 
 static TYPES: OnceLock<BlockEntityTypes> = OnceLock::new();
 
-/// Reading before startup installation never freezes an empty table.
+/// The declared native factory. Reading before installation never freezes an empty table.
 pub fn type_for(block: &str) -> Option<&'static str> {
     current()?.type_for(block)
+}
+
+/// Explicit validity when this block participates in the canonical table.
+pub fn valid(block: &str, kind: &str) -> Option<bool> {
+    current()?.valid(block, kind)
+}
+
+/// Whether an additional type has been accepted beyond the original factory.
+pub fn additional_valid(block: &str, kind: &str) -> bool {
+    current().is_some_and(|types| types.additional_valid(block, kind))
+}
+
+/// Whether the block's own factory is accepted by the canonical validity set.
+pub fn factory_valid(block: &str) -> Option<bool> {
+    current()?.factory_valid(block)
+}
+
+/// The vanilla factory template of a content block, or its own name.
+pub fn factory_block(block: &str) -> &str {
+    current()
+        .and_then(|types| types.template_for(block))
+        .unwrap_or(block)
 }
 
 pub fn current() -> Option<&'static BlockEntityTypes> {
@@ -78,6 +205,46 @@ fn freeze(slot: &OnceLock<BlockEntityTypes>, types: BlockEntityTypes) -> Result<
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn many_to_many_validity_keeps_factories_and_freezes_additions() {
+        let mut types = BlockEntityTypes::new(
+            [("mod:machine".into(), "mod:own".into())].into(),
+            vec![
+                "minecraft:vault".into(),
+                "mod:own".into(),
+                "mod:other".into(),
+            ],
+        );
+        types.template(
+            "mod:vault".into(),
+            "minecraft:vault".into(),
+            "minecraft:vault".into(),
+        );
+        assert_eq!(types.factory_valid("mod:vault"), Some(false));
+        types.add_valid("mod:vault", "minecraft:vault").unwrap();
+        types.add_valid("mod:vault", "mod:other").unwrap();
+        types.add_valid("mod:machine", "mod:other").unwrap();
+        types.add_valid("mod:vault", "mod:other").unwrap();
+        assert_eq!(types.type_for("mod:machine"), Some("mod:own"));
+        assert_eq!(types.type_for("mod:vault"), None);
+        assert_eq!(types.template_for("mod:vault"), Some("minecraft:vault"));
+        assert_eq!(types.factory_valid("mod:vault"), Some(true));
+        assert_eq!(types.valid("mod:machine", "mod:own"), Some(true));
+        assert_eq!(types.valid("mod:machine", "mod:other"), Some(true));
+        assert_eq!(types.valid("mod:vault", "minecraft:vault"), Some(true));
+        assert_eq!(types.valid("mod:vault", "mod:other"), Some(true));
+        assert_eq!(types.valid("mod:vault", "mod:own"), Some(false));
+        assert_eq!(types.memberships().count(), 4);
+        assert_eq!(
+            types.add_valid("mod:vault", "missing:type"),
+            Err("unknown block entity type")
+        );
+        assert_eq!(types.memberships().count(), 4);
+        let slot = OnceLock::new();
+        freeze(&slot, types).unwrap();
+        assert!(freeze(&slot, BlockEntityTypes::new(BTreeMap::new(), Vec::new())).is_err());
+    }
 
     #[test]
     fn declaration_lookup_keeps_vanilla_types_and_block_ids_out() {

@@ -43,7 +43,7 @@ fn game() -> Game<'static> {
     .unwrap();
     game.build_registries();
     game.set_allow_commands(true);
-    growth::install_live_features(&game.res, &game.pack, &game.options);
+    growth::install_live_features(&game.res, &game.pack, &game.options, &Default::default());
     assert!(
         game.res.behaviours().live_features().is_some(),
         "live features"

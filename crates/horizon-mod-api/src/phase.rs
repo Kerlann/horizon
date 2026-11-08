@@ -713,6 +713,67 @@ impl LoopContext for OwningLoop<'_> {
     }
 }
 
+/// The view of a hook fired while a feature generates, where no game is at
+/// hand: on a worldgen worker thread, or on the server thread when a sapling
+/// grows. It carries the server's registries, its settings and the mod list;
+/// the server builds it once per resource generation, a hook never builds one,
+/// and its answers never change while it is held. There are no writes, no
+/// level or entity handles and no transaction: what the generating region
+/// holds is the hook's own arguments.
+///
+/// ```compile_fail
+/// use mod_api::{Host, WorldgenHost};
+/// fn game(_: &dyn Host) {}
+/// fn generate(host: &dyn WorldgenHost) { game(host); }
+/// ```
+///
+/// ```compile_fail
+/// use mod_api::{HostTransaction, WorldgenHost};
+/// fn generate(host: &mut dyn WorldgenHost) {
+///     let _: Result<(), ()> = host.transaction(|_, _| Ok(()));
+/// }
+/// ```
+pub trait WorldgenHost {
+    /// Registry names in ID order, from the server's resource generation.
+    fn registry(&self, name: &str) -> Option<Arc<[String]>>;
+
+    /// A loaded mod's setting captured when the server built this view, without file I/O.
+    fn setting(&self, mod_id: &str, key: &str) -> Option<String>;
+
+    /// The same loaded-mod view available during registration.
+    fn mods(&self) -> LoadedMods;
+}
+
+/// The server's world generation, as a [`WorldgenHost`].
+// hidden: the game's side of the context, not part of the mod surface
+#[doc(hidden)]
+// exhaustive: its fields are private; only the game builds it
+pub struct OwningWorldgen<'a> {
+    source: &'a horizon_world::native_load_context::WorldgenContext,
+    mods: LoadedMods,
+}
+
+impl<'a> OwningWorldgen<'a> {
+    pub fn new(source: &'a horizon_world::native_load_context::WorldgenContext) -> Self {
+        Self {
+            source,
+            mods: LoadedMods::new(),
+        }
+    }
+}
+
+impl WorldgenHost for OwningWorldgen<'_> {
+    fn registry(&self, name: &str) -> Option<Arc<[String]>> {
+        self.source.registry(name)
+    }
+    fn setting(&self, mod_id: &str, key: &str) -> Option<String> {
+        self.source.setting(mod_id, key)
+    }
+    fn mods(&self) -> LoadedMods {
+        self.mods.clone()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

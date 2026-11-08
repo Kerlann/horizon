@@ -832,13 +832,13 @@ impl Game<'_> {
         }
         // Most ticks only advance the cooldown: the block is checked when the
         // hopper is about to move, not on every tick it waits.
-        let hopper = self
-            .res
-            .facts()
-            .get(self.world.block(pos.0, pos.1, pos.2))
-            .name
-            .as_ref()
-            == "minecraft:hopper";
+        let hopper = horizon_client::block_entity_types::factory_block(
+            &self
+                .res
+                .facts()
+                .get(self.world.block(pos.0, pos.1, pos.2))
+                .name,
+        ) == "minecraft:hopper";
         if !hopper {
             self.hoppers.remove(&pos);
             return;
@@ -906,7 +906,10 @@ impl Game<'_> {
                 for y in lo.y.floor() as i32..=hi.y.floor() as i32 {
                     for z in lo.z.floor() as i32..=hi.z.floor() as i32 {
                         let state = self.world.block(x, y, z);
-                        if self.res.facts().get(state).name.as_ref() != "minecraft:hopper" {
+                        if horizon_client::block_entity_types::factory_block(
+                            &self.res.facts().get(state).name,
+                        ) != "minecraft:hopper"
+                        {
                             continue;
                         }
                         // Hopper.INSIDE: the bowl, 2..14 wide and from 11/16 up.

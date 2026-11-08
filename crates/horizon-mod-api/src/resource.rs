@@ -54,6 +54,39 @@ pub const PREVENT_ARMOR_CHANGE: EnchantmentEffect =
 
 pub use horizon_items::properties::{ItemBar, ItemRarity};
 
+/// Effective attack range for an actor, including the component's hitbox margin.
+#[derive(Clone, Copy, Debug, PartialEq)]
+// exhaustive: a value record
+pub struct ItemAttackRange {
+    /// Minimum reach before the margin.
+    pub min: f32,
+    /// Maximum reach before the margin.
+    pub max: f32,
+    /// Margin added to either end of the range.
+    pub hitbox_margin: f32,
+}
+impl ItemAttackRange {
+    /// Inclusive vanilla float bounds compared with a double distance and optional server buffer.
+    pub fn contains(self, distance: f64, buffer: f64) -> bool {
+        distance >= f64::from(self.min - self.hitbox_margin) - buffer
+            && distance <= f64::from(self.max + self.hitbox_margin) + buffer
+    }
+}
+
+/// Owned damage source information for a stack attack or a source-specific item query.
+#[derive(Clone, Debug, PartialEq)]
+// exhaustive: a value record
+pub struct ItemDamageSource {
+    /// Registry identifier of the damage type.
+    pub damage_type: crate::Identifier,
+    /// Entity directly delivering the damage, if any.
+    pub direct: Option<crate::EntityRef>,
+    /// Entity responsible for the damage, if any.
+    pub causing: Option<crate::EntityRef>,
+    /// Explicit source position, if any (melee sources use their direct entity's position).
+    pub position: Option<[f64; 3]>,
+}
+
 /// An item and its components, without a count, as NeoForge's `ItemResource`: what a slot holds.
 /// An empty slot holds none.
 #[derive(Clone)]
@@ -195,6 +228,44 @@ impl ItemResource {
     /// no bar is visible. Client drawing hooks can later replace this bar.
     pub fn bar(&self, host: &dyn Host) -> Option<ItemBar> {
         backend_of(host)?.item_resource_bar(&self.0)
+    }
+    /// `AttackRange.defaultFor` or this stack's effective attack-range component for `attacker`.
+    /// Returns None for an unavailable actor or item. Does not equip this stack.
+    pub fn entity_attack_range(
+        &self,
+        host: &dyn Host,
+        attacker: crate::LivingRef,
+    ) -> Option<ItemAttackRange> {
+        backend_of(host)?.item_resource_entity_attack_range(&self.0, attacker)
+    }
+    /// `ItemStack.getDamageSource`: component override, item-specific source (mace smash),
+    /// then the attacker's ordinary melee source. None for an unavailable actor or damage type.
+    pub fn damage_source(
+        &self,
+        host: &dyn Host,
+        attacker: crate::LivingRef,
+    ) -> Option<ItemDamageSource> {
+        backend_of(host)?.item_resource_damage_source(&self.0, attacker)
+    }
+    /// `ItemStack.canBeHurtBy`: whether this item itself can be hurt by `source`, after
+    /// effective damage-resistant components. This is not wearer protection.
+    /// None for an unknown item or damage type.
+    pub fn can_be_hurt_by(&self, host: &dyn Host, source: &ItemDamageSource) -> Option<bool> {
+        backend_of(host)?.item_resource_can_be_hurt_by(&self.0, source)
+    }
+    /// Preview the stack's attack bonus against `target`, including enchantments and mace
+    /// fall damage. Returns the additional damage above `base_damage`. Uses a cloned RNG
+    /// snapshot: a read never consumes world RNG. This is a preview under the current state; a later attack may
+    /// roll differently. The queried stack is never equipped. None for unavailable handles
+    /// or actors and targets outside the host's active level.
+    pub fn attack_damage_bonus(
+        &self,
+        host: &dyn Host,
+        attacker: crate::LivingRef,
+        target: crate::EntityRef,
+        base_damage: f32,
+    ) -> Option<f32> {
+        backend_of(host)?.item_resource_attack_damage_bonus(&self.0, attacker, target, base_damage)
     }
     /// Standard tooltip text, with explicit advanced and creative flags and the client's
     /// current viewer context. Uses the same line builder as inventory tooltips and skips

@@ -125,7 +125,7 @@ impl FurnaceKind {
         self != Self::Furnace
     }
     pub fn from_block(name: &str) -> Option<Self> {
-        match name {
+        match crate::block_entity_types::factory_block(name) {
             "minecraft:furnace" => Some(Self::Furnace),
             "minecraft:blast_furnace" => Some(Self::BlastFurnace),
             "minecraft:smoker" => Some(Self::Smoker),
@@ -369,6 +369,14 @@ impl Crafter {
 }
 impl BlockEntity {
     pub fn for_block(name: &str) -> Option<Self> {
+        let factory = crate::block_entity_types::factory_block(name);
+        if crate::block_entity_types::factory_valid(name) == Some(false) {
+            return None;
+        }
+        Self::for_factory(factory)
+    }
+
+    fn for_factory(name: &str) -> Option<Self> {
         if let Some(hanging) = crate::signs::sign_kind(name) {
             return Some(Self::Sign(crate::signs::SignData {
                 hanging,
@@ -505,6 +513,17 @@ impl BlockEntity {
     /// it (a furnace is its kind's, a sign only its standing or hanging
     /// kind); native types use the accepted declaration's valid blocks.
     pub fn fits(&self, name: &str) -> bool {
+        if crate::block_entity_types::additional_valid(name, self.id())
+            || (!name.starts_with("minecraft:")
+                && crate::block_entity_types::valid(name, self.id()) == Some(true))
+        {
+            return true;
+        }
+        let factory = crate::block_entity_types::factory_block(name);
+        if factory != name {
+            return crate::block_entity_types::factory_valid(name) == Some(true)
+                && self.fits(factory);
+        }
         match self {
             Self::Chest(items) => container_size(name) == Some(items.len()),
             Self::Furnace(f) => FurnaceKind::from_block(name) == Some(f.kind),

@@ -92,7 +92,59 @@ fn smash_push(center: Vec3, heavy: f64, at: Vec3, velocity: &mut Vec3, resistanc
     );
 }
 
+/// `MaceItem.canSmashAttack` with explicit actor state.
+pub(super) fn can_smash(fall: f64, fall_flying: bool) -> bool {
+    fall > FALL_THRESHOLD && !fall_flying
+}
+
+/// `MaceItem.getAttackDamageBonus`, with an explicit stack, actor fall and RNG.
+pub(super) fn stack_smash_damage(
+    enchantments: &horizon_items::enchant::Enchantments,
+    stack: &horizon_items::items::ItemStack,
+    fall: f64,
+    ctx: &EffectContext<'_>,
+    random: &mut horizon_core::random::LegacyRandom,
+) -> f32 {
+    let damage = if fall <= 3.0 {
+        4.0 * fall
+    } else if fall <= 8.0 {
+        12.0 + 2.0 * (fall - 3.0)
+    } else {
+        22.0 + fall - 8.0
+    };
+    let per_block = enchantments.modify_value(
+        Some(stack),
+        "minecraft:smash_damage_per_fallen_block",
+        ctx,
+        random,
+        0.0,
+    );
+    (damage + f64::from(per_block) * fall) as f32
+}
+
 impl Game<'_> {
+    /// The weapon's source override, item override, then the actor's ordinary melee source.
+    pub(in crate::game) fn stack_melee_damage_type(
+        &self,
+        stack: Option<&ItemStack>,
+        (fall, flying): (f64, bool),
+        player: bool,
+    ) -> String {
+        if let Some(value) =
+            stack.and_then(|s| self.item_combat_component(s, "minecraft:damage_type"))
+            && let Some(id) = value.as_str()
+        {
+            return horizon_core::identifier::Identifier::parse(id)
+                .map_or_else(|_| id.to_owned(), |id| id.to_string());
+        }
+        if stack.is_some_and(|s| &*s.item == "minecraft:mace") && can_smash(fall, flying) {
+            "minecraft:mace_smash".into()
+        } else if player {
+            "minecraft:player_attack".into()
+        } else {
+            "minecraft:mob_attack".into()
+        }
+    }
     fn holds_mace(&self) -> bool {
         self.inventory[self.selected]
             .as_ref()
@@ -102,7 +154,7 @@ impl Game<'_> {
     fn can_smash_attack(&self) -> bool {
         self.player
             .as_ref()
-            .is_some_and(|p| p.fall_distance > FALL_THRESHOLD && !p.fall_flying)
+            .is_some_and(|p| can_smash(p.fall_distance, p.fall_flying))
     }
     /// A held mace about to smash (`MaceItem.getItemDamageSource`: the attack
     /// is `mace_smash` damage).
@@ -111,12 +163,25 @@ impl Game<'_> {
     }
     /// The damage source of the player's hit from `from` with the held item.
     pub(super) fn attack_source(&self, from: [f64; 3]) -> Damage {
-        if self.smash_attack() {
-            Damage::mace(from)
-        } else {
-            Damage::player(from)
+        let motion = self
+            .player
+            .as_ref()
+            .map_or((0.0, false), |p| (p.fall_distance, p.fall_flying));
+        let name = self.stack_melee_damage_type(self.held(), motion, true);
+        let mut source = match name.as_str() {
+            "minecraft:mace_smash" => Damage::mace(from),
+            _ => Damage::player(from),
+        };
+        if name != "minecraft:mace_smash"
+            && name != "minecraft:player_attack"
+            && let Some(named) =
+                horizon_client::mobs::NamedDamage::registered(&self.health_resources.damage, &name)
+        {
+            source.kind = horizon_client::mobs::DamageKind::Named(named);
         }
+        source
     }
+
     /// `MaceItem.getAttackDamageBonus` against `victim`: 4 per block for the
     /// first three blocks fallen, 2 for the next five, 1 after that, plus
     /// `smash_damage_per_fallen_block` (Density) for every block.
@@ -125,32 +190,36 @@ impl Game<'_> {
             return 0.0;
         }
         let fall = self.player.as_ref().map_or(0.0, |p| p.fall_distance);
-        let damage = if fall <= 3.0 {
-            4.0 * fall
-        } else if fall <= 8.0 {
-            12.0 + 2.0 * (fall - 3.0)
-        } else {
-            22.0 + fall - 8.0
-        };
         let held = self.inventory[self.selected].clone();
+        let Some(held) = held else { return 0.0 };
+        let held = self.item_combat_stack(&held);
+        let source = self.stack_melee_damage_type(
+            Some(&held),
+            self.player
+                .as_ref()
+                .map_or((0.0, false), |p| (p.fall_distance, p.fall_flying)),
+            true,
+        );
         let ctx = EffectContext {
             this: Some(victim),
             attacker: Some("minecraft:player"),
             direct_attacker: Some("minecraft:player"),
             is_direct: true,
-            damage_type: Some("minecraft:mace_smash"),
+            damage_type: Some(&source),
+            direct_motion: self
+                .player
+                .as_ref()
+                .map(|p| (p.fall_distance, p.fall_flying)),
             items: Some(world_items!(self)),
             ..Default::default()
         };
-        // EnchantmentHelper.modifyFallBasedDamage(..., 0)
-        let per_block = world_stations!(self).enchantments.modify_value(
-            held.as_ref(),
-            "minecraft:smash_damage_per_fallen_block",
+        stack_smash_damage(
+            &world_stations!(self).enchantments,
+            &held,
+            fall,
             &ctx,
             &mut self.world.random,
-            0.0,
-        );
-        (damage + f64::from(per_block) * fall) as f32
+        )
     }
     /// `source.getEntity()` of a blow as `SulfurCube.knockback` reads it: its eye position
     /// (`getEyePosition`), view direction (`getLookAngle`, `calculateViewVector(xRot, yRot)`)

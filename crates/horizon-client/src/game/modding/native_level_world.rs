@@ -104,7 +104,8 @@ impl Game<'_> {
             dimension == Dim::End,
             self.world.weather.levels(1.0),
         );
-        horizon_client::environment::sky_darken(environment, self.world.day_time, rain, thunder)
+        let day_time = self.command_clock_time(&self.level_clock_name(dimension));
+        horizon_client::environment::sky_darken(environment, day_time, rain, thunder)
     }
 
     /// `Level.getSkyDarken` for an active or parked level, without switching dimensions.
