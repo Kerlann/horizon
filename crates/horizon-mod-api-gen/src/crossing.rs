@@ -79,6 +79,12 @@ pub enum Shape {
     Array(Box<Shape>, usize),
     Slice(Box<Shape>),
     Option(Box<Shape>),
+    /// `Result<T, E>` (and the game's `Result<T>` alias, whose error is `Box<dyn Error>`): a
+    /// two-case tagged enum, Ok = 0 and Err = 1, each with one payload field.
+    Result(Box<Shape>, Box<Shape>),
+    /// `dyn Error`: crosses as its `Display` text, so a `Box<dyn Error>` is read as a string and
+    /// replaced by building a boxed error from one.
+    DynError,
     Wrapped(Wrapper, Box<Shape>),
     /// A collection, with its written arguments (a map's key and value, and any hasher, as types
     /// from the crate's root).
@@ -97,11 +103,12 @@ impl Shape {
             Self::Ref { .. } | Self::Opaque(_) | Self::Wrapped(Wrapper::Cow, _) => true,
             Self::Named(_, lifetimes) => *lifetimes != 0,
             Self::Tuple(parts) | Self::Collection(_, parts) => parts.iter().any(Self::may_borrow),
+            Self::Result(ok, err) => ok.may_borrow() || err.may_borrow(),
             Self::Array(inner, _)
             | Self::Slice(inner)
             | Self::Option(inner)
             | Self::Wrapped(_, inner) => inner.may_borrow(),
-            Self::Scalar(_) | Self::Unit => false,
+            Self::Scalar(_) | Self::Unit | Self::DynError => false,
         }
     }
 }
@@ -144,6 +151,9 @@ const COLLECTIONS: &[(&str, Collection)] = &[
     ("BTreeMap", Collection::BTreeMap),
 ];
 
+/// Type aliases of `Result<T, Box<dyn Error>>`, by resolved path.
+const ERROR_RESULTS: &[&str] = &["horizon_client_core::Result", "horizon_client::Result"];
+
 /// Crates whose types never cross: the GPU, the window, input devices, audio. Only the
 /// [`CROSSING_FOREIGN`] types of them do.
 const OPAQUE_CRATES: &[&str] = &["wgpu", "winit", "gilrs", "cpal", "rodio", "glyphon"];
@@ -169,6 +179,7 @@ pub const CROSSING_FOREIGN: &[(&str, Foreign)] = &[
     ("winit::keyboard::ModifiersState", Foreign::Bits),
     ("winit::event::ElementState", Foreign::Layout),
     ("winit::event::MouseButton", Foreign::Layout),
+    ("winit::event_loop::ControlFlow", Foreign::Layout),
 ];
 
 /// How the [`CROSSING_FOREIGN`] type at `path` is read, if it is one.
@@ -400,6 +411,9 @@ pub struct Named {
     pub guarded: bool,
     /// Declared in another crate than the game's, where the table reads it.
     pub foreign: bool,
+    /// Declared in a workspace crate below the game, whose fields the staged copy makes public
+    /// (the mod API's own layouts and other crates' are not).
+    pub widened: bool,
     /// `#[non_exhaustive]` on it or a case of it: another crate can't build it.
     pub sealed: bool,
 }
@@ -414,6 +428,12 @@ pub struct Field<'r> {
     pub ty: &'r Type,
 }
 
+/// A listed trait's declaration, and the module its signatures are written in.
+pub struct TraitDecl {
+    pub module: String,
+    pub item: syn::ItemTrait,
+}
+
 /// The rule over one game's internals.
 pub struct Rule {
     named: HashMap<String, Named>,
@@ -421,6 +441,13 @@ pub struct Rule {
     /// Import facts in each lexical module. Conflicting conditional imports stay unresolved.
     refs: HashMap<String, BTreeMap<String, Option<String>>>,
     memo: std::cell::RefCell<HashMap<String, Crossing>>,
+    /// Every non-generic listed trait, by path: the trait objects that cross as method tables.
+    traits: HashMap<String, TraitDecl>,
+    /// Set while a codec is built for a call at a staged point, where a widened layout's fields
+    /// are public: its constructor is then not private.
+    pub(crate) widened: std::cell::Cell<bool>,
+    /// Whether a named layout has a generated decoder, decided once per rule.
+    pub(crate) decodable: std::cell::RefCell<HashMap<String, bool>>,
 }
 
 /// `a::b::C<'_>` as `a::b::C`.
@@ -435,7 +462,23 @@ impl Rule {
     /// The rule over `internals`: every struct and enum they list, under no `cfg`.
     pub fn new(internals: &[Internal]) -> Self {
         let mut named = HashMap::new();
+        let mut traits = HashMap::new();
         for internal in internals {
+            if internal.cfg.is_empty()
+                && internal.kind == "trait"
+                && let Ok(syn::Item::Trait(item)) = syn::parse_str::<syn::Item>(&internal.signature)
+                && item.generics.params.is_empty()
+            {
+                let path = bare(&internal.path);
+                let module = path.rsplit_once("::").map_or("", |(module, _)| module);
+                traits.insert(
+                    path.clone(),
+                    TraitDecl {
+                        module: module.to_owned(),
+                        item,
+                    },
+                );
+            }
             if !internal.cfg.is_empty() || !matches!(internal.kind, "struct" | "enum") {
                 continue;
             }
@@ -493,6 +536,9 @@ impl Rule {
                     opaque_reason,
                     guarded,
                     foreign,
+                    widened: foreign
+                        && path.starts_with("horizon_")
+                        && !API_CRATES.contains(&path.split("::").next().unwrap_or_default()),
                     sealed,
                 },
             );
@@ -537,6 +583,68 @@ impl Rule {
                 .collect(),
             refs,
             memo: Default::default(),
+            traits,
+            widened: Default::default(),
+            decodable: Default::default(),
+        }
+    }
+
+    /// `ty` with every path to a listed layout spelled out in full, so that it means the same
+    /// type in another module than the one it was written in.
+    pub fn qualify(&self, module: &str, ty: &Type) -> Type {
+        use syn::visit_mut::VisitMut;
+        struct Qualify<'a>(&'a Rule, &'a str);
+        impl VisitMut for Qualify<'_> {
+            fn visit_type_path_mut(&mut self, node: &mut syn::TypePath) {
+                syn::visit_mut::visit_type_path_mut(self, node);
+                if node.qself.is_none()
+                    && let Some(found) = self.0.resolve(self.1, &node.path)
+                    && self.0.named.contains_key(&found)
+                    && let Ok(full) = syn::parse_str::<syn::Path>(&found)
+                {
+                    node.path = full;
+                }
+            }
+        }
+        let mut ty = ty.clone();
+        Qualify(self, module).visit_type_mut(&mut ty);
+        ty
+    }
+
+    /// The listed trait at `path`.
+    pub fn trait_decl(&self, path: &str) -> Option<&TraitDecl> {
+        self.traits.get(path)
+    }
+
+    /// The listed trait a `dyn` object of `ty`, written in `module`, is an object of, through
+    /// references, parentheses and `Box`: `&dyn T`, `&mut dyn T`, `Box<dyn T>`, `&(dyn T + Send)`.
+    pub fn trait_object(&self, module: &str, ty: &Type) -> Option<String> {
+        match ty {
+            Type::Reference(r) => self.trait_object(module, &r.elem),
+            Type::Paren(p) => self.trait_object(module, &p.elem),
+            Type::Group(g) => self.trait_object(module, &g.elem),
+            Type::TraitObject(object) => object.bounds.iter().find_map(|bound| {
+                let syn::TypeParamBound::Trait(bound) = bound else {
+                    return None;
+                };
+                let found = self.resolve(module, &bound.path)?;
+                self.traits.contains_key(&found).then_some(found)
+            }),
+            Type::Path(p) if p.qself.is_none() => {
+                let last = p.path.segments.last()?;
+                let boxed = last.ident == "Box"
+                    && self.resolve(module, &p.path).is_none_or(|path| {
+                        matches!(path.as_str(), "std::boxed::Box" | "alloc::boxed::Box")
+                    });
+                let PathArguments::AngleBracketed(args) = &last.arguments else {
+                    return None;
+                };
+                match (boxed, args.args.first()) {
+                    (true, Some(GenericArgument::Type(inner))) => self.trait_object(module, inner),
+                    _ => None,
+                }
+            }
+            _ => None,
         }
     }
 
@@ -639,6 +747,35 @@ impl Rule {
             },
             Type::Slice(s) => Shape::Slice(Box::new(self.shape(module, this, &s.elem))),
             Type::Path(p) if p.qself.is_none() => self.path(module, this, &p.path),
+            Type::TraitObject(object) => {
+                // A listed trait's object keeps its identity: its table is that trait's methods.
+                if let Some(path) = self.trait_object(module, ty) {
+                    return Shape::Opaque(Some(format!("dyn {path}")));
+                }
+                let mut error = false;
+                for bound in &object.bounds {
+                    let syn::TypeParamBound::Trait(bound) = bound else {
+                        continue;
+                    };
+                    let spelled = bound
+                        .path
+                        .segments
+                        .iter()
+                        .map(|s| s.ident.to_string())
+                        .collect::<Vec<_>>()
+                        .join("::");
+                    match self
+                        .resolve(module, &bound.path)
+                        .as_deref()
+                        .unwrap_or(&spelled)
+                    {
+                        "std::error::Error" | "core::error::Error" => error = true,
+                        "Send" | "Sync" | "std::marker::Send" | "std::marker::Sync" => {}
+                        _ => return opaque,
+                    }
+                }
+                if error { Shape::DynError } else { opaque }
+            }
             _ => opaque,
         }
     }
@@ -686,6 +823,34 @@ impl Rule {
             .map(|s| s.ident.to_string())
             .collect::<Vec<_>>()
             .join("::");
+        // These std and serde_json types have a Wire codec (`native_value`) but no leaf shape: they
+        // are never walked. A foreign layout writes them without the import facts.
+        let known = resolved.as_deref().unwrap_or(&spelled);
+        let time = matches!(name.as_str(), "Instant" | "Duration")
+            && match resolved.as_deref() {
+                Some(path) => matches!(
+                    path,
+                    "std::time::Instant"
+                        | "std::time::Duration"
+                        | "web_time::Instant"
+                        | "web_time::Duration"
+                ),
+                None => module.starts_with("winit"),
+            };
+        let opaque_codec = if time {
+            Some(format!("std::time::{name}"))
+        } else if matches!(known, "serde_json::Value") {
+            Some("serde_json::Value".to_owned())
+        } else if matches!(known, "std::path::Path" | "std::path::PathBuf") {
+            Some("std::path::PathBuf".to_owned())
+        } else {
+            None
+        };
+        if let Some(codec) = opaque_codec
+            && args.is_empty()
+        {
+            return Shape::Opaque(Some(codec));
+        }
         if self
             .refs
             .get(module)
@@ -697,7 +862,8 @@ impl Rule {
         // names must identify the actual standard type, not just share its last segment.
         let prelude = path.segments.len() == 1
             && (SCALARS.iter().any(|(n, _)| *n == name)
-                || matches!(name.as_str(), "Option" | "Box" | "Vec"));
+                || matches!(name.as_str(), "Option" | "Box" | "Vec")
+                || (name == "Result" && args.len() == 2));
         let builtin = resolved.as_deref().map_or(prelude, |p| {
             let Some((head, tail)) = p.split_once("::") else {
                 return false;
@@ -721,7 +887,7 @@ impl Rule {
                     | "collections::BTreeSet"
                     | "collections::btree_set::BTreeSet",
                 ) => true,
-                ("std" | "core", "option::Option") => true,
+                ("std" | "core", "option::Option" | "result::Result") => true,
                 (
                     "std",
                     "collections::HashMap"
@@ -739,6 +905,19 @@ impl Rule {
                 _ => false,
             }
         });
+        // The game's `Result<T>` alias: `Result<T, Box<dyn Error>>`.
+        if resolved
+            .as_deref()
+            .is_some_and(|p| ERROR_RESULTS.contains(&p))
+        {
+            return match <[Shape; 1]>::try_from(args) {
+                Ok([ok]) => Shape::Result(
+                    Box::new(ok),
+                    Box::new(Shape::Wrapped(Wrapper::Box, Box::new(Shape::DynError))),
+                ),
+                Err(_) => opaque,
+            };
+        }
         if !builtin {
             return opaque;
         }
@@ -746,9 +925,6 @@ impl Rule {
             .as_deref()
             .and_then(|p| p.rsplit("::").next())
             .unwrap_or(&name);
-        if matches!(name, "HashSet" | "BTreeSet") {
-            return opaque;
-        }
         let single = |args: Vec<Shape>| -> Option<Box<Shape>> {
             let [inner] = <[Shape; 1]>::try_from(args).ok()?;
             Some(Box::new(inner))
@@ -758,6 +934,12 @@ impl Rule {
                 Shape::Scalar(*scalar)
             } else {
                 opaque
+            };
+        }
+        if name == "Result" {
+            return match <[Shape; 2]>::try_from(args) {
+                Ok([ok, err]) => Shape::Result(Box::new(ok), Box::new(err)),
+                Err(_) => opaque,
             };
         }
         if name == "Option" {
@@ -829,7 +1011,22 @@ impl Rule {
             },
             // Nodes erase pointers to `*mut ()`; a slice's metadata cannot survive that.
             Shape::Slice(_) => Crossing::Opaque,
+            // A tagged case holds either payload, so the whole is walked, never copied; an
+            // unprojectable payload is a leaf, not a reason to hide the other.
+            Shape::Result(ok, err) => {
+                if self.of(ok, open) == Crossing::Opaque && self.of(err, open) == Crossing::Opaque {
+                    Crossing::Opaque
+                } else {
+                    Crossing::Handle
+                }
+            }
+            Shape::DynError => Crossing::Copy(1),
             Shape::Collection(collection, args) => {
+                // Sets have no stable addressable element nodes, even though their owned
+                // value shape can be used by a native codec.
+                if matches!(collection, Collection::HashSet | Collection::BTreeSet) {
+                    return Crossing::Opaque;
+                }
                 let walked = match collection {
                     Collection::HashMap | Collection::BTreeMap => &args[..2],
                     _ => &args[..1],
@@ -1000,6 +1197,59 @@ pub(crate) mod tests {
 
     fn of(rule: &Rule, module: &str, ty: &str) -> Crossing {
         rule.crossing(module, &syn::parse_str(ty).unwrap())
+    }
+
+    #[test]
+    fn result_is_a_two_case_enum_with_a_display_text_for_dyn_error() {
+        let mut thing = internal("horizon_client::game::Thing", "struct", "struct Thing;");
+        thing
+            .refs
+            .insert("Result".into(), "horizon_client_core::Result".into());
+        let rule = Rule::new(&[thing]);
+        let shape =
+            |ty: &str| rule.shape("horizon_client::game", None, &syn::parse_str(ty).unwrap());
+        let boxed = Shape::Wrapped(Wrapper::Box, Box::new(Shape::DynError));
+        let unit = Shape::Unit;
+        // The game's alias fixes the error to `Box<dyn Error>`.
+        assert_eq!(
+            shape("Result<bool>"),
+            Shape::Result(
+                Box::new(Shape::Scalar(Scalar::Bool)),
+                Box::new(boxed.clone())
+            )
+        );
+        assert_eq!(
+            shape("std::result::Result<(), Box<dyn std::error::Error + Send + Sync>>"),
+            Shape::Result(Box::new(unit), Box::new(boxed))
+        );
+        // Written in full, `Result` is the std type.
+        let rule_plain = Rule::new(&[]);
+        let plain = |ty: &str| rule_plain.shape("m", None, &syn::parse_str(ty).unwrap());
+        assert_eq!(
+            plain("Result<u8, String>"),
+            Shape::Result(
+                Box::new(Shape::Scalar(Scalar::Unsigned("u8"))),
+                Box::new(Shape::Scalar(Scalar::String))
+            )
+        );
+        // An Err type that does not cross stays a leaf: the Result is still walked.
+        assert!(matches!(
+            plain("Result<u8, wgpu::Error>"),
+            Shape::Result(_, err) if matches!(*err, Shape::Opaque(_))
+        ));
+        assert_eq!(
+            rule_plain.crossing_of(&plain("Result<u8, wgpu::Error>")),
+            Crossing::Handle
+        );
+        assert_eq!(
+            rule_plain.crossing_of(&plain("Result<wgpu::A, wgpu::B>")),
+            Crossing::Opaque
+        );
+        // A one-argument `Result` that is not the game's alias is some other type.
+        assert!(matches!(
+            Rule::new(&[]).shape("m", None, &syn::parse_str("Result<u8>").unwrap()),
+            Shape::Opaque(_)
+        ));
     }
 
     #[test]

@@ -559,7 +559,7 @@ fn refuses_a_changed_file_a_taken_id_and_local_files_from_the_real_registry() {
 
 #[test]
 fn registry_versions_run_when_made_for_this_game() {
-    use super::super::{pick, support, Support};
+    use super::super::{Support, pick, support};
     let v = |game: &str| vec![game.to_owned()];
     let horizon = vec![LOADER.to_owned()];
     assert_eq!(support(Kind::Mod, &v(GAME), &horizon), Support::Works);

@@ -144,8 +144,8 @@ pub fn dimension_dir(world: &Path, dimension: &str) -> PathBuf {
     let dimensions = world.join("dimensions");
     match id.split_once(':') {
         Some((namespace, path))
-            if horizon_world::worldgen::overrides::valid_level_namespace(namespace)
-                && horizon_world::worldgen::overrides::valid_level_path(path) =>
+            if horizon_core::level_id::valid_level_namespace(namespace)
+                && horizon_core::level_id::valid_level_path(path) =>
         {
             dimensions.join(namespace).join(path)
         }
@@ -646,6 +646,7 @@ pub fn block_entity_placeholder(entity: &crate::containers::BlockEntity) -> bool
 /// The block entity type ID for the block it sits in (a chest-like container
 /// is a chest, trapped chest or barrel).
 pub fn block_entity_id<'a>(e: &'a crate::containers::BlockEntity, block: &'a str) -> &'a str {
+    let block = crate::block_entity_types::factory_block(block);
     match (e, block) {
         (
             crate::containers::BlockEntity::Chest(_),
@@ -954,11 +955,17 @@ pub fn decode_block_entity_for_block(
     block: &str,
 ) -> Option<((i32, i32, i32), crate::containers::BlockEntity)> {
     let decoded = decode_block_entity(tag)?;
-    let actual = match &decoded.1 {
-        crate::containers::BlockEntity::Mod(m) => Some(m.id()),
-        _ => None,
+    let valid = match &decoded.1 {
+        crate::containers::BlockEntity::Mod(m) => {
+            crate::block_entity_types::valid(block, m.id()) == Some(true)
+        }
+        _ => {
+            crate::block_entity_types::valid(block, decoded.1.id()) == Some(true)
+                || (crate::block_entity_types::type_for(block).is_none()
+                    && (block.starts_with("minecraft:") || decoded.1.fits(block)))
+        }
     };
-    (actual == crate::block_entity_types::type_for(block)).then_some(decoded)
+    valid.then_some(decoded)
 }
 
 pub fn decode_block_entity(tag: &Tag) -> Option<((i32, i32, i32), crate::containers::BlockEntity)> {

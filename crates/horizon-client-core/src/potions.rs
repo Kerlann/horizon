@@ -392,3 +392,12 @@ mod tests {
         assert_eq!(ids.last(), Some(&"ruby:glow"));
     }
 }
+
+/// Borrow an effect by its completed engine registry index.
+pub fn effect_by_index(index: usize) -> Option<&'static EffectDef> {
+    if index < EFFECTS.len() {
+        EFFECTS.get(index)
+    } else {
+        mod_effects().get(index - EFFECTS.len())
+    }
+}

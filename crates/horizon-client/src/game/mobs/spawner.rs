@@ -151,7 +151,11 @@ impl Game<'_> {
             .is_none()
             .then(|| mod_api::NativeSpawner::Block(mod_api::BlockPos::new(key.0, key.1, key.2)));
         let extras = {
-            let level = self.natural_level();
+            let mut level = self.natural_level();
+            // A minecart spawner has no block to tell the spawn checks of.
+            level.spawner = cart.is_none().then_some(mod_api::Spawner::Block {
+                pos: mod_api::BlockPos::new(key.0, key.1, key.2),
+            });
             let mut spawn = |l: &super::natural_spawning::GameLevel,
                              r: &SpawnerSpawn,
                              rng: &mut LegacyRandom| {
@@ -233,7 +237,10 @@ impl Game<'_> {
         let [x, y, z] = r.position;
         let at = Vec3::new(x, y, z);
         let (bounds, key) = if r.finalize {
-            let mut mob = Mob::new(l.provisional_id(), kind, at, r.yaw);
+            // The mob a listened position check created, else a new one.
+            let mut mob = l
+                .take_checked(r.id, r.position, r.yaw)
+                .unwrap_or_else(|| Mob::new(l.provisional_id(), kind, at, r.yaw));
             let reason = if r.trial {
                 SpawnReason::TrialSpawner
             } else {

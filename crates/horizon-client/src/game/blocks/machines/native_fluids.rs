@@ -571,8 +571,8 @@ mod tests {
             let (full, one) = (water(game, 3), water(game, 1));
             let (from, to) = ([0, 64, 0], [2, 64, 0]);
             let flags = NativeBlockUpdateFlags::NEIGHBORS;
-            assert!(game.level_set_block(level, from, full, flags));
-            assert!(game.level_set_block(level, to, one, flags));
+            assert_eq!(game.level_set_block(level, from, full, flags), Ok(true));
+            assert_eq!(game.level_set_block(level, to, one, flags), Ok(true));
             // The target has room for two levels: the bucket the source first gives doesn't
             // fit, so the move is undone and tried again with what fit, two levels' worth.
             let host: &mut dyn ServerHost = game;
@@ -795,11 +795,10 @@ mod tests {
                 _: &mod_api::RegistrationContext,
                 event: &mut mod_api::BlocksEvent<'_>,
             ) {
-                event.blocks.push(horizon_mod_package::content::Block {
-                    id: "fluid_filter_test:water_tank".into(),
-                    template: "minecraft:stone".into(),
-                    ..Default::default()
-                });
+                event.blocks.push(mod_api::Block::new(
+                    "fluid_filter_test:water_tank",
+                    "minecraft:stone",
+                ));
             }
         }
         let mods: Mods = vec![ModEntry::new("fluid_filter_test", Box::new(WaterTanks))].into();
@@ -833,12 +832,10 @@ mod tests {
                     .set_mod_fluids(FxHashMap::from_iter([(block.0, Arc::new(table))]));
                 let (from, to) = ([0, 64, 0], [2, 64, 0]);
                 for pos in [from, to] {
-                    assert!(game.level_set_block(
-                        level,
-                        pos,
-                        block,
-                        NativeBlockUpdateFlags::NEIGHBORS
-                    ));
+                    assert_eq!(
+                        game.level_set_block(level, pos, block, NativeBlockUpdateFlags::NEIGHBORS),
+                        Ok(true)
+                    );
                     game.world.block_entities.insert(
                         (pos[0], pos[1], pos[2]),
                         BlockEntity::Mod(Box::new(ModBlockEntity::new(
@@ -881,12 +878,15 @@ mod tests {
                 let handle = mod_api::__private::intern_unresolved_fluid("othermod:fluid").unwrap();
                 game.set_tank_state(from, &tanks(&[(Some("othermod:fluid"), 1000), (None, 0)]));
                 let pipe_target = [4, 64, 0];
-                assert!(game.level_set_block(
-                    level,
-                    pipe_target,
-                    block,
-                    NativeBlockUpdateFlags::NEIGHBORS
-                ));
+                assert_eq!(
+                    game.level_set_block(
+                        level,
+                        pipe_target,
+                        block,
+                        NativeBlockUpdateFlags::NEIGHBORS
+                    ),
+                    Ok(true)
+                );
                 game.world.block_entities.insert(
                     (4, 64, 0),
                     BlockEntity::Mod(Box::new(ModBlockEntity::new(

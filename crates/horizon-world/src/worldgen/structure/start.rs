@@ -113,12 +113,13 @@ pub enum StructureKind {
 /// `find_generation_point` reads.
 pub struct ModType {
     pub ty: Arc<dyn ModStructureType>,
-    pub config: Arc<Value>,
+    /// The mod's config, prepared once while decoding this definition.
+    pub config: Arc<horizon_core::nbt::Tag>,
 }
 impl std::fmt::Debug for ModType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ModType")
-            .field("type", &self.config["type"])
+            .field("type", &self.config.get("type"))
             .finish()
     }
 }
@@ -448,7 +449,9 @@ impl StructureRegistry {
                 other => match mod_types.get(other) {
                     Some(ty) => StructureKind::Mod(ModType {
                         ty: ty.clone(),
-                        config: Arc::new(v.clone()),
+                        config: ty.prepare_config(&v).map_err(|error| {
+                            DecodeError::Registry(format!("structure {name}: {error}"))
+                        })?,
                     }),
                     None => StructureKind::Unsupported(other.to_owned()),
                 },
@@ -510,19 +513,20 @@ impl StructureRegistry {
                 },
                 _ => Placement::Unsupported,
             };
+            let mut structures = Vec::new();
+            for entry in v["structures"].as_array().into_iter().flatten() {
+                // StructureSelectionEntry.CODEC uses ExtraCodecs.POSITIVE_INT.
+                let weight = entry["weight"]
+                    .as_i64()
+                    .filter(|w| (1..=i64::from(i32::MAX)).contains(w))
+                    .ok_or(DecodeError::Field("structure set positive int weight"))?;
+                if let Some(definition) = entry["structure"].as_str().and_then(index) {
+                    structures.push((definition, weight as i32));
+                }
+            }
             out.push(StructureSet {
                 name: name.clone(),
-                structures: v["structures"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .filter_map(|e| {
-                        Some((
-                            index(e["structure"].as_str()?)?,
-                            e["weight"].as_i64().unwrap_or(1) as i32,
-                        ))
-                    })
-                    .collect(),
+                structures,
                 placement,
                 salt: p["salt"].as_i64().unwrap_or(0) as i32,
                 frequency: frequency as f32,
@@ -930,6 +934,22 @@ impl NoiseColumn {
     }
 }
 
+/// A caller-owned final noise column, filled directly during one sampling pass.
+pub trait NoiseColumnTarget {
+    fn resize(&mut self, min: i32, height: usize);
+    fn set(&mut self, index: usize, block: NoiseBlock);
+}
+impl NoiseColumnTarget for NoiseColumn {
+    fn resize(&mut self, min: i32, height: usize) {
+        self.min = min;
+        self.blocks.clear();
+        self.blocks.resize(height, NoiseBlock::Air);
+    }
+    fn set(&mut self, index: usize, block: NoiseBlock) {
+        self.blocks[index] = block;
+    }
+}
+
 /// Biome and height queries for one structure generation attempt.
 pub trait StartContext: JigsawContext {
     /// A chunk an older version generated: its structure starts are the ones
@@ -951,11 +971,27 @@ pub trait StartContext: JigsawContext {
     }
     /// ChunkGenerator.getBaseColumn as heightmap opacity, indexed from min_y.
     fn base_column(&mut self, x: i32, z: i32, kind: HeightmapType) -> Vec<bool>;
-    /// base_column for several heightmap kinds from one noise-column pass.
-    fn base_columns(&mut self, x: i32, z: i32, kinds: &[HeightmapType]) -> Vec<Vec<bool>>;
+    /// Several heightmap predicates from one pass, for the engine's vanilla callers.
+    fn base_columns(&mut self, x: i32, z: i32, kinds: &[HeightmapType]) -> Vec<Vec<bool>> {
+        self.base_columns_by(x, z, kinds.len(), &|index| kinds[index])
+    }
+    /// Several heightmap predicates from one pass, projected without a temporary kind vector.
+    fn base_columns_by(
+        &mut self,
+        x: i32,
+        z: i32,
+        count: usize,
+        kind: &dyn Fn(usize) -> HeightmapType,
+    ) -> Vec<Vec<bool>>;
     /// ChunkGenerator.getBaseColumn's blocks: the noise column's states, as
     /// mods' placements test them (Formations').
-    fn noise_column(&mut self, x: i32, z: i32) -> NoiseColumn;
+    fn noise_column(&mut self, x: i32, z: i32) -> NoiseColumn {
+        let mut column = NoiseColumn::default();
+        self.noise_column_into(x, z, &mut column);
+        column
+    }
+    /// Fill the caller's final column directly, with no intermediate classified-block vector.
+    fn noise_column_into(&mut self, x: i32, z: i32, column: &mut dyn NoiseColumnTarget);
     /// Biome.coldEnoughToSnow at a position.
     fn cold_enough_to_snow(&mut self, biome: BiomeId, pos: [i32; 3]) -> bool;
     fn generation(&self) -> WorldGenerationContext;
@@ -1047,17 +1083,10 @@ pub(crate) fn create_starts_with_saved(
         let mut options = set.structures.clone();
         let mut random = WorldgenRandom::new(LegacyRandom::new(0));
         random.set_large_feature_seed(seed, chunk.x, chunk.z);
-        let mut total: i32 = options.iter().map(|o| o.1).sum();
         while !options.is_empty() {
-            let mut choice = random.next_int_bound(total).unwrap_or(0);
-            let mut index = 0;
-            for option in &options {
-                choice -= option.1;
-                if choice < 0 {
-                    break;
-                }
-                index += 1;
-            }
+            let Some(index) = pick_structure(&options, &mut random) else {
+                break;
+            };
             let selected = options[index];
             if let Some(start) = try_generate(
                 registry, resources, bindings, context, selected.0, chunk, false,
@@ -1066,12 +1095,24 @@ pub(crate) fn create_starts_with_saved(
                 break;
             }
             options.remove(index);
-            total -= selected.1;
         }
     }
     starts.extend(saved);
     starts
 }
+// StructureSet uses a list of positive-int entries, not WeightedList: vanilla
+// does not reject oversized totals in its codec. Keep vanilla's int draw below
+// the limit; above it use one unsigned nextLong modulo the i64 total, just as
+// the other wide structure selectors do.
+fn pick_structure(options: &[(usize, i32)], random: &mut impl RandomSource) -> Option<usize> {
+    let total: i64 = options.iter().map(|o| i64::from(o.1)).sum();
+    let mut choice = crate::worldgen::weighted::draw(total, random)?;
+    options.iter().position(|option| {
+        choice -= i64::from(option.1);
+        choice < 0
+    })
+}
+
 /// `Structure.generate` of one structure for one chunk: what the chunk's
 /// structure set would build there, or, for `/place structure`, the start this
 /// structure builds in any chunk (the set's placement is not consulted, and
@@ -1464,10 +1505,13 @@ fn generate(
             // The type's own start and pieces; the biome check below and the
             // set's spacing stay the game's, as for every other kind.
             let context: &mut dyn StartContext = context;
-            let (position, pieces) =
-                mod_type
-                    .ty
-                    .find_generation_point(context, chunk, &mod_type.config, &mut random)?;
+            let (position, pieces) = mod_type.ty.find_generation_point(
+                context,
+                resources,
+                chunk,
+                &mod_type.config,
+                &mut random,
+            )?;
             (position, pieces.into_iter().map(Piece::Legacy).collect())
         }
         StructureKind::Unsupported(_) => return None,
@@ -1733,13 +1777,20 @@ mod tests {
     }
 
     fn try_registry(placement: Value) -> Result<StructureRegistry, DecodeError> {
+        try_weight_registry(placement, json!(1))
+    }
+
+    fn try_weight_registry(
+        placement: Value,
+        weight: Value,
+    ) -> Result<StructureRegistry, DecodeError> {
         let structures = BTreeMap::from([(
             "t:s".to_owned(),
             json!({"type": "minecraft:igloo", "biomes": []}).to_string(),
         )]);
         let sets = BTreeMap::from([(
             "t:set".to_owned(),
-            json!({"structures": [{"structure": "t:s", "weight": 1}],
+            json!({"structures": [{"structure": "t:s", "weight": weight}],
                 "placement": placement})
             .to_string(),
         )]);
@@ -1750,6 +1801,52 @@ mod tests {
             &|_| Ok(BTreeSet::new()),
             &ModStructureTypes::new(),
         )
+    }
+
+    #[test]
+    fn structure_weights_decode_positive_int() {
+        let placement = json!({"type": "minecraft:dimension_origin"});
+        for weight in [
+            json!(-1),
+            json!(0),
+            json!(2147483648_i64),
+            json!(u64::MAX),
+            json!(1.5),
+            json!("1"),
+            Value::Null,
+        ] {
+            assert!(
+                try_weight_registry(placement.clone(), weight.clone()).is_err(),
+                "{weight}"
+            );
+        }
+        for weight in [1, i32::MAX] {
+            assert!(try_weight_registry(placement.clone(), json!(weight)).is_ok());
+        }
+    }
+
+    #[test]
+    fn structure_weights_wide_pick_matches_old_small_lists() {
+        for weights in [[1, 1, 1], [1, 2, 5], [7, 3, 1]] {
+            let options: Vec<_> = weights.into_iter().enumerate().collect();
+            for seed in -20..20 {
+                let mut old = LegacyRandom::new(seed);
+                let mut new = old.clone();
+                let mut choice = old.next_int_bound(weights.iter().sum()).unwrap();
+                let expected = weights.iter().position(|w| {
+                    choice -= w;
+                    choice < 0
+                });
+                assert_eq!(pick_structure(&options, &mut new), expected);
+                assert_eq!(new.next_long(), old.next_long());
+            }
+        }
+        let mut options = vec![(0, i32::MAX), (1, i32::MAX), (2, i32::MAX)];
+        let mut random = LegacyRandom::new(71);
+        while !options.is_empty() {
+            let index = pick_structure(&options, &mut random).unwrap();
+            options.remove(index);
+        }
     }
 
     #[test]

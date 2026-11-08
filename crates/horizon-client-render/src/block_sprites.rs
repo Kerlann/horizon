@@ -285,6 +285,7 @@ mod tests {
             &render,
             &facts,
             crate::models::load_visibility(&root, assets.registry)?,
+            None,
         )?);
         let context = WorkerContext {
             light: Arc::new(LightTables::load(&root, assets.registry, &facts)?),

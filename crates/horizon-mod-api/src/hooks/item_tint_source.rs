@@ -3,7 +3,7 @@
 pub trait Hooks {
     /// Client-side colour of an item tint source a mod registered (`register_item_tint_sources`,
     /// vanilla's `ItemTintSource.calculate`), asked for each entry on it each time the item is
-    /// resolved, in hand, in a screen or on the ground. `config` is the entry's JSON object in the
+    /// resolved, in hand, in a screen or on the ground. `config` borrows the entry converted once to a `Tag` at load from the JSON object in the
     /// model's `tints`, so a source reads its own fields there. Set color, ARGB with an alpha of
     /// `0xFF` as vanilla's sources give, only for a source your mod owns; left alone, the entry draws
     /// white. The owned stack snapshot is the one being resolved, including nested bundle items.

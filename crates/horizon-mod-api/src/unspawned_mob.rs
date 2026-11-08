@@ -5,18 +5,27 @@
 use crate::{AttributeModifier, EntityRef, EquipmentSlot, Identifier, ItemStack, Text};
 
 /// Why a read or an edit of an unspawned mob was refused.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum UnspawnedMobError {
+    /// The retained custom name exceeds the component boundary.
+    Text(crate::text::TextFormError),
     /// The hook that lent the handle has returned, the handle belongs to another lend or world,
     /// or there is no game.
     Expired,
     /// This mob's type has no such attribute, or the game keeps no mob behind this lend (the
-    /// ender dragon, which it stores apart from mobs).
+    /// ender dragon, which it stores apart from mobs, or a position check where the game creates
+    /// the mob later from saved data or the world generator).
     Unsupported,
     /// The value is refused: an unknown attribute, a non-finite number, a modifier id the
     /// attribute already has, an empty or full tag list, or invalid item data.
     Invalid,
+}
+
+impl From<crate::text::TextFormError> for UnspawnedMobError {
+    fn from(error: crate::text::TextFormError) -> Self {
+        Self::Text(error)
+    }
 }
 
 impl From<crate::StackWriteError> for UnspawnedMobError {
@@ -83,6 +92,8 @@ pub trait UnspawnedMobEdits {
     -> Result<bool, UnspawnedMobError>;
 
     /// Names the mob (`Entity.setCustomName`), or takes its name away with `None`.
+    /// A component deeper than 512 nodes is refused with `UnspawnedMobError::Text`
+    /// before changing the mob's name.
     fn set_custom_name(
         &self,
         mob: crate::UnspawnedMobRef,

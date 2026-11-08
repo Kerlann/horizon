@@ -19,6 +19,8 @@ patch. The patch contains explicit overrides and removals, not merged defaults.
 The host is `&dyn ClientHost` for each callback. Only answer property names or
 sources the mod owns; unanswered callbacks retain their existing defaults.
 
+`ItemTintSourceEvent.config` is a borrowed `Tag`, converted once from the tint's JSON definition at load. Read fields with `Tag::get` and match tag variants. Invalid payloads refuse model loading; resolving a tint does not convert or clone its payload.
+
 | Former resolver-view access | Owned API access |
 | --- | --- |
 | `event.stack.item` | `event.stack.item()` returns `ItemKey`; retain keys for comparisons |

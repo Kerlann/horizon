@@ -1688,7 +1688,7 @@ pub struct HudBatch {
     /// Screen's first vertex: the preceding HUD is part of its blurred background.
     pub blur_at: u32,
     /// Player object profiles encountered while painting text this frame.
-    pub inline_profiles: Vec<serde_json::Value>,
+    pub inline_profiles: Vec<std::sync::Arc<serde_json::Value>>,
 }
 /// How a run of HUD vertices blends and tests depth.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]

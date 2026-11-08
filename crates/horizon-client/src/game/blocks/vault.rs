@@ -62,7 +62,7 @@ impl Game<'_> {
     pub(super) fn take_vault(&mut self, key: Pos) -> Option<TakenVault> {
         let state = self.world.block(key.0, key.1, key.2);
         let block = self.pack.assets.registry.state(state)?;
-        if block.name != "minecraft:vault" {
+        if horizon_client::block_entity_types::factory_block(&block.name) != "minecraft:vault" {
             return None;
         }
         let current = block

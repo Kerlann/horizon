@@ -12,6 +12,8 @@ pub trait Hooks {
     /// nested in another's tooltip (a crossbow's loaded projectile); `advanced`
     /// (F3+H) and `creative` (a creative tab's own slot) are the tooltip's `TooltipFlag`. Asked
     /// each frame the tooltip shows, only while a mod listens. Client-side.
+    /// A component deeper than 512 nodes refuses capture or the whole writeback;
+    /// no event field is applied if any Text field fails conversion.
     #[hook(
         side = "client",
         contract = "listen",

@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Kundi ikki lesa byggiloggin: {error}",
   "Could not read the saved sign-in.": "Kundi ikki lesa goymdu innritanina.",
   "Could not read the saved sign-in. Sign in again.": "Kundi ikki lesa goymdu innritanina. Rita inn aftur.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Fekk ikki at lesa {name}: {error}",
   "Could not run {program}: {error}": "Kundi ikki koyra {program}: {error}",
   "Could not save the renewed sign-in.": "Kundi ikki goyma endurnýggjaðu innritanina.",

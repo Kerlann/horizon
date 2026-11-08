@@ -242,6 +242,7 @@ impl Game<'_> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::api_values::TryIntoApi;
     use super::super::native_entity_refs::tests::with_game;
     use super::*;
     use horizon_client::entities::ArmorStand;
@@ -297,6 +298,8 @@ mod tests {
             assert_eq!(cart.display_offset(game), Some(8));
             let lit = game
                 .block_state_id("minecraft:furnace[facing=east,lit=true]")
+                .unwrap()
+                .try_into_api()
                 .unwrap();
             assert!(cart.set_custom_display_block(game, Some(lit)));
             assert!(cart.set_display_offset(game, 3));
@@ -315,7 +318,8 @@ mod tests {
             assert_eq!(loaded.display_offset(game), Some(3));
 
             // A state the registry doesn't know is refused; None clears.
-            assert!(!cart.set_custom_display_block(game, Some(BlockStateId(u32::MAX))));
+            let invalid = mod_api::BlockStateRecord::new(lit.block(), u16::MAX).into();
+            assert!(!cart.set_custom_display_block(game, Some(invalid)));
             assert_eq!(cart.custom_display_block(game), Some(Some(lit)));
             assert!(cart.set_custom_display_block(game, None));
             assert_eq!(cart.custom_display_block(game), Some(None));

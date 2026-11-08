@@ -16,7 +16,7 @@ pub trait Hooks {
     fn block_drops(
         dimension: LevelDimension,
         pos: BlockPos,
-        state: BlockStateId,
+        state: BlockState,
         breaker: Option<u128>,
         tool: Option<&ItemStack>,
         drops: &mut Vec<NativeItemDrop>,

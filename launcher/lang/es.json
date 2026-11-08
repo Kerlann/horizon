@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "No se pudo leer el registro de compilación: {error}",
   "Could not read the saved sign-in.": "No se pudo leer el inicio de sesión guardado.",
   "Could not read the saved sign-in. Sign in again.": "No se pudo leer el inicio de sesión guardado. Vuelve a iniciar sesión.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "No se pudo leer {name}: {error}",
   "Could not run {program}: {error}": "No se pudo ejecutar {program}: {error}",
   "Could not save the renewed sign-in.": "No se pudo guardar el inicio de sesión renovado.",

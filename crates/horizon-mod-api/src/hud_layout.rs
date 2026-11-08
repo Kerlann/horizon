@@ -33,6 +33,7 @@ impl Blend {
     }
 }
 /// One `GuiGraphicsExtractor` call.
+/// Text deeper than 512 nodes refuses the whole command buffer at the game boundary.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: a closed set the game matches without a wildcard
 pub enum GuiDraw {

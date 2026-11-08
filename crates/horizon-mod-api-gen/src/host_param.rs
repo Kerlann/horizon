@@ -77,6 +77,7 @@ pub(super) fn context_param(
         PhaseContext::Registration => "RegistrationContext",
         PhaseContext::DataLoad => "LoadContext",
         PhaseContext::Loop => "LoopContext",
+        PhaseContext::Worldgen => "WorldgenContext",
     };
     let valid = args.first().is_some_and(|(name, ty)| {
         name == "context"
@@ -95,6 +96,7 @@ pub(super) fn context_param(
             PhaseContext::Registration => "&RegistrationContext",
             PhaseContext::DataLoad => "&dyn DataLoadContext",
             PhaseContext::Loop => "&dyn LoopContext",
+            PhaseContext::Worldgen => "&dyn WorldgenHost",
         }
         .into(),
         call: "context",
@@ -170,6 +172,11 @@ mod tests {
                 "&dyn DataLoadContext",
             ),
             (PhaseContext::Loop, "&LoopContext", "&dyn LoopContext"),
+            (
+                PhaseContext::Worldgen,
+                "&WorldgenContext",
+                "&dyn WorldgenHost",
+            ),
         ] {
             let hook = Hook {
                 context: Some(kind),

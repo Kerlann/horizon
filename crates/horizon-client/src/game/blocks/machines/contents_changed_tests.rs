@@ -120,11 +120,9 @@ impl Hooks for Observed {
     }
 
     fn blocks(&self, _: &RegistrationContext, event: &mut BlocksEvent<'_>) {
-        event.blocks.push(horizon_mod_package::content::Block {
-            id: DEPOT.into(),
-            template: "minecraft:white_banner".into(),
-            ..Default::default()
-        });
+        event
+            .blocks
+            .push(mod_api::Block::new(DEPOT, "minecraft:white_banner"));
     }
 }
 
@@ -164,7 +162,10 @@ fn with_changes(
 
 fn place(game: &mut Game<'_>, level: LevelRef, pos: [i32; 3], block: &str) {
     let state = game.pack.assets.registry.default_state(block).unwrap();
-    assert!(game.level_set_block(level, pos, state, NativeBlockUpdateFlags::NONE));
+    assert_eq!(
+        game.level_set_block(level, pos, state, NativeBlockUpdateFlags::NONE),
+        Ok(true)
+    );
 }
 
 #[test]
@@ -377,7 +378,10 @@ fn a_double_container_notifies_each_backing_block_once() {
                 let state = game
                     .with_props(base, &[("facing", "north"), ("type", kind)])
                     .unwrap();
-                assert!(game.level_set_block(level, pos, state, NativeBlockUpdateFlags::NONE));
+                assert_eq!(
+                    game.level_set_block(level, pos, state, NativeBlockUpdateFlags::NONE),
+                    Ok(true)
+                );
             }
             let items = level.capability(game, &ITEMS, [0, 64, 0], None).unwrap();
             assert_eq!(items.size(game), 54);
@@ -487,7 +491,10 @@ fn a_crafter_notices_its_source_but_not_a_vehicles_placeholder() {
             let state = game
                 .with_props(base, &[("orientation", "down_east")])
                 .unwrap();
-            assert!(game.level_set_block(level, pos, state, NativeBlockUpdateFlags::NONE));
+            assert_eq!(
+                game.level_set_block(level, pos, state, NativeBlockUpdateFlags::NONE),
+                Ok(true)
+            );
             let Some(BlockEntity::Crafter(crafter)) =
                 game.world.block_entities.get_mut(&(0, 66, 0))
             else {

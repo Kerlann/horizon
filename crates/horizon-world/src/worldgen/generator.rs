@@ -1870,16 +1870,24 @@ where
     /// ChunkGenerator.getBaseColumn: opacity of each noise-column state for
     /// a heightmap type, indexed from the minimum Y.
     fn base_column(&self, x: i32, z: i32, kind: HeightmapType) -> Vec<bool> {
-        self.base_columns(x, z, &[kind]).pop().unwrap_or_default()
+        self.base_columns_by(x, z, 1, &|_| kind)
+            .pop()
+            .unwrap_or_default()
     }
     /// One noise-column pass, as opacities for each heightmap kind.
-    fn base_columns(&self, x: i32, z: i32, kinds: &[HeightmapType]) -> Vec<Vec<bool>> {
+    fn base_columns_by(
+        &self,
+        x: i32,
+        z: i32,
+        count: usize,
+        kind: &dyn Fn(usize) -> HeightmapType,
+    ) -> Vec<Vec<bool>> {
         let (min, height) = self.column_range();
-        let mut columns = vec![vec![false; height as usize]; kinds.len()];
+        let mut columns = vec![vec![false; height as usize]; count];
         self.noise_column(x, z, &mut |y, state| {
             let state = self.data.states.get(state);
-            for (column, kind) in columns.iter_mut().zip(kinds) {
-                column[(y - min) as usize] = kind.is_opaque(state);
+            for (index, column) in columns.iter_mut().enumerate() {
+                column[(y - min) as usize] = kind(index).is_opaque(state);
             }
             false
         });
@@ -1888,14 +1896,19 @@ where
     /// ChunkGenerator.getBaseColumn's blocks, by what structures test
     /// (BlockState.isSolid is blocksMotion for the noise's blocks, which
     /// are never cobwebs or bamboo saplings).
-    fn noise_blocks(&self, x: i32, z: i32) -> super::structure::start::NoiseColumn {
-        use super::structure::start::{NoiseBlock, NoiseColumn};
+    fn noise_blocks_into(
+        &self,
+        x: i32,
+        z: i32,
+        column: &mut dyn super::structure::start::NoiseColumnTarget,
+    ) {
+        use super::structure::start::NoiseBlock;
         let (min, height) = self.column_range();
-        let mut blocks = vec![NoiseBlock::Air; height as usize];
+        column.resize(min, height as usize);
         let registry = self.data.registry;
         self.noise_column(x, z, &mut |y, state| {
             let props = self.data.states.get(state);
-            blocks[(y - min) as usize] = if props.is_air() {
+            let block = if props.is_air() {
                 NoiseBlock::Air
             } else {
                 match registry.state(state).map(|s| s.name.as_str()) {
@@ -1905,9 +1918,9 @@ where
                     _ => NoiseBlock::Other,
                 }
             };
+            column.set((y - min) as usize, block);
             false
         });
-        NoiseColumn { min, blocks }
     }
     /// iterateNoiseColumn from the top down until `visit` returns true.
     fn noise_column(&self, x: i32, z: i32, visit: &mut dyn FnMut(i32, BlockStateId) -> bool) {
@@ -2076,11 +2089,22 @@ where
     fn base_column(&mut self, x: i32, z: i32, kind: HeightmapType) -> Vec<bool> {
         self.pipeline.base_column(x, z, kind)
     }
-    fn base_columns(&mut self, x: i32, z: i32, kinds: &[HeightmapType]) -> Vec<Vec<bool>> {
-        self.pipeline.base_columns(x, z, kinds)
+    fn base_columns_by(
+        &mut self,
+        x: i32,
+        z: i32,
+        count: usize,
+        kind: &dyn Fn(usize) -> HeightmapType,
+    ) -> Vec<Vec<bool>> {
+        self.pipeline.base_columns_by(x, z, count, kind)
     }
-    fn noise_column(&mut self, x: i32, z: i32) -> super::structure::start::NoiseColumn {
-        self.pipeline.noise_blocks(x, z)
+    fn noise_column_into(
+        &mut self,
+        x: i32,
+        z: i32,
+        column: &mut dyn super::structure::start::NoiseColumnTarget,
+    ) {
+        self.pipeline.noise_blocks_into(x, z, column)
     }
     fn cold_enough_to_snow(&mut self, biome: BiomeId, pos: [i32; 3]) -> bool {
         let sea = self.pipeline.settings.sea_level;

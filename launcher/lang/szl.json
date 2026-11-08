@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Niy mōg ôdczytać dziynnika budowy: {error}",
   "Could not read the saved sign-in.": "Niy mōg ôdczytać zapisanego logowanio.",
   "Could not read the saved sign-in. Sign in again.": "Niy mōg ôdczytać zapisanego logowanio. Zalogowaj sie zaś.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Niy mōg ôdczytać {name}: {error}",
   "Could not run {program}: {error}": "Niy mōg sie uruchomić {program}: {error}",
   "Could not save the renewed sign-in.": "Niy mōg zapisać ôdnowiōnego zalogowanio.",

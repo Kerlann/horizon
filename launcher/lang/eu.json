@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Ezin izan da eraikitze erregistroa irakurri: {error}",
   "Could not read the saved sign-in.": "Ezin izan da irakurri gordetako saioa.",
   "Could not read the saved sign-in. Sign in again.": "Ezin izan da irakurri gordetako saioa. Hasi saioa berriro.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Ezin izan da irakurri {name}: {error}",
   "Could not run {program}: {error}": "Ezin izan da exekutatu {program}: {error}",
   "Could not save the renewed sign-in.": "Ezin izan da saio-hasiera berritua gorde.",

@@ -736,8 +736,8 @@ struct NewBlock<'a> {
 impl NewBlock<'_> {
     /// The item its gameplay row names when that is not the template's item
     /// renamed: `block_item`, or `minecraft:air` for a block with no item
-    /// (a sign's wall form keeps the paired sign's). Pick-block and
-    /// `Block.asItem` both read this one value.
+    /// (a sign's wall form keeps the paired sign's). `Block.asItem` and, unless
+    /// the block has a `pick_item` row of its own, pick-block read this value.
     fn item_row(&self) -> Option<&str> {
         match &self.decl.block_item {
             Some(item) => Some(item),
@@ -774,7 +774,7 @@ struct Plan<'a> {
     effects: Vec<&'a MobEffect>,
     entity_types: Vec<&'a EntityType>,
     block_entity_types: Vec<&'a BlockEntityType>,
-    block_entity_membership: BTreeMap<&'a str, &'a str>,
+    block_entity_factories: BTreeMap<&'a str, &'a str>,
     menu_types: Vec<&'a MenuType>,
     /// Vanilla's state count (the tables' length before).
     states: usize,
@@ -1138,7 +1138,7 @@ impl<'a> Plan<'a> {
             })
             .collect();
         block_entity_types.sort_by(|(_, a), (_, b)| a.id.cmp(&b.id));
-        let mut block_entity_membership = BTreeMap::new();
+        let mut block_entity_factories = BTreeMap::new();
         if !block_entity_types.is_empty() {
             let registry = read_json(&base.join("registries.json"))?;
             let Some(J::Obj(entries)) = registry
@@ -1174,7 +1174,7 @@ impl<'a> Plan<'a> {
                         .into());
                     }
                     if let Some(previous) =
-                        block_entity_membership.insert(block.as_str(), kind.id.as_str())
+                        block_entity_factories.insert(block.as_str(), kind.id.as_str())
                     {
                         return Err(format!(
                             "block {block} belongs to both block entity types {previous} and {}",
@@ -1508,7 +1508,7 @@ impl<'a> Plan<'a> {
                 .into_iter()
                 .map(|(_, kind)| kind)
                 .collect(),
-            block_entity_membership,
+            block_entity_factories,
             menu_types: menu_types(mods),
             states: names.len(),
             defaults,
@@ -1556,6 +1556,9 @@ impl<'a> Plan<'a> {
                     row.set("id", J::Num(next.into()));
                     if let Some(item) = b.item_row() {
                         row.set("item", J::Str(item.into()));
+                    }
+                    if let Some(item) = &b.decl.pick_item {
+                        row.set("pick_item", J::Str(item.clone()));
                     }
                     self.override_gameplay(b, combo, &mut row);
                     if let Some(shapes) = &b.shapes {
@@ -1750,10 +1753,15 @@ impl<'a> Plan<'a> {
         }
         if components {
             for b in &self.blocks {
-                if let Some(item) = &b.decl.block_item
-                    && map.get(item).is_none()
-                {
-                    return Err(format!("{}: block_item {item:?} is not an item", b.decl.id).into());
+                for (key, item) in [
+                    ("block_item", &b.decl.block_item),
+                    ("pick_item", &b.decl.pick_item),
+                ] {
+                    if let Some(item) = item
+                        && map.get(item).is_none()
+                    {
+                        return Err(format!("{}: {key} {item:?} is not an item", b.decl.id).into());
+                    }
                 }
             }
             for i in &self.items {
@@ -3309,7 +3317,7 @@ pub fn build(
     }
     overlay.write(
         BLOCK_ENTITY_TYPES,
-        &serde_json::to_vec(&plan.block_entity_membership)?,
+        &serde_json::to_vec(&plan.block_entity_factories)?,
     )?;
     // clients must agree on the block states and the items', mob effects',
     // entity types', block entity types' and menu types' network ids.
@@ -3490,7 +3498,8 @@ pub fn resource_root(
     Ok(out)
 }
 
-/// Canonical block-to-declared-block-entity-type mapping, sorted by block id.
+/// Declared native factory assignments, sorted by block id. Validity is extended
+/// after content resolution in the canonical `block_entity_types` table.
 pub const BLOCK_ENTITY_TYPES: &str = "horizon-block-entity-types.json";
 
 /// The length of a root's folder name: the start of its stamp.

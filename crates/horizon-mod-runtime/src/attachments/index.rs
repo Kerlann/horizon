@@ -84,68 +84,24 @@ impl<T> AttachmentChange<T> {
     }
 }
 
-/// Plain scoped identity used to transfer a residency token.
-/// This protects against stale identities, not unauthorized attachment access.
-#[derive(Clone)]
-#[non_exhaustive]
-pub struct AttachmentOwnerForm<H> {
-    /// The holder's scoped identity.
-    pub holder: H,
-    /// Process-wide registration generation; never reused or wrapped.
-    pub generation: u64,
-}
-impl<H> AttachmentOwnerForm<H> {
-    /// Reconstruct a transferred identity; validation still checks live residency.
+impl<H> AttachmentOwner<H> {
+    /// Rebuild a transferred residency identity; the index still validates it.
+    #[doc(hidden)]
     pub fn from_parts(holder: H, generation: u64) -> Self {
         Self { holder, generation }
     }
-}
-impl<H: Copy> From<&AttachmentOwner<H>> for AttachmentOwnerForm<H> {
-    fn from(token: &AttachmentOwner<H>) -> Self {
-        Self {
-            holder: token.holder,
-            generation: token.generation,
-        }
+    /// The fields needed to transfer this identity.
+    #[doc(hidden)]
+    pub fn parts(&self) -> (&H, u64) {
+        (&self.holder, self.generation)
     }
-}
-impl<H> From<AttachmentOwnerForm<H>> for AttachmentOwner<H> {
-    fn from(form: AttachmentOwnerForm<H>) -> Self {
-        Self {
-            holder: form.holder,
-            generation: form.generation,
-        }
-    }
-}
-
-/// An owned row's transferable state; values remain shared with the entry.
-#[derive(Clone)]
-#[non_exhaustive]
-pub struct AttachmentRowForm<H> {
-    /// Captured residency identity.
-    pub token: AttachmentOwnerForm<H>,
-    /// Captured value binding, never the query read cache.
-    pub entry: Arc<AttachmentEntry>,
-}
-impl<H> AttachmentRowForm<H> {
-    /// Reconstruct a transferred row without decoding its entry.
-    pub fn from_parts(token: AttachmentOwnerForm<H>, entry: Arc<AttachmentEntry>) -> Self {
-        Self { token, entry }
-    }
-}
-impl<H: Copy> From<&AttachmentRow<H>> for AttachmentRowForm<H> {
-    fn from(row: &AttachmentRow<H>) -> Self {
-        Self {
-            token: (&row.write_token()).into(),
-            entry: row.entry.clone(),
-        }
-    }
-}
-impl<H> From<AttachmentRowForm<H>> for AttachmentRow<H> {
-    fn from(form: AttachmentRowForm<H>) -> Self {
-        Self {
-            holder: form.token.holder,
-            generation: form.token.generation,
-            entry: form.entry,
+    /// Rebuild a snapshot row from a transferred identity and value.
+    #[doc(hidden)]
+    pub fn into_row(self, entry: Arc<AttachmentEntry>) -> AttachmentRow<H> {
+        AttachmentRow {
+            holder: self.holder,
+            generation: self.generation,
+            entry,
         }
     }
 }

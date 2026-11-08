@@ -9,26 +9,22 @@ description = "The game's injection points for mods that listen at them: typed f
 [lib]
 name = "mod_points"
 
+[features]
+wasm-guest = ["horizon-mod-api/wasm-guest"]
+
 [dependencies]
 horizon-mod-api = { path = "../horizon-mod-api" }
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wit-bindgen = { version = "0.46", default-features = false, features = ["macros"] }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-wasmtime = { version = "50", optional = true, default-features = false, features = ["anyhow", "cranelift", "component-model", "runtime", "std"] }
-
 [build-dependencies]
 horizon-mod-api-gen = { path = "../horizon-mod-api-gen" }
+horizon-mod-point-shape = { path = "../horizon-mod-point-shape" }
+syn = "2"
+quote = "1"
 
 [dev-dependencies]
 horizon-mod-api = { path = "../horizon-mod-api", features = ["testing"] }
 horizon-mod-api-macros = { path = "../horizon-mod-api-macros" }
-
-[features]
-# The game's side of wasm mods' listeners: the forwarding function slots and the tables it checks a mod's
-# places against. Only the game enables it; a mod compiles none of it.
-wasm-host = ["dep:wasmtime"]
+serde_json = "1"
 
 [lints]
 workspace = true

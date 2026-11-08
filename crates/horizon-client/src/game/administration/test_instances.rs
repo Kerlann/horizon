@@ -53,6 +53,7 @@ pub(super) struct TestDef {
     pub(super) block_based: bool,
     /// The function a function test runs.
     pub(super) function: Option<String>,
+    pub(super) callback: Option<std::sync::Arc<dyn mod_api::GameTestFunction>>,
     /// The test environment's id (`batch()`).
     pub(super) environment: String,
     pub(super) max_ticks: i32,
@@ -77,6 +78,7 @@ impl TestDef {
             sky_access: false,
             block_based,
             function: None,
+            callback: None,
             environment: "minecraft:default".into(),
             dimension: "minecraft:overworld".into(),
             max_ticks,
@@ -144,7 +146,14 @@ fn parse_test_def(json: &serde_json::Value) -> Option<TestDef> {
             .and_then(|v| v.as_bool())
             .unwrap_or(false),
         block_based,
-        function: function.map(str::to_owned),
+        function: function.map(|id| {
+            if id.contains(':') {
+                id.to_owned()
+            } else {
+                format!("minecraft:{id}")
+            }
+        }),
+        callback: None,
         environment: environment.clone(),
         dimension: dimension.to_owned(),
         max_ticks: json
@@ -204,6 +213,8 @@ impl Game<'_> {
             &self.level.enabled_features,
             &super::pack_finders::data_packs(&self.mods),
         );
+        let mut functions = mod_api::GameTestFunctions::default();
+        self.native_register_game_tests(&mut functions);
         let mut defs = std::collections::HashMap::new();
         for pack in stack.builtin.iter().chain(stack.enabled_packs()) {
             for file in pack.list_folder("test_instance") {
@@ -220,10 +231,22 @@ impl Game<'_> {
                 else {
                     continue;
                 };
-                if let Some(def) = parse_test_def(&json) {
+                if let Some(mut def) = parse_test_def(&json) {
+                    def.callback = def.function.as_deref().and_then(|id| functions.resolve(id));
                     defs.insert(id, Some(def));
                 }
             }
+        }
+        for (id, definition) in functions.definitions() {
+            let mut def = parse_test_def(&serde_json::json!({
+                "type": "minecraft:function", "structure": definition.structure,
+                "function": definition.function, "environment": definition.environment,
+                "dimension": definition.dimension, "max_ticks": definition.max_ticks,
+                "setup_ticks": definition.setup_ticks, "max_attempts": definition.max_attempts,
+                "required_successes": definition.required_successes, "required": definition.required,
+            })).expect("validated registered test definition");
+            def.callback = def.function.as_deref().and_then(|id| functions.resolve(id));
+            defs.entry(id.to_owned()).or_insert(Some(def));
         }
         let mut ids: Vec<String> = defs.keys().cloned().collect();
         ids.sort();

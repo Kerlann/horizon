@@ -13,7 +13,7 @@ pub(crate) struct CapabilityPart<P> {
     pub(crate) mod_id: &'static str,
     pub(crate) mod_index: usize,
     /// The handler type it gives, for refusing a capability name answered with two.
-    pub(crate) type_name: &'static str,
+    pub(crate) type_name: Arc<str>,
     /// Asked ahead of the game's own provider.
     pub(crate) before_game: bool,
     pub(crate) provider: P,
@@ -29,7 +29,7 @@ pub struct OwnProvider {
     /// The `Arc` of the provider trait object, which a lookup of that handler type downcasts:
     /// a wasm mod's, in the game or another group, is the game's proxy, which no lookup takes.
     pub(crate) provider: Arc<dyn Any + Send + Sync>,
-    pub(crate) handler: &'static str,
+    pub(crate) handler: Arc<str>,
 }
 
 /// The registrar's table, as the game reads it.
@@ -127,8 +127,9 @@ impl PartRegistrar {
         name: &'static str,
         target: ProviderTarget<'_>,
         before_game: bool,
-        (provider, handler): (P, &'static str),
+        (provider, handler): (P, impl Into<Arc<str>>),
     ) {
+        let handler = handler.into();
         let me = self.mod_id;
         if !namespaced(name) {
             self.refused.push(format!(
@@ -554,7 +555,7 @@ pub mod tests {
         ]
         .into();
         crate::install(mods.clone());
-        install_parts(&mods, &crate::parts::tests::rule_schema()).unwrap();
+        install_parts(&mods, &crate::parts::tests::rule_schema(), |_| false).unwrap();
         mark_game_thread();
 
         // These lookup objects keep their indexed registrations, not a snapshot of enabled mods.
@@ -675,7 +676,7 @@ pub mod tests {
         ]
         .into();
         crate::install(mods.clone());
-        install_parts(&mods, &crate::parts::tests::rule_schema()).unwrap();
+        install_parts(&mods, &crate::parts::tests::rule_schema(), |_| false).unwrap();
         mark_game_thread();
         let found = here()
             .capability(&mut ordered_world(), &ITEMS, [7, 64, 0], None)

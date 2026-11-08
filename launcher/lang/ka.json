@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "ვერ წავიკითხე აშენების ჟურნალი: {error}",
   "Could not read the saved sign-in.": "შენახული შესვლის წაკითხვა ვერ მოხერხდა.",
   "Could not read the saved sign-in. Sign in again.": "შენახული შესვლის წაკითხვა ვერ მოხერხდა. ხელახლა შედით.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "ვერ წავიკითხე {name}: {error}",
   "Could not run {program}: {error}": "ვერ გაშვება {program}: {error}",
   "Could not save the renewed sign-in.": "განახლებული შესვლის შენახვა ვერ მოხერხდა.",

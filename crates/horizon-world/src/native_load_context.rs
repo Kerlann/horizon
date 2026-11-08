@@ -149,6 +149,18 @@ impl LoadContext {
         }
     }
 
+    /// The context of the server's world generation, over this load's
+    /// registry inputs, with fresh settings. Built where the server starts or
+    /// reloads its resources, never by a reader.
+    pub fn worldgen_context<'a>(
+        &self,
+        mod_ids: impl IntoIterator<Item = &'a str>,
+    ) -> WorldgenContext {
+        WorldgenContext {
+            snapshot: Snapshot::capture(self.snapshot.inputs.clone(), mod_ids),
+        }
+    }
+
     pub fn origin(&self) -> DataLoadOrigin {
         self.origin
     }
@@ -383,6 +395,26 @@ fn snapshot_files(
     Err::<std::iter::Empty<std::io::Result<(String, fs::File)>>, _>(
         std::io::ErrorKind::Unsupported.into(),
     )
+}
+
+/// Registries and settings for hooks fired while a feature generates, on a
+/// worldgen worker or the server thread, where no game is at hand. It holds no
+/// game, world handle or mutable registry access, and is built once per
+/// resource generation of the server.
+pub struct WorldgenContext {
+    snapshot: Snapshot,
+}
+
+impl WorldgenContext {
+    /// Names in registry ID order, from the registry snapshot it was built over.
+    pub fn registry(&self, name: &str) -> Option<Arc<[String]>> {
+        self.snapshot.registry(name)
+    }
+
+    /// A loaded mod's setting captured when this context was built, with no file I/O.
+    pub fn setting(&self, mod_id: &str, key: &str) -> Option<String> {
+        self.snapshot.setting(mod_id, key)
+    }
 }
 
 /// Read the same per-key storage as the runtime settings service. No folder is
@@ -661,6 +693,34 @@ mod tests {
         assert_eq!(client.setting("active", "mode").as_deref(), Some("one"));
         assert_eq!(server.setting("active", "mode").as_deref(), Some("two"));
         assert_eq!(load.setting("active", "mode").as_deref(), Some("one"));
+        fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn a_worldgen_context_shares_the_registries_and_captures_its_own_settings() {
+        let root = std::env::temp_dir().join(format!(
+            "horizon-worldgen-settings-{}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let mod_dir = root.join("active");
+        fs::create_dir_all(&mod_dir).unwrap();
+        fs::write(mod_dir.join("ground"), "podzol").unwrap();
+        let registries = BTreeMap::from([("block".to_owned(), vec!["a:b".to_owned()])]);
+        let inputs = Arc::new(LoadInputs::new(registries, root.clone()));
+        let load = LoadContext::new(DataLoadOrigin::ServerDataLoad, inputs, ["active"]);
+        fs::write(mod_dir.join("ground"), "mud").unwrap();
+
+        let worldgen = load.worldgen_context(["active"]);
+        fs::write(mod_dir.join("ground"), "moss").unwrap();
+
+        assert_eq!(
+            worldgen.registry("block").as_deref(),
+            Some(&["a:b".to_owned()][..])
+        );
+        assert_eq!(worldgen.setting("active", "ground").as_deref(), Some("mud"));
+        assert_eq!(worldgen.setting("inactive", "ground"), None);
+        assert_eq!(load.setting("active", "ground").as_deref(), Some("podzol"));
         fs::remove_dir_all(&root).unwrap();
     }
 }

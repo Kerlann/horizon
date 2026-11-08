@@ -8,7 +8,7 @@ impl Game<'_> {
     pub(in crate::game) fn native_item_tint_source(
         &self,
         source: &str,
-        config: &serde_json::Value,
+        config: &horizon_core::nbt::Tag,
         stack: &mod_api::ItemStack,
         bundle_selected: i32,
         color: &mut u32,

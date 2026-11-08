@@ -1,14 +1,12 @@
 /// The structure box a piece's `bounding_box` answers, in world blocks.
 pub use horizon_core::bounding_box::BoundingBox;
 pub use horizon_core::equipment_slot::EquipmentSlot;
-#[horizon_mod_api_macros::wasm(via = String)]
 pub use horizon_core::identifier::Identifier;
-/// A level's key (`LevelDimension::Custom`), as its `namespace:path` on wasm.
-#[horizon_mod_api_macros::wasm(via = String)]
+/// A level's key (`LevelDimension::Custom`).
 pub use horizon_core::level_key::LevelKey;
-#[horizon_mod_api_macros::wasm(via = Tag)]
+/// A block state, as the game's state table numbers it.
+pub use horizon_world::registry::BlockStateId;
 pub use horizon_core::nbt::Compound;
-#[horizon_mod_api_macros::wasm(via = Vec<u8>)]
 pub use horizon_core::nbt::Tag;
 pub use horizon_core::use_animation::UseAnimation;
 pub use {
@@ -19,11 +17,6 @@ pub use {
     horizon_mod_runtime::attachments::{
         AttachmentCodec, AttachmentError, AttachmentForm, AttachmentPolicy, AttachmentStore,
         AttachmentType, AttachmentValue, AttachmentWrite, Holder,
-    },
-    horizon_world::{
-        level::{BlockId, LandingWrite, PlacementContext},
-        loot::{LootStack, NativeLootContext},
-        registry::BlockStateId,
     },
 };
 // hidden: the game's maps behind the store, not part of the mod surface

@@ -215,7 +215,7 @@ fn block_entity_submit_dispatches_in_order_with_shared_draw() {
         &TestHost,
         [1, 2, 3],
         "example:machine",
-        BlockStateId,
+        BlockState::new(BlockKey::Test, 0),
         &ModBlockEntity::default(),
         &mut draw,
     );
@@ -326,24 +326,59 @@ fn placement_replacement_can_refuse_and_stops_later_mods() {
             &self,
             _: &dyn LevelHost,
             _: &mut StateForPlacementEvent<'_>,
-        ) -> Option<Option<BlockStateId>> {
+        ) -> Option<Option<BlockState>> {
             self.0.lock().unwrap().push(self.1);
             Some(None)
         }
     }
     let calls = Arc::new(Mutex::new(Vec::new()));
     install_parts(Parts {
-        blocks: vec![
-            leak(Refuse(calls.clone(), 1)),
-            leak(Refuse(calls.clone(), 2)),
-        ],
+        blocks: vec![(
+            BlockKey::Test,
+            vec![
+                leak(Refuse(calls.clone(), 1)),
+                leak(Refuse(calls.clone(), 2)),
+            ],
+        )],
         ..Parts::default()
     });
+    let table = parts(HookId::StateForPlacement, "state_for_placement");
+    assert_eq!(
+        table
+            .block_key(registry_keys::block_key("test:block"))
+            .len(),
+        2
+    );
+    assert!(
+        table
+            .block_key(registry_keys::block_key("missing:block"))
+            .is_empty()
+    );
     let mut answer = None;
+    for state in [
+        BlockState::new(registry_keys::block_key("test:other").unwrap(), 0),
+        BlockState::new(BlockKey::Test, u16::MAX),
+    ] {
+        dispatch_state_for_placement(
+            &Level,
+            LevelDimension,
+            state,
+            &PlacementContext,
+            generated::mod_api::FluidState {
+                fluid: generated::mod_api::FluidKey,
+                amount: 0,
+                falling: false,
+                source: false,
+            },
+            &mut answer,
+        );
+        assert_eq!(answer, None);
+        assert!(calls.lock().unwrap().is_empty());
+    }
     dispatch_state_for_placement(
         &Level,
         LevelDimension,
-        BlockStateId,
+        BlockState::new(BlockKey::Test, 0),
         &PlacementContext,
         generated::mod_api::FluidState {
             fluid: generated::mod_api::FluidKey,
@@ -358,7 +393,7 @@ fn placement_replacement_can_refuse_and_stops_later_mods() {
     dispatch_state_for_placement(
         &Level,
         LevelDimension,
-        BlockStateId,
+        BlockState::new(BlockKey::Test, 0),
         &PlacementContext,
         generated::mod_api::FluidState {
             fluid: generated::mod_api::FluidKey,

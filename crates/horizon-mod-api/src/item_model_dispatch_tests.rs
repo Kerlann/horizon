@@ -39,7 +39,7 @@ impl Hooks for Selected {
 
 #[test]
 fn model_callbacks_receive_owned_counts_and_the_exact_runtime_selection() {
-    install_parts(&[], &crate::parts::tests::rule_schema()).unwrap();
+    install_parts(&[], &crate::parts::tests::rule_schema(), |_| false).unwrap();
     let stack = crate::parts::tests::stack("minecraft:stick", 2, 0);
     let mods = vec![ModEntry::new("selected", Box::new(Selected))].into();
     testing::with_mods(mods, || {
@@ -78,7 +78,7 @@ fn model_callbacks_receive_owned_counts_and_the_exact_runtime_selection() {
             dispatch_item_tint_source(
                 &NoClient,
                 "example:selected",
-                &serde_json::json!({}),
+                &crate::Tag::compound([] as [(&str, crate::Tag); 0]),
                 &stack,
                 selected,
                 &mut color,

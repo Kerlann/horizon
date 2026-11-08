@@ -27,9 +27,10 @@ pub trait ClientInputClientHost {
     /// Side: client.
     /// A vanilla mapping (`key.forward`, `key.jump`, `key.attack`…): whether
     /// it is held (`KeyMapping.isDown`), and its key's name as Controls shows
-    /// it. None for a mapping it doesn't answer for.
+    /// it. `Ok(None)` for a mapping it doesn't answer for. Refuses an invalid
+    /// label with [`TextFormError`], including components deeper than 512 nodes.
     #[access(ClientSetup)]
-    fn mapping(&self, name: &str) -> Option<NativeKeyMapping>;
+    fn mapping(&self, name: &str) -> Result<Option<NativeKeyMapping>, TextFormError>;
     /// Side: client.
     /// Milliseconds on the game's own clock (`Util.getMillis`), counting from the game's start:
     /// what a text field's cursor blinks by and what tells a double click from two clicks.

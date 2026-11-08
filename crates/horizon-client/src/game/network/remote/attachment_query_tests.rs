@@ -76,18 +76,20 @@ fn synced_client_queries_follow_replacement_retirement_and_level_changes() {
         sync(game, Holder::Level, 41);
         assert_eq!(values(game), [41]);
         let captured = game.attachment_query("mirror", "value");
-        let forms = Vec::<mod_api::AttachmentRowForm>::from(&captured);
+        let query = captured.query(&VALUE).unwrap();
+        let row = query.iter().next().unwrap().unwrap();
         assert_eq!(
-            forms[0].token.holder,
+            row.holder,
             mod_api::AttachmentHolder::Level(game.level("test:pocket").unwrap())
         );
+        let token = mod_api::AttachmentWriteToken::from(row.write_token());
         sync(game, Holder::Level, 42);
         assert_eq!(values(game), [42]);
-        assert_eq!(forms[0].entry.read(&VALUE), Ok(&41));
+        assert_eq!(*row.value, 41);
         client(game).attachments.remove(&Holder::Level);
         assert!(values(game).is_empty());
         assert_eq!(
-            game.attachment_validate_write(forms[0].token.clone().into()),
+            game.attachment_validate_write(token),
             Err(mod_api::AttachmentRowError::StaleHolder)
         );
         sync(game, Holder::Chunk([1, 2]), 51);

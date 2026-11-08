@@ -12,12 +12,7 @@ these in the registries `STRUCTURE_TYPE` and `STRUCTURE_PIECE`). Register it onc
 namespace or an empty name stops the game at startup with a message naming the mod:
 
 ```rust,ignore
-#[mod_api::horizon_mod]
-impl Hooks for MyMod {
-    fn register(&self, r: &mut dyn Registrar, _: &RegistrationContext) {
-        r.register_structure_type("tower", Tower);
-    }
-}
+{{#include ../../../examples/src/worldgen.rs:structure}}
 ```
 
 There is no `Host` in world generation: starts build on worker threads and pieces place per chunk,
@@ -29,10 +24,12 @@ neighbouring chunks at once.
 `FoundStructure { position, pieces }` (each piece an `Arc<dyn StructurePiece>`) or `None` for "no start in this chunk". The
 `GenerationContext` is vanilla's `GenerationContext` over one chunk: the seed, the chunk, the
 random seeded as vanilla seeds it for the chunk (`setLargeFeatureSeed`), the height and
-base-column queries, the noise biomes and the valid-biome test, and the structure's own JSON
-config (`context.config()`, shared). Both contexts are traits and the random is a
+base-column queries, opaque noise-biome identities and the valid-biome test, borrowed immutable
+`metadata()`, and the structure's config as a shared `Arc<Tag>` (`context.config()`). JSON converts
+once when the definition loads or reloads, not once per start. Nested nulls refuse at load. Both contexts are traits and the random is a
 `StructureRandom` (`next_int_bound`, `next_long`, `next_float`, `next_double`, `next_boolean`),
-so a type built to `mod.wasm` runs the same code. Everything around the type stays the game's: the structure set's
+so a type built to `mod.wasm` runs the same code. Generated worker calls take the dependency
+group's store lock and per-call fuel or epoch budget; a trap stops that group with a typed refusal. Everything around the type stays the game's: the structure set's
 spacing, the structure's `biomes` and `terrain_adaptation` are placed by the engine, exactly as
 for a fortress.
 
@@ -43,7 +40,9 @@ box; it defaults to doing nothing. The
 `PieceContext` of `post_process` and `after_place` is the chunk being placed: `set_block` writes a
 block and drops a position outside the writable box silently, as vanilla's
 `StructurePiece.placeBlock` skips it; `block` and `height` read, `state`/`state_with` resolve a
-block by name and properties, `random` is the piece's `RandomSource` as a `StructureRandom`, `name` gives the block's name, `solid_render` asks whether
+a registered `BlockKey` into an API-owned `BlockState`, `random` is the piece's `RandomSource` as a
+`StructureRandom`, and `metadata().name(state.block())` borrows its canonical block name.
+`solid_render` asks whether
 a state draws as a solid block, and `entity` queues an entity from its saved NBT — its `id`, `Pos`
 and fields — which the generating chunk holds and the game finishes as a structure mob's
 (`Mob.finalizeSpawn` with `STRUCTURE` when the NBT keeps the `"horizon:finalize"` byte a structure
@@ -52,8 +51,11 @@ template's entities carry). `block_entity` places a block entity from its NBT.
 Saving goes through the engine's `StructurePiece.createTag` — the type id, `BB`, `O`, `GD` —
 around the piece's `add_additional_save_data`. When the chunk loads back, the type's `load_piece`
 (the `StructurePieceType` loader) rebuilds the piece exactly as it was saved; there is no
-regeneration from the seed. `load_piece` is required: a type whose pieces cannot load cannot save
-a start that comes back.
+regeneration from the seed. `load_piece(metadata, tag)` returns a typed `StructureError` for invalid
+saved block names, properties or piece data. Its metadata is the same retained snapshot the worker
+contexts borrow. Resolve states once in piece construction or load, as the example does; keep
+canonical names and properties in saved data, never process-local ordinals. `post_process` then
+writes retained states without per-block name lookups or allocation.
 
 **Open question — the saved piece's id is the structure type's, not a piece type's.** Every piece
 of a type saves with that type's id, the `STRUCTURE_TYPE` id; Horizon has no separate

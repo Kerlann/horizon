@@ -7,13 +7,7 @@ pub trait BlockStatesHost {
     /// Side: both.
     /// Read a loaded, light-emitting block. No implicit chunk loading.
     #[access(WorldOnly)]
-    fn lit_block_name(&self, pos: [i32; 3]) -> Option<&str>;
-    /// Side: both.
-    /// Property `key` of block state `state` (a machine's `facing`, from the
-    /// `state` `native_block_entity_submit` gets), if it has one: no lookup in
-    /// the world, so cheap each frame.
-    #[access(Metadata)]
-    fn block_state_property(&self, state: BlockStateId, key: &str) -> Option<&str>;
+    fn lit_block_name(&self, pos: [i32; 3]) -> Option<BlockKey>;
     /// Side: both.
     /// Resolve a registered fluid identifier.
     #[access(WorldOnly)]
@@ -22,36 +16,37 @@ pub trait BlockStatesHost {
     /// The state `name` names, read as `/setblock` reads a block
     /// (`BlockStateParser.parseForBlock`): `minecraft:oak_stairs[facing=east]`,
     /// `stone` for `minecraft:stone`, the properties left out at their
-    /// default. Its id is vanilla's `Block.getId`. None for an unknown block,
+    /// default. Returns an owned block key and canonical local ordinal, never
+    /// vanilla's numeric `Block.getId`. None for an unknown block,
     /// a property it doesn't have or a value it can't take, or block NBT
     /// (`{...}`); and, as `/setblock`'s argument, for anything after the
     /// block.
     #[access(Metadata)]
-    fn block_state_id(&self, name: &str) -> Option<BlockStateId>;
+    fn block_state_id(&self, name: &str) -> Option<BlockState>;
     /// Side: both.
     /// The state `state` as `/setblock` takes it back
     /// (`BlockStateParser.serialize`): its block, then each property in
     /// name order, `minecraft:oak_stairs[facing=east,half=bottom,...]`, or
-    /// the block alone for one with no properties. None for an id no state
-    /// has (`Block.stateById` gives air for one).
+    /// the block alone for one with no properties. None for an unknown key
+    /// or local ordinal; an invalid value never falls back to air.
     #[access(Metadata)]
-    fn block_state_string(&self, state: BlockStateId) -> Option<String>;
+    fn block_state_string(&self, state: BlockState) -> Option<String>;
     /// Side: both.
-    /// The default state of `block` (`minecraft:oak_stairs`, or `oak_stairs`):
+    /// The default state of the resolved `block` key:
     /// `Block.defaultBlockState`, the one a block takes when nothing else
     /// says. None for an unknown block.
     #[access(Metadata)]
-    fn block_state_default(&self, block: BlockKey) -> Option<BlockStateId>;
+    fn block_state_default(&self, block: BlockKey) -> Option<BlockState>;
     /// Side: both.
     /// `Item.getCraftingRemainder`: Horizon currently stores the remainder's
     /// item id, so the result is a single plain stack.
     #[access(Metadata)]
     fn item_crafting_remainder(&self, stack: &ItemStack) -> Option<ItemStack>;
     /// Side: both.
-    /// `Block.asItem`: the block's item name, including air for a block with
-    /// no item; None if the block name is unknown.
+    /// `Block.asItem`: the block's item identity, including air for a block with
+    /// no item; None if either resolved identity is unavailable.
     #[access(Metadata)]
-    fn block_item(&self, block: BlockKey) -> Option<String>;
+    fn block_item(&self, block: BlockKey) -> Option<ItemKey>;
 }
 /// The server host's methods of the `block_states` area, implemented by the game and reached through [`ServerHost`].
 #[horizon_mod_api_macros::host_area]
@@ -86,33 +81,62 @@ pub trait BlockStatesServerHost {
 #[horizon_mod_api_macros::host_area]
 pub trait BlockStatesBackend {
     /// Side: both.
+    /// Borrow the canonical block name through the block metadata resource.
+    #[access(Metadata)]
+    fn block_metadata_name(&self, block: BlockKey) -> Result<&str, BlockStateError>;
+    /// Side: both.
+    /// Borrow a property's serialized value from the block metadata resource.
+    #[access(Metadata)]
+    fn block_metadata_property(
+        &self,
+        state: BlockStateRecord,
+        name: &str,
+    ) -> Result<Option<&str>, BlockStateError>;
+    /// Side: both.
+    /// Change a property through the block metadata resource.
+    #[access(Metadata)]
+    fn block_metadata_with(
+        &self,
+        state: BlockStateRecord,
+        name: &str,
+        value: &str,
+    ) -> Result<BlockStateRecord, BlockStateError>;
+    /// Side: both.
+    /// Apply partial properties through the block metadata resource.
+    #[access(Metadata)]
+    fn block_metadata_of(
+        &self,
+        block: BlockKey,
+        properties: &[StateConstraint],
+    ) -> Result<BlockStateRecord, BlockStateError>;
+    /// Side: both.
     /// `BlockState.canBeReplaced()`: whether placing a block where this state stands
     /// replaces it (air, grass, water, snow layers). None for an unknown state.
     #[access(Metadata)]
-    fn block_state_replaceable(&self, state: BlockStateId) -> Option<bool>;
+    fn block_state_replaceable(&self, state: BlockState) -> Option<bool>;
     /// Side: both.
     /// `BlockBehaviour.Properties.destroyTime`, as `BlockState.getDestroySpeed` reads it:
     /// stone 1.5, obsidian 50, bedrock -1 (it can't be broken). None for an unknown state.
     #[access(Metadata)]
-    fn block_state_destroy_speed(&self, state: BlockStateId) -> Option<f32>;
+    fn block_state_destroy_speed(&self, state: BlockState) -> Option<f32>;
     /// Side: both.
     /// `BlockState.getSoundType()`: its volume, pitch and the sound events for breaking,
     /// stepping on, placing, hitting and falling on it. None for an unknown state.
     #[access(Metadata)]
-    fn block_state_sound(&self, state: BlockStateId) -> Option<BlockSoundType>;
+    fn block_state_sound(&self, state: BlockState) -> Option<BlockSoundType>;
     /// Side: both.
     /// `BlockState.hasBlockEntity()`. None for an unknown state.
     #[access(Metadata)]
-    fn block_state_has_block_entity(&self, state: BlockStateId) -> Option<bool>;
+    fn block_state_has_block_entity(&self, state: BlockState) -> Option<bool>;
     /// Side: both.
     /// `BlockState.getMapColor(level, pos)` for a state whose colour does not depend on where it
     /// stands: its `MapColor.id`, 0 (`MapColor.NONE`) for no colour. Map items colour a column
     /// by it (`MapItem.update`). None for an unknown state.
     #[access(Metadata)]
-    fn block_state_map_color(&self, state: BlockStateId) -> Option<u8>;
+    fn block_state_map_color(&self, state: BlockState) -> Option<u8>;
     /// Side: both.
-    /// The states of `block` (`StateDefinition.getPossibleStates`), as the consecutive ids the
-    /// registry numbers them with. None for an unknown block.
+    /// The states of `block` (`StateDefinition.getPossibleStates`) in immutable local ordinal
+    /// order, independent of world numeric IDs. None for unavailable metadata or an unknown block.
     #[access(Metadata)]
     fn block_states_of(&self, block: BlockKey) -> Option<BlockStateRange>;
     /// Side: both.
@@ -124,7 +148,7 @@ pub trait BlockStatesBackend {
     #[access(Metadata)]
     fn block_state_matches(
         &self,
-        state: BlockStateId,
+        state: BlockState,
         block: BlockKey,
         constraints: &[StateConstraint],
     ) -> Option<Result<bool, StateMatchError>>;
@@ -144,6 +168,7 @@ pub trait BlockStatesBackend {
     /// block, or air for the empty fluid. None for a state no fluid can be in (a tank-only
     /// fluid, an amount above 8, a zero amount for anything but the empty fluid, or a source
     /// that isn't full) and without a resolved registry.
+    /// Not on wasm: the block state id has no wire layout yet.
     #[access(Metadata)]
     fn fluid_legacy_block(&self, state: FluidState) -> Option<BlockStateId>;
     /// Side: both.

@@ -12,7 +12,7 @@ impl GameLevel<'_> {
     /// shape or is placed, inside the level's update. Only the block's own
     /// part is asked, so vanilla blocks cost nothing. Authoritative servers only.
     #[inline(always)]
-    pub(in crate::game) fn native_connects_to(&self, call: mod_api::__private::ConnectsToCall<'_>) {
+    pub(in crate::game) fn native_connects_to(&self, call: super::fire::ConnectsToCall<'_>) {
         self.fire_connects_to(call);
     }
 }

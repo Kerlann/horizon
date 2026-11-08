@@ -1,11 +1,6 @@
 id = "counter_lib"
 name = "Counter library"
 version = "1.0.0"
-description = "Publishes the capability test:counter."
 api = "0.2"
 side = "both"
 capabilities = ["registries"]
-
-[wasm]
-sha512 = "880cd3c682713e939c24a09149512452a7cc31e332d91445a46159f155bac51fdc2b4b58b2e65b15cd61dd2d163a72548aa7d611eb8c58f407521be88ec9c866"
-toolchain = "1.99.1 58cf8f9c35b355199727627d07ae34a4e2846d67"

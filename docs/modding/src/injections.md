@@ -14,10 +14,9 @@ An API point injection names a crate-root `with` function and listens at an admi
 slot ([shape rules](#which-methods-are-points)). The prebuilt game fills those slots at load with the
 mods' listeners, without changing game source.
 
-A `mod.wasm` uses the same declarations with `[wasm]` instead of native build pins. The game fills
-its compiled slots at load without rebuilding the game or invoking the Rust compiler.
-Wasm supports compiled function slots, not source rebuilding or call-site injections
-([Building a mod to `mod.wasm`](how-to/wasm-mods.md#listening-at-points)).
+A `mod.wasm` will listen at points too, once the game's shared-memory wasm boundary lands; until
+then a game refuses every `mod.wasm` ([Building a mod to `mod.wasm`](how-to/wasm-mods.md)). Helper
+injections are native-only.
 
 ## Adding a pinned declaration
 
@@ -476,38 +475,6 @@ A listed stale call never falls back to source. Use the function hash and statem
 not a site's physical fingerprint, as the declaration identity. `wrap_if` needs unit output.
 These call kinds are not available to wasm mods.
 
-### Wasm raw listeners
-
-A wasm mod uses the same top-level `internals` declarations and `[[inject]]` listeners beside `[wasm]`,
-but omits all three native pins and carries no helper or support-module source. Its generated view
-imports `horizon:mod-internals/view`: roots, path nodes, plain values and declared function calls.
-The compiled declaration includes each manifest internal and every named type whose layout it walks.
-All paths and hashes are checked at load, before any listener registers. A field also requires its
-owner's matching type hash. A missing opt-in entry names
-`crates/horizon-mod-api-gen/wasm-internals/<mod_id>.txt`; a game built without a table refuses declaring mods.
-
-The slot runs API listeners first, then raw listeners in the native/wasm registration order. A raw
-listener has no Host; its only game access is through the view. Nodes last for one listener call:
-keeping one into the next call refuses `gone`. Writes are journaled and reads see those writes.
-Calling a declared game function applies the journal first and invalidates cached paths. A normal
-listener return applies its remaining writes; a trap discards them and stops the group. Writes that
-no longer resolve are dropped and logged. A trap after a game function call does not undo that call
-or the writes already applied before it.
-
-### Closures and callbacks
-
-A declared function that takes a closure (`impl Fn...`, `dyn Fn...`) has no thunk. A synchronous
-callback would have to re-enter the guest from inside that guest's own import, which the component
-model forbids (the runtime refuses it as `Reentered`); a second instance would not see the guest's
-state. The view therefore refuses a closure argument as opaque and reports it in the stage's skipped
-functions.
-
-Use the game's non-closure helper for the operation instead. For `Game::with_level`'s
-`BlockState.canSurvive`, that is `Game::level_can_survive(pos, state)`: it runs the same level rule
-in the same call frame, and its writes follow the journal rules above. A helper that needs another
-level-scoped operation is an API request; it lands as a declared non-closure method rather than as a
-callback.
-
 ## Reference
 
 - A point's methods are `<point>` (its head: the arguments it was called with) and `<point>_return` (after
@@ -520,6 +487,10 @@ callback.
   atomic load and a branch.
 - A point injection's `hook`, bindings and horizon-mixins fields are refused: a hook is its own `Hooks` method,
   and the record carries what the point passes.
-### Syncing wasm internals to a game repository
-
-From a wasm mod directory, run `cargo horizon-mod internals sync --repo <path>` to write its reviewed `crates/horizon-mod-api-gen/wasm-internals/<mod_id>.txt` input in the Horizon repository. Without `--repo`, the command searches upward for the Horizon workspace. It reads only `horizon-mod.toml`, combining declared internal paths and raw injection targets in sorted, deduplicated order; it does not change the manifest or run the launcher. Commit the resulting file to the game repository. The `--repo` option is not valid for native mods.
+- A helper on a `GameLevel` method that takes `&mut self` (`native_random_tick`, `native_tick_block`,
+  `native_perform_bonemeal`, `native_is_bonemeal_success`), bind
+  `{ name = "level", ty = "&mut dyn crate::mod_api::LevelRandomHost", value = "&mut *self" }` for attachments and
+  `random()`. Scheduling and `set_block_property` stay on the `LevelTicksHost` and `LevelWriteHost` the hook points
+  pass.
+- A hook point's contract is versioned: `hook_version` names the contract a mod built against. A contract
+  never changes; an incompatible change adds a version.

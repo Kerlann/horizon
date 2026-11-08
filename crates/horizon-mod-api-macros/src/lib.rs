@@ -6,6 +6,48 @@ use syn::{
     punctuated::Punctuated,
 };
 
+struct RawFramePlan {
+    roots: usize,
+    read: syn::Block,
+    apply: syn::Block,
+}
+struct RawPlan {
+    plan: Option<usize>,
+    head: RawFramePlan,
+    tail: Option<RawFramePlan>,
+}
+impl syn::parse::Parse for RawPlan {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        fn frame(input: syn::parse::ParseStream<'_>) -> syn::Result<RawFramePlan> {
+            let roots = input.parse::<syn::LitInt>()?.base10_parse()?;
+            input.parse::<Token![,]>()?;
+            let read = input.parse()?;
+            input.parse::<Token![,]>()?;
+            let apply = input.parse()?;
+            Ok(RawFramePlan { roots, read, apply })
+        }
+        let plan = if input.peek(syn::Ident) {
+            let word: syn::Ident = input.parse()?;
+            if word != "plan" {
+                return Err(syn::Error::new(word.span(), "expected `plan`"));
+            }
+            let id = input.parse::<syn::LitInt>()?.base10_parse()?;
+            input.parse::<Token![,]>()?;
+            Some(id)
+        } else {
+            None
+        };
+        let head = frame(input)?;
+        let tail = if input.is_empty() {
+            None
+        } else {
+            input.parse::<Token![,]>()?;
+            Some(frame(input)?)
+        };
+        Ok(Self { plan, head, tail })
+    }
+}
+
 /// The staged call site's typed boundary. Only generated source invokes this macro.
 #[proc_macro]
 pub fn site(input: TokenStream) -> TokenStream {
@@ -149,12 +191,30 @@ fn expand(mut implementation: ItemImpl, export: bool) -> TokenStream {
     implementation.items.push(subscribed);
     let export = if export && part.is_none() {
         let ty = &implementation.self_ty;
+        let registrations: proc_macro2::TokenStream =
+            match std::env::var("HORIZON_GUEST_REGISTRATIONS") {
+                Ok(source) => match source.parse::<proc_macro2::TokenStream>() {
+                    Ok(tokens) => tokens,
+                    Err(error) => {
+                        return syn::Error::new_spanned(
+                            &implementation,
+                            format!("guest registrations: {error}"),
+                        )
+                        .to_compile_error()
+                        .into();
+                    }
+                },
+                Err(_) => quote!(),
+            };
         quote! {
             pub fn hooks() -> Box<dyn mod_api::Hooks> { Box::new(<#ty as Default>::default()) }
-            /// The mod's hooks for the guest glue in `mod_api::wasm`, when built to `mod.wasm`.
+            /// The mod's hooks for the guest runtime in `mod_api::wire::guest`, when built to wasm.
             #[cfg(target_arch = "wasm32")]
             #[unsafe(no_mangle)]
-            fn __horizon_mod_hooks() -> Box<dyn mod_api::Hooks> { hooks() }
+            fn __horizon_mod_hooks() -> Box<dyn mod_api::Hooks> {
+                #registrations
+                hooks()
+            }
         }
     } else {
         quote!()
@@ -252,6 +312,17 @@ pub fn horizon_part(_attribute: TokenStream, input: TokenStream) -> TokenStream 
 #[proc_macro_attribute]
 pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
     let mut function = parse_macro_input!(input as ImplItemFn);
+    let raw_plan = match function
+        .attrs
+        .iter()
+        .position(|attr| attr.path().is_ident("horizon_raw_plan"))
+    {
+        Some(index) => match function.attrs.remove(index).parse_args::<RawPlan>() {
+            Ok(plan) => Some(plan),
+            Err(error) => return error.to_compile_error().into(),
+        },
+        None => None,
+    };
     if let Some(inline) = function.attrs.iter().find(|attr| {
         attr.path().is_ident("inline")
             && attr
@@ -413,6 +484,215 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
         };
         quote!(#ty { #(#fields,)* #outcome })
     };
+    let snapshot = |at_return: bool| {
+        if let Some(plan) = raw_plan.as_ref().and_then(|plan| {
+            if at_return {
+                plan.tail.as_ref()
+            } else {
+                Some(&plan.head)
+            }
+        }) {
+            let roots = plan.roots;
+            let read = &plan.read;
+            let apply = &plan.apply;
+            let mut inputs = Vec::new();
+            if !at_return && raw_plan.as_ref().is_some_and(|plan| plan.plan.is_some()) {
+                // A registration policy projects the receiver, as the first root.
+                match shape.receiver {
+                    point_shape::Receiver::Shared => inputs.push(quote!(self,)),
+                    point_shape::Receiver::Mut => inputs.push(quote!(&mut *self,)),
+                    point_shape::Receiver::None => {}
+                }
+            }
+            if !at_return {
+                for field in point_shape::raw_fields(&function.sig) {
+                    let place = &places[&field.input];
+                    inputs.push(quote!(&mut #place,));
+                }
+            }
+            match (&outcome, at_return) {
+                (point_shape::RawOutcome::Cancel, false) => inputs.push(quote!(&mut #cancel,)),
+                (point_shape::RawOutcome::Result(_), false) => {
+                    inputs.push(quote!(&mut #result_place,))
+                }
+                _ => {}
+            }
+            // The return phase's one root is the returned slot, whatever the head's outcome was.
+            if at_return && matches!(function.sig.output, syn::ReturnType::Type(..)) {
+                inputs.push(quote!(&mut __result,));
+            }
+            if inputs.len() != roots {
+                return syn::Error::new_spanned(
+                    &function.sig,
+                    "staged raw frame does not match the native root tuple",
+                )
+                .to_compile_error();
+            }
+            let rows = (roots + 1) as u32;
+            // A registration policy rides in the leased state: readers are plain functions.
+            let (bind, extra, read, apply) = match raw_plan.as_ref().and_then(|plan| plan.plan) {
+                Some(id) => (
+                    quote!(let ::std::option::Option::Some(__raw_policy) = __endpoint.plan(#id) else { return; };),
+                    quote!(__raw_policy,),
+                    quote!({ let __raw_plan = &__raw_state.2; #read }),
+                    quote!({ let __raw_plan = &__raw_state.2; #apply }),
+                ),
+                None => (quote!(), quote!(), quote!(#read), quote!(#apply)),
+            };
+            return quote! {
+                #bind
+                let __raw_state = (
+                    ::std::cell::RefCell::new((#(#inputs)*)),
+                    ::std::cell::RefCell::new(mod_points::locators::Locators::default()),
+                    #extra
+                );
+                __raw_state.1.borrow_mut().intern(None, mod_points::locators::Step::Root(0))
+                    .expect("the first raw root fits the locator arena");
+                mod_points::snapshot::with_root(&__raw_state, |__root| {
+                    let mut __projection = mod_api::wire::Projected::new(
+                        |__out: &mut mod_api::wire::Writer| {
+                            // SAFETY: creation runs inside the real marked call's encoder, while
+                            // the private value lease belongs to this enclosing callback frame.
+                            // The generated reader resolves paths afresh and returns bounded rows.
+                            let __pages = match unsafe {
+                                mod_points::snapshot::PageSource::new(&__root, |__raw_state, __raw_window| #read)
+                            } {
+                                Ok(__pages) => __pages,
+                                Err(_) => {
+                                    __out.fail(mod_api::wire::WireError::Invalid("raw native root is unavailable"));
+                                    return;
+                                }
+                            };
+                            match __pages.window(mod_api::RowWindow { node: 0, start: 0, rows: #rows, depth: 1 }) {
+                                Ok(__rows) => {
+                                    __out.put(&__rows);
+                                    __out.put(&Some(__pages.clone()));
+                                    __out.put(&mod_api::wire::RecordPatch::default());
+                                }
+                                Err(_) => __out.fail(mod_api::wire::WireError::Invalid("raw native projection refused")),
+                            }
+                        },
+                        |__raw_bytes: &[u8]| -> ::core::result::Result<(), mod_api::wire::WireError> {
+                            __root.close();
+                            #apply
+                        },
+                    );
+                    __endpoint.forward(__index, &mut __projection);
+                });
+            };
+        }
+        if !shape.snapshot_able(&function.sig) {
+            return quote!();
+        }
+        let raw_fields = point_shape::raw_fields(&function.sig);
+        let contract = point_shape::raw_shape(&shape, &function.sig, None);
+        let count = raw_fields.len() as u32;
+        let control_id = count + 1;
+        let nodes = count + 2;
+        let slots: Vec<_> = (0..raw_fields.len())
+            .map(|index| quote::format_ident!("__snapshot_slot_{index}"))
+            .collect();
+        let positions: Vec<_> = (0..raw_fields.len()).map(syn::Index::from).collect();
+        let control_position = syn::Index::from(raw_fields.len());
+        let (prepare, control, apply, control_key) = match (&shape.returns, at_return) {
+            (point_shape::Returns::Value(ty), true) => (
+                quote!(),
+                quote!(__result),
+                quote!(),
+                format!("raw-return-control({})", quote!(#ty)),
+            ),
+            (point_shape::Returns::Value(ty), false) => (
+                quote!(),
+                result_place.clone(),
+                quote!(),
+                format!("raw-result-control({})", quote!(#ty)),
+            ),
+            _ => (
+                quote!(),
+                quote!(#cancel),
+                quote!(),
+                "raw-cancel-control".to_owned(),
+            ),
+        };
+        let roots = raw_fields.iter().map(|field| {
+            if at_return {
+                let name = &field.name;
+                quote!(&mut __args.#name,)
+            } else {
+                let place = &places[&field.input];
+                quote!(&mut #place,)
+            }
+        });
+        let rows = raw_fields.iter().zip(&positions).enumerate().map(|(index, (field, position))| {
+            let index = index as u32;
+            let ty = &field.ty;
+            let ty = quote!(#ty).to_string();
+            quote!(__snapshot.value(Some(__root), #index, const { mod_points::snapshot::key(#ty) }, &*__state.#position)?;)
+        });
+        let writable_control = if at_return {
+            contract.return_record_mutable
+                && matches!(&shape.returns, point_shape::Returns::Value(_))
+        } else {
+            contract.outcome_record_mutable == Some(true)
+        };
+        let fields = if writable_control {
+            quote!((mod_api::wire::PatchCell::new(#control_id, &mut **__snapshot_control), ()))
+        } else {
+            quote!(())
+        };
+        let fields = raw_fields
+            .iter()
+            .zip(&contract.args)
+            .zip(&slots)
+            .enumerate()
+            .rev()
+            .fold(fields, |tail, (index, ((_, metadata), slot))| {
+                if !at_return && metadata.record_mutable {
+                    let id = index as u32 + 1;
+                    quote!((mod_api::wire::PatchCell::new(#id, &mut **#slot), #tail))
+                } else {
+                    tail
+                }
+            });
+        quote! {
+            #prepare
+            {
+                let __snapshot_state = ::std::cell::RefCell::new((#(#roots)* &mut #control,));
+                mod_points::snapshot::with_root(&__snapshot_state, |__root_handle| {
+                    let mut __record = mod_api::wire::Projected::new(
+                        |__out: &mut mod_api::wire::Writer| {
+                            let __state = __snapshot_state.borrow();
+                            let mut __snapshot = mod_points::snapshot::Builder::default();
+                            let __rows = (|| -> ::core::result::Result<_, mod_api::wire::WireError> {
+                                let __root = __snapshot.node(None, 0, const { mod_points::snapshot::key("raw-call") })?;
+                                #(#rows)*
+                                __snapshot.value(Some(__root), #count, const { mod_points::snapshot::key(#control_key) }, &*__state.#control_position)?;
+                                Ok(__snapshot.finish())
+                            })();
+                            match __rows {
+                                Ok(__rows) => {
+                                    __out.put(&__rows);
+                                    __out.put(&None::<::std::sync::Arc<dyn mod_api::RowPages>>);
+                                    __out.put(&mod_api::wire::RecordPatch::default());
+                                }
+                                Err(__error) => __out.fail(__error),
+                            }
+                        },
+                        |__bytes: &[u8]| {
+                            __root_handle.close();
+                            let mut __state = __snapshot_state.borrow_mut();
+                            let (#(#slots,)* __snapshot_control,) = &mut *__state;
+                            mod_api::wire::Record::apply(&mut mod_api::wire::PatchFields::new(#fields, #nodes), __bytes)
+                        },
+                    );
+                    __endpoint.forward(__index, &mut __record);
+                });
+            }
+            #apply
+        }
+    };
+    let head_snapshot = snapshot(false);
+    let return_snapshot = snapshot(true);
     let fire = |variant: &syn::Ident, method: &syn::Ident, api: bool| {
         let name = method.to_string();
         let api = api.then(|| {
@@ -436,9 +716,7 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
                                 )
                             }
                         }
-                        mod_points::__private::RawKind::Indexed(__function, __index) => {
-                            unsafe { __function(mod_points::PointId::#variant as usize, __index, #erased_receiver, &mut #raw_record as *mut _ as *mut ()) };
-                        }
+                        mod_points::__private::RawKind::Snapshot(__endpoint, __index) => { #head_snapshot }
                         mod_points::__private::RawKind::Erased(__function) => {
                             // SAFETY: this slot supplies its exact receiver and raw record types.
                             unsafe {
@@ -532,9 +810,7 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
                                 )
                             }
                         }
-                        mod_points::__private::RawKind::Indexed(__function, __index) => {
-                            unsafe { __function(mod_points::PointId::#variant as usize, __index, #erased_receiver, &mut __result as *mut _ as *mut ()) };
-                        }
+                        mod_points::__private::RawKind::Snapshot(__endpoint, __index) => { #return_snapshot }
                         mod_points::__private::RawKind::Erased(__function) => {
                             // SAFETY: this slot supplies its exact receiver and return types.
                             unsafe {
@@ -631,154 +907,6 @@ impl syn::parse::Parse for IfInstalled {
             id,
             block: input.parse()?,
         })
-    }
-}
-
-/// Declares how a plain-data type crosses the generated wasm interface.
-///
-/// `#[wasm(via = Form)]` on a type or its re-export checks `TryFrom<&Type> for Form`
-/// and `TryFrom<Form> for Type`. Add `writeback = method` to apply a returned form
-/// through `Type::method(&mut self, Form)` instead of replacing the value. This keeps
-/// identity and native mutation bookkeeping under the type's control.
-/// `#[wasm(host_constructor = method)]` on an owned
-/// tuple struct makes incoming host lifts call that checked constructor with the
-/// lifted fields instead of constructing the tuple directly. It returns `Result<Self, E>`
-/// with a displayable refusal. Guest lifts remain structural: the host owns validation.
-#[proc_macro_attribute]
-pub fn wasm(attribute: TokenStream, input: TokenStream) -> TokenStream {
-    let item = parse_macro_input!(input as syn::Item);
-    let rule = parse_macro_input!(attribute as WasmRule);
-    if let WasmRule::HostConstructor(constructor) = rule {
-        let syn::Item::Struct(record) = &item else {
-            return syn::Error::new_spanned(
-                item,
-                "host_constructor requires an owned tuple struct",
-            )
-            .to_compile_error()
-            .into();
-        };
-        let syn::Fields::Unnamed(fields) = &record.fields else {
-            return syn::Error::new_spanned(
-                item,
-                "host_constructor requires an owned tuple struct",
-            )
-            .to_compile_error()
-            .into();
-        };
-        if !record.generics.params.is_empty() {
-            return syn::Error::new_spanned(
-                item,
-                "host_constructor requires an owned tuple struct",
-            )
-            .to_compile_error()
-            .into();
-        }
-        let ty = &record.ident;
-        let params: Vec<_> = fields
-            .unnamed
-            .iter()
-            .enumerate()
-            .map(|(i, field)| {
-                let name = format_ident!("p{i}");
-                let ty = &field.ty;
-                quote!(#name: #ty)
-            })
-            .collect();
-        let args: Vec<_> = (0..params.len()).map(|i| format_ident!("p{i}")).collect();
-        return quote! {
-            #item
-            const _: () = {
-                fn checked_constructor(#(#params),*) -> ::core::result::Result<#ty, ::std::string::String> {
-                    #ty::#constructor(#(#args),*).map_err(|error| error.to_string())
-                }
-                let _ = #ty::#constructor;
-                let _ = checked_constructor;
-            };
-        }
-        .into();
-    }
-    let WasmRule::Via(via, writeback) = rule else {
-        unreachable!()
-    };
-    let ty = match &item {
-        syn::Item::Struct(item) => item.ident.clone(),
-        syn::Item::Enum(item) => item.ident.clone(),
-        syn::Item::Use(item) => match last_use_name(&item.tree) {
-            Some(name) => name,
-            None => {
-                return syn::Error::new_spanned(item, "#[wasm] exports one type")
-                    .to_compile_error()
-                    .into();
-            }
-        },
-        item => {
-            return syn::Error::new_spanned(item, "#[wasm] goes on a type or its `pub use`")
-                .to_compile_error()
-                .into();
-        }
-    };
-    let writer = writeback.map(|method| {
-        quote! {
-            fn writes_its_form(value: &mut #ty, form: #via) { value.#method(form); }
-        }
-    });
-    quote! {
-        #item
-        const _: () = {
-            #writer
-            fn crosses_as_its_form()
-            where
-                #via: for<'a> ::core::convert::TryFrom<&'a #ty>,
-                #ty: ::core::convert::TryFrom<#via>,
-            {
-            }
-        };
-    }
-    .into()
-}
-
-/// The single conversion rule on a type declaration.
-enum WasmRule {
-    Via(syn::Type, Option<syn::Ident>),
-    HostConstructor(syn::Ident),
-}
-
-impl syn::parse::Parse for WasmRule {
-    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
-        let key: syn::Ident = input.parse()?;
-        input.parse::<syn::Token![=]>()?;
-        match key.to_string().as_str() {
-            "via" => {
-                let form = input.parse()?;
-                let writeback = if input.is_empty() {
-                    None
-                } else {
-                    input.parse::<syn::Token![,]>()?;
-                    let key: syn::Ident = input.parse()?;
-                    if key != "writeback" {
-                        return Err(syn::Error::new(key.span(), "expected writeback"));
-                    }
-                    input.parse::<syn::Token![=]>()?;
-                    Some(input.parse()?)
-                };
-                Ok(Self::Via(form, writeback))
-            }
-            "host_constructor" => Ok(Self::HostConstructor(input.parse()?)),
-            _ => Err(syn::Error::new(
-                key.span(),
-                "expected via or host_constructor",
-            )),
-        }
-    }
-}
-
-/// The name a `use` tree of one path brings in.
-fn last_use_name(tree: &syn::UseTree) -> Option<syn::Ident> {
-    match tree {
-        syn::UseTree::Path(path) => last_use_name(&path.tree),
-        syn::UseTree::Name(name) => Some(name.ident.clone()),
-        syn::UseTree::Rename(rename) => Some(rename.rename.clone()),
-        _ => None,
     }
 }
 

@@ -272,18 +272,7 @@ pub fn fingerprint(home: &Path, version: Option<&str>) -> String {
     let mut out = format!("{}\n{version:?}\n", home.display());
     // The on/off list (`browser::java::is_enabled`).
     out += &fs::read_to_string(home.join("horizon-mods.txt")).unwrap_or_default();
-    let mut packages = hmods(home);
-    // A wasm mod's declarations also select a source build's internals table.
-    packages.extend(
-        fs::read_dir(home.join(horizon_mod_package::mod_list::DIR))
-            .into_iter()
-            .flatten()
-            .flatten()
-            .map(|entry| entry.path())
-            .filter(|path| path.extension().is_some_and(|ext| ext == "hmod")),
-    );
-    packages.sort();
-    for path in packages
+    for path in hmods(home)
         .into_iter()
         .flat_map(|p| [p.clone(), p.with_extension("origin.json")])
         .chain([home.join("mod-browser.json")])
@@ -340,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn regular_wasm_package_changes_invalidate_the_build_view_cache() {
+    fn regular_wasm_package_changes_leave_the_build_view_cache_alone() {
         let home = std::env::temp_dir().join(format!("wasm-build-view-{}", std::process::id()));
         fs::create_dir_all(home.join(horizon_mod_package::mod_list::DIR)).unwrap();
         let package = home
@@ -349,7 +338,22 @@ mod tests {
         fs::write(&package, b"a").unwrap();
         let before = fingerprint(&home, None);
         fs::write(&package, b"ab").unwrap();
-        assert_ne!(before, fingerprint(&home, None));
+        // Declared internals of a wasm package do not select native build inputs: the staged
+        // game carries the whole generated catalog, and the loader resolves each wasm mod's
+        // declarations against it at load time. Only native packages are build inputs.
+        assert_eq!(
+            before,
+            fingerprint(&home, None),
+            "a wasm package is not a build input: the native build never reads it"
+        );
+        let native = home.join(native_mods::INSTALLED);
+        fs::create_dir_all(&native).unwrap();
+        fs::write(native.join("example.hmod"), b"a").unwrap();
+        assert_ne!(
+            before,
+            fingerprint(&home, None),
+            "a native package is a build input"
+        );
         fs::remove_dir_all(home).unwrap();
     }
 

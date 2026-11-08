@@ -14,8 +14,12 @@ use std::{
 };
 
 fn add(game: &mut Game<'_>, options: &ParticleOptions, at: [f64; 3], velocity: [f64; 3]) -> bool {
+    use super::api_values::TryIntoApi;
+    let Ok(options) = options.try_into_api() else {
+        return false;
+    };
     let host: &mut dyn ClientHost = game;
-    host.add_particle(options, at, velocity)
+    host.add_particle(&options, at, velocity)
 }
 
 impl Game<'_> {

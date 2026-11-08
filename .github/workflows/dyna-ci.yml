@@ -222,47 +222,6 @@ jobs:
             target
           key: ${{ steps.lint-cache.outputs.cache-primary-key }}
 
-  wasm-bench:
-    # Main pushes and dispatches: what a wasm mod costs against the same mod built native,
-    # in release, in the job summary (never a failure; timings on shared runners are indicative).
-    needs: changes
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust toolchains and the ALSA and udev headers
-        run: |
-          sudo apt-get update && sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev
-          rustup toolchain install stable --profile minimal
-          rustup toolchain install 1.99.1 --profile minimal --component rust-src --target wasm32-unknown-unknown
-      - uses: Swatinem/rust-cache@v2
-        with:
-          shared-key: wasm-bench
-          workspaces: |
-            .
-            crates/horizon-mod-wasm/tests/bench/hook -> target/horizon-mod
-            crates/horizon-mod-wasm/tests/bench/internals -> target/horizon-mod
-          save-if: ${{ github.ref == 'refs/heads/main' }}
-      - name: Build the benchmark mod to mod.wasm, and the std member
-        run: |
-          cargo +stable build -p cargo-horizon-mod
-          cd crates/horizon-mod-wasm/tests/bench/hook
-          ../../../../../target/debug/cargo-horizon-mod horizon-mod build --wasm
-          ../../../../../target/debug/cargo-horizon-mod horizon-mod wasm-std "$GITHUB_WORKSPACE/target/horizon-wasm-std.wasm"
-          cd ../internals
-          HORIZON_MOD_INTERNALS_CATALOG="$PWD/internals.json" ../../../../../target/debug/cargo-horizon-mod horizon-mod build --wasm
-      - name: The same hook native and as mod.wasm
-        env:
-          HORIZON_WASM_BENCH: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/bench/hook/target/horizon-mod/bench_mod.hmod
-          HORIZON_WASM_INTERNALS_BENCH: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/bench/internals/target/horizon-mod/internals_bench.hmod
-          HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
-        # The internals bench seals the process-wide hook registry, so it runs alone, as its #[ignore] note says.
-        run: |
-          cargo +stable test --release -p horizon-mod-wasm --test bench -- --ignored --nocapture --test-threads=1 --skip internals_bench
-          cargo +stable test --release -p horizon-mod-wasm --test borrowed_view -- --ignored --nocapture
-          cargo +stable test --release -p horizon-mod-wasm --test bench -- --ignored --nocapture --test-threads=1 internals_bench
-
   verify:
     needs: changes
     runs-on: ${{ needs.changes.outputs.self_hosted == 'true' && 'dyna-large' || vars.SELF_HOSTED_CI == 'all' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "linux", "playhorizon-ci"]') || 'ubuntu-latest' }}

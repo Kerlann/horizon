@@ -166,7 +166,8 @@ impl Game<'_> {
             .map(|i| {
                 let state = BlockStateId(i as u32);
                 let name: &str = &self.res.facts().get(state).name;
-                match name {
+                let factory = horizon_client::block_entity_types::factory_block(name);
+                match factory {
                     "minecraft:hopper"
                     | "minecraft:crafter"
                     | "minecraft:beacon"
@@ -197,7 +198,7 @@ impl Game<'_> {
                         if record { Ticking::Yes } else { Ticking::Idle }
                     }
                     n if FurnaceKind::from_block(n).is_some() => Ticking::Yes,
-                    n if !n.starts_with("minecraft:") && self.native_ticks(n) => Ticking::Yes,
+                    _ if !name.starts_with("minecraft:") && self.native_ticks(name) => Ticking::Yes,
                     _ => Ticking::No,
                 }
             })
@@ -458,5 +459,226 @@ mod jukebox_stop_tests {
             return;
         };
         assert!(lines.is_empty(), "{lines:?}");
+    }
+}
+
+#[cfg(test)]
+mod add_blocks_tests {
+    use super::*;
+    use mod_api::*;
+    use std::sync::{Arc, OnceLock};
+
+    #[test]
+    #[ignore = "needs prepared resources; isolates process-wide registries"]
+    fn vanilla_template_membership_creates_ticks_and_saves() {
+        const FLAG: &str = "HORIZON_ADD_BLOCKS_CASE";
+        const BLOCK: &str = "add_blocks_test:vault";
+        const SIGN: &str = "add_blocks_test:sign";
+        const DECLARED: &str = "add_blocks_test:declared";
+        if std::env::var_os(FLAG).is_none() {
+            for case in ["valid", "quiet", "bad_class", "bad_block", "bad_type"] {
+                let scratch = std::env::temp_dir()
+                    .join(format!("horizon-add-blocks-{}-{case}", std::process::id()));
+                std::fs::create_dir_all(&scratch).unwrap();
+                let mut child = std::process::Command::new(std::env::current_exe().unwrap());
+                child.args(["--ignored", "--exact", "game::block_entity_ticks::add_blocks_tests::vanilla_template_membership_creates_ticks_and_saves", "--nocapture"])
+                    .current_dir(&scratch).env(FLAG, case).env("HORIZON_NO_AUDIO", "1").env("HORIZON_LAUNCHER_NO_SELF_UPDATE", "1");
+                for key in [
+                    "HORIZON_HOME",
+                    "HORIZON_LAUNCHER_HOME",
+                    "XDG_DATA_HOME",
+                    "XDG_CONFIG_HOME",
+                ] {
+                    child.env(key, scratch.join(key));
+                }
+                let status = child.status().unwrap();
+                std::fs::remove_dir_all(&scratch).unwrap();
+                assert!(status.success(), "case {case}");
+            }
+            return;
+        }
+        let case = std::env::var(FLAG).unwrap();
+        #[derive(Default)]
+        struct Keys(
+            OnceLock<(BlockEntityTypeKey, BlockEntityTypeKey, BlockKey, BlockKey)>,
+            std::sync::atomic::AtomicUsize,
+        );
+        struct Listener(Arc<Keys>, String);
+        #[mod_api::__subscriptions]
+        impl Hooks for Listener {
+            fn register(&self, r: &mut dyn Registrar, _: &RegistrationContext) {
+                let kind = r.block_entity_type_key(if self.1 == "bad_type" {
+                    "minecraft:missing"
+                } else {
+                    "minecraft:vault"
+                });
+                let extra = r.block_entity_type("extra").blocks(&[]).build();
+                r.block_entity_type("own").blocks(&[DECLARED]).build();
+                let declared = r.block_key(DECLARED);
+                let block = r.block_key(if self.1 == "bad_block" {
+                    "add_blocks_test:missing"
+                } else {
+                    BLOCK
+                });
+                assert_eq!(
+                    *self.0.0.get_or_init(|| (kind, extra, block, declared)),
+                    (kind, extra, block, declared)
+                );
+            }
+            fn blocks(&self, _: &RegistrationContext, event: &mut BlocksEvent<'_>) {
+                for (id, template) in [
+                    (
+                        BLOCK,
+                        if self.1 == "bad_class" {
+                            "minecraft:stone"
+                        } else {
+                            "minecraft:vault"
+                        },
+                    ),
+                    (SIGN, "minecraft:oak_sign"),
+                    (DECLARED, "minecraft:vault"),
+                ] {
+                    event.blocks.push(mod_api::Block::new(id, template));
+                }
+            }
+            fn block_entity_type_add_blocks(
+                &self,
+                _: &RegistrationContext,
+                event: &mut BlockEntityTypeAddBlocksEvent<'_>,
+            ) {
+                self.0.1.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                let &(kind, extra, block, declared) = self.0.0.get().unwrap();
+                event.modify(kind, &[block, declared]);
+                event.modify_matching(|key| key == kind || key == extra, &[block]);
+            }
+        }
+        struct Quiet(Listener);
+        #[mod_api::__subscriptions]
+        impl Hooks for Quiet {
+            fn register(&self, r: &mut dyn Registrar, context: &RegistrationContext) {
+                self.0.register(r, context);
+            }
+            fn blocks(&self, context: &RegistrationContext, event: &mut BlocksEvent<'_>) {
+                self.0.blocks(context, event);
+            }
+        }
+        let observed = Arc::new(Keys::default());
+        let listener = Listener(observed.clone(), case.clone());
+        let hooks: Box<dyn Hooks> = if case == "quiet" {
+            Box::new(Quiet(listener))
+        } else {
+            Box::new(listener)
+        };
+        let mods: Mods = vec![ModEntry::new("add_blocks_test", hooks)].into();
+        mod_api::__private::install(mods.clone());
+        crate::game::api_values::install_parts(&mods).unwrap();
+        let base = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let root = crate::game::mods::content_root(&base, &Default::default());
+        if case.starts_with("bad_") {
+            let error = root
+                .expect_err("invalid addition must fail startup")
+                .to_string();
+            assert!(
+                error.contains(match case.as_str() {
+                    "bad_class" => "must inherit VaultBlock",
+                    "bad_block" => "unknown block",
+                    _ => "unknown block entity type",
+                }),
+                "{error}"
+            );
+            return;
+        }
+        let root = root.unwrap();
+        // Reload reuses frozen validity without redispatching registration.
+        crate::game::mods::content_root(&base, &Default::default()).unwrap();
+        assert_eq!(
+            observed.1.load(std::sync::atomic::Ordering::SeqCst),
+            usize::from(case != "quiet")
+        );
+        crate::game::native_entity_refs::tests::with_game_at(
+            root.prepared().to_path_buf(),
+            |game| {
+                game.options.dedicated = Some(Vec::new());
+                game.world
+                    .chunks
+                    .insert((0, 0), Arc::new(horizon_client::chunk::Chunk::empty(0, 0)));
+                let registry = game.pack.assets.registry;
+                let state = registry.default_state(BLOCK).unwrap();
+                let level = game.level(game.dim.id()).unwrap();
+                assert!(
+                    game.level_set_block(level, [1, 64, 1], state, NativeBlockUpdateFlags::NONE)
+                        .unwrap()
+                );
+                assert!(matches!(
+                    BlockEntity::for_block(SIGN),
+                    Some(BlockEntity::Sign(_))
+                ));
+                assert!(matches!(
+                    BlockEntity::for_block("minecraft:vault"),
+                    Some(BlockEntity::Vault(_))
+                ));
+                if case == "quiet" {
+                    assert!(game.world.block_entities.get(&(1, 64, 1)).is_none());
+                    return;
+                }
+                let states = game.ticking_states();
+                assert_eq!(states[state.0 as usize], Ticking::Yes);
+                game.world.block_entities.set_states(states);
+                assert!(
+                    game.world
+                        .block_entity_tickers()
+                        .iter()
+                        .any(|slot| slot.0 == (1, 64, 1))
+                );
+                game.world.game_time = 100;
+                game.tick_vault((1, 64, 1)).unwrap();
+                let entity = game.world.block_entities.get(&(1, 64, 1)).unwrap();
+                let BlockEntity::Vault(vault) = entity else {
+                    panic!("must create vanilla vault")
+                };
+                assert_eq!(vault.state_updating_resumes_at, 120);
+                let tag = horizon_client::save::encode_block_entity((1, 64, 1), entity, BLOCK);
+                let (_, restored) =
+                    horizon_client::save::decode_block_entity_for_block(&tag, BLOCK).unwrap();
+                assert_eq!(
+                    horizon_client::save::encode_block_entity((1, 64, 1), &restored, BLOCK),
+                    tag
+                );
+                let BlockEntity::Vault(restored) = restored else {
+                    panic!("saved type must stay vanilla")
+                };
+                assert_eq!(restored.state_updating_resumes_at, 120);
+                assert!(matches!(
+                    horizon_client::save::decode_block_entity_for_block(&tag, DECLARED),
+                    Some((_, BlockEntity::Vault(_)))
+                ));
+                let own_state = registry.default_state(DECLARED).unwrap();
+                assert!(
+                    game.level_set_block(
+                        level,
+                        [3, 64, 1],
+                        own_state,
+                        NativeBlockUpdateFlags::NONE
+                    )
+                    .unwrap()
+                );
+                assert!(
+                    matches!(game.world.block_entities.get(&(3, 64, 1)), Some(BlockEntity::Mod(entity)) if entity.id() == "add_blocks_test:own")
+                );
+                assert_eq!(
+                    horizon_client::block_entity_types::valid(BLOCK, "minecraft:vault"),
+                    Some(true)
+                );
+                assert_eq!(
+                    horizon_client::block_entity_types::valid(BLOCK, "add_blocks_test:extra"),
+                    Some(true)
+                );
+                assert_eq!(horizon_client::block_entity_types::type_for(BLOCK), None);
+                assert_eq!(
+                    horizon_client::block_entity_types::factory_block(BLOCK),
+                    "minecraft:vault"
+                );
+            },
+        );
     }
 }

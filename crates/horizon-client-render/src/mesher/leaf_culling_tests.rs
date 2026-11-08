@@ -38,7 +38,7 @@ fn fixture() -> Fixture {
         ))
         .unwrap();
     let visibility = models::load_visibility(&root, assets.registry).unwrap();
-    let tables = MeshTables::new(&assets, &render, &facts, visibility.clone()).unwrap();
+    let tables = MeshTables::new(&assets, &render, &facts, visibility.clone(), None).unwrap();
     Fixture {
         assets,
         biomes,

@@ -9,6 +9,7 @@ pub trait Hooks {
     /// or modded invulnerability ticks. It only listens, and fires where
     /// `native_living_damage_pre` does once the health took more than 0. It can't write the
     /// entity or the world's blocks: the level host gives the hit's random and level attachments.
+    /// The container is an API-owned scalar snapshot; the engine retains sequencing and normalization.
     #[hook(
         side = "server",
         contract = "listen",

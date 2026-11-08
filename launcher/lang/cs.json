@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Nelze přečíst protokol sestavení: {error}",
   "Could not read the saved sign-in.": "Uložené přihlášení nelze přečíst.",
   "Could not read the saved sign-in. Sign in again.": "Uložené přihlášení nelze přečíst. Znovu se přihlaste.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Nelze přečíst {name}: {error}",
   "Could not run {program}: {error}": "Nelze spustit {program}: {error}",
   "Could not save the renewed sign-in.": "Obnovené přihlášení se nepodařilo uložit.",

@@ -1,9 +1,7 @@
 //! Typed native-mod data attached to server-owned holders.
-mod form;
 #[doc(hidden)]
 pub mod index;
 #[doc(hidden)]
-pub use form::AttachmentEntryForm;
 mod index_key;
 mod lifetime;
 #[doc(hidden)]
@@ -473,6 +471,21 @@ struct ReadCache {
 }
 
 impl AttachmentEntry {
+    /// Rebuild a transferred saved binding for lazy typed reads.
+    #[doc(hidden)]
+    pub fn from_saved(saved: Compound) -> Self {
+        Self::raw(saved)
+    }
+
+    /// Capture the saved envelope, if this binding has a codec.
+    #[doc(hidden)]
+    pub fn saved(&self) -> Option<Compound> {
+        match &self.state {
+            Entry::Raw { saved, .. } => Some(saved.clone()),
+            Entry::Decoded(value) => envelope(value),
+        }
+    }
+
     fn raw(saved: Compound) -> Self {
         Self {
             state: Entry::Raw {

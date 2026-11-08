@@ -5,9 +5,10 @@ use super::Game;
 use horizon_client::{
     hud::{HudBatch, rgba},
     hud_layout::GuiDraw,
+    text::Text,
 };
 use horizon_items::items::ItemStack as EngineStack;
-use mod_api::{Text, TextFieldLayout, TextFieldView};
+use mod_api::{TextFieldLayout, TextFieldView};
 
 impl Game<'_> {
     /// Paint GUI extraction calls through this window's atlas, including player faces.
@@ -178,7 +179,7 @@ mod tests {
             widgets.text_field_mut(id).unwrap().set_value(long);
             widgets.set_focus(&*game, Some(id));
             let mut draws = Draws(game, HudBatch::scratch([320, 240]), Vec::new());
-            widgets.draw(&mut draws, &*game, [0.0, 0.0]);
+            widgets.draw(&mut draws, &*game, [0.0, 0.0]).unwrap();
             let view = draws.2[0].clone();
             assert!(!draws.1.vertices.is_empty());
             let layout = game.native_widget_text_field(&mut HudBatch::scratch([320, 240]), &view);

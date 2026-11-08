@@ -175,7 +175,7 @@ impl Game<'_> {
                 Some(t) if t == "sticky" => "minecraft:sticky_piston",
                 _ => "minecraft:piston",
             });
-        let item = clone_item(&facts.name, head.unwrap_or(&facts.item));
+        let item = clone_item(&facts.name, head.unwrap_or(&facts.pick_item));
         // FlowerPotBlock.getCloneItemStack: a potted plant picks as that plant
         // (`new ItemStack(potted)`), an empty pot as the pot itself.
         let item = picked_item(self.res.behaviours(), state, item)?;
@@ -499,11 +499,10 @@ mod tests {
                     .expect("native type");
             }
             fn blocks(&self, _context: &mod_api::RegistrationContext, event: &mut BlocksEvent<'_>) {
-                event.blocks.push(horizon_mod_package::content::Block {
-                    id: CRATE.into(),
-                    template: "minecraft:white_banner".into(),
-                    item: true,
-                    ..Default::default()
+                event.blocks.push({
+                    let mut draft = mod_api::Block::new(CRATE, "minecraft:white_banner");
+                    draft.item = true;
+                    draft
                 });
             }
         }
@@ -523,12 +522,10 @@ mod tests {
             let level = game.level(game.dim.id()).unwrap();
             let state = game.pack.assets.registry.default_state(CRATE).unwrap();
             for x in [1, 2] {
-                assert!(game.level_set_block(
-                    level,
-                    [x, 64, 0],
-                    state,
-                    NativeBlockUpdateFlags::NONE
-                ));
+                assert_eq!(
+                    game.level_set_block(level, [x, 64, 0], state, NativeBlockUpdateFlags::NONE),
+                    Ok(true)
+                );
             }
             let Some(BlockEntity::Mod(first)) = game.world.block_entities.get_mut(&(1, 64, 0))
             else {
@@ -591,6 +588,82 @@ mod tests {
                     .unwrap_err()
                     .contains("item_test:nope")
             );
+        });
+    }
+
+    /// A content block's `pick_item` is what pick-block takes (`getCloneItemStack`),
+    /// whatever the block's own item is: a crop with no item of its own picks its seed,
+    /// a block with an item picks another, and one that declares nothing keeps
+    /// picking its own item, or nothing when it has none.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_content_blocks_pick_item_is_what_pick_block_takes() {
+        use super::super::native_entity_refs::tests::{run_fresh_cases, with_game_at};
+        use horizon_client::chunk::Chunk;
+        use mod_api::{self, *};
+        use std::sync::Arc;
+
+        const CHILD: &str = "HORIZON_MOD_PICK_ITEM_CHILD";
+        if run_fresh_cases(
+            "game::block_items::tests::a_content_blocks_pick_item_is_what_pick_block_takes",
+            CHILD,
+            &["game"],
+        ) {
+            return;
+        }
+        struct TestMod;
+        #[mod_api::__subscriptions]
+        impl Hooks for TestMod {
+            fn blocks(&self, _context: &mod_api::RegistrationContext, event: &mut BlocksEvent<'_>) {
+                for (id, item, pick_item) in [
+                    ("pick_test:crop", false, Some("minecraft:wheat_seeds")),
+                    ("pick_test:gold", true, Some("minecraft:diamond")),
+                    ("pick_test:plain", true, None),
+                    ("pick_test:ghost", false, None),
+                ] {
+                    let mut block = mod_api::Block::new(id, "minecraft:stone");
+                    block.item = item;
+                    block.pick_item = pick_item.map(Into::into);
+                    event.blocks.push(block);
+                }
+            }
+        }
+        let mods: Mods = Arc::from([ModEntry::new("pick_test", Box::new(TestMod))]);
+        mod_api::__private::install(mods.clone());
+        crate::game::api_values::install_parts(&mods).unwrap();
+        let base = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let root = super::super::mods::content_root(&base, &Default::default())
+            .unwrap()
+            .prepared()
+            .to_path_buf();
+        with_game_at(root, |game| {
+            game.options.dedicated = Some(Vec::new());
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            let level = game.level(game.dim.id()).unwrap();
+            let blocks = [
+                "pick_test:crop",
+                "pick_test:gold",
+                "pick_test:plain",
+                "pick_test:ghost",
+            ];
+            for (x, block) in (1..).zip(blocks) {
+                let state = game.pack.assets.registry.default_state(block).unwrap();
+                assert!(
+                    game.level_set_block(level, [x, 64, 0], state, NativeBlockUpdateFlags::NONE)
+                        .unwrap(),
+                    "{block} at {x}"
+                );
+            }
+            let picked = |x: i32| {
+                game.picked_stack([x, 64, 0], false)
+                    .map(|stack| stack.item.to_string())
+            };
+            assert_eq!(picked(1).as_deref(), Some("minecraft:wheat_seeds"));
+            assert_eq!(picked(2).as_deref(), Some("minecraft:diamond"));
+            assert_eq!(picked(3).as_deref(), Some("pick_test:plain"));
+            assert_eq!(picked(4), None);
         });
     }
 }

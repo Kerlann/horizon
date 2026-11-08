@@ -3,7 +3,7 @@
 //! opacity, and the stroke follows the steps. One canvas paints them all: a plate costs two
 //! elements, however many steps it has.
 use crate::theme::night::{self, Night};
-use gpui::{canvas, div, point, prelude::*, px, rgba, Bounds, Div, Pixels, Rgba};
+use gpui::{Bounds, Div, Pixels, Rgba, canvas, div, point, prelude::*, px, rgba};
 
 /// `c` at opacity `a`.
 pub fn alpha(c: u32, a: f32) -> Rgba {

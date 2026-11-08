@@ -19,7 +19,7 @@ pub(crate) fn sources(root: &Path) -> Result<BTreeMap<String, String>, String> {
                 if let Some((_, items)) = module.content.take() {
                     let next = match (scope, module.ident.to_string().as_str()) {
                         ("root", "__private") => "private".to_owned(),
-                        ("private", name @ ("built" | "game" | "reload" | "wasm_host")) => {
+                        ("private", name @ ("built" | "game" | "reload")) => {
                             format!("private_{name}")
                         }
                         _ => {
@@ -64,7 +64,6 @@ pub(crate) fn sources(root: &Path) -> Result<BTreeMap<String, String>, String> {
         "private_built",
         "private_game",
         "private_reload",
-        "private_wasm_host",
     ]
     .map(|scope| (scope.to_owned(), String::new()))
     .into_iter()

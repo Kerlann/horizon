@@ -46,19 +46,13 @@ pub fn backend_ref(inner: &dyn Backend) -> crate::BackendRef<'_> {
 /// Call `read` on `host`'s real backend, or `None` where the host has none:
 /// the mob tick's goal view forwards the level's own reads — blocks, loaded
 /// chunks, time, height, weather, block entities — through it (#1077); the
-/// entity data its snapshot does not carry stays refused.
-pub fn backend_read<R>(host: &dyn crate::Host, read: impl FnOnce(&dyn Backend) -> R) -> Option<R> {
+/// entity data its snapshot does not carry stays refused. Returned borrows stay tied to the host.
+pub fn backend_read<'a, R>(
+    host: &'a dyn crate::Host,
+    read: impl FnOnce(&'a dyn Backend) -> R,
+) -> Option<R> {
     host.backend().map(|backend| read(backend.open()))
 }
-/// The game's side of wasm mods, for `horizon-mod-wasm`.
-#[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
-pub mod wasm_host {
-    include!(concat!(
-        env!("OUT_DIR"),
-        "/mod_api_exports_private_wasm_host.rs"
-    ));
-}
-
 /// The trait mods installed, in dispatch order: the game's own list, not part of the mod surface.
 pub fn mods() -> &'static [ModEntry] {
     crate::mods()
@@ -446,21 +440,22 @@ pub mod game {
     }
 }
 
-/// Construct a fluid state from an engine-owned state and its load-resolved key.
-pub fn engine_fluid_state(
+/// Construct a fluid state from load-resolved data supplied by the engine boundary.
+pub fn fluid_state(
     fluid: crate::FluidKey,
-    state: horizon_world::fluid::FluidState,
+    amount: u8,
+    falling: bool,
+    source: bool,
 ) -> crate::FluidState {
-    debug_assert_eq!(
-        state.amount() == 0,
-        state.kind() == horizon_world::fluid::FluidKind::Empty
-    );
     crate::FluidState {
         fluid,
-        amount: state.amount(),
-        falling: state.falling(),
-        source: state.is_source(),
+        amount,
+        falling,
+        source,
     }
 }
+
+#[path = "__private/ingredient_parser.rs"]
+pub mod ingredient_parser;
 
 include!(concat!(env!("OUT_DIR"), "/mod_api_exports_private.rs"));

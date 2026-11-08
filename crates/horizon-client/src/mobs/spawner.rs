@@ -573,19 +573,24 @@ impl SpawnerExt for Spawner {
                 width * scale,
                 height * scale,
             );
-            let position_ok = spawn_selection::position_ok(l, &id, Reason::Spawner, placed, || {
-                (data.custom_spawn_rules.is_some()
-                    || spawn_selection::mob_spawn_rules(s, l, own[0], own[1], own[2]))
-                    && spawn_selection::spawn_obstruction(
-                        s,
-                        l,
-                        bounds,
-                        Some(&added),
-                        own[0],
-                        own[1],
-                        own[2],
-                    )
-            });
+            let pending = spawn_selection::Pending {
+                yaw,
+                fresh: data.unconfigured(),
+            };
+            let position_ok =
+                spawn_selection::position_ok(l, &id, Reason::Spawner, placed, pending, || {
+                    (data.custom_spawn_rules.is_some()
+                        || spawn_selection::mob_spawn_rules(s, l, own[0], own[1], own[2]))
+                        && spawn_selection::spawn_obstruction(
+                            s,
+                            l,
+                            bounds,
+                            Some(&added),
+                            own[0],
+                            own[1],
+                            own[2],
+                        )
+                });
             if !position_ok {
                 continue;
             }

@@ -97,7 +97,8 @@ pub trait Commands {
     /// Side: server.
     /// A command's success feedback, routed to its originating source using
     /// vanilla's silence, send-command-feedback and block/cart track-output rules.
-    fn feedback(&mut self, line: Text) {
+    /// Refuses text deeper than 512 component nodes before applying any changes.
+    fn feedback(&mut self, line: Text) -> Result<(), TextFormError> {
         crate::phase::unprovided(
             "Commands::feedback",
             "feedback",
@@ -147,7 +148,8 @@ pub trait Messages {
     }
     /// Side: server.
     /// A system line in every player's chat and the server's log.
-    fn broadcast(&self, line: Text) {
+    /// Refuses text deeper than 512 component nodes before applying any changes.
+    fn broadcast(&self, line: Text) -> Result<(), TextFormError> {
         crate::phase::unprovided(
             "Messages::broadcast",
             "broadcast",

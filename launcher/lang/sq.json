@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Nuk mund të lexoja regjistrin e ndërtimit: {error}",
   "Could not read the saved sign-in.": "Nuk mund të lexohej identifikimi i ruajtur.",
   "Could not read the saved sign-in. Sign in again.": "Nuk mund të lexohej identifikimi i ruajtur. Hyni përsëri.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Nuk mund të lexoja {name}: {error}",
   "Could not run {program}: {error}": "Nuk mund të ekzekutohej {program}: {error}",
   "Could not save the renewed sign-in.": "Identifikimi i rinovuar nuk mund të ruhej.",

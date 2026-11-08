@@ -418,7 +418,7 @@ pub fn main() -> horizon_client::Result<()> {
     );
     let defaults = horizon_world::item_defaults::read(root)?;
     let items = Items::tags_only(root, &PackOverlay::NONE, &defaults)?;
-    let enchantments = Enchantments::load(root, &defaults);
+    let enchantments = Enchantments::load(root, &defaults)?;
     let types = MobTypes::load(root)?;
     let registries = SpawnRegistries::load(root);
     let camel = &types.types["minecraft:camel_husk"];

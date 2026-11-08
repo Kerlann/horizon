@@ -25,7 +25,6 @@ pub enum SpawnerKind {
 /// mod names it: what [`CustomSpawners::add`] takes and `custom_spawner_tick` hands back.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
-#[horizon_mod_api_macros::wasm(via = String)]
 pub struct SpawnerKey(Arc<str>);
 
 impl SpawnerKey {
@@ -88,7 +87,6 @@ impl std::error::Error for SpawnerError {}
 /// It starts with vanilla's, and a spawner a mod adds goes at the end.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
-#[horizon_mod_api_macros::wasm(via = Vec<SpawnerEntry>)]
 pub struct CustomSpawners(Vec<SpawnerEntry>);
 
 impl CustomSpawners {

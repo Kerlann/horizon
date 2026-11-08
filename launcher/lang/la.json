@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Non legere aedificare iniuriarum:{error}",
   "Could not read the saved sign-in.": "Servatum sign-in legi non potuit.",
   "Could not read the saved sign-in. Sign in again.": "Servatum sign-in legi non potuit. Inscribe iterum.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Non legere{name}:{error}",
   "Could not run {program}: {error}": "Non currunt{program}:{error}",
   "Could not save the renewed sign-in.": "In signum renovatum servare non potuit.",

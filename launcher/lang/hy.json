@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Չհաջողվեց կարդալ կառուցման մատյանը՝ {error}",
   "Could not read the saved sign-in.": "Չհաջողվեց կարդալ պահված մուտքը:",
   "Could not read the saved sign-in. Sign in again.": "Չհաջողվեց կարդալ պահված մուտքը: Նորից մուտք գործեք:",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Չկարողացա կարդալ {name}: {error}",
   "Could not run {program}: {error}": "Չհաջողվեց գործարկել {program}: {error}",
   "Could not save the renewed sign-in.": "Չհաջողվեց պահել նորացված մուտքը:",

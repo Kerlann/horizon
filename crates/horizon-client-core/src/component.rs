@@ -204,7 +204,7 @@ impl Parser<'_> {
 }
 /// `click_event` / `hover_event`, or the pre-datafixer `clickEvent` /
 /// `hoverEvent` names SNBT and older chat JSON still use.
-fn style_event_object<'a>(
+pub fn style_event_object<'a>(
     o: &'a serde_json::Map<String, Value>,
     modern: &str,
     legacy: &str,
@@ -215,7 +215,7 @@ fn style_event_object<'a>(
 }
 
 /// Style flags from JSON bools, or SNBT `1b`/`0b` which parse as numbers.
-fn style_flag(v: Option<&Value>) -> Option<bool> {
+pub fn style_flag(v: Option<&Value>) -> Option<bool> {
     match v {
         Some(Value::Bool(b)) => Some(*b),
         Some(Value::Number(n)) => n.as_i64().map(|i| i != 0),
@@ -235,14 +235,18 @@ pub fn untrusted_http_url(url: &str) -> bool {
 
 /// `ClickEvent.CODEC` plus the legacy `value` field TextComponentHoverAndClickEventFix
 /// renames (`url` / `command` / `page`).
-fn parse_click_event(e: &serde_json::Map<String, Value>) -> Option<crate::text::ClickEvent> {
+pub fn parse_click_event(
+    e: &serde_json::Map<String, Value>,
+) -> Result<Option<crate::text::ClickEvent>, horizon_core::json_nbt::JsonNbtError> {
+    use crate::text::ClickEvent;
+    use horizon_core::json_nbt::json_to_tag;
     let text = |k: &str| e.get(k).and_then(Value::as_str).map(str::to_owned);
     let legacy = || text("value");
-    match e.get("action").and_then(Value::as_str) {
+    let event = match e.get("action").and_then(Value::as_str) {
         Some("open_url") => text("url")
             .or_else(legacy)
             .filter(|u| untrusted_http_url(u))
-            .map(crate::text::ClickEvent::OpenUrl),
+            .map(ClickEvent::OpenUrl),
         Some("change_page") => e
             .get("page")
             .and_then(Value::as_i64)
@@ -254,32 +258,95 @@ fn parse_click_event(e: &serde_json::Map<String, Value>) -> Option<crate::text::
             })
             .and_then(|p| i32::try_from(p).ok())
             .filter(|p| *p >= 1)
-            .map(crate::text::ClickEvent::ChangePage),
+            .map(ClickEvent::ChangePage),
         Some("suggest_command") => text("command")
             .or_else(legacy)
-            .map(crate::text::ClickEvent::SuggestCommand),
-        Some("run_command") => text("command")
-            .or_else(legacy)
-            .map(crate::text::ClickEvent::RunCommand),
-        Some("copy_to_clipboard") => text("value").map(crate::text::ClickEvent::CopyToClipboard),
-        // ClickEvent.ShowDialog.CODEC: a `minecraft:dialog` registry id or
-        // the dialog itself; the server may send it (isAllowedFromServer).
-        Some("show_dialog") => e.get("dialog").map(|dialog| {
-            crate::text::ClickEvent::ShowDialog(crate::scoreboard::json_to_tag(dialog))
-        }),
-        Some("custom") => Some(crate::text::ClickEvent::Custom {
-            id: crate::identifier::parse_identifier(&text("id")?)?,
-            payload: e
+            .map(ClickEvent::SuggestCommand),
+        Some("run_command") => text("command").or_else(legacy).map(ClickEvent::RunCommand),
+        Some("copy_to_clipboard") => text("value").map(ClickEvent::CopyToClipboard),
+        Some("show_dialog") => e
+            .get("dialog")
+            .map(json_to_tag)
+            .transpose()?
+            .map(|tag| ClickEvent::ShowDialog(tag.into())),
+        Some("custom") => {
+            let Some(id) = e
+                .get("id")
+                .and_then(Value::as_str)
+                .and_then(crate::identifier::parse_identifier)
+            else {
+                return Ok(None);
+            };
+            let payload = e
                 .get("payload")
-                .filter(|value| !value.is_null())
-                .map(crate::scoreboard::json_to_tag),
-        }),
+                .filter(|v| !v.is_null())
+                .map(json_to_tag)
+                .transpose()?
+                .map(Into::into);
+            Some(ClickEvent::Custom { id, payload })
+        }
         _ => None,
+    };
+    Ok(event)
+}
+
+// Hover entity names can themselves contain components. Clone their retained
+// JSON with a work list rather than Value's recursive Clone implementation.
+pub(crate) fn clone_object(object: &serde_json::Map<String, Value>) -> Value {
+    clone_json(Work::BorrowedObject(object))
+}
+pub(crate) fn clone_value(value: &Value) -> Value {
+    clone_json(Work::Value(value))
+}
+/// Release an owned component without recursive JSON container destruction.
+pub fn discard_component(value: Value) {
+    let mut pending = vec![value];
+    while let Some(value) = pending.pop() {
+        match value {
+            Value::Array(values) => pending.extend(values),
+            Value::Object(values) => pending.extend(values.into_values()),
+            _ => {}
+        }
     }
+}
+enum Work<'a> {
+    Value(&'a Value),
+    BorrowedObject(&'a serde_json::Map<String, Value>),
+    Array(usize),
+    Object(Vec<String>),
+}
+fn clone_json(root: Work<'_>) -> Value {
+    let mut pending = vec![root];
+    let mut done = Vec::new();
+    while let Some(work) = pending.pop() {
+        match work {
+            Work::Value(Value::Array(a)) => {
+                pending.push(Work::Array(a.len()));
+                pending.extend(a.iter().rev().map(Work::Value));
+            }
+            Work::Value(Value::Object(o)) | Work::BorrowedObject(o) => {
+                pending.push(Work::Object(o.keys().cloned().collect()));
+                pending.extend(o.values().rev().map(Work::Value));
+            }
+            Work::Value(v) => done.push(v.clone()),
+            Work::Array(len) => {
+                let values = done.split_off(done.len() - len);
+                done.push(Value::Array(values));
+            }
+            Work::Object(keys) => {
+                let values = done.split_off(done.len() - keys.len());
+                done.push(Value::Object(keys.into_iter().zip(values).collect()));
+            }
+        }
+    }
+    done.pop().unwrap_or(Value::Null)
 }
 
 /// The style fields of a component object.
-fn object_style(o: &serde_json::Map<String, Value>) -> Style {
+fn object_style<'a>(
+    o: &'a serde_json::Map<String, Value>,
+    child: &mut dyn FnMut(&'a Value) -> Text,
+) -> Style {
     let mut style = Style::default();
     if let Some(c) = o.get("color").and_then(Value::as_str) {
         style.color = named_color(c).or_else(|| hex_color(c));
@@ -294,7 +361,7 @@ fn object_style(o: &serde_json::Map<String, Value>) -> Style {
     // ClickEvent.CODEC: the actions a chat line acts on here. A component
     // from a server never opens a file.
     if let Some(e) = style_event_object(o, "click_event", "clickEvent") {
-        style.click = parse_click_event(e);
+        style.click = parse_click_event(e).ok().flatten();
     }
     // HoverEvent.ShowText, ShowItem and ShowEntity.
     if let Some(e) = style_event_object(o, "hover_event", "hoverEvent") {
@@ -306,14 +373,14 @@ fn object_style(o: &serde_json::Map<String, Value>) -> Style {
                     .or_else(|| e.get("contents"))
                     .or_else(|| e.get("text"));
                 if let Some(value) = value {
-                    style.hover = Some(Box::new(to_text(value, &mut |s| Text::literal(s))));
+                    style.hover = Some(std::sync::Arc::new(child(value)));
                 }
             }
             Some("show_item") if e.get("id").is_some_and(Value::is_string) => {
-                style.hover_item = Some(Box::new(Value::Object(e.clone())));
+                style.hover_item = Some(std::sync::Arc::new(clone_object(e)));
             }
             Some("show_entity") if e.get("id").is_some_and(Value::is_string) => {
-                style.hover_entity = Some(Box::new(Value::Object(e.clone())));
+                style.hover_entity = Some(std::sync::Arc::new(clone_object(e)));
             }
             _ => {}
         }
@@ -333,7 +400,7 @@ pub(crate) fn hex_color(c: &str) -> Option<u32> {
 }
 
 /// `Style.shadow_color`: a packed ARGB int or normalized RGBA array.
-pub(crate) fn shadow_color(value: &Value) -> Option<u32> {
+pub fn shadow_color(value: &Value) -> Option<u32> {
     if let Some(packed) = value.as_i64() {
         return i32::try_from(packed).ok().map(|n| n as u32);
     }
@@ -398,7 +465,11 @@ impl Sourced {
     fn append(self, base: &mut Text, other: Text) {
         match self.0 {
             true => base.push(other),
-            false => base.spans.extend(other.spans),
+            false => {
+                let mut other = other;
+                base.spans.append(&mut other.spans);
+                crate::text::discard_text(other);
+            }
         }
     }
     fn styled(self, mut text: Text, style: &Style) -> Text {
@@ -412,19 +483,154 @@ impl Sourced {
             }
         }
     }
-    fn translate(self, key: &str, args: &[Text]) -> Text {
-        match self.0 {
-            true => Text::translate(key, args),
-            false => crate::text::format_translation(&crate::lang::get(key), args),
+    fn translate(self, key: &str, fallback: Option<&str>, args: &[Text]) -> Text {
+        match (self.0, fallback) {
+            (true, Some(fallback)) => Text::translate_with_fallback(key, fallback, args),
+            (true, None) => Text::translate(key, args),
+            (false, fallback) => crate::text::format_translatable(key, fallback, args),
         }
     }
 }
 
+// Continuations preserve lazy content selection and callback order while keeping
+// every component relation off the call stack. Hover decoding has its own policy.
 fn build(
     v: &Value,
     resolve: &mut dyn FnMut(&str) -> Text,
     contents: &mut dyn FnMut(&serde_json::Map<String, Value>) -> Option<Text>,
     sourced: Sourced,
+) -> Text {
+    use std::collections::HashMap;
+    enum Work<'a> {
+        Enter(&'a Value, bool),
+        Styled(&'a Value, bool),
+        Content(&'a Value, bool, Style, Option<Text>),
+        Finish(&'a Value, bool, Style, Text),
+    }
+    let mut pending = vec![Work::Enter(v, false)];
+    let mut done = HashMap::<*const Value, (Text, Style)>::new();
+    while let Some(work) = pending.pop() {
+        match work {
+            Work::Enter(value, hover) => match value {
+                Value::Object(o) => {
+                    pending.push(Work::Styled(value, hover));
+                    if let Some(e) = style_event_object(o, "hover_event", "hoverEvent")
+                        && e.get("action").and_then(Value::as_str) == Some("show_text")
+                        && let Some(v) = e
+                            .get("value")
+                            .or_else(|| e.get("contents"))
+                            .or_else(|| e.get("text"))
+                    {
+                        pending.push(Work::Enter(v, true));
+                    }
+                }
+                Value::Array(a) => {
+                    pending.push(Work::Content(value, hover, Style::default(), None));
+                    pending.extend(a.iter().rev().map(|v| Work::Enter(v, hover)));
+                }
+                _ => pending.push(Work::Content(value, hover, Style::default(), None)),
+            },
+            Work::Styled(value, hover) => {
+                let Value::Object(o) = value else {
+                    unreachable!()
+                };
+                let style = object_style(o, &mut |v| {
+                    done.remove(&(v as *const Value))
+                        .map(take_built_text)
+                        .unwrap_or_default()
+                });
+                let overridden = if hover { None } else { contents(o) };
+                let needs_content = overridden.is_none();
+                pending.push(Work::Content(value, hover, style, overridden));
+                if needs_content {
+                    // inline_object evaluates its fallback before selecting the content.
+                    // Arguments are evaluated only for the translation branch.
+                    if inline_object_fields(o).is_none()
+                        && !o.contains_key("text")
+                        && o.get("translate").is_some_and(Value::is_string)
+                        && let Some(Value::Array(a)) = o.get("with")
+                    {
+                        pending.extend(a.iter().rev().map(|v| Work::Enter(v, hover)));
+                    }
+                    if let Some(v) = o.get("fallback") {
+                        pending.push(Work::Enter(v, hover));
+                    }
+                }
+            }
+            Work::Content(value, hover, mut style, overridden) => {
+                let mode = Sourced(sourced.0 || hover);
+                if let Value::Array(a) = value
+                    && let Some(first) = a.first()
+                    && let Some((text, own_style)) = done.get(&(first as *const Value))
+                {
+                    style = if first.is_object() {
+                        own_style.clone()
+                    } else {
+                        text.spans
+                            .first()
+                            .map(|s| s.style.clone())
+                            .unwrap_or_default()
+                    };
+                }
+                let mut literal = |s: &str| Text::literal(s);
+                let resolver: &mut dyn FnMut(&str) -> Text =
+                    if hover { &mut literal } else { resolve };
+                let text = build_node(value, resolver, overridden, mode, &style, &mut |v| {
+                    done.remove(&(v as *const Value))
+                        .map(take_built_text)
+                        .unwrap_or_default()
+                });
+                if let Value::Object(o) = value {
+                    pending.push(Work::Finish(value, hover, style, text));
+                    if let Some(Value::Array(a)) = o.get("extra") {
+                        pending.extend(a.iter().rev().map(|v| Work::Enter(v, hover)));
+                    }
+                } else {
+                    done.insert(value as *const Value, (text, style));
+                }
+            }
+            Work::Finish(value, hover, style, mut text) => {
+                let Value::Object(o) = value else {
+                    unreachable!()
+                };
+                let mode = Sourced(sourced.0 || hover);
+                if let Some(Value::Array(a)) = o.get("extra") {
+                    for v in a {
+                        let extra = done
+                            .remove(&(v as *const Value))
+                            .map(take_built_text)
+                            .unwrap_or_default();
+                        mode.append(&mut text, mode.styled(extra, &style));
+                    }
+                }
+                if mode.0
+                    && (o.contains_key("object")
+                        || o.contains_key("player")
+                        || o.contains_key("sprite"))
+                {
+                    text = text.with_component(clone_object(o));
+                }
+                done.insert(value as *const Value, (text, style));
+            }
+        }
+    }
+    done.remove(&(v as *const Value))
+        .map(take_built_text)
+        .unwrap_or_default()
+}
+
+fn take_built_text((text, style): (Text, Style)) -> Text {
+    crate::text::discard_style(style);
+    text
+}
+
+fn build_node<'a>(
+    v: &'a Value,
+    resolve: &mut dyn FnMut(&str) -> Text,
+    overridden: Option<Text>,
+    sourced: Sourced,
+    style: &Style,
+    child: &mut dyn FnMut(&'a Value) -> Text,
 ) -> Text {
     match v {
         Value::String(s) => sourced.literal(s.clone()),
@@ -435,28 +641,21 @@ fn build(
             let Some((first, rest)) = list.split_first() else {
                 return Text::empty();
             };
-            let mut base = build(first, resolve, contents, sourced);
+            let mut base = child(first);
             // The siblings take the first component's own style, even when
             // its text is empty.
-            let style = match first {
-                Value::Object(o) => object_style(o),
-                _ => base
-                    .spans
-                    .first()
-                    .map(|s| s.style.clone())
-                    .unwrap_or_default(),
-            };
             for sibling in rest {
-                let sibling = build(sibling, resolve, contents, sourced);
+                let sibling = child(sibling);
                 sourced.append(&mut base, sourced.styled(sibling, &style));
             }
             base
         }
         Value::Object(o) => {
-            let style = object_style(o);
-            let content = if let Some(t) = contents(o) {
+            let content = if let Some(t) = overridden {
                 t
-            } else if let Some(object) = inline_object(o, resolve, contents) {
+            } else if let Some(object) =
+                inline_object_with_fallback(o, o.get("fallback").map(|v| plain_component(child(v))))
+            {
                 let mut text = Text::literal("\u{fffc}");
                 text.spans[0].style.inline_object = Some(object);
                 text
@@ -469,22 +668,13 @@ fn build(
                 let args: Vec<Text> = o
                     .get("with")
                     .and_then(Value::as_array)
-                    .map(|a| {
-                        a.iter()
-                            .map(|x| build(x, resolve, contents, sourced))
-                            .collect()
-                    })
+                    .map(|a| a.iter().map(|x| child(x)).collect())
                     .unwrap_or_default();
-                // The fallback is a literal template, not another translation key.
-                match o.get("fallback").and_then(Value::as_str) {
-                    Some(fallback) if sourced.0 => {
-                        Text::translate_with_fallback(key, fallback, &args)
-                    }
-                    Some(fallback) => {
-                        crate::text::format_translation(&crate::lang::get_or(key, fallback), &args)
-                    }
-                    None => sourced.translate(key, &args),
+                let text = sourced.translate(key, o.get("fallback").and_then(Value::as_str), &args);
+                for arg in args {
+                    crate::text::discard_text(arg);
                 }
+                text
             } else if let Some(sel) = o.get("selector").and_then(Value::as_str) {
                 resolve(sel)
             } else if let Some(key) = o.get("keybind").and_then(Value::as_str) {
@@ -492,43 +682,63 @@ fn build(
             } else {
                 Text::empty()
             };
-            let mut out = sourced.styled(content, &style);
-            for extra in o
-                .get("extra")
-                .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-            {
-                let extra = build(extra, resolve, contents, sourced);
-                sourced.append(&mut out, sourced.styled(extra, &style));
-            }
-            if sourced.0
-                && (o.contains_key("object")
-                    || o.contains_key("player")
-                    || o.contains_key("sprite"))
-            {
-                out.with_component(Value::Object(o.clone()))
-            } else {
-                out
-            }
+            sourced.styled(content, style)
         }
         Value::Null => Text::empty(),
     }
 }
 
-fn inline_object(
+fn plain_component(text: Text) -> String {
+    let plain = text.plain();
+    crate::text::discard_text(text);
+    plain
+}
+
+/// Decode inline object fields, including the engine's profile and atlas defaults.
+pub fn inline_object(
     object: &serde_json::Map<String, Value>,
     resolve: &mut dyn FnMut(&str) -> Text,
     contents: &mut dyn FnMut(&serde_json::Map<String, Value>) -> Option<Text>,
 ) -> Option<InlineObject> {
-    let kind = object.get("object").and_then(Value::as_str);
     let fallback = object
         .get("fallback")
-        .map(|value| to_text_with(value, resolve, contents).plain());
-    match kind {
+        .map(|value| plain_component(to_text_with(value, resolve, contents)));
+    inline_object_with_fallback(object, fallback)
+}
+
+/// Decode object identity/defaults without rendering its recursive fallback.
+/// Structured component capture retains the fallback as a component instead.
+pub enum InlineObjectFields<'a> {
+    Player { profile: &'a Value, hat: bool },
+    Atlas { atlas: &'a str, sprite: &'a str },
+}
+pub fn inline_object_fields(
+    object: &serde_json::Map<String, Value>,
+) -> Option<InlineObjectFields<'_>> {
+    match object.get("object").and_then(Value::as_str) {
         Some("player") | None if object.contains_key("player") => {
-            let profile = object.get("player")?.clone();
-            // PlayerSprite.defaultFallback.
+            Some(InlineObjectFields::Player {
+                profile: object.get("player")?,
+                hat: object.get("hat").and_then(Value::as_bool).unwrap_or(true),
+            })
+        }
+        Some("atlas") | None if object.contains_key("sprite") => Some(InlineObjectFields::Atlas {
+            atlas: object
+                .get("atlas")
+                .and_then(Value::as_str)
+                .unwrap_or("minecraft:blocks"),
+            sprite: object.get("sprite")?.as_str()?,
+        }),
+        _ => None,
+    }
+}
+
+fn inline_object_with_fallback(
+    object: &serde_json::Map<String, Value>,
+    fallback: Option<String>,
+) -> Option<InlineObject> {
+    Some(match inline_object_fields(object)? {
+        InlineObjectFields::Player { profile, hat } => {
             let fallback = fallback.unwrap_or_else(|| {
                 match profile
                     .as_str()
@@ -538,40 +748,29 @@ fn inline_object(
                     None => "[unknown player head]".to_owned(),
                 }
             });
-            Some(InlineObject::Player {
-                profile,
-                hat: object.get("hat").and_then(Value::as_bool).unwrap_or(true),
+            InlineObject::Player {
+                profile: clone_value(profile).into(),
+                hat,
                 fallback,
-            })
+            }
         }
-        Some("atlas") | None if object.contains_key("sprite") => {
-            let atlas = object
-                .get("atlas")
-                .and_then(Value::as_str)
-                .unwrap_or("minecraft:blocks")
-                .to_owned();
-            let sprite = object.get("sprite")?.as_str()?.to_owned();
-            // AtlasSprite.defaultFallback: short names, the atlas unless blocks.
+        InlineObjectFields::Atlas { atlas, sprite } => {
             let fallback = fallback.unwrap_or_else(|| {
-                let short = |id: &str| match id.split_once(':') {
-                    Some(("minecraft", path)) => path.to_owned(),
-                    Some(_) => id.to_owned(),
-                    None => id.to_owned(),
-                };
-                if short(&atlas) == "blocks" {
-                    format!("[{}]", short(&sprite))
+                let sprite_name = sprite.strip_prefix("minecraft:").unwrap_or(sprite);
+                let atlas_name = atlas.strip_prefix("minecraft:").unwrap_or(atlas);
+                if atlas_name == "blocks" {
+                    format!("[{sprite_name}]")
                 } else {
-                    format!("[{}@{}]", short(&sprite), short(&atlas))
+                    format!("[{sprite_name}@{atlas_name}]")
                 }
             });
-            Some(InlineObject::Atlas {
-                atlas,
-                sprite,
+            InlineObject::Atlas {
+                atlas: atlas.into(),
+                sprite: sprite.into(),
                 fallback,
-            })
+            }
         }
-        _ => None,
-    }
+    })
 }
 
 /// `CustomName` as text: a string keeps its legacy formatting codes, anything
@@ -586,6 +785,177 @@ pub fn name_text(tag: &Tag) -> Text {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn mixed_recursive_temporaries_are_released_on_256_kib() {
+        std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(|| {
+                for hover_text in [false, true] {
+                    for argument in [false, true] {
+                        let mut child = serde_json::json!({"text":"leaf"});
+                        for _ in 1..511 {
+                            let mut event = serde_json::Map::new();
+                            event.insert(
+                                "action".into(),
+                                if hover_text {
+                                    "show_text"
+                                } else {
+                                    "show_entity"
+                                }
+                                .into(),
+                            );
+                            event.insert("id".into(), "minecraft:pig".into());
+                            event.insert("uuid".into(), serde_json::json!([0, 0, 0, 1]));
+                            event.insert(if hover_text { "value" } else { "name" }.into(), child);
+                            let mut fields = serde_json::Map::new();
+                            fields.insert("text".into(), "parent".into());
+                            fields.insert("hover_event".into(), Value::Object(event));
+                            child = Value::Object(fields);
+                        }
+                        let mut fields = serde_json::Map::new();
+                        if argument {
+                            fields.insert("translate".into(), "test:missing".into());
+                            fields.insert("fallback".into(), "unused".into());
+                            fields.insert("with".into(), Value::Array(vec![child]));
+                        } else {
+                            fields.insert("object".into(), "atlas".into());
+                            fields.insert("sprite".into(), "test:icon".into());
+                            fields.insert("fallback".into(), child);
+                        }
+                        let output = spans_of(Value::Object(fields));
+                        assert_eq!(output.plain(), if argument { "unused" } else { "parent" });
+                        std::mem::forget(output);
+                    }
+                }
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    fn opaque_profile_and_click_payloads_build_on_256_kib() {
+        std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(|| {
+                let nested =
+                    |depth| (0..depth).fold(serde_json::json!(1), |v, _| Value::Array(vec![v]));
+                let profile = Value::Object(
+                    [
+                        ("name".into(), "Test".into()),
+                        ("future".into(), nested(511)),
+                    ]
+                    .into_iter()
+                    .collect(),
+                );
+                let mut tree = serde_json::json!({"object": "player"});
+                tree["player"] = profile;
+                for _ in 1..512 {
+                    let mut parent = serde_json::json!({"translate": "test.opaque"});
+                    parent["with"] = Value::Array(vec![tree]);
+                    tree = parent;
+                }
+                let mut click = serde_json::json!({"action": "custom", "id": "test:click"});
+                click["payload"] = nested(512);
+                tree["click_event"] = click;
+                let language =
+                    crate::lang::Language::of("en_us", [("test.opaque".into(), "%s".into())]);
+                crate::lang::scoped(language, || {
+                    let text = Text::from(tree);
+                    assert_eq!(text.plain(), "[Test head]");
+                    assert!(matches!(
+                        text.spans[0].style.inline_object,
+                        Some(InlineObject::Player { .. })
+                    ));
+                    assert!(matches!(
+                        text.spans[0].style.click,
+                        Some(crate::text::ClickEvent::Custom { .. })
+                    ));
+                    crate::text::discard_text(text);
+                });
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
+    #[test]
+    fn iterative_builder_preserves_lazy_content_and_callback_order() {
+        let value = serde_json::json!({"id":"parent", "text":"visible", "with":[{"id":"unused", "selector":"unused"}], "extra":[{"id":"extra", "selector":"@a"}]});
+        let calls = std::cell::RefCell::new(Vec::new());
+        let text = to_text_with(
+            &value,
+            &mut |selector| {
+                calls.borrow_mut().push(selector.to_owned());
+                Text::literal("resolved")
+            },
+            &mut |o| {
+                calls
+                    .borrow_mut()
+                    .push(o["id"].as_str().unwrap().to_owned());
+                None
+            },
+        );
+        assert_eq!(text.plain(), "visibleresolved");
+        assert_eq!(*calls.borrow(), ["parent", "extra", "@a"]);
+        let value = serde_json::json!({"id":"override", "translate":"missing", "with":[{"selector":"unused"}], "fallback":{"selector":"unused"}});
+        let text = to_text_with(&value, &mut |_| panic!("unused branch"), &mut |o| {
+            assert_eq!(o.get("id").and_then(Value::as_str), Some("override"));
+            Some(Text::literal("override"))
+        });
+        assert_eq!(text.plain(), "override");
+    }
+
+    #[test]
+    fn iterative_builder_isolates_hover_resolution_and_empty_array_style() {
+        let value = serde_json::json!({"text":"visible", "hover_event":{"action":"show_text", "value":{"selector":"@p"}}});
+        let text = to_text_with(
+            &value,
+            &mut |_| panic!("hover resolver escaped"),
+            &mut |o| {
+                assert!(o.contains_key("text"));
+                None
+            },
+        );
+        assert_eq!(text.spans[0].style.hover.as_ref().unwrap().plain(), "@p");
+        let value = serde_json::json!({"text":"visible", "hover_event":{"action":"show_text", "value":{"translate":"test:hover"}}});
+        let text = to_text(&value, &mut |_| panic!("hover resolver escaped"));
+        assert_eq!(
+            text.spans[0].style.hover.as_ref().unwrap().component()["translate"],
+            "test:hover"
+        );
+        let text = Text::from(serde_json::json!([[{"text":"", "color":"red"}], "tail"]));
+        assert_eq!(text.plain(), "tail");
+        assert_eq!(text.spans[0].style.color, None);
+        let text = Text::from(serde_json::json!([{"text":"", "color":"red"}, "tail"]));
+        assert_eq!(text.spans[0].style.color, Some(crate::text::RED));
+    }
+
+    #[test]
+    fn translation_fallback_is_a_literal_template_not_a_second_key() {
+        let language = crate::lang::Language::of(
+            "en_us",
+            [
+                ("test.fallback".into(), "Wrong translation".into()),
+                ("test.same".into(), "test.same".into()),
+            ],
+        );
+        crate::lang::scoped(language, || {
+            for (key, fallback, expected) in [
+                ("test.missing", "test.fallback", "test.fallback"),
+                ("test.same", "Wrong fallback", "test.same"),
+            ] {
+                let value = serde_json::json!({"translate":key, "fallback":fallback});
+                assert_eq!(Text::from(value.clone()).plain(), expected);
+                assert_eq!(to_text(&value, &mut |s| Text::literal(s)).plain(), expected);
+            }
+            let value = serde_json::json!({"translate":"test.missing", "fallback":"value: %s", "with":[{"text":"argument", "bold":true}]});
+            let text = Text::from(value);
+            assert_eq!(text.plain(), "value: argument");
+            assert_eq!(text.spans.last().unwrap().style.bold, Some(true));
+        });
+    }
     use crate::lang::{self, Language, ResourceSource};
 
     struct Mem(std::collections::HashMap<String, Vec<u8>>);
@@ -797,12 +1167,12 @@ mod tests {
         for (payload, expected) in [
             (None, None),
             (Some(serde_json::Value::Null), None),
-            (Some(serde_json::json!(42)), Some(Tag::Int(42))),
+            (Some(serde_json::json!(42)), Some(Tag::Byte(42))),
             (
                 Some(serde_json::json!({"shop": "potions", "amount": 3})),
                 Some(Tag::Compound(
                     [
-                        ("amount".into(), Tag::Int(3)),
+                        ("amount".into(), Tag::Byte(3)),
                         ("shop".into(), Tag::String("potions".into())),
                     ]
                     .into_iter()
@@ -824,7 +1194,7 @@ mod tests {
                     style.click,
                     Some(ClickEvent::Custom {
                         id: "test:shop".into(),
-                        payload: expected.clone(),
+                        payload: expected.clone().map(Into::into),
                     })
                 );
             }

@@ -92,8 +92,12 @@ fn install(subscribed: bool) {
     let mods: Arc<[ModEntry]> =
         vec![ModEntry::new("stack-bench", Box::new(BenchMod(subscribed)))].into();
     mod_api::__private::install(mods.clone());
-    mod_api::__private::install_parts(&mods, &mod_api::__private::part_tests::rule_schema())
-        .unwrap();
+    mod_api::__private::install_parts(
+        &mods,
+        &mod_api::__private::part_tests::rule_schema(),
+        |_| false,
+    )
+    .unwrap();
     // RESOLVE_ITEMS
     mod_api::__private::mark_game_thread();
     mod_api::__private::resolve_parts(
@@ -102,8 +106,6 @@ fn install(subscribed: bool) {
         mod_api::__private::KnownIds {
             block: &|_| false,
             item: &|id| ["minecraft:stick", "minecraft:iron_sword"].contains(&id),
-            state_count: 0,
-            state_block: &|_| unreachable!(),
         },
     )
     .unwrap();

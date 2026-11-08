@@ -564,7 +564,7 @@ fn remesh(
 ) -> Result<FxHashMap<[i32; 3], SectionMesh>, Box<dyn std::error::Error>> {
     let facts = BlockFacts::load(root, assets.registry)?;
     let visibility = models::load_visibility(root, assets.registry)?;
-    let tables = MeshTables::new(assets, render, &facts, visibility)?;
+    let tables = MeshTables::new(assets, render, &facts, visibility, None)?;
     let biomes = Biomes::load(&horizon_assets::resource_source::ResourceRoot::directory(
         root.to_path_buf(),
     ))?;

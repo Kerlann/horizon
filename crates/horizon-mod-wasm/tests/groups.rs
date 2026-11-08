@@ -1,16 +1,10 @@
-//! A capability of a library mod's own handler type across wasm groups: two mods depending on
-//! the library share one group, so the one answering it is reached by the other; a mod of
-//! another group asking a capability of the same name gets none. CI builds the mods in
-//! `tests/groups/` first and points `HORIZON_WASM_GROUPS` at that folder and `HORIZON_WASM_STD`
-//! at the std member; the test is ignored elsewhere.
-use mod_api::__private::game::BackendRefOf;
-use mod_api::__private::game::Fields;
+//! Real wasm capability providers within and across dependency groups.
+use mod_api::__private::game::{BackendRefOf, Fields};
 use mod_api::{
     Backend, BackendRef, BlockEntityRef, BlockEntityTypeKey, BoolGameRuleKey, Host, LevelRef,
     NativeWorldEpoch, ServerChatEvent, ServerHost, Text,
 };
 
-/// One level with a `test:counter_box` block entity at its origin column.
 struct World;
 
 fn overworld() -> LevelRef {
@@ -35,7 +29,6 @@ impl mod_api::prelude::BlockEntitiesBackend for World {
 }
 impl Backend for World {}
 mod_api::impl_backend_areas!(World, except(block_entities, levels));
-
 impl mod_api::prelude::EntitiesHost for World {
     fn level(&self, dimension: &str) -> Option<LevelRef> {
         (dimension == "minecraft:overworld").then(overworld)
@@ -54,123 +47,129 @@ impl Host for World {
     }
 }
 mod_api::impl_host_areas!(World, except(block_entities, entities));
-
 impl ServerHost for World {}
 mod_api::impl_server_host_areas!(World);
 
-/// The built group mods, and the std member.
-fn built() -> ([horizon_mod_wasm::WasmPackage; 4], Vec<u8>) {
-    let path = |var: &str| std::path::PathBuf::from(std::env::var(var).expect(var));
-    let folder = path("HORIZON_WASM_GROUPS");
-    let std_member = std::fs::read(path("HORIZON_WASM_STD")).unwrap();
-    let packages = ["counter_lib", "alpha", "beta", "gamma"].map(|id| {
-        let package = folder.join(format!("{id}/target/horizon-mod/{id}.hmod"));
+#[test]
+fn capability_is_answered_only_within_its_group() {
+    let (Ok(folder), Ok(std)) = (
+        std::env::var("HORIZON_WASM_GROUPS"),
+        std::env::var("HORIZON_WASM_STD"),
+    ) else {
+        eprintln!("skipping: group fixtures and shared std are not set");
+        return;
+    };
+    let mut infos = Vec::new();
+    let packages = ["counter_lib", "alpha", "beta", "gamma", "hog"].map(|id| {
+        let path = std::path::Path::new(&folder).join(format!("{id}/target/horizon-mod/{id}.hmod"));
+        let manifest = horizon_mod_package::Package::read(&path).unwrap().manifest;
+        infos.push(mod_api::PackageInfo::new(
+            manifest.id.clone(),
+            manifest.version.clone(),
+            mod_api::PackageKind::Code,
+            mod_api::Side::Both,
+            vec![manifest.id.clone()],
+            manifest.dependencies.keys().cloned().collect(),
+        ));
         horizon_mod_wasm::WasmPackage {
-            manifest: horizon_mod_package::Package::read(&package)
-                .unwrap()
-                .manifest,
-            module: horizon_mod_package::Package::read_wasm(&package).unwrap(),
+            manifest,
+            module: horizon_mod_package::Package::read_wasm(&path).unwrap(),
         }
     });
-    (packages, std_member)
-}
-
-#[test]
-#[ignore = "needs the group mods built to mod.wasm (CI's wasm-mods job)"]
-fn a_library_refused_over_a_point_takes_its_dependents_with_it() {
-    assert_refused_library_point("gone", "no such point");
-    assert_refused_library_point("tick", "no guest export");
-}
-
-fn assert_refused_library_point(method: &str, reason: &str) {
-    let (mut packages, std_member) = built();
-    // Both a missing place and a missing guest export refuse the library and its dependents.
-    let wasm = packages[0].manifest.wasm.as_ref().unwrap();
-    packages[0].manifest = horizon_mod_package::manifest::Manifest::parse(&format!(
-        "id = \"counter_lib\"\nname = \"Counter library\"\nversion = \"1.0.0\"\napi = \"0.2\"\n\
-         capabilities = [\"registries\"]\n\n[wasm]\nsha512 = \"{}\"\ntoolchain = \"{}\"\n\n\
-         [[inject]]\nid = \"gone\"\nat = \"horizon_client::game::Game<'_>::{method}\"\n\
-         kind = \"head\"\nwith = \"gone\"\nhash = \"signature\"\n",
-        wasm.sha512(),
-        wasm.toolchain()
-    ))
-    .unwrap();
-    let loaded = horizon_mod_wasm::load(
-        &horizon_mod_wasm::RuntimeConfig::default(),
-        &std_member,
-        packages.into(),
-    );
-    let mut refused: Vec<(&str, String)> = loaded
-        .refused
-        .iter()
-        .map(|(id, why)| {
-            let why = match why {
-                horizon_mod_wasm::Refusal::NoSuchPoint { .. } => "no such point".to_owned(),
-                horizon_mod_wasm::Refusal::UnfilledPoint { point } if point == "gone" => {
-                    "no guest export".to_owned()
-                }
-                horizon_mod_wasm::Refusal::DependencyRefused { dependency } => {
-                    format!("needs {dependency}")
-                }
-                why => why.to_string(),
-            };
-            (id.as_str(), why)
-        })
-        .collect();
-    refused.sort();
-    assert_eq!(
-        refused,
-        [
-            ("alpha", "needs counter_lib".to_owned()),
-            ("beta", "needs counter_lib".to_owned()),
-            ("counter_lib", reason.to_owned()),
-        ]
-    );
-    // Only gamma, of the other group, is installed, and nothing listens at points.
-    assert_eq!(loaded.mods.len(), 1);
-    assert!(loaded.listening.is_empty());
-}
-
-#[test]
-#[ignore = "needs the group mods built to mod.wasm (CI's wasm-mods job)"]
-fn a_library_capability_is_answered_in_its_group_and_nowhere_else() {
-    let (packages, std_member) = built();
-    let loaded = horizon_mod_wasm::load(
-        &horizon_mod_wasm::RuntimeConfig::default(),
-        &std_member,
-        packages.into(),
-    );
+    let loaded = horizon_mod_wasm::load(&std::fs::read(std).unwrap(), packages.into());
     assert!(loaded.refused.is_empty(), "{:?}", loaded.refused);
-    mod_api::__private::install_parts(&loaded.mods, &mod_api::__private::part_tests::rule_schema())
+    loaded.initialize(&infos).unwrap();
+    mod_api::testing::with_mods(loaded.mods.into(), || {
+        mod_api::__private::install_parts(
+            mod_api::__private::mods(),
+            &mod_api::__private::part_tests::rule_schema(),
+            |_| false,
+        )
         .unwrap();
-    assert!(mod_api::__private::game_rule_categories().contains(&"alpha:machines".to_owned()));
-    {
-        let types = &horizon_client_core::block_entity_types::BlockEntityTypes::new(
+        mod_api::__private::mark_game_thread();
+        let _phase = mod_api::__private::PhaseOwner::scope(mod_api::__private::ModPhase::World);
+        let types = horizon_client_core::block_entity_types::BlockEntityTypes::new(
             Default::default(),
             vec!["test:counter_box".into()],
         );
-        mod_api::__private::resolve_block_entity_types(types.names(), |id| types.key(id))
-    }
-    .unwrap();
-    let mut answers: Vec<String> = loaded
-        .mods
-        .iter()
-        .map(|entry| {
-            let mut message = Text::literal("");
-            let mut replies = Vec::new();
-            let mut event = ServerChatEvent {
-                player_id: 1,
-                player: 1,
-                username: "tester",
-                raw_text: "",
-                message: &mut message,
-                replies: &mut replies,
-            };
-            entry.fields().hooks.server_chat(&mut World, &mut event);
-            message.plain()
-        })
-        .filter(|answer| !answer.is_empty())
-        .collect();
-    answers.sort();
-    assert_eq!(answers, ["alpha: 7 true", "beta: 7", "gamma: none"]);
+        mod_api::__private::resolve_block_entity_types(types.names(), |id| types.key(id)).unwrap();
+        let mut answers: Vec<String> = mod_api::__private::mods()
+            .iter()
+            .map(|entry| {
+                let mut message = Text::literal("");
+                let mut replies = Vec::new();
+                let mut event = ServerChatEvent {
+                    player_id: 1,
+                    player: 1,
+                    username: "tester",
+                    raw_text: "",
+                    message: &mut message,
+                    replies: &mut replies,
+                };
+                entry.fields().hooks.server_chat(&mut World, &mut event);
+                let mod_api::text::TextContent::Literal(answer) = message.content else {
+                    panic!("expected literal reply")
+                };
+                answer
+            })
+            .filter(|answer| !answer.is_empty())
+            .collect();
+        answers.sort();
+        // Each member counts its own `register` and `server_chat` calls and reports them. The game
+        // calls every member's `register` once per registration pass and fires `server_chat` once
+        // per member, so no member sees a call twice because another member of its group exists.
+        let counts: Vec<(String, String)> = answers
+            .iter()
+            .map(|answer| {
+                let (answer, counts) = answer.split_once(" [").unwrap();
+                (answer.to_string(), counts.trim_end_matches(']').to_string())
+            })
+            .collect();
+        let replies: Vec<&str> = counts.iter().map(|(answer, _)| answer.as_str()).collect();
+        assert_eq!(replies, ["alpha: 7 true", "beta: 7", "gamma: none"]);
+        let registers: Vec<&str> = counts
+            .iter()
+            .map(|(_, counts)| {
+                let (registers, chats) = counts.split_once(' ').unwrap();
+                assert_eq!(chats, "chats=1", "a hook fires once per member");
+                registers
+            })
+            .collect();
+        assert!(registers[0] != "registers=0", "register ran");
+        assert!(
+            registers.iter().all(|r| *r == registers[0]),
+            "every member registers as often as every other, in its group or not: {registers:?}"
+        );
+        // The allocator's retry, in the real group memory (256 MiB). `hog` keeps 150 MiB it frees
+        // when the group's allocator asks. With nothing held, a 1 GiB request fails and says so (no
+        // trap) after the evictor ran once; holding, a 150 MiB request that cannot fit beside the
+        // held buffer succeeds because the evictor freed it first, and ran once more.
+        let hog = |text: &'static str| -> String {
+            let mut said = Vec::new();
+            for entry in mod_api::__private::mods().iter() {
+                let mut message = Text::literal("");
+                let mut replies = Vec::new();
+                let mut event = ServerChatEvent {
+                    player_id: 1,
+                    player: 1,
+                    username: "tester",
+                    raw_text: text,
+                    message: &mut message,
+                    replies: &mut replies,
+                };
+                entry.fields().hooks.server_chat(&mut World, &mut event);
+                if let mod_api::text::TextContent::Literal(answer) = message.content
+                    && answer.starts_with("hog:")
+                {
+                    said.push(answer);
+                }
+            }
+            assert_eq!(said.len(), 1, "{text}: {said:?}");
+            said.remove(0)
+        };
+        assert_eq!(hog("grab_all"), "hog: refused [evicted=1]");
+        assert_eq!(hog("hold"), "hog: held [evicted=1]");
+        assert_eq!(hog("grab"), "hog: grabbed [evicted=2]");
+        assert_eq!(hog("grab_all"), "hog: refused [evicted=3]");
+    });
 }

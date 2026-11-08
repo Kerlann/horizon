@@ -10,6 +10,8 @@ use std::sync::{Arc, OnceLock};
 /// The chunk a generator fills: vanilla's `ChunkAccess`, as far as terrain
 /// needs it. Positions are world blocks.
 pub trait ChunkAccess {
+    /// The immutable registry whose numeric states this chunk stores.
+    fn registry(&self) -> &'static crate::registry::BlockRegistry;
     /// `ChunkAccess.getPos`.
     fn pos(&self) -> ChunkPos;
     /// The world's seed.

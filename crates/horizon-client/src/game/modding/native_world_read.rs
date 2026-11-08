@@ -27,22 +27,21 @@ pub(super) enum NativeBlockReadError {
 
 thread_local! {
     // Like the key-to-state mapping, this snapshot belongs to the thread resolving the world.
-    static BLOCK_TAGS: std::cell::RefCell<std::collections::HashMap<String, horizon_world::level::data::BlockSet>> = Default::default();
+    static BLOCK_TAGS: std::cell::RefCell<std::collections::HashMap<String, std::collections::HashSet<BlockKey>>> = Default::default();
 }
 
 /// Bind the world's merged tags alongside its block mappings, including the resource-only case.
 /// Never cache on Items: its string tables also serve tools and client network snapshots.
 pub(super) fn prepare_block_tags(
     items: &Items,
-    mut resolve: impl FnMut(&str) -> Option<horizon_world::level::states::BlockId>,
-) -> std::collections::HashMap<String, horizon_world::level::data::BlockSet> {
+) -> std::collections::HashMap<String, std::collections::HashSet<BlockKey>> {
     items
         .block_tags
         .iter()
         .map(|(tag, members)| {
-            let mut set = horizon_world::level::data::BlockSet::default();
+            let mut set = std::collections::HashSet::<BlockKey>::default();
             for name in members {
-                if let Some(block) = resolve(name) {
+                if let Some(block) = mod_api::__private::block_key(name) {
                     set.insert(block);
                 }
             }
@@ -52,21 +51,21 @@ pub(super) fn prepare_block_tags(
 }
 
 pub(super) fn install_block_tags(
-    tags: std::collections::HashMap<String, horizon_world::level::data::BlockSet>,
+    tags: std::collections::HashMap<String, std::collections::HashSet<BlockKey>>,
 ) {
     BLOCK_TAGS.with(|snapshot| *snapshot.borrow_mut() = tags);
 }
 
-/// One numeric key mapping, one tag-name lookup and one bit test; no block name lookup.
+/// One availability check, one tag-name lookup and one API key membership test.
 /// An unavailable owning-thread mapping is not a missing tag.
 pub(super) fn block_in_tag(block: BlockKey, tag: &str) -> Option<bool> {
-    let block = mod_api::__private::resolved_block(block)?.block;
+    super::api_values::default_state(block)?;
     let tag = horizon_client::command::args::normalized(tag);
     Some(BLOCK_TAGS.with(|snapshot| {
         snapshot
             .borrow()
             .get(tag.as_ref())
-            .is_some_and(|set| set.contains(block))
+            .is_some_and(|set| set.contains(&block))
     }))
 }
 
@@ -82,9 +81,14 @@ pub(super) fn state_fluid(
 
 /// Convert the engine's state using the load-owned kind-to-key mapping.
 pub(super) fn api_fluid_state(state: EngineFluidState) -> Option<FluidState> {
-    Some(mod_api::__private::engine_fluid_state(
-        mod_api::__private::world_fluid_key(state.kind())?,
-        state,
+    Some(mod_api::__private::fluid_state(
+        match state.kind().vanilla_index() {
+            Some(index) => mod_api::__private::world_fluid_key(usize::from(index))?,
+            None => mod_api::__private::fluid_key(state.kind().name())?,
+        },
+        state.amount(),
+        state.falling(),
+        state.is_source(),
     ))
 }
 
@@ -170,17 +174,12 @@ impl Game<'_> {
         self.session_lock.is_some().then(|| self.items())
     }
 
-    /// `items`' block tags, over this game's block ids.
+    /// `items`' block tags, over this game's resolved block keys.
     pub(super) fn block_tag_sets(
         &self,
         items: &Items,
-    ) -> std::collections::HashMap<String, horizon_world::level::data::BlockSet> {
-        let registry = self.pack.assets.registry;
-        prepare_block_tags(items, |name| {
-            registry
-                .default_state(name)
-                .map(|state| self.res.behaviours().block(state))
-        })
+    ) -> std::collections::HashMap<String, std::collections::HashSet<BlockKey>> {
+        prepare_block_tags(items)
     }
 
     /// Whether the resolved block is in the world's merged block tag, on a client the tag its
@@ -325,8 +324,8 @@ impl Game<'_> {
     /// The bucket item that picks `fluid` up (`Fluid.getBucket`), `minecraft:water_bucket` for
     /// water and flowing water. None for `minecraft:empty`, whose bucket is air, and for a name
     /// no fluid has.
-    pub(super) fn fluid_bucket(&self, fluid: &str) -> Option<&'static str> {
-        horizon_world::level::fluid_bucket(fluid_kind(fluid)?)
+    pub(super) fn fluid_bucket(&self, fluid: &str) -> Option<mod_api::ItemKey> {
+        mod_api::__private::item_key(horizon_world::level::fluid_bucket(fluid_kind(fluid)?)?)
     }
 
     /// The sound event a bucket plays as it picks `fluid` up (`Fluid.getPickupSound`),
@@ -441,9 +440,8 @@ mod tests {
     }
 
     #[test]
-    fn numeric_block_tags_rebind_the_merged_snapshot_without_changing_keys() {
-        use horizon_world::level::states::BlockId;
-        use mod_api::__private::{ResolvedBlock, part_tests, resolve_blocks};
+    fn api_block_tags_rebind_the_merged_snapshot_without_changing_keys() {
+        use mod_api::__private::part_tests;
         mod_api::__private::install(Default::default());
         crate::game::api_values::register_game_keys([
             "minecraft:stone".into(),
@@ -459,21 +457,14 @@ mod tests {
             "minecraft:base_stone_overworld".into(),
             ["minecraft:stone".into()].into(),
         );
-        for (stone_index, machine_index) in [(2, 71), (96, 5)] {
-            let resolve = |name: &str| match name {
-                "minecraft:stone" => Some(BlockId(stone_index)),
-                "test:machine" => Some(BlockId(machine_index)),
-                _ => None,
-            };
-            resolve_blocks(|name| {
-                Some(ResolvedBlock {
-                    block: resolve(name)?,
-                    default: BlockStateId(0),
-                    states: mod_api::BlockStateRange::new(BlockStateId(0), 1),
-                })
-            })
-            .unwrap();
-            install_block_tags(prepare_block_tags(&items, resolve));
+        for facts in [
+            r#"{"defaults":{"minecraft:air":2,"minecraft:stone":0,"test:machine":1},"states":[["s",false,false,"","minecraft:stone"],["m",false,false,"","test:machine"],["a",true,false,"","minecraft:air"]]}"#,
+            r#"{"defaults":{"minecraft:air":2,"minecraft:stone":1,"test:machine":0},"states":[["m",false,false,"","test:machine"],["s",false,false,"","minecraft:stone"],["a",true,false,"","minecraft:air"]]}"#,
+        ] {
+            // Build reordered numeric registries from the same API definitions.
+            let registry = BlockRegistry::from_facts_json(facts.as_bytes()).unwrap();
+            crate::game::api_values::resolve_block_definitions(&registry).unwrap();
+            install_block_tags(prepare_block_tags(&items));
             assert_eq!(block_in_tag(machine, "test:machines"), Some(true));
             assert_eq!(block_in_tag(stone, "test:machines"), Some(false));
             assert_eq!(block_in_tag(stone, "base_stone_overworld"), Some(true));
@@ -488,11 +479,7 @@ mod tests {
         items
             .block_tags
             .insert("test:machines".into(), ["minecraft:stone".into()].into());
-        install_block_tags(prepare_block_tags(&items, |name| match name {
-            "minecraft:stone" => Some(BlockId(96)),
-            "test:machine" => Some(BlockId(5)),
-            _ => None,
-        }));
+        install_block_tags(prepare_block_tags(&items));
         assert_eq!(block_in_tag(machine, "test:machines"), Some(false));
         assert_eq!(block_in_tag(stone, "test:machines"), Some(true));
         // Valid key, no owning world: never answer false using another thread's tags.
@@ -764,10 +751,20 @@ mod tests {
             });
             game.options.dedicated = Some(Vec::new());
             let bounds = game.level_height(level).unwrap();
-            let parsed = game.block_state_id("minecraft:oak_slab[waterlogged=true]");
-            let default = game.block_state_default(mod_api::__private::part_tests::block_key(
-                "minecraft:oak_slab",
-            ));
+            use super::super::api_values::TryIntoApi;
+            let stone = stone.try_into_api().unwrap();
+            let slab = slab.try_into_api().unwrap();
+            let invalid = mod_api::BlockStateRecord::new(stone.block(), u16::MAX).into();
+            let parsed = game
+                .block_state_id("minecraft:oak_slab[waterlogged=true]")
+                .try_into_api()
+                .unwrap();
+            let default = game
+                .block_state_default(mod_api::__private::part_tests::block_key(
+                    "minecraft:oak_slab",
+                ))
+                .try_into_api()
+                .unwrap();
             game.with_level(|_, host, ticks| {
                 assert_eq!(
                     host.block_state_id("minecraft:oak_slab[waterlogged=true]"),
@@ -803,7 +800,7 @@ mod tests {
                         .unwrap()
                         .contains("waterlogged=true")
                 );
-                assert_eq!(host.state_string(BlockStateId(u32::MAX)), None);
+                assert_eq!(host.state_string(invalid), None);
                 assert_eq!((host.min_y(), host.height()), bounds);
                 assert_eq!(
                     host.block_in_tag(
@@ -861,7 +858,7 @@ mod tests {
 
                 assert_eq!(hit.state_string(stone).as_deref(), Some("minecraft:stone"));
                 assert!(hit.state_string(slab).unwrap().contains("waterlogged=true"));
-                assert_eq!(hit.state_string(BlockStateId(u32::MAX)), None);
+                assert_eq!(hit.state_string(invalid), None);
                 assert_eq!((hit.min_y(), hit.height()), bounds);
                 assert_eq!(
                     hit.block_in_tag(
@@ -933,10 +930,15 @@ mod tests {
             assert!(!host.fluid_is_same("nope:missing", "nope:missing"));
 
             assert_eq!(
-                host.fluid_bucket("minecraft:flowing_water"),
+                host.fluid_bucket("minecraft:flowing_water")
+                    .and_then(mod_api::__private::item_key_id),
                 Some("minecraft:water_bucket")
             );
-            assert_eq!(host.fluid_bucket("lava"), Some("minecraft:lava_bucket"));
+            assert_eq!(
+                host.fluid_bucket("lava")
+                    .and_then(mod_api::__private::item_key_id),
+                Some("minecraft:lava_bucket")
+            );
             assert_eq!(host.fluid_bucket("minecraft:empty"), None);
             assert_eq!(host.fluid_bucket("nope:missing"), None);
 

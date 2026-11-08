@@ -95,9 +95,7 @@ fn percent(progress: Option<native_mods::Progress>) -> u32 {
 
 pub(super) fn mode_note(profile: Profile) -> &'static str {
     match profile {
-        Profile::Optimized => tr(
-            "Best performance, longest build",
-        ),
+        Profile::Optimized => tr("Best performance, longest build"),
         Profile::Balanced => tr(
             "Builds the game on this computer. Quicker to rebuild after a change; the game runs about 13% slower.",
         ),

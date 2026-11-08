@@ -56,10 +56,7 @@ pub fn intern(id: &str) -> Option<UnresolvedFluid> {
     } else {
         format!("minecraft:{id}")
     };
-    if id.len() > MAX_ID_BYTES
-        || !horizon_mod_package::content::namespaced_id(&id)
-        || id.starts_with("minecraft:")
-    {
+    if id.len() > MAX_ID_BYTES || !namespaced_id(&id) || id.starts_with("minecraft:") {
         return None;
     }
     TABLE.write().unwrap().insert(id)
@@ -178,5 +175,32 @@ mod tests {
         let next = intern("other:fluid").unwrap();
         assert_ne!(old, next);
         assert_eq!(name(old), "absent:fluid");
+    }
+}
+
+fn namespaced_id(id: &str) -> bool {
+    let ok = |b: u8| b.is_ascii_lowercase() || b.is_ascii_digit() || b"_.-".contains(&b);
+    id.split_once(':').is_some_and(|(namespace, path)| {
+        !namespace.is_empty()
+            && !path.is_empty()
+            && namespace.bytes().all(ok)
+            && path.bytes().all(|b| ok(b) || b == b'/')
+    })
+}
+#[cfg(test)]
+mod identifier_tests {
+    #[test]
+    fn namespaced_identifier_samples() {
+        for (id, expected) in [
+            ("a:b/c", true),
+            ("a_0.x-y:b/c.d-e_0", true),
+            ("a:", false),
+            (":b", false),
+            ("a:b:c", false),
+            ("A:b", false),
+            ("a/b:c", false),
+        ] {
+            assert_eq!(super::namespaced_id(id), expected, "{id}");
+        }
     }
 }

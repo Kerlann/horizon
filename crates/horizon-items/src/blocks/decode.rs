@@ -175,6 +175,7 @@ object!(Entry<'a> {
     friction: f64 = 0.0 => value(number),
     explosion_resistance: f64 = 0.0 => value(number),
     item: Option<String> = None => value(text),
+    pick_item: Option<String> = None => value(text),
     sound: Sound<'a> = Sound::default() => typed,
     offset: bool = false => value(flag),
     outline_offset: Option<bool> = None => value(|v: Value| v.as_bool()),

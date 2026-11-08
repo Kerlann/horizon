@@ -96,15 +96,8 @@ fn eager_subscribers_are_shared_across_dispatch_threads() {
         [1]
     );
     let barrier = Barrier::new(2);
-    let load = horizon_world::native_load_context::LoadContext::new(
-        horizon_world::native_load_context::DataLoadOrigin::ServerDataLoad,
-        std::sync::Arc::new(horizon_world::native_load_context::LoadInputs::new(
-            Default::default(),
-            std::path::PathBuf::new(),
-        )),
-        [],
-    );
-    let context = crate::OwningLoad::new(&load);
+    let load = crate::phase::TestReader::default();
+    let context = crate::OwningLoad::new(crate::DataLoadOrigin::ServerDataLoad, &load);
     let context = &context;
     std::thread::scope(|scope| {
         for _ in 0..2 {
@@ -387,6 +380,12 @@ fn dimension_types_take_a_host(
         ..Default::default()
     };
     Some((ty.coordinate_scale, ty.fast_lava, nether_like))
+}
+
+/// Compile-only: a mod reads the time of a level's own clock from a handle on a shared host.
+#[allow(dead_code)]
+fn clock_time_takes_a_host(host: &dyn Host, level: LevelRef) -> Option<i64> {
+    level.clock_time(host)
 }
 
 /// Compile-only: a mod reads a level's sea level from a handle on a shared host.

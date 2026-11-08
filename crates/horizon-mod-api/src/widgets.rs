@@ -382,15 +382,20 @@ impl Widgets {
     }
 
     /// Draws every widget, the one under `mouse` (the screen's `mouse`) or with the focus
-    /// highlighted, in the order added.
-    pub fn draw(&mut self, draw: &mut dyn DrawContext, host: &dyn ClientHost, mouse: [f32; 2]) {
+    /// highlighted, in the order added. Returns a refusal if a label cannot cross the text boundary.
+    pub fn draw(
+        &mut self,
+        draw: &mut dyn DrawContext,
+        host: &dyn ClientHost,
+        mouse: [f32; 2],
+    ) -> Result<(), crate::text::TextFormError> {
         let now = host.millis();
         for (index, widget) in self.widgets.iter_mut().enumerate() {
             let focused = self.focus == Some(index);
             match widget {
                 Widget::Button(button) => {
                     let highlighted = button.active && (focused || over(button.rect, mouse));
-                    draw.widget_button(button.rect, &button.label, button.active, highlighted);
+                    draw.widget_button(button.rect, &button.label, button.active, highlighted)?;
                 }
                 Widget::TextField(field) => {
                     let layout = draw.widget_text_field(&field.view(focused, now));
@@ -399,6 +404,7 @@ impl Widgets {
                 }
             }
         }
+        Ok(())
     }
 
     /// A mouse button went down at `at` (the screen's `mouse`): `Screen.mouseClicked`. Only the

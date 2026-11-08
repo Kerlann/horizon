@@ -240,7 +240,7 @@ pub fn main() -> horizon_client::Result<()> {
     let vanilla = fs::read_to_string(args.get(3).ok_or(usage)?)?;
     let defaults = horizon_world::item_defaults::read(root)?;
     let items = Items::catalog(root, &PackOverlay::NONE, &defaults)?;
-    let enchantments = Enchantments::load(root, &defaults);
+    let enchantments = Enchantments::load(root, &defaults)?;
     let names = horizon_client::creative::Names::default();
     let trades = Trades::load(root, &PackOverlay::NONE);
     let recipes = horizon_client::crafting::Recipes::load(

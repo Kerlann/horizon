@@ -34,42 +34,47 @@ pub mod tests {
                 ModEntry::new("second", Box::new(Keys(requested.clone()))),
             ],
             &crate::parts::tests::rule_schema(),
+            |_| false,
         )
         .unwrap();
         let speed_key = requested.lock().unwrap()[0];
         assert_eq!(EffectKey::from_slot(speed_key.0), Ok(speed_key));
         assert!(EffectKey::from_slot(2).is_err());
         assert!(
-            crate::registry_keys::effect(speed_key).is_none(),
+            crate::registry_keys::effect_id(speed_key).is_none(),
             "startup has no resolved effects"
         );
-        assert!(horizon_client_core::potions::register_mod_effects([(
-            "key_test:later".to_owned(),
-            0x123456,
-            horizon_client_core::potions::Category::Neutral
-        )]));
-        crate::registry_keys::resolve_effects(
-            horizon_client_core::potions::all_effects()
-                .map(|def| horizon_client_core::potions::namespaced(def.id)),
-            |id| horizon_client_core::potions::effect(id).map(|def| def.index),
-        )
+        // Independent engine-index fixture: requested slots must not be confused
+        // with the loaded registry indices, and unrequested effects are completed.
+        let effects = [
+            ("minecraft:speed", 2),
+            ("key_test:later", 0),
+            ("minecraft:poison", 1),
+        ];
+        crate::registry_keys::resolve_effects(effects.iter().map(|(id, _)| *id), |id| {
+            effects
+                .iter()
+                .find(|(name, _)| *name == id)
+                .map(|(_, index)| *index)
+        })
         .unwrap();
         let keys = requested.lock().unwrap();
         assert_eq!(keys[0], keys[2]);
         assert_eq!(keys[1], keys[3]);
-        let speed = crate::registry_keys::effect(keys[0]).unwrap();
-        let later = crate::registry_keys::effect(keys[1]).unwrap();
-        assert_eq!(speed.id, "speed");
-        assert_eq!(later.id, "key_test:later");
-        assert_eq!(later.color, 0x123456);
-        assert_eq!(crate::registry_keys::effect_key(later.index), Some(keys[1]));
-        for def in horizon_client_core::potions::all_effects() {
-            let key = crate::registry_keys::effect_key(def.index).unwrap();
-            assert_eq!(crate::registry_keys::effect(key).unwrap().id, def.id);
-            assert_eq!(
-                crate::registry_keys::effect_id(key),
-                Some(horizon_client_core::potions::namespaced(def.id))
-            );
+        assert_eq!(
+            crate::registry_keys::effect_id(keys[0]),
+            Some("minecraft:speed")
+        );
+        assert_eq!(
+            crate::registry_keys::effect_id(keys[1]),
+            Some("key_test:later")
+        );
+        assert_eq!(crate::registry_keys::effect_key_by_index(0), Some(keys[1]));
+        assert_eq!(crate::registry_keys::effect_index(keys[0]), Some(2));
+        assert_eq!(crate::registry_keys::effect_index(keys[1]), Some(0));
+        for (id, index) in effects {
+            let key = crate::registry_keys::effect_key_by_index(index).unwrap();
+            assert_eq!(crate::registry_keys::effect_id(key), Some(id));
         }
 
         assert!(EffectKey::from_slot(u32::MAX).is_err());

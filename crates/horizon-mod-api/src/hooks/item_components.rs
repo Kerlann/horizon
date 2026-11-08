@@ -36,4 +36,18 @@ enchantment tag with the active server level's random source and the stack's eff
 enchantability. It returns a detached result. Use the normal item-place or capability
 transaction to replace a stored stack. Discarding the result does not rewind the random source."#]
     fn item_components_note3();
+    #[notes = r#"## Stack combat queries
+
+`ItemResource::entity_attack_range(host, attacker)` returns effective minimum, maximum and
+hitbox margin; `contains(distance, buffer)` uses vanilla's inclusive float bounds.
+`damage_source(host, attacker)` returns a typed owned source: component override, item-specific
+source (mace smash), then the actor's ordinary melee source. Actors and targets are typed handles;
+unavailable or stale handles return `None`. These reads never equip the queried stack.
+`can_be_hurt_by(host, source)` asks whether the item itself can take that source's damage,
+including damage-resistant component overrides, removals and damage type tags. It does not
+calculate the wearer's protection.
+`attack_damage_bonus(host, attacker, target, base_damage)` previews enchantment and item bonuses
+with a cloned RNG snapshot. A read never consumes world RNG; a later attack may roll differently.
+`hurt_and_break` remains the durability write."#]
+    fn item_components_note4();
 }

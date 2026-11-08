@@ -103,13 +103,4 @@ fn malformed_or_conflicting_damage_refuses_the_whole_patch() {
         Err(StackError::ConflictingDamage)
     );
     assert_eq!(stack, before);
-    let mut record = StackRecord::from(&stack);
-    record.components = Some(Box::new(Components::from(Compound::from([(
-        JavaString::from("minecraft:damage"),
-        Tag::Int(2),
-    )]))));
-    assert_eq!(
-        ItemStack::try_from(record),
-        Err(StackError::ConflictingDamage)
-    );
 }

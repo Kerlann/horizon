@@ -61,6 +61,9 @@ pub struct StateFacts {
     pub friction: f32,
     pub explosion_resistance: f32,
     pub item: Arc<str>,
+    /// The item pick-block takes (`BlockState.getCloneItemStack`): `item` unless the block
+    /// declares its own, as a crop picks its seed.
+    pub pick_item: Arc<str>,
     pub sounds: Sounds,
     pub fluid: Fluid,
     /// Fluid amount 1..=8 (8 = source/falling surface), 0 when there is no fluid.
@@ -509,6 +512,13 @@ impl BlockFacts {
                 friction: entry.friction as f32,
                 explosion_resistance: entry.explosion_resistance as f32,
                 item: intern(entry.item.as_deref().unwrap_or("minecraft:air")),
+                pick_item: intern(
+                    entry
+                        .pick_item
+                        .as_deref()
+                        .or(entry.item.as_deref())
+                        .unwrap_or("minecraft:air"),
+                ),
                 sounds: Sounds {
                     volume: sound.volume as f32,
                     pitch: sound.pitch as f32,

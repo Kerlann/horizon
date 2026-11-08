@@ -1,5 +1,4 @@
 use super::*;
-use crate::game::api_values::TryIntoApi;
 use horizon_client::items::BlockLootRoll;
 
 impl GameLevel<'_> {
@@ -10,7 +9,7 @@ impl GameLevel<'_> {
     #[inline(always)]
     pub(in crate::game) fn native_enchanted_block_loot(
         &self,
-        call: mod_api::__private::EnchantedBlockLootCall<'_>,
+        call: super::fire::EnchantedBlockLootCall<'_>,
     ) {
         self.fire_enchanted_block_loot(call);
     }
@@ -35,15 +34,15 @@ impl GameLevel<'_> {
         }
         let mut random = self.world.random.clone();
         let mut sequences = std::mem::take(&mut *self.rand_sequences);
-        let tool = roll.held.and_then(|tool| tool.try_into_api().ok());
+        let tool = roll.held;
         let level = &*self;
         let levels = |enchantment: &str, mut read: u32| {
             if let Some(enchantment) = horizon_client::enchantment_levels::identifier(enchantment) {
-                level.native_enchanted_block_loot(mod_api::__private::EnchantedBlockLootCall {
+                level.native_enchanted_block_loot(super::fire::EnchantedBlockLootCall {
                     dimension: level.dimension,
                     pos,
                     state,
-                    tool: tool.as_ref(),
+                    tool,
                     enchantment: &enchantment,
                     level: &mut read,
                     entity,
@@ -71,6 +70,7 @@ impl GameLevel<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::game::api_values::TryIntoApi;
     use crate::game::native_entity_refs::tests::with_game;
     use horizon_core::random::{LegacyRandom, RandomSource};
     use mod_api::{EnchantedBlockLootEvent, Hooks, LevelHost, ModEntry, testing::with_mods};
@@ -79,7 +79,7 @@ mod tests {
     #[derive(Debug, PartialEq)]
     struct Read {
         pos: [i32; 3],
-        state: BlockStateId,
+        state: mod_api::BlockState,
         tool: Option<String>,
         enchantment: String,
         level: u32,
@@ -178,7 +178,7 @@ mod tests {
                 reads.lock().unwrap()[0],
                 Read {
                     pos: POS,
-                    state: gravel,
+                    state: gravel.try_into_api().unwrap(),
                     tool: None,
                     enchantment: "minecraft:fortune".into(),
                     level: 0,

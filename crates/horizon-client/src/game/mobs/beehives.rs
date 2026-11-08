@@ -90,13 +90,14 @@ impl Game<'_> {
     /// The hive's honey level and front, from its block state.
     pub(super) fn hive_state(&self, at: [i32; 3]) -> Option<(Option<i32>, [i32; 2])> {
         let state = self.world.block(at[0], at[1], at[2]);
-        let name = &self.res.facts().get(state).name;
+        let name =
+            horizon_client::block_entity_types::factory_block(&self.res.facts().get(state).name);
         if !self
             .res
             .items()
             .block_tags
             .get("minecraft:beehives")
-            .is_some_and(|t| t.contains(&**name))
+            .is_some_and(|t| t.contains(name))
         {
             return None;
         }

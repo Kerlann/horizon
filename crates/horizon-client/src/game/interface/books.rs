@@ -189,7 +189,9 @@ impl Game<'_> {
             // Screen.defaultHandleGameClickEvent: custom actions retain the book.
             ClickEvent::Custom { id, payload } => {
                 if let Some(remote) = &self.remote {
-                    remote.session.send_custom_click(&id, payload);
+                    remote
+                        .session
+                        .send_custom_click(&id, payload.map(std::sync::Arc::unwrap_or_clone));
                 }
             }
             // SuggestCommand's insertText does nothing on a book; a server's
@@ -1072,7 +1074,7 @@ impl Game<'_> {
         }
         if let Some(r) = self.remote.as_mut() {
             r.menu.set(None);
-            r.menu_title = None;
+            r.set_menu_title(None);
         }
         self.book = None;
         self.capture(true);

@@ -25,8 +25,12 @@ impl Processing {
             .iter()
             .filter_map(|recipe| {
                 Some(Definition {
-                    ingredient: host.recipe_ingredient(&recipe.json["ingredient"])?,
-                    result: host.recipe_result(&recipe.json["result"])?,
+                    ingredient: host
+                        .recipe_ingredient(&recipe.json["ingredient"].to_string())
+                        .ok()??,
+                    result: host
+                        .recipe_result(&recipe.json["result"].to_string())
+                        .ok()??,
                 })
             })
             .collect();

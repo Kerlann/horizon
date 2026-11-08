@@ -15,11 +15,12 @@ use super::api_values::TryIntoEngine;
 use super::living_attributes::{AttributeWrite, collect_equipment, write_unspawned_attribute};
 use horizon_client::mobs::finalize::{Ageable, Group};
 use horizon_client::mobs::{Mob, equine, llama, render, tame};
+use horizon_client::text::Text;
 use horizon_world::attribute_map::ValueKind;
 use horizon_world::attributes::Operation;
 use mod_api::{
     AttributeModifier, AttributeOperation, EntityRef, EquipmentSlot, Identifier, ItemStack,
-    NativeAgeableGroup, NativeSpawnGroup, NativeTropicalVariant, NativeWorldEpoch, Text,
+    NativeAgeableGroup, NativeSpawnGroup, NativeTropicalVariant, NativeWorldEpoch,
     UnspawnedMobEdits, UnspawnedMobError, UnspawnedMobRef,
 };
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -34,6 +35,14 @@ static NEXT_LEND: AtomicU64 = AtomicU64::new(1);
 /// The mobs lent to the hook calls running now, the latest last.
 #[derive(Default)]
 pub(in crate::game) struct LentMobs(Vec<Lent>);
+
+#[cfg(test)]
+impl LentMobs {
+    /// Whether no lend is open.
+    pub(in crate::game) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
 
 /// One lend: the handle's numbers, what every lend answers, and the copy of the
 /// mob when the game keeps one (not for the ender dragon).
@@ -539,8 +548,9 @@ impl UnspawnedMobEdits for Edits<'_, '_> {
     fn set_custom_name(
         &self,
         mob: UnspawnedMobRef,
-        name: Option<Text>,
+        name: Option<mod_api::Text>,
     ) -> Result<(), UnspawnedMobError> {
+        let name = name.try_into_engine(&())?;
         self.game.edit_lent_mob(mob, |_, m| {
             m.custom_name = name.as_ref().map(Text::plain);
             m.custom_name_text = name;
@@ -658,7 +668,7 @@ mod tests {
                 edits.set_attribute_base(mob, &max_health, 20.0).unwrap();
                 assert_eq!(edits.add_tag(mob, "test:tagged"), Ok(true));
                 edits
-                    .set_custom_name(mob, Some(Text::literal("Bacon")))
+                    .set_custom_name(mob, Some(mod_api::Text::literal("Bacon")))
                     .unwrap();
                 *saw.lock().unwrap() = Some((
                     mob.kind(host),

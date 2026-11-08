@@ -33,5 +33,10 @@
     "path": "winit::event::MouseButton",
     "kind": "enum",
     "signature": "enum MouseButton { Left , Right , Middle , Back , Forward , Other (u16) }"
+  },
+  {
+    "path": "winit::event_loop::ControlFlow",
+    "kind": "enum",
+    "signature": "enum ControlFlow { Poll , Wait , WaitUntil (Instant) }"
   }
 ]

@@ -1460,8 +1460,10 @@ mod tests {
         base.data_mut()
             .set_loot_name("minecraft:custom_name", &serde_json::json!("Original"));
         base.data_mut().repair_cost = 7;
-        base.data_mut()
-            .set_loot_component("minecraft:custom_data", &serde_json::json!({"kept":1}));
+        base.data_mut().set_loot_component(
+            "minecraft:custom_data",
+            &Some(horizon_core::json_nbt::json_to_tag(&serde_json::json!({"kept":1})).unwrap()),
+        );
         let addition = ItemStack::new("minecraft:diamond", 2);
         let result = stations
             .smithing_result(ctx, &e, None, Some(&base), Some(&addition))

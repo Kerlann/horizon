@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "ビルドログを読み込めませんでした: {error}",
   "Could not read the saved sign-in.": "保存されたサインイン情報を読み込めませんでした。",
   "Could not read the saved sign-in. Sign in again.": "保存されたサインイン情報を読み込めませんでした。もう一度サインインしてください。",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Could not read {name}: {error}",
   "Could not run {program}: {error}": "{program} を実行できませんでした：{error}",
   "Could not save the renewed sign-in.": "更新したサインイン情報を保存できませんでした。",

@@ -62,3 +62,25 @@ impl BlockEntityTypeBuilder<'_> {
             .declare_block_entity_type(&self.id, self.blocks)
     }
 }
+
+impl crate::BlockEntityTypeAddBlocksEvent<'_> {
+    /// Add blocks to one registered type, leaving its factory unchanged.
+    pub fn modify(&mut self, kind: BlockEntityTypeKey, blocks: &[crate::BlockKey]) {
+        self.additions
+            .extend(blocks.iter().map(|&block| (kind, block)));
+    }
+
+    /// Add blocks to every registered type accepted by `predicate`.
+    pub fn modify_matching(
+        &mut self,
+        mut predicate: impl FnMut(BlockEntityTypeKey) -> bool,
+        blocks: &[crate::BlockKey],
+    ) {
+        for &kind in self.types {
+            if predicate(kind) {
+                self.additions
+                    .extend(blocks.iter().map(|&block| (kind, block)));
+            }
+        }
+    }
+}

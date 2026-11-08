@@ -18,8 +18,8 @@ fn stateful_creation_uses_actual_state_and_preserves_existing_entity() {
     const KIND: &str = "state_factory_test:machine";
     #[derive(Default)]
     struct Observations {
-        populated: OnceLock<BlockStateId>,
-        calls: Mutex<Vec<BlockStateId>>,
+        populated: OnceLock<BlockState>,
+        calls: Mutex<Vec<BlockState>>,
         kind: OnceLock<BlockEntityTypeKey>,
     }
     #[derive(Clone)]
@@ -35,11 +35,9 @@ fn stateful_creation_uses_actual_state_and_preserves_existing_entity() {
             self.0.kind.set(kind).unwrap();
         }
         fn blocks(&self, _: &mod_api::RegistrationContext, event: &mut BlocksEvent<'_>) {
-            event.blocks.push(horizon_mod_package::content::Block {
-                id: BLOCK.into(),
-                template: "minecraft:white_banner".into(),
-                ..Default::default()
-            });
+            event
+                .blocks
+                .push(mod_api::Block::new(BLOCK, "minecraft:white_banner"));
         }
     }
     #[mod_api::horizon_part]
@@ -91,18 +89,27 @@ fn stateful_creation_uses_actual_state_and_preserves_existing_entity() {
             "the factory must see a non-default state"
         );
         assert_ne!(empty, populated);
-        observed.populated.set(populated).unwrap();
+        use crate::game::api_values::TryIntoApi;
+        let populated_api = populated.try_into_api().unwrap();
+        let empty_api = empty.try_into_api().unwrap();
+        observed.populated.set(populated_api).unwrap();
         let level = game.level(game.dim.id()).unwrap();
         let stone = registry.default_state("minecraft:stone").unwrap();
         for x in [1, 2, 3] {
-            assert!(game.level_set_block(level, [x, 63, 0], stone, NativeBlockUpdateFlags::NONE));
+            assert_eq!(
+                game.level_set_block(level, [x, 63, 0], stone, NativeBlockUpdateFlags::NONE),
+                Ok(true)
+            );
         }
         assert!(observed.calls.lock().unwrap().is_empty());
 
         // The whole-block Host write must create inline, not call the factory
         // again after LevelChunk.setBlockState has already installed its entity.
-        assert!(game.level_set_block(level, [1, 64, 0], populated, NativeBlockUpdateFlags::NONE));
-        assert_eq!(*observed.calls.lock().unwrap(), [populated]);
+        assert_eq!(
+            game.level_set_block(level, [1, 64, 0], populated, NativeBlockUpdateFlags::NONE),
+            Ok(true)
+        );
+        assert_eq!(*observed.calls.lock().unwrap(), [populated_api]);
         let handle = game
             .block_entity(level, [1, 64, 0])
             .expect("factory entity");
@@ -116,8 +123,11 @@ fn stateful_creation_uses_actual_state_and_preserves_existing_entity() {
 
         // This state would answer None on a fresh placement, but a property
         // change must preserve both the live payload and the handle generation.
-        assert!(game.level_set_block(level, [1, 64, 0], empty, NativeBlockUpdateFlags::NONE));
-        assert_eq!(*observed.calls.lock().unwrap(), [populated]);
+        assert_eq!(
+            game.level_set_block(level, [1, 64, 0], empty, NativeBlockUpdateFlags::NONE),
+            Ok(true)
+        );
+        assert_eq!(*observed.calls.lock().unwrap(), [populated_api]);
         assert_eq!(handle.kind(game).as_ref(), observed.kind.get());
         let saved = game
             .block_entity_data(handle)
@@ -126,8 +136,11 @@ fn stateful_creation_uses_actual_state_and_preserves_existing_entity() {
 
         // A fresh unanswered stateful placement is absent, not an empty declared
         // mod entity or the template's built-in banner entity.
-        assert!(game.level_set_block(level, [2, 64, 0], empty, NativeBlockUpdateFlags::NONE));
-        assert_eq!(*observed.calls.lock().unwrap(), [populated, empty]);
+        assert_eq!(
+            game.level_set_block(level, [2, 64, 0], empty, NativeBlockUpdateFlags::NONE),
+            Ok(true)
+        );
+        assert_eq!(*observed.calls.lock().unwrap(), [populated_api, empty_api]);
         assert!(game.world.block_entities.get(&(2, 64, 0)).is_none());
         assert!(game.block_entity(level, [2, 64, 0]).is_none());
 
@@ -137,14 +150,14 @@ fn stateful_creation_uses_actual_state_and_preserves_existing_entity() {
             LevelWriteHost::set_block(
                 &mut crate::game::mod_api_host::LevelTicks { level, ticks },
                 [3, 64, 0],
-                populated,
+                populated_api,
                 NativeBlockUpdateFlags::NONE,
             )
         });
         assert!(written);
         assert_eq!(
             *observed.calls.lock().unwrap(),
-            [populated, empty, populated]
+            [populated_api, empty_api, populated_api]
         );
         let second = game
             .block_entity(level, [3, 64, 0])

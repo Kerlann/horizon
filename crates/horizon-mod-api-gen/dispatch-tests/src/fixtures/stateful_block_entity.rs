@@ -58,7 +58,7 @@ fn actual_state_factory_preserves_none_and_stops_at_first_answer() {
     dispatch_block_entity(
         LevelSide::Server(&TestLevel),
         "fixture:heater",
-        BlockStateId,
+        BlockState::new(BlockKey::Test, 0),
         &mut entity,
     );
     assert!(entity.is_none());
@@ -73,7 +73,7 @@ fn actual_state_factory_preserves_none_and_stops_at_first_answer() {
     dispatch_block_entity(
         LevelSide::Server(&TestLevel),
         "fixture:heater",
-        BlockStateId,
+        BlockState::new(BlockKey::Test, 0),
         &mut entity,
     );
     assert!(entity.is_some());

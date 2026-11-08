@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Nepavyko perskaityti kūrimo žurnalo: {error}",
   "Could not read the saved sign-in.": "Nepavyko perskaityti išsaugoto prisijungimo.",
   "Could not read the saved sign-in. Sign in again.": "Nepavyko perskaityti išsaugoto prisijungimo. Prisijunkite dar kartą.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Nepavyko perskaityti {name}: {error}",
   "Could not run {program}: {error}": "Nepavyko paleisti {program}: {error}",
   "Could not save the renewed sign-in.": "Nepavyko išsaugoti atnaujinto prisijungimo.",
