@@ -528,9 +528,7 @@ fn boundary_arguments(
             format!(
                 "match {name}.try_into_engine(&()) {{ Ok(value) => value, Err(_) => return Default::default() }}"
             )
-        } else if text {
-            format!("{conversion}?")
-        } else if checked_write {
+        } else if text || checked_write {
             format!("{conversion}?")
         } else if result_error(&sig.output).is_some() {
             format!(
