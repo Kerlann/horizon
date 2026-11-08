@@ -144,7 +144,7 @@ impl Goal for DrinkItem {
         if m.extra.using_item == 0 {
             return;
         }
-        m.extra.using_item += 1;
+        m.extra.using_item = m.extra.using_item.saturating_add(1);
         if m.extra.using_item > DRINK_TICKS {
             // LivingEntity.completeUsingItem: the potion or the milk takes effect.
             if self.dark {

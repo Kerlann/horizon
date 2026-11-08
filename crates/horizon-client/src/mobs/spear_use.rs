@@ -81,7 +81,7 @@ pub fn update_using_item(m: &mut Mob, w: &MobWorld, known_speed: Vec3, events: &
     let ticks_used = m.extra.using_item - 1;
     damage_entities(m, &kinetic, ticks_used, w, known_speed, events);
     if is_using_item(m) {
-        m.extra.using_item += 1;
+        m.extra.using_item = m.extra.using_item.saturating_add(1);
     }
 }
 

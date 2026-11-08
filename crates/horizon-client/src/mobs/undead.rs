@@ -862,7 +862,7 @@ impl Goal for BowAttack {
                 }
             }
             if m.extra.using_item > 0 {
-                m.extra.using_item += 1;
+                m.extra.using_item = m.extra.using_item.saturating_add(1);
             }
         } else {
             self.attack_time -= 1;

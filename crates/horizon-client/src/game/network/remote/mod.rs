@@ -7782,7 +7782,7 @@ impl Game<'_> {
                         ));
                     }
                 }
-                m.extra.using_item += 1;
+                m.extra.using_item = m.extra.using_item.saturating_add(1);
             }
             // LivingEntity.tick's tickHeadTurn: a mob's BodyRotationControl,
             // a player's body following its walk and look.

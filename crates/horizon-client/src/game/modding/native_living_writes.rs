@@ -725,6 +725,27 @@ mod tests {
         });
     }
 
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn extreme_remaining_values_do_not_panic_on_next_spear_tick() {
+        use horizon_items::equipment::MAINHAND;
+        with_game(|game| {
+            floor_and_zombies(game);
+            let zombie = game.living(game.entity(12).unwrap()).unwrap();
+            game.mobs[0]
+                .extra
+                .set_slot_stack(MAINHAND, Some(ItemStack::new("minecraft:iron_spear", 1)));
+            game.mobs[0].ai.targets.clear();
+            game.mobs[0].ai.goals.clear();
+            assert!(game.living_start_using_item(zombie, Hand::Main));
+            for remaining in [i32::MIN, i32::MAX, 0, -1, -72_000] {
+                assert!(game.living_set_item_use_remaining(zombie, remaining));
+                game.tick_mobs().unwrap();
+                assert!(game.mobs[0].extra.using_item > 0);
+            }
+        });
+    }
+
     /// A waypoint write is `/waypoint modify`: what it stores is what the command
     /// stores, for the entities the command takes.
     #[test]
@@ -797,7 +818,7 @@ mod tests {
                     (
                         waypoint_operation::TRACK,
                         "example:flag".into(),
-                        Some(0x12_34AB)
+                        Some(0xFF12_34AB_u32 as i32)
                     ),
                 ]
             );
