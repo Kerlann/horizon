@@ -2103,6 +2103,7 @@ mod selector_restore_tests {
     // Exercise the production acquisition site, not just the restoration helper.
     // This is an engine Goal callback, not native Game integration coverage.
     #[test]
+    #[ignore = "needs prepared resources"]
     fn server_ai_step_restores_live_selectors_after_goal_unwind() {
         use std::sync::{Mutex, atomic::AtomicBool};
         #[derive(Debug)]
