@@ -741,7 +741,7 @@ fn borrowed(
             "None"
         };
         let read = format!(
-            "let (mut {name}_held, {name}_cache_key): ({pointee},_) = crate::wire::guest::cache_probe::take(input,{repair})?; let mut {name} = {}::new(&{}{name}_held);",
+            "let (mut {name}_held, {name}_cache_key): ({pointee},_) = crate::wire::guest::cache_probe::take::<{pointee}>(input,{repair})?; let mut {name} = {}::new(&{}{name}_held);",
             d.rust,
             if view.mutable { "mut " } else { "" }
         );
