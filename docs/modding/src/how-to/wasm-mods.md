@@ -152,8 +152,12 @@ Each guest exports:
 - `horizon_layout() -> u64`: the generated layout hash. A mismatch is refused.
 - `horizon_layout_ext() -> u64`, when `mod_points` is linked: the full point catalog and row-schema
   layout hash. The loader checks it before accepting any listener.
-- `horizon_in(len) -> ptr`: the buffer into which the game writes the next call's input.
-- `horizon_hook(id) -> u64`: runs the generated export ID after the input is written. The high
+- `horizon_arena(written, required) -> ptr`: reserves input storage without zero-filling it.
+  The host initializes the first `written` bytes before requesting growth; growth preserves
+  that prefix. `u32::MAX` refuses the reservation. The host reacquires and bounds-checks guest
+  memory after each reservation and encodes directly into it, without a staging buffer.
+- `horizon_hook(id, input_len) -> u64`: runs the generated export ID after the host has fully
+  initialized `input_len` bytes. The host decodes the reply in place before another guest call. The high
   32 bits are the reply pointer and the low 32 bits its length; `u32::MAX` as the length denotes
   an error, with a Wire string at the pointer. The reply remains valid until the next call at
   the same depth. A handler call starts its input with the handler's `u64` ID.

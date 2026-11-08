@@ -35,9 +35,7 @@ pub(crate) struct State {
     limits: wasmtime::StoreLimits,
     cx: Box<Cx>,
     memory: Option<Memory>,
-    replies: Vec<Writer>,
-    inputs: Vec<Writer>,
-    outputs: Vec<Vec<u8>>,
+    replies: Vec<Writer<'static>>,
     imports: Vec<Vec<u8>>,
     depth: usize,
     epoch_budget: u64,
@@ -60,8 +58,6 @@ impl Default for State {
             cx: Box::default(),
             memory: None,
             replies: Vec::new(),
-            inputs: Vec::new(),
-            outputs: Vec::new(),
             imports: Vec::new(),
             depth: 0,
             epoch_budget: 0,
@@ -150,8 +146,8 @@ impl Drop for FrameScope {
 pub struct WasmMod {
     id: Arc<str>,
     running: Arc<Running>,
-    input: TypedFunc<u32, u32>,
-    hook: TypedFunc<u32, u64>,
+    input: TypedFunc<(u32, u32), u32>,
+    hook: TypedFunc<(u32, u32), u64>,
     pub subscribed: &'static [Option<HookId>],
     released: Arc<Releases>,
     subscriptions: Arc<Mutex<std::collections::HashMap<(Id, u32), &'static [Option<HookId>]>>>,
@@ -161,8 +157,8 @@ pub struct WasmMod {
 pub(crate) struct WeakWasmMod {
     id: Arc<str>,
     running: Weak<Running>,
-    input: TypedFunc<u32, u32>,
-    hook: TypedFunc<u32, u64>,
+    input: TypedFunc<(u32, u32), u32>,
+    hook: TypedFunc<(u32, u32), u64>,
     subscribed: &'static [Option<HookId>],
     released: Arc<Releases>,
     subscriptions: Arc<Mutex<std::collections::HashMap<(Id, u32), &'static [Option<HookId>]>>>,
@@ -504,7 +500,7 @@ impl WasmMod {
                 }
             }
             let input = instance
-                .get_typed_func(&mut group.store, "horizon_in")
+                .get_typed_func(&mut group.store, "horizon_arena")
                 .map_err(load)?;
             let hook = instance
                 .get_typed_func(&mut group.store, "horizon_hook")
@@ -619,8 +615,6 @@ impl WasmMod {
         store.data_mut().depth = depth;
         if store.data().replies.len() <= depth {
             store.data_mut().replies.resize_with(depth + 1, Writer::new);
-            store.data_mut().inputs.resize_with(depth + 1, Writer::new);
-            store.data_mut().outputs.resize_with(depth + 1, Vec::new);
             store.data_mut().imports.resize_with(depth + 1, Vec::new);
         }
         store.data_mut().cx.frames.push(frame);
@@ -636,36 +630,31 @@ impl WasmMod {
         // SAFETY: FrameScope keeps the active module installed and the group
         // remains exclusively locked/lent until this resource scope is dropped.
         let resources = unsafe { crate::boundary::resource_scope(&mut *store.data_mut().cx, true) };
-        let mut w = std::mem::take(&mut store.data_mut().inputs[depth]);
-        let mut output = std::mem::take(&mut store.data_mut().outputs[depth]);
         // This guard unwinds before the resource scope, whose native destructors
         // must already see the group stopped.
         let panic_stop = PoisonOnPanic(&self.running.poisoned);
         let result = (|| -> wasmtime::Result<R> {
             let released = self.released.take();
             if !released.is_empty() {
-                w.clear();
-                w.put(&released);
-                self.invoke(&mut store, mod_api::wire::RELEASE, &w, &mut output)?;
-                if !output.is_empty() {
-                    return Err(WireError::Trailing.into());
-                }
+                self.invoke(
+                    &mut store,
+                    mod_api::wire::RELEASE,
+                    |w| w.put(&released),
+                    |_| Ok(()),
+                )?;
             }
-            w.clear();
-            if let Some(handler) = handler {
-                w.put(&handler);
-            }
-            args(&mut w);
-            self.invoke(&mut store, id, &w, &mut output)?;
-            let mut r = Reader::new(&output);
-            let value = reply(&mut r)?;
-            if !r.rest().is_empty() {
-                return Err(WireError::Trailing.into());
-            }
-            Ok(value)
+            self.invoke(
+                &mut store,
+                id,
+                |w| {
+                    if let Some(handler) = handler {
+                        w.put(&handler);
+                    }
+                    args(w);
+                },
+                reply,
+            )
         })();
-        store.data_mut().inputs[depth] = w;
-        store.data_mut().outputs[depth] = output;
         let first_failure = result.is_err() && !self.running.poisoned.swap(true, Ordering::Relaxed);
         drop(panic_stop);
         drop(resources);
@@ -683,24 +672,61 @@ impl WasmMod {
             }
         }
     }
-    fn invoke(
+    fn invoke<R>(
         &self,
         store: &mut StoreContextMut<'_, State>,
         id: u32,
-        input: &Writer,
-        output: &mut Vec<u8>,
-    ) -> wasmtime::Result<()> {
-        if let Some(error) = input.error() {
-            return Err(error.into());
-        }
-        let len = u32::try_from(input.bytes().len())?;
-        let ptr = self.input.call(&mut *store, len)?;
+        encode: impl FnOnce(&mut Writer),
+        decode: impl FnOnce(&mut Reader<'_>) -> Result<R, WireError>,
+    ) -> wasmtime::Result<R> {
         let memory = store
             .data()
             .memory
             .ok_or_else(|| wasmtime::Error::msg("no memory"))?;
-        memory.write(&mut *store, ptr as usize, input.bytes())?;
-        let result = self.hook.call(&mut *store, id)?;
+        let mut capacity = 256u32;
+        let mut ptr = self.input.call(&mut *store, (0, capacity))?;
+        let mut failure = None;
+        let mut sink = |offset: usize, bytes: &[u8]| {
+            let result = (|| -> wasmtime::Result<()> {
+                let end = offset.checked_add(bytes.len()).ok_or(WireError::Length)?;
+                let required = u32::try_from(end)?;
+                if required > capacity {
+                    capacity = required.checked_next_power_of_two().unwrap_or(required);
+                    ptr = self
+                        .input
+                        .call(&mut *store, (u32::try_from(offset)?, capacity))?;
+                }
+                let start = (ptr as usize)
+                    .checked_add(offset)
+                    .ok_or(WireError::Length)?;
+                // Each write reacquires linear memory after possible guest memory growth.
+                memory.write(&mut *store, start, bytes)?;
+                Ok(())
+            })();
+            if let Err(error) = result {
+                failure = Some(error);
+                return Err(WireError::Invalid("guest arena write failed"));
+            }
+            Ok(())
+        };
+        let mut input = Writer::sink(&mut sink);
+        encode(&mut input);
+        let error = input.error();
+        let len = u32::try_from(input.len())?;
+        let streaming = input.is_streaming();
+        let fallback = input.into_bytes();
+        // A custom encoder may replace the writer entirely. Preserve its valid owned form.
+        if !streaming && error.is_none() {
+            let _ = sink(0, &fallback);
+        }
+        drop(sink);
+        if let Some(error) = failure {
+            return Err(error);
+        }
+        if let Some(error) = error {
+            return Err(error.into());
+        }
+        let result = self.hook.call(&mut *store, (id, len))?;
         let ptr = (result >> 32) as usize;
         let len = result as u32;
         if len == u32::MAX {
@@ -714,13 +740,15 @@ impl WasmMod {
         let end = ptr
             .checked_add(len as usize)
             .ok_or_else(|| wasmtime::Error::msg("reply overflow"))?;
-        output.clear();
-        output.extend_from_slice(
-            memory
-                .data(&*store)
-                .get(ptr..end)
-                .ok_or_else(|| wasmtime::Error::msg("reply outside memory"))?,
-        );
-        Ok(())
+        let bytes = memory
+            .data(&*store)
+            .get(ptr..end)
+            .ok_or_else(|| wasmtime::Error::msg("reply outside memory"))?;
+        let mut reader = Reader::new(bytes);
+        let value = decode(&mut reader)?;
+        if !reader.rest().is_empty() {
+            return Err(WireError::Trailing.into());
+        }
+        Ok(value)
     }
 }

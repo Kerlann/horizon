@@ -147,7 +147,7 @@ struct Runtime {
     /// The input the game is writing for the next call.
     pending: Vec<u8>,
     /// One reply per call depth: the game reads it once the call returns.
-    replies: Vec<Writer>,
+    replies: Vec<Writer<'static>>,
     keeps: Vec<Keep>,
     /// Buffers for arguments and answers, reused so a steady state allocates nothing.
     spare: Vec<Vec<u8>>,
@@ -376,7 +376,7 @@ pub fn reset_static_strings() {
 }
 
 /// A buffer to write a call's arguments into.
-pub fn begin() -> Writer {
+pub fn begin() -> Writer<'static> {
     let mut writer = Writer::new();
     if let Some(buffer) = RUNTIME.with(|rt| rt.borrow_mut().spare.pop()) {
         writer.replace(buffer);
@@ -717,6 +717,28 @@ fn release(ids: Vec<Id>) {
 mod tests {
     use super::*;
 
+    #[test]
+    fn arena_growth_preserves_only_initialized_prefix() {
+        // SAFETY: no prefix exists on the initial reservation.
+        let pointer = unsafe { reserve_input(0, 8) }.unwrap();
+        // SAFETY: the reservation guarantees at least eight writable bytes.
+        unsafe {
+            std::ptr::copy_nonoverlapping([1u8, 2, 3, 4].as_ptr(), pointer, 4);
+        }
+        let capacity = RUNTIME.with(|rt| rt.borrow().pending.capacity());
+        // SAFETY: the first four bytes were just initialized, and growth may move them.
+        let grown = unsafe { reserve_input(4, capacity + 1024) }.unwrap();
+        assert_eq!(
+            unsafe { std::slice::from_raw_parts(grown, 4) },
+            &[1, 2, 3, 4]
+        );
+        assert_eq!(RUNTIME.with(|rt| rt.borrow().pending.len()), 4);
+        let capacity = RUNTIME.with(|rt| rt.borrow().pending.capacity());
+        // Invalid bounds are rejected without touching the uninitialized tail.
+        assert!(unsafe { reserve_input(capacity + 1, capacity + 1) }.is_none());
+        assert!(unsafe { reserve_input(4, 3) }.is_none());
+    }
+
     trait Probe {
         fn answer(&self) -> u32;
     }
@@ -944,6 +966,26 @@ mod tests {
     }
 }
 
+// The host initialized exactly `written` bytes; only that prefix may move during growth.
+#[cfg(any(target_arch = "wasm32", test))]
+unsafe fn reserve_input(written: usize, required: usize) -> Option<*mut u8> {
+    RUNTIME.with(|rt| {
+        let mut rt = rt.borrow_mut();
+        if rt.pending.capacity() == 0 {
+            rt.pending = rt.spare.pop().unwrap_or_default();
+        }
+        if written > rt.pending.capacity() || required < written {
+            return None;
+        }
+        // SAFETY: the caller initialized this prefix before asking for growth.
+        unsafe {
+            rt.pending.set_len(written);
+        }
+        rt.pending.try_reserve(required - written).ok()?;
+        Some(rt.pending.as_mut_ptr())
+    })
+}
+
 #[cfg(target_arch = "wasm32")]
 mod entry {
     use super::*;
@@ -955,12 +997,27 @@ mod entry {
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn horizon_in(len: u32) -> *mut u8 {
-        input(len as usize)
+    pub extern "C" fn horizon_arena(written: u32, required: u32) -> u32 {
+        // SAFETY: the trusted host wrote this prefix before requesting growth.
+        unsafe { reserve_input(written as usize, required as usize) }.map_or(u32::MAX, |p| p as u32)
     }
 
     #[unsafe(no_mangle)]
-    pub extern "C" fn horizon_hook(id: u32) -> u64 {
+    pub extern "C" fn horizon_hook(id: u32, input_len: u32) -> u64 {
+        let valid = RUNTIME.with(|rt| {
+            let mut rt = rt.borrow_mut();
+            if input_len as usize > rt.pending.capacity() {
+                return false;
+            }
+            // SAFETY: the host completely wrote this prefix before dispatching the hook.
+            unsafe {
+                rt.pending.set_len(input_len as usize);
+            }
+            true
+        });
+        if !valid {
+            return u64::MAX;
+        }
         let (pointer, len) = run(id);
         (pointer as usize as u64) << 32 | u64::from(len)
     }

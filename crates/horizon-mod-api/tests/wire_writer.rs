@@ -44,6 +44,60 @@ fn byte_limits_refuse_before_allocating_and_reset_with_the_buffer() {
 }
 
 #[test]
+fn streaming_writer_preserves_bytes_offsets_and_limits() {
+    let mut received = Vec::new();
+    let mut sink = |offset: usize, bytes: &[u8]| {
+        received.truncate(offset);
+        received.extend_from_slice(bytes);
+        Ok(())
+    };
+    let mut stream = Writer::sink(&mut sink);
+    stream.put(&vec![1i32, -2]);
+    stream.put_str("hello");
+    assert_eq!(stream.len(), 21);
+    stream.limit(21);
+    stream.put(&3u8);
+    assert_eq!(stream.error(), Some(WireError::Length));
+    drop(stream);
+    drop(sink);
+    assert_eq!(
+        received,
+        [
+            2, 0, 0, 0, 1, 0, 0, 0, 254, 255, 255, 255, 5, 0, 0, 0, b'h', b'e', b'l', b'l', b'o'
+        ]
+    );
+    let mut sink = |offset: usize, bytes: &[u8]| {
+        received.truncate(offset);
+        received.extend_from_slice(bytes);
+        Ok(())
+    };
+    let mut stream = Writer::sink(&mut sink);
+    stream.put_str("discard");
+    stream.clear();
+    stream.put(&42u32);
+    drop(stream);
+    drop(sink);
+    assert_eq!(received, [42, 0, 0, 0]);
+}
+
+#[test]
+fn streaming_writer_stops_at_first_sink_failure() {
+    let mut calls = 0;
+    let mut sink = |_: usize, _: &[u8]| {
+        calls += 1;
+        Err(WireError::Eof)
+    };
+    let mut stream = Writer::sink(&mut sink);
+    stream.put_str("not written");
+    stream.put(&7u64);
+    assert_eq!(stream.error(), Some(WireError::Eof));
+    assert!(stream.is_empty());
+    drop(stream);
+    drop(sink);
+    assert_eq!(calls, 1);
+}
+
+#[test]
 fn an_encoding_refusal_does_not_consume_resource_registry_state() {
     struct Registry(RefCell<Vec<Box<dyn Any>>>);
     impl ResourceCodec for Registry {

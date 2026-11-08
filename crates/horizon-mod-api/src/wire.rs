@@ -115,19 +115,30 @@ impl std::error::Error for WireError {}
 
 /// A buffer values are written to. Reuse one to keep the allocation.
 #[derive(Default)]
-pub struct Writer {
+pub struct Writer<'a> {
     bytes: Vec<u8>,
+    sink: Option<&'a mut dyn FnMut(usize, &[u8]) -> Result<(), WireError>>,
+    written: usize,
     error: Option<WireError>,
     limit: Option<usize>,
 }
 
-impl Writer {
+impl<'a> Writer<'a> {
+    /// Internal transport writer. The sink owns bounds checks and reacquires memory after growth.
+    #[doc(hidden)]
+    pub fn sink(sink: &'a mut dyn FnMut(usize, &[u8]) -> Result<(), WireError>) -> Self {
+        Self {
+            sink: Some(sink),
+            ..Self::default()
+        }
+    }
     pub fn new() -> Self {
         Self::default()
     }
     /// Empties it, keeping its allocation and resetting any per-call error and byte limit.
     pub fn clear(&mut self) {
         self.bytes.clear();
+        self.written = 0;
         self.error = None;
         self.limit = None;
     }
@@ -135,6 +146,7 @@ impl Writer {
     pub fn replace(&mut self, mut buffer: Vec<u8>) {
         buffer.clear();
         self.bytes = buffer;
+        self.written = 0;
         self.error = None;
         self.limit = None;
     }
@@ -144,6 +156,17 @@ impl Writer {
     }
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
+    }
+    #[doc(hidden)]
+    pub fn is_streaming(&self) -> bool {
+        self.sink.is_some()
+    }
+    /// Bytes written, including bytes streamed to an external transport.
+    pub fn len(&self) -> usize {
+        self.written
+    }
+    pub fn is_empty(&self) -> bool {
+        self.written == 0
     }
     /// Bound this call's encoded bytes. A refusal is recorded before any growth or copy.
     /// A new writer has no limit; `clear` and `replace` remove it.
@@ -155,7 +178,7 @@ impl Writer {
         if self.error.is_some() {
             return false;
         }
-        let fits = self.bytes.len().checked_add(bytes).is_some_and(|total| {
+        let fits = self.written.checked_add(bytes).is_some_and(|total| {
             total <= self.limit.unwrap_or(isize::MAX as usize) && total <= isize::MAX as usize
         });
         if !fits {
@@ -165,7 +188,15 @@ impl Writer {
     }
     pub fn put_bytes(&mut self, bytes: &[u8]) {
         if self.can_fit(bytes.len()) {
-            self.bytes.extend_from_slice(bytes);
+            if let Some(sink) = &mut self.sink {
+                if let Err(error) = sink(self.written, bytes) {
+                    self.fail(error);
+                    return;
+                }
+            } else {
+                self.bytes.extend_from_slice(bytes);
+            }
+            self.written += bytes.len();
         }
     }
     /// A string: its length, then its bytes.
@@ -190,10 +221,8 @@ impl Writer {
             return;
         }
         self.put_len(items.len());
-        let start = self.bytes.len();
-        self.bytes.resize(start + items.len() * 2, 0);
-        for (to, item) in self.bytes[start..].chunks_exact_mut(2).zip(items) {
-            to.copy_from_slice(&item.to_le_bytes());
+        for item in items {
+            self.put_bytes(&item.to_le_bytes());
         }
     }
     /// A length or count.
