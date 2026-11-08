@@ -2105,6 +2105,8 @@ mod selector_restore_tests {
     #[test]
     #[ignore = "needs prepared resources"]
     fn server_ai_step_restores_live_selectors_after_goal_unwind() {
+        use crate::mobs::world::with_resource_test_world;
+        use std::panic::{AssertUnwindSafe, catch_unwind};
         use std::sync::{Mutex, atomic::AtomicBool};
         #[derive(Debug)]
         struct Probe {
@@ -2136,81 +2138,92 @@ mod selector_restore_tests {
                 }
             }
         }
+        let root = std::path::PathBuf::from(
+            std::env::var_os("HORIZON_TEST_RESOURCES").expect("set HORIZON_TEST_RESOURCES"),
+        );
         assert!(
-            crate::mobs::world::with_test_world(&[], |world, _| {
-                for panic_at in [None, Some(0), Some(1)] {
-                    // Full selector tick and the alternate running-only production path.
-                    for age in [0, 2] {
-                        let mut mob =
-                            Mob::new(1, crate::mobs::sensor_scan_tests::kind(), Vec3::ZERO, 0.0);
-                        mob.age = 0;
-                        mob.ai.targets.clear();
-                        mob.ai.goals.clear();
-                        let calls = [
-                            Arc::new(Mutex::new(Vec::new())),
-                            Arc::new(Mutex::new(Vec::new())),
-                        ];
-                        let panics = [
-                            Arc::new(AtomicBool::new(false)),
-                            Arc::new(AtomicBool::new(false)),
-                        ];
-                        let mut identities = [0; 2];
-                        for (i, selector) in [&mut mob.ai.targets, &mut mob.ai.goals]
-                            .into_iter()
-                            .enumerate()
-                        {
-                            let goal = Box::new(Probe {
-                                calls: calls[i].clone(),
-                                panic: panics[i].clone(),
-                                ticks: 0,
-                            });
-                            identities[i] = &*goal as *const Probe as usize;
-                            selector.add_boxed(1, goal);
-                        }
-                        let mut level = crate::health::TestLevel::new(0);
-                        let mut events = Vec::new();
-                        // Start both live goals before testing either production branch.
-                        server_ai_step(&mut mob, world, &mut level.level(), &mut events);
-                        mob.age = age;
-                        if let Some(i) = panic_at {
-                            panics[i].store(true, Ordering::SeqCst);
-                        }
-                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_resource_test_world(
+                &root,
+                &[],
+                true,
+                true,
+                |_, _| {},
+                |world, _| {
+                    for panic_at in [None, Some(0), Some(1)] {
+                        // Full selector tick and the alternate running-only production path.
+                        for age in [0, 2] {
+                            let kind = crate::mobs::sensor_scan_tests::kind();
+                            let mut mob = Mob::new(1, kind, Vec3::ZERO, 0.0);
+                            mob.age = 0;
+                            mob.ai.targets.clear();
+                            mob.ai.goals.clear();
+                            let calls = [
+                                Arc::new(Mutex::new(Vec::new())),
+                                Arc::new(Mutex::new(Vec::new())),
+                            ];
+                            let panics = [
+                                Arc::new(AtomicBool::new(false)),
+                                Arc::new(AtomicBool::new(false)),
+                            ];
+                            let mut identities = [0; 2];
+                            for (i, selector) in [&mut mob.ai.targets, &mut mob.ai.goals]
+                                .into_iter()
+                                .enumerate()
+                            {
+                                let goal = Box::new(Probe {
+                                    calls: calls[i].clone(),
+                                    panic: panics[i].clone(),
+                                    ticks: 0,
+                                });
+                                identities[i] = &*goal as *const Probe as usize;
+                                selector.add_boxed(1, goal);
+                            }
+                            let mut level = crate::health::TestLevel::new(0);
+                            let mut events = Vec::new();
+                            // Start both live goals before testing either production branch.
                             server_ai_step(&mut mob, world, &mut level.level(), &mut events);
-                        }));
-                        if panic_at.is_some() {
-                            assert_eq!(*result.unwrap_err().downcast::<u32>().unwrap(), 73);
-                        } else {
-                            assert!(result.is_ok());
-                        }
-                        assert_eq!(
-                            mob.ai.targets.entries().count(),
-                            1,
-                            "actual target selector lost"
-                        );
-                        assert_eq!(
-                            mob.ai.goals.entries().count(),
-                            1,
-                            "actual action selector lost"
-                        );
-                        for panic in &panics {
-                            panic.store(false, Ordering::SeqCst);
-                        }
-                        server_ai_step(&mut mob, world, &mut level.level(), &mut events);
-                        for i in 0..2 {
-                            let expected_ticks = if panic_at == Some(0) && i == 1 { 2 } else { 3 };
-                            let expected: Vec<_> = (1..=expected_ticks)
-                                .map(|tick| (identities[i], tick))
-                                .collect();
+                            mob.age = age;
+                            if let Some(i) = panic_at {
+                                panics[i].store(true, Ordering::SeqCst);
+                            }
+                            let result = catch_unwind(AssertUnwindSafe(|| {
+                                server_ai_step(&mut mob, world, &mut level.level(), &mut events);
+                            }));
+                            if panic_at.is_some() {
+                                assert_eq!(*result.unwrap_err().downcast::<u32>().unwrap(), 73);
+                            } else {
+                                assert!(result.is_ok());
+                            }
                             assert_eq!(
-                                *calls[i].lock().unwrap(),
-                                expected,
-                                "live goal identity/progress {i}"
+                                mob.ai.targets.entries().count(),
+                                1,
+                                "actual target selector lost"
                             );
+                            assert_eq!(
+                                mob.ai.goals.entries().count(),
+                                1,
+                                "actual action selector lost"
+                            );
+                            for panic in &panics {
+                                panic.store(false, Ordering::SeqCst);
+                            }
+                            server_ai_step(&mut mob, world, &mut level.level(), &mut events);
+                            for i in 0..2 {
+                                let expected_ticks =
+                                    if panic_at == Some(0) && i == 1 { 2 } else { 3 };
+                                let expected: Vec<_> = (1..=expected_ticks)
+                                    .map(|tick| (identities[i], tick))
+                                    .collect();
+                                assert_eq!(
+                                    *calls[i].lock().unwrap(),
+                                    expected,
+                                    "live goal identity/progress {i}"
+                                );
+                            }
                         }
                     }
                 }
-            }),
+            ),
             "production-site proof requires prepared resources"
         );
     }
