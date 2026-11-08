@@ -7,7 +7,7 @@ use std::{
     hash::{BuildHasherDefault, Hasher},
 };
 
-const FORCE_MISS: bool = false;
+const FORCE_MISS: bool = true;
 const MAX_BYTES: usize = 4096;
 const MAX_ENTRIES: usize = 4096;
 #[derive(Default)]
