@@ -44,6 +44,10 @@ pub struct Window {
     depth: u16,
 }
 impl Window {
+    /// Make an owned-output builder using this already-validated window's resource limits.
+    pub fn builder(self) -> Builder {
+        Builder::limited(self)
+    }
     /// Source-local node; the source schema owns checking that it exists.
     pub fn node(self) -> u32 {
         self.node
@@ -141,7 +145,7 @@ impl RowPages for PageSource {
         if request.rows() == 0 {
             return Ok(Vec::new());
         }
-        let mut rows = Builder::limited(request);
+        let mut rows = request.builder();
         // SAFETY: the marker is live on this thread; new attests the root's stable address,
         // no overlapping mutable access, and the shim's exact reader/root pairing.
         unsafe {

@@ -605,6 +605,10 @@ mod dispatch;
 mod host_param;
 mod index;
 pub mod native_value;
+/// Canonical identities for native row layouts.
+pub mod native_schema;
+/// Generated lazy native row projections.
+pub mod native_window;
 mod wire;
 pub use wire::generate as generate_wire;
 pub use wire::generate_host as generate_wire_host;

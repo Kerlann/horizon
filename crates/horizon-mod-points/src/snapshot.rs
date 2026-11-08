@@ -1,6 +1,6 @@
 //! Owned, flattened rows of one raw hook call. No row contains an engine address.
 use mod_api::wire::{Put, Reader, Wire, WireError, Writer};
-use std::{cell::RefCell, ops::Deref};
+use std::{cell::RefCell, collections::HashMap, ops::Deref};
 
 #[path = "snapshot_pages.rs"]
 mod pages;
@@ -41,18 +41,19 @@ impl<'a> Snapshot<'a> {
     /// Decode a plain value from a row; a mismatched wire shape is refused.
     pub fn read<T: Wire>(&self, node: u32) -> Result<T, WireError> {
         let row = self
-            .0
-            .get(node as usize)
-            .filter(|row| row.0 == node)
+            .row(node)
             .ok_or(WireError::Invalid("unknown snapshot node"))?;
         Reader::decode(&row.4)
     }
     /// The generated type key, resolved by the per-mod view rather than sent as text per call.
     pub fn ty(&self, node: u32) -> Option<u64> {
+        self.row(node).map(|row| row.3)
+    }
+    fn row(&self, node: u32) -> Option<&Row> {
         self.0
             .get(node as usize)
             .filter(|row| row.0 == node)
-            .map(|row| row.3)
+            .or_else(|| self.0.iter().find(|row| row.0 == node))
     }
 }
 
@@ -85,7 +86,8 @@ pub struct Built {
     pooled: bool,
 }
 impl Built {
-    fn into_rows(mut self) -> Rows {
+    /// Take the owned rows out of this completed snapshot.
+    pub fn into_rows(mut self) -> Rows {
         self.pooled = false;
         self.rows.truncate(self.used);
         std::mem::take(&mut self.rows)
@@ -123,6 +125,7 @@ pub struct Builder {
     max_rows: usize,
     max_depth: u16,
     pooled: bool,
+    external: Option<HashMap<u32, usize>>,
 }
 impl Default for Builder {
     fn default() -> Self {
@@ -137,6 +140,7 @@ impl Default for Builder {
             max_rows: 65_536,
             max_depth: mod_api::wire::MAX_DEPTH,
             pooled: true,
+            external: None,
         }
     }
 }
@@ -162,21 +166,37 @@ impl Builder {
             max_rows: window.rows(),
             max_depth: window.depth(),
             pooled: false,
+            external: None,
         }
     }
     /// Add an owned node. Node ids are assigned in row order, with checked parent depth.
     pub fn node(&mut self, parent: Option<u32>, field: u32, ty: u64) -> Result<u32, WireError> {
-        if self.used >= self.max_rows {
-            return Err(WireError::Length);
+        if self.external.is_some() {
+            return Err(WireError::Invalid("mixed snapshot id modes"));
         }
         let id = self.used as u32;
         if parent.is_some_and(|parent| parent >= id) {
             return Err(WireError::Invalid("snapshot parent is not an earlier node"));
         }
         let depth = parent.map_or(0, |parent| self.depths[parent as usize] + 1);
+        self.push(id, parent, field, ty, depth)?;
+        Ok(id)
+    }
+    fn push(
+        &mut self,
+        id: u32,
+        parent: Option<u32>,
+        field: u32,
+        ty: u64,
+        depth: u16,
+    ) -> Result<usize, WireError> {
+        if self.used >= self.max_rows {
+            return Err(WireError::Length);
+        }
         if depth > self.max_depth {
             return Err(WireError::Depth);
         }
+        let slot = self.used;
         if self.used == self.rows.len() {
             self.rows.push((id, parent, field, ty, Vec::new()));
             self.depths.push(depth);
@@ -189,6 +209,40 @@ impl Builder {
         row.4.clear();
         self.depths[self.used] = depth;
         self.used += 1;
+        Ok(slot)
+    }
+    /// Append a source-local sparse id to a window. Depth is relative to this window's root;
+    /// its parent may lie outside the window only at depth zero. Later parents must precede
+    /// children. External and ordinal id modes cannot be mixed in one builder.
+    pub fn external(
+        &mut self,
+        id: u32,
+        parent: Option<u32>,
+        field: u32,
+        ty: u64,
+        depth: u16,
+        value: Option<&dyn Put>,
+    ) -> Result<u32, WireError> {
+        if self.external.is_none() {
+            if self.used != 0 {
+                return Err(WireError::Invalid("mixed snapshot id modes"));
+            }
+            self.external = Some(HashMap::new());
+        }
+        let indices = self.external.as_ref().unwrap();
+        if indices.contains_key(&id) || parent == Some(id) {
+            return Err(WireError::Invalid("duplicate or cyclic snapshot id"));
+        }
+        match parent.and_then(|parent| indices.get(&parent)) {
+            Some(slot) if self.depths[*slot] + 1 == depth => {}
+            None if depth == 0 => {}
+            _ => return Err(WireError::Invalid("snapshot parent depth is inconsistent")),
+        }
+        let slot = self.push(id, parent, field, ty, depth)?;
+        if let Some(value) = value {
+            self.encode_value(slot, value)?;
+        }
+        self.external.as_mut().unwrap().insert(id, slot);
         Ok(id)
     }
     /// A plain value row, encoded through the same Wire implementation as an API hook value.
@@ -200,19 +254,23 @@ impl Builder {
         value: &T,
     ) -> Result<u32, WireError> {
         let id = self.node(parent, field, ty)?;
+        self.encode_value(self.used - 1, value)?;
+        Ok(id)
+    }
+    fn encode_value(&mut self, slot: usize, value: &dyn Put) -> Result<(), WireError> {
         let mut encoded = Writer::new();
-        encoded.replace(std::mem::take(&mut self.rows[id as usize].4));
+        encoded.replace(std::mem::take(&mut self.rows[slot].4));
         encoded.limit(1_048_576 - self.bytes);
         encoded.put(value);
         let error = encoded.error();
         let len = encoded.bytes().len();
-        self.rows[id as usize].4 = encoded.into_bytes();
+        self.rows[slot].4 = encoded.into_bytes();
         if let Some(error) = error {
             self.used -= 1;
             return Err(error);
         }
         self.bytes += len;
-        Ok(id)
+        Ok(())
     }
     /// Complete snapshot, moved into the hook call's input and recycled after its return.
     pub fn finish(mut self) -> Built {

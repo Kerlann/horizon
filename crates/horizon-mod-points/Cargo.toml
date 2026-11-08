@@ -17,6 +17,8 @@ horizon-mod-api = { path = "../horizon-mod-api" }
 
 [build-dependencies]
 horizon-mod-api-gen = { path = "../horizon-mod-api-gen" }
+syn = "2"
+quote = "1"
 
 [dev-dependencies]
 horizon-mod-api = { path = "../horizon-mod-api", features = ["testing"] }

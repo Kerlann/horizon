@@ -163,8 +163,7 @@ pub(super) fn detect(
     for field in &fields.named {
         let name = field.ident.as_ref().unwrap().to_string();
         described.push(Field {
-            rust: name.clone(),
-            wit: name,
+            rust: name,
             ty: types.ty(id.module, &field.ty, &[])?,
         });
     }
@@ -178,7 +177,7 @@ pub(super) fn detect(
 // Compare transport identity, including NaN payloads, without serializing or allocating.
 pub(super) fn equal(types: &Types<'_>, ty: &Ty, a: &str, b: &str) -> Option<String> {
     Some(match ty {
-        Ty::Prim("f32" | "f64", _) => format!("({a}).to_bits()==({b}).to_bits()"),
+        Ty::Prim("f32" | "f64") => format!("({a}).to_bits()==({b}).to_bits()"),
         Ty::Unit | Ty::Prim(..) | Ty::Wide(..) | Ty::Str(..) | Ty::Duration => {
             format!("({a})==({b})")
         }
