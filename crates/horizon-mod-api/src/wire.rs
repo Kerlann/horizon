@@ -913,12 +913,11 @@ mod tests {
             let mut entity = crate::ModBlockEntity::new(String::new(), Default::default());
             entity.nbt.insert(
                 horizon_core::nbt::JavaString(vec![0xd800, 0x0061, 0xdc00]),
-                crate::Tag::Double(f64::from_bits(bits)),
+                crate::Tag::Double(bits),
             );
-            entity.nbt.insert(
-                "float".into(),
-                crate::Tag::Float(f32::from_bits((bits >> 32) as u32)),
-            );
+            entity
+                .nbt
+                .insert("float".into(), crate::Tag::Float((bits >> 32) as u32));
             entity.items = vec![None, None];
             entity.data = vec![i32::MIN, i32::MAX];
             let mut original = Writer::new();
