@@ -735,7 +735,7 @@ fn borrowed(
     if let Some(view) = &d.view {
         let pointee = rust_ty(types, &view.pointee, false);
         let read = format!(
-            "let mut {name}_held: {pointee} = input.take()?; let mut {name} = {}::new(&{}{name}_held);",
+            "let mut {name}_held = crate::wire::guest::decode::<{pointee}>(input)?; let mut {name} = {}::new(&{}*{name}_held);",
             d.rust,
             if view.mutable { "mut " } else { "" }
         );
@@ -801,7 +801,19 @@ fn borrowed(
         } else {
             ""
         };
-        writeln!(read, "let {m}{local}: {} = input.take()?;", lent.owned).unwrap();
+        if matches!(
+            f.ty,
+            Ty::Ref(..) | Ty::Str(Str::Borrowed) | Ty::List(_, List::Slice)
+        ) {
+            writeln!(
+                read,
+                "let {m}{local} = crate::wire::guest::decode::<{}>(input)?;",
+                lent.owned
+            )
+            .unwrap();
+        } else {
+            writeln!(read, "let {m}{local}: {} = input.take()?;", lent.owned).unwrap();
+        }
         build.push(format!("{}: {}", f.rust, lent.expr));
     }
     for leaf in writeback_fields(types, def, name, mutable)? {
@@ -931,21 +943,21 @@ pub(super) fn dispatch(types: &Types<'_>, methods: &[Method]) -> (String, Vec<St
                 Ty::Ref(_, true) => {
                     writeln!(
                         body,
-                        "let mut p{i}: {} = input.take()?;",
+                        "let mut p{i} = crate::wire::guest::decode::<{}>(input)?;",
                         held(types, ty).unwrap()
                     )
                     .unwrap();
-                    args.push(format!("&mut p{i}"));
-                    write!(back, "out.put(&p{i});").unwrap();
+                    args.push(format!("&mut *p{i}"));
+                    write!(back, "out.put(&*p{i});").unwrap();
                 }
                 Ty::Ref(..) | Ty::Str(Str::Borrowed) | Ty::List(_, List::Slice) => {
                     writeln!(
                         body,
-                        "let p{i}: {} = input.take()?;",
+                        "let p{i} = crate::wire::guest::decode::<{}>(input)?;",
                         held(types, ty).unwrap()
                     )
                     .unwrap();
-                    args.push(format!("&p{i}"));
+                    args.push(format!("&*p{i}"));
                 }
                 _ => {
                     writeln!(
