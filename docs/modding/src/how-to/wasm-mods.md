@@ -155,7 +155,8 @@ Each guest exports:
 - `horizon_arena(written, required) -> ptr`: reserves input storage without zero-filling it.
   The host initializes the first `written` bytes before requesting growth; growth preserves
   that prefix. `u32::MAX` refuses the reservation. The host reacquires and bounds-checks guest
-  memory after each reservation and encodes directly into it, without a staging buffer.
+  memory after each reservation. Compatible codecs encode directly; opaque Writer-based
+  codecs use a pooled buffered fallback to preserve their existing buffer operations.
 - `horizon_hook(id, input_len) -> u64`: runs the generated export ID after the host has fully
   initialized `input_len` bytes. The host decodes the reply in place before another guest call. The high
   32 bits are the reply pointer and the low 32 bits its length; `u32::MAX` as the length denotes

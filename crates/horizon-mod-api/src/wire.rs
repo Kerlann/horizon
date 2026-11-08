@@ -17,6 +17,7 @@ use std::sync::Arc;
 pub use crate::wire_slots::{Id, Slots, Stale};
 #[path = "wire_arena.rs"]
 mod arena;
+// hidden: internal request encoder; Writer's buffered contract remains unchanged
 #[doc(hidden)]
 pub use arena::{ArenaOp, ArenaWriter};
 #[path = "wire_resources.rs"]
@@ -418,6 +419,7 @@ impl<T> Append<T> {
 pub trait Put {
     /// Writes it.
     fn put_to(&self, out: &mut Writer);
+    // hidden: generated request encoding uses this transport-only path
     #[doc(hidden)]
     fn put_arena(&self, out: &mut ArenaWriter<'_>) {
         out.buffered(|w| self.put_to(w));
@@ -579,10 +581,12 @@ impl<'a> Reader<'a> {
 
 /// A type with a wire form.
 pub trait Wire: Sized {
+    // hidden: internal direct encoding with buffered fallback for opaque codecs
     #[doc(hidden)]
     fn put_arena(&self, out: &mut ArenaWriter<'_>) {
         out.buffered(|w| self.put(w));
     }
+    // hidden: internal direct encoding preserves resource ownership transfer
     #[doc(hidden)]
     fn put_owned_arena(self, out: &mut ArenaWriter<'_>) {
         out.buffered(|w| self.put_owned(w));

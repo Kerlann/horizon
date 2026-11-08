@@ -1,14 +1,13 @@
-//! Internal direct encoder. Unlike `Writer`, this never promises access to buffered bytes.
 use super::{Put, Wire, WireError, Writer};
 use std::cell::RefCell;
 thread_local! { static BUFFERS: RefCell<Vec<Vec<u8>>> = const { RefCell::new(Vec::new()) }; }
 
-#[doc(hidden)]
+// exhaustive: internal sink operations, consumed together by the transport
 pub enum ArenaOp<'a> {
     Write(usize, &'a [u8]),
     Read(usize, &'a mut Writer),
 }
-#[doc(hidden)]
+// exhaustive: internal encoder state with private fields, constructed only by new
 pub struct ArenaWriter<'a> {
     sink: &'a mut dyn FnMut(ArenaOp<'_>) -> Result<(), WireError>,
     len: usize,
