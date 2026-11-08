@@ -880,111 +880,124 @@ fn client_completion_reads_published_resources_without_world_access() {
 }
 
 #[test]
-#[ignore = "needs prepared resources and RUST_MIN_STACK=33554432"]
+#[ignore = "needs prepared resources"]
 fn client_startup_finishes_configs_before_the_first_runtime_callback() {
-    use crate::game::{
-        Audio, UiResources, native_entity_refs::tests::with_client_game, start_game,
-    };
-    use mod_api::__private::{ModPhase, PhaseOwner};
-    use mod_api::{
-        ClientHost, ClientSetupEvent, ClientTickPreEvent, ConfigLoadingEvent, Hooks, HostSide,
-        ModEntry, NativeConfig, NativeConfigKind, RegisterConfigsEvent, ScreenOpening,
-        ScreenOpeningEvent,
-    };
-    use std::{sync::Mutex, time::Instant};
+    // Startup holds two Game values, which exceed libtest's default thread stack.
+    std::thread::Builder::new()
+        .name("client-startup-fixture".into())
+        .stack_size(32 * 1024 * 1024)
+        .spawn(|| {
+            use crate::game::{
+                Audio, UiResources, native_entity_refs::tests::with_client_game, start_game,
+            };
+            use mod_api::__private::{ModPhase, PhaseOwner};
+            use mod_api::{
+                ClientHost, ClientSetupEvent, ClientTickPreEvent, ConfigLoadingEvent, Hooks,
+                HostSide, ModEntry, NativeConfig, NativeConfigKind, RegisterConfigsEvent,
+                ScreenOpening, ScreenOpeningEvent,
+            };
+            use std::{sync::Mutex, time::Instant};
 
-    struct Probe(Arc<Mutex<Vec<String>>>);
-    #[mod_api::__subscriptions]
-    impl Hooks for Probe {
-        fn register_configs(&self, _: HostSide<'_>, event: &mut RegisterConfigsEvent<'_>) {
-            event.configs.push(NativeConfig::new(
-                "startup_phase",
-                NativeConfigKind::Client,
-                "enabled = true\n",
-            ));
-            event.configs.push(NativeConfig::new(
-                "startup_phase",
-                NativeConfigKind::Common,
-                "enabled = true\n",
-            ));
-        }
-        fn client_setup(&self, _: &mut dyn ClientHost, _: &mut ClientSetupEvent) {
-            assert_eq!(mod_api::__private::current_phase(), ModPhase::Setup);
-            self.0.lock().unwrap().push("setup".into());
-        }
-        fn config_loading(&self, _: HostSide<'_>, event: &mut ConfigLoadingEvent<'_>) {
-            assert_eq!(mod_api::__private::current_phase(), ModPhase::Config);
-            self.0
-                .lock()
-                .unwrap()
-                .push(format!("{:?}", event.config.kind));
-        }
-        fn screen_opening(
-            &self,
-            host: &dyn ClientHost,
-            _: &mut ScreenOpeningEvent<'_>,
-        ) -> Option<ScreenOpening> {
-            assert!(host.level("minecraft:overworld").is_none());
-            assert_eq!(mod_api::__private::current_phase(), ModPhase::World);
-            self.0.lock().unwrap().push("screen".into());
-            None
-        }
-        fn client_tick_pre(&self, host: &mut dyn ClientHost, _: &mut ClientTickPreEvent) {
-            assert!(host.level("minecraft:overworld").is_none());
-            assert!(host.entity(1).is_none());
-            assert_eq!(mod_api::__private::current_phase(), ModPhase::World);
-            self.0.lock().unwrap().push("tick".into());
-        }
-    }
-    let seen = Arc::new(Mutex::new(Vec::new()));
-    let mods = vec![ModEntry::new(
-        "startup_phase",
-        Box::new(Probe(seen.clone())),
-    )]
-    .into();
-    mod_api::testing::with_mods(mods, || {
-        for pack_error in [None, Some("selected resource pack failed")] {
-            seen.lock().unwrap().clear();
-            with_client_game(|game| {
-                let resources = game.res.clone();
-                let options = game.options.clone();
-                let root = options.resources.clone();
-                let gui = UiResources::server(
-                    &horizon_assets::resource_source::ResourceSource::directory(root.clone()),
-                )
-                .unwrap();
-                let _setup = PhaseOwner::scope(ModPhase::Setup);
-                let mut started = start_game(
-                    &resources,
-                    game.pack.clone(),
-                    gui,
-                    options,
-                    pack_error.map(str::to_owned),
-                    Audio::silent(&horizon_assets::resource_source::ResourceSource::directory(
-                        root.clone(),
-                    )),
-                    root,
-                    Instant::now(),
-                    None,
-                    Some(game.settings.clone()),
-                    None,
-                    Vec::new(),
-                    None,
-                )
-                .unwrap()
-                .unwrap();
-                // The event loop dispatches this before any per-tick work,
-                // even on the title screen, without a world or renderer.
-                started.native_client_tick_pre();
-                assert_eq!(started.ui.options.resource_error.as_deref(), pack_error);
-                let mut expected = vec!["setup", "Client", "Common", "screen"];
-                if pack_error.is_some() {
-                    assert!(started.ui.options.resource_packs_open());
-                    expected.push("screen");
+            struct Probe(Arc<Mutex<Vec<String>>>);
+            #[mod_api::__subscriptions]
+            impl Hooks for Probe {
+                fn register_configs(&self, _: HostSide<'_>, event: &mut RegisterConfigsEvent<'_>) {
+                    event.configs.push(NativeConfig::new(
+                        "startup_phase",
+                        NativeConfigKind::Client,
+                        "enabled = true\n",
+                    ));
+                    event.configs.push(NativeConfig::new(
+                        "startup_phase",
+                        NativeConfigKind::Common,
+                        "enabled = true\n",
+                    ));
                 }
-                expected.push("tick");
-                assert_eq!(*seen.lock().unwrap(), expected);
-            })
-        }
-    });
+                fn client_setup(&self, _: &mut dyn ClientHost, _: &mut ClientSetupEvent) {
+                    assert_eq!(mod_api::__private::current_phase(), ModPhase::Setup);
+                    self.0.lock().unwrap().push("setup".into());
+                }
+                fn config_loading(&self, _: HostSide<'_>, event: &mut ConfigLoadingEvent<'_>) {
+                    assert_eq!(mod_api::__private::current_phase(), ModPhase::Config);
+                    self.0
+                        .lock()
+                        .unwrap()
+                        .push(format!("{:?}", event.config.kind));
+                }
+                fn screen_opening(
+                    &self,
+                    host: &dyn ClientHost,
+                    _: &mut ScreenOpeningEvent<'_>,
+                ) -> Option<ScreenOpening> {
+                    assert!(host.level("minecraft:overworld").is_none());
+                    assert_eq!(mod_api::__private::current_phase(), ModPhase::World);
+                    self.0.lock().unwrap().push("screen".into());
+                    None
+                }
+                fn client_tick_pre(&self, host: &mut dyn ClientHost, _: &mut ClientTickPreEvent) {
+                    assert!(host.level("minecraft:overworld").is_none());
+                    assert!(host.entity(1).is_none());
+                    assert_eq!(mod_api::__private::current_phase(), ModPhase::World);
+                    self.0.lock().unwrap().push("tick".into());
+                }
+            }
+            let seen = Arc::new(Mutex::new(Vec::new()));
+            let mods = vec![ModEntry::new(
+                "startup_phase",
+                Box::new(Probe(seen.clone())),
+            )]
+            .into();
+            mod_api::testing::with_mods(mods, || {
+                for pack_error in [None, Some("selected resource pack failed")] {
+                    seen.lock().unwrap().clear();
+                    with_client_game(|game| {
+                        let resources = game.res.clone();
+                        let options = game.options.clone();
+                        let root = options.resources.clone();
+                        let gui = UiResources::server(
+                            &horizon_assets::resource_source::ResourceSource::directory(
+                                root.clone(),
+                            ),
+                        )
+                        .unwrap();
+                        let _setup = PhaseOwner::scope(ModPhase::Setup);
+                        let mut started = start_game(
+                            &resources,
+                            game.pack.clone(),
+                            gui,
+                            options,
+                            pack_error.map(str::to_owned),
+                            Audio::silent(
+                                &horizon_assets::resource_source::ResourceSource::directory(
+                                    root.clone(),
+                                ),
+                            ),
+                            root,
+                            Instant::now(),
+                            None,
+                            Some(game.settings.clone()),
+                            None,
+                            Vec::new(),
+                            None,
+                        )
+                        .unwrap()
+                        .unwrap();
+                        // The event loop dispatches this before any per-tick work,
+                        // even on the title screen, without a world or renderer.
+                        started.native_client_tick_pre();
+                        assert_eq!(started.ui.options.resource_error.as_deref(), pack_error);
+                        let mut expected = vec!["setup", "Client", "Common", "screen"];
+                        if pack_error.is_some() {
+                            assert!(started.ui.options.resource_packs_open());
+                            expected.push("screen");
+                        }
+                        expected.push("tick");
+                        assert_eq!(*seen.lock().unwrap(), expected);
+                    })
+                }
+            });
+        })
+        .unwrap()
+        .join()
+        .unwrap_or_else(|panic| std::panic::resume_unwind(panic));
 }
