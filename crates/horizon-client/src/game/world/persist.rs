@@ -4134,6 +4134,10 @@ mod baby_modifier_mutation_tests {
     /// amount, and the transient one the model reports.
     fn state(game: &Game<'_>, n: i32) -> (f64, Option<f64>, Option<f64>) {
         let m = &game.mobs[zombie(game, n)];
+        assert!(
+            close(m.movement_speed(), finalize::value(m, Attr::MovementSpeed)),
+            "gameplay speed must follow the effective movement attribute"
+        );
         (
             finalize::value(m, Attr::MovementSpeed),
             finalize::modifier_amount(m, Attr::MovementSpeed, "minecraft:baby"),

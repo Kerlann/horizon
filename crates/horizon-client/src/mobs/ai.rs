@@ -2612,21 +2612,10 @@ fn never_removed_when_far(s: Species) -> bool {
             | Species::Wither
     )
 }
-/// Movement speed bonus multiplier (baby zombies are 50% faster, etc.).
+/// Movement speed bonus from the modeled baby modifier, unless it was removed.
 pub fn speed_bonus(m: &Mob) -> f64 {
-    match m.species() {
-        Species::Zombie
-        | Species::Husk
-        | Species::Drowned
-        | Species::ZombieVillager
-        | Species::ZombifiedPiglin
-        | Species::Piglin
-            if m.is_baby() =>
-        {
-            1.5
-        }
-        _ => 1.0,
-    }
+    super::finalize::transient(m, super::finalize::Attr::MovementSpeed)
+        .map_or(1.0, |(amount, _)| 1.0 + amount)
 }
 /// The ambient, hurt and death sounds of species that pick them by state
 /// (`getHurtSound` / `getDeathSound` overrides); the type's otherwise.
