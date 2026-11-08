@@ -902,14 +902,23 @@ mod tests {
     #[test]
     fn entity_wire_roundtrip_preserves_float_bits_and_java_keys() {
         use super::{Reader, Writer};
-        for bits in [
+        for (bits, float_bits) in [
             0u64,
             0x8000_0000_0000_0000,
             0x7ff8_0000_0000_1234,
             0x7ff0_0000_0000_1234,
             0x7ff0_0000_0000_0000,
             0xfff0_0000_0000_0000,
-        ] {
+        ]
+        .into_iter()
+        .zip([
+            0u32,
+            0x8000_0000,
+            0x7fc0_1234,
+            0x7f80_1234,
+            0x7f80_0000,
+            0xff80_0000,
+        ]) {
             let mut entity = crate::ModBlockEntity::new(String::new(), Default::default());
             entity.nbt.insert(
                 horizon_core::nbt::JavaString(vec![0xd800, 0x0061, 0xdc00]),
@@ -917,7 +926,7 @@ mod tests {
             );
             entity
                 .nbt
-                .insert("float".into(), crate::Tag::Float((bits >> 32) as u32));
+                .insert("float".into(), crate::Tag::Float(float_bits));
             entity.items = vec![None, None];
             entity.data = vec![i32::MIN, i32::MAX];
             let mut original = Writer::new();
