@@ -529,6 +529,100 @@ pub fn read_nbt(m: &mut Mob, tag: &Tag) {
 mod tests {
     use super::*;
 
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn actual_tick_restores_navigation_after_goal_unwind() {
+        use super::super::goals::{Cx, Goal};
+        use std::sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        };
+        #[derive(Debug, Clone)]
+        struct UnwindGoal(Arc<AtomicUsize>, Arc<i32>);
+        impl Goal for UnwindGoal {
+            fn flags(&self) -> u8 {
+                0
+            }
+            fn can_use(&mut self, _: &mut Mob, _: &mut Cx) -> bool {
+                true
+            }
+            fn every_tick(&self) -> bool {
+                true
+            }
+            fn box_clone(&self) -> Box<dyn Goal> {
+                Box::new(self.clone())
+            }
+            fn tick(&mut self, m: &mut Mob, _: &mut Cx) {
+                self.0.fetch_add(1, Ordering::SeqCst);
+                assert_eq!(
+                    m.ai.nav.speed_modifier, 9.25,
+                    "actual tick must loan vehicle navigation"
+                );
+                m.ai.nav.speed_modifier = 1.25;
+                m.ai.nav.target_pos = Some([7, 8, 9]);
+                m.ai.navigation_redirect.as_mut().unwrap().own.stuck = true;
+                eprintln!("RIDER_SITE_GOAL_PROGRESS");
+                std::panic::resume_unwind(Box::new(self.1.clone()));
+            }
+        }
+        let mut kind = (*crate::mobs::sensor_scan_tests::kind()).clone();
+        kind.species = Species::Zombie;
+        kind.id = "minecraft:zombie".into();
+        let mut rider = Mob::new(72, Arc::new(kind), Vec3::new(2.0, 80.0, 0.5), 0.0);
+        rider.extra.mount = Some(71);
+        rider.on_ground = true;
+        rider.ai.nav.speed_modifier = 3.75;
+        rider.ai.nav.target_pos = Some([1, 2, 3]);
+        rider.ai.goals.clear();
+        rider.ai.targets.clear();
+        let calls = Arc::new(AtomicUsize::new(0));
+        let payload = Arc::new(17);
+        rider
+            .ai
+            .goals
+            .add(0, UnwindGoal(calls.clone(), payload.clone()));
+        let seen = [rider.seen(None)];
+        let mut vehicle = Mob::new(71, crate::mobs::sensor_scan_tests::kind(), Vec3::ZERO, 0.0);
+        vehicle.extra.rider = Some(72);
+        vehicle.ai.nav.speed_modifier = 9.25;
+        let mut mobs: JoinList<_> = [rider, vehicle].into_iter().collect();
+        let root = std::env::var_os("HORIZON_TEST_RESOURCES").expect("prepared resources required");
+        assert!(crate::mobs::world::with_resource_test_world(
+            std::path::Path::new(&root),
+            &seen,
+            true,
+            true,
+            |_, _| {},
+            |w, _| {
+                assert!(mob_controlled(&mobs[1], w));
+                let mut health = crate::health::TestLevel::new(0);
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    tick(&mut mobs, 0, w, &mut health.level(), &mut Vec::new());
+                }));
+                assert_eq!(
+                    calls.load(Ordering::SeqCst),
+                    1,
+                    "real goal was not executed"
+                );
+                let caught = result.unwrap_err().downcast::<Arc<i32>>().unwrap();
+                assert!(Arc::ptr_eq(&caught, &payload));
+                assert_eq!(
+                    mobs[1].ai.nav.speed_modifier, 1.25,
+                    "vehicle navigation progress not returned"
+                );
+                assert_eq!(mobs[1].ai.nav.target_pos, Some([7, 8, 9]));
+                assert_eq!(
+                    mobs[0].ai.nav.speed_modifier, 3.75,
+                    "private rider navigation not returned"
+                );
+                assert_eq!(mobs[0].ai.nav.target_pos, Some([1, 2, 3]));
+                assert!(mobs[0].ai.nav.stuck, "private navigation progress lost");
+                assert!(mobs[0].ai.navigation_redirect.is_none());
+                eprintln!("RIDER_SITE_RESTORED");
+            }
+        ));
+    }
+
     // Lower-layer loan test, not a native GoalContext integration test.
     #[test]
     fn navigation_loan_restores_both_owners_after_unwind() {
