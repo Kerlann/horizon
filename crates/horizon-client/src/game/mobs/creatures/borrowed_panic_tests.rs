@@ -21,11 +21,15 @@ enum Family {
     Knockback,
     Landing,
 }
+#[derive(Debug)]
+struct PanicToken(u64);
 struct Probe {
     family: Family,
     calls: AtomicUsize,
     posts: AtomicUsize,
     armed: AtomicBool,
+    payload: std::sync::Mutex<Option<Box<PanicToken>>>,
+    payload_address: usize,
 }
 impl Probe {
     fn hear(&self, family: Family, target: bool) {
@@ -33,9 +37,26 @@ impl Probe {
             self.calls.fetch_add(1, Ordering::SeqCst);
             if self.armed.swap(false, Ordering::SeqCst) {
                 eprintln!("BORROWED_NATIVE_REACHED:{family:?}");
-                panic!("actual borrowed mob callback panicked");
+                let payload = self.payload.lock().unwrap().take().unwrap();
+                std::panic::resume_unwind(payload);
             }
         }
+    }
+}
+impl Probe {
+    fn progress(&self, family: Family, target: bool, host: &mut dyn mod_api::LevelRandomHost) {
+        if self.family == family && target && self.armed.load(Ordering::SeqCst) {
+            // Seed at the actual callback boundary, independent of earlier vanilla draws.
+            assert!(host.set_random(mod_api::LegacyRandom::new(0x5eed)));
+            let mut expected = LegacyRandom::new(0x5eed);
+            assert_eq!(
+                host.with_random(|random| random.next_long()),
+                Some(expected.next_long())
+            );
+            VALUE.set(host.attachments(), Holder::Level, 314).unwrap();
+            eprintln!("BORROWED_NATIVE_PROGRESS:{family:?}");
+        }
+        self.hear(family, target);
     }
 }
 struct NativeGoal {
@@ -73,8 +94,12 @@ impl mod_api::Goal for NativeGoal {
 struct GoalPart(Arc<Probe>);
 #[mod_api::horizon_part]
 impl mod_api::BlockPart for GoalPart {
-    fn fall_on(&self, _: &mut dyn mod_api::LevelRandomHost, event: &mut mod_api::FallOnEvent<'_>) {
-        self.0.hear(Family::Landing, event.entity == 72);
+    fn fall_on(
+        &self,
+        host: &mut dyn mod_api::LevelRandomHost,
+        event: &mut mod_api::FallOnEvent<'_>,
+    ) {
+        self.0.progress(Family::Landing, event.entity == 72, host);
     }
 }
 #[mod_api::horizon_part]
@@ -143,26 +168,26 @@ impl mod_api::Hooks for Hooks {
     }
     fn living_knockback(
         &self,
-        _: &mut dyn mod_api::LevelRandomHost,
+        host: &mut dyn mod_api::LevelRandomHost,
         event: &mut mod_api::LivingKnockbackEvent<'_>,
     ) -> mod_api::Flow {
-        self.0.hear(Family::Knockback, event.entity == 72);
+        self.0.progress(Family::Knockback, event.entity == 72, host);
         mod_api::Flow::Continue
     }
     fn living_incoming_damage(
         &self,
-        _: &mut dyn mod_api::LevelRandomHost,
+        host: &mut dyn mod_api::LevelRandomHost,
         event: &mut mod_api::LivingIncomingDamageEvent<'_>,
     ) -> mod_api::Flow {
-        self.0.hear(Family::Damage, event.entity == 72);
+        self.0.progress(Family::Damage, event.entity == 72, host);
         mod_api::Flow::Continue
     }
     fn living_shield_block(
         &self,
-        _: &mut dyn mod_api::LevelRandomHost,
+        host: &mut dyn mod_api::LevelRandomHost,
         event: &mut mod_api::LivingShieldBlockEvent<'_>,
     ) {
-        self.0.hear(Family::Shield, event.entity == 72);
+        self.0.progress(Family::Shield, event.entity == 72, host);
     }
     fn living_speed(
         &self,
@@ -180,10 +205,10 @@ impl mod_api::Hooks for Hooks {
     }
     fn living_use_totem(
         &self,
-        _: &mut dyn mod_api::LevelRandomHost,
+        host: &mut dyn mod_api::LevelRandomHost,
         event: &mut mod_api::LivingUseTotemEvent<'_>,
     ) -> mod_api::Flow {
-        self.0.hear(Family::Totem, event.entity == 72);
+        self.0.progress(Family::Totem, event.entity == 72, host);
         mod_api::Flow::Continue
     }
 }
@@ -221,11 +246,15 @@ fn run(family: Family) {
             std::process::id(),
             std::thread::current().id()
         )));
+        let payload = Box::new(PanicToken(0xdecaf));
+        let payload_address = (&*payload as *const PanicToken) as usize;
         let probe = Arc::new(Probe {
             family,
             calls: AtomicUsize::new(0),
             posts: AtomicUsize::new(0),
             armed: AtomicBool::new(true),
+            payload: std::sync::Mutex::new(Some(payload)),
+            payload_address,
         });
         mod_api::testing::with_mods(
             vec![mod_api::ModEntry::new(
@@ -332,7 +361,7 @@ fn run(family: Family) {
                     }
                     let writes = game.world.path_writes.clone();
                     game.world.random = LegacyRandom::new(0x5eed);
-                    let draw = game.world.random.clone().next_long();
+
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         horizon_client::block_contact::in_level(Some(game.dim.id()), || {
                             game.tick_creature_entities()
@@ -349,10 +378,29 @@ fn run(family: Family) {
                         "aborted pass fired post callbacks"
                     );
                     let payload = result.expect_err("native callback panic was swallowed");
+                    let token = payload
+                        .downcast_ref::<PanicToken>()
+                        .expect("original typed payload");
                     assert_eq!(
-                        payload.downcast_ref::<&str>().copied(),
-                        Some("actual borrowed mob callback panicked")
+                        (token as *const PanicToken) as usize,
+                        probe.payload_address,
+                        "original payload object was replaced"
                     );
+                    assert_eq!(token.0, 0xdecaf);
+                    let progressed = matches!(
+                        family,
+                        Family::Damage
+                            | Family::Shield
+                            | Family::Totem
+                            | Family::Knockback
+                            | Family::Landing
+                    );
+                    let expected_value = if progressed { 314 } else { 42 };
+                    let mut expected_random = LegacyRandom::new(0x5eed);
+                    if progressed {
+                        expected_random.next_long();
+                    }
+                    let expected_draw = expected_random.next_long();
                     let mut pending = Vec::new();
                     journal.drain_into(&mut pending);
                     let (mut depth, mut lifts) = (0usize, 0usize);
@@ -385,12 +433,12 @@ fn run(family: Family) {
                         VALUE
                             .get_existing(&mut game.world.attachments, Holder::Level)
                             .unwrap(),
-                        Some(42)
+                        Some(expected_value)
                     );
                     assert_eq!(game.last_hurt_by_player.get(&71).map(|c| c.0), Some(99));
                     assert_eq!(game.world.attachment_syncs, syncs);
                     assert_eq!(game.world.path_writes, writes);
-                    assert_eq!(game.world.random.clone().next_long(), draw);
+                    assert_eq!(game.world.random.clone().next_long(), expected_draw);
                     let mut table = EntityTable::new(journal);
                     for &(id, join) in &rows {
                         let found = table.entity_lookup(&owner.dimension, id, |at| {
@@ -421,6 +469,18 @@ fn run(family: Family) {
                         "real post listener never ran on retry"
                     );
                     table.end_tick().unwrap();
+                    assert_eq!(
+                        VALUE
+                            .get_existing(&mut game.world.attachments, Holder::Level)
+                            .unwrap(),
+                        Some(expected_value),
+                        "callback attachment lost on retry"
+                    );
+                    assert_eq!(
+                        (payload.downcast_ref::<PanicToken>().unwrap() as *const PanicToken)
+                            as usize,
+                        probe.payload_address
+                    );
                 })
             },
         );
