@@ -12246,6 +12246,8 @@ mod chorus_projectile_drop_tests {
             None,
         )
         .unwrap();
+        game.native_lifecycle
+            .begin_open(mod_api::NativeAuthority::IntegratedServer);
         game.build_registries();
         game.set_allow_commands(true);
 
