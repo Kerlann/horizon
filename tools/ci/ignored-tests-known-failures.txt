@@ -58,7 +58,6 @@ horizon-client game::native_entities::tests::native_roots_keep_the_loaded_id_and
 horizon-client game::persist::summon_uuid_conflict_tests::summon_skips_a_uuid_taken_earlier_in_the_same_tree #2175
 horizon-client game::creatures::chorus_projectile_drop_tests::a_registered_arrow_collision_keeps_the_actual_projectile_for_chorus_loot #2176
 horizon-client game::creatures::chorus_projectile_drop_tests::a_registered_snowball_collision_keeps_the_actual_projectile_for_chorus_loot #2176
-horizon-client game::explosion::tests::explosion_and_mob_breaks_apply_block_drops #2176
 horizon-client game::kill_die_cancel_tests::a_vetoed_kill_keeps_the_mob_and_a_later_kill_dies_once #2176
 horizon-client game::kill_die_vibration_tests::a_killed_mob_posts_its_death_before_the_command_returns #2176
 horizon-client game::native_player_break::tests::a_mod_breaks_stone_as_the_player_with_their_pickaxe #2176
