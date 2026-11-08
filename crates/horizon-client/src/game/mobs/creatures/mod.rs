@@ -2,6 +2,8 @@
 //! chunk-generation spawning (`NaturalSpawner`), mob events (attacks,
 //! breeding, conversions, drops), projectiles, player interactions
 //! (feeding, shearing, milking, spawn eggs, throwing) and rendering.
+#[cfg(test)]
+mod borrowed_panic_tests;
 mod borrowed_tick;
 #[cfg(test)]
 mod mob_dispatch_panic_tests;
