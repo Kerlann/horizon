@@ -1222,6 +1222,60 @@ mod tests {
             .unwrap();
     }
 
+    /// Both spawn checks carry their level and spawner, and the position check its lent mob,
+    /// through the WIT contract; `Spawner` is a variant with its two cases.
+    #[test]
+    fn spawn_checks_carry_the_level_spawner_and_mob() {
+        std::thread::Builder::new()
+            .stack_size(64 << 20)
+            .spawn(|| {
+                let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+                let generated =
+                    super::super::sources(&root, super::super::FillMode::Require).unwrap();
+                let included = [
+                    ("mod_api_generated.rs", generated.hooks.as_str()),
+                    ("mod_api_generated_host.rs", generated.host.as_str()),
+                    ("mod_api_host_areas.rs", generated.areas.as_str()),
+                ];
+                let wasm = super::generate(&root, &included).unwrap();
+                let mut resolve = wit_parser::Resolve::default();
+                let package = resolve.push_str("mod-api.wit", &wasm.wit).unwrap();
+                let types = &resolve.interfaces[resolve.packages[package].interfaces["types"]];
+                let spawner = types.types["spawner"];
+                let wit_parser::TypeDefKind::Variant(variants) = &resolve.types[spawner].kind
+                else {
+                    panic!("spawner is not a variant")
+                };
+                let cases: Vec<_> = variants.cases.iter().map(|c| c.name.as_str()).collect();
+                assert_eq!(cases, ["block", "trial"]);
+                for (hook, fields) in [
+                    (
+                        "mob-spawn-placement-check",
+                        &["level: level-ref", "spawner: option<spawner>"][..],
+                    ),
+                    (
+                        "mob-spawn-position-check",
+                        &[
+                            "level: level-ref",
+                            "spawner: option<spawner>",
+                            "mob: unspawned-mob-ref",
+                        ][..],
+                    ),
+                ] {
+                    let lines: Vec<_> = wasm.wit.lines().filter(|l| l.contains(hook)).collect();
+                    for field in fields {
+                        assert!(
+                            lines.iter().any(|l| l.contains(field)),
+                            "{hook} lacks {field}: {lines:#?}"
+                        );
+                    }
+                }
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
     #[test]
     fn pack_finders_bind_the_scoped_mutable_repository() {
         std::thread::Builder::new()
