@@ -545,6 +545,13 @@ pub trait Wire: Sized {
         }
     }
     #[doc(hidden)]
+    fn put_owned_list(items: Vec<Self>, out: &mut Writer) {
+        out.put_len(items.len());
+        for item in items {
+            out.put_owned(item);
+        }
+    }
+    #[doc(hidden)]
     fn take_list(input: &mut Reader<'_>) -> Result<Vec<Self>, WireError> {
         input.list_with(usize::MAX, Self::take)
     }
@@ -572,6 +579,9 @@ macro_rules! numbers {
                 out.put_bytes(bytemuck::cast_slice(items));
                 #[cfg(target_endian = "big")]
                 for item in items { out.put_bytes(&item.to_le_bytes()); }
+            }
+            fn put_owned_list(items: Vec<Self>, out: &mut Writer) {
+                Self::put_list(&items, out);
             }
             fn take_list(input: &mut Reader<'_>) -> Result<Vec<Self>, WireError> {
                 let len = input.take_len(<Self as Wire>::MIN)?;
@@ -793,10 +803,7 @@ impl<T: Wire> Wire for Vec<T> {
         T::put_list(self, out);
     }
     fn put_owned(self, out: &mut Writer) {
-        out.put_len(self.len());
-        for item in self {
-            out.put_owned(item);
-        }
+        T::put_owned_list(self, out);
     }
     fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
         T::take_list(input)
