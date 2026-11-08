@@ -85,6 +85,10 @@ pub(crate) struct State {
     host_stats: std::collections::BTreeMap<u32, (u64, u128, u64, u64)>,
     #[cfg(feature = "boundary-profile")]
     export_stats: std::collections::BTreeMap<u32, (u64, u64, u64, u64, u64)>,
+    #[cfg(feature = "boundary-profile")]
+    phase_previous: std::collections::BTreeMap<(u32, usize), Option<(u32, u64, Instant)>>,
+    #[cfg(feature = "boundary-profile")]
+    phase_stats: std::collections::BTreeMap<(u32, u32), (u64, u64, u128)>,
     group: usize,
     lending: Arc<AtomicUsize>,
 }
@@ -119,6 +123,10 @@ impl Default for State {
             host_stats: Default::default(),
             #[cfg(feature = "boundary-profile")]
             export_stats: Default::default(),
+            #[cfg(feature = "boundary-profile")]
+            phase_previous: Default::default(),
+            #[cfg(feature = "boundary-profile")]
+            phase_stats: Default::default(),
             group: 0,
             lending: Arc::default(),
         }
@@ -364,6 +372,67 @@ fn host(
         .data()
         .memory
         .ok_or_else(|| wasmtime::Error::msg("host import during instantiation"))?;
+    #[cfg(feature = "boundary-profile")]
+    if matches!(id, 0xFFFF_FE00 | 0xFFFF_FE01) {
+        let bytes = memory
+            .data(&caller)
+            .get(
+                ptr as usize
+                    ..(ptr as usize)
+                        .checked_add(len as usize)
+                        .ok_or(WireError::Length)?,
+            )
+            .ok_or(WireError::Eof)?;
+        let mut reader = Reader::new(bytes);
+        let export: u32 = reader.take()?;
+        if id == 0xFFFF_FE01 {
+            let mut values = [0u64; 12];
+            for value in &mut values {
+                *value = reader.take()?;
+            }
+            if !reader.rest().is_empty() {
+                return Err(WireError::Trailing.into());
+            }
+            let fuel = caller.as_context_mut().get_fuel().ok();
+            let n = caller
+                .data()
+                .export_stats
+                .get(&export)
+                .map_or(1, |s| s.0 + 1);
+            eprintln!(
+                "synchronized diagnostic: export={export} hooks={n} fuel={:?} pool/System={values:?} phases={:?}",
+                fuel.map(|left| u64::MAX - left),
+                caller.data().phase_stats
+            );
+        } else {
+            let phase: u32 = reader.take()?;
+            if phase > 3 || !reader.rest().is_empty() {
+                return Err(WireError::Tag(phase).into());
+            }
+            let fuel = caller.as_context_mut().get_fuel().unwrap_or(0);
+            let now = Instant::now();
+            let depth = caller.data().depth;
+            let previous = caller
+                .data_mut()
+                .phase_previous
+                .entry((export, depth))
+                .or_default()
+                .replace((phase, fuel, now));
+            if let Some((before, left, time)) = previous {
+                if phase == before + 1 {
+                    let stats = caller
+                        .data_mut()
+                        .phase_stats
+                        .entry((export, phase))
+                        .or_default();
+                    stats.0 += 1;
+                    stats.1 += left.saturating_sub(fuel);
+                    stats.2 += now.duration_since(time).as_nanos();
+                }
+            }
+        }
+        return Ok(0);
+    }
     let end = (ptr as usize)
         .checked_add(len as usize)
         .ok_or_else(|| wasmtime::Error::msg("input range overflow"))?;
