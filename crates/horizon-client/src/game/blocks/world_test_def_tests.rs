@@ -162,6 +162,9 @@ fn a_world_keeps_the_test_instances_it_opened_with() {
     // No world opened yet: the game's own data, as before.
     let builtin = game.test_def("minecraft:always_pass").expect("built in");
     assert!(!builtin.block_based, "the built-in function test");
+    // World opening publishes its data packs before snapshotting test instances.
+    game.reload_datapacks(false, &game.level.enabled_features.clone())
+        .unwrap();
     game.load_world_state();
     let ids = |game: &Game<'_>| game.ui.registries.ids("minecraft:test_instance").to_vec();
     assert_eq!(ids(&game), ["h275:broken", "minecraft:always_pass"]);
@@ -191,6 +194,8 @@ fn a_world_keeps_the_test_instances_it_opened_with() {
     assert_eq!(ids(&game), ["h275:broken", "minecraft:always_pass"]);
     // World B.
     game.world_root = b.clone();
+    game.reload_datapacks(false, &game.level.enabled_features.clone())
+        .unwrap();
     game.load_world_state();
     assert_eq!(ids(&game), ["h275:other", "minecraft:always_pass"]);
     assert!(
