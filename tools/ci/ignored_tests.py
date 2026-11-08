@@ -109,6 +109,14 @@ def run(package, skip):
         elif status := re.search(r"\((?:signal|exit status): \d+", line):
             # Emit only the numeric status, never adjacent test output.
             print(f"{package}: {status[0]})")
+    for line in process.stdout.splitlines():
+        if found := re.search(r"thread '([A-Za-z0-9_:]+)' has overflowed its stack", line):
+            print(f"stack overflow test: {found[1]}")
+        if "panic in a destructor during cleanup" in line:
+            print("panic in a destructor during cleanup")
+    for name in list(results)[-20:]:
+        if re.fullmatch(r"[A-Za-z0-9_:]+", name):
+            print(f"last completed: {name}")
     if incomplete or awaiting_count or target_count is not None:
         print(f"{package}: test target did not finish (cargo exit {process.returncode})")
         return None
