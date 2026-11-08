@@ -462,8 +462,7 @@ pub fn link(role: &str, args: Vec<String>) -> Result<(), String> {
                     private_exports.push(export.name.to_owned());
                 }
                 if role != "member" || member_export(export.name) {
-                    let kind = wasm_encoder::ExportKind::try_from(export.kind)
-                        .map_err(|e| format!("{e:?}"))?;
+                    let kind = wasm_encoder::ExportKind::from(export.kind);
                     section.export(export.name, kind, export.index);
                 }
             }
