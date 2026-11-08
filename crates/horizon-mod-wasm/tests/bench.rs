@@ -114,4 +114,6 @@ fn block_entity_ticks() {
         vec![ModEntry::new("wasm_fixture", Box::new(fixture::Mod))],
     );
     measure("wasm", loaded.mods);
+    #[cfg(feature = "boundary-profile")]
+    horizon_mod_wasm::finish_boundary_profiles();
 }

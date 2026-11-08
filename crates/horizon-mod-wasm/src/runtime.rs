@@ -23,6 +23,18 @@ use wasmtime::{
     AsContextMut, Caller, Engine, Extern, Func, Memory, Store, StoreContextMut, TypedFunc,
 };
 
+#[cfg(feature = "boundary-profile")]
+static PROFILE_JOBS: Mutex<Vec<std::thread::JoinHandle<()>>> = Mutex::new(Vec::new());
+
+/// Wait for diagnostic profile serialization after the measured workload has stopped.
+#[cfg(feature = "boundary-profile")]
+pub fn finish_boundary_profiles() {
+    let jobs = std::mem::take(&mut *PROFILE_JOBS.lock().unwrap());
+    for job in jobs {
+        job.join().unwrap();
+    }
+}
+
 // Diagnostic-only sampling. This branch is not a production profiler implementation.
 #[cfg(feature = "boundary-profile")]
 struct BoundaryProfile {
@@ -533,8 +545,18 @@ impl WasmMod {
                         // rather than relying on their destructor to run at shutdown.
                         if profile.calls == 400_000 {
                             let profiler = profile.profiler.take().unwrap();
-                            let file = std::fs::File::create(&profile.path)?;
-                            profiler.finish(file)?;
+                            let path = profile.path.clone();
+                            PROFILE_JOBS
+                                .lock()
+                                .unwrap()
+                                .push(std::thread::spawn(move || {
+                                    let result = std::fs::File::create(path)
+                                        .map_err(wasmtime::Error::from)
+                                        .and_then(|file| profiler.finish(file));
+                                    if let Err(error) = result {
+                                        eprintln!("boundary profile: {error}");
+                                    }
+                                }));
                             eprintln!(
                                 "boundary host cumulative at {} guest export returns: {:?}",
                                 profile.calls,

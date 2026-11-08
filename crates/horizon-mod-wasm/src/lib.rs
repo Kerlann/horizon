@@ -15,6 +15,8 @@ mod runtime;
 pub(crate) mod boundary {
     include!(concat!(env!("OUT_DIR"), "/wire_host_generated.rs"));
 }
+#[cfg(feature = "boundary-profile")]
+pub use runtime::finish_boundary_profiles;
 pub use runtime::{CallClass, WasmHandler, WasmMod};
 
 pub(crate) trait NoAnswer {
