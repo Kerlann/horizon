@@ -621,7 +621,19 @@ mod pass_tests {
             game.mobs
                 .push(Mob::new(1, kind.clone(), Vec3::new(1.5, 64.0, 1.5), 0.0));
             game.mobs
-                .push(Mob::new(2, kind, Vec3::new(65.5, 64.0, 1.5), 0.0));
+                .push(Mob::new(2, kind.clone(), Vec3::new(65.5, 64.0, 1.5), 0.0));
+            // The six-block-wide nausea query, expanded by the zombie's width
+            // plus SeenGrid's margin, spans 3 x 3 four-block grid columns.
+            // Populate distinct distant columns so candidates uses the grid
+            // rather than its small-population scan fallback. Keep mob 2 in slot 1.
+            for i in 0..64u32 {
+                game.mobs.push(Mob::new(
+                    i + 3,
+                    kind.clone(),
+                    Vec3::new(256.5 + f64::from(i) * 8.0, 64.0, 256.5),
+                    0.0,
+                ));
+            }
             let moved = game.entity(2).unwrap();
             let mods: mod_api::Mods =
                 vec![ModEntry::new("move-on-nausea", Box::new(MoveMob(moved)))].into();
