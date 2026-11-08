@@ -4739,11 +4739,43 @@ mod tests {
         use super::{SyncCache, cached_sync_data, initialize_world_sync_data, prepare_sync_reload};
         use horizon_world::{damage_source::Catalog, loot::PackOverlay};
         use std::{path::Path, sync::Arc};
-        let root = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../.local/horizon-client")
-            .join(horizon_core::VANILLA_VERSION);
-        let item_data = sync_test_items(&root);
-        let damage = Catalog::load(&root, &PackOverlay::NONE).unwrap();
+
+        fn copy_tree(source: &Path, destination: &Path) {
+            std::fs::create_dir_all(destination).unwrap();
+            for entry in std::fs::read_dir(source).unwrap() {
+                let entry = entry.unwrap();
+                let target = destination.join(entry.file_name());
+                if entry.path().is_dir() {
+                    copy_tree(&entry.path(), &target);
+                } else {
+                    std::fs::copy(entry.path(), target).unwrap();
+                }
+            }
+        }
+
+        let prepared = std::env::var_os("HORIZON_TEST_RESOURCES")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../.local/horizon-client")
+                    .join(horizon_core::VANILLA_VERSION)
+            });
+        let root = std::env::temp_dir().join(format!(
+            "horizon-lazy-wire-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        // Keep the cache's resource-root identity stable while making a reload fail.
+        // Copy only data, not prepared assets, and never mutate shared resources.
+        copy_tree(&prepared.join("data"), &root.join("data"));
+        let report = horizon_protocol::registry::Builtin::find(&prepared)
+            .expect("prepared test resources require registries.json");
+        std::fs::copy(report, root.join("registries.json")).unwrap();
+        let item_data = sync_test_items(&prepared);
+        let damage = Catalog::load(&prepared, &PackOverlay::NONE).unwrap();
         let files = vec![(
             "recipe/demo:unrelated".into(),
             vec![br#"{"type":"minecraft:crafting_special_mapcloning"}"#.to_vec()],
@@ -4760,15 +4792,11 @@ mod tests {
         assert!(cache.data.is_none());
         assert!(prepare_sync_reload(&mut cache, &PackOverlay::NONE).is_none());
         let opened = cached_sync_data(&mut cache, &root, &PackOverlay::NONE, &item_data).unwrap();
-        // An accidental uncached load would fail on the next request rather
-        // than merely reconstructing an equal registry from the same files.
-        let reused = cached_sync_data(
-            &mut cache,
-            &root.join("no-such-resources"),
-            &PackOverlay::NONE,
-            &item_data,
-        )
-        .unwrap();
+        // Changing the root invalidates the cache. Instead remove the private
+        // fixture's files: an accidental reload at the same root must now fail.
+        std::fs::remove_dir_all(&root).unwrap();
+        assert!(horizon_protocol::registry::Builtin::find(&root).is_none());
+        let reused = cached_sync_data(&mut cache, &root, &PackOverlay::NONE, &item_data).unwrap();
         assert!(Arc::ptr_eq(&opened, &reused));
     }
 
