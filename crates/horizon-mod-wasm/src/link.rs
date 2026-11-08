@@ -90,6 +90,8 @@ pub struct Group<T: 'static = ()> {
     pub(crate) store: Store<T>,
     pub(crate) members: Vec<(String, Instance)>,
     pub(crate) memory: Memory,
+    #[cfg(feature = "boundary-profile")]
+    pub(crate) modules: Vec<(String, Module)>,
 }
 
 impl Group<()> {
@@ -387,6 +389,12 @@ impl<T: 'static> Group<T> {
             store,
             members: instances,
             memory,
+            #[cfg(feature = "boundary-profile")]
+            modules: members
+                .iter()
+                .zip(&parsed)
+                .map(|(member, layout)| (member.name.to_owned(), layout.module.clone()))
+                .collect(),
         };
         for hook in [
             "__wasm_start",

@@ -6,6 +6,9 @@ license.workspace = true
 publish = false
 description = "The runtime for wasm mods: groups packages by their dependencies and refuses what cannot load"
 
+[features]
+boundary-profile = ["wasmtime/profiling", "wasmtime/call-hook"]
+
 [dependencies]
 horizon-core = { path = "../horizon-core" }
 mod_points = { package = "horizon-mod-points", path = "../horizon-mod-points" }

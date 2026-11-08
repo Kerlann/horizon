@@ -23,6 +23,27 @@ use wasmtime::{
     AsContextMut, Caller, Engine, Extern, Func, Memory, Store, StoreContextMut, TypedFunc,
 };
 
+// Diagnostic-only sampling. This branch is not a production profiler implementation.
+#[cfg(feature = "boundary-profile")]
+struct BoundaryProfile {
+    profiler: Option<wasmtime::GuestProfiler>,
+    path: std::path::PathBuf,
+}
+#[cfg(feature = "boundary-profile")]
+impl Drop for BoundaryProfile {
+    fn drop(&mut self) {
+        if let Some(profiler) = self.profiler.take() {
+            match std::fs::File::create(&self.path)
+                .map_err(wasmtime::Error::from)
+                .and_then(|file| profiler.finish(file))
+            {
+                Ok(()) => {}
+                Err(error) => eprintln!("boundary profile: {error}"),
+            }
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CallClass {
     Load,
@@ -41,6 +62,10 @@ pub(crate) struct State {
     imports: Vec<Vec<u8>>,
     depth: usize,
     epoch_budget: u64,
+    #[cfg(feature = "boundary-profile")]
+    profile: Option<BoundaryProfile>,
+    #[cfg(feature = "boundary-profile")]
+    epochs_left: u64,
     group: usize,
     lending: Arc<AtomicUsize>,
 }
@@ -65,6 +90,10 @@ impl Default for State {
             imports: Vec::new(),
             depth: 0,
             epoch_budget: 0,
+            #[cfg(feature = "boundary-profile")]
+            profile: None,
+            #[cfg(feature = "boundary-profile")]
+            epochs_left: 0,
             group: 0,
             lending: Arc::default(),
         }
@@ -453,6 +482,43 @@ impl WasmMod {
             }
         })
         .map_err(|e| Refusal::Runtime(e.to_string()))?;
+        #[cfg(feature = "boundary-profile")]
+        if let Some(path) = std::env::var_os("HORIZON_BOUNDARY_PROFILE") {
+            let profiler = wasmtime::GuestProfiler::new(
+                engine,
+                "shared-memory group",
+                Duration::from_millis(1),
+                group.modules.clone(),
+            )
+            .map_err(|e| Refusal::Runtime(e.to_string()))?;
+            group.store.data_mut().profile = Some(BoundaryProfile {
+                profiler: Some(profiler),
+                path: path.into(),
+            });
+            group.store.call_hook(|mut store, kind| {
+                if let Some(mut profile) = store.data_mut().profile.take() {
+                    profile.profiler.as_mut().unwrap().call_hook(&store, kind);
+                    store.data_mut().profile = Some(profile);
+                }
+                Ok(())
+            });
+            group.store.epoch_deadline_callback(|mut store| {
+                if let Some(mut profile) = store.data_mut().profile.take() {
+                    profile
+                        .profiler
+                        .as_mut()
+                        .unwrap()
+                        .sample(&store, Duration::from_millis(1));
+                    store.data_mut().profile = Some(profile);
+                }
+                let left = store.data().epochs_left;
+                if left <= 1 {
+                    return Err(wasmtime::Error::msg("epoch budget exhausted"));
+                }
+                store.data_mut().epochs_left = left - 1;
+                Ok(wasmtime::UpdateDeadline::Continue(1))
+            });
+        }
         group.store.data_mut().memory = Some(group.memory);
         let mut exports = Vec::new();
         for (name, instance) in group.members.clone() {
@@ -582,6 +648,11 @@ impl WasmMod {
                     100
                 };
                 store.set_epoch_deadline(budget);
+                #[cfg(feature = "boundary-profile")]
+                if store.data().profile.is_some() {
+                    store.data_mut().epochs_left = budget;
+                    store.set_epoch_deadline(1);
+                }
                 store.data_mut().epoch_budget = budget;
                 store.as_context_mut()
             }
