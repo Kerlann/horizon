@@ -20,7 +20,6 @@ pub(super) struct BorrowedMobTick<'a, 'p, F> {
     pub(super) path_writes: &'a [((i32, i32, i32), u32, u32)],
     pub(super) gone: &'a mut Vec<(u32, Vec3, f64, f64, Option<Mob>)>,
     pub(super) lent: &'a mut horizon_client::health::LentLevel,
-    pub(super) dispatch_panic: &'a mut Option<Box<dyn std::any::Any + Send>>,
     pub(super) laps: &'a mut horizon_client::spans::Laps,
     pub(super) uuid: Option<[i32; 4]>,
     pub(super) level_id: &'static str,
@@ -51,7 +50,6 @@ impl Game<'_> {
             path_writes,
             gone,
             lent,
-            dispatch_panic,
             laps,
             uuid,
             level_id,
@@ -135,22 +133,13 @@ impl Game<'_> {
                 )
                 && let Some(epoch) = self.native_lifecycle.epoch()
             {
-                // The readonly listener runs while the mob and world views
-                // are borrowed. Defer its unwind until those views end and
-                // the normal owned-state restoration below has completed.
-                if let Err(payload) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    self.native_mob_despawn(
-                        self.dim.id(),
-                        mod_api::MobRef::new(mod_api::EntityRef::new(epoch, m.id)),
-                        &m.kind.id,
-                        [m.position.x, m.position.y, m.position.z],
-                        &mut m.despawn,
-                    );
-                })) {
-                    m.despawn = mod_api::NativeDespawn::default();
-                    *dispatch_panic = Some(payload);
-                    break;
-                }
+                self.native_mob_despawn(
+                    self.dim.id(),
+                    mod_api::MobRef::new(mod_api::EntityRef::new(epoch, m.id)),
+                    &m.kind.id,
+                    [m.position.x, m.position.y, m.position.z],
+                    &mut m.despawn,
+                );
             }
             // ServerLevel.tick: every loaded entity checks despawning, but
             // only those in entity-ticking chunks (within the simulation
@@ -325,12 +314,10 @@ impl Game<'_> {
             horizon_client::mobs::apply_brain_events(mobs, &mut level, events, from);
         }
         laps.lap("creature_loop");
-        if dispatch_panic.is_none() {
-            let mut flags = keep.into_iter();
-            mobs.retain(|_| flags.next().unwrap_or(true));
-            for m in mobs {
-                horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
-            }
+        let mut flags = keep.into_iter();
+        mobs.retain(|_| flags.next().unwrap_or(true));
+        for m in mobs {
+            horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
         }
     }
 }

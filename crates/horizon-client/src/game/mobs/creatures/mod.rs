@@ -1454,8 +1454,7 @@ impl Game<'_> {
         // The level's random and attachments, lent to the mobs (brain behaviours draw from
         // the random, and a hit's damage hooks get both) and taken back after their ticks.
         let mut lent = horizon_client::health::LentLevel::take(&mut self.world);
-        let mut dispatch_panic = None;
-        self.tick_borrowed_creatures(borrowed_tick::BorrowedMobTick {
+        let borrowed = borrowed_tick::BorrowedMobTick {
             mobs: &mut mobs,
             snapshot: &mut snapshot,
             events: &mut events,
@@ -1472,14 +1471,27 @@ impl Game<'_> {
             path_writes: &path_writes,
             gone: &mut gone,
             lent: &mut lent,
-            dispatch_panic: &mut dispatch_panic,
             laps: &mut laps,
             uuid,
             level_id,
             ticking: &ticking,
             nearest: &nearest,
             round: &round,
-        });
+        };
+        // Every native callback in the borrowed region crosses this boundary.
+        // Unwind its temporary views first, then restore the caller's owners
+        // before resuming the identical payload. This is not a rollback.
+        let dispatch_panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.tick_borrowed_creatures(borrowed);
+        }))
+        .err();
+        if dispatch_panic.is_some() {
+            // The aborted pass never applies retention, including previously
+            // finished despawn answers. Do not carry those into the retry.
+            for m in &mut mobs {
+                m.despawn = mod_api::NativeDespawn::default();
+            }
+        }
         lent.give_back(&mut self.world);
         self.last_hurt_by_player = player_credit;
         if let Some(host) = self.lan.as_mut()

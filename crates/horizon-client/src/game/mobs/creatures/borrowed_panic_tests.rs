@@ -18,10 +18,13 @@ enum Family {
     Movement,
     Breathing,
     Goal,
+    Knockback,
+    Landing,
 }
 struct Probe {
     family: Family,
     calls: AtomicUsize,
+    posts: AtomicUsize,
     armed: AtomicBool,
 }
 impl Probe {
@@ -35,13 +38,24 @@ impl Probe {
         }
     }
 }
-struct NativeGoal(Arc<Probe>);
+struct NativeGoal {
+    probe: Arc<Probe>,
+    target: bool,
+}
 impl mod_api::Goal for NativeGoal {
     fn name(&self) -> &'static str {
-        "BorrowedProbe"
+        if self.target {
+            "BorrowedTarget"
+        } else {
+            "BorrowedProbe"
+        }
     }
     fn flags(&self) -> mod_api::GoalFlags {
-        mod_api::GoalFlags::MOVE
+        if self.target {
+            mod_api::GoalFlags::TARGET
+        } else {
+            mod_api::GoalFlags::MOVE
+        }
     }
     fn can_use(&mut self, _: &mut mod_api::GoalContext<'_>) -> bool {
         true
@@ -51,23 +65,82 @@ impl mod_api::Goal for NativeGoal {
             cx.mob().entity().position(cx.host()),
             Some([2.0, 80.0, 0.5])
         );
-        self.0.hear(Family::Goal, cx.mob().entity().id() == 72);
+        if !self.target {
+            self.probe.hear(Family::Goal, cx.mob().entity().id() == 72);
+        }
     }
 }
 struct GoalPart(Arc<Probe>);
 #[mod_api::horizon_part]
+impl mod_api::BlockPart for GoalPart {
+    fn fall_on(&self, _: &mut dyn mod_api::LevelRandomHost, event: &mut mod_api::FallOnEvent<'_>) {
+        self.0.hear(Family::Landing, event.entity == 72);
+    }
+}
+#[mod_api::horizon_part]
 impl mod_api::EntityPart for GoalPart {
     fn register_goals(&self, goals: &mut mod_api::GoalRegistrar<'_>) {
-        goals.add_goal(0, NativeGoal(self.0.clone()));
+        goals.add_target_goal(
+            0,
+            NativeGoal {
+                probe: self.0.clone(),
+                target: true,
+            },
+        );
+        goals.add_goal(
+            0,
+            NativeGoal {
+                probe: self.0.clone(),
+                target: false,
+            },
+        );
     }
 }
 struct Hooks(Arc<Probe>);
 #[mod_api::__subscriptions]
 impl mod_api::Hooks for Hooks {
+    fn entity_tick_post(
+        &self,
+        _: &mut dyn mod_api::ServerHost,
+        _: &mut mod_api::EntityTickPostEvent<'_>,
+    ) {
+        self.0.posts.fetch_add(1, Ordering::SeqCst);
+    }
     fn register(&self, r: &mut dyn mod_api::Registrar, _: &mod_api::RegistrationContext) {
         if self.0.family == Family::Goal {
             r.entity_part("minecraft:zombie", GoalPart(self.0.clone()));
         }
+        if self.0.family == Family::Landing {
+            let stone = r.block_key("minecraft:stone");
+            r.block_part(stone, GoalPart(self.0.clone()));
+        }
+    }
+    fn should_apply_effect_tick_this_tick(
+        &self,
+        _: &dyn mod_api::Host,
+        event: &mut mod_api::ShouldApplyEffectTickThisTickEvent,
+    ) {
+        if self.0.family == Family::Knockback {
+            event.apply = true;
+        }
+    }
+    fn apply_effect_tick(
+        &self,
+        _: &dyn mod_api::Host,
+        event: &mut mod_api::ApplyEffectTickEvent<'_>,
+    ) {
+        if self.0.family == Family::Knockback && event.entity == Some(72) {
+            eprintln!("BORROWED_REAL_EFFECT_HURT");
+            event.hurt("minecraft:mob_attack", 1.0);
+        }
+    }
+    fn living_knockback(
+        &self,
+        _: &mut dyn mod_api::LevelRandomHost,
+        event: &mut mod_api::LivingKnockbackEvent<'_>,
+    ) -> mod_api::Flow {
+        self.0.hear(Family::Knockback, event.entity == 72);
+        mod_api::Flow::Continue
     }
     fn living_incoming_damage(
         &self,
@@ -123,6 +196,16 @@ impl Drop for Scratch {
 }
 fn run(family: Family) {
     crate::entry::install_client_hooks();
+    let _ =
+        horizon_client::block_contact::HOOKS.set(crate::game::native_hooks::BLOCK_CONTACT_HOOKS);
+    static EFFECT: std::sync::Once = std::sync::Once::new();
+    EFFECT.call_once(|| {
+        horizon_client::brewing::register_mod_effects([(
+            "borrowed-panic:hit".into(),
+            0,
+            horizon_client::brewing::Category::Neutral,
+        )]);
+    });
     eprintln!("BORROWED_ASSERTIONS_DISABLED:{}", !cfg!(debug_assertions));
     for dim in [Dim::Overworld, Dim::Nether] {
         eprintln!("BORROWED_CASE:{family:?}:{dim:?}");
@@ -134,6 +217,7 @@ fn run(family: Family) {
         let probe = Arc::new(Probe {
             family,
             calls: AtomicUsize::new(0),
+            posts: AtomicUsize::new(0),
             armed: AtomicBool::new(true),
         });
         mod_api::testing::with_mods(
@@ -179,6 +263,22 @@ fn run(family: Family) {
                         mob.no_ai = true;
                         if id == 72 {
                             mob.air = 100;
+                            if family == Family::Knockback {
+                                mob.add_effect(
+                                    horizon_client::brewing::effect("borrowed-panic:hit")
+                                        .unwrap()
+                                        .id,
+                                    10,
+                                    0,
+                                );
+                            }
+                            if family == Family::Landing {
+                                mob.no_ai = false;
+                                mob.position.y = 80.1;
+                                mob.velocity.y = -1.0;
+                                mob.fall_distance = 6.0;
+                                mob.on_ground = false;
+                            }
                             if matches!(family, Family::Damage | Family::Shield | Family::Totem) {
                                 mob.fire_ticks = 20;
                             }
@@ -215,19 +315,26 @@ fn run(family: Family) {
                         .default_state("minecraft:stone")
                         .unwrap();
                     game.world.set(4, 80, 4, stone).unwrap();
-                    if family == Family::Movement {
+                    if matches!(family, Family::Movement | Family::Landing) {
                         game.world.set(2, 79, 0, stone).unwrap();
                     }
                     let writes = game.world.path_writes.clone();
                     game.world.random = LegacyRandom::new(0x5eed);
                     let draw = game.world.random.clone().next_long();
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        game.tick_creature_entities()
+                        horizon_client::block_contact::in_level(Some(game.dim.id()), || {
+                            game.tick_creature_entities()
+                        })
                     }));
                     assert_eq!(
                         probe.calls.load(Ordering::SeqCst),
                         1,
                         "real native listener was not reached once"
+                    );
+                    assert_eq!(
+                        probe.posts.load(Ordering::SeqCst),
+                        0,
+                        "aborted pass fired post callbacks"
                     );
                     let payload = result.expect_err("native callback panic was swallowed");
                     assert_eq!(
@@ -287,11 +394,19 @@ fn run(family: Family) {
                     table.end_tick().unwrap();
                     if family == Family::Goal {
                         assert!(
+                            game.mobs[1].ai.targets.is_running("BorrowedTarget"),
+                            "actual native target selector was lost"
+                        );
+                        assert!(
                             game.mobs[1].ai.goals.is_running("BorrowedProbe"),
                             "actual native goal selector was lost"
                         );
                     }
                     game.tick_creature_entities().unwrap();
+                    assert!(
+                        probe.posts.load(Ordering::SeqCst) > 0,
+                        "real post listener never ran on retry"
+                    );
                     table.end_tick().unwrap();
                 })
             },
@@ -305,4 +420,4 @@ macro_rules! cases {
         fn $name() { run(Family::$family); }
     )*};
 }
-cases!(damage => Damage, shield => Shield, totem => Totem, movement => Movement, breathing => Breathing, goal => Goal);
+cases!(damage => Damage, shield => Shield, totem => Totem, movement => Movement, breathing => Breathing, goal => Goal, knockback => Knockback, landing => Landing);
