@@ -29,6 +29,11 @@ fn main() {
     let mut graph = Graph::default();
     let root = graph.add(&rule, &rule.shape("horizon_client::model", None, &ty));
     let metadata = graph.tokens();
+    let helpers: Vec<_> = native_window::helpers(&rule, &graph)
+        .unwrap()
+        .into_iter()
+        .map(|(_, tokens)| tokens)
+        .collect();
     let body = native_window::generate_runtime(
         &rule,
         "horizon_client::model",
@@ -39,5 +44,5 @@ fn main() {
         quote!(plan),
     )
     .unwrap();
-    fs::write(PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("reader.rs"), quote!(fn layouts() -> Vec<mod_points::exposure::Layout> { #metadata } const ROOT: usize = #root; fn reader<'a>(value: &'a model::Game, plan: &'a mod_points::exposure::Plan) -> impl mod_points::native_read::NativeNode + 'a { #body }).to_string()).unwrap();
+    fs::write(PathBuf::from(std::env::var_os("OUT_DIR").unwrap()).join("reader.rs"), quote!(#(#helpers)* fn layouts() -> Vec<mod_points::exposure::Layout> { #metadata } const ROOT: usize = #root; fn reader<'a>(value: &'a model::Game, plan: &'a mod_points::exposure::Plan) -> impl mod_points::native_read::NativeNode + 'a { #body }).to_string()).unwrap();
 }
