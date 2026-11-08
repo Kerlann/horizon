@@ -51,6 +51,7 @@ fn a_vetoed_kill_keeps_the_mob_and_a_later_kill_dies_once() {
     with_mods(mods, || {
         crate::game::native_entity_refs::tests::with_game(|game| {
             game.build_registries();
+            game.load_server_loot();
             game.set_allow_commands(true);
             game.world
                 .chunks
