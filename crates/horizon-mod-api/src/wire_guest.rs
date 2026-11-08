@@ -52,6 +52,95 @@ impl Drop for Keep {
     }
 }
 
+/// A request acknowledges one exact decoded ID, never another member's state. This
+/// remains correct under reentry and when Runtime is member-local within a group.
+#[derive(Default)]
+struct StaticStrings {
+    entries: Vec<Option<&'static str>>,
+    last: Option<u32>,
+    vector_charge: usize,
+}
+
+// Leave at least seven eighths of the group's memory limit for normal mod work.
+// The shared counter charges conservative reservations, not just encoded payload bytes.
+fn cache_charge(bytes: usize) -> Option<usize> {
+    bytes.checked_add(32)?.checked_mul(8)
+}
+
+impl Drop for StaticStrings {
+    fn drop(&mut self) {
+        group_budget_release(self.vector_charge);
+    }
+}
+
+impl StaticStrings {
+    fn resolve(&mut self, id: usize, text: Option<&str>) -> Result<&'static str, WireError> {
+        if id >= crate::wire::MAX_STATIC_STRINGS {
+            return Err(WireError::Invalid("static string id outside table"));
+        }
+        let existing = self.entries.get(id).copied().flatten();
+        if let Some(text) = text {
+            if let Some(existing) = existing {
+                if existing != text {
+                    return Err(WireError::Invalid("changed static string definition"));
+                }
+            } else {
+                // Intern only on first sight. This preserves canonical static references and
+                // the pre-existing bounded storage; known IDs never enter the mutex/hash path.
+                let value = crate::wire::intern(text)?;
+                if id >= self.entries.len() {
+                    let needed = id + 1;
+                    if needed > self.entries.capacity() {
+                        let wanted = needed
+                            .max(self.entries.capacity() * 2)
+                            .min(crate::wire::MAX_STATIC_STRINGS);
+                        let Some(charge) =
+                            cache_charge(wanted * std::mem::size_of::<Option<&'static str>>())
+                        else {
+                            return Ok(value);
+                        };
+                        if !group_budget_try_reserve(charge) {
+                            return Ok(value);
+                        }
+                        let mut replacement = Vec::new();
+                        if replacement.try_reserve_exact(wanted).is_err() {
+                            group_budget_release(charge);
+                            return Ok(value);
+                        }
+                        let Some(actual) = cache_charge(
+                            replacement.capacity() * std::mem::size_of::<Option<&'static str>>(),
+                        ) else {
+                            group_budget_release(charge);
+                            return Ok(value);
+                        };
+                        if actual > charge && !group_budget_try_reserve(actual - charge) {
+                            group_budget_release(charge);
+                            return Ok(value);
+                        }
+                        if actual < charge {
+                            group_budget_release(charge - actual);
+                        }
+                        replacement.extend(self.entries.iter().copied());
+                        self.entries = replacement;
+                        group_budget_release(self.vector_charge);
+                        self.vector_charge = actual;
+                    }
+                    self.entries.resize(needed, None);
+                }
+                self.entries[id] = Some(value);
+            }
+        }
+        let value = self
+            .entries
+            .get(id)
+            .copied()
+            .flatten()
+            .ok_or(WireError::Invalid("unknown static string id"))?;
+        self.last = Some(id as u32);
+        Ok(value)
+    }
+}
+
 #[derive(Default)]
 struct Runtime {
     /// The input the game is writing for the next call.
@@ -63,6 +152,7 @@ struct Runtime {
     spare: Vec<Vec<u8>>,
     #[cfg(feature = "wire-pool-profile")]
     pool_counts: [u64; 5], // kept, dropped (full), dropped (large), reply drops, exports
+    strings: StaticStrings,
 }
 
 impl Runtime {
@@ -205,6 +295,17 @@ pub(crate) fn diagnostic_roundtrip_counts() -> [u64; 3] {
     ROUNDTRIPS.with(|counts| counts.get())
 }
 
+/// One exact static reply ID decoded by this instance, or the reserved no-ID marker.
+pub fn static_ack() -> u32 {
+    RUNTIME.with(|rt| rt.borrow().strings.last.unwrap_or(u32::MAX))
+}
+
+/// Model a fresh wasm instance in a native transport fixture.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn reset_static_strings() {
+    RUNTIME.with(|rt| rt.borrow_mut().strings = StaticStrings::default());
+}
+
 /// A buffer to write a call's arguments into.
 pub fn begin() -> Writer {
     let mut writer = Writer::new();
@@ -218,6 +319,42 @@ pub fn begin() -> Writer {
 pub struct Reply(Vec<u8>);
 
 impl Reply {
+    /// Decode a static string table reply and its scalar writebacks atomically.
+    pub fn take_static<T: Wire>(&self) -> Result<(&'static str, T), WireError> {
+        enum Value<'a> {
+            Known(u32),
+            Definition(u32, &'a str),
+            Uncached(&'a str),
+        }
+        fn text<'a>(reader: &mut Reader<'a>) -> Result<&'a str, WireError> {
+            let len = reader.take_len(1)?;
+            std::str::from_utf8(reader.take_bytes(len)?).map_err(|_| WireError::Utf8)
+        }
+        let mut reader = Reader::new(&self.0);
+        let tag: u8 = reader.take()?;
+        let id: u32 = reader.take()?;
+        let value = match tag {
+            0 => Value::Known(id),
+            1 => Value::Definition(id, text(&mut reader)?),
+            2 if id == u32::MAX => Value::Uncached(text(&mut reader)?),
+            tag => return Err(WireError::Tag(u32::from(tag))),
+        };
+        let tail = reader.take()?;
+        if !reader.rest().is_empty() {
+            return Err(WireError::Trailing);
+        }
+        let string = match value {
+            Value::Known(id) => {
+                RUNTIME.with(|rt| rt.borrow_mut().strings.resolve(id as usize, None))?
+            }
+            Value::Definition(id, text) => {
+                RUNTIME.with(|rt| rt.borrow_mut().strings.resolve(id as usize, Some(text)))?
+            }
+            Value::Uncached(text) => crate::wire::intern(text)?,
+        };
+        Ok((string, tail))
+    }
+
     /// The value of type `T` the game answered with.
     pub fn take<T: Wire>(&self) -> Result<T, WireError> {
         let mut reader = Reader::new(&self.0);

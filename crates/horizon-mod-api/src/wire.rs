@@ -42,11 +42,16 @@ pub use crate::WIRE_LAYOUT as LAYOUT;
 #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
 pub use crate::wire_guest as guest;
 
+/// Maximum static strings retained by either transport string table.
+pub const MAX_STATIC_STRINGS: usize = 4096;
+/// Maximum bytes in one static API string (the existing interning bound).
+pub const MAX_STATIC_STRING_BYTES: usize = 256;
+
 /// Intern a static API string with bounded process-lifetime storage.
 pub fn intern(value: &str) -> Result<&'static str, WireError> {
     use std::sync::{Mutex, OnceLock};
     static STRINGS: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
-    if value.len() > 256 {
+    if value.len() > MAX_STATIC_STRING_BYTES {
         return Err(WireError::Invalid("static string too long"));
     }
     let mut strings = STRINGS
@@ -56,7 +61,7 @@ pub fn intern(value: &str) -> Result<&'static str, WireError> {
     if let Some(&existing) = strings.get(value) {
         return Ok(existing);
     }
-    if strings.len() >= 4096 {
+    if strings.len() >= MAX_STATIC_STRINGS {
         return Err(WireError::Invalid("too many static strings"));
     }
     let value = Box::leak(value.to_owned().into_boxed_str());

@@ -581,7 +581,10 @@ fn layout(surface: &Surface<'_>) -> u64 {
         "resource generation zero reserved; Any identity zero is Unsupported/cross-group capability",
     );
     // The group's mods share one handler table, which lives in a word of the std member.
-    feed("group state: eight words in the std member's horizon_group_state; 0 handler table, 1 cache budget");
+    feed(
+        "group state: eight words in the std member's horizon_group_state; 0 handler table, 1 cache budget",
+    );
+    feed("static replies: bounded acknowledged ids or uncached text");
     for method in &surface.methods {
         feed(&format!("{method:?}"));
     }

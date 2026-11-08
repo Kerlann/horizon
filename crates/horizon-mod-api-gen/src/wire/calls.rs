@@ -410,6 +410,21 @@ fn import_body(types: &Types<'_>, m: &Method, id: usize, prefix: &str) -> String
             m.owner, m.name
         );
     };
+    let static_string = m.ret == Ty::Str(Str::Static);
+    let (owned, lent, take_method) = if static_string {
+        (
+            "&'static str".to_string(),
+            "answer".to_string(),
+            "take_static",
+        )
+    } else {
+        (owned, lent, "take")
+    };
+    let prefix = if static_string {
+        format!("{prefix} w.put(&{guest}::static_ack());")
+    } else {
+        prefix.to_string()
+    };
     let take = if !back.is_empty() {
         let shape = back
             .iter()
@@ -422,8 +437,10 @@ fn import_body(types: &Types<'_>, m: &Method, id: usize, prefix: &str) -> String
             .map(|(n, (i, _))| format!("*p{i}=back.{n};"))
             .collect::<String>();
         format!(
-            "let (answer,back):({owned},({shape},))=r.take().expect(\"the host answered with a value of the wrong type\"); let answer={lent}; {apply} answer"
+            "let (answer,back):({owned},({shape},))=r.{take_method}().expect(\"the host answered with a value of the wrong type\"); let answer={lent}; {apply} answer"
         )
+    } else if static_string {
+        "let (answer,()):(&'static str,())=r.take_static().expect(\"the host answered with an invalid static string\"); answer".to_string()
     } else if m.ret == Ty::Unit {
         String::new()
     } else {
