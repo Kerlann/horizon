@@ -63,15 +63,10 @@ pub trait Forward: Send + Sync {
     fn forward(&self, id: u32, host: PointHost<'_>, record: &mut dyn mod_api::wire::Record);
 }
 
-/// A raw hook endpoint; its only engine inputs are the staged reader's owned rows.
+/// A raw hook endpoint; the record projects owned views during the ordinary marked call.
 pub trait RawForward: Send + Sync {
     /// Dispatches the listener through the ordinary hook transport. Record writeback is atomic.
-    fn forward(
-        &self,
-        id: u32,
-        rows: &[crate::snapshot::Row],
-        record: &mut dyn mod_api::wire::Record,
-    );
+    fn forward(&self, id: u32, record: &mut dyn mod_api::wire::Record);
 }
 
 /// A typed API function.

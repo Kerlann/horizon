@@ -248,6 +248,32 @@ pub trait Record {
     fn apply(&mut self, bytes: &[u8]) -> Result<(), WireError>;
 }
 
+/// A record projected from caller-owned state without a second wire DTO. Both closures may
+/// borrow the same interior-mutable native state; the apply closure must validate every edit
+/// before committing it, exactly as required by `Record::apply`.
+pub struct Projected<E, A> {
+    encode: E,
+    apply: A,
+}
+impl<E, A> Projected<E, A> {
+    /// Bind an ordinary encoder and an atomic reply application to their caller-owned state.
+    pub fn new(encode: E, apply: A) -> Self {
+        Self { encode, apply }
+    }
+}
+impl<E, A> Record for Projected<E, A>
+where
+    E: Fn(&mut Writer),
+    A: FnMut(&[u8]) -> Result<(), WireError>,
+{
+    fn encode(&self, out: &mut Writer) {
+        (self.encode)(out);
+    }
+    fn apply(&mut self, bytes: &[u8]) -> Result<(), WireError> {
+        (self.apply)(bytes)
+    }
+}
+
 /// A call record refused before it can be encoded, such as an oversized owned snapshot.
 /// It follows the normal Writer error path instead of sending a truncated call.
 pub struct Refused(pub WireError);

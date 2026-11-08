@@ -1,0 +1,16 @@
+[package]
+name = "native-fields-fixture"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+horizon-mod-api = { path = "../../../horizon-mod-api" }
+horizon-mod-points = { path = "../../../horizon-mod-points" }
+
+[build-dependencies]
+horizon-mod-api-gen = { path = "../.." }
+quote = "1"
+syn = { version = "2", features = ["full"] }

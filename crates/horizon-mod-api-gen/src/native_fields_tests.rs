@@ -11,6 +11,8 @@ fn project(rule: &Rule, ty: &str, writable: bool) -> Result<Projection, String> 
         quote!(value),
         quote!(builder),
         7,
+        Some(0),
+        3,
         writable,
     )
 }
@@ -31,7 +33,7 @@ fn preorder_ids_and_sparse_writes_share_a_layout() {
     let source = p.snapshot.to_string();
     let parsed: syn::Expr = syn::parse2(p.snapshot).unwrap();
     assert!(matches!(parsed, syn::Expr::Call(_)));
-    assert_eq!(source.matches(". value").count(), 5);
+    assert_eq!(source.matches(". value").count(), 6);
     assert!(source.contains("Some (7u32)"));
     let patch = p.patch.to_string();
     for id in [8, 10, 12, 13] {
@@ -51,7 +53,14 @@ fn identities_track_layout_and_unimplemented_cases_are_explicit() {
         project(&a, "Thing", false).unwrap().identity,
         project(&b, "Thing", false).unwrap().identity
     );
-    for ty in ["Vec<u8>", "Option<u8>", "isize", "&str", "Unlisted"] {
+    for ty in [
+        "Vec<u8>",
+        "Option<u8>",
+        "isize",
+        "String",
+        "&str",
+        "Unlisted",
+    ] {
         assert!(
             project(&a, ty, true)
                 .err()

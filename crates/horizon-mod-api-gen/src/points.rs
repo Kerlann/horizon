@@ -944,9 +944,21 @@ pub(crate) fn records_selected(
         .expect("snapshot key schema");
     let rows = syn::parse_file(include_str!("../../horizon-mod-api/src/row_pages.rs"))
         .expect("snapshot row schema");
-    for item in snapshot.items.into_iter().chain(rows.items) {
+    let patch = syn::parse_file(include_str!("../../horizon-mod-api/src/wire_patch.rs"))
+        .expect("snapshot patch schema");
+    for item in snapshot
+        .items
+        .into_iter()
+        .chain(rows.items)
+        .chain(patch.items)
+    {
         let schema = match item {
-            syn::Item::Type(alias) if alias.ident == "Row" => {
+            syn::Item::Type(alias)
+                if matches!(
+                    alias.ident.to_string().as_str(),
+                    "Row" | "Payload" | "CellBytes"
+                ) =>
+            {
                 alias.ty.to_token_stream().to_string()
             }
             syn::Item::Fn(function) if function.sig.ident == "key" => {
@@ -1004,25 +1016,6 @@ pub(crate) fn records_selected(
             }
         });
         }
-        let raw_function = quote::format_ident!("raw_point_{}", point.name);
-        if point.snapshot && enabled(point) {
-            let raw_listener =
-                quote::format_ident!("{}RowsListener", point_shape::camel(&point.name));
-            guest_functions.extend(quote! {
-                fn #raw_function(place: PointId, input: &mut ::mod_api::wire::Reader<'_>, out: &mut ::mod_api::wire::Writer) -> Result<(), ::mod_api::wire::WireError> {
-                    let listener: u32 = input.take()?;
-                    let rows: crate::snapshot::Rows = input.take()?;
-                    let mut args: #record = input.take()?;
-                    crate::guest::fire(place, listener, true, |function| {
-                        // SAFETY: the generated row constructor checked this record's exact type.
-                        let function = unsafe { ::std::mem::transmute::<*const (), raw_listeners::#raw_listener>(function) };
-                        function(crate::snapshot::Snapshot::new(&rows), &mut args);
-                    })?;
-                    out.put(&()); out.put(&args); Ok(())
-                }
-            });
-            raw_listeners.extend(quote! { pub type #raw_listener = fn(crate::snapshot::Snapshot<'_>, &mut #record); });
-        }
         for name in std::iter::once(point.name.clone())
             .chain(point.at_return.then(|| format!("{}_return", point.name)))
         {
@@ -1033,12 +1026,10 @@ pub(crate) fn records_selected(
             if point.snapshot {
                 raw_places.extend(quote! { (PointId::#variant, #target, #at_return), });
                 if enabled(point) {
-                    let raw_listener =
-                        quote::format_ident!("{}RowsListener", point_shape::camel(&point.name));
                     let constructor = quote::format_ident!("{name}");
                     raw_listeners.extend(quote! {
-                        pub const fn #constructor(injection: &'static str, function: #raw_listener) -> crate::guest::RawListener {
-                            // SAFETY: the alias above checks this place's exact snapshot and record signature.
+                        pub const fn #constructor(injection: &'static str, function: Listener) -> crate::guest::RawListener {
+                            // SAFETY: Listener checks the common owned-view and sparse-edit signature.
                             unsafe { crate::guest::RawListener::new(PointId::#variant, injection, function as *const ()) }
                         }
                     });
@@ -1048,7 +1039,7 @@ pub(crate) fn records_selected(
                 continue;
             }
             if point.snapshot {
-                raw_entries.extend(quote! { table[PointId::#variant as usize] = Some((PointId::#variant, #raw_function as Dispatch)); });
+                raw_entries.extend(quote! { table[PointId::#variant as usize] = Some((PointId::#variant, raw_dispatch as Dispatch)); });
             }
             guest_entries.extend(quote! {
                 table[PointId::#variant as usize] = Some((PointId::#variant, #function as Dispatch));
@@ -1073,7 +1064,11 @@ pub(crate) fn records_selected(
         pub const RAW_PLACES: &[(PointId, &str, bool)] = &[#raw_places];
         #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
         #[allow(missing_docs)]
-        pub mod raw_listeners { use super::*; #raw_listeners }
+        pub mod raw_listeners {
+            use super::*;
+            pub type Listener = fn(crate::snapshot::Snapshot<'_>, &mut ::mod_api::wire::RecordPatch);
+            #raw_listeners
+        }
         #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
         fn guest_dispatch(id: u32, input: &mut ::mod_api::wire::Reader<'_>, out: &mut ::mod_api::wire::Writer) -> Result<(), ::mod_api::wire::WireError> {
             if id == 0xBFFF_FFFF { out.put(&crate::guest::subscriptions()); return Ok(()); }
@@ -1096,6 +1091,16 @@ pub(crate) fn records_selected(
             pub(super) const RAW_TABLE: [Option<(PointId, Dispatch)>; POINT_COUNT] = {
                 let mut table = [None; POINT_COUNT]; #raw_entries table
             };
+            fn raw_dispatch(place: PointId, input: &mut ::mod_api::wire::Reader<'_>, out: &mut ::mod_api::wire::Writer) -> Result<(), ::mod_api::wire::WireError> {
+                let listener: u32 = input.take()?;
+                let (rows, pages, mut patch): crate::snapshot::Payload = input.take()?;
+                crate::guest::fire(place, listener, true, |function| {
+                    // SAFETY: every raw constructor checks this one shared signature.
+                    let function = unsafe { ::std::mem::transmute::<*const (), raw_listeners::Listener>(function) };
+                    function(crate::snapshot::Snapshot::with_pages(&rows, pages.as_ref()), &mut patch);
+                })?;
+                out.put(&()); out.put(&patch); Ok(())
+            }
             #guest_functions
         }
         /// A point's place: its head and return in catalog order.

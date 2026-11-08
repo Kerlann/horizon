@@ -39,6 +39,7 @@ enum Kind {
 ///
 /// `place` must be a stable native place, evaluated once per expression. `builder` is a mutable
 /// Builder place; `base` is its node count before this projection (and the patch's id offset).
+/// `root_parent` and `root_field` locate this projection beneath the containing call node.
 /// `writable` is the producer's authorization, not an inference from the native type. Reference
 /// targets are walked without exposing a retargetable reference; shared references stop writes.
 /// The caller must not evaluate either expression after consuming a non-Copy native argument.
@@ -50,6 +51,8 @@ pub fn generate(
     place: TokenStream,
     builder: TokenStream,
     base: u32,
+    root_parent: Option<u32>,
+    root_field: u32,
     writable: bool,
 ) -> Result<Projection, String> {
     fn build(
@@ -66,7 +69,9 @@ pub fn generate(
             return Err("unimplemented: projection exceeds finite generation limits".into());
         }
         let (identity, kind) = match shape {
-            Shape::Scalar(s) if !matches!(s, Scalar::Str | Scalar::Signed("isize")) => {
+            Shape::Scalar(s)
+                if !matches!(s, Scalar::String | Scalar::Str | Scalar::Signed("isize")) =>
+            {
                 let name = match s {
                     Scalar::Bool => "bool",
                     Scalar::Char => "char",
@@ -178,7 +183,10 @@ pub fn generate(
     }
     let shape = rule.shape(module, owner, ty);
     let mut nodes = 0;
-    let tree = build(rule, &shape, 0, &mut Vec::new(), &mut nodes)?;
+    if root_parent.is_some_and(|parent| parent >= base) {
+        return Err("unimplemented: root parent must precede projection".into());
+    }
+    let tree = build(rule, &shape, root_field, &mut Vec::new(), &mut nodes)?;
     base.checked_add(nodes)
         .ok_or("unimplemented: node id overflow")?;
     let mut next = base;
@@ -220,14 +228,14 @@ pub fn generate(
         };
         match &node.kind {
             Kind::Leaf => {
-                snapshots.push(quote! { (#builder).value(#parent, #field, mod_points::snapshot::key(#key), &(#place))?; });
+                snapshots.push(quote! { (#builder).value(#parent, #field, const { mod_points::snapshot::key(#key) }, &(#place))?; });
                 if writable {
                     cells.push(quote! { mod_api::wire::PatchCell::new(#id, &mut (#place)) });
                 }
             }
             Kind::Fields(fields) => {
                 snapshots.push(
-                    quote! { (#builder).node(#parent, #field, mod_points::snapshot::key(#key))?; },
+                    quote! { (#builder).node(#parent, #field, const { mod_points::snapshot::key(#key) })?; },
                 );
                 for (member, child) in fields {
                     emit(
@@ -244,8 +252,9 @@ pub fn generate(
                 }
             }
             Kind::Array(children) => {
+                let length = children.len() as u64;
                 snapshots.push(
-                    quote! { (#builder).node(#parent, #field, mod_points::snapshot::key(#key))?; },
+                    quote! { (#builder).value(#parent, #field, const { mod_points::snapshot::key(#key) }, &#length)?; },
                 );
                 // Snapshot and patch places differ for arrays: destructure once to prove disjointness.
                 let names: Vec<_> = (0..children.len())
@@ -297,7 +306,7 @@ pub fn generate(
     emit(
         &tree,
         quote!(*__horizon_root),
-        None,
+        root_parent,
         writable,
         &mut next,
         &mut snapshots,

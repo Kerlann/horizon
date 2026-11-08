@@ -59,7 +59,11 @@ fn loopback(id: u32, mut input: Writer, record: &mut dyn Record) {
     reply.take::<()>().unwrap();
     let bad_return = id == 0xC000_0000 + PointId::GameServerLinksListTopReturn as u32
         && BAD_RAW_RETURN.swap(false, Ordering::Relaxed);
-    if id & 0xC000_0000 == 0xC000_0000 && (BAD_RAW.swap(false, Ordering::Relaxed) || bad_return) {
+    if REJECT_READONLY.swap(false, Ordering::Relaxed) {
+        assert!(record.apply(reply.rest()).is_err());
+    } else if id & 0xC000_0000 == 0xC000_0000
+        && (BAD_RAW.swap(false, Ordering::Relaxed) || bad_return)
+    {
         assert!(
             record
                 .apply(&reply.rest()[..reply.rest().len() - 1])
@@ -71,10 +75,9 @@ fn loopback(id: u32, mut input: Writer, record: &mut dyn Record) {
 }
 
 impl RawForward for Loopback {
-    fn forward(&self, id: u32, rows: &[mod_points::snapshot::Row], record: &mut dyn Record) {
+    fn forward(&self, id: u32, record: &mut dyn Record) {
         let mut input = Writer::new();
         input.put(&self.0);
-        input.put(rows);
         loopback(id, input, record);
     }
 }
@@ -85,11 +88,10 @@ static RAW: AtomicUsize = AtomicUsize::new(0);
 static BAD_RAW: AtomicBool = AtomicBool::new(false);
 static BAD_RAW_RETURN: AtomicBool = AtomicBool::new(false);
 static RAW_RETURN: AtomicUsize = AtomicUsize::new(0);
+static FORGE_READONLY: AtomicBool = AtomicBool::new(false);
+static REJECT_READONLY: AtomicBool = AtomicBool::new(false);
 static BODY: AtomicUsize = AtomicUsize::new(0);
-fn raw(
-    snapshot: mod_points::snapshot::Snapshot<'_>,
-    args: &mut mod_points::GameServerLinksListTopArgs,
-) {
+fn raw(snapshot: mod_points::snapshot::Snapshot<'_>, args: &mut mod_api::wire::RecordPatch) {
     assert_eq!(
         snapshot.read::<f32>(snapshot.field(0, 0).unwrap()).unwrap(),
         3.0
@@ -98,25 +100,28 @@ fn raw(
         snapshot.read::<u64>(snapshot.field(0, 1).unwrap()).unwrap(),
         7
     );
-    args.h = 999.0;
-    args.n = 999;
-    args.result = if RAW.fetch_add(1, Ordering::Relaxed) == 1 {
-        Some(42.5)
+    let control = snapshot.field(0, 2).unwrap();
+    assert_eq!(snapshot.read::<Option<f32>>(control).unwrap(), None);
+    args.set(snapshot.field(0, 0).unwrap(), &999.0f32).unwrap();
+    args.set(snapshot.field(0, 1).unwrap(), &999u64).unwrap();
+    let result = if RAW.fetch_add(1, Ordering::Relaxed) == 1 {
+        Some(42.5f32)
     } else {
         None
     };
+    args.set(control, &result).unwrap();
 }
 
-fn raw_return(
-    snapshot: mod_points::snapshot::Snapshot<'_>,
-    args: &mut mod_points::GameServerLinksListTopArgs,
-) {
+fn raw_return(snapshot: mod_points::snapshot::Snapshot<'_>, args: &mut mod_api::wire::RecordPatch) {
     let call = RAW_RETURN.fetch_add(1, Ordering::Relaxed);
-    let value: f32 = snapshot.read(snapshot.field(0, 0).unwrap()).unwrap();
+    let control = snapshot.field(0, 2).unwrap();
+    let value = snapshot.read::<f32>(control).unwrap();
     assert_eq!(value, if call == 1 { 10.0 } else { 1998.0 });
-    args.h = 555.0;
-    args.n = 555;
-    args.result = Some(value + 1.0);
+    if FORGE_READONLY.swap(false, Ordering::Relaxed) {
+        args.set(snapshot.field(0, 0).unwrap(), &555.0f32).unwrap();
+        REJECT_READONLY.store(true, Ordering::Relaxed);
+    }
+    args.set(control, &(value + 1.0)).unwrap();
 }
 
 #[horizon_mod_api_macros::point(name = "game_server_links_list_top", raw, free)]
@@ -228,13 +233,21 @@ fn head_and_return_share_the_hook_arena_and_native_listener_list() {
     );
     assert_eq!(BODY.load(Ordering::Relaxed), 3);
     assert_eq!(RAW_RETURN.load(Ordering::Relaxed), 3);
+    FORGE_READONLY.store(true, Ordering::Relaxed);
+    assert_eq!(
+        fixture_list_top(3.0, 7),
+        1998.0,
+        "one readonly argument edit rejects the entire sparse return patch"
+    );
+    assert_eq!(BODY.load(Ordering::Relaxed), 4);
+    assert_eq!(RAW_RETURN.load(Ordering::Relaxed), 4);
     mod_points::stop("guest");
     mod_points::dispatch::tick(mod_api::HostSide::Server(&mut Quiet), &mut args);
     assert!(!args.cancel);
     assert_eq!(HEAD.load(Ordering::Relaxed), 1);
     assert_eq!(fixture_list_top(3.0, 7), 10.0);
-    assert_eq!(RAW.load(Ordering::Relaxed), 4);
-    assert_eq!(RAW_RETURN.load(Ordering::Relaxed), 3);
+    assert_eq!(RAW.load(Ordering::Relaxed), 5);
+    assert_eq!(RAW_RETURN.load(Ordering::Relaxed), 4);
 }
 
 #[test]

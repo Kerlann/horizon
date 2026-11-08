@@ -86,7 +86,11 @@ owner enable flag and stop behavior as native listeners. Mixins remain native-on
 
 Raw listeners read an owned per-call snapshot, never engine addresses or Rust memory layouts.
 Rows identify a node, its parent, a declaration-order field/index, a generated 64-bit type key
-and a plain Wire value. Reads cannot mutate the snapshot. Declared mutable raw-record fields, including
+and a plain Wire value. Every generated raw constructor accepts the same
+`fn(mod_points::snapshot::Snapshot<'_>, &mut mod_api::wire::RecordPatch)` listener signature.
+Reads cannot mutate the snapshot. The head outcome cell uses `Option<T>` for cancellation with a
+replacement result; the return outcome cell contains `T` directly, like the native return listener.
+Declared mutable raw-record fields, including
 by-value arguments which native raw records expose as `&mut`, use checked, atomic writeback.
 Rejected replies apply no argument or outcome writes. The initial generated readers cover free
 functions with primitive arguments and unit/primitive returns; engine receivers, nominal types,
@@ -147,9 +151,12 @@ Points use that same hook export, call arena and execution budget. API place IDs
 `0x8000_0000 + place`; raw place IDs are `0xC000_0000 + place`. The subscription query
 `0xBFFF_FFFF` returns `(place, injection_id)` pairs, with bit 30 of the place marking raw access.
 Point call input starts with the `u32` subscription index. An API `HostSide` point then carries a
-server/client boolean; a raw call instead carries its flattened row list. Both then carry the
-listener record and reply with unit followed by the record; the host applies only fields which
-are writable at that place. Raw snapshots are
+server/client boolean, followed by its listener record. A raw record contains the owned rows,
+an optional ordinary `RowPages` resource and an initially empty `RecordPatch`; there is no separate
+raw row prefix or API-typed argument proxy. API calls reply with unit and their record; raw calls
+reply with unit and a sparse `RecordPatch`. The host validates the complete patch before applying
+any producer-authorized argument or outcome writes; return argument edits are rejected.
+Raw snapshots are
 bounded to 65,536 rows and 1 MiB of encoded plain values, independently of runtime group limits.
 
 Wire values use little-endian numbers; lengths and collection counts are `u32`, strings are a

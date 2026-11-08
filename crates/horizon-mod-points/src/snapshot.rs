@@ -10,6 +10,13 @@ pub use mod_api::Row;
 pub use pages::{PageSource, Root, Window, with_root};
 /// The raw call's snapshot. Generic tuple/list Wire impls carry it without a second codec.
 pub type Rows = Vec<Row>;
+/// Raw arguments, their optional lazy source and a sparse reply, all ordinary Wire values.
+#[doc(hidden)]
+pub type Payload = (
+    Rows,
+    Option<std::sync::Arc<dyn mod_api::RowPages>>,
+    mod_api::wire::RecordPatch,
+);
 
 /// A stable key for the type spellings in a generated view. Calls use constants, not text.
 pub const fn key(name: &str) -> u64 {
@@ -25,15 +32,31 @@ pub const fn key(name: &str) -> u64 {
 
 /// A read-only view of one raw call's flattened snapshot.
 #[derive(Clone, Copy)]
-pub struct Snapshot<'a>(&'a [Row]);
+pub struct Snapshot<'a> {
+    rows: &'a [Row],
+    pages: Option<&'a std::sync::Arc<dyn mod_api::RowPages>>,
+}
 impl<'a> Snapshot<'a> {
     /// The rows of this call, owned by the call arena rather than the engine.
     pub fn new(rows: &'a [Row]) -> Self {
-        Self(rows)
+        Self { rows, pages: None }
+    }
+    /// Borrow owned rows together with their call-scoped lazy source.
+    pub fn with_pages(
+        rows: &'a [Row],
+        pages: Option<&'a std::sync::Arc<dyn mod_api::RowPages>>,
+    ) -> Self {
+        Self { rows, pages }
+    }
+    /// Fetch an owned bounded window. The source independently checks both lifetime leases.
+    pub fn window(&self, request: mod_api::RowWindow) -> Result<Rows, mod_api::RowError> {
+        self.pages
+            .ok_or(mod_api::RowError::Unsupported)?
+            .window(request)
     }
     /// A declaration-order field or collection index of the given node.
     pub fn field(&self, parent: u32, field: u32) -> Option<u32> {
-        self.0
+        self.rows
             .iter()
             .find(|row| row.1 == Some(parent) && row.2 == field)
             .map(|row| row.0)
@@ -50,10 +73,10 @@ impl<'a> Snapshot<'a> {
         self.row(node).map(|row| row.3)
     }
     fn row(&self, node: u32) -> Option<&Row> {
-        self.0
+        self.rows
             .get(node as usize)
             .filter(|row| row.0 == node)
-            .or_else(|| self.0.iter().find(|row| row.0 == node))
+            .or_else(|| self.rows.iter().find(|row| row.0 == node))
     }
 }
 

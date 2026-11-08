@@ -436,86 +436,105 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
         }
         let raw_fields = point_shape::raw_fields(&function.sig);
         let contract = point_shape::raw_shape(&shape, &function.sig, None);
-        let writable_outcome = contract.outcome_record_mutable == Some(true);
-        let rows = if at_return {
-            let ty = match &function.sig.output {
-                syn::ReturnType::Default => "()".to_string(),
-                syn::ReturnType::Type(_, ty) => quote!(#ty).to_string(),
-            };
-            quote!(__snapshot.value(Some(__root), 0, const { mod_points::snapshot::key(#ty) }, &__result)?;)
-        } else {
-            let rows = raw_fields.iter().enumerate().map(|(index, field)| {
-                let index = index as u32;
-                let ty = &field.ty;
-                let ty = quote!(#ty).to_string();
+        let count = raw_fields.len() as u32;
+        let control_id = count + 1;
+        let nodes = count + 2;
+        let slots: Vec<_> = (0..raw_fields.len())
+            .map(|index| quote::format_ident!("__snapshot_slot_{index}"))
+            .collect();
+        let positions: Vec<_> = (0..raw_fields.len()).map(syn::Index::from).collect();
+        let control_position = syn::Index::from(raw_fields.len());
+        let (prepare, control, apply, control_key) = match (&shape.returns, at_return) {
+            (point_shape::Returns::Value(ty), true) => (
+                quote!(),
+                quote!(__result),
+                quote!(),
+                format!("raw-return-control({})", quote!(#ty)),
+            ),
+            (point_shape::Returns::Value(ty), false) => (
+                quote!(),
+                result_place.clone(),
+                quote!(),
+                format!("raw-result-control({})", quote!(#ty)),
+            ),
+            _ => (
+                quote!(),
+                quote!(#cancel),
+                quote!(),
+                "raw-cancel-control".to_owned(),
+            ),
+        };
+        let roots = raw_fields.iter().map(|field| {
+            if at_return {
+                let name = &field.name;
+                quote!(&mut __args.#name,)
+            } else {
                 let place = &places[&field.input];
-                quote!(__snapshot.value(Some(__root), #index, const { mod_points::snapshot::key(#ty) }, &#place)?;)
-            });
-            quote!(#(#rows)*)
+                quote!(&mut #place,)
+            }
+        });
+        let rows = raw_fields.iter().zip(&positions).enumerate().map(|(index, (field, position))| {
+            let index = index as u32;
+            let ty = &field.ty;
+            let ty = quote!(#ty).to_string();
+            quote!(__snapshot.value(Some(__root), #index, const { mod_points::snapshot::key(#ty) }, &*__state.#position)?;)
+        });
+        let writable_control = contract.outcome_record_mutable == Some(true)
+            && (!at_return || matches!(&shape.returns, point_shape::Returns::Value(_)));
+        let fields = if writable_control {
+            quote!((mod_api::wire::PatchCell::new(#control_id, &mut **__snapshot_control), ()))
+        } else {
+            quote!(())
         };
-        let (prepare, outcome, apply) = match (&shape.returns, at_return) {
-            (point_shape::Returns::Value(_), true) => (
-                quote!(let mut __snapshot_result = Some(__result);),
-                if writable_outcome {
-                    quote!(&mut __snapshot_result)
+        let fields = raw_fields
+            .iter()
+            .zip(&contract.args)
+            .zip(&slots)
+            .enumerate()
+            .rev()
+            .fold(fields, |tail, (index, ((_, metadata), slot))| {
+                if !at_return && metadata.record_mutable {
+                    let id = index as u32 + 1;
+                    quote!((mod_api::wire::PatchCell::new(#id, &mut **#slot), #tail))
                 } else {
-                    quote!(mod_api::wire::ReadOnly(&__snapshot_result))
-                },
-                quote!(if let Some(__value) = __snapshot_result {
-                    __result = __value;
-                }),
-            ),
-            (point_shape::Returns::Value(_), false) => (
-                quote!(),
-                if writable_outcome {
-                    quote!(&mut #result_place)
-                } else {
-                    quote!(mod_api::wire::ReadOnly(&#result_place))
-                },
-                quote!(),
-            ),
-            (_, true) => (
-                quote!(),
-                quote!(mod_api::wire::ReadOnly(&#cancel)),
-                quote!(),
-            ),
-            (_, false) => (
-                quote!(),
-                if writable_outcome {
-                    quote!(&mut #cancel)
-                } else {
-                    quote!(mod_api::wire::ReadOnly(&#cancel))
-                },
-                quote!(),
-            ),
-        };
-        let fields = raw_fields.iter().zip(&contract.args).rev().fold(
-            quote!((#outcome, ())),
-            |tail, (field, metadata)| {
-                if at_return || !metadata.record_mutable {
-                    let name = &field.name;
-                    quote!((mod_api::wire::ReadOnly(&__args.#name), #tail))
-                } else {
-                    let place = &places[&field.input];
-                    quote!((&mut #place, #tail))
+                    tail
                 }
-            },
-        );
+            });
         quote! {
             #prepare
-            let mut __snapshot = mod_points::snapshot::Builder::default();
-            let __rows = (|| -> Result<_, mod_api::wire::WireError> {
-                let __root = __snapshot.node(None, 0, const { mod_points::snapshot::key("raw-call") })?;
-                #rows
-                Ok(__snapshot.finish())
-            })();
-            match __rows {
-                Ok(__rows) => {
-                    __endpoint.forward(__index, &__rows, &mut mod_api::wire::Fields(#fields));
-                    #apply
-                }
-                Err(__error) => __endpoint.forward(__index, &[], &mut mod_api::wire::Refused(__error)),
+            {
+                let __snapshot_state = ::std::cell::RefCell::new((#(#roots)* &mut #control,));
+                mod_points::snapshot::with_root(&__snapshot_state, |__root_handle| {
+                    let mut __record = mod_api::wire::Projected::new(
+                        |__out: &mut mod_api::wire::Writer| {
+                            let __state = __snapshot_state.borrow();
+                            let mut __snapshot = mod_points::snapshot::Builder::default();
+                            let __rows = (|| -> Result<_, mod_api::wire::WireError> {
+                                let __root = __snapshot.node(None, 0, const { mod_points::snapshot::key("raw-call") })?;
+                                #(#rows)*
+                                __snapshot.value(Some(__root), #count, const { mod_points::snapshot::key(#control_key) }, &*__state.#control_position)?;
+                                Ok(__snapshot.finish())
+                            })();
+                            match __rows {
+                                Ok(__rows) => {
+                                    __out.put(&__rows);
+                                    __out.put(&None::<::std::sync::Arc<dyn mod_api::RowPages>>);
+                                    __out.put(&mod_api::wire::RecordPatch::default());
+                                }
+                                Err(__error) => __out.fail(__error),
+                            }
+                        },
+                        |__bytes: &[u8]| {
+                            __root_handle.close();
+                            let mut __state = __snapshot_state.borrow_mut();
+                            let (#(#slots,)* __snapshot_control,) = &mut *__state;
+                            mod_api::wire::Record::apply(&mut mod_api::wire::PatchFields::new(#fields, #nodes), __bytes)
+                        },
+                    );
+                    __endpoint.forward(__index, &mut __record);
+                });
             }
+            #apply
         }
     };
     let head_snapshot = snapshot(false);

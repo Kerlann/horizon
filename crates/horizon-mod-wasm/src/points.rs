@@ -45,13 +45,8 @@ impl Forward for Endpoint {
 }
 
 impl RawForward for Endpoint {
-    fn forward(
-        &self,
-        id: u32,
-        rows: &[mod_points::snapshot::Row],
-        record: &mut dyn mod_api::wire::Record,
-    ) {
-        self.invoke(Frame::default(), id, |out| out.put(rows), record);
+    fn forward(&self, id: u32, record: &mut dyn mod_api::wire::Record) {
+        self.invoke(Frame::default(), id, |_| {}, record);
     }
 }
 
