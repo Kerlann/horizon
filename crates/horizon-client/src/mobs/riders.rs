@@ -417,6 +417,40 @@ pub fn mob_controlled(m: &Mob, w: &MobWorld) -> bool {
     controller(m, w).is_some()
 }
 
+// The navigation loan must end even if passenger AI unwinds. Move the live
+// navigation back, including any progress made before the unwind.
+struct NavigationLoan<'a> {
+    rider: &'a mut Mob,
+    vehicle: &'a mut Mob,
+}
+
+impl<'a> NavigationLoan<'a> {
+    fn new(rider: &'a mut Mob, vehicle: &'a mut Mob) -> Self {
+        let body = vehicle.path_mob();
+        std::mem::swap(&mut rider.ai.nav, &mut vehicle.ai.nav);
+        rider.ai.navigation_redirect = Some(Box::new(super::nav::Redirect {
+            own: std::mem::take(&mut vehicle.ai.nav),
+            body,
+            follow_range: vehicle.attrs.follow_range as f32,
+            passenger: vehicle.extra.mount.is_some(),
+            in_liquid: vehicle.is_in_liquid(),
+        }));
+        Self { rider, vehicle }
+    }
+}
+
+impl Drop for NavigationLoan<'_> {
+    fn drop(&mut self) {
+        let redirect = self
+            .rider
+            .ai
+            .navigation_redirect
+            .take()
+            .expect("navigation loan lasts for the tick");
+        self.vehicle.ai.nav = std::mem::replace(&mut self.rider.ai.nav, redirect.own);
+    }
+}
+
 /// Tick a passenger with Mob.getNavigation's recursive vehicle redirection.
 /// Navigation is lent, not copied: goal start/stop/path progress all address
 /// the same object the vehicle ticks. The pathfinder sees the vehicle body.
@@ -449,23 +483,9 @@ pub fn tick(
         return mobs[index].tick(w, level, events);
     }
     let [rider, vehicle] = mobs.get_disjoint_mut([index, owner]).unwrap();
-    let body = vehicle.path_mob();
-    std::mem::swap(&mut rider.ai.nav, &mut vehicle.ai.nav);
-    rider.ai.navigation_redirect = Some(Box::new(super::nav::Redirect {
-        own: std::mem::take(&mut vehicle.ai.nav),
-        body,
-        follow_range: vehicle.attrs.follow_range as f32,
-        passenger: vehicle.extra.mount.is_some(),
-        in_liquid: vehicle.is_in_liquid(),
-    }));
-    let kept = rider.tick(w, level, events);
-    let redirect = rider
-        .ai
-        .navigation_redirect
-        .take()
-        .expect("navigation loan lasts for the tick");
-    vehicle.ai.nav = std::mem::replace(&mut rider.ai.nav, redirect.own);
-    kept
+    NavigationLoan::new(rider, vehicle)
+        .rider
+        .tick(w, level, events)
 }
 /// `Mob.requiresCustomPersistence`: a passenger never despawns.
 pub fn keeps_alive(m: &Mob) -> bool {
@@ -508,6 +528,53 @@ pub fn read_nbt(m: &mut Mob, tag: &Tag) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // Lower-layer loan test, not a native GoalContext integration test.
+    #[test]
+    fn navigation_loan_restores_both_owners_after_unwind() {
+        for unwind in [false, true] {
+            let kind = crate::mobs::sensor_scan_tests::kind();
+            let mut rider = Mob::new(1, kind.clone(), Vec3::ZERO, 0.0);
+            let mut vehicle = Mob::new(2, kind, Vec3::ZERO, 0.0);
+            rider.ai.nav.target_pos = Some([1, 2, 3]);
+            rider.ai.nav.speed_modifier = 1.25;
+            vehicle.ai.nav.target_pos = Some([4, 5, 6]);
+            vehicle.ai.nav.speed_modifier = 2.5;
+            let payload = std::sync::Arc::new(17);
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let loan = NavigationLoan::new(&mut rider, &mut vehicle);
+                assert_eq!(loan.rider.ai.nav.target_pos, Some([4, 5, 6]));
+                loan.rider.ai.nav.target_pos = Some([7, 8, 9]);
+                loan.rider.ai.nav.speed_modifier = 3.75;
+                // The rider's private navigation can also progress during AI.
+                loan.rider
+                    .ai
+                    .navigation_redirect
+                    .as_mut()
+                    .unwrap()
+                    .own
+                    .stuck = true;
+                if unwind {
+                    std::panic::resume_unwind(Box::new(payload.clone()));
+                }
+            }));
+            if unwind {
+                let caught = result
+                    .unwrap_err()
+                    .downcast::<std::sync::Arc<i32>>()
+                    .unwrap();
+                assert!(std::sync::Arc::ptr_eq(&caught, &payload));
+            } else {
+                assert!(result.is_ok());
+            }
+            assert!(rider.ai.navigation_redirect.is_none());
+            assert_eq!(rider.ai.nav.target_pos, Some([1, 2, 3]));
+            assert_eq!(rider.ai.nav.speed_modifier, 1.25);
+            assert!(rider.ai.nav.stuck);
+            assert_eq!(vehicle.ai.nav.target_pos, Some([7, 8, 9]));
+            assert_eq!(vehicle.ai.nav.speed_modifier, 3.75);
+        }
+    }
 
     #[test]
     fn attachments_turn_with_the_vehicle() {
