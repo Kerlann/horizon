@@ -1,8 +1,8 @@
 //! Release notes: pulldown-cmark events into gpui elements.
 use crate::theme::Theme;
 use gpui::{
-    AnyElement, FontStyle, FontWeight, HighlightStyle, SharedString, StyledText, div, prelude::*,
-    px,
+    div, prelude::*, px, AnyElement, FontStyle, FontWeight, HighlightStyle, SharedString,
+    StyledText,
 };
 use pulldown_cmark::{Event, HeadingLevel, Options, Parser, Tag, TagEnd};
 use std::ops::Range;

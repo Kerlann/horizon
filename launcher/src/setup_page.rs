@@ -1,21 +1,21 @@
 //! The Windows setup window: `horizon-launcher-setup.exe` installs, `horizon-launcher.exe
 //! uninstall` removes. The launcher's own sky and plates (docs/design-system.md, "Night"); the
 //! work is `horizon_launcher::installer`, on a thread, reported over a channel.
-use crate::Kind;
 use crate::glass_ui;
 use crate::scene;
 use crate::shell::{c, text};
 use crate::sky::Sky;
-use crate::theme::{self, Theme, night};
+use crate::theme::{self, night, Theme};
 use crate::titlebar;
+use crate::Kind;
 use gpui::{
-    App, Bounds, ClickEvent, Context, Div, PathPromptOptions, Render, Task, Window, WindowBounds,
-    WindowOptions, div, prelude::*, px, size,
+    div, prelude::*, px, size, App, Bounds, ClickEvent, Context, Div, PathPromptOptions, Render,
+    Task, Window, WindowBounds, WindowOptions,
 };
 use horizon_launcher::backend::Settings;
 use horizon_launcher::i18n::{self, tr};
 use horizon_launcher::installer::{self, Mode, Options, Step};
-use std::sync::mpsc::{Receiver, channel};
+use std::sync::mpsc::{channel, Receiver};
 use std::time::{Duration, Instant};
 
 enum Stage {
@@ -145,15 +145,13 @@ impl Setup {
             };
             let _ = tx.send(Event::Done(result));
         });
-        cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor()
-                    .timer(Duration::from_millis(80))
-                    .await;
-                match this.update(cx, |this, cx| this.drain(cx)) {
-                    Ok(true) => {}
-                    _ => break,
-                }
+        cx.spawn(async move |this, cx| loop {
+            cx.background_executor()
+                .timer(Duration::from_millis(80))
+                .await;
+            match this.update(cx, |this, cx| this.drain(cx)) {
+                Ok(true) => {}
+                _ => break,
             }
         })
         .detach();

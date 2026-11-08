@@ -8,11 +8,20 @@ struct EmptyCode;
 impl Hooks for EmptyCode {}
 
 fn selected(fixture: &Fixture, id: &str, code: bool, side: &str) -> SelectedPackage {
-    let module = b"\0asm\x01\0\0\0";
+    // The smallest shared group member: `dylink.0` memory info and the three guest exports.
+    let module = [
+        b"\0asm\x01\0\0\0".as_slice(),
+        b"\0\x0f\x08dylink.0\x01\x04\0\0\0\0",
+        b"\x01\x04\x01\x60\0\0",
+        b"\x03\x04\x03\0\0\0",
+        b"\x07\x2e\x03\x0ehorizon_layout\0\0\x0ahorizon_in\0\x01\x0chorizon_hook\0\x02",
+        b"\x0a\x0a\x03\x02\0\x0b\x02\0\x0b\x02\0\x0b",
+    ]
+    .concat();
     let wasm = if code {
         format!(
             "\n[wasm]\nsha512='{}'\ntoolchain='fixture'\n",
-            horizon_mod_package::manifest::sha512_of(module)
+            horizon_mod_package::manifest::sha512_of(&module)
         )
     } else {
         String::new()

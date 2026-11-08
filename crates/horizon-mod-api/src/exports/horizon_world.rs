@@ -4,11 +4,11 @@ pub use horizon_core::equipment_slot::EquipmentSlot;
 pub use horizon_core::identifier::Identifier;
 /// A level's key (`LevelDimension::Custom`).
 pub use horizon_core::level_key::LevelKey;
-/// A block state, as the game's state table numbers it.
-pub use horizon_world::registry::BlockStateId;
 pub use horizon_core::nbt::Compound;
 pub use horizon_core::nbt::Tag;
 pub use horizon_core::use_animation::UseAnimation;
+/// A block state, as the game's state table numbers it.
+pub use horizon_world::registry::BlockStateId;
 pub use {
     horizon_core::{
         connection_kind::ConnectionKind, dimension::Dimension as LevelDimension,

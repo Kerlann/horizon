@@ -9,9 +9,6 @@
 #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
 extern crate self as mod_api;
 
-mod row_view;
-pub use row_view::RowView;
-
 /// A saved fluid name retained for the lifetime of the process.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: only trusted engine boundaries create handles
@@ -6376,11 +6373,6 @@ pub(crate) mod built {
 
 include!(concat!(env!("OUT_DIR"), "/mod_api_exports_root.rs"));
 include!(concat!(env!("OUT_DIR"), "/wire_generated.rs"));
-#[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
-#[doc(hidden)]
-pub mod wire_guest;
-mod wire_slots;
-mod wire_types;
 
 #[cfg(test)]
 mod brewing_dispatch_tests {

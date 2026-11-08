@@ -3,8 +3,8 @@
 //! inventory tabs, and the slots that hold icons downloaded at run time.
 use crate::theme::{self, Theme};
 use gpui::{
-    AnyElement, App, ClickEvent, Div, FontWeight, Hsla, ImageSource, ObjectFit, SharedString, Svg,
-    Window, div, img, prelude::*, px, svg,
+    div, img, prelude::*, px, svg, AnyElement, App, ClickEvent, Div, FontWeight, Hsla, ImageSource,
+    ObjectFit, SharedString, Svg, Window,
 };
 use std::borrow::Cow;
 

@@ -20,7 +20,6 @@
 
 - [Making a content mod](how-to/content-mods.md)
 - [Native mods](how-to/native-mods.md)
-  - [Typed bulk block edits](how-to/native-mods/typed-block-edits.md)
 - [Caching reload-stable recipe definitions](how-to/reload-recipes.md)
 - [Query attachment holders](how-to/attachments.md)
 - [Game rule categories](how-to/game-rule-categories.md)

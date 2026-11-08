@@ -16,7 +16,7 @@ pub mod java;
 pub mod java_instance;
 pub mod modrinth;
 
-pub use horizon_mod_package::install_lock::{HomeLockGuard, lock_home, try_lock_home};
+pub use horizon_mod_package::install_lock::{lock_home, try_lock_home, HomeLockGuard};
 
 use serde::{Deserialize, Serialize};
 

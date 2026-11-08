@@ -102,6 +102,11 @@ pub(crate) fn module_files(
     let mut files = Vec::new();
     let mut pending = vec![(module, path, dir, Vec::new())];
     while let Some((module, path, dir, cfg)) = pending.pop() {
+        // A declared module with no file is one another target builds (its file named by a
+        // `cfg_attr` path this walk already followed): nothing here compiles from it.
+        if !path.is_file() {
+            continue;
+        }
         let source = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         let file = crate::game_modules::parse(&path, &source)?;
         if test_only(&file.attrs) || (every_build && gated(&file.attrs)) {
@@ -176,6 +181,46 @@ fn children(
             },
             _ => None,
         });
+        // `#[cfg_attr(unix, path = "a/unix.rs")]`: each target's file, under its condition.
+        let per_target: Vec<(String, String)> = declared
+            .attrs
+            .iter()
+            .filter(|attr| attr.path().is_ident("cfg_attr"))
+            .filter_map(|attr| {
+                let args = attr
+                    .parse_args_with(
+                        syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+                    )
+                    .ok()?;
+                let mut args = args.into_iter();
+                let condition = args.next()?;
+                let path = args.find_map(|meta| match meta {
+                    syn::Meta::NameValue(value) if value.path.is_ident("path") => {
+                        match value.value {
+                            syn::Expr::Lit(syn::ExprLit {
+                                lit: syn::Lit::Str(path),
+                                ..
+                            }) => Some(path.value()),
+                            _ => None,
+                        }
+                    }
+                    _ => None,
+                })?;
+                Some((condition.to_token_stream().to_string(), path))
+            })
+            .collect();
+        if declared.content.is_none() && explicit.is_none() && !per_target.is_empty() {
+            for (condition, relative) in per_target {
+                let file = here.join(relative);
+                let dir = file
+                    .parent()
+                    .expect("a module file has a folder")
+                    .to_owned();
+                let cfg = cfg.iter().cloned().chain([condition]).collect();
+                pending.push((child.clone(), file, dir, cfg));
+            }
+            continue;
+        }
         if let Some((_, inner)) = &declared.content {
             // An inline module's children live in its folder, named by its own `#[path]` if any.
             let inner_dir = dir.join(explicit.as_deref().unwrap_or(&name));
@@ -2103,5 +2148,53 @@ mod tests {
             );
         }
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    /// A module whose file each target names with `cfg_attr(…, path = …)` is read from each
+    /// target's file under its condition; it has no default file, and none is needed.
+    #[test]
+    fn per_target_module_paths_are_followed_and_need_no_default_file() {
+        let dir = std::env::temp_dir().join(format!("points-cfg-attr-{}", std::process::id()));
+        let src = dir.join("src");
+        std::fs::create_dir_all(src.join("control")).unwrap();
+        std::fs::write(
+            src.join("lib.rs"),
+            "#[cfg_attr(unix, path = \"control/unix.rs\")]\n#[cfg_attr(windows, path = \"control/windows.rs\")]\nmod platform;\n",
+        )
+        .unwrap();
+        std::fs::write(src.join("control/unix.rs"), "pub fn a() {}").unwrap();
+        std::fs::write(src.join("control/windows.rs"), "pub fn b() {}").unwrap();
+        let files = module_files("k".into(), src.join("lib.rs"), src.clone(), false).unwrap();
+        let mut found: Vec<_> = files
+            .iter()
+            .map(|f| {
+                (
+                    f.module.as_str(),
+                    f.path.strip_prefix(&src).unwrap().to_owned(),
+                    f.cfg.clone(),
+                )
+            })
+            .collect();
+        found.sort();
+        assert_eq!(
+            found,
+            [
+                ("k", "lib.rs".into(), vec![]),
+                (
+                    "k::platform",
+                    "control/unix.rs".into(),
+                    vec!["unix".to_owned()]
+                ),
+                (
+                    "k::platform",
+                    "control/windows.rs".into(),
+                    vec!["windows".to_owned()]
+                ),
+            ]
+        );
+        // Every build compiles neither, so the point walk leaves the module out.
+        let every = module_files("k".into(), src.join("lib.rs"), src, true).unwrap();
+        assert_eq!(every.len(), 1);
+        std::fs::remove_dir_all(dir).unwrap();
     }
 }

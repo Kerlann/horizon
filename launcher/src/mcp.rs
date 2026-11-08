@@ -8,7 +8,7 @@ use horizon_launcher::account::{self, Accounts, SignIn, SignInState};
 use horizon_launcher::backend::{self, Job, Logged};
 use horizon_launcher::instances;
 use horizon_launcher::jars::{self, Permission};
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::path::PathBuf;
 use std::time::Duration;
 

@@ -1,6 +1,6 @@
 //! Profile-head I/O stays on workers; every account surface shares the same pixel-sharp cache.
 use super::*;
-use gpui::{RenderImage, img};
+use gpui::{img, RenderImage};
 use std::{
     cell::RefCell,
     path::PathBuf,

@@ -318,7 +318,6 @@ pub trait LevelsBackend {
     /// scale, ambient light, fixed time, infiniburn, monster spawn light, sky and the gameplay
     /// switches a mod's `DimensionSettings` or a data pack sets. A level whose type neither gave
     /// fields for has the Overworld's. None for a stale handle; on a client, the level it shows.
-    /// Not on wasm: the merged bed and day-cycle fields have no wire layout yet.
     #[access(WorldOnly)]
     fn level_dimension_type(&self, level: LevelRef) -> Option<LevelDimensionType>;
     /// Side: server.

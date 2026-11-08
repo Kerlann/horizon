@@ -8,7 +8,7 @@
 //! stars steps to its next brightness): a few frames a second. The sky stands still under reduced
 //! motion, and stops 10 s after the window loses focus ([`motion`]).
 use crate::art::bake;
-use gpui::{Div, RenderImage, div, img, prelude::*, px, rgb};
+use gpui::{div, img, prelude::*, px, rgb, Div, RenderImage};
 use horizon_theme::night::{Night, SkyArt};
 use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
