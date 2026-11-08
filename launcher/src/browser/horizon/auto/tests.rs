@@ -34,6 +34,7 @@ fn index_of(versions: &[(&str, &str, &Path)]) -> Index {
     let listed = versions
         .iter()
         .map(|(version, game, path)| index::Version {
+            native_binaries: Vec::new(),
             version: (*version).into(),
             api: "0.2".into(),
             side: Some(horizon_mod_package::Side::Both),

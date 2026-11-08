@@ -1173,6 +1173,9 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_mods_item_modifiers_reach_the_wearer() {
+        // The game's stack snapshots, which the hook needs, as its startup installs them;
+        // without this the test passes only after another test in the process installed them.
+        crate::game::api_values::install_stack_hooks();
         let mods = vec![mod_api::ModEntry::new("plated", Box::new(Plated))].into();
         mod_api::testing::with_mods(mods, || {
             with_game(|game| {

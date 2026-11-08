@@ -5431,6 +5431,13 @@ mod tests {
         // Another test installs parts with tags: a dispatch must run on a game thread.
         mark_game_thread();
         stick_part("probe", Probe);
+        // The level answers blocks as their load-resolved keys.
+        crate::registry_keys::resolve_block_keys(["minecraft:stone", "minecraft:dirt"], |_| {
+            let properties = std::collections::BTreeMap::new();
+            horizon_mod_runtime::block_definitions::BlockDefinition::new(&[&properties], 0)
+                .map_err(|error| format!("{error:?}"))
+        })
+        .unwrap();
         let stack = stick();
         for (block, expected) in [("minecraft:stone", true), ("minecraft:dirt", false)] {
             let (pos, face) = ([1, 2, 3], [0, 1, 0]);

@@ -18,9 +18,10 @@ fn commit(host: &mut dyn ServerHost, test: impl FnOnce(&mut dyn ServerHost, &Tra
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
 fn internal_slots_preserve_automation_limits_and_nested_transactions() {
-    with_mod_parts(|root| {
+    const NAME: &str = "game::native_block_entity_item_tests::internal_slots_preserve_automation_limits_and_nested_transactions";
+    with_mod_parts(NAME, |root| {
         super::native_entity_refs::tests::with_game_at(root, |game| {
             let entity = mod_holder(game);
             let get = |host: &dyn Host, slot| entity.item_slot(host, slot);

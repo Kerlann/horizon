@@ -37,3 +37,6 @@ unlock/display-id synchronization. This slice deliberately leaves vanilla tabs,
 search, layouts and unlock behavior unchanged. Adding custom tabs, displaying and
 searching recipes there, and unlocking them like vanilla remain follow-up work
 for #5501; a declaration alone will not make a recipe visible.
+
+For proposed book identities and saved open/filter flags, see the
+[custom recipe-book settings design](../../concepts/recipe-book-types.md).

@@ -905,6 +905,7 @@ pub fn publish(
     let sha256 = index::sha256_file(file).map_err(bad)?;
     let extension = kind.extension().unwrap_or("zip");
     let version = EntryVersion {
+        native_binaries: Vec::new(),
         version: form.version.trim().to_owned(),
         published: date(now()),
         game: form.game.trim().to_owned(),

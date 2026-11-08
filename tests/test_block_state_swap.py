@@ -7,6 +7,8 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "tools/refactors/api-pr3b/swap_state_symbols.py"
+# The scratch directories live under the checkout's `target/`, which a cold CI cache does not have yet.
+(ROOT / "target").mkdir(exist_ok=True)
 
 
 class BlockStateSwapTest(unittest.TestCase):
