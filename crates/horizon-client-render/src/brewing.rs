@@ -424,11 +424,17 @@ pub fn brewing_fuel(items: &Items, stack: &ItemStack) -> Option<(Value, Value)> 
             return None;
         }
         if let Some(own) = data.other("minecraft:brewing_fuel") {
-            let component = horizon_client_core::scoreboard::tag_to_json(own);
-            return Some((
-                component["uses"].clone(),
-                component["speed_multiplier"].clone(),
-            ));
+            use horizon_core::nbt::Tag;
+            let uses = match own.get("uses")? {
+                Tag::Byte(n) => Value::from(*n),
+                Tag::Short(n) => Value::from(*n),
+                Tag::Int(n) => Value::from(*n),
+                Tag::Long(n) => Value::from(*n),
+                // Named and structured providers remain supported.
+                provider => horizon_core::json_nbt::tag_to_json(provider).ok()?,
+            };
+            let speed = horizon_core::json_nbt::tag_to_json(own.get("speed_multiplier")?).ok()?;
+            return Some((uses, speed));
         }
     }
     items.get(&stack.item).and_then(|i| i.brewing_fuel.clone())
@@ -514,34 +520,36 @@ mod tests {
                 output: ItemStack::new("minecraft:potion", 1).with_potion("minecraft:awkward"),
             }],
         };
-        let mut fuel = ItemStack::new("minecraft:stone", 2);
-        fuel.data_mut().set_loot_component(
-            "minecraft:brewing_fuel",
-            &Some(
-                horizon_core::json_nbt::json_to_tag(
-                    &serde_json::json!({"uses": 7, "speed_multiplier": 2.5}),
-                )
-                .unwrap(),
-            ),
-        );
-        let mut stand = BrewingStand::new();
-        stand.items[0] = Some(ItemStack::new("minecraft:potion", 1).with_potion("minecraft:water"));
-        stand.items[3] = Some(ItemStack::new("minecraft:nether_wart", 1));
-        stand.items[4] = Some(fuel);
-        let providers = Providers::empty();
-        stand.tick(&brewing, &items, &providers);
-        assert_eq!((stand.brew_time, stand.fuel, stand.total_fuel), (160, 6, 7));
-        assert_eq!(stand.items[4].as_ref().unwrap().count, 1);
-        for _ in 1..160 {
-            assert!(!stand.tick(&brewing, &items, &providers).brewed);
+        use horizon_core::nbt::Tag;
+        for uses in [Tag::Byte(7), Tag::Short(7), Tag::Int(7), Tag::Long(7)] {
+            let mut fuel = ItemStack::new("minecraft:stone", 2);
+            fuel.data_mut().set_loot_component(
+                "minecraft:brewing_fuel",
+                &Some(Tag::compound([
+                    ("uses", uses),
+                    ("speed_multiplier", Tag::Float(2.5_f32.to_bits())),
+                ])),
+            );
+            let mut stand = BrewingStand::new();
+            stand.items[0] =
+                Some(ItemStack::new("minecraft:potion", 1).with_potion("minecraft:water"));
+            stand.items[3] = Some(ItemStack::new("minecraft:nether_wart", 1));
+            stand.items[4] = Some(fuel);
+            let providers = Providers::empty();
+            stand.tick(&brewing, &items, &providers);
+            assert_eq!((stand.brew_time, stand.fuel, stand.total_fuel), (160, 6, 7));
+            assert_eq!(stand.items[4].as_ref().unwrap().count, 1);
+            for _ in 1..160 {
+                assert!(!stand.tick(&brewing, &items, &providers).brewed);
+            }
+            assert!(stand.tick(&brewing, &items, &providers).brewed);
+            assert_eq!(
+                stand.items[0].as_ref().unwrap().potion(),
+                Some("minecraft:awkward")
+            );
+            assert_eq!(stand.fuel, 6);
+            assert_eq!(stand.items[4].as_ref().unwrap().count, 1);
         }
-        assert!(stand.tick(&brewing, &items, &providers).brewed);
-        assert_eq!(
-            stand.items[0].as_ref().unwrap().potion(),
-            Some("minecraft:awkward")
-        );
-        assert_eq!(stand.fuel, 6);
-        assert_eq!(stand.items[4].as_ref().unwrap().count, 1);
     }
 
     #[test]
