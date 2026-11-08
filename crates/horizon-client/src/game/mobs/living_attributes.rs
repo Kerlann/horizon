@@ -225,13 +225,13 @@ impl AttributeWrite {
                 || (id == "minecraft:baby" && finalize::transient(m, a).is_some())
         };
         let remove = |m: &mut Mob, id: &str| {
-            finalize::remove_modifier(m, a, id);
             if id == "minecraft:baby" && finalize::transient(m, a).is_some() {
                 m.extra
                     .attributes
                     .get_or_insert_with(Box::default)
                     .baby_speed_removed = true;
             }
+            finalize::remove_modifier(m, a, id);
         };
         match self {
             Self::Add {
