@@ -406,7 +406,7 @@ impl Game<'_> {
                     .filter(|m| !m.removed && m.alive() && m.extra.mount == Some(id))
                     .count()
                     .max(usize::from(mob.extra.rider.is_some()));
-                if !horizon_client::mobs::riders::can_add_passenger(mob, players + mobs) {
+                if !force && !horizon_client::mobs::riders::can_add_passenger(mob, players + mobs) {
                     return false;
                 }
             }
@@ -478,8 +478,8 @@ impl Game<'_> {
     ///
     /// Players and mobs can ride a mob, boat, minecart or generic seat entity. Returns false for
     /// unsupported entity pairs, stale or held-out handles, a full stored
-    /// vehicle, a cycle, or a canceled mount or dismount. Mob vehicle capacity
-    /// follows its species; minecarts store one passenger and boats store one
+    /// vehicle, a cycle, or a canceled mount or dismount. Normal mob capacity
+    /// follows its species and is bypassed by force; minecarts store one passenger and boats store one
     /// mob and up to two passengers in total. Generic seats admit one passenger unless forced.
     /// `force` bypasses normal admission checks, not these storage limits.
     /// Player boarding cooldown and the strider's

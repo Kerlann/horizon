@@ -53,7 +53,6 @@ horizon-client game::first_tick_registration_tests::saved_block_and_fluid_ticks_
 horizon-client game::first_tick_registration_tests::water_placed_before_the_first_world_tick_keeps_its_flow_tick #2174
 horizon-client game::functions::tests::forked_function_replies_keep_task_order_and_actual_callbacks #2174
 horizon-client game::functions::tests::prepared_function_calls_keep_causality_and_fallback_boundaries #2174
-horizon-client game::commands::execute::passenger_relation_tests::h150_actual_registered_passengers_select_direct_live_mob_and_boat_children #2175
 horizon-client game::dragon::tests::dragon_summon_command_finalizes_only_without_nbt #2175
 horizon-client game::native_entities::tests::native_roots_keep_the_loaded_id_and_do_not_allocate_twice #2175
 horizon-client game::persist::summon_uuid_conflict_tests::summon_skips_a_uuid_taken_earlier_in_the_same_tree #2175
