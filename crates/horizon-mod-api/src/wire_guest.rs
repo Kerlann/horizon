@@ -32,7 +32,7 @@ struct MemoKey {
 }
 struct Memo {
     key: MemoKey,
-    reply: Vec<u8>,
+    value: Box<dyn Any>,
 }
 #[derive(Default)]
 struct MemoFrame {
@@ -473,34 +473,34 @@ fn host_preserving(id: u32, args: Writer) -> Reply {
 
 // Memoize checked reply bytes, never an unvalidated result or a borrow into a pooled buffer.
 // Bounded keys/results merely miss; spare vectors retain capacity, not values across root calls.
-fn memoized<T>(
+fn memoized<T: Copy + 'static>(
     id: u32,
     key: Option<MemoKey>,
     args: Writer,
     decode: impl FnOnce(&Reply) -> Result<T, WireError>,
 ) -> Result<T, WireError> {
-    let key = key.filter(|_| args.error().is_none());
+    let key = key.filter(|_| args.error().is_none() && std::mem::size_of::<T>() <= 512);
     let mut args = Some(args);
     let cached = key.as_ref().and_then(|key| {
         RUNTIME.with(|rt| {
-            let rt = rt.borrow();
+            let mut rt = rt.borrow_mut();
             let memo = rt.keeps.last()?.memo.as_ref()?;
             let entry = memo.entries[..memo.active]
                 .iter()
                 .find(|entry| &entry.key == key)?;
-            let mut bytes = args
-                .take()
-                .expect("memo hit owns the argument buffer")
-                .into_bytes();
-            bytes.clear();
-            bytes.extend_from_slice(&entry.reply);
-            Some(Reply(bytes))
+            let value = *entry.value.downcast_ref::<T>()?;
+            rt.recycle(
+                args.take()
+                    .expect("memo hit owns the argument buffer")
+                    .into_bytes(),
+            );
+            Some(value)
         })
     });
-    if let Some(reply) = cached {
-        return decode(&reply);
+    if let Some(value) = cached {
+        return Ok(value);
     }
-    let mut reply = host_preserving(id, args.expect("memo miss retains its argument buffer"));
+    let reply = host_preserving(id, args.expect("memo miss retains its argument buffer"));
     let value = decode(&reply)?;
     if let Some(key) = key.filter(|_| reply.0.len() <= 512) {
         RUNTIME.with(|rt| {
@@ -517,20 +517,16 @@ fn memoized<T>(
                 }
                 memo.entries.push(Memo {
                     key,
-                    reply: Vec::new(),
+                    value: Box::new(value),
                 });
             } else {
-                memo.entries[memo.active].key = key;
-            }
-            let entry = &mut memo.entries[memo.active];
-            if reply.0.capacity() <= 512 {
-                std::mem::swap(&mut entry.reply, &mut reply.0);
-            } else {
-                entry.reply.clear();
-                if entry.reply.try_reserve_exact(reply.0.len()).is_err() {
-                    return;
+                let entry = &mut memo.entries[memo.active];
+                entry.key = key;
+                if let Some(old) = entry.value.downcast_mut::<T>() {
+                    *old = value;
+                } else {
+                    entry.value = Box::new(value);
                 }
-                entry.reply.extend_from_slice(&reply.0);
             }
             memo.active += 1;
         });
@@ -927,8 +923,13 @@ mod tests {
         assert_eq!(memo_request(7, &[1; 65]).unwrap(), 7);
         assert_eq!(memo_request(7, &[1; 65]).unwrap(), 8);
         for _ in 0..2 {
-            let value = memoized(77, memo_key(77, &[]), begin(), Reply::take::<Vec<u8>>).unwrap();
-            assert_eq!(value, vec![4; 512]);
+            let value = memoized(77, memo_key(77, &[]), begin(), |r| {
+                let bytes = r.take::<Vec<u8>>()?;
+                assert_eq!(bytes, vec![4; 512]);
+                Ok(bytes.len())
+            })
+            .unwrap();
+            assert_eq!(value, 512);
         }
         assert_eq!(calls.get(), 10);
         assert!(memo_request(88, &[]).is_err());
