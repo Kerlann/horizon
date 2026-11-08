@@ -1701,7 +1701,7 @@ enum BlockEntitySnapshotError {
 // Scratch stage-zero measurements only; do not carry this into production.
 type Stage0EntityState = (
     std::collections::BTreeMap<u64, (u64, Vec<u8>)>,
-    [u64; 8],
+    [u64; 10],
     [u128; 3],
 );
 fn stage0_entity_state() -> Option<&'static std::sync::Mutex<Stage0EntityState>> {
@@ -1713,26 +1713,32 @@ fn stage0_entity_state() -> Option<&'static std::sync::Mutex<Stage0EntityState>>
         })
         .as_ref()
 }
+fn stage0_entity_fields(api: &mod_api::ModBlockEntity) -> mod_api::wire::Writer {
+    let mut fields = mod_api::wire::Writer::new();
+    fields.put_str(api.id());
+    fields.put(&api.nbt);
+    fields.put(&api.items);
+    fields.put(&api.data);
+    fields
+}
 fn stage0_observe_entity(
     state: &std::sync::Mutex<Stage0EntityState>,
     api: &mod_api::ModBlockEntity,
 ) {
     use mod_api::wire::{Reader, Writer};
-    let mut fields = Writer::new();
-    fields.put_str(api.id());
-    fields.put(&api.nbt);
-    fields.put(&api.items);
-    fields.put(&api.data);
+    let fields = stage0_entity_fields(api);
     let revision = api.revision();
     let mut state = state.lock().unwrap();
-    if let Some((changes, bytes)) = state.0.insert(
-        revision.identity(),
-        (revision.changes(), fields.into_bytes()),
-    ) {
+    // Compare next input against the PREVIOUS APPLIED engine state, not the
+    // previous input: guest changes from the last tick are already in the baseline.
+    if let Some((changes, bytes)) = state.0.get(&revision.identity()) {
+        let same = fields.bytes() == bytes;
+        let same_revision = *changes == revision.changes();
         state.1[0] += 1;
-        let same = state.0[&revision.identity()].1 == bytes;
-        state.1[1] += u64::from(same && changes != revision.changes());
-        state.1[2] += u64::from(!same && changes == revision.changes());
+        state.1[1] += u64::from(same && !same_revision);
+        state.1[2] += u64::from(!same && same_revision);
+        state.1[8] += u64::from(same && same_revision);
+        state.1[9] += u64::from(!same && !same_revision);
     }
     let mut original = Writer::new();
     original.put(api);
@@ -1802,7 +1808,17 @@ impl super::Game<'_> {
         let applied = apply_block_entity_snapshot(entity, &api, revision, self.items());
         let apply_ns = started.map_or(0, |s| s.elapsed().as_nanos());
         if let Some(state) = stage0 {
+            let after = entity.try_into_api().ok().map(|after| {
+                (
+                    after.revision().identity(),
+                    after.revision().changes(),
+                    stage0_entity_fields(&after).into_bytes(),
+                )
+            });
             let mut state = state.lock().unwrap();
+            if let Some((identity, changes, bytes)) = after {
+                state.0.insert(identity, (changes, bytes));
+            }
             state.1[6] += 1;
             state.1[7] += u64::from(applied.is_err());
             state.2[0] += conversion_ns;
@@ -1810,7 +1826,7 @@ impl super::Game<'_> {
             state.2[2] += apply_ns;
             if state.1[6] == 200_000 {
                 eprintln!(
-                    "stage0 game (comparisons, counter-only changes, bytes-only changes, exact roundtrip, changed roundtrip, decode failures, applies, rejected)={:?}; ns (engine-to-api, native call, apply)={:?}",
+                    "stage0 game (comparisons, counter-only changes, bytes-only changes, exact roundtrip, changed roundtrip, decode failures, applies, rejected, stable baseline, externally changed baseline)={:?}; ns (engine-to-api, native call, apply)={:?}",
                     state.1, state.2
                 );
             }
