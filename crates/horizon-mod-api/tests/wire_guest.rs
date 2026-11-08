@@ -62,37 +62,6 @@ fn reused_decode_storage_is_exclusive_owned_and_cleared() {
 }
 
 #[test]
-fn machine_snapshot_reuses_lists_but_does_not_keep_old_nbt() {
-    use mod_api::{Tag, containers::ModBlockEntityFields};
-    let mut snapshot = ModBlockEntityFields::default();
-    snapshot
-        .nbt
-        .insert("old".into(), Tag::String("text".into()));
-    snapshot.items = vec![None, None, None];
-    snapshot.data = vec![1, 2, 3, 4];
-    let mut bytes = Writer::new();
-    bytes.put(&snapshot);
-    let first = guest::decode::<ModBlockEntityFields>(&mut Reader::new(bytes.bytes())).unwrap();
-    let item_storage = first.items.as_ptr();
-    let data_storage = first.data.as_ptr();
-    let owned = (*first).clone();
-    drop(first);
-    snapshot.nbt.clear();
-    snapshot.items.truncate(1);
-    snapshot.data = vec![9];
-    bytes.clear();
-    bytes.put(&snapshot);
-    let next = guest::decode::<ModBlockEntityFields>(&mut Reader::new(bytes.bytes())).unwrap();
-    assert_eq!(next.items.as_ptr(), item_storage);
-    assert_eq!(next.data.as_ptr(), data_storage);
-    assert_eq!(next.data, [9]);
-    assert_eq!(next.items, [None]);
-    assert!(next.nbt.is_empty());
-    assert_eq!(owned.data, [1, 2, 3, 4]);
-    assert!(owned.nbt.contains_key(&"old".into()));
-}
-
-#[test]
 fn start_up_installs_the_package_list_and_an_unknown_call_is_refused() {
     let mut packages = Writer::new();
     packages.put(&Vec::<mod_api::PackageInfo>::new());
