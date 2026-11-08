@@ -735,7 +735,7 @@ fn borrowed(
     if let Some(view) = &d.view {
         let pointee = rust_ty(types, &view.pointee, false);
         let read = format!(
-            "let mut {name}_held: {pointee} = input.take()?; let mut {name} = {}::new(&{}{name}_held);",
+            "let (mut {name}_held, {name}_cache_key): ({pointee},_) = crate::wire::guest::cache_probe::take(input)?; let mut {name} = {}::new(&{}{name}_held);",
             d.rust,
             if view.mutable { "mut " } else { "" }
         );
@@ -810,7 +810,7 @@ fn borrowed(
         } else if leaf.optional {
             write!(back, "out.put_opt({}.as_deref());", leaf.path).unwrap();
         } else if leaf.view {
-            write!(back, "{}.__wire_put_snapshot(out);", leaf.path).unwrap();
+            write!(back, "let cache_start=out.bytes().len(); {}.__wire_put_snapshot(out); if out.error().is_none() {{ crate::wire::guest::cache_probe::retain({}_held, {}_cache_key, &out.bytes()[cache_start..]); }}", leaf.path, leaf.local, leaf.local).unwrap();
         } else {
             write!(
                 back,

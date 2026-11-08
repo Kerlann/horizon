@@ -3,6 +3,8 @@
 //! the game and the entry points the game calls. The generated half (`Guest`, `hook`) sits
 //! beside it. See the boundary's design in `horizon-mod-wasm`.
 use crate::wire::{Id, Reader, Slots, Wire, WireError, Writer};
+#[path = "wire_cache_probe.rs"]
+mod cache_probe;
 use std::any::Any;
 use std::cell::RefCell;
 use std::sync::Arc;
