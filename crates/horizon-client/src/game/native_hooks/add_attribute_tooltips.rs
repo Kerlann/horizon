@@ -1,5 +1,5 @@
 use super::*;
-use crate::game::api_values::TryIntoApi;
+use crate::game::api_values::{TryIntoApi, TryIntoEngine};
 use horizon_client::item_tooltip::{
     AttributeFilter, AttributeTooltipContext, AttributeTooltipListener,
 };
@@ -80,6 +80,7 @@ impl AttributeTooltipListener for HookedAttributeTooltips<'_, '_> {
                 creative: ctx.creative,
                 lines: &mut lines,
             });
-        lines
+        // Refuse the appender's whole writeback if any line cannot cross.
+        lines.try_into_engine(&()).unwrap_or_default()
     }
 }

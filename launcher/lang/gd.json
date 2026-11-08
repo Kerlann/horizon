@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Cha b’ urrainn dhuinn an loga togail a leughadh: {error}",
   "Could not read the saved sign-in.": "Cha b' urrainn dhuinn an clàradh a-steach a chaidh a shàbhaladh a leughadh.",
   "Could not read the saved sign-in. Sign in again.": "Cha b' urrainn dhuinn an clàradh a-steach a chaidh a shàbhaladh a leughadh. Clàraich a-steach a-rithist.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Cha b' urrainn dhuinn leughadh {name}: {error}",
   "Could not run {program}: {error}": "Cha b' urrainn dhuinn ruith {program}: {error}",
   "Could not save the renewed sign-in.": "Cha b' urrainn dhuinn an clàradh a-steach ùr a shàbhaladh.",

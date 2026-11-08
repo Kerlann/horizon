@@ -744,12 +744,10 @@ mod tests {
                 let level = host.level("minecraft:overworld").unwrap();
                 for block in ["minecraft:stone", "minecraft:chest"] {
                     let state = host.block_state_id(block).unwrap();
-                    assert!(level.set_block(
-                        host,
-                        [0, 64, 0],
-                        state,
-                        NativeBlockUpdateFlags::NEIGHBORS
-                    ));
+                    assert_eq!(
+                        level.set_block(host, [0, 64, 0], state, NativeBlockUpdateFlags::NEIGHBORS),
+                        Ok(true)
+                    );
                 }
             }
         }
@@ -805,12 +803,15 @@ mod tests {
                 (4, "minecraft:oak_sign"),
             ] {
                 let state = game.pack.assets.registry.default_state(name).unwrap();
-                assert!(game.level_set_block(
-                    level,
-                    [x, 64, 0],
-                    state,
-                    NativeBlockUpdateFlags::NEIGHBORS
-                ));
+                assert_eq!(
+                    game.level_set_block(
+                        level,
+                        [x, 64, 0],
+                        state,
+                        NativeBlockUpdateFlags::NEIGHBORS
+                    ),
+                    Ok(true)
+                );
             }
             let player = game.player(12).unwrap();
             let chest = game.block_entity(level, [0, 64, 0]).unwrap();
@@ -823,12 +824,15 @@ mod tests {
                 });
                 let previous = if case != "replacement" {
                     let state = game.world.block(0, 64, 0);
-                    assert!(game.level_set_block(
-                        level,
-                        [5, 64, 0],
-                        state,
-                        NativeBlockUpdateFlags::NEIGHBORS
-                    ));
+                    assert_eq!(
+                        game.level_set_block(
+                            level,
+                            [5, 64, 0],
+                            state,
+                            NativeBlockUpdateFlags::NEIGHBORS
+                        ),
+                        Ok(true)
+                    );
                     let other = game.block_entity(level, [5, 64, 0]).unwrap();
                     assert!(player.open_menu(game, other).unwrap());
                     game.tick_player_menus();
@@ -962,12 +966,15 @@ mod tests {
                         .collect(),
                     })
                     .unwrap();
-                assert!(game.level_set_block(
-                    level,
-                    [x, 64, 0],
-                    state,
-                    NativeBlockUpdateFlags::NEIGHBORS
-                ));
+                assert_eq!(
+                    game.level_set_block(
+                        level,
+                        [x, 64, 0],
+                        state,
+                        NativeBlockUpdateFlags::NEIGHBORS
+                    ),
+                    Ok(true)
+                );
             }
             let left = game.block_entity(level, [6, 64, 0]).unwrap();
             let right = game.block_entity(level, [7, 64, 0]).unwrap();
@@ -1018,12 +1025,15 @@ mod tests {
                         .collect(),
                     })
                     .unwrap();
-                assert!(game.level_set_block(
-                    level,
-                    [x, 64, 0],
-                    state,
-                    NativeBlockUpdateFlags::NEIGHBORS
-                ));
+                assert_eq!(
+                    game.level_set_block(
+                        level,
+                        [x, 64, 0],
+                        state,
+                        NativeBlockUpdateFlags::NEIGHBORS
+                    ),
+                    Ok(true)
+                );
                 game.block_entity(level, [x, 64, 0]).unwrap()
             };
             let single = chest(game, level, 0, "single");
@@ -1133,7 +1143,10 @@ mod tests {
             let states = ["minecraft:chest", "minecraft:daylight_detector"];
             for (i, name) in states.into_iter().enumerate() {
                 let state = game.pack.assets.registry.default_state(name).unwrap();
-                assert!(game.level_set_block(level, [i as i32 * 2, 64, 0], state, flags));
+                assert_eq!(
+                    game.level_set_block(level, [i as i32 * 2, 64, 0], state, flags),
+                    Ok(true)
+                );
             }
             let chest = game.block_entity(level, [0, 64, 0]).unwrap();
             let sensor = game.block_entity(level, [2, 64, 0]).unwrap();
@@ -1276,7 +1289,10 @@ mod tests {
             let level = game.level("minecraft:overworld").unwrap();
             let chest = game.pack.assets.registry.default_state("minecraft:chest");
             let flags = NativeBlockUpdateFlags::NEIGHBORS;
-            assert!(game.level_set_block(level, [0, 64, 0], chest.unwrap(), flags));
+            assert_eq!(
+                game.level_set_block(level, [0, 64, 0], chest.unwrap(), flags),
+                Ok(true)
+            );
             let chest = game.block_entity(level, [0, 64, 0]).unwrap();
             let key = (0, 64, 0);
             let lock = compound("{lock:{items:\"minecraft:stick\"}}");
@@ -1322,7 +1338,7 @@ mod tests {
         fn write(
             game: &mut Game<'_>,
             pos: [i32; 3],
-            state: BlockStateId,
+            state: mod_api::BlockState,
             flags: NativeBlockUpdateFlags,
         ) -> bool {
             game.with_level(|_, level, ticks| {
@@ -1350,32 +1366,42 @@ mod tests {
             let chest = state("minecraft:chest", None);
             let young = state("minecraft:wheat", Some("0"));
             let grown = state("minecraft:wheat", Some("7"));
+            use crate::game::api_values::TryIntoApi;
+            let api_stone = stone.try_into_api().unwrap();
+            let api_chest = chest.try_into_api().unwrap();
+            let api_young = young.try_into_api().unwrap();
+            let api_grown = grown.try_into_api().unwrap();
             let flags = NativeBlockUpdateFlags::NEIGHBORS | NativeBlockUpdateFlags::KNOWN_SHAPE;
             let key = (0, 64, 0);
 
-            assert!(write(game, [0, 64, 0], stone, flags));
+            assert!(write(game, [0, 64, 0], api_stone, flags));
             assert!(game.world.block_entities.get(&key).is_none());
-            assert!(write(game, [0, 64, 0], chest, flags));
+            assert!(write(game, [0, 64, 0], api_chest, flags));
             assert!(matches!(
                 game.world.block_entities.get(&key),
                 Some(BlockEntity::Chest(_))
             ));
-            assert!(write(game, [0, 64, 0], stone, flags));
+            assert!(write(game, [0, 64, 0], api_stone, flags));
             assert_eq!(game.world.block(0, 64, 0), stone);
             assert!(game.world.block_entities.get(&key).is_none());
 
             // A crop's whole-state growth: no block entity, and a repeat changes nothing.
-            assert!(write(game, [0, 64, 0], young, flags));
-            assert!(write(game, [0, 64, 0], grown, flags));
+            assert!(write(game, [0, 64, 0], api_young, flags));
+            assert!(write(game, [0, 64, 0], api_grown, flags));
             assert_eq!(game.world.block(0, 64, 0), grown);
             assert!(game.world.block_entities.get(&key).is_none());
-            assert!(!write(game, [0, 64, 0], grown, flags));
+            assert!(!write(game, [0, 64, 0], api_grown, flags));
 
             // Unloaded, outside the build height and invalid: refused, nothing loaded.
             let chunks = game.world.chunks.len();
-            assert!(!write(game, [16, 64, 0], stone, flags));
-            assert!(!write(game, [0, 10000, 0], stone, flags));
-            assert!(!write(game, [0, 64, 0], BlockStateId(u32::MAX), flags));
+            assert!(!write(game, [16, 64, 0], api_stone, flags));
+            assert!(!write(game, [0, 10000, 0], api_stone, flags));
+            assert!(!write(
+                game,
+                [0, 64, 0],
+                mod_api::BlockStateRecord::new(api_stone.block(), u16::MAX).into(),
+                flags
+            ));
             assert_eq!(game.world.chunks.len(), chunks);
             assert_eq!(game.world.block(0, 64, 0), grown);
 
@@ -1388,7 +1414,7 @@ mod tests {
 
             // A client's copy of the level is not the server's.
             game.options.dedicated = None;
-            assert!(!write(game, [0, 64, 0], stone, flags));
+            assert!(!write(game, [0, 64, 0], api_stone, flags));
             assert_eq!(game.world.block(0, 64, 0), grown);
         });
     }

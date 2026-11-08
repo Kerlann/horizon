@@ -538,11 +538,7 @@ mod add_blocks_tests {
                     (SIGN, "minecraft:oak_sign"),
                     (DECLARED, "minecraft:vault"),
                 ] {
-                    event.blocks.push(horizon_mod_package::content::Block {
-                        id: id.into(),
-                        template: template.into(),
-                        ..Default::default()
-                    });
+                    event.blocks.push(mod_api::Block::new(id, template));
                 }
             }
             fn block_entity_type_add_blocks(
@@ -609,12 +605,10 @@ mod add_blocks_tests {
                 let registry = game.pack.assets.registry;
                 let state = registry.default_state(BLOCK).unwrap();
                 let level = game.level(game.dim.id()).unwrap();
-                assert!(game.level_set_block(
-                    level,
-                    [1, 64, 1],
-                    state,
-                    NativeBlockUpdateFlags::NONE
-                ));
+                assert!(
+                    game.level_set_block(level, [1, 64, 1], state, NativeBlockUpdateFlags::NONE)
+                        .unwrap()
+                );
                 assert!(matches!(
                     BlockEntity::for_block(SIGN),
                     Some(BlockEntity::Sign(_))
@@ -659,12 +653,15 @@ mod add_blocks_tests {
                     Some((_, BlockEntity::Vault(_)))
                 ));
                 let own_state = registry.default_state(DECLARED).unwrap();
-                assert!(game.level_set_block(
-                    level,
-                    [3, 64, 1],
-                    own_state,
-                    NativeBlockUpdateFlags::NONE
-                ));
+                assert!(
+                    game.level_set_block(
+                        level,
+                        [3, 64, 1],
+                        own_state,
+                        NativeBlockUpdateFlags::NONE
+                    )
+                    .unwrap()
+                );
                 assert!(
                     matches!(game.world.block_entities.get(&(3, 64, 1)), Some(BlockEntity::Mod(entity)) if entity.id() == "add_blocks_test:own")
                 );

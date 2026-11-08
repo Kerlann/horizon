@@ -1,0 +1,15 @@
+[package]
+name = "native-value-fixture"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+mod_api = { package = "horizon-mod-api", path = "../../../horizon-mod-api" }
+
+[build-dependencies]
+horizon-mod-api-gen = { path = "../.." }
+quote = "1"
+syn = "2"

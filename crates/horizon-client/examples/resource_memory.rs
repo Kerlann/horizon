@@ -139,6 +139,7 @@ fn main() -> Result<()> {
         &render,
         &facts,
         models::load_visibility(&root, assets.registry)?,
+        None,
     )?;
     step("mesh tables");
     let collision = collisions::load(&root, assets.registry)?;

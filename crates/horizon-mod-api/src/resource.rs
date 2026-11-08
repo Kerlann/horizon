@@ -52,7 +52,50 @@ impl EnchantmentEffect {
 pub const PREVENT_ARMOR_CHANGE: EnchantmentEffect =
     EnchantmentEffect("minecraft:prevent_armor_change");
 
-pub use horizon_items::properties::{ItemBar, ItemRarity};
+/// The effective rarity of an item stack, after its enchantment upgrade.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum ItemRarity {
+    /// The ordinary rarity.
+    Common,
+    /// An uncommon item.
+    Uncommon,
+    /// A rare item, including enchanted common and uncommon items.
+    Rare,
+    /// An epic item, including enchanted rare items.
+    Epic,
+}
+
+impl ItemRarity {
+    /// `ItemStack.getRarity`: enchantments upgrade common/uncommon to rare and rare to epic.
+    pub fn of(base: &str, enchanted: bool) -> Self {
+        match (base, enchanted) {
+            ("epic", _) | ("rare", true) => Self::Epic,
+            ("rare", false) | (_, true) => Self::Rare,
+            ("uncommon", false) => Self::Uncommon,
+            _ => Self::Common,
+        }
+    }
+    /// The serialized vanilla rarity name.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Common => "common",
+            Self::Uncommon => "uncommon",
+            Self::Rare => "rare",
+            Self::Epic => "epic",
+        }
+    }
+}
+
+/// A visible item bar: its width out of thirteen pixels and its RGB colour.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+// exhaustive: a plain drawing value, also constructed by the bundle calculation.
+pub struct ItemBar {
+    /// Width out of thirteen pixels.
+    pub width: i32,
+    /// RGB color of the filled bar.
+    pub color: u32,
+}
 
 /// Effective attack range for an actor, including the component's hitbox margin.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -158,7 +201,7 @@ impl ItemResource {
     /// `ItemStack.isDamageableItem`: maximum damage and damage components are
     /// present, and the unbreakable component is absent, after this stack's patch.
     pub fn damageable(&self, host: &dyn Host) -> bool {
-        horizon_items::properties::damageable(|id| self.value_id(host, id).is_some())
+        backend_of(host).is_some_and(|backend| backend.item_resource_damageable(&self.0))
     }
     fn enchanted(&self, host: &dyn Host) -> bool {
         matches!(self.value_id(host, "minecraft:enchantments"), Some(Tag::Compound(levels)) if !levels.is_empty())
@@ -166,19 +209,7 @@ impl ItemResource {
     /// `ItemStack.hasFoil`: the effective glint override wins, otherwise a
     /// item-specific foil applies (lodestone compass or nonempty enchantments).
     pub fn foil(&self, host: &dyn Host) -> bool {
-        let override_glint = self
-            .value_id(host, "minecraft:enchantment_glint_override")
-            .as_ref()
-            .and_then(horizon_items::item_data::component_bool);
-        let Some(item) = crate::registry_keys::item_id(self.item()) else {
-            return false;
-        };
-        let item_foil = horizon_items::properties::item_foil(
-            item,
-            self.value_id(host, "minecraft:lodestone_tracker").is_some(),
-            self.enchanted(host),
-        );
-        horizon_items::properties::foil(override_glint, item_foil)
+        backend_of(host).is_some_and(|backend| backend.item_resource_foil(&self.0))
     }
     /// `ItemStack.getRarity`: the effective rarity, upgraded for a nonempty
     /// enchantments component; removing rarity restores common before the upgrade.
@@ -199,22 +230,8 @@ impl ItemResource {
     /// effective repairable component's item holder set. The comparison is by
     /// item identity/tag, not its count, damage or components.
     pub fn repairable(&self, host: &dyn Host, material: &ItemResource) -> bool {
-        self.value_id(host, "minecraft:repairable")
-            .is_some_and(|component| {
-                let Some(item) = crate::registry_keys::item_id(material.item()) else {
-                    return false;
-                };
-                horizon_items::properties::repairable(&component, item, |tag| {
-                    let Ok(id) = crate::Identifier::parse(tag) else {
-                        return false;
-                    };
-                    let tags = host.tags();
-                    let Some(tag) = tags.key(&id) else {
-                        return false;
-                    };
-                    tags.is_in_tag(material.item(), tag).unwrap_or(false)
-                })
-            })
+        backend_of(host)
+            .is_some_and(|backend| backend.item_resource_repairable(&self.0, material.item()))
     }
     /// `Item.getUseDuration` and its item overrides, in ticks, including the
     /// same use-duration Part as gameplay. Uses the host's current acting-player
@@ -610,4 +627,21 @@ pub(super) fn move_once<A: ?Sized, B: ?Sized>(
         answer => answer,
     }
     .or_else(|answer| answer.map(|_| 0))
+}
+
+#[cfg(test)]
+mod rarity_contract_tests {
+    use super::ItemRarity;
+    #[test]
+    fn item_rarity_case_order_and_names() {
+        for (index, rarity, name) in [
+            (0, ItemRarity::Common, "common"),
+            (1, ItemRarity::Uncommon, "uncommon"),
+            (2, ItemRarity::Rare, "rare"),
+            (3, ItemRarity::Epic, "epic"),
+        ] {
+            assert_eq!(rarity as usize, index);
+            assert_eq!(rarity.as_str(), name);
+        }
+    }
 }

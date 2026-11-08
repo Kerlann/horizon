@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "تعمیر لاگ کو نہیں پڑھ سکا: {error}",
   "Could not read the saved sign-in.": "محفوظ کردہ سائن ان نہیں پڑھ سکا۔",
   "Could not read the saved sign-in. Sign in again.": "محفوظ کردہ سائن ان نہیں پڑھ سکا۔ دوبارہ سائن ان کریں۔",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "پڑھا نہیں جا سکا {name}: {error}",
   "Could not run {program}: {error}": "نہیں چل سکا {program}: {error}",
   "Could not save the renewed sign-in.": "تجدید شدہ سائن ان کو محفوظ نہیں کیا جا سکا۔",

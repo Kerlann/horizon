@@ -44,7 +44,10 @@ fn link(inner: Text, color: u32, command: String) -> Text {
         .append("]")
         .with_style(&Style {
             click: Some(ClickEvent::SuggestCommand(command)),
-            hover: Some(Box::new(Text::translate("chat.coordinates.tooltip", &[]))),
+            hover: Some(std::sync::Arc::new(Text::translate(
+                "chat.coordinates.tooltip",
+                &[],
+            ))),
             ..Style::color(color)
         })
 }
@@ -231,7 +234,7 @@ impl Game<'_> {
             click: Some(ClickEvent::CopyToClipboard(format!(
                 "final BlockPos {var} = new BlockPos({description});"
             ))),
-            hover: Some(Box::new(Text::translate(
+            hover: Some(std::sync::Arc::new(Text::translate(
                 "commands.test.coordinates.copy",
                 &[],
             ))),

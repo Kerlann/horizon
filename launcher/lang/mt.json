@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Ma setax jaqra r-reġistru tal-bini: {error}",
   "Could not read the saved sign-in.": "Ma setax jaqra l-firma ssejvjata.",
   "Could not read the saved sign-in. Sign in again.": "Ma setax jaqra l-firma ssejvjata. Idħol mill-ġdid.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Ma setax jaqra {name}: {error}",
   "Could not run {program}: {error}": "Ma setgħetx taħdem {program}: {error}",
   "Could not save the renewed sign-in.": "Ma setgħetx tissejvja l-firma mġedda.",

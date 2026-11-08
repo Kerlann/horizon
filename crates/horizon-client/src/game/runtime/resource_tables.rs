@@ -145,7 +145,14 @@ impl PackResources {
         item_data: &horizon_world::item_defaults::ItemData,
     ) -> Result<Self> {
         let visibility = models::load_visibility(root.prepared(), assets.registry)?;
-        let tables = Arc::new(MeshTables::new(&assets, &render, facts, visibility)?);
+        api_values::resolve_block_definitions(assets.registry)?;
+        let tables = Arc::new(MeshTables::new(
+            &assets,
+            &render,
+            facts,
+            visibility,
+            api_values::mod_tint_values(assets.registry)?,
+        )?);
         let item_renderer = horizon_client::item_render::ItemRenderer::load_with_library(
             root,
             render.model_library.clone(),

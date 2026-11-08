@@ -2,7 +2,7 @@
 
 pub trait Hooks {
     /// A mod's own ingredient kind, matching a concrete stack at craft time:
-    /// the ingredient's `test` calls here with the kind, its JSON and the
+    /// the ingredient's `test` calls here with the kind, its NBT compound and the
     /// stack being matched, `accept` already true (the load-time list named
     /// the item). Set `accept` to false to refuse the stack — its components
     /// are the usual reason. The hook may be called many times a craft; the
@@ -12,7 +12,7 @@ pub trait Hooks {
         contract = "listen",
         context = "loop",
         version = 2,
-        target = "mod_api::crafting::native_ingredient_test",
+        target = "horizon_client_lib::crafting::native_hooks::native_ingredient_test",
         neoforge = "ICustomIngredient"
     )]
     fn ingredient_test();

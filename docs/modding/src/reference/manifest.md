@@ -43,7 +43,7 @@ folders are unsupported.
 
 The shared [manifest fields](../how-to/content-mods.md#the-manifest) include `id`, `name`, `version`, `api = "0.2"`
 and `capabilities = ["registries"]`. The content API is checked for exact equality. Unknown fields
-refuse the manifest. Both code targets may declare top-level `internals`, an array of tables with
+refuse the manifest. Native mods may declare top-level `internals`, an array of tables with
 `path`, `hash`, and optional `kind` when a path names several member kinds. Native code adds `[native]`:
 
 | Field | Type | Rule |
@@ -79,37 +79,6 @@ A wasm mod adds `[wasm]` instead, written by `cargo horizon-mod build --wasm`
 
 At load `mod.wasm` must start with `\0asm`, be at most 64 MiB and match `sha512`; each failure refuses the
 package with its reason.
-
-Both code targets declare top-level `internals`; a `[wasm]` mod has no `[native]` table.
-Wasm internals listeners use top-level `[[inject]]` with `access = "internals"`, `kind = "head"`
-or `"return"`, a pinned function `hash`, and a crate-root `with` function. They require at least
-one declared internal. The generated `mod_internals::raw_listeners!()` entry exports those
-functions without a second listener list. Call-site kinds remain refused as wasm sites pending. The compiled view must include every manifest internal at the same hash,
-plus the named types it walks; the game resolves all of them before registering any listener.
-Missing internals name the prebuilt game's opt-in file to update; changed hashes and a game built
-without an internals table refuse the mod. A raw listener receives no Host: its access is through
-the call-scoped internals view ([Injections](../injections.md#raw-listeners-and-declared-internals)).
-Declarations are permissions as well as compatibility checks. A receiver node exposes only
-that mod's explicitly declared fields, not every field present in the game's shared table.
-Whole-node reads cannot bypass that restriction. Once a declared field is reached, its entire
-subtree is walkable; raw argument-record fields and references returned by declared functions
-are also unrestricted. Using a node as a function's receiver restricts its subsequent field
-access to that mod's declarations. Function calls still require a declared function.
-
-`cargo horizon-mod internals add <path>… [--kind <kind>]` also works beside `[wasm]`.
-Without a native pin it uses the newest daily prebuilt's `internals.json`. For a staged-game
-build, set `HORIZON_MOD_INTERNALS_CATALOG` to an absolute path to that game's catalog; both
-`internals add` and the wasm view build use the same selection.
-
-Hot, GPU and worker-thread paths in `crates/horizon-mod-api-gen/native-only.txt` never receive
-wasm entries, even when declared. Loading them refuses with `native only: <path>` rather than
-suggesting an opt-in file. The daily prebuilt always generates a table from the checkout's
-per-mod declarations. A launcher build from source generates one only when an enabled wasm
-package in the instance declares internals, and uses only those installed mods' paths, not
-the checkout's seed files. With no such mod it retains the empty table. A standalone server
-export takes declarations from `.hmod` packages placed directly in its explicit input folder,
-without reading an instance. Install and enable the same packages in the server's game folder
-to use that table ([Standalone server export](../how-to/native-mods/035-standalone-server-export.md)).
 
 Top-level `[dependencies]` declares other mods by id: a semver requirement string, or
 `{ version = "^1", optional = true }`. These versions refer to `horizon-mod.toml`, not Cargo metadata.

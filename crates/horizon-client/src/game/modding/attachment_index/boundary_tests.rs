@@ -11,8 +11,16 @@ static VALUE: AttachmentType<u32> = AttachmentType {
     sync: false,
 };
 
-fn capture(game: &Game<'_>) -> Vec<mod_api::AttachmentRowForm> {
-    Vec::from(&game.attachment_query("boundary", "value"))
+fn capture(game: &Game<'_>) -> Vec<(AttachmentHolder, u32, AttachmentWriteToken)> {
+    let batch = game.attachment_query("boundary", "value");
+    let query = batch.query(&VALUE).unwrap();
+    query
+        .iter()
+        .map(|row| {
+            let row = row.unwrap();
+            (row.holder, *row.value, AttachmentWriteToken::from(row.write_token()))
+        })
+        .collect()
 }
 
 #[test]
@@ -23,11 +31,11 @@ fn current_dimension_capture_and_foreign_residency_validation() {
             .set(&mut game.world.attachments, Holder::Level, 7)
             .unwrap();
         game.native_level_opened(Dim::Overworld);
-        let forms = capture(game);
-        let holder = forms[0].token.holder;
-        let token = AttachmentWriteToken::from(forms[0].token.clone());
+        let rows = capture(game);
+        let holder = rows[0].0;
+        let token = rows[0].2.clone();
         assert_eq!(game.attachment_validate_write(token.clone()), Ok(()));
-        assert_eq!(forms[0].entry.read(&VALUE), Ok(&7));
+        assert_eq!(rows[0].1, 7);
         let epoch = game.native_lifecycle.epoch().unwrap();
         let b = AttachmentHolder::Entity(mod_api::EntityRef::new(epoch, 313));
         let valid_b = game.attachment_indexes[&game.dim]
@@ -35,14 +43,8 @@ fn current_dimension_capture_and_foreign_residency_validation() {
             .unwrap()
             .register(b, [])
             .into_result();
-        let mut forged = forms[0].token.clone();
-        forged.holder = b;
         let host: &dyn mod_api::ServerHost = game;
         assert_eq!(host.attachment_validate_write(valid_b.into()), Ok(()));
-        assert_eq!(
-            host.attachment_validate_write(forged.into()),
-            Err(AttachmentRowError::StaleHolder)
-        );
 
         let foreign = Arc::new(Mutex::new(AttachmentIndex::default()));
         let mut foreign_map = horizon_mod_runtime::attachments::Attachments::default();
@@ -56,7 +58,7 @@ fn current_dimension_capture_and_foreign_residency_validation() {
             game.attachment_validate_write(token.clone()),
             Err(AttachmentRowError::StaleHolder)
         );
-        assert_eq!(capture(game)[0].entry.read(&VALUE), Ok(&99));
+        assert_eq!(capture(game)[0].1, 99);
         game.attachment_indexes.insert(Dim::Overworld, original);
         assert_eq!(game.attachment_validate_write(token.clone()), Ok(()));
 

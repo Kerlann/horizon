@@ -665,14 +665,7 @@ pub(super) fn compile(
     }
     cmd.arg("-o").arg(&binary).arg(&main);
     super::run(cmd, "Linking the game", |_| {})?;
-    Ok((
-        binary,
-        vec![
-            game_library,
-            library(&deps, "horizon_mod_wasm")?,
-            standard_library(rust)?,
-        ],
-    ))
+    Ok((binary, vec![game_library, standard_library(rust)?]))
 }
 
 #[cfg(test)]
@@ -861,26 +854,6 @@ mod tests {
         fs::remove_file(dir.join(IDENTITY)).unwrap();
         assert!(check_identity(&dir, "abc123", host, Target::Client).is_err());
         fs::remove_dir_all(dir).unwrap();
-    }
-
-    #[test]
-    fn runtime_dylib_is_found_for_installation() {
-        let dir = super::super::tests::dir("prebuilt-runtime-dylib");
-        let stale = dir.join("libhorizon_mod_wasm-old.rmeta");
-        fs::write(&stale, []).unwrap();
-        for name in [
-            "libhorizon_mod_wasm.so",
-            "horizon_mod_wasm.dll",
-            "libhorizon_mod_wasm.dylib",
-        ] {
-            let path = dir.join(name);
-            fs::write(&path, []).unwrap();
-            assert_eq!(library(&dir, "horizon_mod_wasm").unwrap(), path);
-            fs::remove_file(path).unwrap();
-        }
-        assert_eq!(library(&dir, "horizon_mod_wasm").unwrap(), stale);
-        fs::remove_file(stale).unwrap();
-        assert!(library(&dir, "horizon_mod_wasm").is_err());
     }
 
     #[test]

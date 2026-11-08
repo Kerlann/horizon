@@ -7,7 +7,7 @@ impl PartRegistrar {
         } else {
             format!("{}:{id}", self.mod_id)
         };
-        if !horizon_mod_package::content::namespaced_id(&id) {
+        if crate::Identifier::parse_namespaced(&id).is_none() {
             return Err(crate::GameRuleError::InvalidId);
         }
         if id.split_once(':').unwrap().0 != self.mod_id {
@@ -63,7 +63,7 @@ pub mod tests {
             ModEntry::new("first", Box::new(Rule)),
             ModEntry::new("later", Box::new(Category)),
         ];
-        super::install_parts(&mods, &crate::parts::tests::rule_schema()).unwrap();
+        super::install_parts(&mods, &crate::parts::tests::rule_schema(), |_| false).unwrap();
         assert!(
             super::game_rules()
                 .iter()
@@ -85,7 +85,8 @@ pub mod tests {
             ModEntry::new("first", Box::new(Rule)),
             ModEntry::new("second", Box::new(Rule)),
         ];
-        let errors = super::install_parts(&mods, &crate::parts::tests::rule_schema()).unwrap_err();
+        let errors = super::install_parts(&mods, &crate::parts::tests::rule_schema(), |_| false)
+            .unwrap_err();
         assert_eq!(errors.len(), 2);
         assert!(errors[0].contains("first:active"));
         assert!(errors[1].contains("second:active"));

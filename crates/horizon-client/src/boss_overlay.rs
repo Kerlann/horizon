@@ -50,6 +50,18 @@ impl Event {
     }
 }
 
+/// Snapshot of a displayed bar before conversion to the mod API.
+pub struct ModBar {
+    pub uuid: u128,
+    pub name: Text,
+    pub progress: f32,
+    pub color: mod_api::BossBarColor,
+    pub overlay: mod_api::BossBarOverlay,
+    pub darken_screen: bool,
+    pub play_boss_music: bool,
+    pub create_world_fog: bool,
+}
+
 /// `BossHealthOverlay`: the events, plus `GameRenderer`'s world darkening.
 #[derive(Clone, Debug, Default)]
 pub struct BossOverlay {
@@ -160,9 +172,9 @@ impl BossOverlay {
     }
     /// The bar at `index` of `bars(now)` as `customize_boss_event_progress`
     /// hands it to mods.
-    pub fn mod_bar(&self, index: usize, now: u128) -> Option<mod_api::ClientBossBar> {
+    pub fn mod_bar(&self, index: usize, now: u128) -> Option<ModBar> {
         let e = self.events.get(index)?;
-        Some(mod_api::ClientBossBar {
+        Some(ModBar {
             uuid: e.id,
             name: e.name.clone(),
             progress: e.displayed(now),

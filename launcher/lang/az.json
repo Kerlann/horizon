@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Quraşdırma jurnalını oxumaq mümkün olmadı: {error}",
   "Could not read the saved sign-in.": "Yadda saxlanmış girişi oxumaq mümkün olmadı.",
   "Could not read the saved sign-in. Sign in again.": "Yadda saxlanmış girişi oxumaq mümkün olmadı. Yenidən daxil olun.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "{name} oxuya bilmədim: {error}",
   "Could not run {program}: {error}": "Çalıştırmaq mümkün olmadı {program}: {error}",
   "Could not save the renewed sign-in.": "Yenilənmiş girişi saxlamaq mümkün olmadı.",

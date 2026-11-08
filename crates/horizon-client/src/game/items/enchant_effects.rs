@@ -271,15 +271,17 @@ impl Game<'_> {
         // ignite (fire aspect) and apply_mob_effect (bane of arthropods).
         let mut ignite = 0.0f32;
         let mut mob_effects = Vec::new();
-        let mut hook_calls: Vec<(String, String, Value, u32)> = Vec::new();
+        let mut hook_calls: Vec<(String, String, std::sync::Arc<horizon_core::nbt::Tag>, u32)> =
+            Vec::new();
         for (id, level) in held.all_enchantments().iter() {
             let Some(def) = world_stations!(self).enchantments.get(id) else {
                 continue;
             };
-            for effect in def.effects["minecraft:post_attack"]
+            for (effect_index, effect) in def.effects["minecraft:post_attack"]
                 .as_array()
                 .into_iter()
                 .flatten()
+                .enumerate()
             {
                 let e = &effect["effect"];
                 if effect["enchanted"] != "attacker" || effect["affected"] != "victim" {
@@ -309,7 +311,9 @@ impl Game<'_> {
                 // A mod's own kind: its hook answers, after this loop (the
                 // stations borrow is held here).
                 if own {
-                    hook_calls.push((id.to_string(), kind_of, e.clone(), *level));
+                    if let Some(data) = def.native_post_attack.get(&effect_index) {
+                        hook_calls.push((id.to_string(), kind_of, data.clone(), *level));
+                    }
                 } else if kind_of == "minecraft:ignite" {
                     ignite =
                         ignite.max(horizon_client::enchant::level_value(&e["duration"], *level));

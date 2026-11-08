@@ -32,7 +32,6 @@ pub trait ConfigFiles {
 /// that it is the calling mod's.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
-#[horizon_mod_api_macros::wasm(via = String)]
 pub struct ConfigPath(String);
 
 impl From<&ConfigPath> for String {

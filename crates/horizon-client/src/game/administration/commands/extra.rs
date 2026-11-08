@@ -436,7 +436,10 @@ impl Game<'_> {
                         "/execute in {dimension} run tp @s {} {} {}",
                         pos[0], pos[1], pos[2]
                     ))),
-                    hover: Some(Box::new(Text::translate("chat.coordinates.tooltip", &[]))),
+                    hover: Some(std::sync::Arc::new(Text::translate(
+                        "chat.coordinates.tooltip",
+                        &[],
+                    ))),
                     ..Style::default()
                 };
                 // getFeedbackDisplayName().copy().withStyle(color): the
@@ -896,7 +899,7 @@ impl Game<'_> {
         let encoded_component = snbt::to_snbt(&Tag::compound([("player", profile_tag)]));
         let mut head = Text::literal("\u{FFFC}");
         head.spans[0].style.inline_object = Some(InlineObject::Player {
-            profile: json,
+            profile: json.into(),
             hat: true,
             fallback: format!("[{} head]", profile.name),
         });
@@ -979,7 +982,7 @@ impl Game<'_> {
         let port_text = port.to_string();
         let link = Text::literal(port_text.clone()).with_style(&Style {
             color: Some(text::GREEN),
-            hover: Some(Box::new(Text::translate("chat.copy.click", &[]))),
+            hover: Some(std::sync::Arc::new(Text::translate("chat.copy.click", &[]))),
             ..Style::default()
         });
         self.feedback(Text::translate(
@@ -1150,7 +1153,7 @@ impl Game<'_> {
             ));
         }
         let file = Text::literal(relative).underlined().with_style(&Style {
-            hover: Some(Box::new(Text::translate("chat.copy.click", &[]))),
+            hover: Some(std::sync::Arc::new(Text::translate("chat.copy.click", &[]))),
             ..Style::default()
         });
         self.feedback(Text::translate("commands.jfr.stopped", &[file]));

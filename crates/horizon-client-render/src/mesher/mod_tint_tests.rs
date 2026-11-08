@@ -1,29 +1,83 @@
 use super::*;
 use horizon_assets::resource_source::ResourceRoot;
+use horizon_world::registry::BlockRegistry;
 use mod_api::{
-    BlockAndTintGetter, BlockState as ModState, BlockTintSource, TintLayer, VanillaTint,
+    BlockAndTintGetter, BlockMetadata, BlockState as ModState, BlockTintSource, TintLayer,
+    VanillaTint,
 };
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn resources() -> Option<std::path::PathBuf> {
-    let root =
-        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.local/horizon-client/26.3");
+    let root = std::env::var_os("HORIZON_TEST_RESOURCES")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| {
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                .join("../../.local/horizon-client/26.3")
+        });
     root.join("horizon-resources.json").exists().then_some(root)
+}
+
+// Independent API fixture for the air, stone and two leaf states exercised below.
+fn tint_values(registry: &BlockRegistry) -> ModTintValues {
+    use horizon_mod_runtime::block_definitions::BlockDefinition;
+    mod_api::__private::part_tests::install_parts_fixture(&[]).unwrap();
+    let empty = BTreeMap::new();
+    let near = BTreeMap::from([("distance".into(), "1".into())]);
+    let far = BTreeMap::from([("distance".into(), "7".into())]);
+    mod_api::__private::resolve_block_keys(
+        ["minecraft:air", "minecraft:stone", "minecraft:oak_leaves"],
+        |name| {
+            let result = if name == "minecraft:oak_leaves" {
+                BlockDefinition::new(&[&near, &far], 1)
+            } else {
+                BlockDefinition::new(&[&empty], 0)
+            };
+            result.map_err(|error| format!("{error:?}"))
+        },
+    )
+    .unwrap();
+    let metadata = mod_api::__private::block_definitions().unwrap();
+    let key = |name| mod_api::__private::block_key(name).unwrap();
+    let state = |name, properties: &[mod_api::StateConstraint]| {
+        ModState::of(metadata, key(name), properties).unwrap()
+    };
+    let air = state("minecraft:air", &[]);
+    let stone = state("minecraft:stone", &[]);
+    let far = state("minecraft:oak_leaves", &[]);
+    let near = state(
+        "minecraft:oak_leaves",
+        &[mod_api::StateConstraint::new("distance", "1")],
+    );
+    let mut states = vec![air; registry.len()].into_boxed_slice();
+    states[registry.default_state("minecraft:stone").unwrap().0 as usize] = stone;
+    let oak = registry.default_state("minecraft:oak_leaves").unwrap();
+    states[oak.0 as usize] = far;
+    let mut engine_near = registry.state(oak).unwrap().clone();
+    engine_near.properties.insert("distance".into(), "1".into());
+    states[registry.id(&engine_near).unwrap().0 as usize] = near;
+    ModTintValues { states, metadata }
 }
 
 /// A source whose three colours differ, so each reader shows which one it asked.
 struct Three;
 impl BlockTintSource for Three {
-    fn color(&self, _: &ModState) -> u32 {
+    fn color(&self, _: &ModState, _: &dyn BlockMetadata) -> u32 {
         0x11_2233
     }
-    fn color_in_world(&self, _: &ModState, _: &dyn BlockAndTintGetter, [x, _, _]: [i32; 3]) -> u32 {
+    fn color_in_world(
+        &self,
+        _: &ModState,
+        _: &dyn BlockMetadata,
+        _: &dyn BlockAndTintGetter,
+        [x, _, _]: [i32; 3],
+    ) -> u32 {
         0x44_0000 | x as u32
     }
     fn color_as_terrain_particle(
         &self,
         _: &ModState,
+        _: &dyn BlockMetadata,
         _: &dyn BlockAndTintGetter,
         _: [i32; 3],
     ) -> u32 {
@@ -46,7 +100,7 @@ fn registered_layers_replace_vanilla_and_each_reader_asks_its_method() {
         .unwrap();
     let facts = BlockFacts::load(&root, assets.registry).unwrap();
     let visibility = crate::models::load_visibility(&root, assets.registry).unwrap();
-    let mut tables = MeshTables::new(&assets, &render, &facts, visibility).unwrap();
+    let mut tables = MeshTables::new(&assets, &render, &facts, visibility, None).unwrap();
     let biomes = Biomes::load(&ResourceRoot::directory(root.clone())).unwrap();
     let state = |name| assets.registry.default_state(name).unwrap();
     let three: Arc<dyn BlockTintSource> = Arc::new(Three);
@@ -69,7 +123,16 @@ fn registered_layers_replace_vanilla_and_each_reader_asks_its_method() {
         ),
         ("mymod:missing".to_string(), Arc::from([])),
     ]);
-    tables.apply_tint_layers(assets.registry, &layers);
+    assert_eq!(tables.default_tint(state("minecraft:stone"), 0, 0), None);
+    assert!(
+        tables
+            .apply_tint_layers(assets.registry, &layers, None)
+            .is_err()
+    );
+    assert_eq!(tables.default_tint(state("minecraft:stone"), 0, 0), None);
+    tables
+        .apply_tint_layers(assets.registry, &layers, Some(tint_values(assets.registry)))
+        .unwrap();
     let center = Chunk::empty(0, 0);
     let mut region = [[None; 3]; 3];
     region[1][1] = Some(&center);
@@ -117,21 +180,23 @@ fn registered_layers_replace_vanilla_and_each_reader_asks_its_method() {
 
 /// Colours a leaf block by what is under it and by its `distance`, counting its calls.
 struct ByGround {
+    stone: mod_api::BlockKey,
     calls: AtomicUsize,
 }
 impl BlockTintSource for ByGround {
-    fn color(&self, _: &ModState) -> u32 {
+    fn color(&self, _: &ModState, _: &dyn BlockMetadata) -> u32 {
         0xFF_FFFF
     }
     fn color_in_world(
         &self,
         state: &ModState,
+        metadata: &dyn BlockMetadata,
         level: &dyn BlockAndTintGetter,
         [x, y, z]: [i32; 3],
     ) -> u32 {
         self.calls.fetch_add(1, Ordering::Relaxed);
-        let on_stone = &*level.block_state([x, y - 1, z]).block == "minecraft:stone";
-        match (on_stone, state.value("distance")) {
+        let on_stone = level.block_state([x, y - 1, z]).block() == self.stone;
+        match (on_stone, state.property(metadata, "distance").unwrap()) {
             (true, Some("1")) => 0x40_80C0,
             (true, _) => 0x20_4060,
             (false, _) => 0x10_2030,
@@ -154,15 +219,19 @@ fn the_mesher_asks_a_mod_source_once_per_block_with_the_world_around_it() {
         .reload(&ResourceRoot::directory(root.clone()))
         .unwrap();
     let visibility = crate::models::load_visibility(&root, assets.registry).unwrap();
-    let mut tables = MeshTables::new(&assets, &render, &facts, visibility.clone()).unwrap();
+    let mut tables = MeshTables::new(&assets, &render, &facts, visibility.clone(), None).unwrap();
+    let values = tint_values(assets.registry);
     let source = Arc::new(ByGround {
+        stone: mod_api::__private::block_key("minecraft:stone").unwrap(),
         calls: AtomicUsize::new(0),
     });
     let layers = BTreeMap::from([(
         "minecraft:oak_leaves".to_string(),
         Arc::from([TintLayer::Source(source.clone())]),
     )]);
-    tables.apply_tint_layers(assets.registry, &layers);
+    tables
+        .apply_tint_layers(assets.registry, &layers, Some(values))
+        .unwrap();
     let registry = assets.registry;
     let oak = registry.default_state("minecraft:oak_leaves").unwrap();
     let mut near = registry.state(oak).unwrap().clone();

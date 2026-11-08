@@ -34,7 +34,7 @@ pub fn main() -> horizon_client::Result<()> {
         &PackOverlay::NONE,
         &crate::test_resources::server_load(),
     );
-    let enchantments = Enchantments::load(root, &defaults);
+    let enchantments = Enchantments::load(root, &defaults)?;
     let mut out = String::new();
     for line in input.lines() {
         let f: Vec<&str> = line.split('\t').collect();

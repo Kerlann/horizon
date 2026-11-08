@@ -18,7 +18,7 @@ pub(super) struct ObservedScreen {
     /// it open or close.
     overlay: bool,
     menu: Option<String>,
-    title: Option<Text>,
+    title: Option<std::sync::Arc<mod_api::Text>>,
     rect: [f32; 4],
     slots: usize,
     mouse: [f32; 2],
@@ -30,7 +30,7 @@ impl ObservedScreen {
         NativeScreenView::from(mod_api::__private::built::NativeScreenView {
             id: self.id,
             menu: self.menu.as_deref(),
-            title: self.title.as_ref(),
+            title: self.title.as_deref(),
             rect: self.rect,
             slots: self.slots,
             mouse: self.mouse,
@@ -226,13 +226,18 @@ impl Game<'_> {
             title: self
                 .remote
                 .as_ref()
-                .and_then(|r| r.menu_title.as_ref())
+                .and_then(|r| r.menu_title_snapshot())
                 .filter(|_| !none),
             rect,
             slots: if none { 0 } else { self.slot_count() },
             mouse: self.cursor(),
             partial_tick: self.clock.fraction() as f32,
         })
+    }
+    #[cfg(test)]
+    pub(super) fn test_observed_title(&self) -> Option<std::sync::Arc<mod_api::Text>> {
+        self.observe_view(self.screen_change_view(self.screen))
+            .title
     }
     /// A mod's own screen cannot open now: over the title screen, a book, a
     /// sign editor, a dialog or a prompt, with no player or a
@@ -294,17 +299,23 @@ impl Game<'_> {
     /// What `observe_screen` compares with the last frame's.
     fn observed_now(&self) -> Option<ObservedScreen> {
         // Only the title's screens and the overlays show over `Screen::Playing`.
-        let overlay = self.screen == Screen::Playing;
-        self.observed_screen_view().map(|view| ObservedScreen {
+        self.observed_screen_view()
+            .map(|view| self.observe_view(view))
+    }
+
+    fn observe_view(&self, view: NativeScreenView<'_>) -> ObservedScreen {
+        ObservedScreen {
             id: view.id,
-            overlay,
+            overlay: self.screen == Screen::Playing,
             menu: view.menu.map(str::to_owned),
-            title: view.title.cloned(),
+            title: view
+                .title
+                .and_then(|_| self.remote.as_ref()?.shared_menu_title_snapshot()),
             rect: view.rect,
             slots: view.slots,
             mouse: view.mouse,
             partial_tick: view.partial_tick,
-        })
+        }
     }
 
     /// Opens the title screen `Title::set_mode` asked for, as
@@ -938,7 +949,7 @@ impl Game<'_> {
         NativeScreenView::from(mod_api::__private::built::NativeScreenView {
             id: screen.id(),
             menu: self.remote_menu_type().filter(|m| !m.is_empty()),
-            title: self.remote.as_ref().and_then(|r| r.menu_title.as_ref()),
+            title: self.remote.as_ref().and_then(|r| r.menu_title_snapshot()),
             rect: self.screen_rect(batch, screen),
             slots: self.slot_count(),
             mouse: self.cursor(),
@@ -1301,21 +1312,22 @@ impl Game<'_> {
         }
     }
 
-    /// Apply one write a landing asked for, at the block the entity landed on.
+    /// Apply one already-validated engine write, at the block the entity landed on.
+    /// The original-state guard runs once before the ordered batch, not between writes.
     fn apply_landing_write(
         &mut self,
         level: mod_api::LevelRef,
         pos: BlockPos,
-        write: LandingWrite,
+        write: horizon_world::level::LandingWrite,
     ) {
         let at = [pos.x, pos.y, pos.z];
         match write {
             // `Level.setBlockAndUpdate`: flag 3, the neighbours and the clients.
-            LandingWrite::SetBlock(state) => {
+            horizon_world::level::LandingWrite::SetBlock(state) => {
                 let flags = NativeBlockUpdateFlags::NEIGHBORS | NativeBlockUpdateFlags::CLIENTS;
-                self.level_set_block(level, at, state, flags);
+                let _ = self.level_set_block(level, at, state, flags);
             }
-            LandingWrite::DestroyBlock { drop } => {
+            horizon_world::level::LandingWrite::DestroyBlock { drop } => {
                 self.level_destroy_block(level, at, drop, None, false);
             }
             // A write a later API adds that this game does not know is not applied.
@@ -1367,15 +1379,19 @@ pub(super) fn incoming_damage(
     let Ok(weapon) = attack.weapon_of(source.direct).try_into_api() else {
         return false;
     };
+    let mut snapshot = (*container).try_into_api().expect("scalar damage snapshot");
     HitLevel(level).native_living_incoming_damage(mod_api::__private::LivingIncomingDamageCall {
         entity,
         kind,
         source: &source,
         victim: &victim,
         weapon: weapon.as_ref(),
-        container,
+        container: &mut snapshot,
         canceled: &mut canceled,
     });
+    *container = snapshot
+        .try_into_engine(&())
+        .expect("scalar damage snapshot");
     canceled
 }
 
@@ -1389,7 +1405,11 @@ pub(super) fn damage_pre(
         return;
     }
     let (entity, kind, source) = hurt_server_args(hurting, level.attack());
-    HitLevel(level).native_living_damage_pre(entity, kind, &source, container);
+    let mut snapshot = (*container).try_into_api().expect("scalar damage snapshot");
+    HitLevel(level).native_living_damage_pre(entity, kind, &source, &mut snapshot);
+    *container = snapshot
+        .try_into_engine(&())
+        .expect("scalar damage snapshot");
 }
 
 /// `native_living_damage_post` for the damage code.
@@ -1402,7 +1422,8 @@ pub(super) fn damage_post(
         return;
     }
     let (entity, kind, source) = hurt_server_args(hurting, level.attack());
-    HitLevel(level).native_living_damage_post(entity, kind, &source, container);
+    let snapshot = (*container).try_into_api().expect("scalar damage snapshot");
+    HitLevel(level).native_living_damage_post(entity, kind, &source, &snapshot);
 }
 
 /// `native_living_shield_block` for the damage code. Its one
@@ -1557,40 +1578,50 @@ pub(super) const BLOCK_CONTACT_HOOKS: horizon_client::block_contact::Hooks =
         },
         any_inside: || mod_api::__private::has_scoped_hook(mod_api::HookId::EntityInside),
         inside_listens: |state| {
-            mod_api::__private::block_listens(mod_api::HookId::EntityInside, "entity_inside", state)
+            crate::game::api_values::block_state::block_listens(
+                mod_api::HookId::EntityInside,
+                state,
+            )
         },
         pass_listens: |state| {
-            mod_api::__private::block_listens(mod_api::HookId::MinecartPass, "minecart_pass", state)
+            crate::game::api_values::block_state::block_listens(
+                mod_api::HookId::MinecartPass,
+                state,
+            )
         },
         fall_listens: |state| {
-            mod_api::__private::block_listens(mod_api::HookId::FallOn, "fall_on", state)
+            crate::game::api_values::block_state::block_listens(mod_api::HookId::FallOn, state)
         },
         bounce_listens: |state| {
-            mod_api::__private::block_listens(mod_api::HookId::BounceOn, "bounce_on", state)
+            crate::game::api_values::block_state::block_listens(mod_api::HookId::BounceOn, state)
         },
         fall_on: |dimension, level, c, distance, damage, writes| {
-            HitLevel(level.reborrow()).native_fall_on(mod_api::__private::FallOnCall {
-                dimension,
-                entity: c.entity,
-                kind: c.kind,
-                state: c.state,
-                pos: c.position,
-                distance,
-                damage,
-                writes,
-            });
+            HitLevel(level.reborrow()).native_fall_on(
+                crate::game::native_hooks::fire::FallOnCall {
+                    dimension,
+                    entity: c.entity,
+                    kind: c.kind,
+                    state: c.state,
+                    pos: c.position,
+                    distance,
+                    damage,
+                    writes,
+                },
+            );
         },
         bounce_on: |dimension, level, c, fall_distance, movement| {
             let mut answer = [movement.x, movement.y, movement.z];
-            HitLevel(level.reborrow()).native_bounce_on(mod_api::__private::BounceOnCall {
-                dimension,
-                entity: c.entity,
-                kind: c.kind,
-                state: c.state,
-                pos: c.position,
-                fall_distance,
-                movement: &mut answer,
-            });
+            HitLevel(level.reborrow()).native_bounce_on(
+                crate::game::native_hooks::fire::BounceOnCall {
+                    dimension,
+                    entity: c.entity,
+                    kind: c.kind,
+                    state: c.state,
+                    pos: c.position,
+                    fall_distance,
+                    movement: &mut answer,
+                },
+            );
             *movement = horizon_core::geometry::Vec3::new(answer[0], answer[1], answer[2]);
         },
     };
@@ -1913,11 +1944,10 @@ impl GameLevel<'_> {
         block: BlockKey,
         delay: i32,
     ) -> bool {
-        let Some(resolved) = mod_api::__private::resolved_block(block) else {
+        let Some(block) = crate::game::api_values::behavior_block(block, self.behaviours) else {
             return false;
         };
         let at = BlockPos::new(pos[0], pos[1], pos[2]);
-        let block = resolved.block;
         let time = self.game_time();
         ticks.schedule_block(time, at, block, delay, TickPriority::Normal)
             != ScheduleResult::MissingChunk
@@ -2450,14 +2480,8 @@ impl Game<'_> {
             (None, None)
         };
         let (mut successful, mut canceled) = (false, false);
-        let Ok(snapshot) = stack.try_into_api() else {
-            return BonemealAsk {
-                crop: None,
-                check: Some(check),
-            };
-        };
-        let mut snapshot = Some(snapshot);
-        self.native_bonemeal(mod_api::__private::BonemealCall {
+        let mut snapshot = Some(stack.clone());
+        self.native_bonemeal(crate::game::native_hooks::fire::BonemealCall {
             dimension: self.dim.level(),
             player,
             player_entity_id,
@@ -2469,15 +2493,9 @@ impl Game<'_> {
             successful: &mut successful,
             canceled: &mut canceled,
         });
-        match snapshot.try_into_engine(self.items()) {
-            Ok(Some(next)) => *stack = next,
-            Ok(None) => stack.count = 0,
-            Err(_) => {
-                return BonemealAsk {
-                    crop: None,
-                    check: Some(check),
-                };
-            }
+        match snapshot {
+            Some(next) => *stack = next,
+            None => stack.count = 0,
         }
         BonemealAsk {
             crop: canceled.then_some(successful),
@@ -2500,10 +2518,15 @@ impl Game<'_> {
         }
         let placement = match companion {
             None => Placement::Single,
-            Some((at, extra)) => Placement::Multi(Vec::from([
-                BlockPlacement::new(pos, state),
-                BlockPlacement::new(at, extra),
-            ])),
+            Some((at, extra)) => {
+                let (Ok(state), Ok(extra)) = (state.try_into_api(), extra.try_into_api()) else {
+                    return false;
+                };
+                Placement::Multi(Vec::from([
+                    BlockPlacement::new(pos, state),
+                    BlockPlacement::new(at, extra),
+                ]))
+            }
         };
         let placer = self.entity(placer);
         let mut canceled = false;
@@ -2788,6 +2811,9 @@ impl Game<'_> {
             None => self.res.items(),
         };
         let table = items.block_loot_table(self.pack.assets.registry, state);
+        let Ok(state) = state.try_into_api() else {
+            return;
+        };
         let context = NativeLootDrops::from(mod_api::__private::built::NativeLootDrops {
             table: table.as_deref().unwrap_or_default(),
             dimension: self.dim.id(),
@@ -2819,6 +2845,12 @@ impl Game<'_> {
             return;
         }
         let Ok(snapshot) = tool.try_into_api() else {
+            return;
+        };
+        let Ok(block) = block
+            .map(|(pos, state)| state.try_into_api().map(|state| (pos, state)))
+            .transpose()
+        else {
             return;
         };
         let context = NativeLootDrops::from(mod_api::__private::built::NativeLootDrops {
@@ -3535,7 +3567,11 @@ impl Game<'_> {
                     label: k.label.clone(),
                     key: k.key.clone(),
                     modifiers: k.modifiers.bits,
-                    context: k.context,
+                    context: crate::game::api_values::TryIntoEngine::try_into_engine(
+                        &k.context,
+                        &(),
+                    )
+                    .unwrap(),
                     category: k.category.clone(),
                 })
                 .collect();
@@ -4098,13 +4134,10 @@ mod tests {
                     .build();
             }
             fn blocks(&self, _context: &mod_api::RegistrationContext, event: &mut BlocksEvent<'_>) {
-                event.blocks.extend([FIRST, SECOND, EMPTY, PLAIN].map(|id| {
-                    horizon_mod_package::content::Block {
-                        id: id.into(),
-                        template: "minecraft:white_banner".into(),
-                        ..Default::default()
-                    }
-                }));
+                event.blocks.extend(
+                    [FIRST, SECOND, EMPTY, PLAIN]
+                        .map(|id| mod_api::Block::new(id, "minecraft:white_banner")),
+                );
             }
         }
         let case = std::env::var(CHILD).unwrap();
@@ -4171,18 +4204,14 @@ mod tests {
                 (5, "minecraft:chest"),
             ] {
                 let state = game.pack.assets.registry.default_state(block).unwrap();
-                assert!(game.level_set_block(
-                    level,
-                    [x, 63, 0],
-                    stone,
-                    NativeBlockUpdateFlags::NONE
-                ));
-                assert!(game.level_set_block(
-                    level,
-                    [x, 64, 0],
-                    state,
-                    NativeBlockUpdateFlags::NONE
-                ));
+                assert_eq!(
+                    game.level_set_block(level, [x, 63, 0], stone, NativeBlockUpdateFlags::NONE),
+                    Ok(true)
+                );
+                assert_eq!(
+                    game.level_set_block(level, [x, 64, 0], state, NativeBlockUpdateFlags::NONE),
+                    Ok(true)
+                );
                 let pos = (x, 64, 0);
                 let handle = game.block_entity(level, [x, 64, 0]).unwrap();
                 if block == "minecraft:chest" {
@@ -4235,11 +4264,12 @@ mod tests {
 
             // A level hook's `LevelWriteHost::set_block` fires the same hook in its write.
             let first = game.pack.assets.registry.default_state(FIRST).unwrap();
+            use crate::game::api_values::TryIntoApi;
             let written = game.with_level(|_, level, ticks| {
                 LevelWriteHost::set_block(
                     &mut super::super::mod_api_host::LevelTicks { level, ticks },
                     [5, 64, 0],
-                    first,
+                    first.try_into_api().unwrap(),
                     NativeBlockUpdateFlags::NONE,
                 )
             });
@@ -4284,23 +4314,28 @@ mod tests {
             assert!(!mod_api::prelude::ClientInputClientHost::playing(game));
 
             // Vanilla's default bindings: forward is W, attack the left mouse button.
-            let forward =
-                mod_api::prelude::ClientInputClientHost::mapping(game, "key.forward").unwrap();
+            let forward = mod_api::prelude::ClientInputClientHost::mapping(game, "key.forward")
+                .unwrap()
+                .unwrap();
             assert_eq!(
-                (forward.down, forward.label.plain()),
-                (false, "W".to_owned())
+                (forward.down, forward.label),
+                (false, mod_api::Text::literal("W"))
             );
             game.keys.insert(KeyCode::KeyW);
             assert!(
                 mod_api::prelude::ClientInputClientHost::mapping(game, "key.forward")
                     .unwrap()
+                    .unwrap()
                     .down
             );
-            let attack =
-                mod_api::prelude::ClientInputClientHost::mapping(game, "key.attack").unwrap();
-            assert_eq!(attack.label.plain(), "Left Button");
+            let attack = mod_api::prelude::ClientInputClientHost::mapping(game, "key.attack")
+                .unwrap()
+                .unwrap();
+            assert_eq!(attack.label, mod_api::Text::literal("Left Button"));
             assert!(
-                mod_api::prelude::ClientInputClientHost::mapping(game, "key.mymod.boost").is_none()
+                mod_api::prelude::ClientInputClientHost::mapping(game, "key.mymod.boost")
+                    .unwrap()
+                    .is_none()
             );
         });
     }
@@ -4597,7 +4632,8 @@ mod tests {
                     mod_api::dispatch_block_highlight(
                         &game,
                         [1, 2, 3],
-                        super::BlockStateId(7),
+                        crate::game::api_values::TryIntoApi::try_into_api(&super::BlockStateId(7))
+                            .unwrap(),
                         0.5,
                         &mut canceled,
                     );
@@ -5026,8 +5062,7 @@ mod tests {
 
     #[test]
     fn native_ingredient_stays_hookable() {
-        let source =
-            include_str!("../../../../horizon-mod-api/src/crafting.rs").replace("\r\n", "\n");
+        let source = include_str!("../../crafting/native_hooks.rs").replace("\r\n", "\n");
         let at = source.find("pub fn native_ingredient(").unwrap();
         let start = source[..at].rfind("///").unwrap();
         let body = &source[start..start + source[start..].find("\n}\n").unwrap()];
@@ -5239,7 +5274,7 @@ mod item_fall_on_tests {
                 event.distance,
                 event.damage,
             ));
-            event.request(LandingWrite::DestroyBlock { drop: false });
+            event.request(mod_api::LandingWrite::DestroyBlock { drop: false });
         }
     }
     struct Mod(Lands);

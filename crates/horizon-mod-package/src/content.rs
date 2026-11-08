@@ -776,6 +776,7 @@ pub const MAX_MENU_SLOTS: u16 = 256;
 #[derive(Debug, Clone)]
 enum Source {
     Dir(PathBuf),
+    #[cfg(not(target_arch = "wasm32"))]
     Zip(PathBuf),
     /// No files: content a native mod declares in code.
     Code,
@@ -805,6 +806,7 @@ pub struct Content {
 /// Reads a mod's content files ([`Content::reader`]).
 pub enum FileReader<'a> {
     Dir(&'a Path),
+    #[cfg(not(target_arch = "wasm32"))]
     Zip(Box<zip::ZipArchive<std::fs::File>>),
 }
 impl FileReader<'_> {
@@ -815,6 +817,7 @@ impl FileReader<'_> {
             Self::Dir(root) => {
                 Box::new(std::fs::File::open(root.join(name)).map_err(|e| format!("{name}: {e}"))?)
             }
+            #[cfg(not(target_arch = "wasm32"))]
             Self::Zip(zip) => Box::new(zip.by_name(name).map_err(|e| format!("{name}: {e}"))?),
         };
         let mut out = Vec::new();
@@ -856,16 +859,22 @@ impl Content {
         let (source, sized) = if path.is_dir() {
             (Source::Dir(path.to_owned()), folder_files(path)?)
         } else {
-            let mut zip = open_zip(path)?;
-            let mut out = Vec::new();
-            for i in 0..zip.len() {
-                let entry = zip.by_index_raw(i).map_err(|e| e.to_string())?;
-                let name = entry.name().map_err(|e| e.to_string())?.into_owned();
-                if (name.starts_with("assets/") || name.starts_with("data/")) && !entry.is_dir() {
-                    out.push((name.to_owned(), entry.size()));
+            #[cfg(target_arch = "wasm32")]
+            return Err("archive I/O is unavailable on wasm32".into());
+            #[cfg(not(target_arch = "wasm32"))]
+            {
+                let mut zip = open_zip(path)?;
+                let mut out = Vec::new();
+                for i in 0..zip.len() {
+                    let entry = zip.by_index_raw(i).map_err(|e| e.to_string())?;
+                    let name = entry.name().map_err(|e| e.to_string())?.into_owned();
+                    if (name.starts_with("assets/") || name.starts_with("data/")) && !entry.is_dir()
+                    {
+                        out.push((name.to_owned(), entry.size()));
+                    }
                 }
+                (Source::Zip(path.to_owned()), out)
             }
-            (Source::Zip(path.to_owned()), out)
         };
         let mut files = Vec::with_capacity(sized.len());
         let mut total = 0u64;
@@ -993,7 +1002,9 @@ impl Content {
     /// Where the files are read from: the mod's folder or its `.hmod`.
     pub fn source(&self) -> &Path {
         match &self.source {
-            Source::Dir(path) | Source::Zip(path) => path,
+            Source::Dir(path) => path,
+            #[cfg(not(target_arch = "wasm32"))]
+            Source::Zip(path) => path,
             Source::Code => Path::new(""),
         }
     }
@@ -1678,11 +1689,13 @@ fn check_sign_walls(blocks: &[&Block]) -> Result<(), String> {
 fn reader_of(source: &Source) -> Result<FileReader<'_>, String> {
     Ok(match source {
         Source::Dir(root) => FileReader::Dir(root),
+        #[cfg(not(target_arch = "wasm32"))]
         Source::Zip(path) => FileReader::Zip(Box::new(open_zip(path)?)),
         Source::Code => FileReader::Dir(Path::new("")),
     })
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 fn open_zip(path: &Path) -> Result<zip::ZipArchive<std::fs::File>, String> {
     let file = std::fs::File::open(path).map_err(|e| e.to_string())?;
     zip::ZipArchive::new(file).map_err(|e| e.to_string())

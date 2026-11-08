@@ -1,9 +1,7 @@
 //! Java numeric text, actual SNBT and DataFixer numeric text on the same bits.
+use horizon_core::nbt::Tag;
+use horizon_world::snbt_text;
 use std::io::Write;
-use {
-    horizon_core::nbt::Tag,
-    horizon_world::{datafix::json, snbt_text},
-};
 
 pub fn main() {
     let args: Vec<_> = super::args().collect();
@@ -18,9 +16,9 @@ pub fn main() {
             writeln!(
                 out,
                 "{line}\t{}\t{}\t{}",
-                snbt_text::java_float(value),
+                horizon_core::java_number::java_float(value),
                 snbt_text::to_snbt(&tag),
-                json::java_float_string(value)
+                horizon_core::java_number::java_float(value)
             )
             .unwrap();
         } else {
@@ -30,9 +28,9 @@ pub fn main() {
             writeln!(
                 out,
                 "{line}\t{}\t{}\t{}",
-                snbt_text::java_double(value),
+                horizon_core::java_number::java_double(value),
                 snbt_text::to_snbt(&tag),
-                json::java_double_string(value)
+                horizon_core::java_number::java_double(value)
             )
             .unwrap();
         }

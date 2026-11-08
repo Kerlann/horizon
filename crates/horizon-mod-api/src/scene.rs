@@ -1,6 +1,6 @@
 //! Owned drawing data for a screen scene, separate from live world entities.
 
-use crate::{BlockStateId, Identifier, containers::ModBlockEntityFields};
+use crate::{BlockState, Identifier, containers::ModBlockEntityFields};
 
 /// A mod block entity's type and public fields supplied to a screen's drawing Part.
 /// This is not a live entity: internal cache and revision identities never cross the API.
@@ -27,15 +27,16 @@ impl SceneBlockEntity {
 pub struct NativeSceneBlock {
     /// Position in the scene, independent of the world's blocks.
     pub pos: [i32; 3],
-    /// The block state whose baked model is drawn.
-    pub state: BlockStateId,
+    /// Owned block state, including properties, whose baked model is drawn.
+    /// An invalid or unavailable state refuses the entire scene before drawing.
+    pub state: BlockState,
     /// Optional owned block entity drawing data.
     pub entity: Option<SceneBlockEntity>,
 }
 
 impl NativeSceneBlock {
     /// Describe one scene-local block and optional entity.
-    pub fn new(pos: [i32; 3], state: BlockStateId, entity: Option<SceneBlockEntity>) -> Self {
+    pub fn new(pos: [i32; 3], state: BlockState, entity: Option<SceneBlockEntity>) -> Self {
         Self { pos, state, entity }
     }
 }

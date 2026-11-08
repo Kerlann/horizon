@@ -8,7 +8,7 @@
 //! code, progress and problems.
 
 use super::*;
-use crate::glass_ui::{self as ui, white, Tone};
+use crate::glass_ui::{self as ui, Tone, white};
 use crate::servers_page::Field;
 use account::Player;
 use horizon_theme::glass::{fill, ink, radius};

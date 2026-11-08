@@ -28,8 +28,10 @@ impl Commands for FakeCommands {
         self.ran.push(line.to_owned());
         self.known.contains(line)
     }
-    fn feedback(&mut self, line: Text) {
+    fn feedback(&mut self, line: Text) -> Result<(), crate::text::TextFormError> {
+        line.validate_depth()?;
         self.feedback.push(line);
+        Ok(())
     }
 }
 
@@ -55,8 +57,10 @@ impl FakeMessages {
 }
 
 impl Messages for FakeMessages {
-    fn broadcast(&self, line: Text) {
+    fn broadcast(&self, line: Text) -> Result<(), crate::text::TextFormError> {
+        line.validate_depth()?;
         self.broadcast.borrow_mut().push(line);
+        Ok(())
     }
     fn text_allowed(&self, text: &str) -> Option<bool> {
         Some(!self.blocked.contains(text))

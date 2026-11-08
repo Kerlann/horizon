@@ -2,9 +2,10 @@
 //! `TextComponentTagVisitor` (the coloured form commands print), plus Java's
 //! number formatting.
 use crate::text::{self, Style, Text};
+pub use horizon_core::java_number::{java_double, java_float};
 use horizon_core::nbt::Tag;
 use horizon_world::snbt_text::string_of;
-pub use horizon_world::snbt_text::{java_double, java_float, quote_and_escape, to_snbt};
+pub use horizon_world::snbt_text::{quote_and_escape, to_snbt};
 
 // ---- the coloured form -----------------------------------------------------
 

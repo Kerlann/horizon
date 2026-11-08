@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "No si è rivât a lei il regjstri de compilazion: {error}",
   "Could not read the saved sign-in.": "No si è rivât a leî l'autenticazion salvade.",
   "Could not read the saved sign-in. Sign in again.": "No si è rivât a leî l'autenticazion salvade. Accedi di gnûf.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "No si è rivât a lei {name}: {error}",
   "Could not run {program}: {error}": "Nol è stât rivât a corî {program}: {error}",
   "Could not save the renewed sign-in.": "No si è rivât a salvâ l'autenticazion rinovade.",

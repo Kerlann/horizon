@@ -14,7 +14,7 @@ pub fn main() -> horizon_client::Result<()> {
     let root = Path::new(&args[1]);
     let defaults = horizon_world::item_defaults::read(root)?;
     let items = Items::catalog(root, &PackOverlay::NONE, &defaults)?;
-    let enchantments = Enchantments::load(root, &defaults);
+    let enchantments = Enchantments::load(root, &defaults)?;
     let trades = Trades {
         trades: HashMap::new(),
         tags: HashMap::new(),
@@ -46,8 +46,10 @@ pub fn main() -> horizon_client::Result<()> {
                             "minecraft:water"
                         });
                     if *kind == "renamed" {
-                        p.data_mut()
-                            .set_loot_component("minecraft:custom_name", &json!("Bottle"));
+                        p.data_mut().set_loot_component(
+                            "minecraft:custom_name",
+                            &Some(horizon_core::nbt::Tag::String("Bottle".into())),
+                        );
                     }
                     if *kind == "extra_potion" {
                         p.data_mut()

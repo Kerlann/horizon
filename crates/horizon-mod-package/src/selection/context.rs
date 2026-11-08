@@ -128,8 +128,7 @@ impl LaunchArguments {
                 }
                 "--fullscreen" | "--session-stdin" | "--creative" | "--test-terrain"
                 | "--no-pause" | "--offscreen" | "--headless" | "--control" | "--server-thread"
-                | "--in-frame" | "--no-server-thread" | "--pregen" | "--wasm-interpreter"
-                | "--wasm-fuel" => {
+                | "--in-frame" | "--no-server-thread" | "--pregen" => {
                     rest.push(Argument::Switch(arg));
                 }
                 _ => {

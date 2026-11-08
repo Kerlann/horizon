@@ -8,7 +8,13 @@ use super::native_block_entity_draw::{BlockEntityDraw, place_turning};
 use glam::{Mat4, Vec3};
 use horizon_client::{block_entity_render::diffuse_lights, hud::HudBatch, mesher::Vertex};
 use horizon_world::level::data::state_flags;
-use mod_api::{NativeSceneBlock, NativeSceneView};
+use mod_api::NativeSceneView;
+/// Prepared scene data. Entity fields remain borrowed for the duration of the draw.
+pub(super) struct SceneBlock<'a> {
+    pub pos: [i32; 3],
+    pub state: horizon_world::registry::BlockStateId,
+    pub entity: Option<&'a mod_api::SceneBlockEntity>,
+}
 
 /// A quad in the scene's blocks, before it is seen: its corners, UVs in the
 /// atlas, ABGR colour, and its outward normal.
@@ -82,20 +88,15 @@ impl Game<'_> {
         &self,
         batch: &mut HudBatch,
         rect: [f32; 4],
-        blocks: &[NativeSceneBlock],
+        blocks: &[SceneBlock<'_>],
         view: NativeSceneView,
     ) {
         if !self.native_window() || !view.scale.is_finite() || view.scale <= 0.0 {
             return;
         }
-        // A state the registry doesn't know (a mod's stale id) culls nothing
-        // instead of panicking in the block facts.
-        let registry = &self.pack.assets.registry;
-        let occupied: std::collections::HashMap<[i32; 3], _> = blocks
-            .iter()
-            .filter(|b| registry.state(b.state).is_some())
-            .map(|b| (b.pos, b.state))
-            .collect();
+        // The Game boundary prepared every state before any drawing began.
+        let occupied: std::collections::HashMap<[i32; 3], _> =
+            blocks.iter().map(|b| (b.pos, b.state)).collect();
         let solid = |pos: [i32; 3]| {
             occupied.get(&pos).is_some_and(|&state| {
                 self.res.behaviours().facts(state).flags & state_flags::SOLID_RENDER != 0

@@ -1,7 +1,34 @@
 //! The keys a native mod registers on Options > Controls.
 
 use crate::ClientModifiers;
-pub use horizon_mod_package::mod_list::KeyConflictContext;
+/// The screens in which two mappings can conflict.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum KeyConflictContext {
+    /// Conflicts on every screen.
+    #[default]
+    Universal,
+    /// Conflicts while playing.
+    InGame,
+    /// Conflicts in a GUI.
+    Gui,
+}
+impl KeyConflictContext {
+    /// Whether these screen contexts overlap.
+    pub fn conflicts(self, other: Self) -> bool {
+        self == Self::Universal || other == Self::Universal || self == other
+    }
+}
+#[cfg(test)]
+mod context_tests {
+    use super::KeyConflictContext::*;
+    #[test]
+    fn key_context_case_order() {
+        assert_eq!([Universal as u8, InGame as u8, Gui as u8], [0, 1, 2]);
+        assert!(Universal.conflicts(Gui));
+        assert!(!InGame.conflicts(Gui));
+    }
+}
 
 /// A key a mod registers through `Registrar::register_key_mapping`: it is listed under the mod's name on
 /// Options > Controls, and the player's binding and reset are kept by mod id in `horizon-mods.txt`.

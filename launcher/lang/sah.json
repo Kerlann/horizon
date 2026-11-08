@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Сборка логун кыайан аахпатыбыт: {error}",
   "Could not read the saved sign-in.": "Хараллыбыт киириини кыайан аахпатыҥ.",
   "Could not read the saved sign-in. Sign in again.": "Хараллыбыт киириини кыайан аахпатыҥ. Эмиэ киир.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Кыаллыбатах {name}: {error}",
   "Could not run {program}: {error}": "Кыайан сүүрбэтэ {program}: {error}",
   "Could not save the renewed sign-in.": "Саҥардыллыбыт киириини харыстыыр кыах суох.",

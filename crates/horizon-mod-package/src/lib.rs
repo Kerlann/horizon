@@ -12,6 +12,7 @@ pub mod install_lock;
 pub mod internals;
 pub mod manifest;
 pub mod mod_list;
+#[cfg(not(target_arch = "wasm32"))]
 pub mod modpack;
 pub mod packages;
 pub mod runtime;

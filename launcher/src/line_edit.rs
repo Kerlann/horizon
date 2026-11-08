@@ -4,8 +4,8 @@
 
 use super::*;
 use gpui::{
-    black, canvas, Bounds, Font, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point,
-    TextRun,
+    Bounds, Font, MouseButton, MouseDownEvent, MouseMoveEvent, Pixels, Point, TextRun, black,
+    canvas,
 };
 use std::{cell::RefCell, rc::Rc};
 

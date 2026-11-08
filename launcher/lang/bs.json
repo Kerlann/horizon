@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Nije moguće pročitati dnevnik izgradnje: {error}",
   "Could not read the saved sign-in.": "Nije moguće pročitati sačuvanu prijavu.",
   "Could not read the saved sign-in. Sign in again.": "Nije moguće pročitati sačuvanu prijavu. Prijavite se ponovo.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Nije moguće pročitati {name}: {error}",
   "Could not run {program}: {error}": "Nije moguće pokrenuti {program}: {error}",
   "Could not save the renewed sign-in.": "Nije moguće sačuvati obnovljenu prijavu.",

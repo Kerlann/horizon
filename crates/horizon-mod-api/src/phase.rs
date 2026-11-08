@@ -1,5 +1,23 @@
 //! Restricted views for registration and data loading.
-pub use horizon_world::native_load_context::{DataLoadOrigin, LoopSide};
+/// The owning boundary that starts a data load.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum DataLoadOrigin {
+    /// Server data loading, including a reload.
+    ServerDataLoad,
+    /// Client resource preloading.
+    ClientPreload,
+}
+
+/// The side that owns a resource-generation loop.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum LoopSide {
+    /// A server loop.
+    Server,
+    /// A client loop.
+    Client,
+}
 use std::{
     collections::BTreeMap,
     sync::{Arc, OnceLock},
@@ -196,13 +214,23 @@ pub(crate) fn unprovided(method: &'static str, operation: &'static str, access: 
 /// A refused mod call panics so a listener cannot ignore a Result and continue.
 #[inline]
 pub fn check_access(operation: &str, access: LoadAccess) {
+    assert!(
+        access_allowed(operation, access),
+        "mod API {operation} is unavailable during {:?}",
+        current_phase()
+    );
+}
+
+/// Whether an operation is available in this thread's current load phase.
+#[inline]
+pub fn access_allowed(operation: &str, access: LoadAccess) -> bool {
     let phase = current_phase();
     if phase == ModPhase::World {
-        return;
+        return true;
     }
     let metadata = access == LoadAccess::Metadata;
     let settings = operation == "setting";
-    let allowed = match phase {
+    match phase {
         ModPhase::World => true,
         ModPhase::Setup => {
             settings
@@ -215,11 +243,7 @@ pub fn check_access(operation: &str, access: LoadAccess) {
         ModPhase::Config => settings || operation == "config_files",
         ModPhase::Reloading => settings || metadata || access == LoadAccess::PublishedResources,
         ModPhase::Packages | ModPhase::Registration => false,
-    };
-    assert!(
-        allowed,
-        "mod API {operation} is unavailable during {phase:?}"
-    );
+    }
 }
 
 /// Whether a package contains compiled code or content alone.
@@ -343,6 +367,13 @@ pub fn install_packages(native: &[PackageInfo], content: &[PackageInfo]) {
         PACKAGES.set(inventory(native, content).into()).is_ok(),
         "package inventory already installed"
     );
+}
+
+/// Install the host's ordered package inventory in a guest at initialization.
+// hidden: the guest runtime installs this once before dispatching hooks.
+#[doc(hidden)]
+pub fn install_guest_packages(packages: Vec<PackageInfo>) {
+    let _ = PACKAGES.set(packages.into());
 }
 
 /// The registries and settings registration reads: captured by the engine once, before the
@@ -610,19 +641,32 @@ pub trait DataLoadContext {
     fn mods(&self) -> LoadedMods;
 }
 
+/// Immutable resource-generation reads supplied by an owning loader.
+pub trait LoadReader: Sync {
+    /// Registry names in ID order.
+    fn registry(&self, name: &str) -> Option<Arc<[String]>>;
+    /// Fluid tags and their members in source order.
+    fn fluid_tags(&self) -> Arc<[(String, Arc<[String]>)]>;
+    /// A captured setting, without file I/O.
+    fn setting(&self, mod_id: &str, key: &str) -> Option<String>;
+}
+
 /// The game's owning load, as a [`DataLoadContext`].
 // hidden: the game's side of the context, not part of the mod surface
 #[doc(hidden)]
 // exhaustive: its fields are private; only the game builds it
 pub struct OwningLoad<'a> {
-    source: &'a horizon_world::native_load_context::LoadContext,
+    source: &'a dyn LoadReader,
+    origin: DataLoadOrigin,
     mods: LoadedMods,
 }
 
 impl<'a> OwningLoad<'a> {
-    pub fn new(source: &'a horizon_world::native_load_context::LoadContext) -> Self {
+    /// Borrow a loader's immutable reader at its owning boundary.
+    pub fn new(origin: DataLoadOrigin, source: &'a dyn LoadReader) -> Self {
         Self {
             source,
+            origin,
             mods: LoadedMods::new(),
         }
     }
@@ -630,7 +674,7 @@ impl<'a> OwningLoad<'a> {
 
 impl DataLoadContext for OwningLoad<'_> {
     fn origin(&self) -> DataLoadOrigin {
-        self.source.origin()
+        self.origin
     }
     fn registry(&self, name: &str) -> Option<Arc<[String]>> {
         self.source.registry(name)
@@ -639,7 +683,7 @@ impl DataLoadContext for OwningLoad<'_> {
         crate::registry_keys::fluid_key(id)
     }
     fn fluid_tags(&self) -> Option<Arc<[(String, Arc<[String]>)]>> {
-        Some(self.source.fluid_tags().clone())
+        Some(self.source.fluid_tags())
     }
     fn setting(&self, mod_id: &str, key: &str) -> Option<String> {
         self.source.setting(mod_id, key)
@@ -680,19 +724,30 @@ pub trait LoopContext {
     fn mods(&self) -> LoadedMods;
 }
 
+/// Immutable resource-generation reads supplied by an owning loop.
+pub trait LoopReader: Sync {
+    /// Registry names in ID order.
+    fn registry(&self, name: &str) -> Option<Arc<[String]>>;
+    /// A captured setting, without file I/O.
+    fn setting(&self, mod_id: &str, key: &str) -> Option<String>;
+}
+
 /// The game's loop, as a [`LoopContext`].
 // hidden: the game's side of the context, not part of the mod surface
 #[doc(hidden)]
 // exhaustive: its fields are private; only the game builds it
 pub struct OwningLoop<'a> {
-    source: &'a horizon_world::native_load_context::LoopContext,
+    source: &'a dyn LoopReader,
+    side: LoopSide,
     mods: LoadedMods,
 }
 
 impl<'a> OwningLoop<'a> {
-    pub fn new(source: &'a horizon_world::native_load_context::LoopContext) -> Self {
+    /// Borrow a loop's immutable reader at its owning boundary.
+    pub fn new(side: LoopSide, source: &'a dyn LoopReader) -> Self {
         Self {
             source,
+            side,
             mods: LoadedMods::new(),
         }
     }
@@ -700,7 +755,7 @@ impl<'a> OwningLoop<'a> {
 
 impl LoopContext for OwningLoop<'_> {
     fn side(&self) -> LoopSide {
-        self.source.side()
+        self.side
     }
     fn registry(&self, name: &str) -> Option<Arc<[String]>> {
         self.source.registry(name)
@@ -781,7 +836,6 @@ mod tests {
     #[test]
     fn resolved_dispatch_slice_keeps_order_in_registration_config_and_reload() {
         use crate::*;
-        use horizon_mod_package::dependencies;
         use std::sync::Mutex;
         struct Trace {
             id: &'static str,
@@ -811,25 +865,8 @@ mod tests {
         mod_api::impl_host_areas!(Server);
         impl ServerHost for Server {}
         mod_api::impl_server_host_areas!(Server);
-        let declarations: Vec<_> = ["z", "lib", "a"].into_iter().map(|id| {
-            let deps = if id == "lib" { "" } else { "[dependencies]\nlib='^1'" };
-            horizon_mod_package::Manifest::parse(&format!("id='{id}'\nname='{id}'\nversion='1'\napi='0.2'\ncapabilities=['registries']\n{deps}")).unwrap()
-        }).collect();
-        let declared: Vec<_> = declarations
-            .iter()
-            .map(|m| dependencies::from_manifest(&m.dependencies))
-            .collect();
-        let inputs: Vec<_> = declarations
-            .iter()
-            .zip(&declared)
-            .map(|(m, dependencies)| dependencies::Mod {
-                id: &m.id,
-                version: &m.version,
-                has_api: true,
-                dependencies,
-            })
-            .collect();
-        let order = dependencies::resolve(&inputs).unwrap().order;
+        // The loader supplies a dependency-resolved slice; phase dispatch must retain it.
+        let order = [1, 0, 2];
         let calls = Arc::new(Mutex::new(Vec::new()));
         let ids = ["z", "lib", "a"];
         let mods: Mods = order
@@ -848,7 +885,7 @@ mod tests {
         crate::install(mods.clone());
         let owner = PhaseOwner::new(ModPhase::Packages);
         owner.advance(ModPhase::Registration).unwrap();
-        crate::install_parts(&mods, &crate::parts::tests::rule_schema()).unwrap();
+        crate::install_parts(&mods, &crate::parts::tests::rule_schema(), |_| false).unwrap();
         owner.advance(ModPhase::Setup).unwrap();
         let mut host = Server;
         for _world in 0..2 {
@@ -1058,17 +1095,15 @@ mod tests {
 
     #[test]
     fn a_loop_context_reads_its_side_registries_and_mods() {
-        use horizon_world::native_load_context::{DataLoadOrigin, LoadContext, LoadInputs};
-        let registries =
-            std::collections::BTreeMap::from([("item".to_owned(), vec!["a:b".into()])]);
-        let load = LoadContext::new(
-            DataLoadOrigin::ClientPreload,
-            std::sync::Arc::new(LoadInputs::new(registries, Default::default())),
-            [],
-        );
-        let source = load.loop_context(LoopSide::Client, []);
+        let source = TestReader {
+            registries: std::collections::BTreeMap::from([(
+                "item".to_owned(),
+                vec!["a:b".into()].into(),
+            )]),
+            tags: Arc::from([]),
+        };
         with_test_packages(&["one", "two"], || {
-            let context = OwningLoop::new(&source);
+            let context = OwningLoop::new(LoopSide::Client, &source);
             assert_eq!(context.side(), LoopSide::Client);
             assert_eq!(
                 context.registry("item").as_deref(),
@@ -1159,19 +1194,48 @@ mod tests {
         ];
         with_test_packages(&["reader", "other"], || {
             with_test_registration_data(data, || {
-                crate::install_parts(&mods, &crate::parts::tests::rule_schema()).unwrap();
+                crate::install_parts(&mods, &crate::parts::tests::rule_schema(), |_| false)
+                    .unwrap();
                 assert_eq!(*registered.lock().unwrap(), expected);
                 let mut types = Vec::new();
                 dispatch_component_types(&RegistrationContext::new(), &mut types);
                 assert_eq!(types, expected, "a later step reads the same snapshot");
             });
             // No engine view: every read is refused, and a bad name or key still says so.
-            crate::install_parts(&mods, &crate::parts::tests::rule_schema()).unwrap();
+            crate::install_parts(&mods, &crate::parts::tests::rule_schema(), |_| false).unwrap();
             let refused = registered.lock().unwrap().clone();
             assert_eq!(refused[0], "Err(Unavailable)");
             assert_eq!(refused[2], r#"Err(InvalidRegistryName("item"))"#);
             assert_eq!(refused[4], "Err(Unavailable)");
             assert_eq!(refused[8], r#"Err(InvalidSettingKey(""))"#);
         });
+    }
+}
+
+#[cfg(test)]
+#[derive(Default)]
+pub(crate) struct TestReader {
+    pub registries: std::collections::BTreeMap<String, Arc<[String]>>,
+    pub tags: Arc<[(String, Arc<[String]>)]>,
+}
+#[cfg(test)]
+impl LoadReader for TestReader {
+    fn registry(&self, name: &str) -> Option<Arc<[String]>> {
+        self.registries.get(name).cloned()
+    }
+    fn fluid_tags(&self) -> Arc<[(String, Arc<[String]>)]> {
+        self.tags.clone()
+    }
+    fn setting(&self, _: &str, _: &str) -> Option<String> {
+        None
+    }
+}
+#[cfg(test)]
+impl LoopReader for TestReader {
+    fn registry(&self, name: &str) -> Option<Arc<[String]>> {
+        self.registries.get(name).cloned()
+    }
+    fn setting(&self, _: &str, _: &str) -> Option<String> {
+        None
     }
 }

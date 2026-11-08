@@ -1,5 +1,17 @@
 # Making a content mod
 
+Trait mods declare content through `BlocksEvent` and `ItemsEvent`, using API-owned
+`mod_api::Block` and `mod_api::Item` records. Start with `Block::new(id, template)` or
+`Item::new(id, template)`, passing identifier strings, then set the overrides. The drafts are unvalidated; admission reports malformed values with the content loader's refusal messages.
+These are load-time declaration drafts, not live registry entries. The game admits them
+with the content-file checks, atomically for each namespace, before resources load.
+A block's `item` defaults to false in code.
+
+Code declarations carry component patches as ordered `Vec<(String, Option<Tag>)>`:
+`Some(tag)` sets the named component and `None` removes it (without a `!` prefix).
+The game converts this opaque NBT data at load; file declarations below still use JSON.
+No declaration conversion runs per tick.
+
 ## Making a content mod
 
 ```sh
@@ -286,6 +298,11 @@ outline also becomes collision, otherwise the template collision is retained. An
 table can be used without an outline override, and overrides `thickness` collision too.
 
 ### Entity-context shape declarations
+
+Native declarations use the same fields on `mod_api::Block`, with API-owned
+`ShapeEntityKind::{Item, Player, Living, Other}` keys and `BlockShapes` values.
+`interaction_shapes` is an optional `BlockShapes`. The game validates these drafts
+at content admission, just like their JSON counterparts.
 
 `outline_context_shapes` and `collision_context_shapes` independently override
 `shapes` and `collision_shapes` for a captured entity class. Their keys are

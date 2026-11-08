@@ -24,7 +24,10 @@ fn register_item_tint_sources(
 
 fn item_tint_source(&self, _host: &dyn ClientHost, event: &mut ItemTintSourceEvent<'_>) {
     if event.source == "example:charge" {
-        let rgb = event.config["default"].as_i64().unwrap_or(0xFFFFFF) as u32;
+        let rgb = match event.config.get("default") {
+            Some(Tag::Int(value)) => *value as u32,
+            _ => 0xFFFFFF,
+        };
         let rgb = if event.stack.count() > 1 { 0x55FF55 } else { rgb };
         event.color = 0xFF000000 | rgb;
     }

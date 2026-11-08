@@ -16,7 +16,7 @@ builds. These generated Rust files are not kept in the source tree or committed,
 is needed after a merge. Every hook needs a `mod_api` entry: the build fails naming any hook without one. A hook that stands in for a
 method a vanilla block, block entity, item or menu overrides also gets a `scope` and a `key`
 (`{"contract": "collect", "out": "output", "scope": "block", "key": "state"}`): the key is a
-`BlockStateId` (looked up directly by state for block parts), an `&ItemStack`, a `ModBlockEntity` or an id `&str`, and
+`BlockState` (routed by its prepared block key for block parts), an `&ItemStack`, a `ModBlockEntity` or an id `&str`, and
 the generator also puts the method on that scope's part trait ([Parts](006-parts.md#parts)). A body that is neither the
 placeholder nor already calls the dispatch is an error, and the generator never changes it. Hooks that are
 free functions outside `Game` are wired by hand: those crates can't see the mod list, so each calls a callback

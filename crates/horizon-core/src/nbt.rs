@@ -90,6 +90,100 @@ impl Tag {
     }
 }
 
+/// Clone opaque NBT with an explicit work list, without recursive cloning.
+/// The returned tree retains ordinary Tag ownership and drop behavior.
+pub fn clone_tag(root: &Tag) -> Tag {
+    match root {
+        Tag::List(values) if values.is_empty() => return root.clone(),
+        Tag::Compound(values) if values.is_empty() => return root.clone(),
+        Tag::List(_) | Tag::Compound(_) => {}
+        _ => return root.clone(),
+    }
+    enum Work<'a> {
+        Enter(&'a Tag),
+        List(usize),
+        Compound(Vec<JavaString>),
+    }
+    let mut work = vec![Work::Enter(root)];
+    let mut done = Vec::new();
+    while let Some(step) = work.pop() {
+        match step {
+            Work::Enter(Tag::List(values)) => {
+                work.push(Work::List(values.len()));
+                work.extend(values.iter().rev().map(Work::Enter));
+            }
+            Work::Enter(Tag::Compound(values)) => {
+                work.push(Work::Compound(values.keys().cloned().collect()));
+                work.extend(values.values().rev().map(Work::Enter));
+            }
+            Work::Enter(
+                value @ (Tag::End
+                | Tag::Byte(_)
+                | Tag::Short(_)
+                | Tag::Int(_)
+                | Tag::Long(_)
+                | Tag::Float(_)
+                | Tag::Double(_)
+                | Tag::String(_)
+                | Tag::ByteArray(_)
+                | Tag::IntArray(_)
+                | Tag::LongArray(_)),
+            ) => done.push(value.clone()),
+            Work::List(len) => {
+                let values = done.split_off(done.len() - len);
+                done.push(Tag::List(values));
+            }
+            Work::Compound(keys) => {
+                let values = done.split_off(done.len() - keys.len());
+                done.push(Tag::Compound(keys.into_iter().zip(values).collect()));
+            }
+        }
+    }
+    done.pop().expect("one opaque root")
+}
+
+/// Release a boundary-owned tag without recursive list/compound drops.
+pub fn discard_tag(root: Tag) {
+    let mut pending = vec![root];
+    while let Some(tag) = pending.pop() {
+        match tag {
+            Tag::List(values) => pending.extend(values),
+            Tag::Compound(values) => pending.extend(values.into_values()),
+            _ => {}
+        }
+    }
+}
+
+/// Whether recursive lists/compounds fit the supplied NBT container bound.
+/// Scalars and primitive arrays consume no recursive nesting.
+pub fn within_depth(root: &Tag, limit: usize) -> bool {
+    match root {
+        Tag::List(values) if values.is_empty() => return limit > 0,
+        Tag::Compound(values) if values.is_empty() => return limit > 0,
+        Tag::List(_) | Tag::Compound(_) => {}
+        _ => return true,
+    }
+    let mut work = vec![(root, 0)];
+    while let Some((tag, depth)) = work.pop() {
+        match tag {
+            Tag::List(values) => {
+                if depth >= limit {
+                    return false;
+                }
+                work.extend(values.iter().map(|v| (v, depth + 1)));
+            }
+            Tag::Compound(values) => {
+                if depth >= limit {
+                    return false;
+                }
+                work.extend(values.values().map(|v| (v, depth + 1)));
+            }
+            _ => {}
+        }
+    }
+    true
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct NamedTag {
     pub name: JavaString,

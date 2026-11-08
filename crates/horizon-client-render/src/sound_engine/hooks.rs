@@ -3,7 +3,7 @@
 //! at hand there, and a sound is played from inside the engine's own loops.
 use super::{Attenuation, ChannelId, SoundEngine, SoundInstance};
 use mod_api::__private::built;
-use mod_api::{ChannelRef, HookId, OwningLoop, SoundAttenuation, SoundPlay, SoundSource};
+use mod_api::{ChannelRef, HookId, SoundAttenuation, SoundPlay, SoundSource};
 
 /// Hook point for native mods (docs/modding/src/how-to/native-mods.md, declared in `hooks/`
 /// with the game's): a sound is about to play (`PlaySoundEvent`, vanilla's `SoundEngine.play`).
@@ -18,8 +18,11 @@ pub fn native_play_sound(
     original: &SoundPlay,
     sound: &mut Option<SoundPlay>,
 ) {
+    if !mod_api::__private::listened(HookId::PlaySound) {
+        return;
+    }
     mod_api::dispatch_play_sound(
-        &OwningLoop::new(context),
+        &crate::api_context::LoopReader(context).context(),
         instance,
         starting,
         original,
@@ -36,7 +39,14 @@ pub fn native_play_sound_source(
     sound: &SoundPlay,
     channel: &ChannelRef,
 ) {
-    mod_api::dispatch_play_sound_source(&OwningLoop::new(context), sound, channel);
+    if !mod_api::__private::listened(HookId::PlaySoundSource) {
+        return;
+    }
+    mod_api::dispatch_play_sound_source(
+        &crate::api_context::LoopReader(context).context(),
+        sound,
+        channel,
+    );
 }
 
 /// Hook point for native mods (docs/modding/src/how-to/native-mods.md, declared in `hooks/`
@@ -48,7 +58,14 @@ pub fn native_play_streaming_source(
     sound: &SoundPlay,
     channel: &ChannelRef,
 ) {
-    mod_api::dispatch_play_streaming_source(&OwningLoop::new(context), sound, channel);
+    if !mod_api::__private::listened(HookId::PlayStreamingSource) {
+        return;
+    }
+    mod_api::dispatch_play_streaming_source(
+        &crate::api_context::LoopReader(context).context(),
+        sound,
+        channel,
+    );
 }
 
 /// Hook point for native mods (docs/modding/src/how-to/native-mods.md, declared in `hooks/`
@@ -56,7 +73,10 @@ pub fn native_play_streaming_source(
 /// reload and when the output device changes (`SoundEngineLoadEvent`).
 #[inline(never)]
 pub fn native_sound_engine_load(context: &horizon_world::native_load_context::LoopContext) {
-    mod_api::dispatch_sound_engine_load(&OwningLoop::new(context));
+    if !mod_api::__private::listened(HookId::SoundEngineLoad) {
+        return;
+    }
+    mod_api::dispatch_sound_engine_load(&crate::api_context::LoopReader(context).context());
 }
 
 // Validate a mod's changed parameters at the playback boundary, leaving vanilla

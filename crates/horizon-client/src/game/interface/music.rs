@@ -104,7 +104,7 @@ impl Game<'_> {
 
     /// `NowPlayingToast.getNowPlayingString` of the song the music manager
     /// plays: its file's short language key, slashes as dots.
-    fn now_playing_song(&self) -> Option<mod_api::Text> {
+    fn now_playing_song(&self) -> Option<horizon_client::text::Text> {
         let id = self.music.current_instance()?;
         let location = self
             .audio
@@ -122,9 +122,9 @@ impl Game<'_> {
             format!("{namespace}.{path}")
         }
         .replace('/', ".");
-        Some(mod_api::Text::literal(horizon_client::lang::get_or(
-            &key, &key,
-        )))
+        Some(horizon_client::text::Text::literal(
+            horizon_client::lang::get_or(&key, &key),
+        ))
     }
     /// `ToastManager.update` (it plays no toast sound for this toast) and
     /// `extractRenderState` for the Now Playing toast, which slides in at the

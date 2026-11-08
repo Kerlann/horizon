@@ -14,7 +14,7 @@ mod __private {
     pub use crate::parts::{
         EntityAttributeDeclaration, EntityAttributeModification, HookParts, ItemKeyError, KnownIds,
         PartsRef, ResolvePartsError, SpawnPlacementDeclaration, TooltipAppenderPart,
-        block_entity_types, block_listens, clear_game_parts, declared_world_fluids,
+        block_entity_types, block_key_listens, clear_game_parts, declared_world_fluids,
         entity_attribute_declarations, entity_attribute_modifications, entity_parts,
         game_rule_bool_slot, game_rule_categories, game_rules, has_entity_parts, has_part_hook,
         has_scoped_hook, install_parts, install_resolved_parts, key_mappings, mark_game_thread,

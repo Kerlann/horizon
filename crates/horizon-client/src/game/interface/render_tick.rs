@@ -385,18 +385,20 @@ impl Game<'_> {
                 continue;
             };
             let mut replace_vanilla = false;
-            self.native_block_screen_effect_draw(mod_api::__private::BlockScreenEffectDrawCall {
-                effect,
-                state,
-                pos,
-                partial_tick: partial,
-                hide_gui: self.ui.hide_gui,
-                draw: &mut GameCameraDrawContext {
-                    game: self,
-                    surface: &mut quads,
+            self.native_block_screen_effect_draw(
+                crate::game::native_hooks::BlockScreenEffectDrawCall {
+                    effect,
+                    state,
+                    pos,
+                    partial_tick: partial,
+                    hide_gui: self.ui.hide_gui,
+                    draw: &mut GameCameraDrawContext {
+                        game: self,
+                        surface: &mut quads,
+                    },
+                    replace_vanilla: &mut replace_vanilla,
                 },
-                replace_vanilla: &mut replace_vanilla,
-            });
+            );
             drawn[i] = quads.take();
             if replace_vanilla {
                 match effect {
@@ -874,11 +876,16 @@ mod tests {
                 _: &dyn ClientHost,
                 event: &mut ExtractBlockScreenEffectEvent,
             ) -> Flow {
-                SEEN.lock()
-                    .unwrap()
-                    .push((event.effect, event.state, event.pos));
+                SEEN.lock().unwrap().push((
+                    event.effect,
+                    crate::game::api_values::TryIntoEngine::try_into_engine(&event.state, &())
+                        .unwrap(),
+                    event.pos,
+                ));
                 if event.effect == BlockScreenEffect::Block
-                    && event.state == self.0
+                    && crate::game::api_values::TryIntoEngine::try_into_engine(&event.state, &())
+                        .unwrap()
+                        == self.0
                     && event.pos == BlockPos::new(0, 65, 0)
                 {
                     Flow::Cancel

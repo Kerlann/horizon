@@ -287,7 +287,7 @@ fn main() -> Result<(), Error> {
         &horizon_assets::resource_source::ResourceRoot::directory(root.to_path_buf()),
     )?);
     let context = Arc::new(WorkerContext {
-        tables: Arc::new(MeshTables::new(&assets, &render, &facts, visibility)?),
+        tables: Arc::new(MeshTables::new(&assets, &render, &facts, visibility, None)?),
         light: Arc::new(LightTables::load(&root, assets.registry, &facts)?),
         biomes: biomes.clone(),
         assets: assets.clone(),

@@ -309,3 +309,55 @@ fn arrow_hits_name_the_projectile_on_players_mobs_and_the_dragon() {
         );
     }
 }
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn snapshot_crosses_the_real_damage_hook_with_reductions() {
+    let log = heard(|game| {
+        let mut container = horizon_world::living_damage::DamageContainer::new(10.0);
+        container.record_reduction(horizon_world::living_damage::Reduction::Armor, 3.5);
+        container.enter_pre(6.5);
+        damage_level_of!(game).damage_pre(
+            horizon_client::health::Hurting::Player(
+                225003,
+                HurtSource {
+                    damage_type: "minecraft:generic",
+                    causing: 0,
+                    direct: 0,
+                    position: None,
+                },
+            ),
+            &mut container,
+        );
+        assert_eq!(container.capture_inflicted(), 2.0);
+        assert_eq!(
+            container.reduction(horizon_world::living_damage::Reduction::Armor),
+            3.5
+        );
+    });
+    assert_eq!(log.pre, [(225003, 10.0, 2.0, 3.5)]);
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn unsubscribed_damage_does_not_convert() {
+    mod_api::testing::with_mods(Vec::<mod_api::ModEntry>::new().into(), || {
+        with_game(|game| {
+            super::api_values::damage::CONVERSIONS.with(|count| count.set(0));
+            let mut container = horizon_world::living_damage::DamageContainer::new(10.0);
+            damage_level_of!(game).damage_pre(
+                horizon_client::health::Hurting::Player(
+                    225003,
+                    HurtSource {
+                        damage_type: "minecraft:generic",
+                        causing: 0,
+                        direct: 0,
+                        position: None,
+                    },
+                ),
+                &mut container,
+            );
+            super::api_values::damage::CONVERSIONS.with(|count| assert_eq!(count.get(), 0));
+        })
+    });
+}

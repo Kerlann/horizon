@@ -15,7 +15,7 @@ pub trait Hooks {
     fn enchanted_block_loot(
         dimension: LevelDimension,
         pos: BlockPos,
-        state: BlockStateId,
+        state: BlockState,
         tool: Option<&ItemStack>,
         enchantment: &Identifier,
         level: &mut u32,

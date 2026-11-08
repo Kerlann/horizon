@@ -9,6 +9,7 @@ use super::{
     native_living_effects::{active_effect, mob_effect},
     shield::OFFHAND_SLOT,
 };
+use crate::game::api_values::{TryIntoApi, TryIntoEngine};
 use event_timings::EventTimings;
 use horizon_client::crafting::ResolvedSources;
 use horizon_client::{
@@ -2519,20 +2520,42 @@ impl Game<'_> {
                     let mut text = original.clone();
                     let mut cancel = false;
                     let mut replies = Vec::new();
-                    self.native_server_chat(mod_api::__private::ServerChatCall {
-                        player_id: id,
-                        player: sender,
-                        username: &name,
-                        raw_text: &raw,
-                        message: &mut text,
-                        replies: &mut replies,
-                        cancel: &mut cancel,
-                    });
+                    let mut engine_replies = Vec::new();
+                    if mod_api::__private::listened(mod_api::HookId::ServerChat)
+                        && let Ok(mut api_text) = text.try_into_api()
+                    {
+                        self.native_server_chat(mod_api::__private::ServerChatCall {
+                            player_id: id,
+                            player: sender,
+                            username: &name,
+                            raw_text: &raw,
+                            message: &mut api_text,
+                            replies: &mut replies,
+                            cancel: &mut cancel,
+                        });
+                        // Validate all fields before applying any event writes.
+                        let converted: std::result::Result<_, mod_api::text::TextFormError> =
+                            (|| {
+                                Ok((
+                                    api_text.try_into_engine(&())?,
+                                    replies.try_into_engine(&())?,
+                                ))
+                            })();
+                        match converted {
+                            Ok((message, answers)) => {
+                                text = message;
+                                engine_replies = answers;
+                            }
+                            Err(_) => {
+                                cancel = false;
+                            }
+                        }
+                    }
                     // The mods' replies reach the sender alone, as a
                     // command's do, before the message (if any) goes out.
-                    if !replies.is_empty() {
+                    if !engine_replies.is_empty() {
                         let host = self.lan.as_ref()?;
-                        for line in replies {
+                        for line in engine_replies {
                             host.hub.send_to(
                                 conn,
                                 &C::SystemChat(play::SystemChat {
@@ -4848,7 +4871,8 @@ mod tests {
                 (meta, defaults)
             };
             assert!(
-                mob.set_custom_name(game, Some(horizon_client::text::Text::literal("Grumbles")))
+                mob.set_custom_name(game, Some(mod_api::Text::literal("Grumbles")))
+                    .unwrap()
             );
             assert!(mob.set_custom_name_visible(game, true));
             let (meta, _) = meta_of(game);
@@ -4859,7 +4883,7 @@ mod tests {
                 Value::OptText(Some(sent))
             )));
             assert!(meta.contains(&(3, serializer::BOOLEAN, Value::Bool(true))));
-            assert!(mob.set_custom_name(game, None));
+            assert!(mob.set_custom_name(game, None).unwrap());
             assert!(mob.set_custom_name_visible(game, false));
             let (meta, defaults) = meta_of(game);
             assert!(meta.iter().all(|e| e.0 != 2 && e.0 != 3), "{meta:?}");
@@ -5033,7 +5057,7 @@ mod tests {
             ) -> Flow {
                 event
                     .replies
-                    .push(Text::literal(format!("heard {}", event.raw_text)));
+                    .push(mod_api::Text::literal(format!("heard {}", event.raw_text)));
                 if event.raw_text == "secret" {
                     Flow::Cancel
                 } else {
@@ -5170,6 +5194,7 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_mod_changes_the_effect_particles_players_are_sent() {
+        use super::super::api_values::{TryIntoApi, TryIntoEngine};
         use super::super::lan::LanSettings;
         use horizon_client::effects::EffectInstance;
         use horizon_client::lan::{Joined, NetConfig, PlayerSender, guest::Guest, hub::HubConfig};
@@ -5226,16 +5251,24 @@ mod tests {
                     id,
                     name.clone(),
                     event.effect.amplifier,
-                    event.original_particle.clone(),
-                    event.particle.clone(),
+                    event.original_particle.try_into_engine(&()).unwrap(),
+                    event.particle.try_into_engine(&()).unwrap(),
                     event.visible,
                 ));
                 match name.as_str() {
                     "minecraft:speed" if id == ZOMBIE as u32 => {
-                        *event.particle = Some(ParticleOptions::simple(ParticleType::Flame))
+                        *event.particle = Some(
+                            ParticleOptions::simple(ParticleType::Flame)
+                                .try_into_api()
+                                .unwrap(),
+                        )
                     }
                     "minecraft:trial_omen" => {
-                        *event.particle = Some(ParticleOptions::simple(ParticleType::Flame))
+                        *event.particle = Some(
+                            ParticleOptions::simple(ParticleType::Flame)
+                                .try_into_api()
+                                .unwrap(),
+                        )
                     }
                     "minecraft:strength" | "minecraft:weakness" => event.visible = true,
                     "minecraft:regeneration" | "minecraft:slowness" => event.visible = false,
@@ -5255,7 +5288,11 @@ mod tests {
                 if event.effect.id.id(host) == "minecraft:trial_omen" {
                     assert_eq!(
                         *event.particle,
-                        Some(ParticleOptions::simple(ParticleType::Flame))
+                        Some(
+                            ParticleOptions::simple(ParticleType::Flame)
+                                .try_into_api()
+                                .unwrap()
+                        )
                     );
                     *event.particle = None;
                 }

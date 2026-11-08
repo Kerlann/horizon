@@ -1701,7 +1701,7 @@ mod registered_game_test_tests {
     use mod_api::{GameTestContext, GameTestFunction, GameTestResult, GameTests};
     use std::sync::Arc;
 
-    struct ChangeBlock(horizon_world::registry::BlockStateId);
+    struct ChangeBlock(mod_api::BlockState);
     impl GameTestFunction for ChangeBlock {
         fn run(
             &self,
@@ -1709,17 +1709,19 @@ mod registered_game_test_tests {
             context: &GameTestContext,
         ) -> GameTestResult {
             let pos = context.absolute_pos([1, 64, 1]);
-            assert!(context.level.set_block(
-                host,
-                pos,
-                self.0,
-                mod_api::NativeBlockUpdateFlags::CLIENTS
-                    | mod_api::NativeBlockUpdateFlags::NEIGHBORS
-            ));
-            assert_eq!(
-                context.level.block(host, pos).as_deref(),
-                Some("minecraft:stone")
+            assert!(
+                context
+                    .level
+                    .set_block(
+                        host,
+                        pos,
+                        self.0,
+                        mod_api::NativeBlockUpdateFlags::CLIENTS
+                            | mod_api::NativeBlockUpdateFlags::NEIGHBORS
+                    )
+                    .unwrap()
             );
+            assert_eq!(context.level.block(host, pos), Some(self.0.block()));
             GameTestResult::Pass
         }
     }
@@ -1736,7 +1738,7 @@ mod registered_game_test_tests {
             panic!("registered panic in attempt {attempt}");
         }
     }
-    struct TestMod(horizon_world::registry::BlockStateId);
+    struct TestMod(mod_api::BlockState);
     #[mod_api::__subscriptions]
     impl mod_api::Hooks for TestMod {
         fn register_game_tests(
@@ -1785,7 +1787,9 @@ mod registered_game_test_tests {
             let mut functions = mod_api::GameTestFunctions::default();
             game.native_register_game_tests(&mut functions);
             assert!(functions.resolve("example:pass").is_none());
-            let hooks = Box::new(TestMod(stone));
+            let hooks = Box::new(TestMod(
+                crate::game::api_values::TryIntoApi::try_into_api(&stone).unwrap(),
+            ));
             let mods = vec![mod_api::ModEntry::new("example", hooks)];
             mod_api::testing::with_mods(mods.into(), || {
                 game.native_register_game_tests(&mut functions);

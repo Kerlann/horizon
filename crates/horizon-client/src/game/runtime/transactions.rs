@@ -636,6 +636,7 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn cauldron_stat_listener_observes_committed_state_and_can_cancel() {
         use super::super::native_entity_refs::tests::run_fresh_cases;
+        use crate::game::api_values::TryIntoApi;
         use mod_api::{
             Flow, Hooks, ItemSpawnEvent, ItemTossEvent, ModEntry, Mods, PlayerStatAwardEvent,
         };
@@ -648,8 +649,8 @@ mod tests {
             return;
         }
         struct Listener {
-            seen: Arc<Mutex<Vec<(Option<mod_api::BlockStateId>, Option<String>)>>>,
-            drops: Arc<Mutex<Vec<(&'static str, Option<mod_api::BlockStateId>)>>>,
+            seen: Arc<Mutex<Vec<(Option<mod_api::BlockState>, Option<String>)>>>,
+            drops: Arc<Mutex<Vec<(&'static str, Option<mod_api::BlockState>)>>>,
         }
         #[mod_api::__subscriptions]
         impl Hooks for Listener {
@@ -740,7 +741,10 @@ mod tests {
                 assert!(game.use_on_cauldron(pos).unwrap());
                 assert_eq!(
                     seen.lock().unwrap().as_slice(),
-                    &[(Some(empty), Some("minecraft:bucket".into()))]
+                    &[(
+                        Some(empty.try_into_api().unwrap()),
+                        Some("minecraft:bucket".into())
+                    )]
                 );
                 game.world.set(pos[0], pos[1], pos[2], empty).unwrap();
                 game.inventory[0] = Some(ItemStack::new("minecraft:water_bucket", 1));
@@ -753,8 +757,14 @@ mod tests {
             assert_eq!(
                 *seen.lock().unwrap(),
                 vec![
-                    (Some(empty), Some("minecraft:bucket".into())),
-                    (Some(full), Some("minecraft:bucket".into()))
+                    (
+                        Some(empty.try_into_api().unwrap()),
+                        Some("minecraft:bucket".into())
+                    ),
+                    (
+                        Some(full.try_into_api().unwrap()),
+                        Some("minecraft:bucket".into())
+                    )
                 ]
             );
             let level2 = game
@@ -779,7 +789,10 @@ mod tests {
                 assert!(game.use_on_cauldron(pos).unwrap());
                 assert_eq!(
                     drops.lock().unwrap().as_slice(),
-                    &[("toss", Some(full)), ("spawn", Some(full))]
+                    &[
+                        ("toss", Some(full.try_into_api().unwrap())),
+                        ("spawn", Some(full.try_into_api().unwrap()))
+                    ]
                 );
                 drops.lock().unwrap().clear();
                 setup(game);
@@ -793,7 +806,10 @@ mod tests {
                 game.close_storage_transaction(true);
                 assert_eq!(
                     drops.lock().unwrap().as_slice(),
-                    &[("toss", Some(level2)), ("spawn", Some(level2))]
+                    &[
+                        ("toss", Some(level2.try_into_api().unwrap())),
+                        ("spawn", Some(level2.try_into_api().unwrap()))
+                    ]
                 );
             })
             .unwrap();
@@ -1048,9 +1064,18 @@ mod tests {
         let empty = registry.default_state("minecraft:cauldron").unwrap();
         let jukebox = registry.default_state("minecraft:jukebox").unwrap();
         let flags = NativeBlockUpdateFlags::NEIGHBORS;
-        assert!(game.level_set_block(level, [0, 64, 0], chest, flags));
-        assert!(game.level_set_block(level, [2, 64, 0], full, flags));
-        assert!(game.level_set_block(level, [4, 64, 0], jukebox, flags));
+        assert_eq!(
+            game.level_set_block(level, [0, 64, 0], chest, flags),
+            Ok(true)
+        );
+        assert_eq!(
+            game.level_set_block(level, [2, 64, 0], full, flags),
+            Ok(true)
+        );
+        assert_eq!(
+            game.level_set_block(level, [4, 64, 0], jukebox, flags),
+            Ok(true)
+        );
         let sticks = |count| ItemStack::new("minecraft:stick", count);
         let stick = ItemResource::of(&sticks(1).try_into_api().unwrap());
         let rod = ItemResource::of(
@@ -1136,7 +1161,10 @@ mod tests {
         assert!(game.world.block_entities.attachments((0, 64, 0)).is_none());
 
         // An aborted cauldron change leaves no write behind in the world's queues.
-        assert!(game.level_set_block(level, [2, 64, 0], full, flags));
+        assert_eq!(
+            game.level_set_block(level, [2, 64, 0], full, flags),
+            Ok(true)
+        );
         game.world.block_log = Some(Vec::new());
         game.world.path_writes = Some(Vec::new());
         let queues = |game: &Game<'_>| {
@@ -1398,20 +1426,29 @@ mod tests {
             .registry
             .default_state("minecraft:chest")
             .unwrap();
-        assert!(game.level_set_block(level, [0, 64, 4], hopper, flags));
-        assert!(game.level_set_block(level, [2, 64, 4], chest, flags));
+        assert_eq!(
+            game.level_set_block(level, [0, 64, 4], hopper, flags),
+            Ok(true)
+        );
+        assert_eq!(
+            game.level_set_block(level, [2, 64, 4], chest, flags),
+            Ok(true)
+        );
         let slots = |game: &Game<'_>, pos| match game.world.block_entities.get(&pos) {
             Some(BlockEntity::Chest(items)) => items.iter().flatten().map(|s| s.count).sum::<u32>(),
             _ => panic!("no container at {pos:?}"),
         };
         for (id, moved) in [("test:pipe", 1), ("test:greedy", 0)] {
             let state = game.pack.assets.registry.default_state(id).unwrap();
-            assert!(game.level_set_block(
-                level,
-                [1, 64, 4],
-                state,
-                mod_api::NativeBlockUpdateFlags::NONE
-            ));
+            assert_eq!(
+                game.level_set_block(
+                    level,
+                    [1, 64, 4],
+                    state,
+                    mod_api::NativeBlockUpdateFlags::NONE
+                ),
+                Ok(true)
+            );
             if let Some(BlockEntity::Chest(items)) = game.world.block_entities.get_mut(&(0, 64, 4))
             {
                 items[0] = Some(sticks(2));

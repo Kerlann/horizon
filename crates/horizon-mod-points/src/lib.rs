@@ -13,31 +13,54 @@
 // a second compile of the generated points.
 #![cfg(not(test))]
 
-// The guest glue names this crate by its path, here as in the mods it is expanded into.
-#[cfg(target_arch = "wasm32")]
-extern crate self as mod_points;
-
 include!(concat!(env!("OUT_DIR"), "/points_generated.rs"));
 
+/// Native scoped callable sources for generated point bridges.
+#[doc(hidden)]
+pub mod callable;
 mod registry;
-// hidden: how records cross to wasm mods, the runtime's and the guest glue's, not the API's
-#[cfg(any(target_arch = "wasm32", feature = "wasm-host"))]
-#[doc(hidden)]
-pub mod wire;
+pub mod snapshot;
 
-// hidden: the staged game's internals table, for the wasm runtime's internals view
+/// Source-local paths for checked native row readers.
 #[doc(hidden)]
-pub mod internals;
+pub mod locators;
 
-pub use registry::{RegisterError, register, stop};
+/// Sparse native edit path metadata.
+#[doc(hidden)]
+pub mod native_patch;
+
+/// Bounded output for generated native row readers.
+#[doc(hidden)]
+pub mod native_window;
+
+/// Live, borrowed native row traversal.
+#[doc(hidden)]
+pub mod native_read;
+
+/// Borrowed native row node adapters.
+#[doc(hidden)]
+pub mod native_nodes;
+
+/// Registration-time endpoint exposure policies.
+pub mod endpoint_policy;
+/// Endpoint-local receiver field grants and selected-layout schema keys.
+pub mod exposure;
+#[cfg(target_arch = "wasm32")]
+pub use guest::register;
+#[cfg(not(target_arch = "wasm32"))]
+pub use registry::register;
+pub use registry::{RegisterError, stop};
+
+#[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
+pub mod guest;
 
 // hidden: the game's side of the points, not part of the API a mod is written against
 #[doc(hidden)]
 pub mod __private {
     use crate::PointId;
-    pub use crate::registry::{ApiKind, POINTS, RawKind, SITES, SlotListener, seal, wrap};
-    #[cfg(any(target_arch = "wasm32", feature = "wasm-host"))]
-    pub use crate::wire;
+    pub use crate::registry::{
+        ApiKind, Forward, POINTS, PointHost, RawForward, RawKind, SITES, SlotListener, seal, wrap,
+    };
 
     /// Runs the checked API functions and forwarding endpoints under their owner guards.
     #[cold]

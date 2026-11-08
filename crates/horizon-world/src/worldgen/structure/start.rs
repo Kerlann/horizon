@@ -113,12 +113,13 @@ pub enum StructureKind {
 /// `find_generation_point` reads.
 pub struct ModType {
     pub ty: Arc<dyn ModStructureType>,
-    pub config: Arc<Value>,
+    /// The mod's config, prepared once while decoding this definition.
+    pub config: Arc<horizon_core::nbt::Tag>,
 }
 impl std::fmt::Debug for ModType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ModType")
-            .field("type", &self.config["type"])
+            .field("type", &self.config.get("type"))
             .finish()
     }
 }
@@ -448,7 +449,9 @@ impl StructureRegistry {
                 other => match mod_types.get(other) {
                     Some(ty) => StructureKind::Mod(ModType {
                         ty: ty.clone(),
-                        config: Arc::new(v.clone()),
+                        config: ty.prepare_config(&v).map_err(|error| {
+                            DecodeError::Registry(format!("structure {name}: {error}"))
+                        })?,
                     }),
                     None => StructureKind::Unsupported(other.to_owned()),
                 },
@@ -931,6 +934,22 @@ impl NoiseColumn {
     }
 }
 
+/// A caller-owned final noise column, filled directly during one sampling pass.
+pub trait NoiseColumnTarget {
+    fn resize(&mut self, min: i32, height: usize);
+    fn set(&mut self, index: usize, block: NoiseBlock);
+}
+impl NoiseColumnTarget for NoiseColumn {
+    fn resize(&mut self, min: i32, height: usize) {
+        self.min = min;
+        self.blocks.clear();
+        self.blocks.resize(height, NoiseBlock::Air);
+    }
+    fn set(&mut self, index: usize, block: NoiseBlock) {
+        self.blocks[index] = block;
+    }
+}
+
 /// Biome and height queries for one structure generation attempt.
 pub trait StartContext: JigsawContext {
     /// A chunk an older version generated: its structure starts are the ones
@@ -952,11 +971,27 @@ pub trait StartContext: JigsawContext {
     }
     /// ChunkGenerator.getBaseColumn as heightmap opacity, indexed from min_y.
     fn base_column(&mut self, x: i32, z: i32, kind: HeightmapType) -> Vec<bool>;
-    /// base_column for several heightmap kinds from one noise-column pass.
-    fn base_columns(&mut self, x: i32, z: i32, kinds: &[HeightmapType]) -> Vec<Vec<bool>>;
+    /// Several heightmap predicates from one pass, for the engine's vanilla callers.
+    fn base_columns(&mut self, x: i32, z: i32, kinds: &[HeightmapType]) -> Vec<Vec<bool>> {
+        self.base_columns_by(x, z, kinds.len(), &|index| kinds[index])
+    }
+    /// Several heightmap predicates from one pass, projected without a temporary kind vector.
+    fn base_columns_by(
+        &mut self,
+        x: i32,
+        z: i32,
+        count: usize,
+        kind: &dyn Fn(usize) -> HeightmapType,
+    ) -> Vec<Vec<bool>>;
     /// ChunkGenerator.getBaseColumn's blocks: the noise column's states, as
     /// mods' placements test them (Formations').
-    fn noise_column(&mut self, x: i32, z: i32) -> NoiseColumn;
+    fn noise_column(&mut self, x: i32, z: i32) -> NoiseColumn {
+        let mut column = NoiseColumn::default();
+        self.noise_column_into(x, z, &mut column);
+        column
+    }
+    /// Fill the caller's final column directly, with no intermediate classified-block vector.
+    fn noise_column_into(&mut self, x: i32, z: i32, column: &mut dyn NoiseColumnTarget);
     /// Biome.coldEnoughToSnow at a position.
     fn cold_enough_to_snow(&mut self, biome: BiomeId, pos: [i32; 3]) -> bool;
     fn generation(&self) -> WorldGenerationContext;
@@ -1470,10 +1505,13 @@ fn generate(
             // The type's own start and pieces; the biome check below and the
             // set's spacing stay the game's, as for every other kind.
             let context: &mut dyn StartContext = context;
-            let (position, pieces) =
-                mod_type
-                    .ty
-                    .find_generation_point(context, chunk, &mod_type.config, &mut random)?;
+            let (position, pieces) = mod_type.ty.find_generation_point(
+                context,
+                resources,
+                chunk,
+                &mod_type.config,
+                &mut random,
+            )?;
             (position, pieces.into_iter().map(Piece::Legacy).collect())
         }
         StructureKind::Unsupported(_) => return None,

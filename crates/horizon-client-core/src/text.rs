@@ -52,11 +52,11 @@ pub enum ClickEvent {
     CopyToClipboard(String),
     /// `ClickEvent.ShowDialog`: a `minecraft:dialog` registry id, or the
     /// dialog itself as the component carried it.
-    ShowDialog(horizon_core::nbt::Tag),
+    ShowDialog(std::sync::Arc<horizon_core::nbt::Tag>),
     /// `ClickEvent.Custom`: a server-defined action with an optional NBT payload.
     Custom {
         id: String,
-        payload: Option<horizon_core::nbt::Tag>,
+        payload: Option<std::sync::Arc<horizon_core::nbt::Tag>>,
     },
     /// A local file to open with the system handler.
     /// Only allow this in locally constructed messages, never server/LAN text.
@@ -67,7 +67,7 @@ pub enum ClickEvent {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum InlineObject {
     Player {
-        profile: Value,
+        profile: std::sync::Arc<Value>,
         hat: bool,
         fallback: String,
     },
@@ -98,11 +98,11 @@ pub struct Style {
     pub obfuscated: Option<bool>,
     pub click: Option<ClickEvent>,
     /// Hover text.
-    pub hover: Option<Box<Text>>,
+    pub hover: Option<std::sync::Arc<Text>>,
     /// `HoverEvent.ShowItem`: the event's `{id, count?, components?}` object.
-    pub hover_item: Option<Box<Value>>,
+    pub hover_item: Option<std::sync::Arc<Value>>,
     /// `HoverEvent.ShowEntity`: the event's `{id, uuid, name?}` object.
-    pub hover_entity: Option<Box<Value>>,
+    pub hover_entity: Option<std::sync::Arc<Value>>,
     /// `Style.insertion`: the text a Shift-click puts in the chat box.
     pub insertion: Option<String>,
     /// The font (`FontDescription.Resource`), a full id like
@@ -155,6 +155,71 @@ impl Style {
         self.italic == Some(true)
     }
 }
+// A builder may produce no spans for a styled empty component. Release its
+// unretained hover data explicitly rather than recursively dropping a deep chain.
+pub(crate) fn discard_style(style: Style) {
+    discard(Discard::Style(style));
+}
+pub(crate) fn discard_text(text: Text) {
+    discard(Discard::Text(text));
+}
+enum Discard {
+    Style(Style),
+    Text(Text),
+}
+fn discard(root: Discard) {
+    let mut pending = vec![root];
+    while let Some(value) = pending.pop() {
+        match value {
+            Discard::Text(text) => {
+                if let Some(source) = text.source
+                    && let Ok(source) = std::sync::Arc::try_unwrap(source)
+                {
+                    crate::component::discard_component(source);
+                }
+                pending.extend(
+                    text.spans
+                        .into_iter()
+                        .map(|span| Discard::Style(span.style)),
+                );
+            }
+            Discard::Style(mut style) => {
+                match style.click.take() {
+                    Some(
+                        ClickEvent::ShowDialog(tag)
+                        | ClickEvent::Custom {
+                            payload: Some(tag), ..
+                        },
+                    ) => {
+                        if let Ok(tag) = std::sync::Arc::try_unwrap(tag) {
+                            horizon_core::nbt::discard_tag(tag);
+                        }
+                    }
+                    _ => {}
+                }
+                if let Some(hover) = style.hover.take()
+                    && let Ok(text) = std::sync::Arc::try_unwrap(hover)
+                {
+                    pending.push(Discard::Text(text));
+                }
+                for value in [style.hover_item.take(), style.hover_entity.take()]
+                    .into_iter()
+                    .flatten()
+                {
+                    if let Ok(value) = std::sync::Arc::try_unwrap(value) {
+                        crate::component::discard_component(value);
+                    }
+                }
+                if let Some(InlineObject::Player { profile, .. }) = style.inline_object.take() {
+                    if let Ok(profile) = std::sync::Arc::try_unwrap(profile) {
+                        crate::component::discard_component(profile);
+                    }
+                }
+            }
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Span {
     pub text: String,
@@ -215,7 +280,7 @@ impl Text {
                 s.clone(),
                 Style {
                     click: Some(ClickEvent::CopyToClipboard(s)),
-                    hover: Some(Box::new(Self::translate("chat.copy.click", &[]))),
+                    hover: Some(std::sync::Arc::new(Self::translate("chat.copy.click", &[]))),
                     ..Style::color(GREEN)
                 },
             ))
@@ -231,13 +296,16 @@ impl Text {
             .append("]")
             .with_style(&Style {
                 click: Some(ClickEvent::SuggestCommand(format!("/tp @s {x} {y} {z}"))),
-                hover: Some(Box::new(Self::translate("chat.coordinates.tooltip", &[]))),
+                hover: Some(std::sync::Arc::new(Self::translate(
+                    "chat.coordinates.tooltip",
+                    &[],
+                ))),
                 ..Style::color(GREEN)
             })
     }
     /// Component.translatable(key, args) in the current language.
     pub fn translate(key: &str, args: &[Text]) -> Self {
-        let mut t = format_translation(&lang::get(key), args);
+        let mut t = format_translatable(key, None, args);
         let mut c = Map::new();
         c.insert("translate".into(), key.into());
         if !args.is_empty() {
@@ -249,10 +317,7 @@ impl Text {
     /// Component.translatableWithFallback(key, fallback, args): `translate`, with `fallback` as
     /// the template when the language has no `key`.
     pub fn translate_with_fallback(key: &str, fallback: &str, args: &[Text]) -> Self {
-        let template = lang::current()
-            .and_then(|l| l.get(key).map(str::to_owned))
-            .unwrap_or_else(|| fallback.to_owned());
-        let mut t = format_translation(&template, args);
+        let mut t = format_translatable(key, Some(fallback), args);
         let mut c = Map::new();
         c.insert("translate".into(), key.into());
         c.insert("fallback".into(), fallback.into());
@@ -280,7 +345,7 @@ impl Text {
     /// MutableComponent.append: `other` becomes a sibling. A styled text is
     /// wrapped first, as its style doesn't reach what is appended here.
     pub fn push(&mut self, other: impl Into<Text>) {
-        let other = other.into();
+        let mut other = other.into();
         let sibling = other.component();
         let mut root = if self.spans.is_empty() && self.source.is_none() {
             json!({ "text": "" })
@@ -300,8 +365,17 @@ impl Text {
                 }
             }
         }
-        self.source = Some(root.into());
-        self.spans.extend(other.spans);
+        self.replace_component(root);
+        self.spans.append(&mut other.spans);
+        discard_text(other);
+    }
+    fn replace_component(&mut self, component: Value) {
+        let old = self.source.replace(component.into());
+        if let Some(old) = old
+            && let Ok(old) = std::sync::Arc::try_unwrap(old)
+        {
+            crate::component::discard_component(old);
+        }
     }
     /// Apply `style` underneath every span (MutableComponent.withStyle on a parent).
     pub fn with_style(mut self, style: &Style) -> Self {
@@ -314,7 +388,7 @@ impl Text {
                 o.entry(k).or_insert(v);
             }
         }
-        self.source = Some(c.into());
+        self.replace_component(c);
         self
     }
     /// The `Component` as vanilla's JSON (ComponentSerialization): the one
@@ -323,36 +397,71 @@ impl Text {
     pub fn translation_key(&self) -> Option<&str> {
         self.source.as_deref()?.get("translate")?.as_str()
     }
+    /// The retained source, if present, without materializing span-only text.
+    pub fn source_component(&self) -> Option<&Value> {
+        self.source.as_deref()
+    }
+    /// Borrow retained structured source without recursively cloning it.
+    /// Span-only text is materialized once because it has no retained source.
+    pub fn component_view(&self) -> std::borrow::Cow<'_, Value> {
+        match &self.source {
+            Some(source) => std::borrow::Cow::Borrowed(source),
+            None => std::borrow::Cow::Owned(self.component()),
+        }
+    }
     pub fn component(&self) -> Value {
-        if let Some(c) = &self.source {
-            return (**c).clone();
+        let mut pending = vec![(self, false)];
+        let mut done = Vec::new();
+        while let Some((text, ready)) = pending.pop() {
+            if let Some(source) = &text.source {
+                done.push(crate::component::clone_value(source));
+            } else if !ready {
+                pending.push((text, true));
+                pending.extend(
+                    text.spans
+                        .iter()
+                        .rev()
+                        .filter_map(|s| s.style.hover.as_deref())
+                        .map(|hover| (hover, false)),
+                );
+            } else {
+                let count = text
+                    .spans
+                    .iter()
+                    .filter(|s| s.style.hover.is_some())
+                    .count();
+                let mut hovers = done.split_off(done.len() - count).into_iter();
+                let mut span = |s: &Span| {
+                    let mut o = Map::new();
+                    o.insert("text".into(), s.text.clone().into());
+                    o.extend(style_json_with(&s.style, &mut |_| {
+                        hovers.next().expect("scheduled hover")
+                    }));
+                    Value::Object(o)
+                };
+                done.push(match text.spans.as_slice() {
+                    [] => json!({ "text": "" }),
+                    [one] => span(one),
+                    many => {
+                        let mut o = Map::new();
+                        o.insert("text".into(), "".into());
+                        o.insert(
+                            "extra".into(),
+                            Value::Array(many.iter().map(span).collect()),
+                        );
+                        Value::Object(o)
+                    }
+                });
+            }
         }
-        let span = |s: &Span| {
-            let mut o = Map::new();
-            o.insert("text".into(), s.text.clone().into());
-            o.extend(style_json(&s.style));
-            Value::Object(o)
-        };
-        match self.spans.as_slice() {
-            [] => json!({ "text": "" }),
-            [one] => span(one),
-            many => json!({ "text": "", "extra": many.iter().map(span).collect::<Vec<_>>() }),
-        }
+        done.pop().expect("scheduled component")
     }
     /// A translation argument: vanilla passes numbers as numbers, which
     /// Horizon formats into unstyled literals.
     fn argument(&self) -> Value {
-        let c = self.component();
-        match c
-            .as_object()
-            .and_then(|o| o.get("text").filter(|_| o.len() == 1))
-        {
-            Some(Value::String(s)) if s.parse::<i64>().is_ok_and(|n| n.to_string() == *s) => {
-                s.parse::<i64>().map_or(c.clone(), Value::from)
-            }
-            _ => c,
-        }
+        argument_component(self.component())
     }
+
     /// Style fields the spans don't model (an entity hover, an insertion),
     /// set on the component sent to vanilla only.
     pub fn with_component_fields(mut self, fields: Vec<(String, Value)>) -> Self {
@@ -362,13 +471,13 @@ impl Text {
                 o.entry(k).or_insert(v);
             }
         }
-        self.source = Some(c.into());
+        self.replace_component(c);
         self
     }
     /// The same spans, sent to vanilla as `component` (a shape the spans'
     /// own JSON would not take, such as a styled root with siblings).
     pub fn with_component(mut self, component: Value) -> Self {
-        self.source = Some(component.into());
+        self.replace_component(component);
         self
     }
     pub fn with_color(self, color: u32) -> Self {
@@ -568,6 +677,12 @@ const STYLE_KEYS: [&str; 11] = [
 ];
 /// `Style.Serializer`: the fields a style sets.
 fn style_json(style: &Style) -> Vec<(String, Value)> {
+    style_json_with(style, &mut Text::component)
+}
+fn style_json_with(
+    style: &Style,
+    hover_component: &mut dyn FnMut(&Text) -> Value,
+) -> Vec<(String, Value)> {
     let mut out = Vec::new();
     if let Some(c) = style.color {
         let name = COLORS
@@ -590,46 +705,83 @@ fn style_json(style: &Style) -> Vec<(String, Value)> {
             out.push((key.to_owned(), f.into()));
         }
     }
+    if let Some(object) = &style.inline_object {
+        match object {
+            InlineObject::Player {
+                profile,
+                hat,
+                fallback,
+            } => {
+                out.extend([
+                    ("object".into(), "player".into()),
+                    ("player".into(), crate::component::clone_value(profile)),
+                    ("hat".into(), (*hat).into()),
+                    ("fallback".into(), fallback.clone().into()),
+                ]);
+            }
+            InlineObject::Atlas {
+                atlas,
+                sprite,
+                fallback,
+            } => out.extend([
+                ("object".into(), "atlas".into()),
+                ("atlas".into(), atlas.clone().into()),
+                ("sprite".into(), sprite.clone().into()),
+                ("fallback".into(), fallback.clone().into()),
+            ]),
+        }
+    }
     if let Some(click) = &style.click {
-        let event = match click {
-            ClickEvent::OpenUrl(url) => json!({ "action": "open_url", "url": url }),
-            ClickEvent::ChangePage(page) => json!({ "action": "change_page", "page": page }),
-            ClickEvent::SuggestCommand(command) => {
-                json!({ "action": "suggest_command", "command": command })
-            }
-            ClickEvent::CopyToClipboard(value) => {
-                json!({ "action": "copy_to_clipboard", "value": value })
-            }
-            ClickEvent::RunCommand(command) => {
-                json!({ "action": "run_command", "command": command })
-            }
-            // ClickEvent.ShowDialog.CODEC: the dialog the server sent it with.
-            ClickEvent::ShowDialog(dialog) => json!({
-                "action": "show_dialog",
-                "dialog": crate::scoreboard::tag_to_json(dialog),
-            }),
-            ClickEvent::Custom { id, payload } => {
-                let mut event = json!({ "action": "custom", "id": id });
-                if let Some(payload) = payload {
-                    event["payload"] = crate::scoreboard::tag_to_json(payload);
+        let event = (|| {
+            Some(match click {
+                ClickEvent::OpenUrl(url) => json!({ "action": "open_url", "url": url }),
+                ClickEvent::ChangePage(page) => json!({ "action": "change_page", "page": page }),
+                ClickEvent::SuggestCommand(command) => {
+                    json!({ "action": "suggest_command", "command": command })
                 }
-                event
-            }
-            ClickEvent::OpenFile(path) => json!({ "action": "open_file", "path": path }),
-        };
-        out.push(("click_event".to_owned(), event));
+                ClickEvent::CopyToClipboard(value) => {
+                    json!({ "action": "copy_to_clipboard", "value": value })
+                }
+                ClickEvent::RunCommand(command) => {
+                    json!({ "action": "run_command", "command": command })
+                }
+                // ClickEvent.ShowDialog.CODEC: the dialog the server sent it with.
+                ClickEvent::ShowDialog(dialog) => {
+                    let mut event = json!({ "action": "show_dialog" });
+                    event["dialog"] = horizon_core::json_nbt::tag_to_json(dialog).ok()?;
+                    event
+                }
+                ClickEvent::Custom { id, payload } => {
+                    let mut event = json!({ "action": "custom", "id": id });
+                    if let Some(payload) = payload {
+                        event["payload"] = horizon_core::json_nbt::tag_to_json(payload).ok()?;
+                    }
+                    event
+                }
+                ClickEvent::OpenFile(path) => json!({ "action": "open_file", "path": path }),
+            })
+        })();
+        if let Some(event) = event {
+            out.push(("click_event".to_owned(), event));
+        }
     }
     if let Some(hover) = &style.hover {
-        out.push((
-            "hover_event".to_owned(),
-            json!({ "action": "show_text", "value": hover.component() }),
-        ));
+        out.push(("hover_event".to_owned(), {
+            let mut event = Map::new();
+            event.insert("action".into(), "show_text".into());
+            event.insert("value".into(), hover_component(hover));
+            Value::Object(event)
+        }));
     } else if let Some(Value::Object(item)) = style.hover_item.as_deref() {
-        let mut event = item.clone();
+        let Value::Object(mut event) = crate::component::clone_object(item) else {
+            unreachable!()
+        };
         event.insert("action".into(), "show_item".into());
         out.push(("hover_event".to_owned(), Value::Object(event)));
     } else if let Some(Value::Object(entity)) = style.hover_entity.as_deref() {
-        let mut event = entity.clone();
+        let Value::Object(mut event) = crate::component::clone_object(entity) else {
+            unreachable!()
+        };
         event.insert("action".into(), "show_entity".into());
         out.push(("hover_event".to_owned(), Value::Object(event)));
     }
@@ -669,6 +821,18 @@ pub fn legacy_format(style: &Style, code: char, reset: &Style) -> Style {
         _ => {}
     }
     s
+}
+
+/// Shared lookup for constructors and rendering-only component decoding.
+/// A fallback is a literal template, never another translation key.
+pub(crate) fn format_translatable(key: &str, fallback: Option<&str>, args: &[Text]) -> Text {
+    let template = match fallback {
+        Some(fallback) => lang::current()
+            .and_then(|language| language.get(key).map(str::to_owned))
+            .unwrap_or_else(|| fallback.to_owned()),
+        None => lang::get(key),
+    };
+    format_translation(&template, args)
 }
 
 /// TranslatableContents.decomposeTemplate: `%s` takes the next argument,
@@ -812,6 +976,19 @@ impl From<TextForm> for Text {
 impl From<serde_json::Value> for Text {
     fn from(component: serde_json::Value) -> Self {
         crate::component::spans_of(component)
+    }
+}
+
+/// Apply vanilla's numeric translation-argument representation to an owned component.
+pub fn argument_component(c: Value) -> Value {
+    match c
+        .as_object()
+        .and_then(|o| o.get("text").filter(|_| o.len() == 1))
+    {
+        Some(Value::String(s)) if s.parse::<i64>().is_ok_and(|n| n.to_string() == *s) => {
+            s.parse::<i64>().map_or(c.clone(), Value::from)
+        }
+        _ => c,
     }
 }
 

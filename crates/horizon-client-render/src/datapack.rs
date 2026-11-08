@@ -1036,7 +1036,7 @@ pub fn dimension_stems(packs: &[&DataPack]) -> BTreeMap<String, serde_json::Valu
             // An id that is no safe folder name (`..`, an empty segment) would open a level
             // outside the world's `dimensions` folder.
             let id = format!("{namespace}:{path}");
-            if !overrides::valid_level_id(&id) {
+            if !horizon_core::level_id::valid_level_id(&id) {
                 continue;
             }
             if let Some(json) = pack

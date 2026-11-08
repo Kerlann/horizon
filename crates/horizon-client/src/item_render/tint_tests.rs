@@ -5,12 +5,22 @@ use std::fs;
 /// Red for one, green for two, the entry's own `default` for more.
 struct Charge;
 impl ItemEnv for Charge {
-    fn item_tint_source(&self, source: &str, config: &Value, stack: &StackView) -> i32 {
+    fn item_tint_source(
+        &self,
+        source: &str,
+        config: &horizon_core::nbt::Tag,
+        stack: &StackView,
+    ) -> i32 {
         assert_eq!(source, "tintdraw:charge");
         match stack.count {
             1 => 0xFFCC_2211_u32 as i32,
             2 => 0xFF11_CC22_u32 as i32,
-            _ => config["default"].as_i64().unwrap() as i32,
+            _ => {
+                (match config.get("default") {
+                    Some(Tag::Int(v)) => *v,
+                    _ => panic!("expected integer default"),
+                }) as i32
+            }
         }
     }
 }

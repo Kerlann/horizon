@@ -1,5 +1,5 @@
 //! Plain-data structure-template snapshots and transforms.
-use crate::{BlockStateId, Compound};
+use crate::{BlockState, Compound};
 
 /// Rotation of a template about its origin.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -43,8 +43,9 @@ pub struct StructureTemplateSnapshot {
 pub struct StructureTemplateBlock {
     /// Position in the level.
     pub pos: [i32; 3],
-    /// State after mirroring and rotation.
-    pub state: BlockStateId,
+    /// Owned state, including properties, after mirroring and rotation.
+    /// An unavailable mapping refuses the entire template snapshot.
+    pub state: BlockState,
     /// Saved block-entity data, without its position.
     pub nbt: Option<Compound>,
 }
@@ -58,7 +59,7 @@ impl StructureTemplateSnapshot {
 
 impl StructureTemplateBlock {
     /// Build a block snapshot.
-    pub fn new(pos: [i32; 3], state: BlockStateId, nbt: Option<Compound>) -> Self {
+    pub fn new(pos: [i32; 3], state: BlockState, nbt: Option<Compound>) -> Self {
         Self { pos, state, nbt }
     }
 }

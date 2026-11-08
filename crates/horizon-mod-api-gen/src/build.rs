@@ -42,26 +42,26 @@ pub fn generate(root: &Path, out_dir: &Path, target: Target) -> Result<(), Strin
                 ("mod_api_generated.rs", hooks.as_str()),
                 ("mod_api_generated_host.rs", generated.host.as_str()),
             ];
+            let (providers, sources) = super::capability_providers::generate(root, &included)?;
             // The resolver recurses through the API's types: give it a deep stack.
-            let wasm = std::thread::scope(|scope| {
+            let generated_wire = std::thread::scope(|scope| {
                 std::thread::Builder::new()
                     .stack_size(64 << 20)
-                    .spawn_scoped(scope, || super::wasm::generate(root, &included))
+                    .spawn_scoped(scope, || super::wire::generate(root, &included))
                     .map_err(|e| e.to_string())?
                     .join()
-                    .map_err(|_| "generating the wasm interface panicked".to_string())?
+                    .map_err(|_| "generating the wire impls panicked".to_string())?
             })?;
-            for path in &wasm.sources {
+            for path in sources.iter().chain(&generated_wire.sources) {
                 println!("cargo:rerun-if-changed={}", path.display());
             }
-            fs::write(out_dir.join("mod-api.wit"), &wasm.wit).map_err(|e| e.to_string())?;
             vec![
                 (host::AREAS_OUTPUT, generated.areas),
                 ("mod_api_generated.rs", hooks),
                 ("mod_api_generated_host.rs", generated.host),
-                ("capability_providers_generated.rs", wasm.providers),
-                ("wasm_guest_generated.rs", wasm.guest),
-                ("wasm_host_generated.rs", wasm.host),
+                ("capability_providers_generated.rs", providers),
+                ("wire_generated.rs", generated_wire.wire),
+                ("wire_guest_generated.rs", generated_wire.guest),
             ]
         }
     };
@@ -192,8 +192,19 @@ pub fn generate_points(root: &Path, out_dir: &Path) -> Result<(), String> {
         println!("cargo:rerun-if-changed={}", path.display());
     }
     let private = super::points::source::build_input(root)?;
-    let code = super::points::records(&super::points::game_points(root)?, &private)
-        + &super::sites::ids(root).map_err(|e| e.to_string())?;
+    println!("cargo:rerun-if-env-changed=HORIZON_POINT_NAMES");
+    let selected = std::env::var("HORIZON_POINT_NAMES")
+        .ok()
+        .map(|json| {
+            serde_json::from_str::<std::collections::BTreeSet<String>>(&json)
+                .map_err(|error| format!("HORIZON_POINT_NAMES: {error}"))
+        })
+        .transpose()?;
+    let code = super::points::records_selected(
+        &super::points::game_points(root)?,
+        &private,
+        selected.as_ref(),
+    ) + &super::sites::ids(root).map_err(|e| e.to_string())?;
     let generated = syn::parse_file(&code).map_err(|e| format!("generated Rust: points: {e}"))?;
     // A single multi-megabyte line makes Clippy's source lookups prohibitively slow.
     let mut code = String::new();

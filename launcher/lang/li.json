@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Kon ut bouwlog neet leze: {error}",
   "Could not read the saved sign-in.": "Kon de opgeslage aanmelding neet leze.",
   "Could not read the saved sign-in. Sign in again.": "Kon de opgeslage aanmelding neet leze. Meld weer aan.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Kon neet leze {name}: {error}",
   "Could not run {program}: {error}": "Kon neet oetveure {program}: {error}",
   "Could not save the renewed sign-in.": "Kon de vernuide aanmelding neet opsjlaon.",

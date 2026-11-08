@@ -56,6 +56,9 @@ struct Filling<'a> {
 }
 
 impl ChunkAccess for Filling<'_> {
+    fn registry(&self) -> &'static BlockRegistry {
+        self.terrain.registry
+    }
     fn pos(&self) -> ChunkPos {
         self.pos
     }

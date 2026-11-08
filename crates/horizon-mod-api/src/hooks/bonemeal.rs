@@ -21,7 +21,7 @@ pub trait Hooks {
         player: Option<u128>,
         player_entity_id: Option<i32>,
         pos: BlockPos,
-        state: BlockStateId,
+        state: BlockState,
         source: BonemealSource,
         stack: &mut Option<ItemStack>,
         valid_bonemeal_target: bool,

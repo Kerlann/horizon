@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Konnt de Build Log net liesen: {error}",
   "Could not read the saved sign-in.": "Konnt de gespäicherten Umeldung net liesen.",
   "Could not read the saved sign-in. Sign in again.": "Konnt de gespäicherten Umeldung net liesen. Mellt Iech nach eng Kéier un.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Konnt {name} net liesen: {error}",
   "Could not run {program}: {error}": "Konnt {program} net lafen: {error}",
   "Could not save the renewed sign-in.": "Konnt den erneierten Umeldung net späicheren.",

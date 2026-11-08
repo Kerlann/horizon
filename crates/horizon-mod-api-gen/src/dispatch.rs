@@ -90,7 +90,12 @@ pub(super) fn emit<'a>(
                 one_function(functions.iter(), function)?.clone(),
                 // A hook in the mod API crate, or in a crate above it, calls its dispatch
                 // directly; one below it calls the callback the game installs.
-                if matches!(krate, "horizon-mod-api" | "horizon-client-render") {
+                if matches!(krate, "horizon-mod-api" | "horizon-client-render")
+                    || super::has_call(
+                        &one_function(functions.iter(), function)?.block,
+                        &format!("dispatch_{name}"),
+                    )
+                {
                     format!("dispatch_{name}")
                 } else {
                     name.to_owned()
@@ -167,6 +172,33 @@ pub(super) fn emit<'a>(
         if ticks {
             args.retain(|(name, _)| name != "ticks");
         }
+        // Engine-inferred state types become owned API values at the checked crossing.
+        // Explicit catalog declarations remain authoritative.
+        let inferred_types: Vec<Type> = args
+            .iter()
+            .map(|(_, ty)| {
+                let mut ty = (*ty).clone();
+                if declared.is_empty() {
+                    use syn::visit_mut::VisitMut;
+                    struct ApiState;
+                    impl VisitMut for ApiState {
+                        fn visit_type_path_mut(&mut self, ty: &mut syn::TypePath) {
+                            if ty.path.segments.len() == 1 && ty.path.is_ident("BlockStateId") {
+                                ty.path = syn::parse_quote!(BlockState);
+                            }
+                            syn::visit_mut::visit_type_path_mut(self, ty);
+                        }
+                    }
+                    ApiState.visit_type_mut(&mut ty);
+                }
+                ty
+            })
+            .collect();
+        args = args
+            .into_iter()
+            .zip(&inferred_types)
+            .map(|((name, _), ty)| (name, ty))
+            .collect();
         let carried = args.clone();
         let mut used: HashSet<_> = args.iter().map(|(name, _)| name.clone()).collect();
         let mod_item = fresh_name("mod_hook", &mut used);
@@ -248,18 +280,9 @@ pub(super) fn emit<'a>(
                     .ok_or_else(|| format!("key {key} is not an argument of {name}"))?;
                 let key_type = ty.to_token_stream().to_string().replace("mod_api :: ", "");
                 let lookup = match key_type.as_str() {
-                    "BlockStateId" if table == "block" => format!("block_state({key})"),
-                    "BlockStateId" => {
-                        let Some((level, _)) = host.as_ref().filter(|_| is_level) else {
-                            return Err(format!("{name} has no level to name {key}'s block"));
-                        };
-                        if hook.side == Side::Both {
-                            format!(
-                                "{table}(|| match &{level} {{ LevelSide::Server({level}) | LevelSide::Client({level}) => {level}.state_block({key}), }})"
-                            )
-                        } else {
-                            format!("{table}(|| {level}.state_block({key}))")
-                        }
+                    "BlockState" if table == "block" => format!("block_value({key})"),
+                    "BlockState" => {
+                        format!("{table}(|| super::registry_keys::block_id({key}.block()))")
                     }
                     "& ItemStack" => {
                         format!("{table}(|| super::registry_keys::item_id({key}.item()))")
@@ -333,6 +356,21 @@ pub(super) fn emit<'a>(
                 syn::parse_str(&format!("&mut dyn {}", context.trait_name)).expect("a trait name")
             });
             let ty = drawn.as_ref().unwrap_or(ty);
+            let mut owned_ty = ty.clone();
+            struct OwnedLootContext;
+            impl syn::visit_mut::VisitMut for OwnedLootContext {
+                fn visit_type_path_mut(&mut self, path: &mut syn::TypePath) {
+                    if path.path.segments.len() == 1
+                        && path.path.segments[0].ident == "NativeLootContext"
+                    {
+                        path.path.segments[0].arguments = syn::PathArguments::None;
+                    } else {
+                        syn::visit_mut::visit_type_path_mut(self, path);
+                    }
+                }
+            }
+            syn::visit_mut::VisitMut::visit_type_mut(&mut OwnedLootContext, &mut owned_ty);
+            let ty = &owned_ty;
             dispatch_params.push(format!("{name}: {}", ty.to_token_stream()));
             let mutable_entity = ty.to_token_stream().to_string() == "& mut ModBlockEntity";
             let field_ty = if mutable_entity {
@@ -427,12 +465,66 @@ pub(super) fn emit<'a>(
             let target_path: syn::Path = syn::parse_str(target)
                 .map_err(|error| format!("invalid target for {name}: {error}"))?;
             let receiver = &target_path.segments[target_path.segments.len() - 2].ident;
-            let crossing = if declared.is_empty() {
-                stack_crossing(
+            let block_carrier = !declared.is_empty()
+                && carried.iter().any(|(_, ty)| {
+                    ty.to_token_stream()
+                        .to_string()
+                        .split(|c: char| !c.is_alphanumeric())
+                        .any(|word| matches!(word, "BlockState" | "LandingWrite"))
+                });
+            if block_carrier {
+                let engine: Vec<_> = carried
+                    .iter()
+                    .map(|(name, ty)| {
+                        let mut ty = (*ty).clone();
+                        struct EngineTypes;
+                        impl syn::visit_mut::VisitMut for EngineTypes {
+                            fn visit_type_mut(&mut self, ty: &mut Type) {
+                                match ty.to_token_stream().to_string().as_str() {
+                                    "BlockState" => {
+                                        *ty =
+                                            syn::parse_quote!(horizon_world::registry::BlockStateId)
+                                    }
+                                    "LandingWrite" => {
+                                        *ty = syn::parse_quote!(horizon_world::level::LandingWrite)
+                                    }
+                                    _ => syn::visit_mut::visit_type_mut(self, ty),
+                                }
+                            }
+                        }
+                        syn::visit_mut::VisitMut::visit_type_mut(&mut EngineTypes, &mut ty);
+                        (name.clone(), ty)
+                    })
+                    .collect();
+                let refs: Vec<_> = engine.iter().map(|(name, ty)| (name.clone(), ty)).collect();
+                let (fields, generics) = carrier_fields(&refs);
+                fire.push_str(&format!(
+                    "pub(in crate::game) struct {carrier}{generics} {{ {fields} }}\n"
+                ));
+                for arg in &mut signature.inputs {
+                    if let FnArg::Typed(arg) = arg {
+                        if arg.pat.to_token_stream().to_string() == "call" {
+                            arg.ty = Box::new(
+                                syn::parse_str(&format!(
+                                    "{carrier}{}",
+                                    if generics.is_empty() { "" } else { "<'_>" }
+                                ))
+                                .unwrap(),
+                            );
+                        }
+                    }
+                }
+            }
+            let crossing = if declared.is_empty() || block_carrier {
+                stack_crossing_routed(
                     &args,
                     output.as_ref(),
                     hook_id,
                     scoped.is_some(),
+                    hook.scope.as_ref().and_then(|scope| match scope.kind {
+                        PartKind::Block => Some(scope.key.as_str()),
+                        _ => None,
+                    }),
                     &surface_calls,
                 )
             } else {
@@ -449,7 +541,7 @@ pub(super) fn emit<'a>(
                         }
                     })
                     .into_iter()
-                    .chain(crossing.arguments.into_iter().map(|argument| {
+                    .chain(crossing.arguments.iter().cloned().map(|argument| {
                         surface_calls
                             .get(argument.as_str())
                             .cloned()
@@ -457,10 +549,33 @@ pub(super) fn emit<'a>(
                     }))
                     .collect::<Vec<_>>()
                     .join(", ");
-                format!(
-                    "{} mod_api::{call}({passed}); {}",
-                    crossing.before, crossing.after
-                )
+                if block_carrier {
+                    let names = carried
+                        .iter()
+                        .map(|(name, _)| name.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let fields = args
+                        .iter()
+                        .chain(output.as_ref())
+                        .zip(&crossing.arguments)
+                        .map(|((name, _), value)| format!("{name}: {value}"))
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    let host = host
+                        .as_ref()
+                        .map(|(_, param)| format!("{}, ", param.call))
+                        .unwrap_or_default();
+                    format!(
+                        "let {carrier} {{ {names} }} = call; {} mod_api::{call}({host}mod_api::__private::{carrier} {{ {fields} }}); {}",
+                        crossing.before, crossing.after
+                    )
+                } else {
+                    format!(
+                        "{} mod_api::{call}({passed}); {}",
+                        crossing.before, crossing.after
+                    )
+                }
             } else {
                 format!("mod_api::{call}({passed});")
             };
@@ -626,8 +741,9 @@ struct StackCrossing {
     after: String,
 }
 
-/// Only stack-bearing declared argument types select this seam. Event records
+/// Declared owned-value arguments select this guarded conversion seam. Event records
 /// are built explicitly at their game call sites, not inferred from game bodies.
+#[cfg(test)]
 fn stack_crossing(
     args: &[(String, &Type)],
     output: Option<&(String, &Type)>,
@@ -635,52 +751,104 @@ fn stack_crossing(
     scoped: bool,
     surfaces: &std::collections::HashMap<&str, String>,
 ) -> Option<StackCrossing> {
-    fn contains_stack(ty: &Type) -> bool {
+    stack_crossing_routed(args, output, hook_id, scoped, None, surfaces)
+}
+
+fn stack_crossing_routed(
+    args: &[(String, &Type)],
+    output: Option<&(String, &Type)>,
+    hook_id: &str,
+    scoped: bool,
+    block_scope: Option<&str>,
+    surfaces: &std::collections::HashMap<&str, String>,
+) -> Option<StackCrossing> {
+    const STACK_VALUES: &[&str] = &[
+        "ItemStack",
+        "ItemCost",
+        "MerchantOffer",
+        "Suggestion",
+        "GameRuleValue",
+        "PlacementContext",
+        "LootStack",
+        "NativeLootContext",
+        "ParticleOptions",
+    ];
+    const BLOCK_VALUES: &[&str] = &["BlockState", "LandingWrite"];
+    const INFALLIBLE_VALUES: &[&str] = &["GuiDraw", "Text"];
+    fn contains_boundary(ty: &Type, names: &[&str]) -> bool {
         use syn::visit::Visit;
-        struct Stack(bool);
-        impl<'ast> Visit<'ast> for Stack {
+        struct Boundary<'a> {
+            found: bool,
+            names: &'a [&'a str],
+        }
+        impl<'ast> Visit<'ast> for Boundary<'_> {
             fn visit_type_path(&mut self, path: &'ast syn::TypePath) {
-                // Bare names resolve to the owned records in the emitted API module.
-                // Qualified names do not acquire that provenance from their last segment.
-                self.0 |= path.path.segments.len() == 1
-                    && path.path.segments.last().is_some_and(|s| {
-                        matches!(
-                            s.ident.to_string().as_str(),
-                            "ItemStack" | "ItemCost" | "MerchantOffer" | "Suggestion"
-                        )
-                    });
+                // Only bare names have the emitted API module's provenance.
+                self.found |= path.path.segments.len() == 1
+                    && path
+                        .path
+                        .segments
+                        .last()
+                        .is_some_and(|s| self.names.contains(&s.ident.to_string().as_str()));
                 syn::visit::visit_type_path(self, path);
             }
         }
-        let mut stack = Stack(false);
-        stack.visit_type(ty);
-        stack.0
+        let mut boundary = Boundary {
+            found: false,
+            names,
+        };
+        boundary.visit_type(ty);
+        boundary.found
     }
     let parameters = args.iter().chain(output).collect::<Vec<_>>();
-    if !parameters.iter().any(|(_, ty)| contains_stack(ty)) {
+    if !parameters.iter().any(|(_, ty)| {
+        contains_boundary(ty, STACK_VALUES)
+            || contains_boundary(ty, INFALLIBLE_VALUES)
+            || contains_boundary(ty, BLOCK_VALUES)
+    }) {
         return None;
     }
     let guard = if scoped { "has_part_hook" } else { "listened" };
-    let mut before = format!(
-        "if !mod_api::__private::{guard}(mod_api::HookId::{hook_id}) {{ return; }} use crate::game::api_values::TryIntoApi; "
-    );
+    let mut before =
+        format!("if !mod_api::__private::{guard}(mod_api::HookId::{hook_id}) {{ return; }} ");
+    if let Some(key) = block_scope {
+        before.push_str(&format!("if !crate::game::api_values::block_state::block_listens(mod_api::HookId::{hook_id}, {key}) {{ return; }} "));
+    }
+    before.push_str("use crate::game::api_values::TryIntoApi; ");
     if parameters.iter().any(|(_, ty)| {
-        contains_stack(ty) && matches!(ty, Type::Reference(r) if r.mutability.is_some())
+        (contains_boundary(ty, STACK_VALUES)
+            || contains_boundary(ty, INFALLIBLE_VALUES)
+            || contains_boundary(ty, BLOCK_VALUES))
+            && matches!(ty, Type::Reference(r) if r.mutability.is_some())
     }) {
-        before.push_str("use crate::game::api_values::{TryIntoEngine, ItemBoundary}; ");
+        before.push_str("use crate::game::api_values::TryIntoEngine; ");
+    }
+    if parameters.iter().any(|(_, ty)| {
+        contains_boundary(ty, STACK_VALUES)
+            && !contains_boundary(ty, &["LootStack", "ParticleOptions"])
+            && matches!(ty, Type::Reference(r) if r.mutability.is_some())
+    }) {
+        before.push_str("use crate::game::api_values::ItemBoundary; ");
     }
     let mut arguments = Vec::new();
     let mut validations = String::new();
     let mut writes = String::new();
     for (name, ty) in parameters {
-        let stack = contains_stack(ty);
+        let block = contains_boundary(ty, BLOCK_VALUES);
+        let stack = contains_boundary(ty, STACK_VALUES);
+        let infallible = contains_boundary(ty, INFALLIBLE_VALUES);
         let mutable = matches!(ty, Type::Reference(r) if r.mutability.is_some());
-        if surfaces.contains_key(name.as_str()) || (!stack && !mutable) {
+        if surfaces.contains_key(name.as_str())
+            || matches!(ty, Type::Reference(r) if matches!(&*r.elem, Type::TraitObject(_)))
+            || (!stack && !block && !infallible && !mutable)
+        {
             arguments.push(name.clone());
             continue;
         }
         let local = format!("__api_{name}");
-        let value = if stack {
+        let value = if infallible {
+            format!("match {name}.try_into_api() {{ Ok(value) => value, Err(_) => return }}")
+        } else if stack || block {
             format!("match {name}.try_into_api() {{ Ok(value) => value, Err(_) => return }}")
         } else {
             format!("(*{name}).to_owned()")
@@ -700,9 +868,21 @@ fn stack_crossing(
         });
         if mutable {
             let converted = format!("__engine_{name}");
-            let value = if stack {
+            let value = if infallible {
+                format!(
+                    "match {local}.try_into_engine(&()) {{ Ok(value) => value, Err(_) => return }}"
+                )
+            } else if block {
+                format!(
+                    "match {local}.try_into_engine(&*self) {{ Ok(value) => value, Err(_) => return }}"
+                )
+            } else if stack {
                 let result = format!("__checked_{name}");
-                validations.push_str(&format!("let {result}: Result<_, mod_api::StackWriteError> = self.boundary_items().ok_or(mod_api::StackWriteError::Unavailable).and_then(|items| {local}.try_into_engine(items)); "));
+                if contains_boundary(ty, &["LootStack", "ParticleOptions"]) {
+                    validations.push_str(&format!("let {result} = {local}.try_into_engine(&()); "));
+                } else {
+                    validations.push_str(&format!("let {result}: Result<_, mod_api::StackWriteError> = self.boundary_items().ok_or(mod_api::StackWriteError::Unavailable).and_then(|items| {local}.try_into_engine(items)); "));
+                }
                 format!("match {result} {{ Ok(value) => value, Err(_) => return }}")
             } else {
                 local
@@ -721,6 +901,449 @@ fn stack_crossing(
 #[cfg(test)]
 mod stack_crossing_tests {
     use super::*;
+
+    #[test]
+    fn level_block_read_refusal_runtime_and_mutants() {
+        let mut implementations = String::new();
+        for source in [
+            include_str!("../../horizon-client/src/game/modding/mod_api_host.rs"),
+            include_str!("../../horizon-client/src/game/modding/native_level_signals.rs"),
+        ] {
+            for item in syn::parse_file(source).unwrap().items {
+                let syn::Item::Impl(item) = item else {
+                    continue;
+                };
+                if !item
+                    .trait_
+                    .as_ref()
+                    .is_some_and(|(_, path, _)| path.segments.last().unwrap().ident == "LevelHost")
+                {
+                    continue;
+                }
+                let target = item.self_ty.to_token_stream().to_string();
+                let target = if target.contains("GameLevel") && !target.contains("LevelTicks") {
+                    "GameLevel"
+                } else if target.contains("HitLevel") {
+                    "HitLevel"
+                } else if target.contains("ReadLevel") {
+                    "ReadLevel"
+                } else if target.contains("LevelTicks") {
+                    "LevelTicks<'_>"
+                } else {
+                    continue;
+                };
+                let method = item
+                    .items
+                    .iter()
+                    .find_map(|item| match item {
+                        syn::ImplItem::Fn(method) if method.sig.ident == "block_state" => {
+                            Some(method.to_token_stream().to_string())
+                        }
+                        _ => None,
+                    })
+                    .unwrap()
+                    .replace("use super :: api_values :: TryIntoApi ;", "");
+                implementations.push_str(&format!(
+                    "impl crate::LevelHost for {target} {{ {method} }}\n"
+                ));
+            }
+        }
+        assert_eq!(implementations.matches("impl crate::LevelHost").count(), 4);
+        let root = r#"
+struct BlockPos([i32;3]); impl BlockPos { fn new(x:i32,y:i32,z:i32)->Self {Self([x,y,z])} }
+trait LevelHost { fn block_state(&self,pos:[i32;3])->Option<BlockState>; }
+mod level { pub trait LevelAccess { fn block_state(&self,pos:crate::BlockPos)->crate::registry::BlockStateId; } }
+"#;
+        let directory =
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/level-read-proof");
+        std::fs::create_dir_all(&directory).unwrap();
+        let index = directory.join("index.rs");
+        std::fs::write(
+            &index,
+            include_str!("../../horizon-client/src/game/modding/api_values/block_state.rs"),
+        )
+        .unwrap();
+        for (name, methods, success) in [
+            ("baseline", implementations.clone(), true),
+            (
+                "fabricated_air",
+                implementations.replace(
+                    ". ok ()",
+                    ". ok () . or (Some(crate::BlockState(crate::BlockKey(0),0)))",
+                ),
+                false,
+            ),
+            (
+                "panic_on_refusal",
+                implementations
+                    .replace(". ok ()", ". ok () . or_else(|| panic!(\"missing index\"))"),
+                false,
+            ),
+        ] {
+            if !success {
+                assert_ne!(methods, implementations);
+            }
+            let proof = include_str!("../../../tools/refactors/api-pr3b/level_read.rs")
+                .replace("/* READ_IMPLS */", &methods);
+            let fixture = include_str!("../../../tools/refactors/api-pr3b/hook_index.rs")
+                .replace("INDEX_PATH", index.to_str().unwrap())
+                .replace(
+                    "pub fn run() {",
+                    &format!("{proof}\npub fn original_index_proof() {{"),
+                )
+                + root;
+            let source = directory.join(format!("{name}.rs"));
+            let binary = directory.join(name);
+            std::fs::write(&source, fixture).unwrap();
+            let compiler = std::process::Command::new("rustc")
+                .args(["--edition=2024", "-O"])
+                .arg(source)
+                .arg("-o")
+                .arg(&binary)
+                .output()
+                .unwrap();
+            assert!(
+                compiler.status.success(),
+                "{name}: {}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
+            let result = std::process::Command::new(binary).output().unwrap();
+            std::fs::write(
+                directory.join(format!("{name}.log")),
+                format!(
+                    "exit: {}\nstdout:\n{}\nstderr:\n{}",
+                    result.status,
+                    String::from_utf8_lossy(&result.stdout),
+                    String::from_utf8_lossy(&result.stderr)
+                ),
+            )
+            .unwrap();
+            assert_eq!(
+                result.status.success(),
+                success,
+                "{name}: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            println!(
+                "{name}: {}{}",
+                String::from_utf8_lossy(&result.stdout),
+                if success { "passed" } else { "mutant killed" }
+            );
+        }
+    }
+
+    #[test]
+    fn block_numeric_index_runtime_and_mutants() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let directory = root.join("target/hook-index-proof");
+        std::fs::create_dir_all(&directory).unwrap();
+        let production = std::fs::read_to_string(
+            root.join("crates/horizon-client/src/game/modding/api_values/block_state.rs"),
+        )
+        .unwrap();
+        let fixture = include_str!("../../../tools/refactors/api-pr3b/hook_index.rs");
+        for (name, code, success) in [
+            ("baseline", production.clone(), true),
+            (
+                "stale_mapping",
+                production.replace("    clear();", ""),
+                false,
+            ),
+            (
+                "global_ordinal",
+                production.replace(".get(state.0 as usize)", ".get(0)"),
+                false,
+            ),
+        ] {
+            let index = directory.join(format!("{name}_index.rs"));
+            std::fs::write(&index, code).unwrap();
+            let source = directory.join(format!("{name}.rs"));
+            std::fs::write(
+                &source,
+                fixture.replace("INDEX_PATH", index.to_str().unwrap()),
+            )
+            .unwrap();
+            let binary = directory.join(name);
+            let compiler = std::process::Command::new("rustc")
+                .args(["--edition=2024", "-O"])
+                .arg(&source)
+                .arg("-o")
+                .arg(&binary)
+                .output()
+                .unwrap();
+            assert!(
+                compiler.status.success(),
+                "{}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
+            let result = std::process::Command::new(binary).output().unwrap();
+            assert_eq!(
+                result.status.success(),
+                success,
+                "{name}: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            println!(
+                "{name}: {}{}",
+                String::from_utf8_lossy(&result.stdout),
+                if success { "passed" } else { "mutant killed" }
+            );
+        }
+    }
+    #[test]
+    fn per_block_routing_runtime_and_mutants() {
+        let state: Type = syn::parse_quote!(BlockState);
+        let writes: Type = syn::parse_quote!(&mut Vec<LandingWrite>);
+        let crossing = stack_crossing_routed(
+            &[
+                ("state".into(), &state),
+                ("secondary".into(), &state),
+                ("writes".into(), &writes),
+            ],
+            None,
+            "Proof",
+            true,
+            Some("state"),
+            &Default::default(),
+        )
+        .unwrap();
+        let global = stack_crossing_routed(
+            &[
+                ("state".into(), &state),
+                ("secondary".into(), &state),
+                ("writes".into(), &writes),
+            ],
+            None,
+            "Proof",
+            false,
+            None,
+            &Default::default(),
+        )
+        .unwrap();
+        let global = format!(
+            "{} callback(__api_state, __api_secondary, &mut __api_writes); {}",
+            global.before, global.after
+        );
+        let guard = "if !crate::game::api_values::block_state::block_listens(mod_api::HookId::Proof, state) { return; }";
+        let body = format!(
+            "{} callback(__api_state, __api_secondary, &mut __api_writes); {}",
+            crossing.before, crossing.after
+        );
+        let unguarded = body.replace(guard, "");
+        let late = unguarded.replace("callback(", &format!("{guard} callback("));
+        let after_scalar = unguarded.replace(
+            "let __api_secondary",
+            &format!("{guard} let __api_secondary"),
+        );
+        assert_ne!(body, unguarded);
+        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/block-routing-proof");
+        std::fs::create_dir_all(&directory).unwrap();
+        let index = directory.join("index.rs");
+        std::fs::write(
+            &index,
+            // Count actual scalar crossings as well as collection conversions. The
+            // routing helper itself must not trigger this conversion observer.
+            include_str!("../../horizon-client/src/game/modding/api_values/block_state.rs").replace(
+                "pub(crate) fn to_api(&self, state: BlockStateId) -> Result<BlockState, BlockStateError> {",
+                "pub(crate) fn to_api(&self, state: BlockStateId) -> Result<BlockState, BlockStateError> { crate::CONVERSIONS.fetch_add(1, crate::Ordering::Relaxed);",
+            ),
+        )
+        .unwrap();
+        for (name, body, success) in [
+            ("baseline", body, true),
+            ("no_guard", unguarded, false),
+            ("late_guard", late, false),
+            ("after_scalar_guard", after_scalar, false),
+            ("global_listener", global, true),
+        ] {
+            let source = directory.join(format!("{name}.rs"));
+            let binary = directory.join(name);
+            let mut fixture = include_str!("../../../tools/refactors/api-pr3b/block_routing.rs")
+                .replace("INDEX_PATH", index.to_str().unwrap())
+                .replace("FIRE_BODY", &body);
+            if name == "global_listener" {
+                fixture = fixture.replace("fn main()", "fn routing_main()");
+                fixture.push_str(
+                    r#"
+fn main() {
+    let b = BlockState(BlockKey(8), 0);
+    game::api_values::bind(&registry::BlockRegistry(vec![Ok(b)]));
+    let mut writes = vec![42];
+    Game.fire(registry::BlockStateId(0), registry::BlockStateId(0), &mut writes);
+    assert_eq!(CALLS.load(Ordering::Relaxed), 1);
+    assert_eq!(writes, vec![42,99]);
+    println!("ordinary global listener sees unrelated block B");
+}
+"#,
+                );
+            }
+            std::fs::write(&source, fixture).unwrap();
+            let compiled = std::process::Command::new("rustc")
+                .args(["--edition=2024", "-O"])
+                .arg(source)
+                .arg("-o")
+                .arg(&binary)
+                .output()
+                .unwrap();
+            assert!(
+                compiled.status.success(),
+                "{}",
+                String::from_utf8_lossy(&compiled.stderr)
+            );
+            let result = std::process::Command::new(binary).output().unwrap();
+            assert_eq!(
+                result.status.success(),
+                success,
+                "{name}: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            println!(
+                "{name}: {} {}",
+                String::from_utf8_lossy(&result.stdout),
+                if success { "passed" } else { "mutant killed" }
+            );
+        }
+    }
+
+    #[test]
+    fn block_crossing_runtime_and_mutants() {
+        let state: Type = syn::parse_quote!(&mut BlockState);
+        let sibling: Type = syn::parse_quote!(&mut u32);
+        // Sibling first catches early commits even when the checked field follows it.
+        let crossing = stack_crossing(
+            &[("sibling".into(), &sibling), ("state".into(), &state)],
+            None,
+            "BlockProof",
+            true,
+            &Default::default(),
+        )
+        .unwrap();
+        let body = format!(
+            "{} callback(&mut __api_state, &mut __api_sibling); {}",
+            crossing.before, crossing.after
+        );
+        let early = body.replace(
+            "let __engine_sibling = __api_sibling;",
+            "let __engine_sibling = __api_sibling; *sibling = __engine_sibling;",
+        );
+        let guard =
+            "if !mod_api::__private::has_part_hook(mod_api::HookId::BlockProof) { return; }";
+        let unguarded = body.replace(guard, "");
+        assert_ne!(early, body);
+        assert_ne!(unguarded, body);
+        let fixture = include_str!("../../../tools/refactors/api-pr3b/hook_crossing.rs");
+        let directory = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/hook-crossing-proof");
+        std::fs::create_dir_all(&directory).unwrap();
+        for (name, body, success) in [
+            ("baseline", body, true),
+            ("early_commit", early, false),
+            ("no_guard", unguarded, false),
+        ] {
+            let source = directory.join(format!("{name}.rs"));
+            let binary = directory.join(name);
+            std::fs::write(&source, fixture.replace("FIRE_BODY", &body)).unwrap();
+            let compiler = std::process::Command::new("rustc")
+                .args(["--edition=2024", "-O"])
+                .arg(&source)
+                .arg("-o")
+                .arg(&binary)
+                .output()
+                .unwrap();
+            assert!(
+                compiler.status.success(),
+                "{}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
+            let result = std::process::Command::new(binary).output().unwrap();
+            assert_eq!(
+                result.status.success(),
+                success,
+                "{name}: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            println!(
+                "{name}: {}{}",
+                String::from_utf8_lossy(&result.stdout),
+                if success { "passed" } else { "mutant killed" }
+            );
+        }
+    }
+
+    #[test]
+    fn boundary_draw_context_is_borrowed_not_snapshotted() {
+        let state: Type = syn::parse_quote!(BlockState);
+        let draw: Type = syn::parse_quote!(&mut dyn CameraDrawContext);
+        let replace: Type = syn::parse_quote!(&mut bool);
+        let crossing = stack_crossing(
+            &[
+                ("state".into(), &state),
+                ("draw".into(), &draw),
+                ("replace".into(), &replace),
+            ],
+            None,
+            "BlockScreenEffectDraw",
+            false,
+            &Default::default(),
+        )
+        .unwrap();
+        assert_eq!(
+            crossing.arguments,
+            ["__api_state", "draw", "&mut __api_replace"]
+        );
+        assert!(!crossing.before.contains("__api_draw"));
+        assert!(!crossing.after.contains("*draw"));
+    }
+
+    #[test]
+    fn landing_writes_are_checked_and_staged_with_siblings() {
+        let writes: Type = syn::parse_quote!(&mut Vec<LandingWrite>);
+        let sibling: Type = syn::parse_quote!(&mut bool);
+        let crossing = stack_crossing(
+            &[("sibling".into(), &sibling), ("writes".into(), &writes)],
+            None,
+            "BlockLanding",
+            false,
+            &Default::default(),
+        )
+        .unwrap();
+        assert!(crossing.before.contains("writes.try_into_api()"));
+        assert!(!crossing.before.contains("ItemBoundary"));
+        assert!(
+            crossing.after.find("try_into_engine(&*self)").unwrap()
+                < crossing.after.find("*sibling =").unwrap()
+        );
+    }
+
+    #[test]
+    fn gui_snapshot_and_writeback_are_guarded_and_context_free() {
+        let draws: Type = syn::parse_quote!(&mut Option<Vec<GuiDraw>>);
+        let crossing = stack_crossing(
+            &[("draws".into(), &draws)],
+            None,
+            "HealthHud",
+            false,
+            &Default::default(),
+        )
+        .unwrap();
+        assert!(
+            crossing
+                .before
+                .starts_with("if !mod_api::__private::listened")
+        );
+        assert!(
+            crossing
+                .before
+                .contains("match draws.try_into_api() { Ok(value) => value, Err(_) => return }")
+        );
+        assert!(crossing.after.contains(
+            "match __api_draws.try_into_engine(&()) { Ok(value) => value, Err(_) => return }"
+        ));
+        assert!(crossing.after.ends_with("*draws = __engine_draws; "));
+        assert!(!crossing.before.contains("ItemBoundary"));
+        assert!(!crossing.after.contains("StackWriteError"));
+    }
     #[test]
     fn stack_hook_gates_before_conversion_and_stages_every_write() {
         let stack: Type = syn::parse_quote!(&mut ItemStack);
@@ -775,22 +1398,42 @@ mod stack_crossing_tests {
         syn::parse_str::<syn::Block>(&body).unwrap();
     }
     #[test]
-    fn unsubscribed_item_use_never_converts() {
-        let stack: Type = syn::parse_quote!(&ItemStack);
-        let claimed: Type = syn::parse_quote!(&mut bool);
-        let args = [
-            ("stack".to_owned(), &stack),
-            ("claimed".to_owned(), &claimed),
-        ];
-        let crossing = stack_crossing(&args, None, "UseItem", true, &Default::default()).unwrap();
-        let body = format!(
-            "{} mod_api::dispatch_use_item(self, {}); {}",
-            crossing.before,
-            crossing.arguments.join(", "),
-            crossing.after
-        );
-        let source = r#"
+    fn unsubscribed_owned_values_never_convert_or_allocate() {
+        for record in ["ItemStack", "ParticleOptions"] {
+            let stack: Type = syn::parse_str(&format!("&{record}")).unwrap();
+            let claimed: Type = syn::parse_quote!(&mut bool);
+            let args = [
+                ("stack".to_owned(), &stack),
+                ("claimed".to_owned(), &claimed),
+            ];
+            let crossing = stack_crossing(
+                &args,
+                None,
+                "UseItem",
+                record == "ItemStack",
+                &Default::default(),
+            )
+            .unwrap();
+            let body = format!(
+                "{} mod_api::dispatch_use_item(self, {}); {}",
+                crossing.before,
+                crossing.arguments.join(", "),
+                crossing.after
+            );
+            let source = r#"
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+struct Counter;
+static ALLOCATIONS: AtomicUsize = AtomicUsize::new(0);
+unsafe impl std::alloc::GlobalAlloc for Counter {
+    unsafe fn alloc(&self, layout: std::alloc::Layout) -> *mut u8 {
+        ALLOCATIONS.fetch_add(1, Ordering::Relaxed);
+        unsafe { std::alloc::System.alloc(layout) }
+    }
+    unsafe fn dealloc(&self, pointer: *mut u8, layout: std::alloc::Layout) {
+        unsafe { std::alloc::System.dealloc(pointer, layout); }
+    }
+}
+#[global_allocator] static ALLOCATOR: Counter = Counter;
 static SUBSCRIBED: AtomicBool = AtomicBool::new(false);
 static CONVERSIONS: AtomicUsize = AtomicUsize::new(0);
 static DISPATCHES: AtomicUsize = AtomicUsize::new(0);
@@ -824,7 +1467,9 @@ impl Game {
 fn main() {
     let mut game = Game;
     let mut claimed = false;
+    let allocations = ALLOCATIONS.load(Ordering::Relaxed);
     for _ in 0..1_000 { game.fire_use_item(&ItemStack, &mut claimed); }
+    assert_eq!(ALLOCATIONS.load(Ordering::Relaxed), allocations);
     assert_eq!(CONVERSIONS.load(Ordering::Relaxed), 0);
     assert_eq!(DISPATCHES.load(Ordering::Relaxed), 0);
     assert!(!claimed);
@@ -835,36 +1480,46 @@ fn main() {
     assert!(claimed);
 }
 "#
-        .replace("FIRE_BODY", &body);
-        let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
-        let unique = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let directory = target.join(format!("item-fire-{}-{unique}", std::process::id()));
-        std::fs::create_dir_all(&directory).unwrap();
-        let input = directory.join("fire.rs");
-        let output = directory.join(format!("fire{}", std::env::consts::EXE_SUFFIX));
-        std::fs::write(&input, source).unwrap();
-        let compiler = std::process::Command::new("rustc")
-            .args(["--edition=2024", "--crate-name=item_fire_counter"])
-            .arg(&input)
-            .arg("-o")
-            .arg(&output)
-            .output()
-            .unwrap();
-        assert!(
-            compiler.status.success(),
-            "{}",
-            String::from_utf8_lossy(&compiler.stderr)
-        );
-        assert!(
-            std::process::Command::new(output)
-                .status()
+            .replace("FIRE_BODY", &body)
+            .replace("ItemStack", record)
+            .replace(
+                "has_part_hook",
+                if record == "ItemStack" {
+                    "has_part_hook"
+                } else {
+                    "listened"
+                },
+            );
+            let target = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target");
+            let unique = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
                 .unwrap()
-                .success()
-        );
-        std::fs::remove_dir_all(directory).unwrap();
+                .as_nanos();
+            let directory = target.join(format!("item-fire-{}-{unique}", std::process::id()));
+            std::fs::create_dir_all(&directory).unwrap();
+            let input = directory.join("fire.rs");
+            let output = directory.join(format!("fire{}", std::env::consts::EXE_SUFFIX));
+            std::fs::write(&input, source).unwrap();
+            let compiler = std::process::Command::new("rustc")
+                .args(["--edition=2024", "--crate-name=item_fire_counter"])
+                .arg(&input)
+                .arg("-o")
+                .arg(&output)
+                .output()
+                .unwrap();
+            assert!(
+                compiler.status.success(),
+                "{}",
+                String::from_utf8_lossy(&compiler.stderr)
+            );
+            assert!(
+                std::process::Command::new(output)
+                    .status()
+                    .unwrap()
+                    .success()
+            );
+            std::fs::remove_dir_all(directory).unwrap();
+        }
     }
 
     #[test]
@@ -897,6 +1552,52 @@ fn main() {
             .is_some()
         );
     }
+    #[test]
+    fn rule_hook_gates_before_copying_value() {
+        let ty: Type = syn::parse_quote!(GameRuleValue);
+        let crossing = stack_crossing(
+            &[("value".to_owned(), &ty)],
+            None,
+            "GameRuleChanged",
+            false,
+            &Default::default(),
+        )
+        .unwrap();
+        assert!(
+            crossing
+                .before
+                .starts_with("if !mod_api::__private::listened")
+        );
+        assert!(crossing.before.contains("value.try_into_api()"));
+        assert_eq!(crossing.arguments, ["__api_value"]);
+        assert!(crossing.after.is_empty());
+    }
+
+    #[test]
+    fn placement_hook_gates_before_snapshot_and_stages_the_answer() {
+        let context: Type = syn::parse_quote!(&PlacementContext);
+        let answer: Type = syn::parse_quote!(&mut Option<Option<BlockStateId>>);
+        let crossing = stack_crossing(
+            &[
+                ("context".to_owned(), &context),
+                ("answer".to_owned(), &answer),
+            ],
+            None,
+            "StateForPlacement",
+            true,
+            &Default::default(),
+        )
+        .unwrap();
+        assert!(
+            crossing
+                .before
+                .starts_with("if !mod_api::__private::has_part_hook")
+        );
+        assert!(crossing.before.contains("context.try_into_api()"));
+        assert_eq!(crossing.arguments, ["&__api_context", "&mut __api_answer"]);
+        assert!(crossing.after.contains("*answer = __engine_answer"));
+    }
+
     #[test]
     fn plain_hook_has_no_stack_seam() {
         let scalar: Type = syn::parse_quote!(&mut u32);

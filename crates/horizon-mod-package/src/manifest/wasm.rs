@@ -62,19 +62,6 @@ pub(crate) fn sha512_hex(value: &str) -> Result<(), &'static str> {
 }
 
 /// The SHA-512 of `bytes`, as `[wasm]` writes it.
-/// The plain name prefix of a wasm mod's exports in its group, `<prefix>-<interface>`: the id
-/// in the component model's kebab case. Ids are `[a-z0-9_]`, so the mapping is one to one.
-pub fn export_prefix(id: &str) -> String {
-    id.replace('_', "-")
-}
-
-/// Whether `id` can name a wasm mod's exports: each `_`-separated word starts with a letter,
-/// as the component model's names need.
-pub(crate) fn exportable(id: &str) -> bool {
-    id.split('_')
-        .all(|word| word.starts_with(|c: char| c.is_ascii_lowercase()))
-}
-
 pub fn sha512_of(bytes: &[u8]) -> String {
     Sha512::digest(bytes)
         .iter()
@@ -92,6 +79,8 @@ pub enum WasmError {
     TooLarge,
     /// Not a WebAssembly file (no `\0asm` header).
     NotWasm,
+    /// Not a valid shared group member with the guest entry points.
+    InvalidMember,
     /// The bytes aren't the ones `[wasm] sha512` names.
     Hash,
 }
@@ -103,6 +92,7 @@ impl std::fmt::Display for WasmError {
             Self::Undeclared => "mod.wasm needs a [wasm] section",
             Self::TooLarge => "mod.wasm exceeds 64 MiB",
             Self::NotWasm => "mod.wasm is not a WebAssembly file",
+            Self::InvalidMember => "mod.wasm is not a valid shared group member",
             Self::Hash => "mod.wasm doesn't match its [wasm] sha512",
         })
     }
@@ -143,6 +133,90 @@ impl Wasm {
         if sha512_of(bytes) != self.sha512 {
             return Err(WasmError::Hash);
         }
+        wasmparser::Validator::new()
+            .validate_all(bytes)
+            .map_err(|_| WasmError::InvalidMember)?;
+        let mut shared = false;
+        let mut exports = [false; 3];
+        for payload in wasmparser::Parser::new(0).parse_all(bytes) {
+            match payload.map_err(|_| WasmError::InvalidMember)? {
+                wasmparser::Payload::Version {
+                    encoding: wasmparser::Encoding::Component,
+                    ..
+                } => return Err(WasmError::InvalidMember),
+                wasmparser::Payload::CustomSection(section) if section.name() == "dylink.0" => {
+                    if shared {
+                        return Err(WasmError::InvalidMember);
+                    }
+                    let wasmparser::KnownCustom::Dylink0(subsections) = section.as_known() else {
+                        return Err(WasmError::InvalidMember);
+                    };
+                    let mut memory_info = false;
+                    for subsection in subsections {
+                        if let wasmparser::Dylink0Subsection::MemInfo(_) =
+                            subsection.map_err(|_| WasmError::InvalidMember)?
+                        {
+                            if memory_info {
+                                return Err(WasmError::InvalidMember);
+                            }
+                            memory_info = true;
+                        }
+                    }
+                    if !memory_info {
+                        return Err(WasmError::InvalidMember);
+                    }
+                    shared = true;
+                }
+                wasmparser::Payload::ImportSection(section) => {
+                    for import in section.into_imports() {
+                        let import = import.map_err(|_| WasmError::InvalidMember)?;
+                        let allowed = matches!(
+                            (import.module, import.name, import.ty),
+                            ("env", "memory", wasmparser::TypeRef::Memory(_))
+                                | (
+                                    "env",
+                                    "__indirect_function_table",
+                                    wasmparser::TypeRef::Table(_)
+                                )
+                                | (
+                                    "env",
+                                    "__stack_pointer" | "__memory_base" | "__table_base",
+                                    wasmparser::TypeRef::Global(_),
+                                )
+                                | ("env", _, wasmparser::TypeRef::Func(_))
+                                | ("GOT.mem" | "GOT.func", _, wasmparser::TypeRef::Global(_))
+                                | (
+                                    "horizon",
+                                    "host" | "host_reply",
+                                    wasmparser::TypeRef::Func(_)
+                                )
+                        );
+                        if !allowed {
+                            return Err(WasmError::InvalidMember);
+                        }
+                    }
+                }
+                wasmparser::Payload::ExportSection(section) => {
+                    for export in section {
+                        let export = export.map_err(|_| WasmError::InvalidMember)?;
+                        if export.kind == wasmparser::ExternalKind::Func {
+                            for (index, name) in ["horizon_layout", "horizon_in", "horizon_hook"]
+                                .iter()
+                                .enumerate()
+                            {
+                                if export.name == *name {
+                                    exports[index] = true;
+                                }
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        if !shared || !exports.into_iter().all(|found| found) {
+            return Err(WasmError::InvalidMember);
+        }
         Ok(())
     }
 }
@@ -165,11 +239,43 @@ mod tests {
     fn a_module_is_checked_by_header_size_and_hash() {
         let module = b"\0asm\x01\0\0\0".to_vec();
         let wasm = section(&module);
-        assert_eq!(wasm.check(&module), Ok(()));
+        assert_eq!(wasm.check(&module), Err(WasmError::InvalidMember));
         let mut changed = module.clone();
         changed[7] = 1;
         assert_eq!(wasm.check(&changed), Err(WasmError::Hash));
         assert_eq!(section(b"MZ").check(b"MZ"), Err(WasmError::NotWasm));
+    }
+
+    #[test]
+    fn member_requires_shared_layout_guest_exports_and_allowed_imports() {
+        let module = |imports: &str, exports: &str, dylink: &str| {
+            wat::parse_str(format!("(module {dylink} {imports} {exports})")).unwrap()
+        };
+        let dylink = r#"(@custom "dylink.0" "\01\04\00\00\00\00")"#;
+        let exports = r#"(func (export "horizon_layout")) (func (export "horizon_in")) (func (export "horizon_hook"))"#;
+        let imports = r#"(import "horizon" "host" (func)) (import "env" "memory" (memory 1))"#;
+        let good = module(imports, exports, dylink);
+        assert_eq!(section(&good).check(&good), Ok(()));
+        for bad in [
+            module(imports, exports, ""),
+            module(imports, exports, r#"(@custom "dylink.0" "\01\01\00")"#),
+            module(imports, exports, r#"(@custom "dylink.0" "")"#),
+            module(
+                r#"(import "GOT.other" "thing" (global i32))"#,
+                exports,
+                dylink,
+            ),
+            module(r#"(import "env" "unknown" (global i32))"#, exports, dylink),
+            module(imports, "", dylink),
+            module(
+                r#"(import "wasi_snapshot_preview1" "fd_write" (func))"#,
+                exports,
+                dylink,
+            ),
+            module(r#"(import "horizon" "other" (func))"#, exports, dylink),
+        ] {
+            assert_eq!(section(&bad).check(&bad), Err(WasmError::InvalidMember));
+        }
     }
 
     #[test]

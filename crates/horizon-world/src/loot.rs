@@ -226,9 +226,8 @@ pub struct LootStack {
     pub stew_effects: Vec<(String, i32)>,
     /// Set by set_name: (`custom_name` or `item_name`, the text component).
     pub names: Vec<(String, Value)>,
-    /// Set by set_components: (component id, its JSON value; null removes
-    /// it), a later patch of the same id replacing an earlier one.
-    pub components: Vec<(String, Value)>,
+    /// Ordered component patches. None removes a component; repeated IDs apply in order.
+    pub components: Vec<(String, Option<Tag>)>,
 }
 /// `ExplorationMapFunction`'s settings.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1725,12 +1724,9 @@ impl<R: RandomSource> Context<'_, R> {
                         .random
                         .next_int_bound(options.len() as i32)
                         .unwrap_or(0) as usize;
-                    stack
-                        .components
-                        .retain(|(k, _)| k != "minecraft:instrument");
                     stack.components.push((
                         "minecraft:instrument".to_owned(),
-                        Value::String(options[pick].clone()),
+                        Some(Tag::String(options[pick].as_str().into())),
                     ));
                 }
             }
@@ -1802,45 +1798,68 @@ impl<R: RandomSource> Context<'_, R> {
             // loot random), flags and strings as they are written.
             "minecraft:set_custom_model_data" => {
                 let id = "minecraft:custom_model_data";
-                let content = stack.components.iter().find(|(k, _)| k == id);
+                let content = stack.components.iter().rev().find(|(k, _)| k == id);
                 let mut content = content
-                    .map(|(_, v)| v.clone())
-                    .filter(Value::is_object)
-                    .unwrap_or_else(|| Value::Object(serde_json::Map::new()));
-                let old = |key: &str| -> Vec<Value> {
-                    content[key].as_array().cloned().unwrap_or_default()
+                    .and_then(|(_, v)| match v {
+                        Some(Tag::Compound(map)) => Some(map.clone()),
+                        _ => None,
+                    })
+                    .unwrap_or_default();
+                let old = |key: &str| -> Vec<Tag> {
+                    match content.get(&key.into()) {
+                        Some(Tag::List(values)) => values
+                            .iter()
+                            .map(|value| {
+                                let number = match value {
+                                    Tag::Byte(v) => Some(f64::from(*v)),
+                                    Tag::Short(v) => Some(f64::from(*v)),
+                                    Tag::Int(v) => Some(f64::from(*v)),
+                                    Tag::Long(v) => Some(*v as f64),
+                                    Tag::Float(v) => Some(f64::from(f32::from_bits(*v))),
+                                    Tag::Double(v) => Some(f64::from_bits(*v)),
+                                    _ => None,
+                                };
+                                match (key, number) {
+                                    ("floats", Some(v)) => Tag::Float((v as f32).to_bits()),
+                                    ("colors", Some(v)) => Tag::Int(v as i32),
+                                    _ => value.clone(),
+                                }
+                            })
+                            .collect(),
+                        _ => Vec::new(),
+                    }
                 };
-                let mut replaced: Vec<(&str, Vec<Value>)> = Vec::new();
+                let mut replaced: Vec<(&str, Vec<Tag>)> = Vec::new();
                 if f["floats"].is_object() {
-                    let list =
-                        list_operation(&f["floats"], old("floats"), |v| Value::from(self.float(v)));
+                    let list = list_operation(&f["floats"], old("floats"), |v| {
+                        Tag::Float(self.float(v).to_bits())
+                    });
                     replaced.push(("floats", list));
                 }
                 if f["flags"].is_object() {
                     let list = list_operation(&f["flags"], old("flags"), |v| {
-                        Value::Bool(v.as_bool().unwrap_or(false))
+                        Tag::Byte(i8::from(v.as_bool().unwrap_or(false)))
                     });
                     replaced.push(("flags", list));
                 }
                 if f["strings"].is_object() {
                     let list = list_operation(&f["strings"], old("strings"), |v| {
-                        Value::String(v.as_str().unwrap_or_default().to_owned())
+                        Tag::String(v.as_str().unwrap_or_default().into())
                     });
                     replaced.push(("strings", list));
                 }
                 if f["colors"].is_object() {
                     let list =
-                        list_operation(&f["colors"], old("colors"), |v| Value::from(self.int(v)));
+                        list_operation(&f["colors"], old("colors"), |v| Tag::Int(self.int(v)));
                     replaced.push(("colors", list));
                 }
-                let Value::Object(map) = &mut content else {
-                    unreachable!("an object above")
-                };
                 for (key, list) in replaced {
-                    map.insert(key.to_owned(), Value::Array(list));
+                    content.insert(key.into(), Tag::List(list));
                 }
                 stack.components.retain(|(k, _)| k != id);
-                stack.components.push((id.to_owned(), content));
+                stack
+                    .components
+                    .push((id.to_owned(), Some(Tag::Compound(content))));
             }
             // SetBannerPatternFunction: the layers a banner or shield gets,
             // replacing the component's own list or added to its end
@@ -1848,13 +1867,20 @@ impl<R: RandomSource> Context<'_, R> {
             // pattern id and a dye name, so the list is kept as it came.
             "minecraft:set_banner_pattern" => {
                 let id = "minecraft:banner_patterns";
-                let layers = f["patterns"].as_array().cloned().unwrap_or_default();
+                let Ok(Tag::List(layers)) = horizon_core::json_nbt::json_to_tag(&f["patterns"])
+                else {
+                    return stack;
+                };
                 let layers = if f["append"].as_bool() == Some(true) {
                     stack
                         .components
                         .iter()
+                        .rev()
                         .find(|(k, _)| k == id)
-                        .and_then(|(_, v)| v.as_array().cloned())
+                        .and_then(|(_, v)| match v {
+                            Some(Tag::List(values)) => Some(values.clone()),
+                            _ => None,
+                        })
                         .unwrap_or_default()
                         .into_iter()
                         .chain(layers)
@@ -1863,7 +1889,9 @@ impl<R: RandomSource> Context<'_, R> {
                     layers
                 };
                 stack.components.retain(|(k, _)| k != id);
-                stack.components.push((id.to_owned(), Value::Array(layers)));
+                stack
+                    .components
+                    .push((id.to_owned(), Some(Tag::List(layers))));
             }
             // SetBookCoverFunction: the written book's title, author and
             // generation, kept over the component the stack already carries (an
@@ -1876,32 +1904,47 @@ impl<R: RandomSource> Context<'_, R> {
                 let mut content = stack
                     .components
                     .iter()
+                    .rev()
                     .find(|(k, _)| k == id)
-                    .map(|(_, v)| v.clone())
-                    .filter(Value::is_object)
-                    .unwrap_or_else(|| Value::Object(serde_json::Map::new()));
-                if let Value::Object(map) = &mut content {
+                    .and_then(|(_, v)| match v {
+                        Some(Tag::Compound(map)) => Some(map.clone()),
+                        _ => None,
+                    })
+                    .unwrap_or_default();
+                {
+                    let map = &mut content;
                     for field in ["title", "author"] {
                         if let Some(value) = f.get(field) {
-                            map.insert(field.to_owned(), value.clone());
+                            if let Ok(tag) = horizon_core::json_nbt::json_to_tag(value) {
+                                map.insert(field.into(), tag);
+                            }
                         }
                     }
                     // `WrittenBookContent`'s generation is 0 to 3; the codec
                     // refuses the rest, so a table that asks for more is clamped
                     // as the item's own parse does.
                     if let Some(generation) = f["generation"].as_i64() {
-                        map.insert("generation".to_owned(), Value::from(generation.clamp(0, 3)));
+                        map.insert("generation".into(), Tag::Int(generation.clamp(0, 3) as i32));
                     }
                 }
                 stack.components.retain(|(k, _)| k != id);
-                stack.components.push((id.to_owned(), content));
+                stack
+                    .components
+                    .push((id.to_owned(), Some(Tag::Compound(content))));
             }
             // SetComponentsFunction: the patch's components, applied when the
             // stack becomes an item (trim on worn armour, see `mobs::finalize`).
             "minecraft:set_components" => {
                 for (id, value) in f["components"].as_object().into_iter().flatten() {
-                    stack.components.retain(|(k, _)| k != id);
-                    stack.components.push((id.clone(), value.clone()));
+                    let tag = if value.is_null() {
+                        None
+                    } else {
+                        let Ok(tag) = horizon_core::json_nbt::json_to_tag(value) else {
+                            continue;
+                        };
+                        Some(tag)
+                    };
+                    stack.components.push((id.clone(), tag));
                 }
             }
             // A mod's own kind: the hook changes the stack.
@@ -2308,6 +2351,39 @@ mod namespace_tests {
         let _ = fs::remove_dir_all(&root);
     }
 
+    #[test]
+    fn component_functions_decode_json_to_ordered_nbt_patches() {
+        let root =
+            std::env::temp_dir().join(format!("horizon-loot-patches-{}", std::process::id()));
+        let table = r#"{"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:stone","modifier":[
+            {"type":"minecraft:set_components","components":{"test:value":7}},
+            {"type":"minecraft:set_components","components":{"test:value":null}},
+            {"type":"minecraft:set_components","components":{"test:value":[7]}}
+        ]}]}]}"#;
+        for (name, text) in [
+            ("items.json", r#"{"minecraft:stone":{}}"#),
+            ("data/minecraft/loot_table/patches.json", table),
+        ] {
+            let path = root.join(name);
+            fs::create_dir_all(path.parent().unwrap()).unwrap();
+            fs::write(path, text).unwrap();
+        }
+        let defaults = crate::item_defaults::read(&root).unwrap();
+        let data = LootData::load(&root, &PackOverlay::NONE, &defaults).unwrap();
+        let filled = data.fill("minecraft:patches", 7, 27, None);
+        let stack = filled.iter().flatten().next().unwrap();
+        assert_eq!(
+            stack.components,
+            vec![
+                ("test:value".into(), Some(Tag::Byte(7))),
+                ("test:value".into(), None),
+                ("test:value".into(), Some(Tag::List(vec![Tag::Byte(7)]))),
+            ]
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    /// `SetInstrumentFunction`: a goat horn from a loot table gets one of the options as its instrument.
     /// `SetCustomModelDataFunction`: each of the model data's four lists goes
     /// through its `ListOperation` over the component the stack already has -
     /// floats appended, flags and strings replaced, a colour inserted first -
@@ -2320,6 +2396,7 @@ mod namespace_tests {
         let table = r#"{"pools": [{"rolls": 1, "entries": [{"type": "minecraft:item", "name": "minecraft:stick",
             "modifier": [
                 {"type": "minecraft:set_components", "components": {"minecraft:custom_model_data": {"floats": [1.0], "strings": ["old"]}}},
+                {"type": "minecraft:set_components", "components": {"minecraft:custom_model_data": {"floats": [3.0], "strings": ["old"]}}},
                 {"type": "minecraft:set_custom_model_data",
                  "floats": {"mode": "append", "values": [{"type": "minecraft:constant", "value": 2.0}]},
                  "flags": {"mode": "replace_all", "values": [true]},
@@ -2349,9 +2426,22 @@ mod namespace_tests {
             .filter(|(k, _)| k == "minecraft:custom_model_data")
             .collect();
         assert_eq!(component.len(), 1, "{:?}", stack.components);
-        let component = &component[0].1;
-        assert_eq!(component["floats"], serde_json::json!([1.0, 2.0]));
-        assert_eq!(component["flags"], serde_json::json!([true]));
+        let component =
+            horizon_core::json_nbt::tag_to_json(component[0].1.as_ref().unwrap()).unwrap();
+        assert_eq!(component["floats"], serde_json::json!([3.0, 2.0]));
+        let Some(Tag::Compound(fields)) = &stack
+            .components
+            .iter()
+            .find(|(id, _)| id == "minecraft:custom_model_data")
+            .unwrap()
+            .1
+        else {
+            panic!("model data must be a compound")
+        };
+        assert_eq!(
+            fields.get(&"flags".into()),
+            Some(&Tag::List(vec![Tag::Byte(1)]))
+        );
         assert_eq!(component["strings"], serde_json::json!(["new"]));
         assert_eq!(component["colors"], serde_json::json!([16711680]));
         let _ = fs::remove_dir_all(&root);
@@ -2415,7 +2505,7 @@ mod namespace_tests {
             .collect();
         assert_eq!(component.len(), 1, "{:?}", banner.components);
         assert_eq!(
-            component[0].1,
+            horizon_core::json_nbt::tag_to_json(component[0].1.as_ref().unwrap()).unwrap(),
             serde_json::json!([
                 {"pattern": "minecraft:stripe_bottom", "color": "red"},
                 {"pattern": "minecraft:border", "color": "blue"},
@@ -2442,7 +2532,7 @@ mod namespace_tests {
             .filter(|(k, _)| k == "minecraft:banner_patterns")
             .collect();
         assert_eq!(
-            component[0].1,
+            horizon_core::json_nbt::tag_to_json(component[0].1.as_ref().unwrap()).unwrap(),
             serde_json::json!([{"pattern": "minecraft:border", "color": "blue"}])
         );
         let _ = fs::remove_dir_all(&root);
@@ -2483,7 +2573,7 @@ mod namespace_tests {
             .filter(|(k, _)| k == "minecraft:written_book_content")
             .collect();
         assert_eq!(content.len(), 1, "{:?}", book.components);
-        let content = &content[0].1;
+        let content = horizon_core::json_nbt::tag_to_json(content[0].1.as_ref().unwrap()).unwrap();
         assert_eq!(content["title"]["raw"], "A Guide");
         assert_eq!(content["author"], "Cartographer");
         assert_eq!(content["generation"], 2);
@@ -2520,7 +2610,10 @@ mod namespace_tests {
                 .filter(|(k, _)| k == "minecraft:instrument")
                 .collect();
             assert_eq!(instrument.len(), 1, "{:?}", horn.components);
-            seen.insert(instrument[0].1.as_str().unwrap().to_owned());
+            seen.insert(match &instrument[0].1 {
+                Some(Tag::String(id)) => id.to_string_lossy(),
+                _ => panic!("instrument"),
+            });
         }
         assert_eq!(
             seen.into_iter().collect::<Vec<_>>(),
@@ -3157,7 +3250,7 @@ impl LootData {
                 .iter()
                 .rev()
                 .find(|(id, _)| id == "minecraft:custom_data")
-                .and_then(|(_, value)| nbt_predicate_tag(value));
+                .and_then(|(_, value)| value.clone());
             let data = match &data {
                 Some(Tag::Compound(c)) => Some(c),
                 _ => None,

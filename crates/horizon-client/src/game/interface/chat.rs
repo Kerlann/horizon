@@ -1486,7 +1486,9 @@ impl Game<'_> {
             // Screen.defaultHandleGameClickEvent: custom actions retain chat.
             Some(ClickEvent::Custom { id, payload }) => {
                 if let Some(remote) = &self.remote {
-                    remote.session.send_custom_click(&id, payload);
+                    remote
+                        .session
+                        .send_custom_click(&id, payload.map(std::sync::Arc::unwrap_or_clone));
                 }
             }
             // Screen.defaultHandleClickEvent: a page link means nothing in chat.
@@ -2841,7 +2843,11 @@ mod enchantment_snapshot_tests {
         let definition = serde_json::json!({"description":"H024 audit","supported_items":"minecraft:diamond_sword",
             "weight":1,"max_level":1,"min_cost":{"base":1,"per_level_above_first":0},
             "max_cost":{"base":1,"per_level_above_first":0},"anvil_cost":1,"slots":["mainhand"],"effects":{}});
-        let synced = std::sync::Arc::new(base.with_entries([("h024:audit", &definition)]).unwrap());
+        let synced = std::sync::Arc::new(
+            base.with_entries([("h024:audit", &definition)])
+                .unwrap()
+                .unwrap(),
+        );
         game.world_tables.as_mut().unwrap().stations.enchantments = synced.clone();
         game.world_tables.as_mut().unwrap().items.enchantments = synced;
         assert!(

@@ -29,6 +29,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         &render,
         &facts,
         models::load_visibility(root, assets.registry)?,
+        None,
     )?;
     let mut output = BufWriter::new(fs::File::create(&args[3])?);
     for line in BufReader::new(fs::File::open(&args[2])?).lines() {

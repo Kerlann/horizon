@@ -1,11 +1,10 @@
 //! Resolved tag names and the read-only merged-tag service.
-use crate::{FluidKey, Identifier, ItemKey};
+use crate::{BlockKey, FluidKey, Identifier, ItemKey};
 
 /// A process-lifetime tag name resolved once through [`Tags::key`].
 /// Membership belongs to the current authoritative data reload, not to the key.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: the runtime alone creates name slots
-#[horizon_mod_api_macros::wasm(host_constructor = from_slot)]
 pub struct TagKey(pub(crate) u32);
 
 impl TagKey {
@@ -16,7 +15,7 @@ impl TagKey {
     }
 }
 
-/// Read merged item and fluid tags without borrowing the game's registry structs.
+/// Read merged block, item and fluid tags without borrowing the game's registry structs.
 /// Unknown tags answer false or an empty member list. A client reads the tags its server
 /// sent. Membership reads answer `None` before authoritative tags are loaded, on a client
 /// before its server's are applied, or while their key table is unavailable.
@@ -50,6 +49,15 @@ pub trait Tags {
         crate::phase::unprovided(
             "Tags::fluids",
             "tags_fluids",
+            crate::phase::LoadAccess::Metadata,
+        )
+    }
+    /// Block members in vanilla's order, including unrequested vanilla blocks.
+    /// Unknown tags are empty; unavailable authoritative tags or block mappings answer None.
+    fn blocks(&self, _tag: TagKey) -> Option<Vec<BlockKey>> {
+        crate::phase::unprovided(
+            "Tags::blocks",
+            "tags_blocks",
             crate::phase::LoadAccess::Metadata,
         )
     }

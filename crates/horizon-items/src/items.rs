@@ -74,16 +74,19 @@ pub enum ConsumeEffect {
     /// it silently): the game hands it to `native_consume_effect`.
     Native {
         kind: String,
-        data: serde_json::Value,
+        data: Arc<horizon_core::nbt::Tag>,
     },
 }
 
 /// Typed consumable shared by item prototypes and stack component patches.
 pub type ItemConsumable = horizon_world::consumable::Consumable<String, ConsumeEffect>;
 
-/// Decode `Consumable.CODEC` defaults and ordered effects at the component boundary.
-pub(crate) fn parse_consumable(cons: &Value) -> ItemConsumable {
-    ItemConsumable {
+/// Decode `Consumable.CODEC` defaults and ordered effects at the load boundary.
+/// Opaque mod payloads are converted once to retained NBT; invalid payloads refuse admission.
+pub fn parse_consumable(
+    cons: &Value,
+) -> std::result::Result<ItemConsumable, horizon_core::json_nbt::JsonNbtError> {
+    Ok(ItemConsumable {
         seconds: cons["consume_seconds"].as_f64().map_or(1.6, |s| s as f32),
         animation: crate::use_animation::consumable_animation(cons),
         sound: cons["sound"]
@@ -95,9 +98,24 @@ pub(crate) fn parse_consumable(cons: &Value) -> ItemConsumable {
             .as_array()
             .into_iter()
             .flatten()
-            .filter_map(parse_consume_effect)
+            .map(|effect| {
+                if let Some(kind) = effect["type"].as_str().filter(|k| {
+                    k.contains(':') && !k.starts_with("minecraft:") && !k.starts_with(':')
+                }) {
+                    return horizon_core::json_nbt::json_to_tag(effect).map(|data| {
+                        Some(ConsumeEffect::Native {
+                            kind: kind.to_owned(),
+                            data: Arc::new(data),
+                        })
+                    });
+                }
+                Ok(parse_consume_effect(effect))
+            })
+            .collect::<std::result::Result<Vec<_>, _>>()?
+            .into_iter()
+            .flatten()
             .collect(),
-    }
+    })
 }
 
 /// One `on_consume_effects` entry. A bare type name is minecraft's own, as
@@ -162,7 +180,7 @@ fn parse_consume_effect(effect: &serde_json::Value) -> Option<ConsumeEffect> {
             .map(|s| ConsumeEffect::PlaySound(s.to_string())),
         k if !k.starts_with("minecraft:") => Some(ConsumeEffect::Native {
             kind: k.to_owned(),
-            data: effect.clone(),
+            data: Arc::new(horizon_core::json_nbt::json_to_tag(effect).ok()?),
         }),
         _ => None,
     }
@@ -188,6 +206,8 @@ pub struct ItemInfo {
     pub can_always_eat: bool,
     /// `consumable`: its timing, sound, particles and `on_consume_effects`.
     pub consumable: Option<horizon_world::consumable::Consumable<String, ConsumeEffect>>,
+    /// Death protection effects decoded at definition load.
+    pub death_protection: Option<Vec<ConsumeEffect>>,
     /// Kinetic pose timing decoded once from the shared item prototype.
     pub kinetic_timing: Option<crate::kinetic_weapon::UseTiming>,
     /// `use_remainder`: what a finished use leaves (`UseRemainder`).
@@ -971,7 +991,16 @@ impl Items {
                         .get("minecraft:kinetic_weapon")
                         .and_then(crate::kinetic_weapon::UseTiming::from_json),
                     // Consumable.CODEC's defaults.
-                    consumable: c.get("minecraft:consumable").map(parse_consumable),
+                    death_protection: c
+                        .get("minecraft:death_protection")
+                        .map(parse_death_effects)
+                        .transpose()
+                        .map_err(|e| format!("{name}: {e}"))?,
+                    consumable: c
+                        .get("minecraft:consumable")
+                        .map(parse_consumable)
+                        .transpose()
+                        .map_err(|e| format!("{name}: {e}"))?,
                     use_remainder: c["minecraft:use_remainder"]["id"]
                         .as_str()
                         .map(str::to_owned),
@@ -1120,7 +1149,7 @@ impl Items {
             instruments: load_instruments(root, overlay),
             enchantments: Arc::new(crate::enchant::Enchantments::load_with(
                 root, overlay, defaults,
-            )),
+            )?),
         })
     }
     /// Use the server's loaded loot-table snapshot for item and block drops.
@@ -1180,7 +1209,7 @@ impl Items {
             instruments: HashMap::new(),
             enchantments: Arc::new(crate::enchant::Enchantments::load_with(
                 root, overlay, defaults,
-            )),
+            )?),
         })
     }
     /// A table with nothing in it: the tags a client was sent go in with `set_tags`.
@@ -2621,27 +2650,20 @@ fn apply_components(stack: &mut ItemStack, patch: &Value) {
 
 /// The items engine's stack as the loot engine's (`LootStack`), for a mod's
 /// function hook: the parts of it the hook can change and the engine takes
-/// back. The components the engine keeps as saved travel as their JSON, as
-/// `set_components` writes them.
+/// back. Saved components retain their exact NBT types.
 fn loot_of(stack: &ItemStack) -> horizon_world::loot::LootStack {
-    let mut components: Vec<(String, Value)> = Vec::new();
+    let mut components: Vec<(String, Option<horizon_core::nbt::Tag>)> = Vec::new();
     if let Some(data) = stack.data() {
         for (id, value) in &data.other {
-            components.push((
-                id.clone(),
-                horizon_client_core::scoreboard::tag_to_json(value),
-            ));
+            components.push((id.clone(), Some(value.clone())));
         }
         if let Some(name) = &data.custom_name {
-            components.push((
-                "minecraft:custom_name".to_owned(),
-                horizon_client_core::scoreboard::tag_to_json(name),
-            ));
+            components.push(("minecraft:custom_name".to_owned(), Some(name.clone())));
         }
         if let Some(trim) = &data.trim {
             components.push((
                 "minecraft:trim".to_owned(),
-                horizon_client_core::scoreboard::tag_to_json(&crate::item_data::trim::to_nbt(trim)),
+                Some(crate::item_data::trim::to_nbt(trim)),
             ));
         }
     }
@@ -2723,13 +2745,25 @@ fn apply_loot(
     // `SetComponentsFunction`'s patch: the components the hook changed or
     // added are set, and the ones it dropped (gone from the stack) removed.
     for (id, value) in &after.components {
-        if !before.components.iter().any(|(i, v)| i == id && v == value) {
+        // Replay changed per-ID sequences in order, not unchanged captured values:
+        // an unrelated patch must not undo a separately edited loot name.
+        let unchanged = before
+            .components
+            .iter()
+            .filter(|(key, _)| key == id)
+            .map(|(_, value)| value)
+            .eq(after
+                .components
+                .iter()
+                .filter(|(key, _)| key == id)
+                .map(|(_, value)| value));
+        if !unchanged {
             stack.data_mut().set_loot_component(id, value);
         }
     }
     for (id, _) in &before.components {
         if !after.components.iter().any(|(i, _)| i == id) {
-            stack.data_mut().set_loot_component(id, &Value::Null);
+            stack.data_mut().set_loot_component(id, &None);
         }
     }
     stack.tidy();
@@ -2822,14 +2856,10 @@ pub fn bucket_contents(
 /// `DeathProtection.CODEC`: the `death_effects` of a `minecraft:death_protection`
 /// component, in order (`applyEffects` runs each one). A missing or empty
 /// list, as in `death_protection={}`, has none.
-pub fn death_effects(component: &Value) -> Vec<ConsumeEffect> {
-    component
-        .get("death_effects")
-        .and_then(Value::as_array)
-        .into_iter()
-        .flatten()
-        .filter_map(parse_consume_effect)
-        .collect()
+pub fn parse_death_effects(
+    component: &Value,
+) -> std::result::Result<Vec<ConsumeEffect>, horizon_core::json_nbt::JsonNbtError> {
+    parse_consumable(&serde_json::json!({"on_consume_effects": component.get("death_effects").cloned().unwrap_or_else(|| serde_json::json!([]))})).map(|value| value.effects)
 }
 
 #[cfg(test)]
@@ -2845,7 +2875,7 @@ mod death_effects_tests {
                 {"duration": 800, "id": "minecraft:fire_resistance", "show_icon": true}
             ]}
         ]});
-        let effects = death_effects(&totem);
+        let effects = parse_death_effects(&totem).unwrap();
         assert_eq!(effects.len(), 2);
         assert_eq!(effects[0], ConsumeEffect::ClearAllEffects);
         let ConsumeEffect::ApplyEffects {
@@ -2871,7 +2901,11 @@ mod death_effects_tests {
     }
     #[test]
     fn an_empty_component_has_no_effects() {
-        assert!(death_effects(&serde_json::json!({})).is_empty());
+        assert!(
+            parse_death_effects(&serde_json::json!({}))
+                .unwrap()
+                .is_empty()
+        );
     }
 }
 
@@ -2958,13 +2992,30 @@ mod consume_effect_tests {
     }
 
     #[test]
+    fn invalid_native_consume_payload_refuses_component() {
+        let bad =
+            serde_json::json!({"on_consume_effects": [{"type": "mymod:charge", "data": null}]});
+        assert!(parse_consumable(&bad).is_err());
+        let good =
+            serde_json::json!({"on_consume_effects": [{"type": "mymod:charge", "amount": 42}]});
+        let value = parse_consumable(&good).unwrap();
+        let copy = value.clone();
+        let (ConsumeEffect::Native { data: a, .. }, ConsumeEffect::Native { data: b, .. }) =
+            (&value.effects[0], &copy.effects[0])
+        else {
+            panic!("native payload")
+        };
+        assert!(Arc::ptr_eq(a, b));
+    }
+
+    #[test]
     fn a_mods_own_consume_effect_kind_is_kept() {
         let v = |s: &str| serde_json::from_str::<serde_json::Value>(s).unwrap();
         // A mod's own kind: Native with its JSON.
         let native =
             parse_consume_effect(&v(r#"{"type":"mymod:energy_boost","amount":42}"#)).unwrap();
         assert!(matches!(&native, ConsumeEffect::Native { kind, data }
-            if kind == "mymod:energy_boost" && data["amount"] == 42));
+            if kind == "mymod:energy_boost" && data.get("amount") == Some(&horizon_core::nbt::Tag::Byte(42))));
         // A bare vanilla name and its namespaced form are the same kind.
         let bare = parse_consume_effect(&v(
             r#"{"type":"apply_effects","effects":[{"id":"minecraft:speed","duration":100}]}"#,
@@ -3066,10 +3117,11 @@ mod tests {
         let defaults = horizon_world::item_defaults::read(&root).unwrap();
         assert!(
             crate::enchant::Enchantments::load_with(&root, &off, &defaults)
+                .unwrap()
                 .list
                 .is_empty()
         );
-        let enchantments = crate::enchant::Enchantments::load_with(&root, &on, &defaults);
+        let enchantments = crate::enchant::Enchantments::load_with(&root, &on, &defaults).unwrap();
         assert_eq!(enchantments.list.len(), 1);
         assert_eq!(enchantments.list[0].max_level, 7);
         fs::remove_dir_all(root).unwrap();
@@ -3778,7 +3830,10 @@ mod tests {
                 loot.count = 7;
                 loot.components.push((
                     "minecraft:custom_data".to_owned(),
-                    json!({"machine": "furnace"}),
+                    Some(
+                        horizon_core::json_nbt::json_to_tag(&json!({"machine": "furnace"}))
+                            .unwrap(),
+                    ),
                 ));
             },
         );
@@ -3789,6 +3844,100 @@ mod tests {
             Some(&horizon_client_core::scoreboard::json_to_tag(
                 &json!({"machine": "furnace"})
             ))
+        );
+    }
+
+    #[test]
+    fn loot_patches_keep_nbt_types_removals_and_order() {
+        use horizon_core::nbt::Tag;
+        let mut stack = ItemStack::new("minecraft:stone", 1);
+        stack
+            .data_mut()
+            .set_other("test:array", Some(Tag::ByteArray(vec![7])));
+        stack.data_mut().set_other("test:byte", Some(Tag::Byte(7)));
+        let before = loot_of(&stack);
+        assert!(
+            before
+                .components
+                .contains(&("test:array".into(), Some(Tag::ByteArray(vec![7]))))
+        );
+        assert!(
+            before
+                .components
+                .contains(&("test:byte".into(), Some(Tag::Byte(7))))
+        );
+        let mut after = before.clone();
+        after.components.extend([
+            ("test:array".into(), Some(Tag::List(vec![Tag::Int(7)]))),
+            ("test:array".into(), None),
+            ("test:array".into(), Some(Tag::ByteArray(vec![7]))),
+            ("test:byte".into(), None),
+        ]);
+        apply_loot(&before, &after, &mut stack);
+        assert_eq!(
+            stack.data().unwrap().other("test:array"),
+            Some(&Tag::ByteArray(vec![7]))
+        );
+        assert_eq!(stack.data().unwrap().other("test:byte"), None);
+    }
+
+    #[test]
+    fn loot_trim_patch_decodes_materializes_captures_and_removes() {
+        use horizon_core::nbt::Tag;
+        let mut stack = ItemStack::new("minecraft:iron_chestplate", 1);
+        let before = loot_of(&stack);
+        let mut after = before.clone();
+        let trim = horizon_core::json_nbt::json_to_tag(
+            &json!({"material": "minecraft:gold", "pattern": "minecraft:sentry"}),
+        )
+        .unwrap();
+        after.components.push(("minecraft:trim".into(), Some(trim)));
+        apply_loot(&before, &after, &mut stack);
+        assert_eq!(
+            stack.data().unwrap().trim.as_ref().cloned(),
+            Some((
+                crate::item_data::trim::Holder::Named("minecraft:gold".into()),
+                crate::item_data::trim::Holder::Named("minecraft:sentry".into())
+            ))
+        );
+        let captured = loot_of(&stack);
+        assert_eq!(
+            captured.components,
+            vec![(
+                "minecraft:trim".into(),
+                Some(Tag::Compound(
+                    [
+                        ("material".into(), Tag::String("minecraft:gold".into())),
+                        ("pattern".into(), Tag::String("minecraft:sentry".into())),
+                    ]
+                    .into()
+                ))
+            )]
+        );
+        let mut removed = captured.clone();
+        removed.components.push(("minecraft:trim".into(), None));
+        apply_loot(&captured, &removed, &mut stack);
+        assert!(stack.data().is_none_or(|data| data.trim.is_none()));
+    }
+
+    #[test]
+    fn an_unrelated_loot_patch_does_not_restore_a_captured_name() {
+        let mut stack = ItemStack::new("minecraft:stick", 1);
+        stack
+            .data_mut()
+            .set_loot_name("minecraft:custom_name", &json!("Old"));
+        let before = loot_of(&stack);
+        let mut after = before.clone();
+        after
+            .names
+            .push(("minecraft:custom_name".into(), json!("New")));
+        after
+            .components
+            .push(("test:byte".into(), Some(horizon_core::nbt::Tag::Byte(7))));
+        apply_loot(&before, &after, &mut stack);
+        assert_eq!(
+            stack.data().unwrap().custom_name,
+            Some(horizon_core::nbt::Tag::String("New".into()))
         );
     }
 

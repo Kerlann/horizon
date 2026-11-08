@@ -12,7 +12,7 @@ impl HitLevel<'_> {
         entity: i32,
         kind: &str,
         source: &HurtSource<'_>,
-        container: &DamageContainer,
+        container: &mod_api::DamageContainer,
     ) {
         self.fire_living_damage_post(entity, kind, source, container);
     }

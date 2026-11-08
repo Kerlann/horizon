@@ -22,7 +22,7 @@ With no `custom_draw` set the hook is never asked, so a mod that only listens he
     )]
     fn block_screen_effect_draw(
         effect: mod_api::BlockScreenEffect,
-        state: BlockStateId,
+        state: BlockState,
         pos: BlockPos,
         partial_tick: f32,
         hide_gui: bool,

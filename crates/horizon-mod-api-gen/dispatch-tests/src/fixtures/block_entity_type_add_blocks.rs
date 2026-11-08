@@ -1,15 +1,13 @@
 mod api {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub struct BlockEntityTypeKey(pub u32);
-    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    pub struct BlockKey(pub u32);
 }
 
 use mod_api::mod_api::{BlockEntityTypeKey, BlockKey};
 
 #[test]
 fn block_entity_additions_collect_in_order_and_quiet_dispatch_preserves_input() {
-    struct Listener(u32);
+    struct Listener(BlockKey);
     #[mod_api::__subscriptions]
     impl Hooks for Listener {
         fn block_entity_type_add_blocks(
@@ -18,7 +16,7 @@ fn block_entity_additions_collect_in_order_and_quiet_dispatch_preserves_input() 
             event: &mut BlockEntityTypeAddBlocksEvent<'_>,
         ) {
             for &kind in event.types.iter().filter(|kind| kind.0 < 2) {
-                event.additions.push((kind, BlockKey(self.0)));
+                event.additions.push((kind, self.0));
             }
         }
     }
@@ -27,18 +25,18 @@ fn block_entity_additions_collect_in_order_and_quiet_dispatch_preserves_input() 
         BlockEntityTypeKey(1),
         BlockEntityTypeKey(2),
     ];
-    let mut additions = vec![(types[2], BlockKey(8))];
+    let mut additions = vec![(types[2], BlockKey::Other)];
     install(Vec::<ModEntry>::new().into());
     dispatch_block_entity_type_add_blocks(
         &RegistrationContext("bootstrap"),
         &types,
         &mut additions,
     );
-    assert_eq!(additions, [(types[2], BlockKey(8))]);
+    assert_eq!(additions, [(types[2], BlockKey::Other)]);
     install(
         vec![
-            ModEntry::new("first", Box::new(Listener(7))),
-            ModEntry::new("second", Box::new(Listener(9))),
+            ModEntry::new("first", Box::new(Listener(BlockKey::Test))),
+            ModEntry::new("second", Box::new(Listener(BlockKey::Other))),
         ]
         .into(),
     );
@@ -50,11 +48,11 @@ fn block_entity_additions_collect_in_order_and_quiet_dispatch_preserves_input() 
     assert_eq!(
         additions,
         [
-            (types[2], BlockKey(8)),
-            (types[0], BlockKey(7)),
-            (types[1], BlockKey(7)),
-            (types[0], BlockKey(9)),
-            (types[1], BlockKey(9))
+            (types[2], BlockKey::Other),
+            (types[0], BlockKey::Test),
+            (types[1], BlockKey::Test),
+            (types[0], BlockKey::Other),
+            (types[1], BlockKey::Other)
         ]
     );
 }

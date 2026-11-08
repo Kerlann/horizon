@@ -31,7 +31,7 @@ pub trait ScreensClientHost {
     /// The id of the item in the slot under the pointer on the open container screen
     /// (`AbstractContainerScreen.getHoveredSlot().getItem()`), None over no slot or an empty one.
     #[access(ClientSetup)]
-    fn screen_hovered_item(&self) -> Option<String>;
+    fn screen_hovered_item(&self) -> Option<ItemKey>;
     /// Side: client.
     /// Requests vanilla's menu background blur for this frame, with a per-frame guard
     /// so blur is applied at most once per frame. Returns true if blur was newly

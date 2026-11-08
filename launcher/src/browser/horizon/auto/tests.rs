@@ -249,7 +249,21 @@ fn wasm_update_waits_for_the_player() {
     let dir = scratch("auto-wasm");
     let home = dir.join("home");
     let old = ruby(&dir, "1.0.0", &["lamp"], &[]);
-    let module = b"\0asm\x01\0\0\0";
+    // The smallest shared group member the package check accepts, as bytes: header, `dylink.0` with
+    // memory info, one `() -> ()` type, three functions exported as `horizon_layout`, `horizon_in`
+    // and `horizon_hook`, and their empty bodies.
+    let module: &[u8] = &[
+        b'\0', b'a', b's', b'm', 1, 0, 0, 0, //
+        0, 15, 8, b'd', b'y', b'l', b'i', b'n', b'k', b'.', b'0', 1, 4, 0, 0, 0, 0, //
+        1, 4, 1, 0x60, 0, 0, //
+        3, 4, 3, 0, 0, 0, //
+        7, 46, 3, //
+        14, b'h', b'o', b'r', b'i', b'z', b'o', b'n', b'_', b'l', b'a', b'y', b'o', b'u', b't', 0,
+        0, //
+        10, b'h', b'o', b'r', b'i', b'z', b'o', b'n', b'_', b'i', b'n', 0, 1, //
+        12, b'h', b'o', b'r', b'i', b'z', b'o', b'n', b'_', b'h', b'o', b'o', b'k', 0, 2, //
+        10, 10, 3, 2, 0, 0x0b, 2, 0, 0x0b, 2, 0, 0x0b,
+    ];
     let manifest = format!(
         "{MANIFEST}version = \"1.1.0\"\n[wasm]\nsha512 = \"{}\"\ntoolchain = \"1.99.1\"\nbuilt_with = \"test\"\n",
         horizon_mod_package::manifest::sha512_of(module)
@@ -462,8 +476,8 @@ fn an_automatic_update_keeps_a_disabled_mod_off() {
 
 #[test]
 fn auto_update_and_manual_mutation_do_not_race_or_lose_entries() {
-    use std::sync::mpsc::channel;
     use std::sync::Arc;
+    use std::sync::mpsc::channel;
     use std::time::Duration;
 
     let dir = scratch("auto-race-install");
@@ -552,8 +566,8 @@ fn auto_update_and_manual_mutation_do_not_race_or_lose_entries() {
 
 #[test]
 fn auto_update_does_not_revive_concurrently_removed_mod() {
-    use std::sync::mpsc::channel;
     use std::sync::Arc;
+    use std::sync::mpsc::channel;
     use std::time::Duration;
 
     let dir = scratch("auto-race-remove");
@@ -617,9 +631,11 @@ fn auto_update_does_not_revive_concurrently_removed_mod() {
 
     let final_installed = installed::Installed::load(&home);
     assert_eq!(final_installed.entries.len(), 1);
-    assert!(final_installed
-        .find(SourceId::Horizon, "coords_hud")
-        .is_none());
+    assert!(
+        final_installed
+            .find(SourceId::Horizon, "coords_hud")
+            .is_none()
+    );
     let ruby_entry = final_installed
         .find(SourceId::Horizon, "ruby")
         .expect("ruby present");

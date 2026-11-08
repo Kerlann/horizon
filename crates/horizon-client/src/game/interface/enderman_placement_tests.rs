@@ -205,7 +205,9 @@ fn canceled_normalized_placements_keep_the_original_carried_block() {
     impl Hooks for Cancel {
         fn entity_place(&self, _: &mut dyn ServerHost, event: &mut EntityPlaceEvent) -> Flow {
             self.heard.lock().unwrap().push(event.pos);
-            self.normalized.lock().unwrap().push(event.state);
+            self.normalized.lock().unwrap().push(
+                crate::game::api_values::TryIntoEngine::try_into_engine(&event.state, &()).unwrap(),
+            );
             Flow::Cancel
         }
     }

@@ -9,10 +9,11 @@ use horizon_core::{
     position::{BlockPos, ChunkPos},
 };
 use horizon_items::items::ItemStack;
+use horizon_world::registry::BlockStateId;
 use mod_api::mod_chunk_tickets::ModTicket;
 use mod_api::{
-    BlockHit, BlockStateId, BlockTransformPreview, ChunkRef, ChunkStatus, DimensionKey, Hand,
-    LevelRef, LightLayer, MapState, NativeClipBlock, NativeClipFluid, NativeTicketOwner, PlayerRef,
+    BlockHit, BlockTransformPreview, ChunkRef, ChunkStatus, DimensionKey, Hand, LevelRef,
+    LightLayer, MapState, NativeClipBlock, NativeClipFluid, NativeTicketOwner, PlayerRef,
     RespawnData, TicketController, Vec3,
 };
 
@@ -167,13 +168,25 @@ impl Game<'_> {
     }
     /// The world a handle names now, or None for a stale or foreign one.
     pub(super) fn native_level_world(&self, level: LevelRef) -> Option<&World> {
-        if !self.is_logical_server() || self.native_lifecycle.epoch() != Some(level.epoch()) {
-            return None;
+        self.native_level_world_result(level).ok()
+    }
+    /// The single residency boundary for typed server-level reads.
+    pub(super) fn native_level_world_result(
+        &self,
+        level: LevelRef,
+    ) -> Result<&World, mod_api::LevelReadError> {
+        if !self.is_logical_server() {
+            return Err(mod_api::LevelReadError::Unavailable);
+        }
+        if self.native_lifecycle.epoch() != Some(level.epoch()) {
+            return Err(mod_api::LevelReadError::Stale);
         }
         if level.dimension() == self.dim.key() {
-            return Some(&self.world);
+            return Ok(&self.world);
         }
-        self.levels.parked_world_of(level.dimension_id())
+        self.levels
+            .parked_world_of(level.dimension_id())
+            .ok_or(mod_api::LevelReadError::Stale)
     }
     /// The world a handle names for a read that works on both sides: the
     /// server's level, or on a client the one it shows (`Minecraft.level`, its
@@ -442,8 +455,13 @@ impl Game<'_> {
                 simulated: true,
             },
         )?;
+        use crate::game::api_values::TryIntoApi;
         Some(BlockTransformPreview::new(
-            state, sound, loot, durability, particle,
+            state.try_into_api().ok()?,
+            sound,
+            loot,
+            durability,
+            particle,
         ))
     }
     /// `FluidState.getFlow` at `pos`: the current that pushes an entity there, after the
@@ -464,9 +482,9 @@ impl Game<'_> {
     }
     /// The block at `pos` without its properties: `minecraft:oak_stairs`.
     /// None as for `block_state`. API 381.
-    pub(super) fn level_block(&self, level: LevelRef, pos: [i32; 3]) -> Option<String> {
+    pub(super) fn level_block(&self, level: LevelRef, pos: [i32; 3]) -> Option<mod_api::BlockKey> {
         self.level_block_state(level, pos)
-            .map(|state| self.res.facts().get(state).name.to_string())
+            .and_then(|state| mod_api::__private::block_key(&self.res.facts().get(state).name))
     }
     /// Property `key` of the block state at `pos` (`BlockState.getValue`):
     /// `east` for `facing`. None for a block without it, or as for
@@ -926,7 +944,7 @@ mod tests {
                     .registry
                     .default_state("minecraft:stripped_oak_log")
                     .unwrap();
-                assert_eq!(preview.state, stripped);
+                assert_eq!(preview.state, stripped.try_into_api().unwrap());
                 assert_eq!(preview.durability, 1);
                 assert_eq!(game.world.block(pos[0], pos[1], pos[2]), log);
                 assert_eq!(
@@ -1272,9 +1290,15 @@ mod tests {
             let air = registry.default_state("minecraft:air").unwrap();
             for (pos, expected) in [([0, bottom, 0], stone), ([15, top - 1, 15], stairs)] {
                 game.world.set(pos[0], pos[1], pos[2], expected).unwrap();
-                assert_eq!(level.block_state(game, pos), Some(expected));
+                assert_eq!(
+                    level.block_state(game, pos),
+                    Some(expected.try_into_api().unwrap())
+                );
             }
-            assert_eq!(level.block_state(game, [1, bottom, 1]), Some(air));
+            assert_eq!(
+                level.block_state(game, [1, bottom, 1]),
+                Some(air.try_into_api().unwrap())
+            );
             assert_eq!(level.block_state(game, [16, bottom, 0]), None);
             assert_eq!(level.block_state(game, [0, bottom - 1, 0]), None);
             assert_eq!(level.block_state(game, [0, top, 0]), None);

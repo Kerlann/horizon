@@ -2,16 +2,28 @@
 //! `StructureTemplateManager.get`, and what `StructureTemplate.placeInWorld`
 //! would place) without placing them: a builder reads a template once, then
 //! places its blocks one at a time.
-use super::Game;
+use super::{Game, api_values::TryIntoApi};
 use horizon_client::structure_block::parse_identifier;
 use horizon_core::position::BlockPos;
 use horizon_core::random::{LegacyRandom, RandomSource, position_seed};
+use horizon_world::registry::BlockStateId;
 use horizon_world::worldgen::structure::{Mirror, Rotation, StateTransforms, StructureTemplate};
+use mod_api::Compound;
 
-use mod_api::{
-    StructureMirror, StructureRotation, StructureTemplateBlock, StructureTemplateSnapshot,
-};
+use mod_api::{StructureMirror, StructureRotation, StructureTemplateSnapshot};
 
+/// Game-owned placement result; numeric states never escape to mods.
+#[derive(Debug, PartialEq)]
+pub(super) struct TemplateSnapshot<'a> {
+    pub size: [i32; 3],
+    pub blocks: Vec<TemplateBlock<'a>>,
+}
+#[derive(Debug, PartialEq)]
+pub(super) struct TemplateBlock<'a> {
+    pub pos: [i32; 3],
+    pub state: BlockStateId,
+    pub nbt: Option<&'a Compound>,
+}
 // Native mods use this; nothing in Horizon does.
 impl Game<'_> {
     /// For a server mod: structure template `id` (`mymod:hut`, found as
@@ -22,7 +34,8 @@ impl Game<'_> {
     /// those with a block entity, each by y, x, z), from the palette
     /// `/place template` picks at `at`; no processor runs, and the template's
     /// entities are left out. None for an id that doesn't parse or has a `.`
-    /// or `..` part, a template the game doesn't have, and on a client.
+    /// or `..` part, a template the game doesn't have, an unknown or unavailable
+    /// state mapping (the entire snapshot is refused), and on a client.
     /// API @API:structure_template@.
     pub(super) fn structure_template(
         &mut self,
@@ -52,7 +65,9 @@ impl Game<'_> {
         let transforms = self.state_transforms()?;
         let template =
             StructureTemplate::from_nbt(&entry.tag, self.pack.assets.registry, transforms);
-        Some(placements(&template, transforms, at, rotation, mirror))
+        placements(&template, transforms, at, rotation, mirror)
+            .try_into_api()
+            .ok()
     }
 }
 
@@ -72,17 +87,20 @@ fn template_id(id: &str) -> Option<String> {
 /// random seeded with `at`, each position transformed and moved to `at`, each
 /// state mirrored, then rotated. A template with no palette or a side below 1
 /// places nothing.
-fn placements(
-    template: &StructureTemplate,
+fn placements<'a>(
+    template: &'a StructureTemplate,
     transforms: &StateTransforms,
     at: [i32; 3],
     rotation: Rotation,
     mirror: Mirror,
-) -> StructureTemplateSnapshot {
+) -> TemplateSnapshot<'a> {
     let size = template.size(rotation);
     let palettes = template.palettes();
     if palettes.is_empty() || template.size.iter().any(|side| *side < 1) {
-        return StructureTemplateSnapshot::new(size, Vec::new());
+        return TemplateSnapshot {
+            size,
+            blocks: Vec::new(),
+        };
     }
     let palette = LegacyRandom::new(position_seed(BlockPos::new(at[0], at[1], at[2])))
         .next_int_bound(palettes.len() as i32)
@@ -92,14 +110,14 @@ fn placements(
         .iter()
         .map(|block| {
             let relative = StructureTemplate::transform(block.pos, mirror, rotation, [0; 3]);
-            StructureTemplateBlock::new(
-                std::array::from_fn(|i| relative[i] + at[i]),
-                transforms.rotate(transforms.mirror(block.state, mirror), rotation),
-                block.nbt.clone(),
-            )
+            TemplateBlock {
+                pos: std::array::from_fn(|i| relative[i].wrapping_add(at[i])),
+                state: transforms.rotate(transforms.mirror(block.state, mirror), rotation),
+                nbt: block.nbt.as_ref(),
+            }
         })
         .collect();
-    StructureTemplateSnapshot::new(size, blocks)
+    TemplateSnapshot { size, blocks }
 }
 
 #[cfg(test)]
@@ -205,19 +223,19 @@ mod tests {
         // state is mirrored, then turned: north stays north, then faces east;
         // east faces west, then north. The full block comes first, the block
         // entity last.
-        let at = |pos: [i32; 3], name: &str, nbt: Option<Compound>| {
-            StructureTemplateBlock::new(
+        fn at<'a>(pos: [i32; 3], name: &str, nbt: Option<&'a Compound>) -> TemplateBlock<'a> {
+            TemplateBlock {
                 pos,
-                BlockStateId(NAMES.iter().position(|n| *n == name).unwrap() as u32),
+                state: BlockStateId(NAMES.iter().position(|n| *n == name).unwrap() as u32),
                 nbt,
-            )
-        };
+            }
+        }
         assert_eq!(
             read.blocks,
             [
                 at([10, 64, 20], "minecraft:stone", None),
                 at([8, 64, 19], "test:east", None),
-                at([9, 64, 20], "test:north", Some(chest)),
+                at([9, 64, 20], "test:north", Some(&chest)),
             ]
         );
     }
@@ -240,6 +258,23 @@ mod tests {
         );
         assert_eq!(read.blocks.len(), 1);
         assert_eq!(read.blocks[0].state, BlockStateId(5));
+    }
+
+    #[test]
+    fn template_offset_uses_java_wrapping_positions() {
+        let template = template(
+            [2, 1, 1],
+            vec![vec![named("minecraft:stone")]],
+            vec![block([1, 0, 0], 0, None)],
+        );
+        let read = placements(
+            &template,
+            &transforms(),
+            [i32::MAX, 64, 0],
+            Rotation::None,
+            Mirror::None,
+        );
+        assert_eq!(read.blocks[0].pos, [i32::MIN, 64, 0]);
     }
 
     #[test]

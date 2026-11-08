@@ -1582,7 +1582,7 @@ impl Game<'_> {
     }
     /// `LivingEntity.makePoofParticles` (entity event 60) about a mob's box.
     pub(super) fn death_poof(&mut self, at: [f64; 3], width: f64, height: f64) {
-        let options = mod_api::particles::ParticleOptions::simple(
+        let options = horizon_client::particles::ParticleOptions::simple(
             horizon_client::particles::ParticleType::Poof,
         );
         for _ in 0..20 {
@@ -2555,7 +2555,7 @@ impl Game<'_> {
                     count,
                 } => {
                     if let Some(ty) = horizon_client::particles::ParticleType::from_name(kind) {
-                        let options = mod_api::particles::ParticleOptions::simple(ty);
+                        let options = horizon_client::particles::ParticleOptions::simple(ty);
                         self.particles
                             .send_particles(&options, at, spread, speed, count);
                         self.lan_level_particles(&options, at, spread, speed, count, None);
@@ -3468,7 +3468,7 @@ impl Game<'_> {
                         if kind.starts_with("item_") {
                             self.ensure_item_particle_sprites();
                         }
-                        let options = mod_api::particles::ParticleOptions::simple(ty);
+                        let options = horizon_client::particles::ParticleOptions::simple(ty);
                         if ty == horizon_client::particles::ParticleType::SonicBoom {
                             self.lan_sonic_boom(&options, at);
                         }
@@ -3506,7 +3506,7 @@ impl Game<'_> {
                 }
                 MobEvent::ParticleAt { kind, at, velocity } => {
                     if let Some(ty) = horizon_client::particles::ParticleType::from_name(kind) {
-                        let options = mod_api::particles::ParticleOptions::simple(ty);
+                        let options = horizon_client::particles::ParticleOptions::simple(ty);
                         self.particles.add(&options, at, velocity);
                     }
                 }
@@ -3514,7 +3514,7 @@ impl Game<'_> {
                     at,
                     color: [r, g, b],
                 } => {
-                    let options = mod_api::particles::ParticleOptions::colored(
+                    let options = horizon_client::particles::ParticleOptions::colored(
                         horizon_client::particles::ParticleType::EntityEffect,
                         [r, g, b, 1.0],
                     );
@@ -6372,7 +6372,7 @@ impl Game<'_> {
                 self.audio
                     .play("minecraft:entity.shulker_bullet.hit", Some(atp), 1.0, 1.0);
                 if let Some(ty) = horizon_client::particles::ParticleType::from_name("explosion") {
-                    let options = mod_api::particles::ParticleOptions::simple(ty);
+                    let options = horizon_client::particles::ParticleOptions::simple(ty);
                     for _ in 0..2 {
                         let r = &mut self.world.random;
                         let at = [
@@ -8676,11 +8676,9 @@ fn to_loot(stack: &ItemStack) -> horizon_world::loot::LootStack {
     let components = stack
         .custom_data()
         .map(|data| {
-            let snbt =
-                horizon_world::snbt_text::to_snbt(&horizon_core::nbt::Tag::Compound(data.clone()));
             (
                 "minecraft:custom_data".to_owned(),
-                serde_json::Value::String(snbt),
+                Some(horizon_core::nbt::Tag::Compound(data.clone())),
             )
         })
         .into_iter()

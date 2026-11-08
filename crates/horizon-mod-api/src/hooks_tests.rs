@@ -96,15 +96,8 @@ fn eager_subscribers_are_shared_across_dispatch_threads() {
         [1]
     );
     let barrier = Barrier::new(2);
-    let load = horizon_world::native_load_context::LoadContext::new(
-        horizon_world::native_load_context::DataLoadOrigin::ServerDataLoad,
-        std::sync::Arc::new(horizon_world::native_load_context::LoadInputs::new(
-            Default::default(),
-            std::path::PathBuf::new(),
-        )),
-        [],
-    );
-    let context = crate::OwningLoad::new(&load);
+    let load = crate::phase::TestReader::default();
+    let context = crate::OwningLoad::new(crate::DataLoadOrigin::ServerDataLoad, &load);
     let context = &context;
     std::thread::scope(|scope| {
         for _ in 0..2 {

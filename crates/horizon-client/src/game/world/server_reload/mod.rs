@@ -62,7 +62,11 @@ impl Game<'_> {
             &self.options.resources,
             &horizon_client::logging::game_home().join("jars"),
         )
-        .map_err(ReloadStageError::OriginalJars)?;
+        .map_err(|error| {
+            ReloadStageError::OriginalJars(
+                crate::game::api_values::TryIntoApi::try_into_api(&error).unwrap(),
+            )
+        })?;
         let inventory = horizon_mod_package::enabled::EnabledMods::read(resources)
             .map_err(|error| ReloadStageError::DataSource(error.to_string()))?;
         let conditions = horizon_world::conditions::LoadConditions::new(inventory.server_ids());
