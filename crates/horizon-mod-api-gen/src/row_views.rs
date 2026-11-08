@@ -157,18 +157,19 @@ pub fn generate(
                 Shape::Opaque(_) => {}
             }
             let writable = self.writable(shape, &mut Vec::new());
-            if let Shape::Named(path, _) = shape {
-                if writable {
-                    if let Some(named) = self.rule.named(path) {
-                        if let syn::Item::Enum(item) = &named.item {
-                            for (tag, variant) in item.variants.iter().enumerate() {
-                                let encode = format_ident!(
-                                    "encode_{}",
-                                    heck::AsSnakeCase(variant.ident.to_string()).to_string()
-                                );
-                                let count = variant.fields.len();
-                                let tag = tag as u32;
-                                methods.push(quote! {
+            if let Shape::Named(path, _) = shape
+                && writable
+                && let Some(named) = self.rule.named(path)
+                && let syn::Item::Enum(item) = &named.item
+            {
+                for (tag, variant) in item.variants.iter().enumerate() {
+                    let encode = format_ident!(
+                        "encode_{}",
+                        heck::AsSnakeCase(variant.ident.to_string()).to_string()
+                    );
+                    let count = variant.fields.len();
+                    let tag = tag as u32;
+                    methods.push(quote! {
                                 pub fn #encode(fields: &[&[u8]]) -> Result<Vec<u8>, mod_api::wire::WireError> {
                                     if fields.len() != #count { return Err(mod_api::wire::WireError::Length); }
                                     let mut out = mod_api::wire::Writer::new(); out.limit(1_048_576); out.put(&#tag);
@@ -176,9 +177,6 @@ pub fn generate(
                                     if let Some(e) = out.error() { return Err(e); } Ok(out.into_bytes())
                                 }
                             });
-                            }
-                        }
-                    }
                 }
             }
             let record_fields = match shape {
