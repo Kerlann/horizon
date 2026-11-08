@@ -255,8 +255,19 @@ pub(super) fn guest(
 }
 
 fn resource_codec(types: &Types<'_>) -> String {
-    let mut store = String::new();
-    let mut load = String::new();
+    let mut store = String::from(
+        r#"if value.is::<std::sync::Arc<dyn std::any::Any + Send + Sync>>() {
+        let value=*value.downcast::<std::sync::Arc<dyn std::any::Any + Send + Sync>>().map_err(|_|crate::wire::WireError::Invalid("wrong erased handler"))?;
+        if value.is::<crate::wire::Unsupported>() {return Ok(crate::wire::Unsupported::ID)}
+        return Ok(crate::wire::guest::add_handler(vec![crate::wire::guest::view::<dyn std::any::Any + Send + Sync>(value)]));
+    }"#,
+    );
+    let mut load = String::from(
+        r#"if view==std::any::TypeId::of::<std::sync::Arc<dyn std::any::Any + Send + Sync>>() {
+        let value=if id==crate::wire::Unsupported::ID {crate::wire::Unsupported::shared()} else {crate::wire::guest::handler::<dyn std::any::Any + Send + Sync>(id)?};
+        return Ok(Box::new(value));
+    }"#,
+    );
     for (owner, views) in &types.views {
         let path = trait_path(owner);
         let views = views

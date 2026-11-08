@@ -737,11 +737,259 @@ fn dropping_a_handler_releases_its_id_on_the_next_call() {
     );
     assert_eq!(call(&module), Some(0));
     drop(WasmHandler {
-        module: module.clone(),
+        module: module.downgrade(),
         index: Id(123),
     });
     assert_eq!(call(&module), Some(1));
     assert!(!module.running.poisoned.load(Ordering::Relaxed));
+}
+
+struct StopProbe {
+    module: WeakWasmMod,
+    dropped: Arc<AtomicBool>,
+}
+impl Drop for StopProbe {
+    fn drop(&mut self) {
+        assert_eq!(
+            self.module.call(
+                CallClass::Callback,
+                Frame::default(),
+                0,
+                None,
+                |_| {},
+                |r| r.take::<u32>()
+            ),
+            None
+        );
+        self.dropped.store(true, Ordering::Relaxed);
+    }
+}
+fn hold_stop_probe(module: &WasmMod) -> Arc<AtomicBool> {
+    let dropped = Arc::new(AtomicBool::new(false));
+    module
+        .running
+        .group
+        .lock()
+        .unwrap()
+        .store
+        .data_mut()
+        .cx
+        .held
+        .insert_long(Box::new(StopProbe {
+            module: module.downgrade(),
+            dropped: dropped.clone(),
+        }));
+    dropped
+}
+
+#[test]
+fn retained_proxy_does_not_own_running_and_unload_drops_native_resources() {
+    let module = module("i64.const 4398046511108");
+    let proxy = WasmHandler::new(&module, Id(123));
+    let running = Arc::downgrade(&module.running);
+    let dropped = hold_stop_probe(&module);
+    drop(module);
+    assert_eq!(running.strong_count(), 0);
+    assert!(dropped.load(Ordering::Relaxed));
+    assert_eq!(
+        proxy.module.call(
+            CallClass::Callback,
+            Frame::default(),
+            0,
+            None,
+            |_| {},
+            |r| r.take::<u32>()
+        ),
+        None
+    );
+}
+
+#[test]
+fn disable_clears_held_resources_before_retained_proxy_can_call() {
+    let module = module("i64.const 4398046511108");
+    let proxy = WasmHandler::new(&module, Id(123));
+    let dropped = hold_stop_probe(&module);
+    module.disable();
+    assert!(dropped.load(Ordering::Relaxed));
+    assert_eq!(
+        proxy.module.call(
+            CallClass::Callback,
+            Frame::default(),
+            0,
+            None,
+            |_| {},
+            |r| r.take::<u32>()
+        ),
+        None
+    );
+}
+
+#[test]
+fn disable_during_native_import_defers_resource_drop_until_call_returns() {
+    let id = crate::boundary::import_id("StructureRandom", "next_long").unwrap();
+    let module = module(&format!(
+        "i32.const {id} i32.const 0 i32.const 0 i32.const 2048 i32.const 8 call $host drop i64.const 8796093022216"
+    ));
+    let dropped = hold_stop_probe(&module);
+    let mut random = Random(|| {
+        module.disable();
+        assert!(!dropped.load(Ordering::Relaxed));
+        7
+    });
+    let mut frame = Frame::default();
+    frame.set_structure_random_mut(&mut random);
+    assert_eq!(
+        module.call(CallClass::Hook, frame, 0, None, |_| {}, |r| r.take::<i64>()),
+        Some(7)
+    );
+    assert!(dropped.load(Ordering::Relaxed));
+}
+
+#[test]
+fn native_panic_stops_group_before_held_resources_drop() {
+    let id = crate::boundary::import_id("StructureRandom", "next_long").unwrap();
+    let module = module(&format!(
+        "i32.const {id} i32.const 0 i32.const 0 i32.const 2048 i32.const 8 call $host drop i64.const 8796093022216"
+    ));
+    let dropped = hold_stop_probe(&module);
+    let mut random = Random(|| panic!("native callback"));
+    let mut frame = Frame::default();
+    frame.set_structure_random_mut(&mut random);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        module.call(CallClass::Hook, frame, 0, None, |_| {}, |r| r.take::<i64>())
+    }));
+    assert!(result.is_err());
+    assert!(dropped.load(Ordering::Relaxed));
+    assert_eq!(call(&module), None);
+}
+
+#[test]
+fn idle_proxy_called_during_unwind_stops_and_clears_resources() {
+    struct OnUnwind(WeakWasmMod);
+    impl Drop for OnUnwind {
+        fn drop(&mut self) {
+            assert_eq!(
+                self.0.call(
+                    CallClass::Callback,
+                    Frame::default(),
+                    0,
+                    None,
+                    |_| {},
+                    |r| r.take::<u32>()
+                ),
+                None
+            );
+        }
+    }
+    let module = module("i64.const 4398046511108");
+    let dropped = hold_stop_probe(&module);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _callback = OnUnwind(module.downgrade());
+        panic!("unrelated native panic");
+    }));
+    assert!(result.is_err());
+    assert!(module.is_stopped());
+    assert!(dropped.load(Ordering::Relaxed));
+}
+
+#[test]
+fn released_dispatch_receiver_cannot_reenter_guest_while_unwinding() {
+    struct Piece {
+        module: WeakWasmMod,
+        refused: Arc<AtomicBool>,
+    }
+    impl std::fmt::Debug for Piece {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            f.write_str("Piece")
+        }
+    }
+    impl Drop for Piece {
+        fn drop(&mut self) {
+            let result = self.module.call(
+                CallClass::Callback,
+                Frame::default(),
+                2,
+                None,
+                |_| {},
+                |r| r.take::<u32>(),
+            );
+            self.refused.store(result.is_none(), Ordering::Relaxed);
+        }
+    }
+    impl mod_api::EnergyHandler for Piece {
+        fn amount(&self, _: &mut dyn mod_api::ServerHost) -> u32 {
+            assert_eq!(
+                self.module.call(
+                    CallClass::Callback,
+                    Frame::default(),
+                    1,
+                    None,
+                    |_| {},
+                    |r| r.take::<()>()
+                ),
+                Some(())
+            );
+            panic!("last dispatch receiver unwinds");
+        }
+        fn capacity(&self, _: &mut dyn mod_api::ServerHost) -> u32 {
+            0
+        }
+        fn insert(&self, _: &mut dyn mod_api::ServerHost, _: &mod_api::Transaction, _: u32) -> u32 {
+            0
+        }
+        fn extract(
+            &self,
+            _: &mut dyn mod_api::ServerHost,
+            _: &mod_api::Transaction,
+            _: u32,
+        ) -> u32 {
+            0
+        }
+    }
+    let bounds = crate::boundary::import_id("EnergyHandler", "amount").unwrap();
+    let release = mod_api::wire::HOST_RELEASE;
+    let module = module(&format!(
+        r#"
+        local.get 0 i32.eqz if (result i64)
+          i32.const 0 local.get 1 i64.load i64.store
+          i32.const {bounds} i32.const 0 i32.const 8 i32.const 2048 i32.const 24 call $host drop
+          i64.const 0
+        else local.get 0 i32.const 1 i32.eq if (result i64)
+          i32.const {release} i32.const 0 i32.const 8 i32.const 0 i32.const 0 call $host drop
+          i64.const 0
+        else
+          i64.const 4398046511108
+        end end"#
+    ));
+    let refused = Arc::new(AtomicBool::new(false));
+    let piece: Arc<dyn mod_api::EnergyHandler> = Arc::new(Piece {
+        module: module.downgrade(),
+        refused: refused.clone(),
+    });
+    let mut host = mod_api::testing::FakeHost::new();
+    let mut frame = Frame::default();
+    frame.set_server_host_mut(&mut host);
+    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        module.call(
+            CallClass::Hook,
+            frame,
+            0,
+            None,
+            |w| w.put_owned(piece),
+            |r| r.take::<()>(),
+        )
+    }));
+    assert!(result.is_err());
+    assert!(refused.load(Ordering::Relaxed));
+    assert!(module.is_stopped());
+}
+
+#[test]
+fn trap_clears_held_native_resources() {
+    let module = module("unreachable");
+    let dropped = hold_stop_probe(&module);
+    assert_eq!(call(&module), None);
+    assert!(dropped.load(Ordering::Relaxed));
 }
 
 #[test]

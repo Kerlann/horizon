@@ -380,36 +380,9 @@ pub(super) fn surface<'a>(
     let (excused_methods, mut methods): (Vec<Method>, Vec<Method>) = methods
         .into_iter()
         .partition(|m| excused.iter().any(|(o, n)| *o == m.owner && *n == m.name));
-    let skipped = emit::skipped(&types);
-    let mut report = String::from("Skipped types:\n");
-    for (def, skipped) in types.defs.iter().zip(&skipped) {
-        if *skipped {
-            let name = def.rust.rsplit("::").next().unwrap_or(&def.rust);
-            let why = emit::SKIPPED
-                .iter()
-                .find(|(n, _)| *n == name)
-                .map_or("contains a skipped type", |(_, why)| *why);
-            report.push_str(&format!("{}: {}\n", def.rust, why));
-        }
-    }
-    report.push_str("\nMethods that do not cross:\n");
-    let (methods, dropped): (Vec<Method>, Vec<Method>) = methods.into_iter().partition(|m| {
-        let excluded = m
-            .params
-            .iter()
-            .any(|(_, ty)| emit::references_skipped(ty, &skipped))
-            || emit::references_skipped(&m.ret, &skipped);
-        if excluded {
-            report.push_str(&format!("{}::{}\n", m.owner, m.name));
-        }
-        !excluded
-    });
     let target = root.join("target");
     std::fs::create_dir_all(&target).map_err(|e| format!("creating wire report directory: {e}"))?;
-    std::fs::write(target.join("wire-skipped.txt"), report)
-        .map_err(|e| format!("writing wire report: {e}"))?;
-    let mut dropped = dropped;
-    dropped.extend(excused_methods);
+    let dropped = excused_methods;
     // The type emitter respects checked, hand-written Wire impls even when a shape
     // becomes derivable after a new generic borrowing/resource rule is added.
     types.index.module("mod_api", &["wire_types".into()])?;

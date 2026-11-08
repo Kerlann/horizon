@@ -10,6 +10,29 @@ use std::{
 pub trait ResourceCodec {
     fn store(&self, value: Box<dyn Any>) -> Result<Id, WireError>;
     fn load(&self, id: Id, view: TypeId) -> Result<Box<dyn Any>, WireError>;
+    /// Reports a refused erased view; codecs may log this once per caller and handler.
+    fn refused(&self, _handler: &str) {}
+}
+/// A deliberate refusal to move an erased Rust capability between link groups.
+/// Typed resources never use this marker; their zero identity is still stale.
+#[doc(hidden)]
+#[derive(Debug)]
+pub struct Unsupported {
+    pub reason: &'static str,
+}
+impl Unsupported {
+    /// Slots never allocates generation zero. Only the erased Any view interprets it.
+    pub const ID: Id = Id(0);
+    pub const CROSS_GROUP: Self = Self {
+        reason: "cross-group capability",
+    };
+    pub fn shared() -> std::sync::Arc<dyn Any + Send + Sync> {
+        static MARKER: std::sync::OnceLock<std::sync::Arc<Unsupported>> =
+            std::sync::OnceLock::new();
+        MARKER
+            .get_or_init(|| std::sync::Arc::new(Self::CROSS_GROUP))
+            .clone()
+    }
 }
 /// A lease's scope ended, or the caller left its owning thread.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -322,6 +345,11 @@ mod tests {
             store(Box::new(())),
             Err(WireError::Invalid("no resource context"))
         );
+    }
+}
+pub(super) fn refused(handler: &str) {
+    if let Ok(codec) = current() {
+        codec.refused(handler);
     }
 }
 pub(super) fn store(value: Box<dyn Any>) -> Result<Id, WireError> {

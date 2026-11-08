@@ -365,6 +365,76 @@ fn release(ids: Vec<Id>) {
     }
 }
 
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn guest_pool_bounds_returned_leases_and_discards_large_buffers() {
+        let mut runtime = Runtime::default();
+        let leases: Vec<_> = (0..100).map(|_| Vec::with_capacity(32)).collect();
+        for buffer in leases {
+            runtime.recycle(buffer);
+        }
+        assert_eq!(runtime.spare.len(), 64);
+        let mut runtime = Runtime::default();
+        runtime.recycle(Vec::with_capacity(1024 * 1024 + 1));
+        assert!(runtime.spare.is_empty());
+    }
+
+    #[test]
+    fn guest_pool_returns_nested_import_arguments_and_replies() {
+        set_transport(Some(std::rc::Rc::new(|id, bytes| {
+            if id == 0 {
+                assert_eq!(Reader::decode::<u32>(bytes).unwrap(), 5);
+                let mut arguments = begin();
+                arguments.put(&37u32);
+                assert_eq!(host(1, arguments).take::<u32>().unwrap(), 99);
+            } else {
+                assert_eq!(Reader::decode::<u32>(bytes).unwrap(), 37);
+            }
+            99u32.to_le_bytes().to_vec()
+        })));
+        let mut arguments = begin();
+        arguments.put(&5u32);
+        let reply = host(0, arguments);
+        assert_eq!(reply.take::<u32>().unwrap(), 99);
+        // The nested arguments and reply, plus outer arguments, have returned. The
+        // outer answer still belongs to Reply and cannot be leased by another call.
+        RUNTIME.with(|rt| assert_eq!(rt.borrow().spare.len(), 3));
+        drop(reply);
+        RUNTIME.with(|rt| assert_eq!(rt.borrow().spare.len(), 4));
+        set_transport(None);
+    }
+
+    #[test]
+    fn guest_pool_does_not_cache_large_import_arguments_or_answers() {
+        set_transport(Some(std::rc::Rc::new(|_, bytes| {
+            assert!(bytes.len() > 1024 * 1024);
+            vec![7]
+        })));
+        let mut arguments = begin();
+        arguments.put_str(&"x".repeat(1024 * 1024 + 1));
+        let reply = host(0, arguments);
+        assert_eq!(reply.0, [7]);
+        RUNTIME.with(|rt| assert!(rt.borrow().spare.is_empty()));
+        drop(reply);
+        RUNTIME.with(|rt| assert_eq!(rt.borrow().spare.len(), 1));
+        set_transport(Some(std::rc::Rc::new(|_, _| vec![7; 1024 * 1024 + 1])));
+        let mut arguments = begin();
+        arguments.put(&5u32);
+        let reply = host(0, arguments);
+        assert_eq!(reply.0.len(), 1024 * 1024 + 1);
+        drop(reply);
+        RUNTIME.with(|rt| {
+            let runtime = rt.borrow();
+            assert_eq!(runtime.spare.len(), 1);
+            assert!(runtime.spare[0].capacity() <= 1024 * 1024);
+        });
+        set_transport(None);
+    }
+}
+
 #[cfg(target_arch = "wasm32")]
 mod entry {
     use super::*;

@@ -8,6 +8,7 @@ mod boundary {
 }
 #[derive(Clone)]
 struct WasmMod {
+    group: u8,
     subscribed: &'static [Option<mod_api::HookId>],
     corrupt: bool,
 }
@@ -43,6 +44,15 @@ fn call_refused<E: From<(mod_api::Identifier, String)>>() -> E {
     ))
 }
 impl WasmHandler {
+    fn new(module: &WasmMod, index: Id) -> Self {
+        Self {
+            module: module.clone(),
+            index,
+        }
+    }
+    fn belongs_to(&self, module: &WasmMod) -> bool {
+        self.module.same_group(module)
+    }
     fn subscriptions(&self, owner: &'static str, id: u32) -> &'static [Option<mod_api::HookId>] {
         let names = self
             .module
@@ -59,6 +69,12 @@ impl WasmHandler {
     }
 }
 impl WasmMod {
+    fn same_group(&self, other: &Self) -> bool {
+        self.group == other.group
+    }
+    fn mod_id(&self) -> &str {
+        if self.group == 0 { "loopback" } else { "other" }
+    }
     fn call<R>(
         &self,
         _: CallClass,
@@ -223,6 +239,7 @@ fn wire_loopback_machine_tick_uses_checked_snapshot_writeback() {
         index: id,
         module: WasmMod {
             subscribed: &[],
+            group: 0,
             corrupt: false,
         },
     };
@@ -241,6 +258,7 @@ fn wire_loopback_machine_tick_uses_checked_snapshot_writeback() {
         index: id,
         module: WasmMod {
             subscribed: &[],
+            group: 0,
             corrupt: true,
         },
     };
@@ -273,6 +291,7 @@ fn wire_loopback_borrowed_tuple_inside_optional_context() {
     let mut drops = vec![mod_api::ItemStack::new(REGISTERED_ITEM.get().unwrap(), 1).unwrap()];
     WasmMod {
         subscribed: &[],
+        group: 0,
         corrupt: false,
     }
     .loot_drops(
@@ -288,6 +307,7 @@ fn wire_loopback_borrowed_tuple_inside_optional_context() {
 fn wire_loopback_nested_tuple_reference_writes_back() {
     let module = WasmMod {
         subscribed: &[],
+        group: 0,
         corrupt: false,
     };
     install_counter();
@@ -317,6 +337,7 @@ fn install_counter() {
         "wire_test",
         Box::new(WasmMod {
             subscribed: &[],
+            group: 0,
             corrupt: false,
         }),
     )];
@@ -345,6 +366,7 @@ fn wire_loopback_tagged_frame_enum_preserves_side() {
         index,
         module: WasmMod {
             subscribed: &[],
+            group: 0,
             corrupt: false,
         },
     };
@@ -379,6 +401,7 @@ fn wire_loopback_owned_box_handlers_inside_result_and_vec() {
     let mut cx = boundary::Cx::default();
     cx.module = Some(WasmMod {
         subscribed: &[],
+        group: 0,
         corrupt: false,
     });
     {
@@ -493,6 +516,148 @@ fn wire_loopback_returned_frame_resource_uses_source_permissions() {
     assert!(out.bytes().is_empty());
 }
 #[test]
+fn wire_loopback_erased_resource_restores_identity_and_refuses_other_groups() {
+    struct Capture(std::sync::Mutex<Vec<String>>);
+    impl log::Log for Capture {
+        fn enabled(&self, _: &log::Metadata<'_>) -> bool {
+            true
+        }
+        fn log(&self, r: &log::Record<'_>) {
+            self.0.lock().unwrap().push(r.args().to_string());
+        }
+        fn flush(&self) {}
+    }
+    static LOG: Capture = Capture(std::sync::Mutex::new(Vec::new()));
+    log::set_logger(&LOG).unwrap();
+    log::set_max_level(log::LevelFilter::Debug);
+    let original: Arc<dyn std::any::Any + Send + Sync> = Arc::new(97u32);
+    let handler: Arc<str> = format!("test:long-handler-{}", "a".repeat(300)).into();
+    let mut outbound = Writer::new();
+    {
+        let _scope = guest::resource_scope();
+        outbound.put(&handler);
+        outbound.put(&original);
+    }
+    let mut cx = boundary::Cx::default();
+    cx.module = Some(WasmMod {
+        group: 0,
+        subscribed: &[],
+        corrupt: false,
+    });
+    let native: mod_api::OwnProvider = {
+        let _scope = unsafe { boundary::resource_scope(&mut cx, true) };
+        Reader::decode(outbound.bytes()).unwrap()
+    };
+    let mut back = Writer::new();
+    {
+        let _scope = unsafe { boundary::resource_scope(&mut cx, true) };
+        back.put(&native);
+    }
+    assert_eq!(back.bytes(), outbound.bytes());
+    {
+        let _scope = guest::resource_scope();
+        let mut input = Reader::new(back.bytes());
+        assert_eq!(input.take::<Arc<str>>().unwrap(), handler);
+        let restored: Arc<dyn std::any::Any + Send + Sync> = input.take().unwrap();
+        assert!(input.rest().is_empty());
+        assert!(Arc::ptr_eq(&original, &restored));
+        assert_eq!(restored.downcast_ref::<u32>(), Some(&97));
+    }
+    cx.module = Some(WasmMod {
+        group: 1,
+        subscribed: &[],
+        corrupt: false,
+    });
+    for _ in 0..2 {
+        back.clear();
+        {
+            let _scope = unsafe { boundary::resource_scope(&mut cx, true) };
+            back.put(&native);
+        }
+        let _scope = guest::resource_scope();
+        let mut input = Reader::new(back.bytes());
+        assert_eq!(input.take::<Arc<str>>().unwrap(), handler);
+        let refused: Arc<dyn std::any::Any + Send + Sync> = input.take().unwrap();
+        assert!(input.rest().is_empty());
+        assert_eq!(
+            refused
+                .downcast_ref::<mod_api::wire::Unsupported>()
+                .unwrap()
+                .reason,
+            "cross-group capability"
+        );
+        assert!(refused.downcast_ref::<u32>().is_none());
+    }
+    assert_eq!(
+        LOG.0
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|s| s.contains(&*handler) && s.contains("cross-group capability"))
+            .count(),
+        1
+    );
+}
+
+#[test]
+fn wire_loopback_builtin_provider_invokes_nested_box_handler() {
+    use mod_api::{EnergyHandler, ItemCapabilityProvider, ItemProviderOf, ServerHost, Transaction};
+    struct Energy(u32);
+    impl EnergyHandler for Energy {
+        fn amount(&self, _: &mut dyn ServerHost) -> u32 {
+            self.0
+        }
+        fn capacity(&self, _: &mut dyn ServerHost) -> u32 {
+            self.0
+        }
+        fn insert(&self, _: &mut dyn ServerHost, _: &Transaction, _: u32) -> u32 {
+            0
+        }
+        fn extract(&self, _: &mut dyn ServerHost, _: &Transaction, _: u32) -> u32 {
+            0
+        }
+    }
+    struct World;
+    impl mod_api::Host for World {}
+    mod_api::impl_host_areas!(World);
+    impl ServerHost for World {}
+    mod_api::impl_server_host_areas!(World);
+    let place = mod_api::ItemPlace::PlayerSlot {
+        player: 19,
+        slot: 3,
+    };
+    let provider: Arc<dyn ItemCapabilityProvider<dyn EnergyHandler>> = Arc::new(
+        |_: &mut dyn ServerHost, place: &mod_api::ItemPlace| match place {
+            mod_api::ItemPlace::PlayerSlot { player: 19, slot } => {
+                Some(Box::new(Energy(*slot as u32)) as Box<dyn EnergyHandler>)
+            }
+            _ => None,
+        },
+    );
+    let mut out = Writer::new();
+    {
+        let _scope = guest::resource_scope();
+        out.put(&ItemProviderOf::EnergyHandler(provider));
+    }
+    let mut cx = boundary::Cx::default();
+    cx.module = Some(WasmMod {
+        group: 0,
+        subscribed: &[],
+        corrupt: false,
+    });
+    let decoded: ItemProviderOf = {
+        let _scope = unsafe { boundary::resource_scope(&mut cx, true) };
+        Reader::decode(out.bytes()).unwrap()
+    };
+    let ItemProviderOf::EnergyHandler(provider) = decoded else {
+        panic!("wrong typed provider")
+    };
+    let energy = provider.provide(&mut World, &place).unwrap();
+    assert_eq!(energy.amount(&mut World), 3);
+    assert_eq!(energy.capacity(&mut World), 3);
+}
+
+#[test]
 fn wire_loopback_bad_import_bytes_are_typed_errors() {
     let mut cx = boundary::Cx::default();
     let mut out = Writer::new();
@@ -549,6 +714,7 @@ fn wire_loopback_owner_thread_guards_access_and_drop() {
 fn wire_loopback_roundtrip_and_atomic_writeback() {
     let module = WasmMod {
         subscribed: &[],
+        group: 0,
         corrupt: false,
     };
     let mut event = mod_api::LivingJumpPowerEvent {
@@ -561,6 +727,7 @@ fn wire_loopback_roundtrip_and_atomic_writeback() {
     assert_eq!(event.kind, "original");
     let bad = WasmMod {
         subscribed: &[],
+        group: 0,
         corrupt: true,
     };
     event.entity = 42;
@@ -603,5 +770,44 @@ fn wire_loopback_roundtrip_and_atomic_writeback() {
             )
             .is_none(),
         "released handler must be refused"
+    );
+}
+
+#[test]
+fn wire_loopback_resource_codec_restores_context_between_groups() {
+    fn encode() -> Id {
+        let apply: Arc<dyn mod_api::ReloadApply> = <dyn mod_api::ReloadApply>::new(|| {}).into();
+        let mut writer = Writer::new();
+        writer.put_owned(apply);
+        assert_eq!(writer.error(), None);
+        Reader::decode(writer.bytes()).unwrap()
+    }
+    let mut first = Box::new(boundary::Cx::default());
+    let mut second = Box::new(boundary::Cx::default());
+    // Both contexts stay boxed and live through their private lexical guards.
+    let outer = unsafe { boundary::resource_scope(&mut *first, true) };
+    let first_id = encode();
+    {
+        let _inner = unsafe { boundary::resource_scope(&mut *second, true) };
+        let second_id = encode();
+        assert_eq!(
+            second_id, first_id,
+            "independent tables start with the same slot"
+        );
+        assert!(second.held.get(second_id).is_ok());
+        assert!(mod_api::wire::borrow_token().unwrap().check().is_ok());
+    }
+    let next_first_id = encode();
+    assert_ne!(next_first_id, first_id);
+    assert!(first.held.get(first_id).is_ok());
+    assert!(first.held.get(next_first_id).is_ok());
+    assert!(second.held.get(next_first_id).is_err());
+    drop(outer);
+    let apply: Arc<dyn mod_api::ReloadApply> = <dyn mod_api::ReloadApply>::new(|| {}).into();
+    let mut writer = Writer::new();
+    writer.put_owned(apply);
+    assert!(
+        writer.error().is_some(),
+        "no context survives the outer guard"
     );
 }

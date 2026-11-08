@@ -14,7 +14,7 @@ use mod_api::{
 use std::{
     cell::Cell,
     sync::{
-        Arc, Mutex,
+        Arc, Mutex, Weak,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
     time::{Duration, Instant},
@@ -90,6 +90,14 @@ struct Running {
     poisoned: AtomicBool,
     lending: Arc<AtomicUsize>,
 }
+struct PoisonOnPanic<'a>(&'a AtomicBool);
+impl Drop for PoisonOnPanic<'_> {
+    fn drop(&mut self) {
+        if std::thread::panicking() {
+            self.0.store(true, Ordering::Relaxed);
+        }
+    }
+}
 struct FrameScope {
     state: *mut State,
     previous_module: Option<WasmMod>,
@@ -106,6 +114,10 @@ impl Drop for FrameScope {
         if std::thread::panicking() {
             self.running.poisoned.store(true, Ordering::Relaxed);
         }
+        if state.depth == 0 && self.running.poisoned.load(Ordering::Relaxed) {
+            // Detach before dropping: native destructors may call a proxy again.
+            drop(std::mem::take(&mut state.cx.held));
+        }
     }
 }
 #[derive(Clone)]
@@ -118,9 +130,42 @@ pub struct WasmMod {
     released: Arc<Mutex<Vec<Id>>>,
     subscriptions: Arc<Mutex<std::collections::HashMap<(Id, u32), &'static [Option<HookId>]>>>,
 }
+/// A guest object never owns the store that may itself retain that object.
+#[derive(Clone)]
+pub(crate) struct WeakWasmMod {
+    id: Arc<str>,
+    running: Weak<Running>,
+    input: TypedFunc<u32, u32>,
+    hook: TypedFunc<u32, u64>,
+    subscribed: &'static [Option<HookId>],
+    released: Arc<Mutex<Vec<Id>>>,
+    subscriptions: Arc<Mutex<std::collections::HashMap<(Id, u32), &'static [Option<HookId>]>>>,
+}
+impl WeakWasmMod {
+    pub(crate) fn call<R>(
+        &self,
+        class: CallClass,
+        frame: Frame,
+        id: u32,
+        handler: Option<Id>,
+        args: impl FnOnce(&mut Writer),
+        reply: impl FnOnce(&mut Reader<'_>) -> Result<R, WireError>,
+    ) -> Option<R> {
+        let module = WasmMod {
+            id: self.id.clone(),
+            running: self.running.upgrade()?,
+            input: self.input.clone(),
+            hook: self.hook.clone(),
+            subscribed: self.subscribed,
+            released: self.released.clone(),
+            subscriptions: self.subscriptions.clone(),
+        };
+        module.call(class, frame, id, handler, args, reply)
+    }
+}
 pub struct WasmHandler {
     pub index: Id,
-    pub module: WasmMod,
+    pub(crate) module: WeakWasmMod,
 }
 impl std::fmt::Debug for WasmHandler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -130,6 +175,15 @@ impl std::fmt::Debug for WasmHandler {
     }
 }
 impl WasmHandler {
+    pub fn new(module: &WasmMod, index: Id) -> Self {
+        Self {
+            index,
+            module: module.downgrade(),
+        }
+    }
+    pub fn belongs_to(&self, module: &WasmMod) -> bool {
+        self.module.running.ptr_eq(&Arc::downgrade(&module.running))
+    }
     pub fn subscriptions(&self, owner: &'static str, export_id: u32) -> &'static [Option<HookId>] {
         if let Some(value) = self
             .module
@@ -323,6 +377,17 @@ fn host_reply(mut caller: Caller<'_, State>, ptr: u32) -> wasmtime::Result<()> {
 }
 
 impl WasmMod {
+    fn downgrade(&self) -> WeakWasmMod {
+        WeakWasmMod {
+            id: self.id.clone(),
+            running: Arc::downgrade(&self.running),
+            input: self.input.clone(),
+            hook: self.hook.clone(),
+            subscribed: self.subscribed,
+            released: self.released.clone(),
+            subscriptions: self.subscriptions.clone(),
+        }
+    }
     pub(crate) fn same_group(&self, other: &Self) -> bool {
         Arc::ptr_eq(&self.running, &other.running)
     }
@@ -333,7 +398,17 @@ impl WasmMod {
         self.running.poisoned.load(Ordering::Relaxed)
     }
     pub(crate) fn disable(&self) {
+        // Publish stop before destroying native resources. Never wait on a store
+        // loaned to native code: the outermost FrameScope clears it on return.
         self.running.poisoned.store(true, Ordering::Relaxed);
+        if let Some(mut resumed) = Resumed::take(Arc::as_ptr(&self.running) as usize) {
+            let mut store = resumed.context();
+            if store.data().depth == 0 {
+                drop(std::mem::take(&mut store.data_mut().cx.held));
+            }
+        } else if let Ok(mut group) = self.running.group.try_lock() {
+            drop(std::mem::take(&mut group.store.data_mut().cx.held));
+        }
     }
     pub(crate) fn instantiate(
         engine: &Engine,
@@ -440,6 +515,12 @@ impl WasmMod {
         args: impl FnOnce(&mut Writer),
         reply: impl FnOnce(&mut Reader<'_>) -> Result<R, WireError>,
     ) -> Option<R> {
+        // Dispatch-owned native receivers can unwind before our outer call
+        // guards. Their destructors must not reenter the still-lent guest.
+        if std::thread::panicking() {
+            self.disable();
+            return None;
+        }
         if self.running.poisoned.load(Ordering::Relaxed) {
             return None;
         }
@@ -473,9 +554,6 @@ impl WasmMod {
                 }
             }
         }
-        if self.running.poisoned.load(Ordering::Relaxed) {
-            return None;
-        }
         crate::profile::mark(2);
         let mut store = match resumed.as_mut() {
             Some(resumed) => resumed.context(),
@@ -489,6 +567,12 @@ impl WasmMod {
                 store.as_context_mut()
             }
         };
+        if self.running.poisoned.load(Ordering::Relaxed) {
+            if store.data().depth == 0 {
+                drop(std::mem::take(&mut store.data_mut().cx.held));
+            }
+            return None;
+        }
         crate::profile::mark(3);
         let depth = store.data().depth + 1;
         if depth > 64 {
@@ -516,6 +600,9 @@ impl WasmMod {
         crate::profile::mark(5);
         let mut w = std::mem::take(&mut store.data_mut().inputs[depth]);
         let mut output = std::mem::take(&mut store.data_mut().outputs[depth]);
+        // This guard unwinds before the resource scope, whose native destructors
+        // must already see the group stopped.
+        let panic_stop = PoisonOnPanic(&self.running.poisoned);
         let result = (|| -> wasmtime::Result<R> {
             let released =
                 std::mem::take(&mut *self.released.lock().unwrap_or_else(|e| e.into_inner()));
@@ -546,6 +633,10 @@ impl WasmMod {
         store.data_mut().inputs[depth] = w;
         store.data_mut().outputs[depth] = output;
         crate::profile::mark(14);
+        if result.is_err() {
+            self.running.poisoned.store(true, Ordering::Relaxed);
+        }
+        drop(panic_stop);
         drop(resources);
         drop(scope);
         crate::profile::mark(15);
@@ -556,7 +647,6 @@ impl WasmMod {
         match result {
             Ok(value) => Some(value),
             Err(e) => {
-                self.running.poisoned.store(true, Ordering::Relaxed);
                 log::error!("wasm mod {} stopped its group: {e:#}", self.id);
                 None
             }

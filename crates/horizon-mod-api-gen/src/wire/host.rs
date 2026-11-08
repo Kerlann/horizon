@@ -136,7 +136,7 @@ fn resource(ty: &Ty) -> bool {
 }
 fn supported_resource(ty: &Ty) -> bool {
     match ty {
-        Ty::Handler(name, _) => super::exports().contains(&name.as_str()),
+        Ty::Handler(name, _) => name == super::ERASED || super::exports().contains(&name.as_str()),
         Ty::Option(t) => supported_resource(t),
         _ => false,
     }
@@ -235,25 +235,85 @@ fn fallback(types: &super::ty::Types<'_>, m: &Method) -> &'static str {
 }
 
 fn resources() -> String {
-    let mut store = String::new();
-    let mut load = String::new();
+    let mut store = String::from(
+        r#"if value.is::<std::sync::Arc<dyn std::any::Any + Send + Sync>>() {
+        let value=*value.downcast::<std::sync::Arc<dyn std::any::Any + Send + Sync>>().map_err(|_|WireError::Invalid("wrong erased handler"))?;
+        if let Some(proxy)=value.downcast_ref::<crate::WasmHandler>() {
+            let module=unsafe {(&*cx).module.as_ref()}.ok_or(WireError::Invalid("no calling module"))?;
+            if proxy.belongs_to(module) {return Ok(proxy.index)}
+        }
+        return Ok(mod_api::wire::Unsupported::ID);
+    }"#,
+    );
+    let mut load = String::from(
+        r#"if view==std::any::TypeId::of::<std::sync::Arc<dyn std::any::Any + Send + Sync>>() {
+        let value:std::sync::Arc<dyn std::any::Any + Send + Sync>=if id==mod_api::wire::Unsupported::ID {mod_api::wire::Unsupported::shared()} else {std::sync::Arc::new(crate::WasmHandler::new(&module,id))};
+        return Ok(Box::new(value));
+    }"#,
+    );
     for owner in super::exports()
         .iter()
         .filter(|owner| super::mod_receiver(owner).is_none())
     {
         let path = trait_path(owner);
-        writeln!(store,"if value.is::<std::sync::Arc<dyn {path}>>() {{ let value = *value.downcast::<std::sync::Arc<dyn {path}>>().map_err(|_| WireError::Invalid(\"wrong handler\"))?; return Ok(unsafe {{ (&mut *self.cx).held.insert_long(Box::new(OwnerThread::new(value))) }}); }}").unwrap();
+        writeln!(store,"if value.is::<std::sync::Arc<dyn {path}>>() {{ let value = *value.downcast::<std::sync::Arc<dyn {path}>>().map_err(|_| WireError::Invalid(\"wrong handler\"))?; return Ok(unsafe {{ (&mut *cx).held.insert_long(Box::new(OwnerThread::new(value))) }}); }}").unwrap();
         for container in ["Box", "std::sync::Arc"] {
-            writeln!(load,"if view == std::any::TypeId::of::<{container}<dyn {path}>>() {{ return Ok(Box::new({container}::new(crate::WasmHandler {{ index:id,module }}) as {container}<dyn {path}>)); }}").unwrap();
+            writeln!(load,"if view == std::any::TypeId::of::<{container}<dyn {path}>>() {{ return Ok(Box::new({container}::new(crate::WasmHandler::new(&module,id)) as {container}<dyn {path}>)); }}").unwrap();
         }
     }
     format!(
-        "struct HostCodec {{ cx:*mut Cx }} impl mod_api::wire::ResourceCodec for HostCodec {{ fn store(&self,value:Box<dyn std::any::Any>)->Result<mod_api::wire::Id,WireError> {{ {store} Err(WireError::Invalid(\"unknown handler type\")) }} fn load(&self,id:mod_api::wire::Id,view:std::any::TypeId)->Result<Box<dyn std::any::Any>,WireError> {{ let module=unsafe {{ (&*self.cx).module.clone() }}.ok_or(WireError::Invalid(\"no calling module\"))?; {load} Err(WireError::Invalid(\"unknown handler view\")) }} }} /// The Cx pointer must stay live for the whole synchronous call.\npub unsafe fn resource_scope(cx:*mut Cx,native_root:bool)->mod_api::wire::ResourceScope {{ let codec=std::rc::Rc::new(HostCodec {{cx}}); if native_root {{ unsafe {{ mod_api::wire::ResourceScope::native_root(codec) }} }} else {{ mod_api::wire::ResourceScope::new(codec) }} }}\n"
+        r#"struct HostCodec;
+thread_local! {{
+    static CURRENT_CX:std::cell::Cell<*mut Cx> = const {{std::cell::Cell::new(std::ptr::null_mut())}};
+    static HOST_CODEC:std::rc::Rc<dyn mod_api::wire::ResourceCodec> = std::rc::Rc::new(HostCodec);
+}}
+fn current_cx()->Result<*mut Cx,WireError> {{
+    let cx=CURRENT_CX.with(|current|current.get());
+    if cx.is_null() {{Err(WireError::Invalid("no resource context"))}} else {{Ok(cx)}}
+}}
+impl mod_api::wire::ResourceCodec for HostCodec {{
+    fn store(&self,value:Box<dyn std::any::Any>)->Result<mod_api::wire::Id,WireError> {{
+        let cx=current_cx()?;
+        {store}
+        Err(WireError::Invalid("unknown handler type"))
+    }}
+    fn load(&self,id:mod_api::wire::Id,view:std::any::TypeId)->Result<Box<dyn std::any::Any>,WireError> {{
+        let cx=current_cx()?;
+        let module=unsafe {{(&*cx).module.clone()}}.ok_or(WireError::Invalid("no calling module"))?;
+        {load}
+        Err(WireError::Invalid("unknown handler view"))
+    }}
+    fn refused(&self,handler:&str) {{
+        let Ok(cx)=current_cx() else {{return}};
+        let Some(module)=(unsafe {{(&*cx).module.clone()}}) else {{return}};
+        let seen=unsafe {{&mut (*cx).refused}};
+        match seen.get_mut(module.mod_id()) {{
+            Some(names) if names.contains(handler)=>return,
+            Some(names)=>{{names.insert(handler.to_owned());}},
+            None=>{{seen.insert(module.mod_id().to_owned(),std::collections::HashSet::from([handler.to_owned()]));}},
+        }}
+        log::debug!("wasm mod {{}}: {{handler:?}} unsupported: cross-group capability",module.mod_id());
+    }}
+}}
+struct HostContext(*mut Cx);
+impl Drop for HostContext {{fn drop(&mut self) {{CURRENT_CX.with(|current|current.set(self.0));}}}}
+// Field order removes the codec scope before restoring the outer context.
+pub struct HostResources {{_scope:mod_api::wire::ResourceScope,_context:HostContext}}
+/// # Safety
+/// cx and its frame pointees stay live until this guard drops. These private runtime
+/// guards must drop in reverse construction order, before the frame or store is released.
+pub unsafe fn resource_scope(cx:*mut Cx,native_root:bool)->HostResources {{
+    let context=HostContext(CURRENT_CX.with(|current|current.replace(cx)));
+    let codec=HOST_CODEC.with(std::rc::Rc::clone);
+    let scope=if native_root {{unsafe {{mod_api::wire::ResourceScope::native_root(codec)}}}} else {{mod_api::wire::ResourceScope::new(codec)}};
+    HostResources {{_scope:scope,_context:context}}
+}}
+"#
     )
 }
 pub(super) fn generate(surface: &mut super::Surface<'_>) -> Result<String, String> {
     let mut code = String::from(
-        "// @generated by horizon-mod-api-gen; do not edit.\nuse mod_api::wire::{Reader, Writer, WireError, Slots};\n#[derive(Debug)] pub enum ServeError { Decode(WireError), Missing(&'static str), Stale, WrongThread, Unsupported(u32) } impl From<WireError> for ServeError { fn from(e: WireError) -> Self { Self::Decode(e) } } impl std::fmt::Display for ServeError { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, \"{self:?}\") } } impl std::error::Error for ServeError {} fn missing(s: &'static str) -> ServeError { ServeError::Missing(s) }\n#[derive(Default)] pub struct Cx { pub frames: Vec<Frame>, pub held: Slots<Box<dyn std::any::Any + Send>>, pub module: Option<crate::WasmMod> } impl Cx { pub fn frame(&self) -> Result<&Frame, ServeError> { self.frames.last().ok_or(ServeError::Missing(\"frame\")) } }\n",
+        "// @generated by horizon-mod-api-gen; do not edit.\nuse mod_api::wire::{Reader, Writer, WireError, Slots};\n#[derive(Debug)] pub enum ServeError { Decode(WireError), Missing(&'static str), Stale, WrongThread, Unsupported(u32) } impl From<WireError> for ServeError { fn from(e: WireError) -> Self { Self::Decode(e) } } impl std::fmt::Display for ServeError { fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result { write!(f, \"{self:?}\") } } impl std::error::Error for ServeError {} fn missing(s: &'static str) -> ServeError { ServeError::Missing(s) }\n#[derive(Default)] pub struct Cx { pub frames: Vec<Frame>, pub held: Slots<Box<dyn std::any::Any + Send>>, pub module: Option<crate::WasmMod>, pub refused: std::collections::HashMap<String,std::collections::HashSet<String>> } impl Cx { pub fn frame(&self) -> Result<&Frame, ServeError> { self.frames.last().ok_or(ServeError::Missing(\"frame\")) } }\n",
     );
     code.push_str("use crate::{NoAnswer, call_refused};\n");
     code.push_str(&frame(surface)?);
@@ -275,7 +335,12 @@ pub(super) fn generate(surface: &mut super::Surface<'_>) -> Result<String, Strin
     code.push_str(
         "pub fn import_id(owner: &str, name: &str) -> Option<u32> { match (owner,name) {\n",
     );
-    for (id, m) in imports(&surface.methods).iter().enumerate() {
+    for (id, m) in imports(&surface.methods)
+        .iter()
+        .copied()
+        .chain(held_methods(&surface.methods))
+        .enumerate()
+    {
         writeln!(code, "({:?},{:?}) => Some({id}),", m.owner, m.name).unwrap();
     }
     code.push_str("_ => None } }\n");

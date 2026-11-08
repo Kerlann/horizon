@@ -118,7 +118,7 @@ fn providers_code(shapes: &[KeyShape]) -> String {
             .iter()
             .map(|s| {
                 format!(
-                    "Self::{}(_) => std::any::type_name::<dyn {}>(),\n",
+                    "Self::{}(_) => Arc::from(std::any::type_name::<dyn {}>()),\n",
                     s.case(),
                     s.handler
                 )
@@ -142,7 +142,7 @@ fn providers_code(shapes: &[KeyShape]) -> String {
         };
         let _ = ctx;
         code.push_str(&format!(
-            "/// A {by} capability's provider, by its handler type.\n#[doc(hidden)]\n#[derive(Clone)]\npub enum {by}ProviderOf {{\n{cases}/// A handler type of a mod's own.\nOwn(OwnProvider),\n}}\nimpl {by}ProviderOf {{\n/// `provider`, by its handler type.\npub(crate) fn of{params}(provider: Arc<dyn {provider}>) -> Self {{\nlet any: Box<dyn Any + Send + Sync> = Box::new(provider);\n{tries}Self::Own(OwnProvider {{ provider: Arc::from(any), handler: std::any::type_name::<T>() }})\n}}\n/// Its handler type's name.\npub(crate) fn handler(&self) -> &'static str {{\nmatch self {{\n{names}Self::Own(own) => own.handler,\n}}\n}}\n/// The provider, if it answers with handler type `T`.\npub(crate) fn get{params}(&self) -> Option<&Arc<dyn {provider}>> {{\nmatch self {{\n{gets}Self::Own(own) => (*own.provider).downcast_ref(),\n}}\n}}\n}}\n"
+            "/// A {by} capability's provider, by its handler type.\n#[doc(hidden)]\n#[derive(Clone)]\npub enum {by}ProviderOf {{\n{cases}/// A handler type of a mod's own.\nOwn(OwnProvider),\n}}\nimpl {by}ProviderOf {{\n/// `provider`, by its handler type.\npub(crate) fn of{params}(provider: Arc<dyn {provider}>) -> Self {{\nlet any: Box<dyn Any + Send + Sync> = Box::new(provider);\n{tries}Self::Own(OwnProvider {{ provider: Arc::from(any), handler: Arc::from(std::any::type_name::<T>()) }})\n}}\n/// Its handler type's name.\npub(crate) fn handler(&self) -> Arc<str> {{\nmatch self {{\n{names}Self::Own(own) => own.handler.clone(),\n}}\n}}\n/// The provider, if it answers with handler type `T`.\npub(crate) fn get{params}(&self) -> Option<&Arc<dyn {provider}>> {{\nmatch self {{\n{gets}Self::Own(own) if own.provider.is::<crate::wire::Unsupported>() => None,\nSelf::Own(own) => (*own.provider).downcast_ref(),\n}}\n}}\n}}\n"
         ));
     }
     code

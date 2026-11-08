@@ -5,6 +5,25 @@ use crate::{
     TagKey, UnresolvedFluid,
 };
 
+impl Wire for crate::OwnProvider {
+    const MIN: usize = 12;
+    fn put(&self, out: &mut Writer) {
+        out.put(&self.handler);
+        if let Ok(id) = out.resource(Box::new(self.provider.clone())) {
+            if id == crate::wire::Unsupported::ID {
+                out.refused(&self.handler)
+            }
+            out.put(&id);
+        }
+    }
+    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
+        Ok(Self {
+            handler: input.take()?,
+            provider: input.take()?,
+        })
+    }
+}
+
 impl Wire for crate::Transaction {
     const MIN: usize = 0;
     fn put(&self, _: &mut Writer) {}

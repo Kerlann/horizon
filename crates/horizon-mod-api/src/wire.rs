@@ -17,7 +17,9 @@ use std::sync::Arc;
 pub use crate::wire_slots::{Id, Slots, Stale};
 #[path = "wire_resources.rs"]
 mod resources;
-pub use resources::{ResourceCodec, ResourceScope, ScopeError, ScopeToken, borrow_token};
+pub use resources::{
+    ResourceCodec, ResourceScope, ScopeError, ScopeToken, Unsupported, borrow_token,
+};
 
 /// The guest's start-up call: its input is the package list.
 pub const INIT: u32 = 0xFFFF_FF00;
@@ -203,13 +205,26 @@ impl Writer {
     pub fn fail(&mut self, error: WireError) {
         self.error.get_or_insert(error);
     }
-    pub fn put_resource(&mut self, value: Box<dyn std::any::Any>) {
-        if !self.can_fit(<Id as Wire>::MIN) {
-            return;
+    /// Resolves one resource, reserving its wire width before registry mutation.
+    /// Any failure is recorded before returning, so partial messages are never sent.
+    pub fn resource(&mut self, value: Box<dyn std::any::Any>) -> Result<Id, WireError> {
+        self.can_fit(<Id as Wire>::MIN);
+        if let Some(error) = self.error {
+            return Err(error);
         }
-        match resources::store(value) {
-            Ok(id) => self.put(&id),
-            Err(error) => self.fail(error),
+        let result = resources::store(value);
+        if let Err(error) = result {
+            self.fail(error)
+        }
+        result
+    }
+    /// Reports a deliberate erased-view refusal without changing the native Option contract.
+    pub fn refused(&self, handler: &str) {
+        resources::refused(handler);
+    }
+    pub fn put_resource(&mut self, value: Box<dyn std::any::Any>) {
+        if let Ok(id) = self.resource(value) {
+            self.put(&id)
         }
     }
 }
