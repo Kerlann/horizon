@@ -119,10 +119,11 @@ pub(crate) enum Call {
     Hook,
     /// Start-up or a load-phase call: within `Budgets::load`.
     Load,
-    /// A call on a game worker: a structure type's or piece's on a worldgen worker, a block tint
-    /// source's on a meshing worker. Within `Budgets::call`, and queued for its group for as long
-    /// as that takes. Refusing it would leave the chunk without its structure, or the block
-    /// untinted, depending on timing; the holder's own deadline bounds the wait.
+    /// A call on a game worker: a structure type's or piece's, a worldgen hook's or a ground
+    /// provider's on a worldgen worker, a block tint source's on a meshing worker. Within
+    /// `Budgets::call`, and queued for its group for as long as that takes. Refusing it would
+    /// leave the chunk without its structure or its ground, or the block untinted, depending on
+    /// timing; the holder's own deadline bounds the wait.
     Worker,
 }
 

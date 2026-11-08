@@ -139,7 +139,8 @@ pub(super) fn exports() -> &'static [&'static str] {
 /// another mod's provider): the mod calls one through the `held-<interface>` imports, by the
 /// index the game keeps it under.
 pub(super) fn held(owner: &str) -> bool {
-    owner == "PlaceProvider" || (exports().contains(&owner) && !EXPORTS.contains(&owner))
+    matches!(owner, "PlaceProvider" | "GroundStateProvider")
+        || (exports().contains(&owner) && !EXPORTS.contains(&owner))
 }
 
 /// The contexts of the load phase: the catalog's registration and data-load contexts and a
@@ -152,10 +153,18 @@ const LOAD_CONTEXTS: &[&str] = &[
     "ClientReloadContext",
 ];
 
-/// The traits the game calls on its worker threads: a mod's structure types and their pieces on
-/// the worldgen workers, its block tint sources on the meshing workers. They keep no mutable
-/// state and get no `Host`.
-const WORKERS: &[&str] = &["StructureType", "StructurePiece", "BlockTintSource"];
+/// The traits the game calls on its worker threads: a mod's structure types, their pieces and its
+/// ground providers on the worldgen workers, its block tint sources on the meshing workers. They
+/// keep no mutable state and get no `Host`.
+const WORKERS: &[&str] = &[
+    "StructureType",
+    "StructurePiece",
+    "GroundStateProvider",
+    "BlockTintSource",
+];
+
+/// The contexts of hooks fired on a game worker: a call given one is a worker call too.
+const WORKER_CONTEXTS: &[&str] = &["WorldgenHost"];
 
 /// Predicates that may synchronously borrow the store lent by their triggering import.
 pub(super) const CALLBACKS: &[&str] = &["CriterionTest"];
@@ -165,25 +174,25 @@ pub(super) fn call_class(types: &ty::Types<'_>, method: &Method) -> &'static str
     if CALLBACKS.contains(&method.owner) {
         return "super::Call::Callback";
     }
-    if WORKERS.contains(&method.owner) {
+    if WORKERS.contains(&method.owner) || takes(types, method, WORKER_CONTEXTS) {
         "super::Call::Worker"
-    } else if loads(types, method) {
+    } else if takes(types, method, LOAD_CONTEXTS) {
         "super::Call::Load"
     } else {
         "super::Call::Hook"
     }
 }
 
-/// Whether `method` is a load-phase call: one of its arguments is a load-phase context.
-fn loads(types: &ty::Types<'_>, method: &Method) -> bool {
+/// Whether one of `method`'s arguments is one of `contexts`.
+fn takes(types: &ty::Types<'_>, method: &Method, contexts: &[&str]) -> bool {
     method.params.iter().any(|(_, ty)| {
         let ty = match ty {
             ty::Ty::Ref(inner, _) => &**inner,
             ty => ty,
         };
         match ty {
-            ty::Ty::Dyn(name, _) => LOAD_CONTEXTS.contains(&name.as_str()),
-            ty::Ty::Named(def) => LOAD_CONTEXTS
+            ty::Ty::Dyn(name, _) => contexts.contains(&name.as_str()),
+            ty::Ty::Named(def) => contexts
                 .iter()
                 .any(|name| types.defs[*def].rust.rsplit("::").next() == Some(*name)),
             _ => false,
