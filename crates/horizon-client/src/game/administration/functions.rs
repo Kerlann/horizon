@@ -2070,7 +2070,11 @@ mod tests {
         ] {
             std::fs::create_dir_all(pack.join(path)).unwrap();
         }
-        std::fs::write(pack.join("pack.mcmeta"), "{}").unwrap();
+        std::fs::write(
+            pack.join("pack.mcmeta"),
+            r#"{"pack":{"description":"Function fixture"}}"#,
+        )
+        .unwrap();
         let function = pack.join("data/test/function/start.mcfunction");
         std::fs::write(
             &function,

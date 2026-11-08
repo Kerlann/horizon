@@ -390,7 +390,11 @@ fn registered_data_commands_respect_flags_required_packs_and_default_priority() 
                 let world = fixture.root.join("world");
                 let user = world.join("datapacks/user");
                 fs::create_dir_all(user.join("data/packmod/function")).unwrap();
-                fs::write(user.join("pack.mcmeta"), b"{}").unwrap();
+                fs::write(
+                    user.join("pack.mcmeta"),
+                    br#"{"pack":{"description":"User override fixture"}}"#,
+                )
+                .unwrap();
                 fs::write(
                     user.join("data/packmod/function/probe.mcfunction"),
                     b"say from-user\n",
