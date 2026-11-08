@@ -796,12 +796,17 @@ mod tests {
             game.riding = Some(70);
             assert!(game.start_riding_target(Target::Mob(73), Target::Mob(70), true));
             assert!(game.start_riding_target(Target::Mob(74), Target::Mob(70), true));
-            assert!(!game.start_riding_target(Target::Mob(75), Target::Mob(70), true));
+            assert!(!game.start_riding_target(Target::Mob(75), Target::Mob(70), false));
             let mut riding = horizon_client::lan::entity::Riding::default();
             game.lan_riding(&[(70, 1)], &mut riding);
             assert_eq!(riding.passengers(70), &[1, 73, 74]);
+            // Force bypasses mob capacity, without losing any existing passenger.
+            assert!(game.start_riding_target(Target::Mob(75), Target::Mob(70), true));
+            game.lan_riding(&[(70, 1)], &mut riding);
+            assert_eq!(riding.passengers(70), &[1, 73, 74, 75]);
             game.dismount_mob(73);
             game.dismount_mob(74);
+            game.dismount_mob(75);
             game.riding = None;
             for vehicle in [70, 71, 72] {
                 let capacity = if vehicle == 72 { 4 } else { 3 };
@@ -813,7 +818,11 @@ mod tests {
                     ));
                 }
                 if capacity == 3 {
-                    assert!(!game.start_riding_target(Target::Mob(76), Target::Mob(vehicle), true));
+                    assert!(!game.start_riding_target(
+                        Target::Mob(76),
+                        Target::Mob(vehicle),
+                        false
+                    ));
                 }
                 for rider in 73..73 + capacity {
                     game.dismount_mob(rider);
