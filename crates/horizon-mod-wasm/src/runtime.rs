@@ -540,8 +540,9 @@ impl WasmMod {
             });
             group.store.call_hook(|mut store, kind| {
                 if let Some(mut profile) = store.data_mut().profile.take() {
-                    if let Some(profiler) = profile.profiler.as_mut() {
-                        profiler.call_hook(&store, kind);
+                    if profile.profiler.is_some() {
+                        // Guest samples already carry stacks. Per-transition hostcall
+                        // markers would dwarf the profile on import-heavy scenes.
                         if matches!(kind, wasmtime::CallHook::ReturningFromWasm) {
                             profile.calls += 1;
                         }
