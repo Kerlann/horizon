@@ -4,6 +4,7 @@ use crate::selection::ModSelectionContext;
 use std::io::{Read, Write};
 use subtle::ConstantTimeEq;
 const LIMIT: u64 = 64 * 1024;
+mod gc;
 #[derive(Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub(super) struct Reference {
