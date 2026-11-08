@@ -1,9 +1,9 @@
 //! Owned component trees. No language is resolved until the game displays a component.
-use serde::{Deserialize, Serialize};
+use crate::Tag;
+use horizon_core::nbt::clone_tag;
 
 /// A component tree, retaining translation keys, styles and ordered children.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[horizon_mod_api_macros::wasm(via = TextForm)]
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct Text {
     /// The component's contents before its children.
@@ -12,14 +12,13 @@ pub struct Text {
     pub style: TextStyle,
     /// Components appended in order.
     pub children: Vec<Text>,
-    /// Unrecognised component metadata survives an engine round trip.
-    #[serde(default)]
-    metadata: std::collections::BTreeMap<String, serde_json::Value>,
+    /// Unrecognised component metadata survives an engine round trip, as a compound.
+    pub metadata: Tag,
 }
 
 /// What supplies the characters or inline object of a component.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq)]
+// exhaustive: closed serialized component vocabulary; new cases change the link contract
 pub enum TextContent {
     /// Literal characters, without interpreting legacy formatting codes.
     Literal(String),
@@ -64,8 +63,8 @@ pub enum TextContent {
 }
 
 /// The source of an NBT component, not the NBT itself.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
-#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+// exhaustive: closed serialized component vocabulary; new cases change the link contract
 pub enum TextNbtSource {
     /// Block position expression.
     Block(String),
@@ -76,13 +75,13 @@ pub enum TextNbtSource {
 }
 
 /// An inline object embedded in text.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq)]
+// exhaustive: closed serialized component vocabulary; new cases change the link contract
 pub enum TextObject {
     /// A player head, retaining the profile properties carried by the component.
     Player {
         /// Profile data, including signed skin properties when present.
-        profile: serde_json::Value,
+        profile: TextProfile,
         /// Whether to draw the hat layer.
         hat: bool,
         /// Optional component for consumers unable to display the object; None uses the default.
@@ -100,7 +99,7 @@ pub enum TextObject {
 }
 
 /// Optional style fields inherit; explicit `false` overrides an inherited decoration.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub struct TextStyle {
     /// Named colour or `#RRGGBB` component colour.
@@ -125,9 +124,8 @@ pub struct TextStyle {
     pub insertion: Option<String>,
     /// Font identifier.
     pub font: Option<String>,
-    /// Unknown style metadata remains owned data, without engine types.
-    #[serde(default)]
-    metadata: std::collections::BTreeMap<String, serde_json::Value>,
+    /// Unknown style fields, as a compound, without engine types.
+    pub metadata: Tag,
 }
 
 /// A text component's click action.
@@ -135,8 +133,8 @@ pub struct TextStyle {
 /// File-opening actions are intentionally absent: mods can neither produce nor
 /// round-trip `OpenFile`. Capture drops untrusted file-opening action metadata.
 /// Part of the [per-node origin tracking follow-up](https://github.com/arismoko/horizon/issues/1738).
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq, Eq)]
+// exhaustive: closed serialized component vocabulary; new cases change the link contract
 pub enum TextClick {
     /// Open an HTTP or HTTPS URL.
     OpenUrl(String),
@@ -149,19 +147,19 @@ pub enum TextClick {
     /// Copy text to the clipboard.
     CopyToClipboard(String),
     /// Show a dialog identifier or inline declaration.
-    ShowDialog(serde_json::Value),
+    ShowDialog(Tag),
     /// A server-defined action with optional payload.
     Custom {
         /// Action identifier.
         id: String,
         /// Payload retained without interpretation.
-        payload: Option<serde_json::Value>,
+        payload: Option<Tag>,
     },
 }
 
 /// A text component's hover action.
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-#[non_exhaustive]
+#[derive(Clone, Debug, PartialEq)]
+// exhaustive: closed serialized component vocabulary; new cases change the link contract
 pub enum TextHover {
     /// Show another styled component tree.
     Text(Box<Text>),
@@ -172,7 +170,7 @@ pub enum TextHover {
         /// Display count.
         count: u32,
         /// Component patch carried by the component, if any.
-        components: Option<serde_json::Value>,
+        components: Option<Tag>,
     },
     /// Show an entity's identity and optional name.
     Entity {
@@ -191,25 +189,38 @@ impl Default for Text {
     }
 }
 impl Text {
-    /// A literal component, with no inherited style overrides or children.
-    pub fn literal(value: impl Into<String>) -> Self {
+    /// A component with the given contents, with no style overrides or children.
+    pub fn new(content: TextContent) -> Self {
         Self {
-            content: TextContent::Literal(value.into()),
+            content,
             style: TextStyle::default(),
             children: Vec::new(),
-            metadata: Default::default(),
+            metadata: Tag::Compound(Default::default()),
         }
+    }
+    /// Check vanilla's component-depth bound before cloning any node payload.
+    /// Counts every recursive component relation, including hover names.
+    pub fn validate_depth(&self) -> Result<(), TextFormError> {
+        let mut pending = vec![(self, 1)];
+        while let Some((text, depth)) = pending.pop() {
+            if depth > MAX_TEXT_DEPTH {
+                return Err(TextFormError::TooDeep);
+            }
+            text.visit_children(|child, _| pending.push((child, depth + 1)));
+        }
+        Ok(())
+    }
+    /// A literal component, with no inherited style overrides or children.
+    pub fn literal(value: impl Into<String>) -> Self {
+        Self::new(TextContent::Literal(value.into()))
     }
     /// A translatable component. The key and arguments remain unresolved data.
     pub fn translate(key: impl Into<String>, arguments: Vec<Text>) -> Self {
-        Self {
-            content: TextContent::Translatable {
-                key: key.into(),
-                fallback: None,
-                arguments,
-            },
-            ..Self::default()
-        }
+        Self::new(TextContent::Translatable {
+            key: key.into(),
+            fallback: None,
+            arguments,
+        })
     }
     /// Append a child without flattening its style or translation.
     pub fn append(mut self, child: Text) -> Self {
@@ -223,271 +234,920 @@ impl Text {
     }
 }
 
-/// A finite, serializable representation of the recursive tree.
-/// Native boundary conversion and generated wasm bindings share the same serde model.
+/// A player profile, including ordered signed properties and unknown data.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct TextProfile {
+    /// Player name in U+0021..U+007E, at most 16 characters (ExtraCodecs.PLAYER_NAME).
+    pub name: Option<String>,
+    /// UUID as high and low halves.
+    pub id: Option<[u64; 2]>,
+    /// Ordered signed records; unsigned map values retain their order within each name.
+    pub properties: Vec<TextProfileProperty>,
+    /// Unknown profile fields, as a compound.
+    pub metadata: Tag,
+}
+/// One signed or unsigned profile property.
+///
+/// ExtraCodecs.PROPERTY_MAP accepts at most 16 distinct unsigned map names.
+/// Signed or metadata-bearing records instead use its 16-entry list codec,
+/// whose UTF-16 limits are 64 units for names, 32767 for values and 1024 for signatures.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct TextProfileProperty {
+    /// Property name.
+    pub name: String,
+    /// Property value.
+    pub value: String,
+    /// Optional signature.
+    pub signature: Option<String>,
+    /// Unknown property fields, as a compound.
+    pub metadata: Tag,
+}
+impl Default for TextProfile {
+    fn default() -> Self {
+        Self {
+            name: None,
+            id: None,
+            properties: Vec::new(),
+            metadata: Tag::Compound(Default::default()),
+        }
+    }
+}
+impl Default for TextProfileProperty {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            value: String::new(),
+            signature: None,
+            metadata: Tag::Compound(Default::default()),
+        }
+    }
+}
+impl Default for TextStyle {
+    fn default() -> Self {
+        Self {
+            color: None,
+            shadow_color: None,
+            bold: None,
+            italic: None,
+            underlined: None,
+            strikethrough: None,
+            obfuscated: None,
+            click: None,
+            hover: None,
+            insertion: None,
+            font: None,
+            metadata: Tag::Compound(Default::default()),
+        }
+    }
+}
+
+/// Flat representation of a component tree.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct TextForm {
-    /// Serialized owned tree, including component metadata and unresolved keys.
-    pub tree: String,
+    /// Nodes in parent-before-child order.
+    pub nodes: Vec<TextNode>,
 }
-/// Maximum nested JSON containers in a text form, below serde_json's recursion limit.
-pub const MAX_TEXT_FORM_DEPTH: usize = 100;
+/// One typed shallow component and its position in the tree.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct TextNode {
+    /// Parent node index, or None for the root.
+    pub parent: Option<u32>,
+    /// Relation to the parent.
+    pub relation: TextRelation,
+    /// Contents without recursive component slots.
+    pub content: TextNodeContent,
+    /// Style without recursive component slots.
+    pub style: TextNodeStyle,
+    /// Unknown component fields, as a compound.
+    pub metadata: Tag,
+}
+impl TextNode {
+    /// A root row with no style overrides or unknown fields.
+    pub fn new(content: TextNodeContent) -> Self {
+        Self {
+            parent: None,
+            relation: TextRelation::Child,
+            content,
+            style: TextNodeStyle::default(),
+            metadata: Tag::Compound(Default::default()),
+        }
+    }
+}
+/// Shallow content. Recursive values appear only in related rows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+// exhaustive: closed wire vocabulary
+pub enum TextNodeContent {
+    /// Literal characters.
+    Literal(String),
+    /// Translation key and optional literal fallback template.
+    Translatable {
+        /// Translation identifier.
+        key: String,
+        /// Literal fallback template.
+        fallback: Option<String>,
+    },
+    /// Key binding identifier.
+    Keybind(String),
+    /// Selector expression.
+    Selector {
+        /// Selector expression.
+        pattern: String,
+    },
+    /// Score holder and objective.
+    Score {
+        /// Score holder or selector.
+        name: String,
+        /// Scoreboard objective.
+        objective: String,
+    },
+    /// NBT lookup.
+    Nbt {
+        /// NBT path expression.
+        path: String,
+        /// Whether selected strings contain components.
+        interpret: bool,
+        /// NBT lookup source.
+        source: TextNbtSource,
+    },
+    /// Player head.
+    Player {
+        /// Typed player profile.
+        profile: TextProfile,
+        /// Whether to draw the hat layer.
+        hat: bool,
+    },
+    /// Atlas sprite.
+    Atlas {
+        /// Atlas identifier.
+        atlas: String,
+        /// Sprite identifier.
+        sprite: String,
+    },
+}
+/// Shallow hover event. Text and entity-name values use related rows.
+#[derive(Clone, Debug, PartialEq, Eq)]
+// exhaustive: closed wire vocabulary
+pub enum TextNodeHover {
+    /// Exactly one HoverText row is required.
+    Text,
+    /// Item identity and optional component patch.
+    Item {
+        /// Item identifier.
+        id: String,
+        /// Displayed item count.
+        count: u32,
+        /// Optional opaque component patch.
+        components: Option<Tag>,
+    },
+    /// Entity identity; a HoverEntityName row is optional.
+    Entity {
+        /// Entity type identifier.
+        kind: String,
+        /// UUID as high and low halves.
+        id: [u64; 2],
+    },
+}
+/// The nonrecursive form of TextStyle, with the same inheritance semantics.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct TextNodeStyle {
+    /// Named colour or `#RRGGBB` component colour.
+    pub color: Option<String>,
+    /// Packed ARGB shadow colour; zero suppresses shadows.
+    pub shadow_color: Option<u32>,
+    /// Bold decoration.
+    pub bold: Option<bool>,
+    /// Italic decoration.
+    pub italic: Option<bool>,
+    /// Underline decoration.
+    pub underlined: Option<bool>,
+    /// Strikethrough decoration.
+    pub strikethrough: Option<bool>,
+    /// Obfuscated decoration.
+    pub obfuscated: Option<bool>,
+    /// Action invoked by clicking the component.
+    pub click: Option<TextClick>,
+    /// Information displayed on hover.
+    pub hover: Option<TextNodeHover>,
+    /// Text inserted into the chat input on Shift-click.
+    pub insertion: Option<String>,
+    /// Font identifier.
+    pub font: Option<String>,
+    /// Unknown style metadata remains owned data, without engine types.
+    pub metadata: Tag,
+}
+/// Relation to an earlier row. Unknown discriminants are rejected by bindings.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum TextRelation {
+    /// Appended component.
+    Child,
+    /// Translation argument.
+    Argument,
+    /// Selector or NBT separator.
+    Separator,
+    /// Inline object fallback.
+    Fallback,
+    /// Hover text.
+    HoverText,
+    /// Hover entity name.
+    HoverEntityName,
+}
+/// Maximum component depth, counted in nodes.
+pub const MAX_TEXT_DEPTH: usize = 512;
 
-/// A text form was too deeply nested or could not be serialized or parsed.
-#[derive(Debug)]
+/// A refused Text crossing. No partially converted fields are written.
+#[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum TextFormError {
-    /// The form exceeds [`MAX_TEXT_FORM_DEPTH`] nested containers.
+    /// No backend is available.
+    Unavailable,
+    /// A component path or opaque NBT container path exceeds 512.
     TooDeep,
-    /// The tree is not a valid serialized text component.
-    Invalid(serde_json::Error),
+    /// Fields or parent/relation tables are inconsistent.
+    Malformed,
+    /// Tag→JSON emission cannot represent NaN or infinity.
+    NonFinite,
+    /// Tag→JSON emission cannot represent an unpaired UTF-16 surrogate.
+    InvalidString,
+    /// Vanilla JsonOps→NbtOps refuses null nested in metadata.
+    NestedNull,
 }
 impl std::fmt::Display for TextFormError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::TooDeep => write!(f, "text form exceeds maximum depth"),
-            Self::Invalid(error) => error.fmt(f),
-        }
+        f.write_str(match self {
+            Self::Unavailable => "text backend unavailable",
+            Self::TooDeep => "text or NBT nesting exceeds maximum depth",
+            Self::Malformed => "malformed text fields or node table",
+            Self::NonFinite => "JSON cannot represent a non-finite NBT number",
+            Self::InvalidString => "JSON cannot represent an unpaired UTF-16 surrogate",
+            Self::NestedNull => "JSON-to-NBT does not accept nested null",
+        })
     }
 }
 impl std::error::Error for TextFormError {}
-
-// The same streaming scanner protects serialization before serde descends further and
-// deserialization before serde's recursion limit. Brackets inside strings do not count.
-#[derive(Default)]
-struct DepthWriter {
-    bytes: Vec<u8>,
-    depth: usize,
-    quoted: bool,
-    escaped: bool,
-    too_deep: bool,
-}
-impl std::io::Write for DepthWriter {
-    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
-        for &byte in bytes {
-            if self.quoted {
-                if self.escaped {
-                    self.escaped = false;
-                } else if byte == b'\\' {
-                    self.escaped = true;
-                } else if byte == b'"' {
-                    self.quoted = false;
-                }
-            } else {
-                match byte {
-                    b'"' => self.quoted = true,
-                    b'{' | b'[' => {
-                        self.depth += 1;
-                        if self.depth > MAX_TEXT_FORM_DEPTH {
-                            self.too_deep = true;
-                            return Err(std::io::Error::other("text form too deep"));
-                        }
-                    }
-                    b'}' | b']' => self.depth = self.depth.saturating_sub(1),
-                    _ => {}
-                }
-            }
-        }
-        self.bytes.extend_from_slice(bytes);
-        Ok(bytes.len())
+impl crate::NoBackend for TextFormError {
+    fn no_backend() -> Self {
+        Self::Unavailable
     }
-    fn flush(&mut self) -> std::io::Result<()> {
+}
+
+impl Text {
+    /// Validate component paths, opaque NBT containers and typed profile fields
+    /// before constructing owned conversion payloads. This does not impose JSON
+    /// representation restrictions on NBT data; engine emission may refuse those.
+    pub fn validate(&self) -> Result<(), TextFormError> {
+        self.validate_depth()?;
+        let mut pending = vec![self];
+        while let Some(text) = pending.pop() {
+            let profile = match &text.content {
+                TextContent::Object(TextObject::Player { profile, .. }) => Some(profile),
+                _ => None,
+            };
+            let item = match &text.style.hover {
+                Some(TextHover::Item { components, .. }) => components.as_ref(),
+                _ => None,
+            };
+            validate_payload(
+                &text.metadata,
+                &text.style.metadata,
+                text.style.click.as_ref(),
+                item,
+                profile,
+            )?;
+            text.visit_children(|child, _| pending.push(child));
+        }
         Ok(())
     }
+    /// Visit recursive component slots in their relation order, without cloning.
+    /// Opaque NBT data is not a component edge.
+    pub fn visit_children<'a>(&'a self, mut visit: impl FnMut(&'a Text, TextRelation)) {
+        for child in &self.children {
+            visit(child, TextRelation::Child);
+        }
+        match &self.content {
+            TextContent::Translatable { arguments, .. } => {
+                for child in arguments {
+                    visit(child, TextRelation::Argument);
+                }
+            }
+            TextContent::Selector { separator, .. } | TextContent::Nbt { separator, .. } => {
+                if let Some(child) = separator {
+                    visit(child, TextRelation::Separator);
+                }
+            }
+            TextContent::Object(
+                TextObject::Player { fallback, .. } | TextObject::Atlas { fallback, .. },
+            ) => {
+                if let Some(child) = fallback {
+                    visit(child, TextRelation::Fallback);
+                }
+            }
+            _ => {}
+        }
+        match &self.style.hover {
+            Some(TextHover::Text(child)) => visit(child, TextRelation::HoverText),
+            Some(TextHover::Entity { name, .. }) => {
+                if let Some(child) = name {
+                    visit(child, TextRelation::HoverEntityName);
+                }
+            }
+            _ => {}
+        }
+    }
 }
+
+fn clone_profile(source: &TextProfile) -> TextProfile {
+    TextProfile {
+        name: source.name.clone(),
+        id: source.id,
+        properties: source
+            .properties
+            .iter()
+            .map(|p| TextProfileProperty {
+                name: p.name.clone(),
+                value: p.value.clone(),
+                signature: p.signature.clone(),
+                metadata: clone_tag(&p.metadata),
+            })
+            .collect(),
+        metadata: clone_tag(&source.metadata),
+    }
+}
+fn clone_click(source: &TextClick) -> TextClick {
+    match source {
+        TextClick::OpenUrl(s) => TextClick::OpenUrl(s.clone()),
+        TextClick::ChangePage(n) => TextClick::ChangePage(*n),
+        TextClick::SuggestCommand(s) => TextClick::SuggestCommand(s.clone()),
+        TextClick::RunCommand(s) => TextClick::RunCommand(s.clone()),
+        TextClick::CopyToClipboard(s) => TextClick::CopyToClipboard(s.clone()),
+        TextClick::ShowDialog(t) => TextClick::ShowDialog(clone_tag(t)),
+        TextClick::Custom { id, payload } => TextClick::Custom {
+            id: id.clone(),
+            payload: payload.as_ref().map(clone_tag),
+        },
+    }
+}
+impl Default for TextNodeStyle {
+    fn default() -> Self {
+        Self {
+            color: None,
+            shadow_color: None,
+            bold: None,
+            italic: None,
+            underlined: None,
+            strikethrough: None,
+            obfuscated: None,
+            insertion: None,
+            font: None,
+            click: None,
+            hover: None,
+            metadata: Tag::Compound(Default::default()),
+        }
+    }
+}
+impl TextNodeStyle {
+    fn from_style(source: &TextStyle) -> Self {
+        let hover = source.hover.as_ref().map(|hover| match hover {
+            TextHover::Text(_) => TextNodeHover::Text,
+            TextHover::Item {
+                id,
+                count,
+                components,
+            } => TextNodeHover::Item {
+                id: id.clone(),
+                count: *count,
+                components: components.as_ref().map(clone_tag),
+            },
+            TextHover::Entity { kind, id, .. } => TextNodeHover::Entity {
+                kind: kind.clone(),
+                id: *id,
+            },
+        });
+        Self {
+            color: source.color.clone(),
+            shadow_color: source.shadow_color,
+            bold: source.bold,
+            italic: source.italic,
+            underlined: source.underlined,
+            strikethrough: source.strikethrough,
+            obfuscated: source.obfuscated,
+            insertion: source.insertion.clone(),
+            font: source.font.clone(),
+            click: source.click.as_ref().map(clone_click),
+            hover,
+            metadata: clone_tag(&source.metadata),
+        }
+    }
+    fn into_style(self) -> TextStyle {
+        let hover = self.hover.and_then(|hover| match hover {
+            TextNodeHover::Text => None, // The required child row supplies the value.
+            TextNodeHover::Item {
+                id,
+                count,
+                components,
+            } => Some(TextHover::Item {
+                id,
+                count,
+                components,
+            }),
+            TextNodeHover::Entity { kind, id } => Some(TextHover::Entity {
+                kind,
+                id,
+                name: None,
+            }),
+        });
+        TextStyle {
+            color: self.color,
+            shadow_color: self.shadow_color,
+            bold: self.bold,
+            italic: self.italic,
+            underlined: self.underlined,
+            strikethrough: self.strikethrough,
+            obfuscated: self.obfuscated,
+            insertion: self.insertion,
+            font: self.font,
+            click: self.click,
+            hover,
+            metadata: self.metadata,
+        }
+    }
+}
+
+fn validate_payload(
+    metadata: &Tag,
+    style_metadata: &Tag,
+    click: Option<&TextClick>,
+    item: Option<&Tag>,
+    profile: Option<&TextProfile>,
+) -> Result<(), TextFormError> {
+    let mut roots = vec![metadata, style_metadata];
+    if let Some(profile) = profile {
+        roots.push(&profile.metadata);
+        roots.extend(profile.properties.iter().map(|p| &p.metadata));
+        // ResolvableProfile.Partial.MAP_CODEC and ExtraCodecs.PLAYER_NAME.
+        if profile
+            .name
+            .as_ref()
+            .is_some_and(|n| n.len() > 16 || n.bytes().any(|b| b <= 32 || b >= 127))
+        {
+            return Err(TextFormError::Malformed);
+        }
+        // ExtraCodecs.PROPERTY_MAP accepts either up to16 map keys with
+        // unbounded unsigned value lists, or up to16 signed property records.
+        let unsigned = profile.properties.iter().all(|p| {
+            p.signature.is_none() && matches!(&p.metadata, Tag::Compound(m) if m.is_empty())
+        });
+        if unsigned {
+            let names: std::collections::BTreeSet<_> =
+                profile.properties.iter().map(|p| &p.name).collect();
+            if names.len() > 16 {
+                return Err(TextFormError::Malformed);
+            }
+        } else if profile.properties.len() > 16
+            || profile.properties.iter().any(|p| {
+                p.name.encode_utf16().count() > 64
+                    || p.value.encode_utf16().count() > 32767
+                    || p.signature
+                        .as_ref()
+                        .is_some_and(|s| s.encode_utf16().count() > 1024)
+            })
+        {
+            return Err(TextFormError::Malformed);
+        }
+    }
+    if roots.iter().any(|t| !matches!(t, Tag::Compound(_))) {
+        return Err(TextFormError::Malformed);
+    }
+    if let Some(TextClick::ShowDialog(tag)) = click {
+        roots.push(tag);
+    }
+    if let Some(TextClick::Custom {
+        payload: Some(tag), ..
+    }) = click
+    {
+        roots.push(tag);
+    }
+    roots.extend(item);
+    if roots
+        .into_iter()
+        .any(|tag| !horizon_core::nbt::within_depth(tag, MAX_TEXT_DEPTH))
+    {
+        return Err(TextFormError::TooDeep);
+    }
+    Ok(())
+}
+
 impl TryFrom<&Text> for TextForm {
     type Error = TextFormError;
     fn try_from(value: &Text) -> Result<Self, Self::Error> {
-        let mut writer = DepthWriter::default();
-        if let Err(error) = serde_json::to_writer(&mut writer, value) {
-            return Err(if writer.too_deep {
-                TextFormError::TooDeep
-            } else {
-                TextFormError::Invalid(error)
+        value.validate()?;
+        let mut nodes = Vec::new();
+        let mut pending = vec![(value, None, TextRelation::Child)];
+        while let Some((text, parent, relation)) = pending.pop() {
+            let index = u32::try_from(nodes.len()).map_err(|_| TextFormError::Malformed)?;
+            let content = match &text.content {
+                TextContent::Literal(s) => TextNodeContent::Literal(s.clone()),
+                TextContent::Translatable { key, fallback, .. } => TextNodeContent::Translatable {
+                    key: key.clone(),
+                    fallback: fallback.clone(),
+                },
+                TextContent::Keybind(s) => TextNodeContent::Keybind(s.clone()),
+                TextContent::Selector { pattern, .. } => TextNodeContent::Selector {
+                    pattern: pattern.clone(),
+                },
+                TextContent::Score { name, objective } => TextNodeContent::Score {
+                    name: name.clone(),
+                    objective: objective.clone(),
+                },
+                TextContent::Nbt {
+                    path,
+                    interpret,
+                    source,
+                    ..
+                } => TextNodeContent::Nbt {
+                    path: path.clone(),
+                    interpret: *interpret,
+                    source: source.clone(),
+                },
+                TextContent::Object(TextObject::Player { profile, hat, .. }) => {
+                    TextNodeContent::Player {
+                        profile: clone_profile(profile),
+                        hat: *hat,
+                    }
+                }
+                TextContent::Object(TextObject::Atlas { atlas, sprite, .. }) => {
+                    TextNodeContent::Atlas {
+                        atlas: atlas.clone(),
+                        sprite: sprite.clone(),
+                    }
+                }
+            };
+            nodes.push(TextNode {
+                parent,
+                relation,
+                content,
+                style: TextNodeStyle::from_style(&text.style),
+                metadata: clone_tag(&text.metadata),
             });
+            let mut children = Vec::new();
+            text.visit_children(|child, relation| children.push((child, Some(index), relation)));
+            pending.extend(children.into_iter().rev());
         }
-        // serde_json always writes UTF-8.
-        Ok(Self {
-            tree: String::from_utf8(writer.bytes).expect("JSON is UTF-8"),
-        })
+        Ok(Self { nodes })
+    }
+}
+impl TextForm {
+    fn validate(&self) -> Result<(), TextFormError> {
+        let mut depths = Vec::with_capacity(self.nodes.len());
+        let mut masks = vec![0u8; self.nodes.len()];
+        for (index, node) in self.nodes.iter().enumerate() {
+            let depth = match node.parent {
+                None if index == 0 && node.relation == TextRelation::Child => 1usize,
+                Some(parent) if (parent as usize) < index => depths[parent as usize] + 1,
+                _ => return Err(TextFormError::Malformed),
+            };
+            if depth > MAX_TEXT_DEPTH {
+                return Err(TextFormError::TooDeep);
+            }
+            depths.push(depth);
+            if let Some(parent) = node.parent {
+                let parent = parent as usize;
+                let target = &self.nodes[parent];
+                let bit = match node.relation {
+                    TextRelation::Child => 0,
+                    TextRelation::Argument
+                        if matches!(target.content, TextNodeContent::Translatable { .. }) =>
+                    {
+                        0
+                    }
+                    TextRelation::Separator
+                        if matches!(
+                            target.content,
+                            TextNodeContent::Selector { .. } | TextNodeContent::Nbt { .. }
+                        ) =>
+                    {
+                        1
+                    }
+                    TextRelation::Fallback
+                        if matches!(
+                            target.content,
+                            TextNodeContent::Player { .. } | TextNodeContent::Atlas { .. }
+                        ) =>
+                    {
+                        2
+                    }
+                    TextRelation::HoverText
+                        if matches!(target.style.hover, Some(TextNodeHover::Text)) =>
+                    {
+                        4
+                    }
+                    TextRelation::HoverEntityName
+                        if matches!(target.style.hover, Some(TextNodeHover::Entity { .. })) =>
+                    {
+                        8
+                    }
+                    _ => return Err(TextFormError::Malformed),
+                };
+                if masks[parent] & bit != 0 {
+                    return Err(TextFormError::Malformed);
+                }
+                masks[parent] |= bit;
+            }
+        }
+        if self.nodes.is_empty() {
+            return Err(TextFormError::Malformed);
+        }
+        for (index, node) in self.nodes.iter().enumerate() {
+            if matches!(node.style.hover, Some(TextNodeHover::Text)) && masks[index] & 4 == 0 {
+                return Err(TextFormError::Malformed);
+            }
+            let profile = match &node.content {
+                TextNodeContent::Player { profile, .. } => Some(profile),
+                _ => None,
+            };
+            let item = match &node.style.hover {
+                Some(TextNodeHover::Item { components, .. }) => components.as_ref(),
+                _ => None,
+            };
+            validate_payload(
+                &node.metadata,
+                &node.style.metadata,
+                node.style.click.as_ref(),
+                item,
+                profile,
+            )?;
+        }
+        Ok(())
+    }
+}
+fn discard_form(form: TextForm) {
+    let mut tags = Vec::new();
+    for node in form.nodes {
+        tags.extend([node.metadata, node.style.metadata]);
+        if let Some(
+            TextClick::ShowDialog(t)
+            | TextClick::Custom {
+                payload: Some(t), ..
+            },
+        ) = node.style.click
+        {
+            tags.push(t);
+        }
+        if let Some(TextNodeHover::Item {
+            components: Some(t),
+            ..
+        }) = node.style.hover
+        {
+            tags.push(t);
+        }
+        if let TextNodeContent::Player { profile, .. } = node.content {
+            tags.push(profile.metadata);
+            tags.extend(profile.properties.into_iter().map(|p| p.metadata));
+        }
+    }
+    for tag in tags {
+        horizon_core::nbt::discard_tag(tag);
     }
 }
 impl TryFrom<TextForm> for Text {
     type Error = TextFormError;
     fn try_from(value: TextForm) -> Result<Self, Self::Error> {
-        use std::io::Write;
-        let mut writer = DepthWriter::default();
-        writer
-            .write_all(value.tree.as_bytes())
-            .map_err(|_| TextFormError::TooDeep)?;
-        serde_json::from_str(&value.tree).map_err(TextFormError::Invalid)
+        if let Err(error) = value.validate() {
+            discard_form(value);
+            return Err(error);
+        }
+        let mut nodes: Vec<_> = value
+            .nodes
+            .into_iter()
+            .map(|node| {
+                let content = match node.content {
+                    TextNodeContent::Literal(s) => TextContent::Literal(s),
+                    TextNodeContent::Translatable { key, fallback } => TextContent::Translatable {
+                        key,
+                        fallback,
+                        arguments: Vec::new(),
+                    },
+                    TextNodeContent::Keybind(s) => TextContent::Keybind(s),
+                    TextNodeContent::Selector { pattern } => TextContent::Selector {
+                        pattern,
+                        separator: None,
+                    },
+                    TextNodeContent::Score { name, objective } => {
+                        TextContent::Score { name, objective }
+                    }
+                    TextNodeContent::Nbt {
+                        path,
+                        interpret,
+                        source,
+                    } => TextContent::Nbt {
+                        path,
+                        interpret,
+                        source,
+                        separator: None,
+                    },
+                    TextNodeContent::Player { profile, hat } => {
+                        TextContent::Object(TextObject::Player {
+                            profile,
+                            hat,
+                            fallback: None,
+                        })
+                    }
+                    TextNodeContent::Atlas { atlas, sprite } => {
+                        TextContent::Object(TextObject::Atlas {
+                            atlas,
+                            sprite,
+                            fallback: None,
+                        })
+                    }
+                };
+                (
+                    node.parent,
+                    node.relation,
+                    Some(Text {
+                        content,
+                        style: node.style.into_style(),
+                        children: Vec::new(),
+                        metadata: node.metadata,
+                    }),
+                )
+            })
+            .collect();
+        for i in (1..nodes.len()).rev() {
+            let parent = nodes[i].0.expect("validated parent") as usize;
+            let relation = nodes[i].1;
+            let mut child = nodes[i].2.take().expect("unattached child");
+            child.children.reverse();
+            if let TextContent::Translatable { arguments, .. } = &mut child.content {
+                arguments.reverse();
+            }
+            let target = nodes[parent].2.as_mut().expect("parent follows child");
+            match relation {
+                TextRelation::Child => target.children.push(child),
+                TextRelation::Argument => match &mut target.content {
+                    TextContent::Translatable { arguments, .. } => arguments.push(child),
+                    _ => unreachable!("validated argument"),
+                },
+                TextRelation::Separator => match &mut target.content {
+                    TextContent::Selector { separator, .. }
+                    | TextContent::Nbt { separator, .. } => *separator = Some(Box::new(child)),
+                    _ => unreachable!("validated separator"),
+                },
+                TextRelation::Fallback => match &mut target.content {
+                    TextContent::Object(
+                        TextObject::Player { fallback, .. } | TextObject::Atlas { fallback, .. },
+                    ) => *fallback = Some(Box::new(child)),
+                    _ => unreachable!("validated fallback"),
+                },
+                TextRelation::HoverText => {
+                    target.style.hover = Some(TextHover::Text(Box::new(child)))
+                }
+                TextRelation::HoverEntityName => match &mut target.style.hover {
+                    Some(TextHover::Entity { name, .. }) => *name = Some(Box::new(child)),
+                    _ => unreachable!("validated name"),
+                },
+            }
+        }
+        let mut root = nodes[0].2.take().expect("validated root");
+        root.children.reverse();
+        if let TextContent::Translatable { arguments, .. } = &mut root.content {
+            arguments.reverse();
+        }
+        Ok(root)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[test]
-    fn form_bounds_depth_and_preserves_hover_and_insertion() {
-        let mut text = Text::literal("root").with_style(TextStyle {
-            hover: Some(TextHover::Text(Box::new(Text::literal("hover")))),
-            insertion: Some("insert".into()),
+    fn named(name: &str) -> TextProfile {
+        TextProfile {
+            name: Some(name.into()),
             ..Default::default()
-        });
-        let round_trip = Text::try_from(TextForm::try_from(&text).unwrap()).unwrap();
-        assert_eq!(round_trip.style.hover, text.style.hover);
-        assert_eq!(round_trip.style.insertion, text.style.insertion);
-        // Metadata allows exercising the exact JSON-container limit independently of
-        // the several containers used to represent each Text node.
-        let mut nested = serde_json::json!(0);
-        for _ in 0..MAX_TEXT_FORM_DEPTH - 2 {
-            nested = serde_json::json!([nested]);
-        }
-        text.metadata.insert("nested".into(), nested);
-        let form = TextForm::try_from(&text).unwrap();
-        assert!(Text::try_from(form).is_ok());
-        let nested = text.metadata.remove("nested").unwrap();
-        text.metadata
-            .insert("nested".into(), serde_json::json!([nested]));
-        assert!(matches!(
-            TextForm::try_from(&text),
-            Err(TextFormError::TooDeep)
-        ));
-
-        let mut deep = Text::literal("end");
-        for _ in 0..100_000 {
-            deep = Text::literal("node").append(deep);
-        }
-        assert!(matches!(
-            TextForm::try_from(&deep),
-            Err(TextFormError::TooDeep)
-        ));
-        // Dropping a deeply recursive value is not part of conversion.
-        std::mem::forget(deep);
-    }
-    #[test]
-    fn form_refuses_deep_input_and_keeps_all_style_and_source_fields() {
-        let raw = format!("{}0{}", "[".repeat(101), "]".repeat(101));
-        assert!(matches!(
-            Text::try_from(TextForm { tree: raw }),
-            Err(TextFormError::TooDeep)
-        ));
-        let style = TextStyle {
-            color: Some("red".into()),
-            shadow_color: Some(0xff123456),
-            italic: Some(true),
-            underlined: Some(true),
-            strikethrough: Some(true),
-            obfuscated: Some(true),
-            click: Some(TextClick::RunCommand("/test".into())),
-            font: Some("test:font".into()),
-            ..Default::default()
-        };
-        let mut score = Text::literal("").with_style(style);
-        score.content = TextContent::Score {
-            name: "test".into(),
-            objective: "objective".into(),
-        };
-        let mut nbt = Text::literal("");
-        nbt.content = TextContent::Nbt {
-            path: "foo.bar".into(),
-            interpret: true,
-            source: TextNbtSource::Storage("test:data".into()),
-            separator: None,
-        };
-        let text = score.append(nbt);
-        assert_eq!(
-            Text::try_from(TextForm::try_from(&text).unwrap()).unwrap(),
-            text
-        );
-    }
-    #[test]
-    fn via_accepts_infallible_and_fallible_forms() {
-        #[horizon_mod_api_macros::wasm(via = String)]
-        struct Infallible;
-        impl From<&Infallible> for String {
-            fn from(_: &Infallible) -> Self {
-                String::new()
-            }
-        }
-        impl TryFrom<String> for Infallible {
-            type Error = ();
-            fn try_from(_: String) -> Result<Self, Self::Error> {
-                Ok(Self)
-            }
-        }
-        #[horizon_mod_api_macros::wasm(via = TextForm)]
-        struct Fallible(Text);
-        impl TryFrom<&Fallible> for TextForm {
-            type Error = TextFormError;
-            fn try_from(value: &Fallible) -> Result<Self, Self::Error> {
-                Self::try_from(&value.0)
-            }
-        }
-        impl TryFrom<TextForm> for Fallible {
-            type Error = TextFormError;
-            fn try_from(value: TextForm) -> Result<Self, Self::Error> {
-                Text::try_from(value).map(Self)
-            }
         }
     }
     #[test]
-    fn form_retains_translation_children_and_explicit_style_overrides() {
-        let text = Text::translate(
-            "chat.type.text",
-            vec![Text::literal("Alex"), Text::literal("Hi")],
-        )
-        .with_style(TextStyle {
-            bold: Some(true),
-            ..Default::default()
-        })
-        .append(Text::literal("!").with_style(TextStyle {
-            bold: Some(false),
-            ..Default::default()
+    fn recursive_fields_styles_and_metadata_survive_typed_rows() {
+        let mut root =
+            Text::translate("key", vec![Text::literal("first"), Text::literal("second")]);
+        let mut player = Text::new(TextContent::Object(TextObject::Player {
+            profile: TextProfile {
+                name: Some("Test".into()),
+                id: Some([1, 2]),
+                properties: vec![TextProfileProperty {
+                    name: "textures".into(),
+                    value: "data".into(),
+                    signature: Some("signed".into()),
+                    metadata: Tag::compound([("property-extra", Tag::Int(8))]),
+                }],
+                metadata: Tag::compound([(
+                    "future-profile",
+                    Tag::List(vec![Tag::String("kept".into())]),
+                )]),
+            },
+            hat: false,
+            fallback: Some(Box::new(Text::translate("head", vec![]))),
         }));
-        let decoded = Text::try_from(TextForm::try_from(&text).unwrap()).unwrap();
-        assert_eq!(decoded, text);
-        assert!(
-            matches!(&decoded.content, TextContent::Translatable { key, .. } if key == "chat.type.text")
-        );
-        assert_eq!(decoded.children[0].style.bold, Some(false));
+        player.style.hover = Some(TextHover::Text(Box::new(Text::literal("hover"))));
+        let mut atlas = Text::new(TextContent::Object(TextObject::Atlas {
+            atlas: "minecraft:blocks".into(),
+            sprite: "test:icon".into(),
+            fallback: None,
+        }));
+        atlas.style.hover = Some(TextHover::Entity {
+            kind: "test:entity".into(),
+            id: [3, 4],
+            name: Some(Box::new(Text::literal("name"))),
+        });
+        root.children = vec![
+            Text::new(TextContent::Selector {
+                pattern: "@a".into(),
+                separator: Some(Box::new(Text::literal(", "))),
+            }),
+            Text::new(TextContent::Nbt {
+                path: "x".into(),
+                interpret: true,
+                source: TextNbtSource::Storage("test:data".into()),
+                separator: Some(Box::new(Text::literal("/"))),
+            }),
+            player,
+            atlas,
+        ];
+        root.style.bold = Some(false);
+        root.metadata = Tag::compound([("future", Tag::Byte(7))]);
+        root.style.metadata = Tag::compound([("future-style", Tag::IntArray(vec![1, 2]))]);
+        let form = TextForm::try_from(&root).unwrap();
+        assert!(matches!(
+            form.nodes[0].content,
+            TextNodeContent::Translatable { .. }
+        ));
+        assert_eq!(Text::try_from(form).unwrap(), root);
     }
     #[test]
-    fn object_fallback_form_distinguishes_omitted_styled_and_translatable() {
-        use serde_json::json;
-        let styled = json!({"content":{"Literal":"styled"}, "style":{"bold":false}, "children":[]});
-        let translated = json!({"content":{"Translatable":{"key":"test.head", "arguments":[]}}, "style":{}, "children":[]});
-        for object in [
-            json!({"Player":{"profile":{"name":"Test"}, "hat":true}}),
-            json!({"Atlas":{"atlas":"minecraft:blocks", "sprite":"test:icon"}}),
+    fn malformed_relations_duplicates_and_missing_hover_markers_refuse() {
+        let form =
+            TextForm::try_from(&Text::literal("root").append(Text::literal("child"))).unwrap();
+        for relation in [
+            TextRelation::Argument,
+            TextRelation::Separator,
+            TextRelation::Fallback,
+            TextRelation::HoverText,
+            TextRelation::HoverEntityName,
         ] {
-            for fallback in [None, Some(styled.clone()), Some(translated.clone())] {
-                let mut object = object.clone();
-                if let Some(fallback) = &fallback {
-                    object.as_object_mut().unwrap().values_mut().next().unwrap()["fallback"] =
-                        fallback.clone();
-                }
-                let tree =
-                    json!({"content":{"Object":object}, "style":{}, "children":[]}).to_string();
-                let text = Text::try_from(TextForm { tree }).unwrap();
-                let TextContent::Object(object) = &text.content else {
-                    panic!("object contents")
-                };
-                let captured = match object {
-                    TextObject::Player { fallback, .. } | TextObject::Atlas { fallback, .. } => {
-                        fallback
+            let mut bad = form.clone();
+            bad.nodes[1].relation = relation;
+            assert_eq!(Text::try_from(bad), Err(TextFormError::Malformed));
+        }
+        for parent in [Some(0), Some(1), None] {
+            let mut bad = form.clone();
+            bad.nodes[1].parent = parent;
+            if parent == Some(0) {
+                continue;
+            }
+            assert_eq!(Text::try_from(bad), Err(TextFormError::Malformed));
+        }
+        let mut bad = form.clone();
+        bad.nodes[0].parent = Some(0);
+        assert_eq!(Text::try_from(bad), Err(TextFormError::Malformed));
+        let mut valid = form;
+        valid.nodes[0].style.hover = Some(TextNodeHover::Text);
+        valid.nodes[1].relation = TextRelation::HoverText;
+        assert!(Text::try_from(valid.clone()).is_ok());
+        let mut duplicate = valid.clone();
+        duplicate.nodes.push(valid.nodes[1].clone());
+        assert_eq!(Text::try_from(duplicate), Err(TextFormError::Malformed));
+        valid.nodes.pop();
+        assert_eq!(Text::try_from(valid), Err(TextFormError::Malformed));
+    }
+    #[test]
+    fn fallback_absence_and_component_styles_remain_distinct() {
+        for fallback in [
+            None,
+            Some(Text::literal("styled").with_style(TextStyle {
+                bold: Some(false),
+                ..Default::default()
+            })),
+            Some(Text::translate("test.head", vec![])),
+        ] {
+            for player in [true, false] {
+                let object = if player {
+                    TextObject::Player {
+                        profile: named("Test"),
+                        hat: true,
+                        fallback: fallback.clone().map(Box::new),
+                    }
+                } else {
+                    TextObject::Atlas {
+                        atlas: "minecraft:blocks".into(),
+                        sprite: "test:icon".into(),
+                        fallback: fallback.clone().map(Box::new),
                     }
                 };
-                match &fallback {
-                    None => assert!(captured.is_none()),
-                    Some(value) if value == &styled => {
-                        assert_eq!(captured.as_ref().unwrap().style.bold, Some(false))
-                    }
-                    Some(_) => assert!(
-                        matches!(&captured.as_ref().unwrap().content, TextContent::Translatable { key, .. } if key == "test.head")
-                    ),
-                }
+                let text = Text::new(TextContent::Object(object));
                 assert_eq!(
                     Text::try_from(TextForm::try_from(&text).unwrap()).unwrap(),
                     text
@@ -496,18 +1156,151 @@ mod tests {
         }
     }
     #[test]
-    fn form_keeps_unknown_metadata_and_refuses_malformed_trees() {
-        let mut value = serde_json::to_value(Text::literal("value")).unwrap();
-        value["metadata"]["future_component"] = serde_json::json!({"version": 7});
-        value["style"]["metadata"]["future_style"] = serde_json::json!([1, 2]);
-        let text: Text = serde_json::from_value(value.clone()).unwrap();
-        let decoded = Text::try_from(TextForm::try_from(&text).unwrap()).unwrap();
-        assert_eq!(serde_json::to_value(decoded).unwrap(), value);
-        assert!(
-            Text::try_from(TextForm {
-                tree: "{\"content\": 42}".into()
+    fn profile_limits_cover_both_vanilla_property_codecs() {
+        let mut profile = named("Test");
+        profile.properties = (0..17)
+            .map(|_| TextProfileProperty {
+                name: "textures".into(),
+                value: "v".into(),
+                ..Default::default()
             })
-            .is_err()
+            .collect();
+        let text = |profile| {
+            Text::new(TextContent::Object(TextObject::Player {
+                profile,
+                hat: true,
+                fallback: None,
+            }))
+        };
+        assert!(TextForm::try_from(&text(profile.clone())).is_ok()); // one unsigned map key, not17 signed entries
+        profile.properties[0].signature = Some("signed".into());
+        assert_eq!(
+            TextForm::try_from(&text(profile.clone())),
+            Err(TextFormError::Malformed)
+        );
+        profile.properties.clear();
+        profile.name = Some("seventeen-chars!!!".into());
+        assert_eq!(
+            TextForm::try_from(&text(profile)),
+            Err(TextFormError::Malformed)
+        );
+    }
+    fn nested_tag(depth: usize) -> Tag {
+        (0..depth).fold(Tag::Byte(7), |t, _| Tag::List(vec![t]))
+    }
+    #[test]
+    fn every_opaque_slot_obeys_the_512_container_boundary() {
+        for depth in [512, 513] {
+            for slot in 0..7 {
+                let mut text = Text::literal("root");
+                let metadata = || Tag::compound([("test:deep", nested_tag(depth - 1))]);
+                match slot {
+                    0 => text.metadata = metadata(),
+                    1 => text.style.metadata = metadata(),
+                    2 | 3 => {
+                        let mut profile = named("Test");
+                        if slot == 2 {
+                            profile.metadata = metadata();
+                        } else {
+                            let mut property = TextProfileProperty::default();
+                            property.name = "textures".into();
+                            property.value = "value".into();
+                            property.metadata = metadata();
+                            profile.properties.push(property);
+                        }
+                        text.content = TextContent::Object(TextObject::Player {
+                            profile,
+                            hat: true,
+                            fallback: None,
+                        });
+                    }
+                    4 => {
+                        text.style.click = Some(TextClick::Custom {
+                            id: "test:x".into(),
+                            payload: Some(nested_tag(depth)),
+                        })
+                    }
+                    5 => text.style.click = Some(TextClick::ShowDialog(nested_tag(depth))),
+                    _ => {
+                        text.style.hover = Some(TextHover::Item {
+                            id: "minecraft:stone".into(),
+                            count: 1,
+                            components: Some(nested_tag(depth)),
+                        })
+                    }
+                }
+                let form = TextForm::try_from(&text);
+                if depth == 512 {
+                    assert_eq!(Text::try_from(form.unwrap()).unwrap(), text, "slot {slot}");
+                } else {
+                    assert_eq!(form, Err(TextFormError::TooDeep), "slot {slot}");
+                }
+            }
+        }
+        let mut row = TextNode::new(TextNodeContent::Literal("root".into()));
+        row.metadata = Tag::compound([("test:deep", nested_tag(512))]);
+        assert_eq!(
+            Text::try_from(TextForm { nodes: vec![row] }),
+            Err(TextFormError::TooDeep)
+        );
+    }
+    #[test]
+    fn mixed_component_and_tag_depths_have_no_100_container_gap() {
+        std::thread::Builder::new()
+            .stack_size(256 * 1024)
+            .spawn(|| {
+                let mut tree = Text::literal("leaf");
+                tree.metadata = Tag::compound([("deep", nested_tag(511))]);
+                tree.style.metadata = Tag::compound([("deep-style", nested_tag(511))]);
+                tree.style.click = Some(TextClick::Custom {
+                    id: "test:click".into(),
+                    payload: Some(nested_tag(512)),
+                });
+                tree.style.hover = Some(TextHover::Item {
+                    id: "test:item".into(),
+                    count: 1,
+                    components: Some(nested_tag(512)),
+                });
+                for _ in 1..512 {
+                    tree = Text::literal("parent").append(tree);
+                }
+                let form = TextForm::try_from(&tree).unwrap();
+                assert_eq!(form.nodes.len(), 512);
+                let decoded = Text::try_from(form).unwrap();
+                let mut leaf = &decoded;
+                for _ in 1..512 {
+                    leaf = &leaf.children[0];
+                }
+                assert!(matches!(leaf.metadata.get("deep"), Some(Tag::List(_))));
+                let too_deep = Text::literal("root").append(tree);
+                assert_eq!(TextForm::try_from(&too_deep), Err(TextFormError::TooDeep));
+                std::mem::forget(too_deep);
+                std::mem::forget(decoded);
+                let mut bad = TextNode::new(TextNodeContent::Literal("bad".into()));
+                bad.metadata = Tag::compound([("deep", nested_tag(4096))]);
+                // The consuming decoder must iteratively release refused input too.
+                assert_eq!(
+                    Text::try_from(TextForm { nodes: vec![bad] }),
+                    Err(TextFormError::TooDeep)
+                );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+    #[test]
+    fn opaque_nonfinite_and_surrogates_are_data_until_json_emission() {
+        let mut text = Text::literal("data");
+        text.metadata = Tag::compound([
+            ("number", Tag::Float(f32::NAN.to_bits())),
+            (
+                "string",
+                Tag::String(horizon_core::nbt::JavaString(vec![0xd800])),
+            ),
+        ]);
+        assert_eq!(
+            Text::try_from(TextForm::try_from(&text).unwrap()).unwrap(),
+            text
         );
     }
 }

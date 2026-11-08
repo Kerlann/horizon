@@ -142,7 +142,7 @@ impl GameLevel<'_> {
         dimension: LevelDimension,
         pos: BlockPos,
         state: BlockStateId,
-        changed: BlockId,
+        changed: mod_api::BlockKey,
         moved: bool,
     ) {
         self.fire_neighbor_changed(ticks, dimension, pos, state, changed, moved);
@@ -347,7 +347,7 @@ impl GameLevel<'_> {
     pub(in crate::game) fn native_update_shape(
         &self,
         ticks: &mut Ticks,
-        call: mod_api::__private::UpdateShapeCall<'_>,
+        call: super::fire::UpdateShapeCall<'_>,
     ) {
         self.fire_update_shape(ticks, call);
     }
@@ -820,7 +820,7 @@ impl Game<'_> {
         inputs: &mod_api::hud_layout::HealthInputs,
         wi: i32,
         hi: i32,
-        draws: &mut Option<Vec<mod_api::hud_layout::GuiDraw>>,
+        draws: &mut Option<Vec<GuiDraw>>,
     ) {
         self.fire_health_hud(inputs, wi, hi, draws);
     }
@@ -1033,7 +1033,7 @@ impl Game<'_> {
     }
     /// Blocks this mod adds, declared in code rather than one file each
     /// (NeoForge's `DeferredRegister.Blocks` drained by `RegisterEvent`):
-    /// push a `horizon_mod_package::content::Block` per block, the same declaration
+    /// push a `mod_api::Block` per block, the same declaration
     /// a content mod's `data/<id>/horizon/block/<path>.json` holds (a
     /// vanilla `template`, `properties`, `state_properties`, `shapes`...),
     /// with its id in your mod's namespace. `item: true` gives it a block
@@ -1048,20 +1048,20 @@ impl Game<'_> {
     /// are logged and that namespace's are left out.
     pub(in crate::game) fn native_blocks(
         context: &mod_api::RegistrationContext,
-        blocks: &mut Vec<horizon_mod_package::content::Block>,
+        blocks: &mut Vec<mod_api::Block>,
     ) {
         Self::fire_blocks(context, blocks);
     }
     /// Items this mod adds, declared in code (NeoForge's
     /// `DeferredRegister.Items`), as `native_blocks` declares blocks: a
-    /// `horizon_mod_package::content::Item` per item, a content mod's
+    /// `mod_api::Item` per item, a content mod's
     /// `data/<id>/horizon/item/<path>.json` (a vanilla `template`,
     /// `max_stack_size`, `rarity`, `components`, `crafting_remainder`). A
     /// block's item comes with its block (`item: true`), not from here.
     /// Asked once at start, on every side.
     pub(in crate::game) fn native_items(
         context: &mod_api::RegistrationContext,
-        items: &mut Vec<horizon_mod_package::content::Item>,
+        items: &mut Vec<mod_api::Item>,
     ) {
         Self::fire_items(context, items);
     }
@@ -1107,7 +1107,7 @@ impl Game<'_> {
     /// player's weapon hit: the entry says `enchanted` attacker and `affected`
     /// victim, its `requirements` passed, and its `effect` names a `type` in a
     /// namespace outside `minecraft:`. Told the enchantment id, the kind, the
-    /// `effect` JSON, the level and the mob's id (it may have just died). The
+    /// `effect` payload as a borrowed `Tag`, the level and the mob's id (it may have just died). The
     /// acting player is the one whose weapon carries the enchantment. Each
     /// such entry is told once a hit, and once for each mob a sweep lands on.
     /// A hit on a player, and an entry inside `minecraft:all_of`, aren't told
@@ -1116,7 +1116,7 @@ impl Game<'_> {
         &mut self,
         enchantment: &str,
         kind: &str,
-        data: &serde_json::Value,
+        data: &horizon_core::nbt::Tag,
         level: u32,
         victim: u32,
     ) {
@@ -1188,11 +1188,15 @@ impl Game<'_> {
     }
     /// A consumable's effect of a mod's own kind: the item's `on_consume_effects`
     /// entry is of a type in a namespace of its own, and the loader kept it
-    /// for this call. The kind and the JSON the file wrote are here; the acting
+    /// for this call. The kind and the definition payload as a borrowed `Tag` are here; the acting
     /// player is the one consuming, and the game's own effects,
     /// sounds, teleports and drops are open. An unclaimed kind does
     /// nothing.
-    pub(in crate::game) fn native_consume_effect(&mut self, kind: &str, data: &serde_json::Value) {
+    pub(in crate::game) fn native_consume_effect(
+        &mut self,
+        kind: &str,
+        data: &horizon_core::nbt::Tag,
+    ) {
         self.fire_consume_effect(kind, data);
     }
     /// What clients get of the block entity at `pos` when its `id` is
@@ -4636,7 +4640,7 @@ impl Game<'_> {
         self
     }
     /// Read a loaded, light-emitting block. No implicit chunk loading.
-    pub(in crate::game) fn lit_block_name(&self, pos: [i32; 3]) -> Option<&str> {
+    pub(in crate::game) fn lit_block_name(&self, pos: [i32; 3]) -> Option<mod_api::BlockKey> {
         self.world
             .chunks
             .contains_key(&(pos[0].div_euclid(16), pos[2].div_euclid(16)))
@@ -4646,7 +4650,7 @@ impl Game<'_> {
                     .get(self.world.block(pos[0], pos[1], pos[2]))
             })
             .filter(|f| f.emission > 0)
-            .map(|f| f.name.as_ref())
+            .and_then(|f| mod_api::__private::block_key(&f.name))
     }
     /// A small local vanilla particle; caller should rate-limit emission.
     pub(in crate::game) fn flame_particle(&mut self, at: [f64; 3], soul: bool) {
@@ -5095,16 +5099,18 @@ impl Game<'_> {
     /// world.
     pub(in crate::game) fn recipe_ingredient(
         &self,
-        json: &serde_json::Value,
-    ) -> Option<Ingredient> {
+        json: &str,
+    ) -> Result<Option<Ingredient>, mod_api::RecipeJsonError> {
         if self.outside_world() {
-            return None;
+            return Ok(None);
         }
+        let json: serde_json::Value =
+            serde_json::from_str(json).map_err(|_| mod_api::RecipeJsonError::InvalidJson)?;
         let qualify = |s: &str| match s.strip_prefix('#') {
             Some(tag) => String::from("#") + &qualified(tag),
             None => qualified(s),
         };
-        let json = match json {
+        let json = match &json {
             serde_json::Value::String(s) => serde_json::Value::String(qualify(s)),
             serde_json::Value::Array(a) => serde_json::Value::Array(
                 a.iter()
@@ -5112,29 +5118,38 @@ impl Game<'_> {
                     .map(|s| serde_json::Value::String(qualify(s)))
                     .collect(),
             ),
-            _ => return None,
+            _ => return Ok(None),
         };
         let items = self.items();
-        let known: Vec<String> = Ingredient::parse(&json, items)?
+        let Some(ingredient) = horizon_client::crafting::Ingredient::parse(&json, items) else {
+            return Ok(None);
+        };
+        let known: Vec<String> = ingredient
             .order
             .into_iter()
             .filter(|item| items.get(item).is_some())
             .collect();
-        (!known.is_empty()).then(|| Ingredient::of(known))
+        Ok((!known.is_empty()).then(|| Ingredient::of(known)))
     }
     /// A stack as a recipe's `result` names it: `id` (a bare one as
     /// `minecraft:`), `count` (1 by default, up to 99) and `components`. None
     /// without an `id`, for an item the game doesn't know or a count outside
     /// that, and outside a world.
-    pub(in crate::game) fn recipe_result(&self, json: &serde_json::Value) -> Option<ItemStack> {
+    pub(in crate::game) fn recipe_result(
+        &self,
+        json: &str,
+    ) -> Result<Option<ItemStack>, mod_api::RecipeJsonError> {
         if self.outside_world() {
-            return None;
+            return Ok(None);
         }
-        let mut json = json.clone();
-        if let Some(id) = json["id"].as_str() {
+        let mut json: serde_json::Value =
+            serde_json::from_str(json).map_err(|_| mod_api::RecipeJsonError::InvalidJson)?;
+        if let Some(id) = json.as_str() {
+            json = qualified(id).into();
+        } else if let Some(id) = json["id"].as_str() {
             json["id"] = qualified(id).into();
         }
-        recipe_result(&json).filter(|s| self.items().get(&s.item).is_some())
+        Ok(recipe_result(&json).filter(|s| self.items().get(&s.item).is_some()))
     }
     /// The `book_id`s of the recipes the player's recipe book holds now
     /// (the server's book on a server); empty outside a world.
@@ -5160,7 +5175,12 @@ impl Game<'_> {
     /// (`minecraft:diamond`) as taking it from the creative inventory does
     /// (`ServerboundSetCreativeModeSlot`): the selected slot first, then the
     /// hotbar, then the inventory. The count is cut to one stack.
-    pub(in crate::game) fn give(&mut self, item: &str, count: u32) -> Result<(), String> {
+    pub(in crate::game) fn give(
+        &mut self,
+        item: mod_api::ItemKey,
+        count: u32,
+    ) -> Result<(), String> {
+        let item = mod_api::__private::item_key_id(item).ok_or("unknown item key")?;
         self.recipe_give(item, count)
     }
 }

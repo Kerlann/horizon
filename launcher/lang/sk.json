@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Nepodarilo sa prečítať denník zostavy: {error}",
   "Could not read the saved sign-in.": "Uložené prihlásenie sa nepodarilo prečítať.",
   "Could not read the saved sign-in. Sign in again.": "Uložené prihlásenie sa nepodarilo prečítať. Prihláste sa znova.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Nedá sa prečítať {name}: {error}",
   "Could not run {program}: {error}": "Nepodarilo sa spustiť {program}: {error}",
   "Could not save the renewed sign-in.": "Obnovené prihlásenie sa nepodarilo uložiť.",

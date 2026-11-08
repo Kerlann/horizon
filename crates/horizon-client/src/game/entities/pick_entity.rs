@@ -67,6 +67,7 @@ impl Game<'_> {
     /// or on a miss. Entity hits carry this client level's epoch. Unlike
     /// view_hit, this never traces distant terrain.
     pub(super) fn crosshair_target(&self) -> Option<NativeCrosshairTarget> {
+        use crate::game::api_values::TryIntoApi;
         if !self.native_window() || self.title.is_some() {
             return None;
         }
@@ -81,7 +82,11 @@ impl Game<'_> {
         let hit = self.pick()?;
         Some(NativeCrosshairTarget::Block {
             pos: BlockPos::new(hit.pos[0], hit.pos[1], hit.pos[2]),
-            state: self.world.block(hit.pos[0], hit.pos[1], hit.pos[2]),
+            state: self
+                .world
+                .block(hit.pos[0], hit.pos[1], hit.pos[2])
+                .try_into_api()
+                .ok()?,
             hit: hit.native(),
         })
     }

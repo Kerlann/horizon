@@ -17,6 +17,7 @@ pub use snapshots::{
     FireworkShapeIngredient, RecipeRule, RecipeSnapshot, RecipeTemplate, RecipeTrimPattern,
 };
 mod ingredient;
+pub mod native_hooks;
 pub use ingredient::{Ingredient, Shape};
 use serde_json::Value;
 use std::{
@@ -1442,7 +1443,7 @@ impl PropertyAdditions {
     /// item that is air are logged and skipped.
     fn ask(context: &horizon_world::native_load_context::LoadContext) -> Self {
         let mut asked = Vec::new();
-        mod_api::crafting::native_recipe_property_sets(context, &mut asked);
+        native_hooks::native_recipe_property_sets(context, &mut asked);
         let mut sets = HashMap::<&'static str, HashSet<String>>::new();
         for addition in asked {
             let key = addition
@@ -2650,7 +2651,7 @@ mod tests {
         assert!(Ingredient::parse(&json(r#"{"type":"minecraft:future_shape"}"#), &items).is_none());
         assert!(Ingredient::parse(&json(r#"{"type":"aspect"}"#), &items).is_none());
         let mut list = vec!["b".to_string(), "a".to_string(), "b".to_string()];
-        mod_api::crafting::dedup_keep_order(&mut list);
+        mod_api::__private::dedup_keep_order(&mut list);
         assert_eq!(list, vec!["b".to_string(), "a".to_string()]);
     }
 

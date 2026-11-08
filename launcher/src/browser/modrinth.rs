@@ -1,5 +1,5 @@
 //! Modrinth's public API (api.modrinth.com/v2): no key, files with SHA-512 and SHA-1.
-use super::{details, FileRef, Kind, Project, Query, Source, SourceId, Version, GAME};
+use super::{FileRef, GAME, Kind, Project, Query, Source, SourceId, Version, details};
 use serde_json::Value;
 
 const API: &str = "https://api.modrinth.com/v2";

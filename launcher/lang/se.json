@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Ii sáhttán lohkat huksenlogu: {error}",
   "Could not read the saved sign-in.": "Ii sáhttán lohkat vurkejuvvon sisaloggema.",
   "Could not read the saved sign-in. Sign in again.": "Ii sáhttán lohkat vurkejuvvon sisaloggema. Logge sisa fas.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Ii sáhttán lohkat {name}: {error}",
   "Could not run {program}: {error}": "Ii sáhttán čađahit {program}: {error}",
   "Could not save the renewed sign-in.": "Ii sáhttán vurket ođasmahttojuvvon sisaloggema.",

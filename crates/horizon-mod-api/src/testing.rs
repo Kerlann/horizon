@@ -238,8 +238,10 @@ impl crate::prelude::LevelsBackend for FakeHost {
     fn level_in_place(&self, level: LevelRef) -> bool {
         level == self.level.level()
     }
-    fn level_block(&self, level: LevelRef, pos: [i32; 3]) -> Option<String> {
-        self.level.block_at(level, pos).map(str::to_owned)
+    fn level_block(&self, level: LevelRef, pos: [i32; 3]) -> Option<crate::BlockKey> {
+        self.level
+            .block_at(level, pos)
+            .and_then(crate::__private::block_key)
     }
 }
 impl crate::prelude::BlockEntitiesBackend for FakeHost {
@@ -456,12 +458,17 @@ impl crate::prelude::EntitiesBackendMut for FakeHost {
     }
 }
 impl crate::prelude::PlayersBackendMut for FakeHost {
-    fn player_action_bar(&mut self, player: PlayerRef, line: Text) -> bool {
+    fn player_action_bar(
+        &mut self,
+        player: PlayerRef,
+        line: Text,
+    ) -> Result<bool, crate::text::TextFormError> {
+        line.validate_depth()?;
         let Some(player) = self.players.get_mut(player.uuid()) else {
-            return false;
+            return Ok(false);
         };
         player.action_bar.push(line);
-        true
+        Ok(true)
     }
 }
 crate::impl_backend_mut_areas!(FakeHost, except(entities, fluids_energy, items, players));

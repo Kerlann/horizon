@@ -18,6 +18,17 @@ use horizon_core::{position::BlockPos, random::RandomSource};
 use horizon_world::{fluid::FluidKind, level::LevelAccess, registry::BlockStateId};
 use serde_json::Value;
 
+/// Shared weapon damage effects; callers choose live RNG for an attack or a snapshot for a read.
+pub(super) fn stack_enchanted_damage(
+    enchantments: &Enchantments,
+    stack: &ItemStack,
+    ctx: &EffectContext<'_>,
+    random: &mut horizon_core::random::LegacyRandom,
+    base: f32,
+) -> f32 {
+    enchantments.modify_value(Some(stack), "minecraft:damage", ctx, random, base)
+}
+
 /// `EquipmentSlot.getName` of each `mobs::finalize` slot (hands, feet to head).
 const MOB_SLOTS: [&str; 6] = ["mainhand", "offhand", "feet", "legs", "chest", "head"];
 
@@ -159,21 +170,32 @@ impl Game<'_> {
     /// `Player.getEnchantedDamage`: `base` run through the held weapon's
     /// damage effects against a mob type.
     pub(super) fn enchanted_damage(&mut self, target: &str, base: f32) -> f32 {
-        let Some(held) = self.held().cloned() else {
+        let Some(held) = self.held().map(|stack| self.item_combat_stack(stack)) else {
             return base;
         };
+        let source = self.stack_melee_damage_type(
+            Some(&held),
+            self.player
+                .as_ref()
+                .map_or((0.0, false), |p| (p.fall_distance, p.fall_flying)),
+            true,
+        );
         let ctx = EffectContext {
             this: Some(target),
             attacker: Some("minecraft:player"),
             direct_attacker: Some("minecraft:player"),
             is_direct: true,
-            damage_type: Some("minecraft:player_attack"),
+            damage_type: Some(&source),
+            direct_motion: self
+                .player
+                .as_ref()
+                .map(|p| (p.fall_distance, p.fall_flying)),
             items: Some(world_items!(self)),
             ..Default::default()
         };
-        world_stations!(self).enchantments.modify_value(
-            Some(&held),
-            "minecraft:damage",
+        stack_enchanted_damage(
+            &world_stations!(self).enchantments,
+            &held,
             &ctx,
             &mut self.world.random,
             base,
@@ -249,15 +271,17 @@ impl Game<'_> {
         // ignite (fire aspect) and apply_mob_effect (bane of arthropods).
         let mut ignite = 0.0f32;
         let mut mob_effects = Vec::new();
-        let mut hook_calls: Vec<(String, String, Value, u32)> = Vec::new();
+        let mut hook_calls: Vec<(String, String, std::sync::Arc<horizon_core::nbt::Tag>, u32)> =
+            Vec::new();
         for (id, level) in held.all_enchantments().iter() {
             let Some(def) = world_stations!(self).enchantments.get(id) else {
                 continue;
             };
-            for effect in def.effects["minecraft:post_attack"]
+            for (effect_index, effect) in def.effects["minecraft:post_attack"]
                 .as_array()
                 .into_iter()
                 .flatten()
+                .enumerate()
             {
                 let e = &effect["effect"];
                 if effect["enchanted"] != "attacker" || effect["affected"] != "victim" {
@@ -287,7 +311,9 @@ impl Game<'_> {
                 // A mod's own kind: its hook answers, after this loop (the
                 // stations borrow is held here).
                 if own {
-                    hook_calls.push((id.to_string(), kind_of, e.clone(), *level));
+                    if let Some(data) = def.native_post_attack.get(&effect_index) {
+                        hook_calls.push((id.to_string(), kind_of, data.clone(), *level));
+                    }
                 } else if kind_of == "minecraft:ignite" {
                     ignite =
                         ignite.max(horizon_client::enchant::level_value(&e["duration"], *level));

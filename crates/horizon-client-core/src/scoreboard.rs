@@ -26,7 +26,7 @@ pub fn bracketed(inner: Text) -> Text {
 }
 fn hover_name(text: Text, name: &str) -> Text {
     text.with_style(&Style {
-        hover: Some(Box::new(Text::literal(name))),
+        hover: Some(std::sync::Arc::new(Text::literal(name))),
         ..Style::default()
     })
 }

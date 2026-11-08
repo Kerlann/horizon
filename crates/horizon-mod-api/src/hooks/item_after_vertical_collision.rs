@@ -14,7 +14,7 @@ pub trait Hooks {
         dimension: &str,
         client: bool,
         entity: u32,
-        state: BlockStateId,
+        state: BlockState,
         block_pos: [i32; 3],
         item_pos: [f64; 3],
         stack: &mut Option<ItemStack>,

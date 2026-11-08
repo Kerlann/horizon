@@ -51,6 +51,13 @@ opening a world handle or transaction. The first client registration and prepare
 thread; later registration runs on the render thread, prepare on its worker, and apply on the owning
 game thread. Startup's empty client Host is not an extra permission.
 
+`DataLoadOrigin` and `LoopSide` are API-owned enums, not engine exports. Load and loop
+callbacks read frozen registry and settings metadata through `DataLoadContext` and `LoopContext`.
+The engine supplies borrowed `LoadReader` and `LoopReader` implementations; the API's owning
+views contain no engine types and do not copy or rescan the resource snapshot. Mod listeners
+keep using the context traits, with the same origin, side and registry ordering on both targets.
+The reader adapters themselves are native host implementation details, not wasm resources.
+
 The game alone advances phases. An illegal or wrong-thread advance is refused before dispatch;
 a forbidden mod call panics naming the phase, rather than returning a Result a listener could ignore.
 There is no separate common-setup, load-complete or intermod event: registration and the first server

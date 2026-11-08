@@ -187,7 +187,7 @@ impl Behaviours {
         }
         let mut world = LevelFeatureWorld {
             sim: &mut sim,
-            features,
+            features: &features,
             entities: Vec::new(),
         };
         let at = [pos.x, pos.y, pos.z];
@@ -1203,7 +1203,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
                     continue 'attempts;
                 }
             }
-            let corals = match (features, self.level.biome_name(test)) {
+            let corals = match (features.as_deref(), self.level.biome_name(test)) {
                 (Some(f), Some(biome)) => {
                     f.biome_in_tag(biome, "minecraft:produces_corals_from_bonemeal")
                 }

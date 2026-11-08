@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "N'haller ket lenn marilh ar sevel : {error}",
   "Could not read the saved sign-in.": "N'haller ket lenn an enrolladenn enrollet.",
   "Could not read the saved sign-in. Sign in again.": "N'haller ket lenn an enrolladenn enrollet. En em lugañ en-dro.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "N'haller ket lenn {name}: {error}",
   "Could not run {program}: {error}": "N'haller ket mont en-dro {program} : {error}",
   "Could not save the renewed sign-in.": "N'eus ket bet tu da enrollañ an enskrivadur nevesaet.",

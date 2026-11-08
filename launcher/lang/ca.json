@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "No s'ha pogut llegir el registre de compilació: {error}",
   "Could not read the saved sign-in.": "No s'ha pogut llegir l'inici de sessió desat.",
   "Could not read the saved sign-in. Sign in again.": "No s'ha pogut llegir l'inici de sessió desat. Torna a iniciar la sessió.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "No s'ha pogut llegir {name}: {error}",
   "Could not run {program}: {error}": "No s'ha pogut executar {program}: {error}",
   "Could not save the renewed sign-in.": "No s'ha pogut desar l'inici de sessió renovat.",

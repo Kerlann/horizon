@@ -19,7 +19,12 @@ pub trait BossBarsServerHost {
     /// `/bossbar add`: a new bar, visible, white, `progress`, at 0 of 100, with
     /// nobody added. None if the id is taken or invalid, or outside a server.
     #[access(WorldOnly)]
-    fn create_boss_bar(&mut self, id: &str, name: Text) -> Option<BossBarRef>;
+    /// Refuses text deeper than 512 component nodes before applying any changes.
+    fn create_boss_bar(
+        &mut self,
+        id: &str,
+        name: Text,
+    ) -> Result<Option<BossBarRef>, TextFormError>;
 }
 /// The handles' reads of the `boss_bars` area, implemented by the game and reached through [`Backend`].
 // hidden: a handle's backend, reached through `Backend`; mods call the handle, never this trait
@@ -33,7 +38,8 @@ pub trait BossBarsBackend {
     /// Side: server.
     /// `BossEvent.getName`.
     #[access(WorldOnly)]
-    fn boss_bar_name(&self, bar: BossBarRef) -> Option<Text>;
+    /// Refuses text deeper than 512 component nodes before applying any changes.
+    fn boss_bar_name(&self, bar: BossBarRef) -> Result<Option<Text>, TextFormError>;
     /// Side: server.
     /// `BossEvent.getColor`.
     #[access(WorldOnly)]
@@ -79,7 +85,8 @@ pub trait BossBarsBackendMut {
     /// Side: server.
     /// `ServerBossEvent.setName`: viewers are sent the new name.
     #[access(WorldOnly)]
-    fn boss_bar_set_name(&mut self, bar: BossBarRef, name: Text) -> bool;
+    /// Refuses text deeper than 512 component nodes before applying any changes.
+    fn boss_bar_set_name(&mut self, bar: BossBarRef, name: Text) -> Result<bool, TextFormError>;
     /// Side: server.
     /// `ServerBossEvent.setColor`.
     #[access(WorldOnly)]

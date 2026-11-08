@@ -2,9 +2,9 @@
 //! and rows, and the top bar's tabs, icon buttons and account chip. The sky shows between them;
 //! only the sidebar and the selected or hovered parts are plates.
 use crate::plate::{alpha, cut};
-use crate::theme::{self, night, Step, Theme};
+use crate::theme::{self, Step, Theme, night};
 use crate::{hover_fade, keyboard, track_hover};
-use gpui::{div, prelude::*, px, rgb, Div, FontWeight, Hsla, SharedString, Stateful};
+use gpui::{Div, FontWeight, Hsla, SharedString, Stateful, div, prelude::*, px, rgb};
 
 /// A night colour as GPUI's.
 pub fn c(color: u32) -> Hsla {

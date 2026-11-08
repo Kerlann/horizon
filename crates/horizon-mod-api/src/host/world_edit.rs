@@ -11,7 +11,7 @@ pub trait WorldEditServerHost {
     /// give it, a mod block's included); no neighbour is told, and the chunks changed go to the players whole.
     /// Runs in chunks not loaded, and the parts of runs outside the column, are left out. The blocks changed, or
     /// why the edit was left out, with nothing changed: another dimension, a client of a server, a palette entry
-    /// or filter that doesn't read or carries NBT (refused), a run naming a palette entry or filter past the end,
+    /// or predicate that fails typed validation, a run naming a palette entry or filter past the end,
     /// or more than 65536 filters.
     #[access(WorldOnly)]
     fn edit_blocks(&mut self, dimension: &str, edit: &NativeBlockEdit) -> Result<u64, String>;
@@ -28,7 +28,7 @@ pub trait WorldEditServerHost {
     ) -> Result<Vec<Option<i32>>, String>;
     /// Side: server.
     /// For a server mod: `below` blocks under and `above` blocks from each column's height by `heightmap`, as a
-    /// palette and indexes, with the biome's grass, foliage and water tints (air outside the column and in columns
+    /// palette of complete `BlockState` values and indexes, with biome tints (air outside the column and in columns
     /// not loaded). The tints are the biome's at the column's top, not blended over the biome blend radius as the
     /// game draws them: near a biome border they can differ from what players see. `Err` says why nothing was
     /// read: another dimension or a client of a server, `below + above` of 0 or more than the level's height, or

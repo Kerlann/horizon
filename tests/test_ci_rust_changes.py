@@ -4,7 +4,7 @@ import subprocess
 import tempfile
 import unittest
 
-from tools.ci.rust_changes import changed_paths, needs_launcher, needs_rust
+from tools.ci.rust_changes import UNKNOWN_CHANGE, changed_paths, needs_launcher, needs_rust
 
 
 class RustChangesTests(unittest.TestCase):
@@ -59,6 +59,24 @@ class RustChangesTests(unittest.TestCase):
                 os.chdir(previous)
             self.assertIn("source.rs", paths)
             self.assertTrue(needs_rust(paths))
+
+    def test_a_base_missing_from_the_checkout_means_everything_changed(self):
+        with tempfile.TemporaryDirectory() as directory:
+            subprocess.check_call(["git", "-C", directory, "init", "--quiet"])
+            subprocess.check_call([
+                "git", "-C", directory, "-c", "user.name=CI test", "-c", "user.email=ci@example.invalid",
+                "-c", "commit.gpgsign=false", "commit", "--quiet", "--allow-empty", "-m", "head",
+            ])
+            previous = Path.cwd()
+            try:
+                os.chdir(directory)
+                # A base newer than the checked-out history, as when main moved after the PR event.
+                paths = changed_paths("a" * 40, "HEAD")
+            finally:
+                os.chdir(previous)
+            self.assertEqual(paths, [UNKNOWN_CHANGE])
+            self.assertTrue(needs_rust(paths))
+            self.assertTrue(needs_launcher(paths))
 
 
 if __name__ == "__main__":

@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "ಬಿಲ್ಡ್ ಲಾಗ್ ಅನ್ನು ಓದಲಾಗಲಿಲ್ಲ: {error}",
   "Could not read the saved sign-in.": "ಉಳಿಸಿದ ಸೈನ್-ಇನ್ ಅನ್ನು ಓದಲಾಗಲಿಲ್ಲ.",
   "Could not read the saved sign-in. Sign in again.": "ಉಳಿಸಿದ ಸೈನ್-ಇನ್ ಅನ್ನು ಓದಲಾಗಲಿಲ್ಲ. ಮತ್ತೆ ಸೈನ್ ಇನ್ ಮಾಡಿ.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "{name}: {error} ಅನ್ನು ಓದಲಾಗಲಿಲ್ಲ",
   "Could not run {program}: {error}": "ರನ್ ಆಗಲಿಲ್ಲ {program}: {error}",
   "Could not save the renewed sign-in.": "ನವೀಕರಿಸಿದ ಸೈನ್-ಇನ್ ಅನ್ನು ಉಳಿಸಲು ಸಾಧ್ಯವಾಗಲಿಲ್ಲ.",

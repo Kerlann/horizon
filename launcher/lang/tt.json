@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Төзелеш журналын укып булмады: {error}",
   "Could not read the saved sign-in.": "Сакланган керүне укый алмадым.",
   "Could not read the saved sign-in. Sign in again.": "Сакланган керүне укый алмадым. Тагын керегез.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Укып булмады{name}:{error}",
   "Could not run {program}: {error}": "Йөгерә алмады{program}:{error}",
   "Could not save the renewed sign-in.": "Яңартылган керүне саклап кала алмадым.",

@@ -640,7 +640,7 @@ pub enum TintSource {
     /// [`ItemEnv::item_tint_source`] with its entry in the model's `tints`.
     Mod {
         id: String,
-        config: Value,
+        config: Arc<horizon_core::nbt::Tag>,
     },
 }
 impl TintSource {
@@ -671,7 +671,10 @@ impl TintSource {
             "minecraft:team" => Self::Team(default()?),
             other if is_tint_source(other) => Self::Mod {
                 id: other.to_owned(),
-                config: v.clone(),
+                config: Arc::new(
+                    horizon_core::json_nbt::json_to_tag(v)
+                        .map_err(|_| err("unknown item tint source"))?,
+                ),
             },
             // A mod's own tint source, which its Java code computes: untinted here.
             other if foreign::is_foreign(other) => Self::Constant(-1),
@@ -1089,7 +1092,12 @@ pub trait ItemEnv {
     }
     /// A mod's registered tint source for `stack`, with its entry in the model's `tints`:
     /// ARGB, white when no mod answers.
-    fn item_tint_source(&self, _source: &str, _config: &Value, _stack: &StackView) -> i32 {
+    fn item_tint_source(
+        &self,
+        _source: &str,
+        _config: &horizon_core::nbt::Tag,
+        _stack: &StackView,
+    ) -> i32 {
         -1
     }
     /// `PotionContents.getColorOr` for the potion/effects part: the mixed

@@ -1,7 +1,5 @@
 //! `mod-api`: fill new native hooks' placeholder bodies in the hand-written source, and write
 //! the layouts of the foreign types that cross to wasm mods from the locked source.
-//! `mod-api wit <dir>`: write the mod API's generated files (`mod-api.wit` among them) to `<dir>`,
-//! as the crate's build generates them, for CI's artifact and interface report.
 use std::path::{Path, PathBuf};
 
 fn checkout() -> Result<PathBuf, String> {
@@ -25,9 +23,4 @@ pub fn notes() -> Result<(), String> {
         horizon_mod_api_gen::generate_hook_notes(&checkout()?)?
     );
     Ok(())
-}
-
-pub fn wit(out: &Path) -> Result<(), String> {
-    std::fs::create_dir_all(out).map_err(|e| format!("{}: {e}", out.display()))?;
-    horizon_mod_api_gen::generate(&checkout()?, out, horizon_mod_api_gen::Target::Api)
 }

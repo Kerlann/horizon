@@ -2029,7 +2029,7 @@ impl Game<'_> {
                 };
             }
             self.particles.add(
-                &mod_api::particles::ParticleOptions::dust([1.0, 0.0, 0.0], 1.0),
+                &horizon_client::particles::ParticleOptions::dust([1.0, 0.0, 0.0], 1.0),
                 [
                     f64::from(pos[0]) + at[0],
                     f64::from(pos[1]) + at[1],
@@ -2592,7 +2592,13 @@ mod tests {
                 _host: &mut dyn mod_api::ServerHost,
                 event: &mut VanillaGameEventEvent<'_>,
             ) -> mod_api::Flow {
-                self.0.lock().unwrap().push(event.affected_state);
+                self.0
+                    .lock()
+                    .unwrap()
+                    .push(event.affected_state.map(|state| {
+                        crate::game::api_values::TryIntoEngine::try_into_engine(&state, &())
+                            .unwrap()
+                    }));
                 mod_api::Flow::Continue
             }
         }

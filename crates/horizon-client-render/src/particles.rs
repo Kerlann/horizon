@@ -19,7 +19,8 @@ use horizon_core::{
     random::{LegacyRandom, RandomSource},
 };
 use horizon_world::block_collision::BlockCollisionRegistry;
-pub use mod_api::particles::ParticleOptions;
+mod options;
+pub use options::ParticleOptions;
 use std::{
     array,
     collections::{HashMap, HashSet},
@@ -1965,7 +1966,7 @@ impl ParticleEngine {
         // A native mod's SimpleParticleType: vanilla's TextureSheetParticle with
         // the sprite set its particles/<name>.json names, no tint, 20..40 ticks.
         if let Some(name) = &o.mod_particle {
-            let (set, behaviour) = *self.mod_sets.get(name)?;
+            let (set, behaviour) = *self.mod_sets.get(name.as_ref())?;
             let mut r = LegacyRandom::new(seed);
             let mut q = Particle::moving(&mut r, ParticleType::Smoke, p, v);
             q.ty = ParticleType::Smoke;

@@ -20,7 +20,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         .map(Path::new)
         .ok_or("no #resources line")?;
     let defaults = horizon_world::item_defaults::read(root)?;
-    let enchantments = Enchantments::load(root, &defaults);
+    let enchantments = Enchantments::load(root, &defaults)?;
     let items = Items::catalog(root, &PackOverlay::NONE, &defaults)?;
     let out = fs::File::create(args.get(2).ok_or("missing OUTPUT")?)?;
     let mut out = std::io::BufWriter::new(out);

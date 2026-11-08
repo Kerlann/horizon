@@ -177,10 +177,18 @@ fn registered_range_property_thresholds_on_the_mods_number_per_stack() {
 fn registered_tint_source_colours_each_stack_from_its_entry() {
     struct Env;
     impl ItemEnv for Env {
-        fn item_tint_source(&self, source: &str, config: &Value, stack: &StackView) -> i32 {
+        fn item_tint_source(
+            &self,
+            source: &str,
+            config: &horizon_core::nbt::Tag,
+            stack: &StackView,
+        ) -> i32 {
             assert_eq!(source, "tinttest:charge");
             match stack.count {
-                1 => config["default"].as_i64().unwrap() as i32,
+                1 => match config.get("default") {
+                    Some(horizon_core::nbt::Tag::Int(v)) => *v,
+                    _ => panic!("expected integer default"),
+                },
                 _ => 0xFF11_2233_u32 as i32,
             }
         }
@@ -192,6 +200,7 @@ fn registered_tint_source_colours_each_stack_from_its_entry() {
     ]);
     assert_eq!(kept, ["tinttest:charge"]);
     assert!(register_tint_sources(vec!["tinttest:charge".into()]).is_empty());
+    assert!(ClientItem::from_json(r#"{"model":{"type":"minecraft:model","model":"tinttest:item/grey","tints":[{"type":"tinttest:charge","bad":null}]}}"#).is_err());
     let json = r#"{"model":{
         "type":"minecraft:model", "model":"tinttest:item/grey",
         "tints":[

@@ -1,5 +1,17 @@
 # Making a content mod
 
+Trait mods declare content through `BlocksEvent` and `ItemsEvent`, using API-owned
+`mod_api::Block` and `mod_api::Item` records. Start with `Block::new(id, template)` or
+`Item::new(id, template)`, passing identifier strings, then set the overrides. The drafts are unvalidated; admission reports malformed values with the content loader's refusal messages.
+These are load-time declaration drafts, not live registry entries. The game admits them
+with the content-file checks, atomically for each namespace, before resources load.
+A block's `item` defaults to false in code.
+
+Code declarations carry component patches as ordered `Vec<(String, Option<Tag>)>`:
+`Some(tag)` sets the named component and `None` removes it (without a `!` prefix).
+The game converts this opaque NBT data at load; file declarations below still use JSON.
+No declaration conversion runs per tick.
+
 ## Making a content mod
 
 ```sh
@@ -152,6 +164,11 @@ that other item instead, an item of the mod or a vanilla one, such as `"minecraf
 `Block.asItem` both read it, and the load fails naming the block when no such item exists. `"none"` is not an item id;
 write `"item": false`. A sign's wall form takes its sign's item through `wall_block`, not `block_item`.
 
+Pick-block takes the block's item by default. `"pick_item": "<item id>"` names a different one, with any `item` and
+`block_item`: vanilla's `getCloneItemStack`, which lets a mature crop pick its seed while `Block.asItem` stays what it
+is (air for `"item": false`). It is an item of the mod or a vanilla one, and the load fails naming the block when no
+such item exists. A sign's wall form picks its sign's item through `wall_block`, so it declares no `pick_item`.
+
 `push_reaction` sets vanilla's `BlockBehaviour.Properties.pushReaction` to `"PUSH_PULL"`, `"PUSH"`, `"POPPED"`, `"IMMOVEABLE"`, or `"IGNORE_ENTITY"`.
 
 `random_ticks` makes a block tick randomly whatever its template does, as vanilla's
@@ -281,6 +298,11 @@ outline also becomes collision, otherwise the template collision is retained. An
 table can be used without an outline override, and overrides `thickness` collision too.
 
 ### Entity-context shape declarations
+
+Native declarations use the same fields on `mod_api::Block`, with API-owned
+`ShapeEntityKind::{Item, Player, Living, Other}` keys and `BlockShapes` values.
+`interaction_shapes` is an optional `BlockShapes`. The game validates these drafts
+at content admission, just like their JSON counterparts.
 
 `outline_context_shapes` and `collision_context_shapes` independently override
 `shapes` and `collision_shapes` for a captured entity class. Their keys are

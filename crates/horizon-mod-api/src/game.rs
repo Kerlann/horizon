@@ -23,13 +23,14 @@ pub struct NativeBlockRun {
     pub block: u32,
     pub only: Option<u32>,
 }
-/// A bulk edit: block states and block predicates as commands write them (without NBT), and the runs naming them
-/// by index.
+/// A bulk edit of complete typed states and partial predicates, named by run indices; NBT is not supported.
 #[derive(Clone, Debug, PartialEq, Default)]
 // exhaustive: the game builds it with a literal; mods only read it
 pub struct NativeBlockEdit {
-    pub palette: Vec<String>,
-    pub filters: Vec<String>,
+    /// Complete states to write; properties are never parsed from command strings.
+    pub palette: Vec<BlockState>,
+    /// Partial block or tag predicates; omitted properties are wildcards.
+    pub filters: Vec<StatePredicate>,
     pub runs: Vec<NativeBlockRun>,
 }
 /// The camera shake native mods ask for (`native_camera_shake`): turns in
@@ -78,7 +79,8 @@ pub struct NativeClock {
 #[derive(Clone, Debug, PartialEq, Default)]
 // exhaustive: the game builds it with a literal; mods only read it
 pub struct NativeColumnBlocks {
-    pub palette: Vec<String>,
+    /// Distinct complete states, including separate entries for different property combinations.
+    pub palette: Vec<BlockState>,
     pub bases: Vec<Option<i32>>,
     pub blocks: Vec<u16>,
     pub tints: Vec<u32>,
@@ -192,7 +194,7 @@ impl Default for NativeFalling {
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
 pub struct NativeHeldItem {
-    pub id: String,
+    pub id: ItemKey,
     pub count: u32,
     /// The inventory slot: 0 to 8, the hotbar (a mod use is the main hand's).
     pub slot: u32,
@@ -212,8 +214,8 @@ pub struct NativeHit {
     pub x: f64,
     pub y: f64,
     pub z: f64,
-    /// The block's id (`minecraft:stone`).
-    pub block: String,
+    /// The block's resolved identity, without state properties.
+    pub block: BlockKey,
 }
 /// What happened to a mod's claimed item, oldest first.
 #[derive(Clone, Debug, PartialEq)]

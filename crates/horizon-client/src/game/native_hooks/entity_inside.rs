@@ -30,7 +30,9 @@ mod entity_inside_tests {
     #[test]
     #[ignore = "needs prepared resources"]
     fn landing_writes_apply_at_the_batch_end() {
+        use crate::game::api_values::{TryIntoApi, TryIntoEngine};
         use horizon_client::block_contact::{landed, take_pending};
+        use horizon_world::level::LandingWrite;
         crate::game::native_entity_refs::tests::with_game(|game| {
             game.options.dedicated = Some(Vec::new());
             let state = |name| game.pack.assets.registry.default_state(name).unwrap();
@@ -47,8 +49,24 @@ mod entity_inside_tests {
             game.world.set(1, 64, 1, farmland).unwrap();
             game.world.set(2, 64, 1, farmland).unwrap();
             game.world.set(3, 64, 1, stone).unwrap();
+            game.world.set(4, 64, 1, dirt).unwrap();
+            game.world.set(5, 64, 1, dirt).unwrap();
+            let drops_before = game.dropped.len();
             let at = |x| BlockPos::new(x, 64, 1);
-            landed(farmland, at(1), vec![LandingWrite::SetBlock(dirt)]);
+            let requested = vec![
+                mod_api::LandingWrite::SetBlock(stone.try_into_api().unwrap()),
+                mod_api::LandingWrite::SetBlock(dirt.try_into_api().unwrap()),
+            ];
+            // Exercise the same complete-batch boundary as generated dispatch before
+            // entering the engine queue, then prove its ordered writes reach the world.
+            let staged = requested.try_into_engine(&*game).unwrap();
+            landed(farmland, at(1), staged);
+            landed(dirt, at(4), vec![LandingWrite::DestroyBlock { drop: true }]);
+            landed(
+                dirt,
+                at(5),
+                vec![LandingWrite::DestroyBlock { drop: false }],
+            );
             // The block changed after the landing: dropped.
             landed(stone, at(2), vec![LandingWrite::SetBlock(dirt)]);
             landed(
@@ -68,6 +86,20 @@ mod entity_inside_tests {
             assert_eq!(game.world.block(1, 64, 1), dirt);
             assert_eq!(game.world.block(2, 64, 1), farmland);
             assert_eq!(game.world.block(3, 64, 1), air, "the stone is destroyed");
+            assert_eq!(game.world.block(4, 64, 1), air);
+            assert_eq!(game.world.block(5, 64, 1), air);
+            assert_eq!(
+                game.dropped.len(),
+                drops_before + 1,
+                "only drop=true creates dirt resources"
+            );
+            let dropped = &game.dropped[drops_before];
+            assert_eq!(dropped.stack.item.as_ref(), "minecraft:dirt");
+            assert_eq!(
+                dropped.position.x.floor() as i32,
+                4,
+                "resources came from drop=true, not the neighboring drop=false block"
+            );
             // Both writes reach the clients (`setBlockAndUpdate` and `destroyBlock` are
             // flag 3); the dropped one sends nothing.
             let log = game.world.block_log.take().unwrap();

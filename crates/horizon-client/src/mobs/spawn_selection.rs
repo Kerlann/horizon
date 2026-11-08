@@ -331,10 +331,20 @@ pub type MobType = (Species, f32, f32, Category);
 
 pub trait NaturalLevel: SpawnLevel {
     /// `MobSpawnEvent.PositionCheck`: what server mods answer for the new mob
-    /// of type `entity` at `at`; `Default` leaves the checks to vanilla.
-    fn position_check(&self, _entity: &str, _reason: Reason, _at: [f64; 3]) -> NativeSpawnCheck {
+    /// of type `entity` at `at`, described by `pending`; `Default` leaves the
+    /// checks to vanilla.
+    fn position_check(
+        &self,
+        _entity: &str,
+        _reason: Reason,
+        _at: [f64; 3],
+        _pending: Pending,
+    ) -> NativeSpawnCheck {
         NativeSpawnCheck::Default
     }
+    /// The position check just asked refused the mob: what the level made
+    /// for it is dropped.
+    fn position_refused(&self) {}
     /// Whether server mods hear `potential_spawns`.
     fn spawn_hooks(&self) -> bool {
         false
@@ -593,6 +603,18 @@ pub fn spawn_aabb(s: Species, x: f64, y: f64, z: f64, width: f32, height: f32) -
         Vec3::new(x + half, y + f64::from(scale * height), z + half),
     )
 }
+/// The mob a position check is about, which the site has not created yet
+/// (vanilla creates it before the check).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Pending {
+    /// The yaw the site creates it with, drawn before the check.
+    pub yaw: f32,
+    /// Whether the site creates it fresh from its type (`EntityType.create`):
+    /// natural spawning, and a spawner whose spawn data is the type alone. A
+    /// spawner with entity data loads it, and chunk generation's packs come
+    /// from the generator.
+    pub fresh: bool,
+}
 /// `Mob.checkSpawnRules` and `checkSpawnObstruction` of a freshly created
 /// mob, unless a mod forces the answer (`MobSpawnEvent.PositionCheck`); then
 /// `vanilla` does not run.
@@ -601,13 +623,18 @@ pub fn position_ok<L: NaturalLevel>(
     entity: &str,
     reason: Reason,
     at: [f64; 3],
+    pending: Pending,
     vanilla: impl FnOnce() -> bool,
 ) -> bool {
-    match l.position_check(entity, reason, at) {
+    let ok = match l.position_check(entity, reason, at, pending) {
         NativeSpawnCheck::Succeed => true,
         NativeSpawnCheck::Fail => false,
         _ => vanilla(),
+    };
+    if !ok {
+        l.position_refused();
     }
+    ok
 }
 /// `checkSpawnObstruction` of a freshly created mob with the given box, with
 /// the mobs already `spawned` in the way; None in a generation region, which
@@ -1264,6 +1291,7 @@ pub fn spawn_category_for_position<L: NaturalLevel, R: RandomSource>(
                     &entry.entity,
                     Reason::Natural,
                     [xx, f64::from(y), zz],
+                    Pending { yaw, fresh: true },
                     || {
                         mob_spawn_rules(species, l, x, y, z)
                             && spawn_obstruction(species, l, bounds, Some(&spawned), x, y, z)
@@ -1565,6 +1593,7 @@ pub fn spawn_mobs_for_chunk_generation<L: NaturalLevel, R: RandomSource, Q: Rand
                         &entry.entity,
                         Reason::ChunkGeneration,
                         [fx, fy, fz],
+                        Pending { yaw, fresh: false },
                         || {
                             mob_spawn_rules(species, l, bx, pos[1], bz)
                                 && spawn_obstruction(species, l, bounds, None, bx, pos[1], bz)

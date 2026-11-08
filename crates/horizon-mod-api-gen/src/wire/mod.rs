@@ -1,0 +1,697 @@
+//! The WebAssembly interface of the mod API: every method of the traits a mod calls (the hosts,
+//! the backends, the drawing contexts) and every method it implements (`Hooks`, the parts, the
+//! capability handlers), through one shared-memory boundary and the glue on both sides of it.
+mod append;
+mod calls;
+mod emit;
+mod host;
+pub use host::generate_host;
+mod ty;
+
+use crate::capability_providers::key_shapes;
+use crate::index::{Found, Index};
+use std::fmt::Write as _;
+use std::path::Path;
+use syn::{FnArg, Item, Pat, ReturnType, TraitItem};
+use ty::{Ty, Types};
+
+/// Traits a mod calls: their methods are the world's imports.
+pub(super) const IMPORTS: &[&str] = &[
+    "Host",
+    "ServerHost",
+    "ClientHost",
+    "Backend",
+    "BackendMut",
+    "ClientBackendMut",
+    "DrawContext",
+    "BlockEntityDrawContext",
+    "WorldDrawContext",
+    "CameraDrawContext",
+    "LevelHost",
+    "LevelRandomHost",
+    "LevelTicksHost",
+    "LevelWriteHost",
+    "ConfigFiles",
+    "Commands",
+    "Levels",
+    "Messages",
+    "Players",
+    "ClientSession",
+    "RenderAssets",
+    "InstanceGroups",
+    "Tags",
+    "menu::SlotView",
+    "Registrar",
+    "CapabilityProviders",
+    "TicketValidation",
+    "DataLoadContext",
+    "LoopContext",
+    "WorldgenHost",
+    "GenerationContext",
+    "PieceContext",
+    "StructureRandom",
+    "AttachmentStore",
+    "ServerReloadListeners",
+    "GameTests",
+    "ClientReloadListeners",
+    "PackFinders",
+    "BlockTintSources",
+    "BlockAndTintGetter",
+    "GroundLevel",
+    "BlockMetadata",
+    "ServerReloadResources",
+    "CriterionContext",
+    "UnspawnedMobEdits",
+];
+
+/// Imported traits a call never hands over, each reached through another's method instead.
+pub(super) const REACHED: &[(&str, &str, &str)] = &[
+    ("ConfigFiles", "host", "Ok(h.config_files())"),
+    ("Commands", "server_host_mut", "Ok(h.commands())"),
+    ("Levels", "server_host", "Ok(h.levels())"),
+    ("Messages", "server_host", "Ok(h.messages())"),
+    ("Players", "server_host", "Ok(h.players())"),
+    ("ClientSession", "client_host", "Ok(h.client_session())"),
+    ("RenderAssets", "client_host", "Ok(h.render_assets())"),
+    ("InstanceGroups", "client_host", "Ok(h.instance_groups())"),
+    (
+        "Tags",
+        "",
+        "level_host().map(|h| h.tags()).or_else(|_| host().map(|h| h.tags()))",
+    ),
+    // A level hook's host first: inside a level write it is the one the call hands over.
+    (
+        "AttachmentStore",
+        "",
+        "level_random_host_mut().map(|h| h.attachments()).or_else(|_| host_mut().map(|h| h.attachments()))",
+    ),
+    (
+        "CapabilityProviders",
+        "host",
+        "Ok(h.capability_providers())",
+    ),
+    (
+        "ServerReloadResources",
+        "server_host",
+        "Ok(h.reload_resources())",
+    ),
+    (
+        "Backend",
+        "host",
+        "h.backend().map(crate::BackendRef::open).ok_or_else(|| missing(\"game backend\"))",
+    ),
+    (
+        "BackendMut",
+        "server_host_mut",
+        "crate::backend_mut_of(h).ok_or_else(|| missing(\"game backend\"))",
+    ),
+    (
+        "ClientBackendMut",
+        "client_host_mut",
+        "crate::client_backend_mut_of(h).ok_or_else(|| missing(\"client game backend\"))",
+    ),
+];
+
+/// Traits a mod implements: their methods are the world's exports. The handler traits the
+/// capability keys name join them (`exports`).
+const EXPORTS: &[&str] = &[
+    "Hooks",
+    "ReloadApply",
+    "StructureType",
+    "StructurePiece",
+    "BlockPart",
+    "BlockEntityPart",
+    "ItemPart",
+    "MenuPart",
+    "FluidPart",
+    "ServerReloadListener",
+    "GameTestFunction",
+    "ClientReloadListener",
+    "BlockTintSource",
+    "GroundStateProvider",
+    "PlaceProvider",
+    "TooltipAppender",
+    "CriterionTest",
+    "RowPages",
+    "RowFunction",
+];
+
+/// Every exported trait: [`EXPORTS`], then the handler traits `mod_api`'s capability keys name
+/// (`ResourceHandler<ItemResource>`), each instance of a generic one its own export. Set once,
+/// by `surface`.
+pub(super) fn exports() -> &'static [&'static str] {
+    EXPORTED.get().map_or(EXPORTS, Vec::as_slice)
+}
+
+/// Whether the game also hands a mod objects of exported trait `owner` (a capability's handler,
+/// another mod's provider): the mod calls one through the `held-<interface>` imports, by the
+/// index the game keeps it under.
+pub(super) fn held(owner: &str) -> bool {
+    ["PlaceProvider", "RowPages", "RowFunction"].contains(&owner)
+        || (exports().contains(&owner) && !EXPORTS.contains(&owner))
+}
+
+/// The contexts of the load phase: the catalog's registration and data-load contexts and a
+/// resource reload's. A call given one reads and parses data, so it runs within the load limit
+/// (`Budgets::load`), not a hook call's.
+const LOAD_CONTEXTS: &[&str] = &[
+    "RegistrationContext",
+    "DataLoadContext",
+    "ServerReloadContext",
+    "ClientReloadContext",
+];
+
+/// The traits the game calls on its worker threads: a mod's structure types and their pieces on
+/// the worldgen workers, its block tint sources on the meshing workers. They keep no mutable
+/// state and get no `Host`.
+const WORKERS: &[&str] = &["StructureType", "StructurePiece", "BlockTintSource"];
+
+/// What a call of `method` is to the runtime, for its limits and its wait.
+pub(super) fn call_class(types: &ty::Types<'_>, method: &Method) -> &'static str {
+    if WORKERS.contains(&method.owner) {
+        "super::Call::Worker"
+    } else if loads(types, method) {
+        "super::Call::Load"
+    } else {
+        "super::Call::Hook"
+    }
+}
+
+/// Whether `method` is a load-phase call: one of its arguments is a load-phase context.
+fn loads(types: &ty::Types<'_>, method: &Method) -> bool {
+    method.params.iter().any(|(_, ty)| {
+        let ty = match ty {
+            ty::Ty::Ref(inner, _) => &**inner,
+            ty => ty,
+        };
+        match ty {
+            ty::Ty::Dyn(name, _) => LOAD_CONTEXTS.contains(&name.as_str()),
+            ty::Ty::Named(def) => LOAD_CONTEXTS
+                .iter()
+                .any(|name| types.defs[*def].rust.rsplit("::").next() == Some(*name)),
+            _ => false,
+        }
+    })
+}
+
+/// A trait object that crosses without methods: a provider of a mod's own handler type,
+/// erased (`Arc<dyn Any + Send + Sync>`), which only mods of its group take back.
+pub(super) const ERASED: &str = "Any";
+
+static EXPORTED: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+
+/// An owner as written (`ResourceHandler<ItemResource>`): the trait's path, and its type arguments.
+fn owner_parts(owner: &str) -> Result<(Vec<String>, Vec<syn::Type>), String> {
+    let path: syn::Path = syn::parse_str(owner).map_err(|e| format!("{owner}: {e}"))?;
+    let segments: Vec<String> = path.segments.iter().map(|s| s.ident.to_string()).collect();
+    let args = match &path.segments.last().unwrap().arguments {
+        syn::PathArguments::AngleBracketed(args) => args
+            .args
+            .iter()
+            .filter_map(|arg| match arg {
+                syn::GenericArgument::Type(ty) => Some(ty.clone()),
+                _ => None,
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
+    Ok((segments, args))
+}
+
+/// The exported traits the mod itself answers, with no handler index, and the guest's
+/// expression for its implementation of each; every other export is a registered handler's.
+pub(super) const MOD_EXPORTS: &[(&str, &str)] = &[("Hooks", "super::hooks()")];
+
+/// The guest's receiver of `owner`'s exports, if the mod itself answers them.
+pub(super) fn mod_receiver(owner: &str) -> Option<&'static str> {
+    MOD_EXPORTS
+        .iter()
+        .find(|(o, _)| *o == owner)
+        .map(|(_, r)| *r)
+}
+
+/// The exported traits that list the hooks they subscribe to, and the method listing them.
+pub(super) const SUBSCRIBED: &[(&str, &str)] = &[
+    ("Hooks", "subscribed"),
+    ("BlockPart", "block_subscribed"),
+    ("BlockEntityPart", "block_entity_subscribed"),
+    ("ItemPart", "item_subscribed"),
+    ("MenuPart", "menu_subscribed"),
+    ("FluidPart", "fluid_subscribed"),
+];
+
+/// One trait method as it crosses.
+#[derive(Debug)]
+pub(super) struct Method {
+    /// The interface the method belongs to: the union trait a host's area traits are parts of.
+    pub(super) owner: &'static str,
+    /// The area trait that declares it, when it is a part of `owner` (`host::items::ItemsHost`).
+    pub(super) via: Option<String>,
+    pub(super) name: String,
+    /// `Some(mutable)` for a `self` receiver.
+    pub(super) receiver: Option<bool>,
+    pub(super) params: Vec<(String, Ty)>,
+    pub(super) ret: Ty,
+}
+
+/// A method that can't cross, and why.
+#[derive(Debug)]
+pub(super) struct Unbound {
+    pub(super) owner: &'static str,
+    pub(super) name: String,
+    pub(super) why: String,
+}
+
+pub(super) struct Surface<'a> {
+    /// The methods that mention a type that does not cross: the traits still need them, and
+    /// each answers that it is not available.
+    pub(super) dropped: Vec<Method>,
+    /// The variants of the generated `HookId`, each with its hook's name.
+    pub(super) hooks: Vec<(String, String)>,
+    pub(super) types: Types<'a>,
+    pub(super) methods: Vec<Method>,
+    pub(super) unbound: Vec<Unbound>,
+    /// The methods whose doc says `Not on wasm: <why>.`
+    pub(super) excused: Vec<(&'static str, String)>,
+    /// Each imported trait with the area traits that are parts of it.
+    pub(super) parts: Vec<(&'static str, String)>,
+}
+
+/// The line on a method's doc that keeps it off wasm, and says why.
+const NOT_ON_WASM: &str = "Not on wasm: ";
+
+/// Whether `attrs`' doc has a [`NOT_ON_WASM`] line with a reason.
+fn not_on_wasm(attrs: &[syn::Attribute]) -> bool {
+    attrs.iter().any(|attr| match &attr.meta {
+        syn::Meta::NameValue(doc) if doc.path.is_ident("doc") => match &doc.value {
+            syn::Expr::Lit(syn::ExprLit {
+                lit: syn::Lit::Str(line),
+                ..
+            }) => line
+                .value()
+                .trim()
+                .strip_prefix(NOT_ON_WASM)
+                .is_some_and(|why| why.len() > 1),
+            _ => false,
+        },
+        _ => false,
+    })
+}
+
+/// The methods of the bound traits, with their types resolved. `hooks` and `host` are the
+/// generated sources `mod_api` includes.
+pub(super) fn surface<'a>(
+    root: &'a Path,
+    included: &'a [(&'a str, &'a str)],
+) -> Result<Surface<'a>, String> {
+    let mut types = Types::new(Index::new(root, included))?;
+    let api = types.index.module("mod_api", &[])?;
+    let mut exported: Vec<&'static str> = EXPORTS.to_vec();
+    for shape in key_shapes(&mut types.index)? {
+        for owner in [shape.handler.clone(), shape.provider()] {
+            if !exported.iter().any(|e| *e == owner) {
+                exported.push(Box::leak(owner.into_boxed_str()));
+            }
+        }
+    }
+    let _ = EXPORTED.set(exported);
+    let mut methods = Vec::new();
+    let mut unbound = Vec::new();
+    let mut excused = Vec::new();
+    let mut parts = Vec::new();
+    let hooks = hook_ids(&mut types)?;
+    for owner in IMPORTS.iter().chain(exports()) {
+        let (path, args) = owner_parts(owner)?;
+        let Found::Item(id) = types.index.resolve_path(api, &path)? else {
+            return Err(format!("{owner} is not a mod_api trait"));
+        };
+        let Item::Trait(item) = types.index.item(id).clone() else {
+            return Err(format!("{owner} is not a trait"));
+        };
+        // A generic trait's instance: its parameters as the owner's arguments.
+        let mut subst = Vec::new();
+        for (param, arg) in item.generics.type_params().zip(&args) {
+            subst.push((param.ident.to_string(), types.ty(api, arg, &[])?));
+        }
+        // The trait's own methods, then those of the area traits it is a union of.
+        let mut members: Vec<(usize, Option<String>, syn::TraitItemFn)> = Vec::new();
+        for item in &item.items {
+            if let TraitItem::Fn(function) = item {
+                members.push((id.module, None, function.clone()));
+            }
+        }
+        for bound in &item.supertraits {
+            let syn::TypeParamBound::Trait(bound) = bound else {
+                continue;
+            };
+            let segments: Vec<String> = bound
+                .path
+                .segments
+                .iter()
+                .map(|segment| segment.ident.to_string())
+                .collect();
+            let area_union = (segments.len() == 4 && segments[..2] == ["crate", "host"])
+                || (segments.len() == 3 && segments[..2] == ["crate", "parts"]);
+            if !area_union {
+                continue;
+            }
+            let via = segments[1..].join("::");
+            let Found::Item(part) = types.index.resolve_path(api, &segments[1..])? else {
+                return Err(format!("{via} is not a mod_api trait"));
+            };
+            let Item::Trait(part_item) = types.index.item(part).clone() else {
+                return Err(format!("{via} is not a trait"));
+            };
+            parts.push((*owner, via.clone()));
+            for item in part_item.items {
+                if let TraitItem::Fn(function) = item {
+                    members.push((part.module, Some(via.clone()), function));
+                }
+            }
+        }
+        for (module, via, function) in &members {
+            let name = function.sig.ident.to_string();
+            let subscription = SUBSCRIBED.iter().any(|(o, n)| o == owner && *n == name);
+            if hidden(&function.attrs) && !subscription {
+                continue;
+            }
+            if not_on_wasm(&function.attrs) {
+                excused.push((*owner, name.clone()));
+            }
+            match method(&mut types, *module, owner, function, &subst) {
+                Ok(mut method) => {
+                    method.via = via.clone();
+                    methods.push(method);
+                }
+                Err(why) => unbound.push(Unbound { owner, name, why }),
+            }
+        }
+    }
+    // A method the API keeps off wasm (`Not on wasm:`) is gated out of the trait on that target:
+    // no table holds it, and a native build of the guest answers that it is unavailable.
+    let (excused_methods, methods): (Vec<Method>, Vec<Method>) = methods
+        .into_iter()
+        .partition(|m| excused.iter().any(|(o, n)| *o == m.owner && *n == m.name));
+    let target = root.join("target");
+    std::fs::create_dir_all(&target).map_err(|e| format!("creating wire report directory: {e}"))?;
+    let dropped = excused_methods;
+    // The type emitter respects checked, hand-written Wire impls even when a shape
+    // becomes derivable after a new generic borrowing/resource rule is added.
+    types.index.module("mod_api", &["wire_types".into()])?;
+    for owner in exports() {
+        let (path, _) = owner_parts(owner)?;
+        let Found::Item(id) = types.index.resolve_path(api, &path)? else {
+            continue;
+        };
+        let Item::Trait(item) = types.index.item(id) else {
+            continue;
+        };
+        let mut list = vec![owner.to_string()];
+        for bound in &item.supertraits {
+            if let syn::TypeParamBound::Trait(t) = bound {
+                let name = t.path.segments.last().unwrap().ident.to_string();
+                if exports().contains(&name.as_str()) {
+                    list.push(name);
+                }
+            }
+        }
+        types.views.push((owner.to_string(), list));
+    }
+    Ok(Surface {
+        dropped,
+        hooks,
+        types,
+        methods,
+        unbound,
+        excused,
+        parts,
+    })
+}
+
+/// A frame resource already reborrowed through `REACHED`: acquiring it on the
+/// guest needs no wire call. Its trait methods are the actual imports.
+pub(super) fn frame_accessor(method: &Method) -> bool {
+    method.params.is_empty()
+        && IMPORTS.contains(&method.owner)
+        && matches!(&method.ret, Ty::Dyn(name, _) if IMPORTS.iter().any(|owner| owner.rsplit("::").next() == Some(name.as_str())))
+}
+
+/// The coverage check: every method of the bound traits crosses to wasm, or its doc says why
+/// not (`/// Not on wasm: <why>.`), and no method that crosses says it doesn't. The game's and
+/// the mods' builds both run it, so the wasm side can't fall behind the API.
+fn coverage(surface: &Surface<'_>) -> Result<(), String> {
+    let excused = |owner: &str, name: &str| {
+        surface
+            .excused
+            .iter()
+            .any(|(o, n)| *o == owner && n == name)
+    };
+    let mut problems: Vec<String> = surface
+        .unbound
+        .iter()
+        .filter(|u| !excused(u.owner, &u.name))
+        .map(|u| {
+            format!(
+                "{}::{} doesn't cross to wasm ({}): fix its types, or add `/// {NOT_ON_WASM}<why>.` to its doc",
+                u.owner, u.name, u.why
+            )
+        })
+        .collect();
+    problems.extend(
+        surface
+            .methods
+            .iter()
+            .filter(|m| excused(m.owner, &m.name) && !frame_accessor(m))
+            .map(|m| {
+                format!(
+                    "{}::{} crosses to wasm: remove `{NOT_ON_WASM}` from its doc",
+                    m.owner, m.name
+                )
+            }),
+    );
+    match problems.is_empty() {
+        true => Ok(()),
+        false => Err(problems.join("\n")),
+    }
+}
+
+/// The variants of the generated `HookId`, each with its hook's name.
+fn hook_ids(types: &mut Types<'_>) -> Result<Vec<(String, String)>, String> {
+    let api = types.index.module("mod_api", &[])?;
+    let Found::Item(id) = types.index.resolve_path(api, &["HookId".to_string()])? else {
+        return Err("HookId is not a mod_api enum".into());
+    };
+    let Item::Enum(item) = types.index.item(id) else {
+        return Err("HookId is not an enum".into());
+    };
+    Ok(item
+        .variants
+        .iter()
+        .map(|v| {
+            (
+                v.ident.to_string(),
+                heck::ToSnakeCase::to_snake_case(v.ident.to_string().as_str()),
+            )
+        })
+        .collect())
+}
+
+fn method(
+    types: &mut Types<'_>,
+    module: usize,
+    owner: &'static str,
+    function: &syn::TraitItemFn,
+    subst: &[(String, Ty)],
+) -> Result<Method, String> {
+    let sig = &function.sig;
+    if sig.generics.type_params().next().is_some() {
+        return Err("generic".into());
+    }
+    let mut receiver = None;
+    let mut params = Vec::new();
+    for input in &sig.inputs {
+        match input {
+            FnArg::Receiver(r) => receiver = Some(r.mutability.is_some()),
+            FnArg::Typed(arg) => {
+                let name = match &*arg.pat {
+                    Pat::Ident(ident) => ident.ident.to_string(),
+                    _ => format!("arg{}", params.len()),
+                };
+                let name = name.trim_start_matches('_').to_string();
+                params.push((name, types.ty(module, &arg.ty, subst)?));
+            }
+        }
+    }
+    let ret = match &sig.output {
+        ReturnType::Default => Ty::Unit,
+        ReturnType::Type(_, ty) => types.ty(module, ty, subst)?,
+    };
+    Ok(Method {
+        owner,
+        via: None,
+        name: sig.ident.to_string(),
+        receiver,
+        params,
+        ret,
+    })
+}
+
+fn hidden(attrs: &[syn::Attribute]) -> bool {
+    attrs.iter().any(|attr| {
+        matches!(&attr.meta, syn::Meta::List(list)
+            if list.path.is_ident("doc") && list.tokens.to_string() == "hidden")
+    })
+}
+
+/// What the boundary generates from the API's sources and its generated files: the `Wire`
+/// impls and layout hash of `mod_api`, and the mod's side of every call.
+pub struct Generated {
+    pub wire: String,
+    pub guest: String,
+    /// Every source file read to derive them, for the build script to track.
+    pub sources: Vec<std::path::PathBuf>,
+}
+
+pub fn generate(root: &Path, included: &[(&str, &str)]) -> Result<Generated, String> {
+    let providers = crate::capability_providers::generate(root, included)?.0;
+    let mut with_providers = included.to_vec();
+    with_providers.push(("capability_providers_generated.rs", providers.as_str()));
+    let surface = surface(root, &with_providers)?;
+    coverage(&surface)?;
+    let mut wire = emit::types(&surface.types);
+    let mut guest = calls::guest(
+        &surface.types,
+        &surface.methods,
+        &surface.dropped,
+        &surface.excused,
+        &surface.parts,
+    );
+    guest.push_str(&calls::hook_names(&surface.hooks));
+    guest.push_str(&calls::dispatch(&surface.types, &surface.methods).0);
+    let _ = writeln!(
+        wire,
+        "#[doc(hidden)]\npub const WIRE_LAYOUT: u64 = {:#x};",
+        layout(&surface)
+    );
+    let sources = surface.types.index.read.take();
+    Ok(Generated {
+        wire,
+        guest,
+        sources,
+    })
+}
+
+/// A hash of everything the two sides must agree on: every method's id and signature, and
+/// every type's shape (FNV-1a over their descriptions).
+fn layout(surface: &Surface<'_>) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325u64;
+    let mut feed = |text: &str| {
+        for byte in text.bytes() {
+            hash = (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3);
+        }
+    };
+    // Resource-control values are part of the interface even though they do not
+    // appear in a catalog signature. Older guests may have allocated identity zero.
+    feed(
+        "resource generation zero reserved; Any identity zero is Unsupported/cross-group capability",
+    );
+    // The group's mods share one handler table, which lives in a word of the std member.
+    feed(
+        "group state: 32 words in the std member's horizon_group_state; 0 handler table, 1 cache budget, 2 eviction guard, 3.. eviction callbacks; members allocate through an evicting global allocator",
+    );
+    feed("static replies: bounded acknowledged ids or uncached text");
+    for method in &surface.methods {
+        feed(&format!("{method:?}"));
+    }
+    for def in &surface.types.defs {
+        // Private borrowed descriptors also define bytes and checked writeback policy.
+        // Hash the complete definition so a new transport shape cannot hide behind Opaque.
+        feed(&format!("{def:?}"));
+    }
+    feed(&format!("{:?}", surface.hooks));
+    hash
+}
+
+#[cfg(test)]
+mod tests {
+    /// The generated impls depend on the hand-written `Wire` impls the generator skips, so an
+    /// edit to that file must rerun the build script.
+    #[test]
+    fn the_hand_written_wire_impls_are_tracked_sources() {
+        std::thread::Builder::new()
+            .stack_size(64 << 20)
+            .spawn(|| {
+                let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+                let generated = crate::sources(&root, crate::FillMode::Require).unwrap();
+                let included = [
+                    ("mod_api_generated.rs", generated.hooks.as_str()),
+                    ("mod_api_generated_host.rs", generated.host.as_str()),
+                    ("mod_api_host_areas.rs", generated.areas.as_str()),
+                ];
+                let sources = super::generate(&root, &included).unwrap().sources;
+                assert!(
+                    sources
+                        .iter()
+                        .any(|p| p.ends_with("crates/horizon-mod-api/src/wire_types.rs"))
+                );
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+    #[test]
+    fn layout_includes_private_borrowed_shapes() {
+        let run = || {
+            let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+            let generated = crate::sources(&root, crate::FillMode::Require).unwrap();
+            let providers = crate::capability_providers::generate(&root, &[]).unwrap().0;
+            let included = [
+                ("mod_api_generated.rs", generated.hooks.as_str()),
+                ("mod_api_generated_host.rs", generated.host.as_str()),
+                ("mod_api_host_areas.rs", generated.areas.as_str()),
+                ("capability_providers_generated.rs", providers.as_str()),
+            ];
+            let mut surface = super::surface(&root, &included).unwrap();
+            let baseline = super::layout(&surface);
+            let append = surface
+                .types
+                .defs
+                .iter()
+                .position(|d| d.append.is_some())
+                .unwrap();
+            assert!(matches!(
+                surface.types.defs[append].kind,
+                super::ty::Kind::Opaque
+            ));
+            surface.types.defs[append].append.as_mut().unwrap().field += 1;
+            assert_ne!(baseline, super::layout(&surface));
+            surface.types.defs[append].append.as_mut().unwrap().field -= 1;
+            let projection = surface
+                .types
+                .defs
+                .iter_mut()
+                .find(|d| d.projection.is_some())
+                .unwrap();
+            assert!(matches!(projection.kind, super::ty::Kind::Opaque));
+            projection.projection.as_mut().unwrap()[0].ty = super::ty::Ty::Unit;
+            assert_ne!(baseline, super::layout(&surface));
+        };
+        std::thread::Builder::new()
+            .stack_size(64 << 20)
+            .spawn(run)
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+    #[test]
+    fn coverage_document_is_current() {
+        std::thread::Builder::new().stack_size(64 << 20).spawn(|| {
+            let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+            super::generate_host(&root).unwrap();
+            let actual = std::fs::read_to_string(root.join("target/wire-coverage.md")).unwrap();
+            let checked_in = std::fs::read_to_string(root.join("docs/modding/src/wasm-coverage.md")).unwrap();
+            assert_eq!(actual, checked_in, "regenerate with HORIZON_UPDATE_WIRE_COVERAGE=1 cargo test -p horizon-mod-api-gen coverage_document_is_current");
+            assert!(actual.contains("Required gap total: 0."), "required boundary methods must not silently lose coverage");
+        }).unwrap().join().unwrap();
+    }
+}

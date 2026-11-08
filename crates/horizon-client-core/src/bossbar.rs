@@ -78,7 +78,7 @@ impl BossBar {
     pub fn display_name(&self) -> Text {
         let style = Style {
             color: Some(color_rgb(&self.color)),
-            hover: Some(Box::new(Text::literal(self.id.clone()))),
+            hover: Some(std::sync::Arc::new(Text::literal(self.id.clone()))),
             ..Style::default()
         };
         // ComponentUtils.wrapInSquareBrackets(name).withStyle(...): the

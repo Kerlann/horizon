@@ -353,20 +353,19 @@ impl Game<'_> {
         let at = horizon_core::position::BlockPos::new(pos[0], pos[1], pos[2]);
         Some(self.with_level(|_, level, _| level.block_drops_of(at, state, tool, entity)))
     }
-    /// Set a block in the level in place (`Level.setBlock`). Parked levels,
-    /// stale handles, clients and unloaded or out-of-height positions return
-    /// false. Client notification follows the supplied update flags.
+    /// Set a block through Level.setBlock. Typed errors distinguish stale/unavailable
+    /// levels; Ok(false) preserves vanilla's position/no-change refusal.
     pub(super) fn level_set_block(
         &mut self,
         level: LevelRef,
         pos: [i32; 3],
         state: BlockStateId,
         flags: NativeBlockUpdateFlags,
-    ) -> bool {
-        if !self.native_level_write_allowed(level, pos) {
-            return false;
+    ) -> Result<bool, mod_api::LevelWriteError> {
+        if !self.native_level_write_position(level, pos)? {
+            return Ok(false);
         }
-        self.native_set_block(level.dimension_id(), pos, state, flags.bits())
+        Ok(self.native_set_block(level.dimension_id(), pos, state, flags.bits()))
     }
     /// Remove a block in place (`Level.removeBlock`), preserving its fluid.
     pub(super) fn level_remove_block(
@@ -397,19 +396,16 @@ impl Game<'_> {
         pos: [i32; 3],
         source: BlockStateId,
         update: NeighbourUpdate,
-    ) -> bool {
-        if !self.native_level_write_allowed(level, pos)
-            || self.dim.key() != level.dimension()
-            || self.pack.assets.registry.state(source).is_none()
-        {
-            return false;
+    ) -> Result<bool, mod_api::LevelWriteError> {
+        if !self.native_level_write_position(level, pos)? {
+            return Ok(false);
         }
         let at = horizon_core::position::BlockPos::new(pos[0], pos[1], pos[2]);
         self.with_level(|b, level, ticks| {
             b.neighbour_update(level, ticks, at, b.block(source), update)
         });
         let _ = self.process_level_events();
-        true
+        Ok(true)
     }
     /// Tell the block at `pos` that `source`'s block beside it changed (`Level.neighborChanged`),
     /// as a diode tells the block in front of it before updating that block's neighbours. False,
@@ -420,17 +416,14 @@ impl Game<'_> {
         level: LevelRef,
         pos: [i32; 3],
         source: BlockStateId,
-    ) -> bool {
-        if !self.native_level_write_allowed(level, pos)
-            || self.dim.key() != level.dimension()
-            || self.pack.assets.registry.state(source).is_none()
-        {
-            return false;
+    ) -> Result<bool, mod_api::LevelWriteError> {
+        if !self.native_level_write_position(level, pos)? {
+            return Ok(false);
         }
         let at = horizon_core::position::BlockPos::new(pos[0], pos[1], pos[2]);
         self.with_level(|b, level, ticks| b.neighbor_changed_at(level, ticks, at, b.block(source)));
         let _ = self.process_level_events();
-        true
+        Ok(true)
     }
     /// Destroy a block in the level in place (`Level.destroyBlock`), optionally dropping
     /// resources with `tool` (None is an empty hand). With `collect`, return the dropped
@@ -511,6 +504,18 @@ impl Game<'_> {
             return false;
         }
         self.set_biome_at(pos, biome)
+    }
+    /// One residency boundary for state-bearing block writes; position refusal is vanilla.
+    fn native_level_write_position(
+        &self,
+        level: LevelRef,
+        pos: [i32; 3],
+    ) -> Result<bool, mod_api::LevelWriteError> {
+        let world = self.native_level_world_result(level)?;
+        if self.dim.key() != level.dimension() {
+            return Err(mod_api::LevelWriteError::Unavailable);
+        }
+        Ok(world.loaded(pos[0], pos[2]) && world.shape.contains_y(pos[1]))
     }
     fn native_level_write_allowed(&self, level: LevelRef, pos: [i32; 3]) -> bool {
         self.is_logical_server()
@@ -802,6 +807,14 @@ mod ray_tests {
 
 #[cfg(test)]
 pub(super) mod tests {
+    /// Resolve a fixture after registration or a late Parts reinstall from its loaded table.
+    pub(in crate::game) fn resolve_parts(game: &super::Game<'_>) -> Result<(), String> {
+        crate::game::api_values::resolve_block_definitions(game.pack.assets.registry)?;
+        mod_api::__private::resolve_items(game.items().registry_order.iter().map(|id| &**id))
+            .map_err(|errors| format!("fixture item keys refused: {errors:?}"))?;
+        game.resolve_parts().map_err(|error| error.to_string())
+    }
+    use crate::game::api_values::TryIntoApi;
     use mod_api::__private::game::*;
     /// Isolate declarations and frozen registries without changing another test's resources.
     pub(in crate::game) fn run_fresh_cases(name: &str, flag: &str, cases: &[&str]) -> bool {
@@ -907,6 +920,19 @@ pub(super) mod tests {
         use super::super::{Audio, Game, Options, Progress, Settings, load_resources};
         use mod_api::NativeAuthority;
 
+        // Parts registration replaces its metadata snapshot. Finish registration before
+        // loading the resource graph, whose registry retains one immutable worker snapshot.
+        let (registry, _) = horizon_world::level::data::load_registry_with_flags(&root).unwrap();
+        let ids: std::collections::HashSet<_> = (0..registry.len())
+            .map(|i| {
+                registry
+                    .state(horizon_world::registry::BlockStateId(i as u32))
+                    .unwrap()
+                    .name
+                    .clone()
+            })
+            .collect();
+        crate::game::api_values::register_game_keys(ids);
         let settings = Settings::default();
         let loaded = load_resources(
             horizon_assets::resource_source::ResourceRoot::directory(root.clone()),
@@ -938,23 +964,10 @@ pub(super) mod tests {
         .unwrap();
         game.native_lifecycle
             .begin_open(NativeAuthority::IntegratedServer);
-        let registry = game.pack.assets.registry;
-        let ids: std::collections::HashSet<_> = (0..registry.len())
-            .map(|i| {
-                registry
-                    .state(mod_api::BlockStateId(i as u32))
-                    .unwrap()
-                    .name
-                    .clone()
-            })
-            .collect();
-        crate::game::api_values::register_game_keys(ids);
-        mod_api::__private::resolve_items(game.items().registry_order.iter().map(|id| &**id))
-            .expect("fixture item keys resolve against its loaded catalog");
 
         // A game that opened its world resolves its parts; the harness stops
         // short of the open, so do it here for the by-state part table.
-        game.resolve_parts().unwrap();
+        resolve_parts(&game).unwrap();
         // The title's save folder is under the working directory: give each test its own, so a
         // test that saves leaves the checkout clean and parallel tests don't share files.
         let saves = std::env::temp_dir().join(format!(
@@ -1154,10 +1167,21 @@ pub(super) mod tests {
             set(game, east, "minecraft:redstone_lamp");
             set(game, above, "minecraft:redstone_lamp");
             // `updateNeighborsAtExceptFromFacing(lever, East)`: every neighbour but the east one.
-            assert!(level.update_neighbors(game, lever, state, NeighboursExcept(East)));
+            assert_eq!(
+                level.update_neighbors(
+                    game,
+                    lever,
+                    state.try_into_api().unwrap(),
+                    NeighboursExcept(East)
+                ),
+                Ok(true)
+            );
             assert!(lit(game, above) && !lit(game, east));
             // `updateNeighborsAt(lever)`: the east lamp hears it too.
-            assert!(level.update_neighbors(game, lever, state, Neighbours));
+            assert_eq!(
+                level.update_neighbors(game, lever, state.try_into_api().unwrap(), Neighbours),
+                Ok(true)
+            );
             assert!(lit(game, east));
         });
         // `Level.neighborChanged(east, lever)`: only that lamp hears.
@@ -1167,7 +1191,10 @@ pub(super) mod tests {
             let state = game.world.block(6, 64, 5);
             set(game, east, "minecraft:redstone_lamp");
             set(game, above, "minecraft:redstone_lamp");
-            assert!(level.neighbor_changed(game, east, state));
+            assert_eq!(
+                level.neighbor_changed(game, east, state.try_into_api().unwrap()),
+                Ok(true)
+            );
             assert!(lit(game, east) && !lit(game, above));
         });
         // A repeater in front of the lever, reading it, schedules its own tick when told (a
@@ -1204,9 +1231,15 @@ pub(super) mod tests {
             let at = horizon_core::position::BlockPos::new(7, 64, 5);
             let state = game.world.block(6, 64, 5);
             assert!(!game.block_ticks.has_block_tick(at, block));
-            assert!(level.update_neighbors(game, lever, state, Neighbours));
+            assert_eq!(
+                level.update_neighbors(game, lever, state.try_into_api().unwrap(), Neighbours),
+                Ok(true)
+            );
             assert!(game.block_ticks.has_block_tick(at, block));
-            assert!(level.update_neighbors(game, lever, state, Neighbours));
+            assert_eq!(
+                level.update_neighbors(game, lever, state.try_into_api().unwrap(), Neighbours),
+                Ok(true)
+            );
             assert!(game.block_ticks.has_block_tick(at, block));
             assert_eq!(
                 game.world.block(7, 64, 5),
@@ -1247,14 +1280,42 @@ pub(super) mod tests {
             let at = horizon_core::position::BlockPos::new(11, 64, 5);
             assert!(!game.block_ticks.has_block_tick(at, block));
             let cake = game.world.block(10, 64, 5);
-            assert!(level.update_neighbors(game, [10, 64, 5], cake, OutputSignal));
+            assert_eq!(
+                level.update_neighbors(
+                    game,
+                    [10, 64, 5],
+                    cake.try_into_api().unwrap(),
+                    OutputSignal
+                ),
+                Ok(true)
+            );
             assert!(game.block_ticks.has_block_tick(at, block));
             // Off the level in place: refused, nothing done.
-            assert!(!level.update_neighbors(game, [10, 64, 500_000], cake, OutputSignal));
+            assert_eq!(
+                level.update_neighbors(
+                    game,
+                    [10, 64, 500_000],
+                    cake.try_into_api().unwrap(),
+                    OutputSignal
+                ),
+                Ok(false)
+            );
             // A source that is no block state: refused, not a panic.
-            let unknown = horizon_world::registry::BlockStateId(u32::MAX);
-            assert!(!level.update_neighbors(game, [10, 64, 5], unknown, Neighbours));
-            assert!(!level.neighbor_changed(game, [11, 64, 5], unknown));
+            let known: mod_api::BlockState = cake.try_into_api().unwrap();
+            let unknown: mod_api::BlockState =
+                mod_api::BlockStateRecord::new(known.block(), u16::MAX).into();
+            assert_eq!(
+                level.update_neighbors(game, [10, 64, 5], unknown, Neighbours),
+                Err(mod_api::LevelWriteError::InvalidState(
+                    mod_api::BlockStateError::UnknownState
+                ))
+            );
+            assert_eq!(
+                level.neighbor_changed(game, [11, 64, 5], unknown),
+                Err(mod_api::LevelWriteError::InvalidState(
+                    mod_api::BlockStateError::UnknownState
+                ))
+            );
         });
     }
 
@@ -1613,7 +1674,8 @@ pub(super) mod tests {
             assert!(game.level_is_loaded(level, [0, 127, 0]));
             assert_eq!(game.level_block_state(level, [0, 127, 0]), Some(stone));
             assert_eq!(
-                game.level_block(level, [0, 127, 0]).as_deref(),
+                game.level_block(level, [0, 127, 0])
+                    .and_then(mod_api::__private::block_key_id),
                 Some("minecraft:stone")
             );
             assert!(game.native_level_write_allowed(level, [0, 127, 0]));
@@ -1622,12 +1684,10 @@ pub(super) mod tests {
             assert_eq!(game.level_block(level, [0, 128, 0]), None);
             assert!(!game.level_is_loaded(level, [0, -1, 0]));
             assert_eq!(game.level_block_state(level, [0, -1, 0]), None);
-            assert!(!game.level_set_block(
-                level,
-                [0, 128, 0],
-                stone,
-                NativeBlockUpdateFlags::NEIGHBORS
-            ));
+            assert_eq!(
+                game.level_set_block(level, [0, 128, 0], stone, NativeBlockUpdateFlags::NEIGHBORS),
+                Ok(false)
+            );
             assert!(
                 game.level_destroy_block(level, [0, 128, 0], false, None, false)
                     .is_none()
@@ -3462,18 +3522,71 @@ pub(super) mod tests {
             .registry
             .default_state("minecraft:air")
             .unwrap();
-        // Flag-aware writes log only client updates; ordinary World::set still logs by default.
+        // Exercise the generated typed boundary, not only the native engine-input helpers.
+        use crate::game::api_values::TryIntoApi;
+        let api_stone: mod_api::BlockState = stone.try_into_api().unwrap();
+        let invalid: mod_api::BlockState =
+            mod_api::BlockStateRecord::new(api_stone.block(), u16::MAX).into();
+        assert_eq!(
+            level.set_block(&mut game, [0, 64, 0], invalid, NativeBlockUpdateFlags::NONE),
+            Err(mod_api::LevelWriteError::InvalidState(
+                mod_api::BlockStateError::UnknownState
+            ))
+        );
+        assert_eq!(game.world.block(0, 64, 0), air);
+        {
+            let _phase = mod_api::__private::PhaseOwner::scope(mod_api::__private::ModPhase::Setup);
+            assert_eq!(
+                level.set_block(
+                    &mut game,
+                    [0, 64, 0],
+                    api_stone,
+                    NativeBlockUpdateFlags::NONE
+                ),
+                Err(mod_api::LevelWriteError::Unavailable)
+            );
+        }
+        assert_eq!(game.world.block(0, 64, 0), air);
         game.world.block_log = Some(Vec::new());
-        assert!(game.level_set_block(level, [2, 64, 0], stone, NativeBlockUpdateFlags::NONE));
+        assert_eq!(
+            level.update_neighbors(
+                &mut game,
+                [0, 64, 0],
+                invalid,
+                mod_api::NeighbourUpdate::Neighbours
+            ),
+            Err(mod_api::LevelWriteError::InvalidState(
+                mod_api::BlockStateError::UnknownState
+            ))
+        );
+        assert_eq!(
+            level.neighbor_changed(&mut game, [0, 64, 0], invalid),
+            Err(mod_api::LevelWriteError::InvalidState(
+                mod_api::BlockStateError::UnknownState
+            ))
+        );
+        assert_eq!(game.world.block(0, 64, 0), air);
         assert!(game.world.block_log.as_ref().unwrap().is_empty());
-        assert!(game.level_set_block(level, [3, 64, 0], stone, NativeBlockUpdateFlags::CLIENTS));
+        // Flag-aware writes log only client updates; ordinary World::set still logs by default.
+        assert_eq!(
+            game.level_set_block(level, [2, 64, 0], stone, NativeBlockUpdateFlags::NONE),
+            Ok(true)
+        );
+        assert!(game.world.block_log.as_ref().unwrap().is_empty());
+        assert_eq!(
+            game.level_set_block(level, [3, 64, 0], stone, NativeBlockUpdateFlags::CLIENTS),
+            Ok(true)
+        );
         assert_eq!(game.world.block_log.as_ref().unwrap(), &vec![(3, 64, 0)]);
-        assert!(game.level_set_block(
-            level,
-            [4, 64, 0],
-            stone,
-            NativeBlockUpdateFlags::CLIENTS | NativeBlockUpdateFlags::INVISIBLE
-        ));
+        assert_eq!(
+            game.level_set_block(
+                level,
+                [4, 64, 0],
+                stone,
+                NativeBlockUpdateFlags::CLIENTS | NativeBlockUpdateFlags::INVISIBLE
+            ),
+            Ok(true)
+        );
         assert_eq!(
             game.world.block_log.as_ref().unwrap(),
             &vec![(3, 64, 0), (4, 64, 0)]
@@ -3512,15 +3625,27 @@ pub(super) mod tests {
             assert_eq!(game.world.block(5, 64, 0), water);
         }
         let flags = NativeBlockUpdateFlags::NEIGHBORS;
-        assert!(game.level_set_block(level, [0, 64, 0], stone, flags));
+        assert_eq!(
+            game.level_set_block(level, [0, 64, 0], stone, flags),
+            Ok(true)
+        );
         assert_eq!(game.world.block(0, 64, 0), stone);
-        assert!(!game.level_set_block(level, [16, 64, 0], stone, flags));
-        assert!(!game.level_set_block(level, [0, 10000, 0], stone, flags));
+        assert_eq!(
+            game.level_set_block(level, [16, 64, 0], stone, flags),
+            Ok(false)
+        );
+        assert_eq!(
+            game.level_set_block(level, [0, 10000, 0], stone, flags),
+            Ok(false)
+        );
         let stale = mod_api::LevelRef::new(
             mod_api::NativeWorldEpoch::new(level.epoch().get() + 1),
             level.dimension(),
         );
-        assert!(!game.level_set_block(stale, [0, 64, 0], stone, flags));
+        assert_eq!(
+            game.level_set_block(stale, [0, 64, 0], stone, flags),
+            Err(mod_api::LevelWriteError::Stale)
+        );
         assert!(
             game.level_destroy_block(stale, [0, 64, 0], true, None, false)
                 .is_none()
@@ -3538,9 +3663,15 @@ pub(super) mod tests {
                 extra: None,
             });
         };
-        assert!(game.level_set_block(level, [0, 64, 0], chest, flags));
+        assert_eq!(
+            game.level_set_block(level, [0, 64, 0], chest, flags),
+            Ok(true)
+        );
         fill_chest(&mut game);
-        assert!(game.level_set_block(level, [0, 64, 0], air, flags));
+        assert_eq!(
+            game.level_set_block(level, [0, 64, 0], air, flags),
+            Ok(true)
+        );
         assert_eq!(
             game.dropped
                 .iter()
@@ -3550,24 +3681,36 @@ pub(super) mod tests {
             3
         );
         game.dropped.clear();
-        assert!(game.level_set_block(level, [0, 64, 0], chest, flags));
+        assert_eq!(
+            game.level_set_block(level, [0, 64, 0], chest, flags),
+            Ok(true)
+        );
         fill_chest(&mut game);
-        assert!(game.level_set_block(
-            level,
-            [0, 64, 0],
-            air,
-            NativeBlockUpdateFlags::SKIP_BLOCK_ENTITY_SIDE_EFFECTS
-        ));
+        assert_eq!(
+            game.level_set_block(
+                level,
+                [0, 64, 0],
+                air,
+                NativeBlockUpdateFlags::SKIP_BLOCK_ENTITY_SIDE_EFFECTS
+            ),
+            Ok(true)
+        );
         assert!(!game.world.block_entities.contains_key(&(0, 64, 0)));
         assert!(game.dropped.is_empty());
-        assert!(game.level_set_block(level, [0, 64, 0], stone, flags));
+        assert_eq!(
+            game.level_set_block(level, [0, 64, 0], stone, flags),
+            Ok(true)
+        );
         assert!(
             game.level_destroy_block(level, [0, 64, 0], false, None, false)
                 .is_some()
         );
         assert!(game.dropped.is_empty());
         assert_eq!(game.world.block(0, 64, 0), air);
-        assert!(game.level_set_block(level, [0, 64, 0], stone, flags));
+        assert_eq!(
+            game.level_set_block(level, [0, 64, 0], stone, flags),
+            Ok(true)
+        );
         assert!(
             game.level_destroy_block(level, [0, 64, 0], true, None, false)
                 .is_some()
@@ -3594,9 +3737,15 @@ pub(super) mod tests {
             .registry
             .default_state("minecraft:exposed_copper_chest")
             .unwrap();
-        assert!(game.level_set_block(level, [0, 64, 0], copper, flags));
+        assert_eq!(
+            game.level_set_block(level, [0, 64, 0], copper, flags),
+            Ok(true)
+        );
         fill_chest(&mut game);
-        assert!(game.level_set_block(level, [0, 64, 0], exposed, flags));
+        assert_eq!(
+            game.level_set_block(level, [0, 64, 0], exposed, flags),
+            Ok(true)
+        );
         let Some(super::super::BlockEntity::Chest(items)) =
             game.world.block_entities.get(&(0, 64, 0))
         else {
@@ -3610,12 +3759,18 @@ pub(super) mod tests {
             .registry
             .default_state("minecraft:sculk_sensor")
             .unwrap();
-        assert!(game.level_set_block(level, [0, 64, 0], sensor, flags));
+        assert_eq!(
+            game.level_set_block(level, [0, 64, 0], sensor, flags),
+            Ok(true)
+        );
         assert!(matches!(
             game.world.block_entities.get(&(0, 64, 0)),
             Some(super::super::BlockEntity::Sculk(_))
         ));
-        assert!(game.level_set_block(level, [0, 64, 0], chest, flags));
+        assert_eq!(
+            game.level_set_block(level, [0, 64, 0], chest, flags),
+            Ok(true)
+        );
         assert!(matches!(
             game.world.block_entities.get(&(0, 64, 0)),
             Some(super::super::BlockEntity::Chest(_))
@@ -3624,7 +3779,10 @@ pub(super) mod tests {
             game.enter_command_level(super::super::Dim::Nether)
                 .is_some()
         );
-        assert!(!game.level_set_block(level, [0, 64, 0], stone, flags));
+        assert_eq!(
+            game.level_set_block(level, [0, 64, 0], stone, flags),
+            Err(mod_api::LevelWriteError::Unavailable)
+        );
         assert!(
             game.level_destroy_block(level, [0, 64, 0], true, None, false)
                 .is_none()

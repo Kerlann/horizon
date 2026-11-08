@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Tidak dapat membaca log build: {error}",
   "Could not read the saved sign-in.": "Tidak dapat membaca sesi masuk yang disimpan.",
   "Could not read the saved sign-in. Sign in again.": "Tidak dapat membaca sesi masuk yang disimpan. Masuk kembali.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Tidak dapat membaca {name}: {error}",
   "Could not run {program}: {error}": "Tidak dapat menjalankan {program}: {error}",
   "Could not save the renewed sign-in.": "Tidak dapat menyimpan sesi masuk yang diperbarui.",

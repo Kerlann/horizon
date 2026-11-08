@@ -536,7 +536,7 @@ fn creative_tabs_keep_vanilla_items_missing_from_search() {
         effects: Vec::new(),
         entity_types: Vec::new(),
         block_entity_types: Vec::new(),
-        block_entity_membership: BTreeMap::new(),
+        block_entity_factories: BTreeMap::new(),
         menu_types: Vec::new(),
         states: 0,
         defaults: BTreeMap::new(),
@@ -5883,7 +5883,8 @@ fn a_content_fence_gate_plays_its_own_sounds_or_its_woods() {
 
 /// A block's item is one value in its gameplay row: its own id by default, the
 /// `block_item` it names (a mod's own item or a vanilla one), or none with
-/// `item` false. A `block_item` that is no item refuses the load.
+/// `item` false. A `block_item` that is no item refuses the load. Pick-block's item
+/// is that value unless the block declares a `pick_item` of its own.
 #[test]
 #[ignore = "full content root: CI and pr_ready run it"]
 fn a_block_yields_the_item_it_names_or_its_own_or_none() {
@@ -5916,6 +5917,14 @@ fn a_block_yields_the_item_it_names_or_its_own_or_none() {
                 r#"{"template": "minecraft:stone", "item": false}"#,
             ),
             (
+                "data/pick/horizon/block/crop.json",
+                r#"{"template": "minecraft:stone", "item": false, "pick_item": "minecraft:wheat_seeds"}"#,
+            ),
+            (
+                "data/pick/horizon/block/gilded.json",
+                r#"{"template": "minecraft:stone", "pick_item": "pick:rod"}"#,
+            ),
+            (
                 "data/pick/horizon/item/rod.json",
                 r#"{"template": "minecraft:stick"}"#,
             ),
@@ -5939,6 +5948,19 @@ fn a_block_yields_the_item_it_names_or_its_own_or_none() {
     assert_eq!(item("pick:pillar"), "pick:rod");
     assert_eq!(item("pick:gem_ore"), "minecraft:diamond");
     assert_eq!(item("pick:ghost"), "minecraft:air");
+    let pick = |name: &str| {
+        let state = registry.default_state(name).unwrap();
+        facts.get(state).pick_item.to_string()
+    };
+    // Without a `pick_item`, pick-block takes the block's item.
+    assert_eq!(pick("pick:plain"), "pick:plain");
+    assert_eq!(pick("pick:pillar"), "pick:rod");
+    assert_eq!(pick("pick:ghost"), "minecraft:air");
+    // With one, it takes that, and `Block.asItem` is unchanged.
+    assert_eq!(pick("pick:crop"), "minecraft:wheat_seeds");
+    assert_eq!(item("pick:crop"), "minecraft:air");
+    assert_eq!(pick("pick:gilded"), "pick:rod");
+    assert_eq!(item("pick:gilded"), "pick:gilded");
     let id = |name: &str| behaviours.table.block_by_name(name).unwrap();
     assert_eq!(&*behaviours.block_data(id("pick:pillar")).item, "pick:rod");
     assert_eq!(
@@ -5966,6 +5988,26 @@ fn a_block_yields_the_item_it_names_or_its_own_or_none() {
     .unwrap()
     .to_string();
     assert!(e.contains("lost:pillar") && e.contains("lost:rod"), "{e}");
+    let missing = folder_mod(
+        &scratch.join("gone"),
+        &[
+            ("horizon-mod.toml", &manifest("gone", "")),
+            (
+                "data/gone/horizon/block/crop.json",
+                r#"{"template": "minecraft:stone", "item": false, "pick_item": "gone:seed"}"#,
+            ),
+        ],
+    );
+    let e = resource_root_fixture(
+        &base,
+        Path::new(""),
+        std::slice::from_ref(&missing),
+        &scratch.join("cache3"),
+    )
+    .err()
+    .unwrap()
+    .to_string();
+    assert!(e.contains("gone:crop") && e.contains("gone:seed"), "{e}");
     let _ = fs::remove_dir_all(&scratch);
 }
 

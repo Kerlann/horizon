@@ -26,7 +26,7 @@ fn main() -> horizon_items::Result<()> {
     let args: Vec<_> = std::env::args().collect();
     let root = Path::new(&args[1]);
     let defaults = horizon_world::item_defaults::read(root)?;
-    let enchantments = Enchantments::load(root, &defaults);
+    let enchantments = Enchantments::load(root, &defaults)?;
     let mut out = BufWriter::new(File::create(&args[3])?);
     for line in BufReader::new(File::open(&args[2])?).lines() {
         let line = line?;

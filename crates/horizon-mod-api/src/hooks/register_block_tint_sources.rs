@@ -17,10 +17,10 @@ once at start, and a model face with `tintindex` i is multiplied by layer i. A l
 (`VanillaTint`: `Constant`, `ConstantSplit`, `Grass`, `Foliage`, `Water`, `Redstone`...) or the mod's own
 `BlockTintSource`, with vanilla's four methods:
 
-- `color(state)`: the colour away from a level (a block in a minecart, a mod's drawn block);
-- `color_in_world(state, level, pos)`: the chunk mesher's colour, and a block a piston moves; it defaults to
+- `color(state, metadata)`: the colour away from a level (a block in a minecart, a mod's drawn block);
+- `color_in_world(state, metadata, level, pos)`: the chunk mesher's colour, and a block a piston moves; it defaults to
   `color`;
-- `color_as_terrain_particle(state, level, pos)`: the bits the block breaks into; it defaults to
+- `color_as_terrain_particle(state, metadata, level, pos)`: the bits the block breaks into; it defaults to
   `color_in_world`;
 - `relevant_properties()`: the properties the colour depends on. Vanilla groups states for shared baked models
   by them; Horizon bakes every state and does not read it.
@@ -28,8 +28,8 @@ once at start, and a model face with `tintindex` i is multiplied by layer i. A l
 ```rust,ignore
 struct Dyed;
 impl BlockTintSource for Dyed {
-    fn color(&self, state: &BlockState) -> u32 {
-        match state.value("color") {
+    fn color(&self, state: &BlockState, metadata: &dyn BlockMetadata) -> u32 {
+        match state.property(metadata, "color").ok().flatten() {
             Some("red") => 0xFFB02E26,
             _ => 0xFFF9FFFE,
         }
@@ -50,7 +50,7 @@ fn register_block_tint_sources(
 
 Colours are ARGB; the faces take their RGB, as vanilla's block renderer does. The mesher asks `color_in_world`
 on its worker threads, once per block and tint index each time it meshes the section, so a source keeps no
-mutable state and gets no `Host`. `level` is a `BlockAndTintGetter` over the section's chunk and its eight
+mutable state and gets no `Host`. Each colour method receives an explicit immutable `BlockMetadata` resource, also used by `BlockState::property`, `with` and `of`. `level` is a `BlockAndTintGetter` over the section's chunk and its eight
 neighbours: block and fluid states, light, face shading and `block_tint(pos, resolver)` for the biome colours.
 Block entities are not part of it. A block with no mod layers meshes as before, and the registrations hold after
 a pack change or F3+T. Fluids take their colour from their fluid model, not from these registrations."#]

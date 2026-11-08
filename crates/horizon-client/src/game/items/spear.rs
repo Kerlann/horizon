@@ -325,7 +325,7 @@ impl Game<'_> {
     pub(super) fn damage_stats_and_hearts(&mut self, actual: f32, feet: [f64; 3], height: f64) {
         self.award_custom_stat("damage_dealt", (actual * 10.0).round() as i32);
         if actual > 2.0 {
-            let indicator = mod_api::particles::ParticleOptions::simple(
+            let indicator = horizon_client::particles::ParticleOptions::simple(
                 horizon_client::particles::ParticleType::DamageIndicator,
             );
             self.particles.send_particles(

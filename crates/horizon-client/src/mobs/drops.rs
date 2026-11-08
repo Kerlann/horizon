@@ -268,8 +268,7 @@ pub fn slot_item(m: &Mob, slot: &str) -> Option<LootStack> {
             stack.enchantments.push((e.to_string(), *l as i32));
         }
         if let Some(trim) = &g.trims[index] {
-            let trim =
-                horizon_client_core::scoreboard::tag_to_json(&crate::item_data::trim::to_nbt(trim));
+            let trim = Some(crate::item_data::trim::to_nbt(trim));
             stack.components.push(("minecraft:trim".to_owned(), trim));
         }
     }

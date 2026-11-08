@@ -1,5 +1,15 @@
 # Building a mod to `mod.wasm`
 
+## Boundary benchmark
+
+After building the shared std and the test fixture, run the release benchmark with their paths:
+
+```sh
+HORIZON_WASM_STD="$PWD/target/horizon-wasm-std.wasm" HORIZON_WASM_FIXTURE="$PWD/crates/horizon-mod-wasm/tests/fixture/target/horizon-mod/wasm_fixture.hmod" cargo test --release -p horizon-mod-wasm --test bench block_entity_ticks -- --ignored --nocapture
+```
+
+It measures 1,000 block entity ticks against an in-memory host, both without and with two host reads per tick; it is not a full game-world benchmark. The `wasm-mods` workflow runs it only on manual dispatch.
+
 A mod written against `mod_api` builds either way from the same source: native, compiled into
 the game by the launcher ([Native mods](native-mods.md)), or to `mod.wasm`, which any game with
 the same mod API runs with no rebuild. Only the build step differs: the hooks, Parts,
@@ -27,169 +37,158 @@ toolchain = "1.99.1 <commit>"     # every mod linked together needs the same one
 my_library = "…"
 ```
 
-A mod carries native code or wasm code, not both. A wasm mod keeps `internals` and
-`[[inject]]` declarations at the manifest root, with no `[native]` table.
-A wasm mod's id is words that each start with a
-letter (`hello_wasm`, not `mod_2`).
+A mod carries native code or wasm code, not both. A wasm mod has no `[native]` table.
+
+A mod with `[[inject]]` listeners builds against the game's staged point catalog. Pass
+`--catalog path/to/points.json`, or set `HORIZON_WASM_STD` to the toolchain's std member
+with `points.json` beside it. Mods without listeners need no catalog. When packaging the
+wasm toolchain, `cargo horizon-mod wasm-std <out.wasm> --catalog <staged-points.json>`
+copies that catalog beside the std member.
+
+The std member also owns the group's shared state: its cache budget and the one table of handlers (capability providers and parts) that the mods of a
+group give the game, so a handler one mod of a group gave is usable by another mod of the same group. A
+mod built for a toolchain whose std lacks that table is refused at load; rebuild the mod and the std
+together.
+
+The state is 32 words, zeroed, exported by the std member as `horizon_group_state`: the handler table, the cache budget, and
+29 slots for eviction callbacks. A member's allocator is `mod_api`'s `#[global_allocator]` on wasm32. When an allocation
+fails because the group's memory (256 MiB) is full, it calls every callback registered with
+`mod_api::wire::guest::register_eviction(fn())` once and retries once; if that frees nothing the allocation fails as
+usual (`try_reserve` returns an error, an infallible allocation ends the call with a trap). Register a callback to
+give back what a cache can rebuild. It must free memory and must not allocate. Registering the same function twice is
+harmless; `false` means all 29 slots are taken.
+
+A wasm mod must not declare its own `#[global_allocator]`: `cargo horizon-mod build --wasm` fails with rustc's error
+"the `#[global_allocator]` in this crate conflicts with global allocator in: mod_api". Allocate through the standard
+collections and let the group's allocator do the rest.
 
 ## Dependencies
 
 `[dependencies]` work as for native mods. List the library mod in `horizon-mod.toml` and its
-crate in `Cargo.toml`; build the library with `--wasm` first. The game links a mod with its
+crate in `Cargo.toml`. The tool stages the resolved mod packages into one Cargo workspace:
+each library's single compiler unit produces both its rlib and its position-independent member,
+and dependents use that exact rlib through Cargo's ordinary dependency edges. Cargo still owns
+feature resolution, build scripts and non-mod dependencies. Registration generation is scoped to
+each package, not to the mod from which the command was launched.
+
+Ordinary Rust calls such as `my_library::function()`, statics, generics and owned Rust types need
+no generated interface or export annotations. Members export their public definitions without
+symbol interposition: duplicate definitions are refused, rather than overriding another mod.
+Each member records its compiler, target, settings,
+rlib digest and dependency artifact identities in `horizon.build` metadata covered by its module
+hash. Mod crate disambiguators use the mod ID, version and resolved Cargo features rather than
+the temporary workspace path. A shared crate disambiguator alone is not an ABI guarantee:
+the loader checks the exact dependency build recorded in `[wasm.linked]`, including when the
+library and its consumers were built separately. Changing a library's source, toolchain,
+features or settings requires rebuilding its consumers.
+
+The build packages every member of the resolved group into the invoking project's
+`target/horizon-mod/` directory. A consumer build does not replace another project's previously
+packaged `.hmod`. To include additional local roots in the same Cargo invocation, repeat
+`--with path/to/another/mod`. The game links a mod with its
 dependencies at load, one copy of each library shared by every mod that uses it, and refuses a
 mod whose library is missing or another build than the one it was linked against, naming it on
 the Mods page. An optional dependency is built in with the Cargo feature of its id, so its crate's
 entry in `Cargo.toml` is `optional = true` under that id; an absent one is left out of the group at
 load, and `if_installed!` keeps the mod from calling it.
 
+## Injection points
+
+API-typed `[[inject]]` listeners use the same generated `mod_points` records and constructors as
+native listeners. The wasm build takes the pinned game's staged `points.json` as an explicit
+`--points` input when injections are declared. Only the declared places' guest codecs and dispatch
+functions are compiled into the member; the complete catalog still determines its layout hash.
+Listeners register in the host's ordinary point list, with the same priority, dependency order,
+owner enable flag and stop behavior as native listeners. Mixins remain native-only.
+
+Raw listeners read an owned per-call snapshot, never engine addresses or Rust memory layouts.
+Rows identify a node, its parent, a declaration-order field/index, a generated 64-bit type key
+and a plain Wire value. Every generated raw constructor accepts the same
+`fn(mod_points::snapshot::Snapshot<'_>, &mut mod_api::wire::RecordPatch)` listener signature.
+Reads cannot mutate the snapshot. The head outcome cell uses `Option<T>` for cancellation with a
+replacement result; the return outcome cell contains `T` directly, like the native return listener.
+Declared mutable raw-record fields, including
+by-value arguments which native raw records expose as `&mut`, use checked, atomic writeback.
+Rejected replies apply no argument or outcome writes. The initial generated readers cover free
+functions with primitive arguments and unit/primitive returns; engine receivers, nominal types,
+callbacks and borrowed returns need staged catalog readers and are refused until those exist.
+
+The shared `RowPages` resource interface returns owned windows, with a node, starting index,
+row count and child-depth bound. Native borrowed providers check their marked call's lifetime
+before every read and resolve movable elements afresh. Retaining or transferring a provider does
+not keep its native root alive: expired and wrong-thread reads are refused, while rows already
+returned remain owned and usable. This interface alone does not enable the missing nominal readers
+above. Sparse `wire::RecordPatch` records likewise carry only field ids and ordinary Wire values;
+the receiving schema validates every edit before committing any field.
+
+## ABI reference
+
+A dependency group consists of core wasm shared modules with `dylink.0`, not components.
+The loader provides one linear memory, function table and standard-library member per group,
+plus the `env` base globals and the `GOT.mem` and `GOT.func` relocations used by the members.
+The loader supplies linker globals such as `GOT.mem.__heap_base` and `GOT.mem.__data_end`;
+member constructors run after linking. Groups do not share memory with one another.
+
+The build step moves a core start function to the explicit `__wasm_start` export. The loader
+instantiates members, fills self-referencing GOT entries from their actual exports, then runs
+`__wasm_start`, data relocations and constructors in that order. A raw core start is refused:
+it would execute before its own addresses could be relocated. `horizon.private` metadata lists
+compiler implementation exports that remain local to a member (for example an upstream inline
+method emitted in several members). Their original symbols can resolve that member's own GOT,
+but are not published as library definitions. This is symbol visibility metadata, not function
+glue or another Rust interface.
+
+Pointers and lengths below are wasm32 `u32` values. The game provides these imports in the
+`horizon` module:
+
+- `host(id, in_ptr, in_len, out_ptr, out_cap) -> u32` invokes a generated import ID. Arguments
+  are Wire values in order. It writes the reply if it fits and returns its length; if the length
+  exceeds `out_cap`, call `host_reply(out_ptr)` after allocating that many bytes to copy the
+  retained reply. Host errors trap the call.
+- `host_reply(out_ptr)` copies that retained reply.
+
+Each guest exports:
+
+- `horizon_layout() -> u64`: the generated layout hash. A mismatch is refused.
+- `horizon_layout_ext() -> u64`, when `mod_points` is linked: the full point catalog and row-schema
+  layout hash. The loader checks it before accepting any listener.
+- `horizon_in(len) -> ptr`: the buffer into which the game writes the next call's input.
+- `horizon_hook(id) -> u64`: runs the generated export ID after the input is written. The high
+  32 bits are the reply pointer and the low 32 bits its length; `u32::MAX` as the length denotes
+  an error, with a Wire string at the pointer. The reply remains valid until the next call at
+  the same depth. A handler call starts its input with the handler's `u64` ID.
+
+The reserved IDs are `INIT = 0xFFFF_FF00` (guest package-list initialization),
+`RELEASE = 0xFFFF_FF01` (guest handler IDs to release), and `HOST_RELEASE = 0xFFFF_FF02`
+(host object ID to release), and `HOST_LOG = 0xFFFF_FF03` (a guest panic string, with no reply).
+Other IDs index the generated import or export table. A hook reply
+contains its return value followed by writable arguments in field order.
+
+Points use that same hook export, call arena and execution budget. API place IDs are
+`0x8000_0000 + place`; raw place IDs are `0xC000_0000 + place`. The subscription query
+`0xBFFF_FFFF` returns `(place, injection_id)` pairs, with bit 30 of the place marking raw access.
+Point call input starts with the `u32` subscription index. An API `HostSide` point then carries a
+server/client boolean, followed by its listener record. A raw record contains the owned rows,
+an optional ordinary `RowPages` resource and an initially empty `RecordPatch`; there is no separate
+raw row prefix or API-typed argument proxy. API calls reply with unit and their record; raw calls
+reply with unit and a sparse `RecordPatch`. The host validates the complete patch before applying
+any producer-authorized argument or outcome writes; return argument edits are rejected.
+Raw snapshots are
+bounded to 65,536 rows and 1 MiB of encoded plain values, independently of runtime group limits.
+
+Wire values use little-endian numbers; lengths and collection counts are `u32`, strings are a
+byte length followed by UTF-8 bytes, options have a byte tag (`0` or `1`), enums have a `u32`
+case followed by its fields, and records contain their fields in declaration order. Readers reject
+invalid tags, invalid UTF-8, trailing data, lengths that cannot fit in the remaining bytes, and
+nesting beyond the shared Wire budget of 1040 protocol levels (which accommodates vanilla's
+512 nested NBT lists or compounds). Interned static strings are limited to 256 bytes and 4096 distinct
+strings per process. Execution, memory and table limits are enforced separately by the loader.
+
 ## In the game
 
-The game loads every `mod.wasm` turned on in the launcher or `horizon-mods.txt` (or passed with `--dev-mod`) at start,
-after the native mods. Each runs sandboxed with a memory limit and a time limit per call: 100 ms
-for a hook or part call, 30 s for start-up and a call of the load phase (registration, a data
-load, a resource reload). A mod that traps or runs past its limit stops its group, not the game.
-The limit is wall-clock time, so a slow machine reaches it sooner; `--wasm-fuel` counts
-instructions instead, so a mod stops at the same place on every machine, at some cost per call
-(for debugging and deterministic runs). `--wasm-interpreter` runs mods interpreted, for hosts
-that can't compile code at run time; it is much slower.
-A mod refused at load is named on the Mods page with its reason. A `mod.wasm` built against
-hooks this game doesn't have, or has with another type, names the first such import
-(`horizon:mod-api/host@0.1.0#entity`), so rebuilding against this game's `mod_api` is the fix.
+Each dependency group uses shared memory and one copy of the standard library; its members are
+core wasm shared modules, not components. A layout mismatch or an unresolved dependency is refused
+and named on the Mods page.
 
-## Listening at points
-
-API function slots use `[[inject]]`, with a crate-root function named by `with`, without an implementation trait. The [chat fixture's manifest](https://github.com/arismoko/horizon/blob/main/crates/horizon-mod-wasm/tests/points/chat_tail/horizon-mod.toml)
-and [listener](https://github.com/arismoko/horizon/blob/main/crates/horizon-mod-wasm/tests/points/chat_tail/src/lib.rs) are compiled examples.
-The function takes the point's host and API record (only the record for a hostless point).
-
-A build script parses the manifest once, projects its validated declarations into
-`horizon_mod_api_gen::points::GuestInject`, and calls `guest_exports` with the pinned game's root.
-This generates the one generic listeners export, including its subscriptions and record shapes.
-The [shared fixture build script](https://github.com/arismoko/horizon/blob/main/crates/horizon-mod-wasm/tests/points/build.rs) shows the
-complete path; the generator itself has no manifest-crate dependency. Include its output in the guest
-bootstrap, not one hand-written wasm adapter per point.
-
-The loader supports API `head` and `return`, including priorities and multiple declarations at one
-place. Each export is checked by inject id and record shape, then registered by its checked export
-index alongside native functions. Missing, undeclared and changed records refuse the mod. Other
-access forms and kinds are explicitly refused pending the remaining wasm routing. Full route/hash
-checks and the rest of the wasm inject kinds follow separately.
-
-A listener changes its record's fields (`cancel`, `result`, the arguments), and the game takes them
-back when it returns. Internals use the view below. Source mixins require a native mod.
-
-## Declared internals at raw points
-
-For internals that the typed API does not yet cover, add `horizon-mod-internals` (library name
-`mod_internals`) to the mod's Cargo dependencies. Declare each internal with
-`cargo horizon-mod internals add <path>` at the manifest root. Declare each listener with
-`[[inject]]`, `at`, `kind = "head"` or `"return"`, `access = "internals"`, its function `hash`
-and a crate-root `with` callback. `cargo horizon-mod build --wasm` fetches the newest prebuilt game's
-`internals.json` and generates `mod_internals::view` for exactly those declarations and the
-types they reach. The generated code stays in Cargo's build directory. Opaque types and
-functions that cannot cross the sandbox are refused at build, naming the declaration.
-GPU, window, input-device and audio types (`wgpu`, `winit`, `gilrs`, `cpal`, `rodio`, `glyphon`)
-are opaque, except these `winit` key and mouse types, which cross by copy: `keyboard::KeyCode`,
-`PhysicalKey`, `NativeKeyCode`, `KeyLocation` and `ModifiersState` (as its `u32` bits), and
-`event::ElementState` and `MouseButton`. `KeyCode` is `#[non_exhaustive]`, so it, `PhysicalKey`
-and anything holding them are read-only.
-
-Call `mod_internals::raw_listeners!()` once; the manifest generates the listener list and order. Each takes its generated raw record and an optional receiver:
-`fn(view::HandleChatInputRaw, Option<view::Game>)`, for example. A free function has no receiver
-and takes `Option<()>` instead. This compiled test mod shows the complete pattern:
-
-```rust,ignore
-{{#include ../../../../crates/horizon-mod-wasm/tests/internals/counter/src/lib.rs}}
-```
-
-A copy field has a getter and `set_<field>`, both returning `Result`; a handle field gives its
-typed node. `Seq<T>` and `Map<K, V>` have `len` and `get`; `Opt<T>` has `case` and `some`.
-Guest copies own their data: a native borrowed or shared copy is represented by `Box<T>`.
-Small named copies are plain structs or enums; their node form, when used as a receiver, has
-`Node` appended to its name. Same-named types retain their fully qualified generated names;
-an unambiguous type also gets a short alias such as `Game` unless it conflicts with the view's
-runtime types. A function's `&mut T` copy argument is also `&mut T` in the guest view: its value
-crosses into a separate host local, and the final value is written back into the guest argument
-after the call, including when the game returns an error. For example, `mutate(&mut count,
-&mut small)?` updates both guest values without making either a node or aliasing game state.
-Mutable node arguments still require the separation described below. Sets are opaque, not indexed
-sequences. A returned node may not borrow a decoded copy local; such signatures are refused.
-Elided return borrows on methods still resolve to `self`, not to copied arguments.
-
-A function returning `Result<T, E>` (including a written `Result<T>` alias) can expose a copyable
-`T` even when its error is opaque. Its view method returns `Result<Result<T, GameError>, Refusal>`:
-`GameError` means the game function failed, without copying its native error into the mod.
-A function returning `Option<&T>` or `Option<&mut T>` for handle-typed state returns an optional
-call-scoped node. Like a directly returned reference, it expires after the next declared function
-that actually runs, even when that function returns an error. With no pending writes it can be
-that next function's receiver. Pending writes apply first and expire returned references before
-the function's receiver and arguments are resolved.
-
-A function that writes through a node requires that node to be separate from every other node
-argument, including a shared one. Distinct struct fields or Vec/array indices can prove that
-only when the entire shared path uses raw-pointer steps. Map keys, enum/Option variants and
-VecDeque indices never prove separation; an object and its child cannot either. A returned-reference root is conservatively treated as overlapping
-any other root. Unproved separation returns `NotHere("arguments overlap")` before applying writes.
-Calls into the game cannot reenter a listener in the same wasm group. A native callback that needs
-that synchronous reentry must stay native rather than silently deferring its work.
-
-The listener sees its own journaled writes immediately. A declared function applies that journal
-before running, and listener return applies the remaining writes. A trap drops writes since the
-last function call and stops the dependency group; it does not undo calls that already ran.
-Nodes are valid for one listener call only. A changed layout or missing declared internal refuses
-the package at load, rather than guessing a new field number. No game rebuild is needed when
-the declared layouts and functions are unchanged.
-
-Native methods that collide with a field accessor use `call_<name>` (for example `call_set_mode`), determined from the full catalog field list, not the mod's declarations.
-
-### Batched fields
-
-Each copy field has an `x_field()` descriptor beside `x()` and `set_x()`.
-Use `get_many((game.copy_field(), other.value_field()))` to read a tuple of up to twelve
-fields in one crossing. It returns the matching tuple of typed `Result`s; a refused entry
-does not stop the others. Use `set_many((game.copy_field().write(7), other.value_field().write(11)))`
-to write a tuple. Both helpers are in `mod_internals::view`.
-
-`set_many` writes join the listener's journal like single writes and are applied on listener return
-or before a declared function call, not immediately at `set_many`. Reads see that journal,
-including the last successful write to a field in a batch. Batches pay the same per-entry
-base, path, journal scan and value fuel costs as single calls, including refused entries.
-Raw batches over twelve entries trap before dispatch; valid inputs are prepaid and read outputs are charged before return.
-
-### Internals budgets and trust boundary
-
-Each listener call can retain at most 4,096 live nodes and journal 4,096 writes totaling 65,536
-value cells (including writes flushed before a thunk). Retained journal payloads and keys together
-are capped at 1 MiB per frame, and live-node paths have a separate 1 MiB cap; sequence storage
-counts toward these byte limits too. A value can contain at most 1 MiB of string or byte data.
-A write is checked against its field's codec before entering the journal. Exceeding these limits returns
-`NotHere("internals budget")`. With fuel enabled, every import costs 1 plus its input and output
-cells; a native thunk call also costs a fixed 1,000 fuel units.
-
-Incoming values are limited to 65,536 cells and 1 MiB of decoded string bytes each.
-String lengths are checked and fuel is charged before their payloads are copied into
-host memory, including strings nested in call arguments and batch writes. A function
-call checks the declared thunk's argument count before lifting those arguments; each
-accepted argument keeps its own value budget. Batches retain the twelve-entry limit
-and per-entry refusals.
-
-**Native work inside a thunk is not interruptible.** Fuel and deadlines limit the wasm listener,
-not the duration of a native function it calls. Daily prebuilts contain thunks only for paths in
-committed, reviewed `wasm-internals/<mod>.txt` files. Reviewers must put unbounded functions
-(for example, loops whose work scales with a guest argument) in `native-only.txt`. Building an
-instance from source instead exposes the installed mods' declarations: choosing that build
-trusts those functions to finish. A wasm-only instance can use this source-build route without
-installing a native mod. A native panic is contained and stops the calling dependency group;
-already-applied writes and native side effects are not rolled back.
-
-## Calls into the game
-
-A wasm mod reaches the game through the same `mod_api` as a native one, and each call crosses
-the sandbox: a hook call into a mod costs about 1.5 µs, and a capability lookup about 2.5 µs on
-top (measured on a release build). A `Capability<T>` holds no borrow and stays valid for the
-tick, so a pipe or machine looks up its neighbours' capabilities once per tick and calls the
-handlers it got, rather than looking them up again for every move. A mod's own handlers, and
-those of mods in its group, are called directly without crossing.
-
-`host.is_loaded("other_mod")` says whether a mod is installed, native, wasm or content, as
-Fabric's `isModLoaded` does; the list is fixed at startup.
+The game limits execution time, memory and table usage. A trap or limit hit disables the affected
+group. APIs marked `Not on wasm` in their Rust documentation cannot be used by wasm mods.

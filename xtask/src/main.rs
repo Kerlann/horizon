@@ -23,7 +23,7 @@ use std::fs;
 use std::path::{Component, Path, PathBuf};
 use std::process::{Command, ExitCode};
 
-const USAGE: &str = "usage: cargo run -p xtask -- package BINARY OUTDIR | package-server ENGINE OUTDIR | mod-api [wit OUTDIR | notes] | tokens | icons";
+const USAGE: &str = "usage: cargo run -p xtask -- package BINARY OUTDIR | package-server ENGINE OUTDIR | mod-api [notes] | tokens | icons";
 
 /// What the release folder takes from the repository at HEAD, as `git archive` writes it.
 const ARCHIVED: [&str; 5] = [
@@ -51,7 +51,6 @@ fn main() -> ExitCode {
             package_server(Path::new(engine), Path::new(out))
         }
         [task] if task == "mod-api" => mod_api::run(),
-        [task, wit, out] if task == "mod-api" && wit == "wit" => mod_api::wit(Path::new(out)),
         [task, notes] if task == "mod-api" && notes == "notes" => mod_api::notes(),
         [task] if task == "tokens" => tokens(),
         [task] if task == "icons" => icons(),

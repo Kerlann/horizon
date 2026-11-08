@@ -1,8 +1,8 @@
 //! Moved here from the game so mods can name it.
+use crate::ItemStack;
 #[allow(unused_imports)]
 use crate::*;
 use horizon_core::nbt::Tag;
-use horizon_items::items::ItemStack;
 /// The `minecraft:tooltip_display` component applied by `ItemStack` while it
 /// builds a hover tooltip.
 // exhaustive: its fields are private, so mods cannot build or destructure it
@@ -11,12 +11,40 @@ pub struct TooltipDisplay<'a> {
     pub(crate) ominous_banner: bool,
 }
 impl<'a> TooltipDisplay<'a> {
-    pub fn for_stack(stack: &'a ItemStack) -> Self {
+    /// Reconstruct the read-only projection transported by the mod boundary.
+    #[doc(hidden)]
+    pub fn __wire_from_fields(component: Option<&'a Tag>, ominous_banner: bool) -> Self {
         Self {
-            component: stack
-                .data()
-                .and_then(|data| data.other("minecraft:tooltip_display")),
-            ominous_banner: stack.data().is_some_and(|data| data.ominous_banner),
+            component,
+            ominous_banner,
+        }
+    }
+
+    /// Read tooltip visibility from an owned API stack's effective component patch.
+    /// The game supplies this stack only after the tooltip subscription guard.
+    pub fn for_stack(stack: &'a ItemStack) -> Self {
+        Self::from_component(
+            stack.components().and_then(|components| {
+                components
+                    .as_nbt()
+                    .iter()
+                    .find(|(id, _)| {
+                        id.0.iter()
+                            .copied()
+                            .eq("minecraft:tooltip_display".encode_utf16())
+                    })
+                    .map(|(_, tag)| tag)
+            }),
+            false,
+        )
+    }
+
+    /// Borrow a tooltip component without copying it. `ominous_banner` represents
+    /// the vanilla banner default when the engine stores that default implicitly.
+    pub fn from_component(component: Option<&'a Tag>, ominous_banner: bool) -> Self {
+        Self {
+            component,
+            ominous_banner,
         }
     }
 
@@ -56,5 +84,44 @@ impl<'a> TooltipDisplay<'a> {
         !hidden.iter().any(|tag| {
             matches!(tag, Tag::String(id) if id.0.iter().copied().eq(component.encode_utf16()))
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn owned_stack_tooltip_visibility_uses_its_patch() {
+        let mut stack = ItemStack::of(crate::ItemKey(0));
+        assert!(TooltipDisplay::for_stack(&stack).name_visible(false));
+        stack
+            .set_components(
+                [(
+                    "minecraft:tooltip_display".into(),
+                    Tag::compound(vec![("hide_tooltip", Tag::Byte(1))]),
+                )]
+                .into(),
+            )
+            .unwrap();
+        let display = TooltipDisplay::for_stack(&stack);
+        assert!(!display.name_visible(false));
+        assert!(display.name_visible(true));
+        assert!(!display.shows("minecraft:lore"));
+        stack
+            .set_components(
+                [(
+                    "minecraft:tooltip_display".into(),
+                    Tag::compound(vec![(
+                        "hidden_components",
+                        Tag::List(vec![Tag::String("minecraft:lore".into())]),
+                    )]),
+                )]
+                .into(),
+            )
+            .unwrap();
+        let display = TooltipDisplay::for_stack(&stack);
+        assert!(display.name_visible(false));
+        assert!(!display.shows("minecraft:lore"));
+        assert!(display.shows("minecraft:attribute_modifiers"));
     }
 }

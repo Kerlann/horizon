@@ -250,7 +250,7 @@ pub(super) struct Spawn {
 /// What a broken block spawns (`GameLevel::block_dropped`).
 /// Prepared engine item entity; API snapshots exist only while a listener runs.
 #[derive(Clone, Debug, PartialEq)]
-pub(super) struct BlockItemDrop {
+pub(crate) struct BlockItemDrop {
     pub(super) random: Option<ItemRandom>,
     pub(super) stack: ItemStack,
     pub(super) position: [f64; 3],
@@ -673,16 +673,16 @@ impl GameLevel<'_> {
         } = dropped;
         if self.native_authoritative
             && mod_api::__private::listened(mod_api::HookId::BlockDrops)
-            && let (Ok(tool), Ok(mut snapshots)) = (tool.try_into_api(), items.try_into_api())
+            && let Ok(mut snapshots) = items.try_into_api()
         {
             let mut next_experience = experience;
             let mut next_canceled = canceled;
-            self.native_block_drops(mod_api::__private::BlockDropsCall {
+            self.native_block_drops(crate::game::native_hooks::BlockDropsCall {
                 dimension: self.dimension,
                 pos,
                 state,
                 breaker,
-                tool: tool.as_ref(),
+                tool,
                 drops: &mut snapshots,
                 experience: &mut next_experience,
                 cancel: &mut next_canceled,

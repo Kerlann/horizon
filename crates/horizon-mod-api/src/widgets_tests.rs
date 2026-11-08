@@ -37,12 +37,20 @@ impl EffectsClientHost for Fake {
 /// field's view; every character 6 pixels wide, from 4 pixels in.
 #[derive(Default)]
 struct Recorder {
-    buttons: Vec<(String, bool, bool)>,
+    buttons: Vec<(Text, bool, bool)>,
     fields: Vec<TextFieldView>,
 }
 impl DrawContext for Recorder {
-    fn widget_button(&mut self, _: [f32; 4], label: &Text, active: bool, highlighted: bool) {
-        self.buttons.push((label.plain(), active, highlighted));
+    fn widget_button(
+        &mut self,
+        _: [f32; 4],
+        label: &Text,
+        active: bool,
+        highlighted: bool,
+    ) -> Result<(), crate::text::TextFormError> {
+        label.validate_depth()?;
+        self.buttons.push((label.clone(), active, highlighted));
+        Ok(())
     }
     fn widget_text_field(&mut self, field: &TextFieldView) -> TextFieldLayout {
         self.fields.push(field.clone());
@@ -79,7 +87,7 @@ fn a_field_takes_clicks_typing_and_the_clipboard() {
     let (mut widgets, [a, ..]) = screen();
     let mut draw = Recorder::default();
     widgets.text_field_mut(a).unwrap().set_value("hello");
-    widgets.draw(&mut draw, &host, [0.0, 0.0]);
+    widgets.draw(&mut draw, &host, [0.0, 0.0]).unwrap();
     // Character boundaries at 14, 20, 26...: x 27 is after the second character.
     assert_eq!(
         widgets.mouse_pressed(&host, [27.0, 15.0], 0, 0),
@@ -137,7 +145,7 @@ fn double_clicks_select_words_and_drags_select_text() {
     let (mut widgets, [a, ..]) = screen();
     let mut draw = Recorder::default();
     widgets.text_field_mut(a).unwrap().set_value("ab cd");
-    widgets.draw(&mut draw, &host, [0.0, 0.0]);
+    widgets.draw(&mut draw, &host, [0.0, 0.0]).unwrap();
     host.now.set(1000);
     widgets.mouse_pressed(&host, [39.0, 15.0], 0, 0);
     widgets.mouse_released(0);
@@ -228,12 +236,12 @@ fn drawing_asks_the_game_for_each_widget() {
     widgets.button_mut(done).unwrap().active = false;
     widgets.set_focus(&host, Some(b));
     let mut draw = Recorder::default();
-    widgets.draw(&mut draw, &host, [20.0, 75.0]);
+    widgets.draw(&mut draw, &host, [20.0, 75.0]).unwrap();
     assert_eq!(
         draw.buttons,
         [
-            ("Copy".to_owned(), true, true),
-            ("Done".to_owned(), false, false)
+            (Text::literal("Copy"), true, true),
+            (Text::literal("Done"), false, false)
         ]
     );
     assert_eq!(
@@ -245,17 +253,17 @@ fn drawing_asks_the_game_for_each_widget() {
     );
     host.now.set(350);
     let mut draw = Recorder::default();
-    widgets.draw(&mut draw, &host, [0.0, 0.0]);
+    widgets.draw(&mut draw, &host, [0.0, 0.0]).unwrap();
     assert!(!draw.fields[1].caret_shown);
     assert_eq!(widgets.char_typed(&host, 'z'), Outcome::Changed(b));
     let mut draw = Recorder::default();
-    widgets.draw(&mut draw, &host, [0.0, 0.0]);
+    widgets.draw(&mut draw, &host, [0.0, 0.0]).unwrap();
     assert!(draw.fields[1].caret_shown, "typing restarts the blink");
     widgets.text_field_mut(a).unwrap().active = false;
     widgets.set_focus(&host, Some(a));
     assert_eq!(widgets.focused(), None, "an inactive field takes no focus");
     let mut draw = Recorder::default();
-    widgets.draw(&mut draw, &host, [0.0, 0.0]);
+    widgets.draw(&mut draw, &host, [0.0, 0.0]).unwrap();
     assert_eq!(draw.fields[0].text_color, TEXT_COLOR_INACTIVE);
     assert_eq!(
         widgets.widget(copy).map(|w| w.rect()),
@@ -272,7 +280,7 @@ fn a_focused_widget_made_inactive_takes_no_input() {
     let host = Fake::default();
     let (mut widgets, [a, b, copy, _]) = screen();
     let mut draw = Recorder::default();
-    widgets.draw(&mut draw, &host, [0.0, 0.0]);
+    widgets.draw(&mut draw, &host, [0.0, 0.0]).unwrap();
     widgets.set_focus(&host, Some(copy));
     widgets.button_mut(copy).unwrap().active = false;
     assert_eq!(
@@ -320,7 +328,7 @@ fn replacing_a_scrolled_text_scrolls_back_to_it() {
     widgets.text_field_mut(a).unwrap().scroll = 6;
     widgets.key_pressed(&host, "key.keyboard.a", CONTROL);
     assert_eq!(widgets.char_typed(&host, 'x'), Outcome::Changed(a));
-    widgets.draw(&mut draw, &host, [0.0, 0.0]);
+    widgets.draw(&mut draw, &host, [0.0, 0.0]).unwrap();
     assert_eq!(draw.fields[0].value, "x");
     assert_eq!(draw.fields[0].scroll, 0);
 }
@@ -334,7 +342,7 @@ fn an_ignored_press_starts_no_double_click() {
     let (mut widgets, [a, ..]) = screen();
     let mut draw = Recorder::default();
     widgets.text_field_mut(a).unwrap().set_value("hello");
-    widgets.draw(&mut draw, &host, [0.0, 0.0]);
+    widgets.draw(&mut draw, &host, [0.0, 0.0]).unwrap();
     host.now.set(1000);
     assert_eq!(
         widgets.mouse_pressed(&host, [300.0, 300.0], 0, 0),

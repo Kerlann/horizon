@@ -27,7 +27,10 @@ impl Game<'_> {
             .map(|e| e.min_cost.calculate(level))
     }
     /// Whether enchantment `id` can go on `item` (`Enchantment.isSupportedItem`).
-    pub(in crate::game) fn enchantment_supports(&self, id: &str, item: &str) -> bool {
+    pub(in crate::game) fn enchantment_supports(&self, id: &str, item: mod_api::ItemKey) -> bool {
+        let Some(item) = mod_api::__private::item_key_id(item) else {
+            return false;
+        };
         self.stations()
             .enchantments
             .can_enchant(self.items(), id, item)

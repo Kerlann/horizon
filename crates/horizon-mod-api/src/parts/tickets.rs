@@ -10,7 +10,7 @@ pub(crate) fn registered_controllers(mods: &[ModEntry]) -> Vec<ControllerInfo> {
     if mods.is_empty() {
         return Vec::new();
     }
-    register_all(mods).controllers
+    register_all(mods, |_| false).controllers
 }
 /// Fixtures that tests of other crates use to install Parts.
 #[cfg(any(test, feature = "testing"))]

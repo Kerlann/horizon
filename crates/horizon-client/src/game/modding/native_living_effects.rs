@@ -18,8 +18,10 @@ use mod_api::{EffectKey, LivingRef, NativeActiveEffect};
 /// A player's effect as the API's load-owned key and instance data.
 pub(super) fn active_effect(e: &EffectInstance) -> NativeActiveEffect {
     NativeActiveEffect::from(mod_api::__private::built::NativeActiveEffect {
-        id: mod_api::__private::effect_key(e.registry_index.expect("active effect registry index"))
-            .expect("effects resolved at load"),
+        id: mod_api::__private::effect_key_by_index(
+            e.registry_index.expect("active effect registry index"),
+        )
+        .expect("effects resolved at load"),
         duration: e.duration,
         amplifier: e.amplifier,
         ambient: e.ambient,
@@ -30,8 +32,10 @@ pub(super) fn active_effect(e: &EffectInstance) -> NativeActiveEffect {
 /// A mob's stored effect as the API's: ambient and particle flags remain in their own lists.
 pub(super) fn mob_effect(m: &Mob, e: &horizon_client::mobs::StoredEffect) -> NativeActiveEffect {
     NativeActiveEffect::from(mod_api::__private::built::NativeActiveEffect {
-        id: mod_api::__private::effect_key(e.registry_index.expect("active effect registry index"))
-            .expect("effects resolved at load"),
+        id: mod_api::__private::effect_key_by_index(
+            e.registry_index.expect("active effect registry index"),
+        )
+        .expect("effects resolved at load"),
         duration: e.duration,
         amplifier: e.amplifier,
         ambient: m.extra.ambient_effects.contains(&e.id),
@@ -94,7 +98,9 @@ impl Game<'_> {
         living: LivingRef,
         effect: &NativeActiveEffect,
     ) -> bool {
-        let Some(def) = mod_api::__private::resolved_effect(effect.id) else {
+        let Some(def) = mod_api::__private::effect_index(effect.id)
+            .and_then(horizon_client_core::potions::effect_by_index)
+        else {
             return false;
         };
         if effect.duration < -1 {
@@ -146,7 +152,8 @@ impl Game<'_> {
         living: LivingRef,
         effect: EffectKey,
     ) -> Option<NativeActiveEffect> {
-        let def = mod_api::__private::resolved_effect(effect)?;
+        let def = mod_api::__private::effect_index(effect)
+            .and_then(horizon_client_core::potions::effect_by_index)?;
         match self.native_living_read_target(living)? {
             t @ (Target::Player | Target::Guest(_)) => self
                 .native_living_player_effects(t)?
@@ -187,7 +194,9 @@ impl Game<'_> {
     /// on a client, for any entity but the local player, whose copy of what the server
     /// sent it is read.
     pub(super) fn living_potion_affected(&self, living: LivingRef, effect: EffectKey) -> bool {
-        let Some(def) = mod_api::__private::resolved_effect(effect) else {
+        let Some(def) = mod_api::__private::effect_index(effect)
+            .and_then(horizon_client_core::potions::effect_by_index)
+        else {
             return false;
         };
         match self.native_living_read_target(living) {
@@ -226,7 +235,8 @@ impl Game<'_> {
         effect: EffectKey,
         partial: f32,
     ) -> Option<f32> {
-        let def = mod_api::__private::resolved_effect(effect)?;
+        let def = mod_api::__private::effect_index(effect)
+            .and_then(horizon_client_core::potions::effect_by_index)?;
         let Target::Player = self.native_living_read_target(living)? else {
             return None;
         };
@@ -254,7 +264,9 @@ impl Game<'_> {
     /// changes) when the entity has the effect not, before effect resolution, or for
     /// an armor stand, the dragon, a stale handle or a client.
     pub(super) fn living_remove_effect(&mut self, living: LivingRef, effect: EffectKey) -> bool {
-        let Some(def) = mod_api::__private::resolved_effect(effect) else {
+        let Some(def) = mod_api::__private::effect_index(effect)
+            .and_then(horizon_client_core::potions::effect_by_index)
+        else {
             return false;
         };
         match self.native_living_target(living) {
@@ -319,7 +331,7 @@ impl Game<'_> {
                     .iter()
                     .filter(|(name, amplifier)| {
                         let mut cancel = false;
-                        if let Some(key) = mod_api::__private::effect_key(*name) {
+                        if let Some(key) = mod_api::__private::effect_key_by_index(*name) {
                             self.native_mob_effect_remove(living, key, *amplifier, &mut cancel);
                         }
                         cancel

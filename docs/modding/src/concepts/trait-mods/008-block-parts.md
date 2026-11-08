@@ -5,6 +5,16 @@
 level, position, block state and `include_data`, true when a creative player picks with Ctrl. Return
 `None` to keep the game's item.
 
+`BlockPart::fall_on` runs at vanilla's landing moment on a read-only level random host.
+Request a deferred write with `event.request(LandingWrite::SetBlock(state))`, where `state`
+is an API `BlockState`, or `LandingWrite::DestroyBlock { drop }`. The game checks the
+complete write batch before queuing it. An invalid block key or ordinal refuses that
+callback's writes and other outputs, including damage; it never applies a valid prefix.
+After the entity batch ticks, writes apply in request order if the block still matches
+its original landed state. That guard runs once, so a first write can change the state
+without suppressing the next write. SetBlock notifies neighbors and clients; DestroyBlock
+preserves the requested resource-drop flag.
+
 `BlockPart::contents_changed(host, event)` observes a world block's storage at `setChanged`,
 with a `ServerHost`, typed `event.level`, `event.pos: BlockPos` and `event.state`. Attach it to the specific
 blocks you observe, including vanilla containers; it has no global `Hooks` counterpart. The backing

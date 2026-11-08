@@ -23,17 +23,23 @@ impl Game<'_> {
     }
     /// The `death_effects` of the stack's `minecraft:death_protection`.
     fn death_effects(&self, s: &ItemStack) -> Vec<horizon_client::items::ConsumeEffect> {
-        death_effects_of(&self.pack.item_renderer.models, s)
+        s.death_protection(self.items().get(&s.item))
+            .unwrap_or_default()
+            .to_vec()
     }
     /// What each armed mob's hands carry as `minecraft:death_protection`, for
     /// `Mob::use_death_protection` (the mob has no item data of its own): any
     /// item with the component counts, not only the totem.
     pub(super) fn sync_mob_death_protection(&mut self) {
-        let models = &self.pack.item_renderer.models;
+        let items = self.res.items();
         let of = |id: Option<&str>, stack: Option<&ItemStack>| {
             let item = stack.map(|s| &*s.item).or(id)?;
-            death_protection_of(models, item, stack)
-                .map(|component| horizon_client::items::death_effects(&component))
+            match stack {
+                Some(stack) => stack.death_protection(items.get(item)).map(<[_]>::to_vec),
+                None => items
+                    .get(item)
+                    .and_then(|info| info.death_protection.clone()),
+            }
         };
         for m in self.mobs.iter_mut().filter(|m| !m.removed) {
             if m.extra.main_hand_id().is_none() && m.extra.off_hand_id().is_none() {
@@ -227,17 +233,6 @@ impl Game<'_> {
         let pose = pose * glam::Mat4::from_scale(glam::Vec3::splat(size));
         self.submit_item_lit(&state, to_world * pose, vertex_light(0xFF), lights, out);
     }
-}
-
-/// The `death_effects` of the stack's `minecraft:death_protection`, if it has
-/// the component.
-fn death_effects_of(
-    models: &horizon_assets::item_model::ItemModels,
-    s: &ItemStack,
-) -> Vec<horizon_client::items::ConsumeEffect> {
-    death_protection_of(models, &s.item, Some(s))
-        .map(|component| horizon_client::items::death_effects(&component))
-        .unwrap_or_default()
 }
 
 /// The `minecraft:death_protection` component of `item` (of `stack`, when

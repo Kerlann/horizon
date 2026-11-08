@@ -22,29 +22,7 @@ const MAX_ENTRY: usize = 1 << 30;
 /// limits still let a bomb spend its budget one 1 GiB entry at a time.
 const MAX_TOTAL: usize = 4 << 30;
 
-/// File identity/change stamps for resource-cache keys, following symlinks.
-pub(crate) fn metadata_fingerprint(metadata: &fs::Metadata) -> io::Result<u64> {
-    let mut hash = DefaultHasher::new();
-    metadata.len().hash(&mut hash);
-    metadata.modified()?.hash(&mut hash);
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::MetadataExt;
-        (
-            metadata.dev(),
-            metadata.ino(),
-            metadata.ctime(),
-            metadata.ctime_nsec(),
-        )
-            .hash(&mut hash);
-    }
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        metadata.creation_time().hash(&mut hash);
-    }
-    Ok(hash.finish())
-}
+use crate::resource_source::metadata_fingerprint;
 
 /// One archive with its entries indexed by name (`\` read as `/`), files
 /// and folders apart.

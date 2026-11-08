@@ -1,6 +1,6 @@
 use super::*;
 /// The world fluids the mods declared in code, once they have all registered.
-pub fn declared_world_fluids() -> &'static [horizon_mod_package::content::FluidLook] {
+pub fn declared_world_fluids() -> &'static [(String, crate::WorldFluid)] {
     installed().map_or(&[], |installed| &installed.world_fluids)
 }
 
@@ -56,7 +56,7 @@ pub mod tests {
                 crate::FluidKey(u32::MAX)
             );
             assert_eq!(registrar.world_fluids.len(), 1);
-            let world = registrar.world_fluids[0].world.unwrap();
+            let world = registrar.world_fluids[0].1;
             assert_eq!(
                 (
                     world.tick_delay,
@@ -105,8 +105,8 @@ pub mod tests {
         ]
         .into();
         crate::install(mods.clone());
-        install_parts(&mods, &crate::parts::tests::rule_schema()).unwrap();
-        let error = resolve_fluids(&[]).unwrap_err();
+        install_parts(&mods, &crate::parts::tests::rule_schema(), |_| false).unwrap();
+        let error = resolve_fluids(&[], &[]).unwrap_err();
         assert_eq!(
             error,
             vec![crate::UnknownFluid {
@@ -114,7 +114,7 @@ pub mod tests {
                 id: "minecraft:water".to_owned()
             }]
         );
-        resolve_fluids(&["minecraft:water", "minecraft:lava"]).unwrap();
+        resolve_fluids(&["minecraft:water", "minecraft:lava"], &[]).unwrap();
         let chocolate = fluid_key("maker:chocolate").unwrap();
         assert_eq!(fluid_id(chocolate), Some("maker:chocolate"));
         for name in ["minecraft:water", "minecraft:lava", "maker:chocolate"] {
@@ -133,6 +133,7 @@ pub mod tests {
         }
         assert_eq!(FluidKey::from_slot(chocolate.0), Ok(chocolate));
         assert!(fluid_key("missing:fluid").is_none());
+        assert_eq!(fluid_id(FluidKey(u32::MAX)), None);
     }
     /// A mod's tank: the game's tank at its position, reached from every side but its top, and
     /// misanswering as `lie` says.
@@ -602,7 +603,7 @@ impl FluidsRegistrar for PartRegistrar {
 
     fn declare_fluid(&mut self, path: &str) -> crate::FluidKey {
         let id = format!("{}:{path}", self.mod_id);
-        if path.contains(':') || !horizon_mod_package::content::namespaced_id(&id) {
+        if path.contains(':') || crate::Identifier::parse_namespaced(&id).is_none() {
             self.refused.push(format!(
                 "mod {}: invalid fluid declaration {id:?}",
                 self.mod_id
@@ -624,13 +625,6 @@ impl FluidsRegistrar for PartRegistrar {
     }
 
     fn declare_world_fluid(&mut self, path: &str, fluid: crate::WorldFluid) -> crate::FluidKey {
-        let fluid = horizon_mod_package::content::WorldFluid {
-            tick_delay: fluid.tick_delay,
-            drop_off: fluid.drop_off,
-            slope_find_distance: fluid.slope_find_distance,
-            source_conversion: fluid.source_conversion,
-            bucket: fluid.bucket,
-        };
         let id = format!("{}:{path}", self.mod_id);
         let flowing = format!("{}:flowing_{path}", self.mod_id);
         if [id.as_str(), flowing.as_str()].iter().any(|id| {
@@ -652,19 +646,12 @@ impl FluidsRegistrar for PartRegistrar {
         }
         let key = self.declare_fluid(path);
         if key != crate::FluidKey(u32::MAX) {
-            let look = horizon_mod_package::content::FluidLook {
-                id: format!("{}:{path}", self.mod_id),
-                sprite: None,
-                tint: None,
-                world: Some(fluid),
-            };
-            let flowing = look.flowing_id();
             self.registry_keys
                 .borrow_mut()
                 .declared_fluids
                 .insert(flowing.clone(), self.mod_id);
             self.fluid_key(&flowing);
-            self.world_fluids.push(look);
+            self.world_fluids.push((id, fluid));
         }
         key
     }

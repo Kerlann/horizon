@@ -7,7 +7,7 @@ use std::sync::OnceLock;
 /// Stack-bearing hooks whose API snapshots are made by the game.
 pub struct StackHooks {
     pub ingredient_test:
-        fn(&LoopContext, &str, &serde_json::Map<String, serde_json::Value>, &ItemStack, &mut bool),
+        fn(&LoopContext, &str, &horizon_core::nbt::Compound, &ItemStack, &mut bool),
     pub enchantments: fn(&ItemStack, Option<&Identifier>, &mut ItemEnchantments),
     pub attributes: fn(&ItemStack, &mut ItemAttributeModifiers),
 }
@@ -19,7 +19,7 @@ pub fn install(hooks: StackHooks) -> bool {
 pub(crate) fn ingredient_test(
     context: &LoopContext,
     kind: &str,
-    data: &serde_json::Map<String, serde_json::Value>,
+    data: &horizon_core::nbt::Compound,
     stack: &ItemStack,
     accept: &mut bool,
 ) {

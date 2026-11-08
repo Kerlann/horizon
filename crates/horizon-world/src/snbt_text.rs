@@ -3,42 +3,7 @@
 //! a tag's string form.
 use horizon_core::nbt::Tag;
 
-/// `Double.toString`.
-pub fn java_double(v: f64) -> String {
-    java_float_text(v, &format!("{v}"), &format!("{v:e}"))
-}
-/// `Float.toString`.
-pub fn java_float(v: f32) -> String {
-    java_float_text(f64::from(v), &format!("{v}"), &format!("{v:e}"))
-}
-fn java_float_text(v: f64, plain: &str, sci: &str) -> String {
-    if v.is_nan() {
-        return "NaN".into();
-    }
-    if v.is_infinite() {
-        return if v > 0.0 { "Infinity" } else { "-Infinity" }.into();
-    }
-    if v == 0.0 {
-        return if v.is_sign_negative() { "-0.0" } else { "0.0" }.into();
-    }
-    let a = v.abs();
-    if (1.0e-3..1.0e7).contains(&a) {
-        if plain.contains('.') {
-            plain.to_owned()
-        } else {
-            format!("{plain}.0")
-        }
-    } else {
-        let (mantissa, exponent) = sci.split_once('e').unwrap_or((sci, "0"));
-        if !mantissa.contains('.') {
-            // Java also considers two-digit decimals when one digit round-trips,
-            // choosing the closest value. Padding Rust's choice loses that step
-            // for tiny subnormals (Float.MIN_VALUE is 1.4E-45, not 1.0E-45).
-            return format!("{v:.1e}").replace('e', "E");
-        }
-        format!("{mantissa}E{exponent}")
-    }
-}
+use horizon_core::java_number::{java_double, java_float};
 
 /// `SnbtGrammar.escapeControlCharacters`.
 fn escape_control(c: char) -> Option<&'static str> {

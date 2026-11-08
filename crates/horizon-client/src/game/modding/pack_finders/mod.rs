@@ -1,6 +1,6 @@
 //! Mod-supplied repository sources. Discovery owns the metadata and retained
 //! readers; selection and resource/data reloads use the ordinary pack paths.
-use super::{Game, mods::ModsState};
+use super::{Game, api_values::TryIntoEngine, mods::ModsState};
 use horizon_assets::resource_source::{ResourceSource, stays_inside};
 use horizon_client::{
     datapack::DataPack,
@@ -73,7 +73,8 @@ impl PackFinders for Registry {
             PackType::ServerData => horizon_core::version::DATA_PACK_FORMAT,
             _ => return Err(PackFinderError::InvalidMetadata),
         };
-        let mut pack = packs::pack_for(id, entry.title, Source::Opened(source), format)
+        let title = entry.title.try_into_engine(&())?;
+        let mut pack = packs::pack_for(id, title, Source::Opened(source), format)
             .ok_or(PackFinderError::InvalidMetadata)?;
         pack.selection = Some(PackInfo {
             id: pack.id.clone(),

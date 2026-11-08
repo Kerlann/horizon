@@ -241,6 +241,16 @@ fn private_rows_do_not_become_listed_and_handwritten_points_stay_refused() {
     };
     const GAME: &str = "crates/horizon-client/src/game.rs";
     fs::create_dir_all(root.join("crates/horizon-mod-api-gen/slots")).unwrap();
+    put("crates/horizon-mod-api-gen/internals.txt", "");
+    put("crates/horizon-client/src/entry.rs", "");
+    put(
+        "crates/horizon-client/src/lib.rs",
+        "mod game; mod entry;\npub fn install_points_catalog() {}\n",
+    );
+    put(
+        "crates/horizon-client/Cargo.toml",
+        "[package]\nname='horizon-client'\n",
+    );
     put(
         "crates/horizon-mod-points/Cargo.toml",
         "[package]\nname='horizon-mod-points'\n",
@@ -355,14 +365,13 @@ fn private_rows_do_not_become_listed_and_handwritten_points_stay_refused() {
         serde_json::to_value(game_points(&root).unwrap()).unwrap()
     );
     let parsed = syn::parse_file(&records(&public, &private)).unwrap();
-    // Compile the actual enum and wire tables together, without unrelated API dispatch bodies.
+    // Compile the actual enum together, without unrelated API dispatch bodies.
     let ids = parsed
         .items
         .iter()
         .filter(|item| match item {
             Item::Enum(item) => item.ident == "PointId",
             Item::Const(item) => item.ident == "POINT_COUNT",
-            Item::Mod(item) => item.ident == "places",
             _ => false,
         })
         .map(ToTokens::to_token_stream)
@@ -380,10 +389,6 @@ fn main() {{
     assert_eq!(POINT_COUNT, 4);
     assert_eq!(PointId::Listed as usize, 0);
     assert_eq!(PointId::Source123 as usize, 2);
-    assert_eq!(places::NAMES, ["listed", "listed_return", "source123", "source123_return"]);
-    assert_eq!(&places::SHAPES[2..], ["", ""]);
-    assert_eq!(&places::TARGETS[2..], ["horizon_client::game::nested::Game::hidden"; 2]);
-    for (index, id) in places::IDS.iter().enumerate() {{ assert_eq!(*id as usize, index); }}
 }}
 "#,
             private[0].items, private[0].record_export
@@ -392,7 +397,7 @@ fn main() {{
     .unwrap();
     let binary = root.join(format!("ids{}", std::env::consts::EXE_SUFFIX));
     let output = std::process::Command::new("rustc")
-        .args(["--edition=2024", "--cfg", "feature=\"wasm-host\""])
+        .arg("--edition=2024")
         .arg(&file)
         .arg("-o")
         .arg(&binary)

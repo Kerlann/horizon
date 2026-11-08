@@ -71,14 +71,14 @@ fn code_types_join_package_and_code_blocks_before_planning() {
     let plan = Plan::new(&base, &mods).unwrap();
     assert_eq!(plan.block_entity_types.len(), 1);
     assert_eq!(
-        plan.block_entity_membership.get("test:b"),
+        plan.block_entity_factories.get("test:b"),
         Some(&"test:machine")
     );
     assert_eq!(
-        plan.block_entity_membership.get("test:c"),
+        plan.block_entity_factories.get("test:c"),
         Some(&"test:machine")
     );
-    assert!(!plan.block_entity_membership.contains_key("test:a"));
+    assert!(!plan.block_entity_factories.contains_key("test:a"));
     drop(plan);
     // A type-only code namespace is not skipped by the content merge.
     assert!(
@@ -144,7 +144,7 @@ fn validates_declared_type_ids_and_exclusive_known_mod_block_membership() {
     mods[0].content.block_entity_types = vec![kind("test:machine", &["test:b", "test:a"])];
     let plan = Plan::new(&base, &mods).unwrap();
     assert_eq!(
-        serde_json::to_string(&plan.block_entity_membership).unwrap(),
+        serde_json::to_string(&plan.block_entity_factories).unwrap(),
         r#"{"test:a":"test:machine","test:b":"test:machine"}"#
     );
     drop(plan);

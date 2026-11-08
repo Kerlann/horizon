@@ -74,3 +74,6 @@ pub mod widget_screen;
 
 /// Reload-stable custom recipe definitions.
 pub mod reload_recipes;
+
+/// Worldgen states resolved at construction and saved-piece load.
+pub mod worldgen;

@@ -57,6 +57,22 @@ struct CachedIdentity {
     hash: [u8; 32],
 }
 
+fn hash_block_entity_validity(
+    hash: [u8; 32],
+    types: &crate::block_entity_types::BlockEntityTypes,
+) -> [u8; 32] {
+    let entries: Vec<_> = types
+        .identity_memberships()
+        .enumerate()
+        .map(|(index, (block, kind))| (index as u64, format!("{block}\0{kind}")))
+        .collect();
+    if entries.is_empty() {
+        hash
+    } else {
+        hash_entries(hash, "horizon:block_entity_validity/v1", &entries)
+    }
+}
+
 /// Hash the network order and each state's name and properties, not its gameplay facts.
 pub fn identity(
     root: &Path,
@@ -95,6 +111,9 @@ pub fn identity(
             .map(|(index, (block, kind))| (index as u64, format!("{block}\0{kind}")))
             .collect();
         hash = hash_entries(hash, "horizon:block_entity_membership/v1", &entries);
+    }
+    if let Some(types) = crate::block_entity_types::current() {
+        hash = hash_block_entity_validity(hash, types);
     }
     let components: Vec<_> = horizon_protocol::item::custom::entries()
         .map(|(id, name)| (id as u64, name.to_owned()))
@@ -344,5 +363,37 @@ mod tests {
         assert!(hash_facts(br#"{"states":[["x",false,false,"x","minecraft:stone"]]}"#).is_err());
         assert!(hash_facts(br#"{"states":[[]]}"#).is_err());
         assert!(hash_facts(br#"{"states":[["x",false,false,"x",{"id":"x"},0]]}"#).is_err());
+    }
+}
+
+#[cfg(test)]
+mod validity_tests {
+    use super::*;
+    #[test]
+    fn added_validity_changes_identity_without_changing_factories() {
+        use crate::block_entity_types::BlockEntityTypes;
+        let mut types = BlockEntityTypes::new(
+            BTreeMap::new(),
+            vec!["minecraft:chest".into(), "minecraft:trapped_chest".into()],
+        );
+        types.template(
+            "minecraft:trapped_chest".into(),
+            "minecraft:trapped_chest".into(),
+            "minecraft:trapped_chest".into(),
+        );
+        assert_eq!(hash_block_entity_validity([42; 32], &types), [42; 32]);
+        types
+            .add_valid("minecraft:trapped_chest", "minecraft:chest")
+            .unwrap();
+        let added = hash_block_entity_validity([42; 32], &types);
+        assert_ne!(added, [42; 32]);
+        types
+            .add_valid("minecraft:trapped_chest", "minecraft:chest")
+            .unwrap();
+        assert_eq!(hash_block_entity_validity([42; 32], &types), added);
+        assert_eq!(
+            types.template_for("minecraft:trapped_chest"),
+            Some("minecraft:trapped_chest")
+        );
     }
 }

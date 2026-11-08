@@ -111,7 +111,8 @@ impl Hooks for WidgetScreen {
         let mut screen = self.screen.lock().unwrap();
         let screen = screen.get_or_insert_with(|| Screen::new(width));
         event.draw.fill([0.0, 30.0, width, 100.0], 0x8000_0000);
-        screen
+        // A refused label is not drawn; screen input remains usable.
+        let _ = screen
             .widgets
             .draw(&mut *event.draw, host, event.screen.mouse);
     }

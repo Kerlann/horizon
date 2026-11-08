@@ -95,7 +95,7 @@ fn forced_chunks_reach_vanillas_rings() {
     let facts = BlockFacts::load(&root, assets.registry).unwrap();
     let visibility = models::load_visibility(&root, assets.registry).unwrap();
     let context = Arc::new(WorkerContext {
-        tables: Arc::new(MeshTables::new(&assets, &render, &facts, visibility).unwrap()),
+        tables: Arc::new(MeshTables::new(&assets, &render, &facts, visibility, None).unwrap()),
         light: Arc::new(LightTables::load(&root, assets.registry, &facts).unwrap()),
         biomes: Arc::new(
             Biomes::load(&horizon_assets::resource_source::ResourceRoot::directory(

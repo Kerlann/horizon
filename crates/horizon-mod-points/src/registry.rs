@@ -35,22 +35,52 @@ pub enum RawKind {
     /// associated function, and at a borrowed-return place. A shared receiver must not be written
     /// to; its mutable pointer only erases the type, not its mutability.
     Erased(unsafe fn(usize, *mut (), *mut ())),
-    /// A checked runtime export, with its identity preserved through ordering.
-    Indexed(unsafe fn(usize, u32, *mut (), *mut ()), u32),
+    /// A checked hook endpoint receiving an owned read-only row snapshot and declared outputs.
+    Snapshot(&'static dyn RawForward, u32),
 }
 
 // Function pointers: no data behind them, so they move between threads.
 unsafe impl Send for RawKind {}
 unsafe impl Sync for RawKind {}
 
-/// A typed API function or a generic wasm forwarding endpoint.
+/// The host available to a point's hook call; frame objects never cross as data.
+pub enum PointHost<'a> {
+    /// A read-only point.
+    Read(&'a dyn mod_api::Host),
+    /// A server write point.
+    Server(&'a mut dyn mod_api::ServerHost),
+    /// A client write point.
+    Client(&'a mut dyn mod_api::ClientHost),
+    /// A point which runs on either side.
+    Side(mod_api::HostSide<'a>),
+    /// A free function without a host.
+    None,
+}
+
+/// A checked hook endpoint. The runtime calls the ordinary hook export under its limits.
+pub trait Forward: Send + Sync {
+    /// Dispatches one generated listener id with its mutable wire record.
+    fn forward(&self, id: u32, host: PointHost<'_>, record: &mut dyn mod_api::wire::Record);
+}
+
+/// A raw hook endpoint; the record projects owned views during the ordinary marked call.
+pub trait RawForward: Send + Sync {
+    /// Returns the module-owned exposure plan for a point's head call layout, when registered.
+    fn plan(&self, _head_call: usize) -> Option<std::sync::Arc<crate::exposure::Plan>> {
+        None
+    }
+
+    /// Dispatches the listener through the ordinary hook transport. Record writeback is atomic.
+    fn forward(&self, id: u32, record: &mut dyn mod_api::wire::Record);
+}
+
+/// A typed API function.
 #[derive(Clone, Copy)]
 pub enum ApiKind {
     /// A function checked by the generated typed constructor before erasure.
     Typed(*const ()),
-    /// One checked export index in a wasm mod.
-    #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
-    Forward(&'static dyn crate::wire::Forward, u32),
+    /// A runtime endpoint in the same ordered list as native functions.
+    Forwarded(&'static dyn Forward, u32),
 }
 
 // The pointer is a function; forwarding endpoints are Send + Sync resources.
@@ -113,12 +143,15 @@ static SEALED: OnceLock<Sealed> = OnceLock::new();
 pub enum RegisterError {
     /// The list was sealed: listeners register while the game loads, before its points are set.
     Sealed,
+    /// The guest table requires a typed API listener.
+    Unsupported,
 }
 
 impl std::fmt::Display for RegisterError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Sealed => "the game's points were already set",
+            Self::Unsupported => "the guest table requires a typed API listener",
         })
     }
 }
@@ -209,25 +242,6 @@ impl SlotListener {
         }
     }
 
-    /// A runtime listener whose export index is retained by the registry.
-    ///
-    /// # Safety
-    /// The callback must obey the same pointer contract as [`Self::erased`].
-    pub const unsafe fn indexed(
-        id: &'static str,
-        place: PointId,
-        function: unsafe fn(usize, u32, *mut (), *mut ()),
-        index: u32,
-    ) -> Self {
-        Self {
-            id,
-            place: place as usize,
-            kind: Kind::Raw(RawKind::Indexed(function, index)),
-            priority: 0,
-            injection: "",
-        }
-    }
-
     /// A typed call-site wrap listener, sorted by priority, mod id and injection id.
     ///
     /// # Safety
@@ -264,21 +278,39 @@ impl SlotListener {
         }
     }
 
-    /// A checked wasm API export, forwarded without a per-point proxy.
-    #[cfg(all(feature = "wasm-host", not(target_arch = "wasm32")))]
+    /// A checked runtime endpoint at an API place, dispatched through the hook machinery.
     pub const fn forwarded(
         id: &'static str,
         place: PointId,
-        forward: &'static dyn crate::wire::Forward,
-        index: u32,
+        endpoint: &'static dyn Forward,
+        export: u32,
     ) -> Self {
         Self {
             id,
             place: place as usize,
-            kind: Kind::Api(ApiKind::Forward(forward, index)),
+            kind: Kind::Api(ApiKind::Forwarded(endpoint, export)),
             priority: 0,
             injection: "",
         }
+    }
+
+    /// A raw hook endpoint at a place with a generated snapshot reader.
+    pub fn snapshot(
+        id: &'static str,
+        place: PointId,
+        endpoint: &'static dyn RawForward,
+        export: u32,
+    ) -> Result<Self, RegisterError> {
+        if !crate::RAW_PLACES.iter().any(|(at, _, _)| *at == place) {
+            return Err(RegisterError::Unsupported);
+        }
+        Ok(Self {
+            id,
+            place: place as usize,
+            kind: Kind::Raw(RawKind::Snapshot(endpoint, export)),
+            priority: 0,
+            injection: "",
+        })
     }
 
     /// Orders a point by priority, then dependency order, then inject id within its mod.
@@ -286,6 +318,24 @@ impl SlotListener {
         self.priority = priority;
         self.injection = injection;
         self
+    }
+
+    #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
+    pub(crate) fn api_kind(&self) -> Option<ApiKind> {
+        match self.kind {
+            Kind::Api(kind) => Some(kind),
+            _ => None,
+        }
+    }
+
+    #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
+    pub(crate) fn place(&self) -> usize {
+        self.place
+    }
+
+    #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
+    pub(crate) fn injection(&self) -> &'static str {
+        self.injection
     }
 
     /// The mod's id.

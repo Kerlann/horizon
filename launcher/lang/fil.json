@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Hindi mabasa ang build log: {error}",
   "Could not read the saved sign-in.": "Hindi mabasa ang naka-save na pag-sign-in.",
   "Could not read the saved sign-in. Sign in again.": "Hindi mabasa ang naka-save na pag-sign-in. Mag-sign in muli.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Hindi mabasa {name}: {error}",
   "Could not run {program}: {error}": "Hindi makatakbo {program}: {error}",
   "Could not save the renewed sign-in.": "Hindi ma-save ang na-renew na pag-sign-in.",

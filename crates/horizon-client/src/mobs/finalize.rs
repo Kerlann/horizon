@@ -1126,10 +1126,9 @@ pub fn equip_stack(
         let trim = stack
             .components
             .iter()
+            .rev()
             .find(|(id, _)| id == "minecraft:trim")
-            .and_then(|(_, v)| {
-                crate::item_data::trim::from_nbt(&horizon_client_core::scoreboard::json_to_tag(v))
-            });
+            .and_then(|(_, v)| v.as_ref().and_then(crate::item_data::trim::from_nbt));
         gear::set_trim(m, gear_slot(slot), trim);
     }
     if let Some(chance) = drop_chance {

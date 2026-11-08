@@ -9,7 +9,7 @@ impl Game<'_> {
     /// own bone meal Parts and the meal's use: `growCrop` then answers
     /// `successful` (`setSuccessful`), which is `false` unless a mod sets it.
     /// Fired on both sides; changes to `stack` stay.
-    pub(in crate::game) fn native_bonemeal(&mut self, call: mod_api::__private::BonemealCall<'_>) {
+    pub(in crate::game) fn native_bonemeal(&mut self, call: super::fire::BonemealCall<'_>) {
         self.fire_bonemeal(call);
     }
 }

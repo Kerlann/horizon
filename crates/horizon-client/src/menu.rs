@@ -4078,7 +4078,12 @@ pub(crate) mod tests {
         let mut fuel = ItemStack::new("minecraft:stone", 2);
         fuel.data_mut().set_loot_component(
             "minecraft:brewing_fuel",
-            &serde_json::json!({"uses": 7, "speed_multiplier": 2.5}),
+            &Some(
+                horizon_core::json_nbt::json_to_tag(
+                    &serde_json::json!({"uses": 7, "speed_multiplier": 2.5}),
+                )
+                .unwrap(),
+            ),
         );
         let mut menu = Menu::new(Kind::Brewing);
         assert!(menu.may_place(&env, 4, &fuel));

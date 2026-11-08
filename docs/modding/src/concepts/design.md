@@ -155,6 +155,9 @@ them; the design is this:
   copies with the holder and is never kept in a mod's statics.
 - **The same kind twice on one thing is refused at load**, naming the mods, and a part's kind is its type.
   Parts attach by key or by tag, and the tags resolve against each game's own tags.
+  Block dispatch uses a load-prepared API key lookup, refreshed on tag reload. If no part subscribes
+  for that block, the game skips converting the event's state values and write collections. This
+  per-block filter does not restrict ordinary global hook listeners.
 
 Items, fluids and energy are Parts as well, as capabilities in NeoForge's transfer shape. A capability is a
 `CapabilityKey` (`ITEMS`, `FLUIDS`, `ENERGY`) for a block entity, and an `ItemCapabilityKey` (`ITEM_ITEMS`,

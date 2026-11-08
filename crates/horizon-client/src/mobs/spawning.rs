@@ -205,7 +205,7 @@ mod tests {
                 let defaults = horizon_world::item_defaults::read(&root).unwrap();
                 std::sync::Mutex::new(Level {
                     registries: crate::mobs::finalize::SpawnRegistries::load(&root),
-                    enchantments: crate::enchant::Enchantments::load(&root, &defaults),
+                    enchantments: crate::enchant::Enchantments::load(&root, &defaults).unwrap(),
                     items: crate::items::Items::tags_only(
                         &root,
                         &horizon_world::loot::PackOverlay::NONE,

@@ -35,7 +35,10 @@ pub type ModUpdateTag = fn([i32; 3], &ModBlockEntity) -> Option<Compound>;
 
 /// The vanilla block entity type of a block (BlockEntityType.validBlocks).
 pub fn block_entity_type(name: &str) -> Option<&'static str> {
-    let n = name.strip_prefix("minecraft:")?;
+    if crate::block_entity_types::factory_valid(name) == Some(false) {
+        return None;
+    }
+    let n = crate::block_entity_types::factory_block(name).strip_prefix("minecraft:")?;
     Some(match n {
         "chest" => "minecraft:chest",
         "trapped_chest" => "minecraft:trapped_chest",

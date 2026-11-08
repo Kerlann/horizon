@@ -75,6 +75,8 @@ impl PackRegistration {
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum PackFinderError {
+    /// The title failed component conversion; no pack was added.
+    Text(crate::TextFormError),
     /// The requested directory is outside the package's logical root.
     InvalidPath,
     /// No loaded package matches the location's namespace, or it cannot be opened.
@@ -86,15 +88,22 @@ pub enum PackFinderError {
 }
 impl std::fmt::Display for PackFinderError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str(match self {
-            Self::InvalidPath => "the pack location leaves its package",
-            Self::MissingPackage => "the pack's mod package is not loaded",
-            Self::InvalidMetadata => "the pack metadata could not be read",
-            Self::Duplicate => "the repository already contains this pack id",
-        })
+        match self {
+            Self::Text(error) => error.fmt(f),
+            Self::InvalidPath => f.write_str("the pack location leaves its package"),
+            Self::MissingPackage => f.write_str("the pack's mod package is not loaded"),
+            Self::InvalidMetadata => f.write_str("the pack metadata could not be read"),
+            Self::Duplicate => f.write_str("the repository already contains this pack id"),
+        }
     }
 }
 impl std::error::Error for PackFinderError {}
+
+impl From<crate::TextFormError> for PackFinderError {
+    fn from(error: crate::TextFormError) -> Self {
+        Self::Text(error)
+    }
+}
 
 /// The typed builder handed to `add_pack_finders`, rebuilt for each discovery.
 /// Registration performs no resource reload and does not select optional packs.
@@ -103,5 +112,7 @@ pub trait PackFinders {
     fn pack_type(&self) -> PackType;
     /// Add a bundled pack to this repository. A registration for the other pack
     /// type is ignored, allowing one hook implementation to describe both kinds.
+    /// Refuses an invalid title with [`PackFinderError::Text`], including components
+    /// deeper than 512 nodes; a refusal leaves the repository unchanged.
     fn add_pack_finders(&mut self, pack: PackRegistration) -> Result<(), PackFinderError>;
 }

@@ -1022,7 +1022,8 @@ impl Game<'_> {
         let [primary_key, secondary_key] = powers.each_ref().map(|power| {
             power.as_ref().map(|(_, id)| {
                 let def = horizon_client::brewing::effect(id).expect("validated beacon effect");
-                mod_api::__private::effect_key(def.index).expect("effects resolved at load")
+                mod_api::__private::effect_key_by_index(def.index)
+                    .expect("effects resolved at load")
             })
         });
         let [primary, secondary] = powers.map(|p| p.map(|(_, n)| n));

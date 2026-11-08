@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Не можев да го прочитам дневникот за изградба: {error}",
   "Could not read the saved sign-in.": "Не може да се прочита зачуваното најавување.",
   "Could not read the saved sign-in. Sign in again.": "Не може да се прочита зачуваното најавување. Најавете се повторно.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Не можев да прочитам {name}: {error}",
   "Could not run {program}: {error}": "Не може да се изврши {program}: {error}",
   "Could not save the renewed sign-in.": "Не може да се зачува обновеното најавување.",

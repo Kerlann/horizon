@@ -33,12 +33,12 @@ pub trait ItemsHost {
     /// component, the data pack's context int provider resolved), None where it is no fuel. API
     /// @API:item_components@.
     #[access(Metadata)]
-    fn item_burn_time(&self, item: &str) -> Option<i32>;
+    fn item_burn_time(&self, item: ItemKey) -> Option<i32>;
     /// Side: both.
     /// Item `item`'s chance to raise a composter's level (its `compostable` component's layers provider
     /// resolved), None where it is not compostable. API @API:item_components@.
     #[access(Metadata)]
-    fn item_compost_chance(&self, item: &str) -> Option<f32>;
+    fn item_compost_chance(&self, item: ItemKey) -> Option<f32>;
     /// Side: both.
     /// Whether enchantments `a` and `b` may share an item (`Enchantment.areCompatible`), by the
     /// world's enchantment definitions. API @API:item_components@.
@@ -76,7 +76,7 @@ pub trait ItemsClientHost {
     /// (`ServerboundSetCreativeModeSlot`): the selected slot first, then the
     /// hotbar, then the inventory. The count is cut to one stack.
     #[access(WorldOnly)]
-    fn give(&mut self, item: &str, count: u32) -> Result<(), String>;
+    fn give(&mut self, item: ItemKey, count: u32) -> Result<(), String>;
     /// Side: client.
     /// Registered enchantments, in registry order.
     #[access(ClientSetup)]
@@ -88,19 +88,59 @@ pub trait ItemsClientHost {
     /// Side: client.
     /// Whether enchantment `id` can go on `item` (`Enchantment.isSupportedItem`).
     #[access(ClientSetup)]
-    fn enchantment_supports(&self, id: &str, item: &str) -> bool;
+    fn enchantment_supports(&self, id: &str, item: ItemKey) -> bool;
 }
 /// The handles' reads of the `items` area, implemented by the game and reached through [`Backend`].
 // hidden: a handle's backend, reached through `Backend`; mods call the handle, never this trait
 #[doc(hidden)]
 #[horizon_mod_api_macros::host_area]
 pub trait ItemsBackend {
+    /// Side: both. Effective damageability after defaults and the stack patch.
+    #[access(Metadata)]
+    fn item_resource_damageable(&self, stack: &ItemStack) -> bool;
+    /// Side: both. Effective glint, including overrides and item-specific foil.
+    #[access(Metadata)]
+    fn item_resource_foil(&self, stack: &ItemStack) -> bool;
+    /// Side: both. Effective repair ingredient membership, including item tags.
+    #[access(Metadata)]
+    fn item_resource_repairable(&self, stack: &ItemStack, material: ItemKey) -> bool;
+
     /// Side: both. ItemResource's effective use duration, including its Part.
     #[access(WorldOnly)]
     fn item_resource_use_duration(&self, stack: &ItemStack) -> Option<i32>;
     /// Side: both. The effective vanilla bar, before client drawing hooks.
     #[access(WorldOnly)]
     fn item_resource_bar(&self, stack: &ItemStack) -> Option<ItemBar>;
+    /// Side: both. Effective stack range for the supplied actor.
+    #[access(WorldOnly)]
+    fn item_resource_entity_attack_range(
+        &self,
+        stack: &ItemStack,
+        attacker: LivingRef,
+    ) -> Option<ItemAttackRange>;
+    /// Side: both. Effective stack melee source for the supplied actor.
+    #[access(WorldOnly)]
+    fn item_resource_damage_source(
+        &self,
+        stack: &ItemStack,
+        attacker: LivingRef,
+    ) -> Option<ItemDamageSource>;
+    /// Side: both. Item immunity to the supplied damage source.
+    #[access(WorldOnly)]
+    fn item_resource_can_be_hurt_by(
+        &self,
+        stack: &ItemStack,
+        source: &ItemDamageSource,
+    ) -> Option<bool>;
+    /// Side: both. Attack bonus preview without consuming world RNG or equipping the stack.
+    #[access(WorldOnly)]
+    fn item_resource_attack_damage_bonus(
+        &self,
+        stack: &ItemStack,
+        attacker: LivingRef,
+        target: EntityRef,
+        base_damage: f32,
+    ) -> Option<f32>;
     /// Side: client. The item's standard tooltip lines before mod callbacks or drawing.
     #[access(WorldOnly)]
     fn item_resource_tooltip(

@@ -694,7 +694,9 @@ fn server_services_preserve_identity_and_message_delivery() {
         }
         assert!(game.commands().run_command("list"));
         game.chat_capture = Some(Vec::new());
-        game.commands().feedback(Text::literal("command answer"));
+        game.commands()
+            .feedback(Text::literal("command answer"))
+            .unwrap();
         assert_eq!(
             game.chat_capture.take().unwrap()[0].plain(),
             "command answer"
@@ -713,14 +715,17 @@ fn server_services_preserve_identity_and_message_delivery() {
             assert_eq!(a.permission_level(game), Some(1));
             assert_eq!(a.can_use_game_master_blocks(game), Some(false));
             game.ui.registries.permission = 3;
-            assert!(a.tell(game, Text::literal("chat")));
-            assert!(a.action_bar(game, Text::literal("overlay")));
-            assert!(a.tab_list(game, &Text::literal("header"), &Text::literal("footer")));
+            assert!(a.tell(game, Text::literal("chat")).unwrap());
+            assert!(a.action_bar(game, Text::literal("overlay")).unwrap());
+            assert!(
+                a.tab_list(game, &Text::literal("header"), &Text::literal("footer"))
+                    .unwrap()
+            );
             let packets = &game.guest_packets;
             assert!(matches!(&packets[packets.len() - 3], C::SystemChat(p) if !p.overlay));
             assert!(matches!(&packets[packets.len() - 2], C::SystemChat(p) if p.overlay));
             assert!(matches!(&packets[packets.len() - 1], C::TabList(_)));
-            assert!(b.tell(game, Text::literal("other player")));
+            assert!(b.tell(game, Text::literal("other player")).unwrap());
             assert!(b.set_nickname(game, Some("B")));
             assert!(b.set_sleep_ignored(game, true));
             game.as_guest(13, |game| {
@@ -737,7 +742,10 @@ fn server_services_preserve_identity_and_message_delivery() {
                     assert_eq!(invalid.address(game), None);
                     assert_eq!(invalid.permission_level(game), None);
                 }
-                assert!(a.tell(game, Text::literal("displaced but connected")));
+                assert!(
+                    a.tell(game, Text::literal("displaced but connected"))
+                        .unwrap()
+                );
             })
             .unwrap();
         })
@@ -746,7 +754,7 @@ fn server_services_preserve_identity_and_message_delivery() {
         game.lan.as_mut().unwrap().hub.guests.clear();
         assert!(a.hide(game, Some(2)));
         assert_eq!(game.lan.as_ref().unwrap().hub.hidden.get(&12), Some(&2));
-        assert!(!a.tell(game, Text::literal("offline")));
+        assert!(!a.tell(game, Text::literal("offline")).unwrap());
         assert!(!a.set_nickname(game, Some("offline")));
         assert!(!a.set_sleep_ignored(game, true));
         assert_eq!(a.address(game), None);

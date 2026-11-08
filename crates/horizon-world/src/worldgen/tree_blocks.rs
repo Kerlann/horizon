@@ -257,6 +257,35 @@ impl TreeBlocks {
     pub(crate) fn is_air(&self, state: BlockStateId) -> bool {
         self.has(state, AIR)
     }
+    /// Whether `state` is one of the registry's states.
+    pub(crate) fn is_state(&self, state: BlockStateId) -> bool {
+        (state.0 as usize) < self.flags.len()
+    }
+    /// Facts for `registry` where only its air blocks (`minecraft:air`,
+    /// `cave_air`, `void_air`) are classified, for tests of one decorator.
+    #[cfg(test)]
+    pub(crate) fn air_only(registry: &BlockRegistry, properties: Arc<StateProperties>) -> Self {
+        let mut flags = vec![0u32; registry.len()];
+        for name in ["minecraft:air", "minecraft:cave_air", "minecraft:void_air"] {
+            if let Some(state) = registry.default_state(name) {
+                flags[state.0 as usize] |= AIR;
+            }
+        }
+        Self {
+            distance: vec![0; flags.len()],
+            block: (0..flags.len() as u32).collect(),
+            flags,
+            properties,
+            defaults: DEFAULTS
+                .iter()
+                .filter_map(|name| {
+                    registry
+                        .default_state(name)
+                        .map(|id| ((*name).to_owned(), id))
+                })
+                .collect(),
+        }
+    }
     /// TreeFeature.validTreePos: air or replaceable by trees.
     pub(crate) fn valid_tree_pos(&self, state: BlockStateId) -> bool {
         self.has(state, AIR | REPLACEABLE_BY_TREES)

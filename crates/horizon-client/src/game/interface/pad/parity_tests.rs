@@ -156,20 +156,20 @@ fn a_spectators_bumpers_set_the_flying_speed_as_the_wheel_does() {
 fn readers_of_the_movement_keys_see_the_stick() {
     playing(|game| {
         game.focused = true;
-        assert!(!game.mapping("key.forward").unwrap().down);
+        assert!(!game.mapping("key.forward").unwrap().unwrap().down);
         // Up and to the left, on a diagonal: two keys, as a keyboard would hold.
         game.pad.state.left = [-0.7, 0.7];
-        assert!(game.mapping("key.forward").unwrap().down);
-        assert!(game.mapping("key.left").unwrap().down);
-        assert!(!game.mapping("key.back").unwrap().down);
-        assert!(!game.mapping("key.right").unwrap().down);
+        assert!(game.mapping("key.forward").unwrap().unwrap().down);
+        assert!(game.mapping("key.left").unwrap().unwrap().down);
+        assert!(!game.mapping("key.back").unwrap().unwrap().down);
+        assert!(!game.mapping("key.right").unwrap().unwrap().down);
         assert!(
-            !game.mapping("key.jump").unwrap().down,
+            !game.mapping("key.jump").unwrap().unwrap().down,
             "the stick holds only the movement keys"
         );
         // A screen takes the stick away.
         game.screen = Screen::Paused;
-        assert!(!game.mapping("key.forward").unwrap().down);
+        assert!(!game.mapping("key.forward").unwrap().unwrap().down);
     });
 }
 
@@ -206,12 +206,12 @@ fn the_pads_attack_and_use_reach_what_the_mouse_tells_mods() {
     playing(|game| {
         assert_eq!(game.native_clicks(), (0, 0));
         pad_press(game, Button::RightTrigger, "key.attack");
-        assert!(game.mapping("key.attack").unwrap().down);
+        assert!(game.mapping("key.attack").unwrap().unwrap().down);
         assert_eq!(game.native_clicks(), (1, 0));
         game.pad_action("key.attack", false).unwrap();
-        assert!(!game.mapping("key.attack").unwrap().down);
+        assert!(!game.mapping("key.attack").unwrap().unwrap().down);
         pad_press(game, Button::LeftTrigger, "key.use");
-        assert!(game.mapping("key.use").unwrap().down);
+        assert!(game.mapping("key.use").unwrap().unwrap().down);
         assert_eq!(game.native_clicks(), (1, 1));
     });
 }

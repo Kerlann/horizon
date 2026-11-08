@@ -4,36 +4,26 @@ version = "0.1.0"
 edition.workspace = true
 license.workspace = true
 publish = false
-description = "The one runtime for wasm mods: groups packages by their dependencies, links each group, caches it and runs it"
+description = "The runtime for wasm mods: groups packages by their dependencies and refuses what cannot load"
 
 [dependencies]
-horizon-mod-api = { path = "../horizon-mod-api", features = ["wasm-host"] }
+horizon-core = { path = "../horizon-core" }
+mod_points = { package = "horizon-mod-points", path = "../horizon-mod-points" }
+mod_api = { package = "horizon-mod-api", path = "../horizon-mod-api" }
 horizon-mod-package = { path = "../horizon-mod-package", default-features = false }
-horizon-mod-points = { path = "../horizon-mod-points", features = ["wasm-host"] }
-wasmtime = { version = "50", default-features = false, features = ["anyhow", "cranelift", "component-model", "runtime", "std", "parallel-compilation", "pulley"] }
-wit-component = "0.261"
+horizon-mod-point-emit = { path = "../horizon-mod-point-emit" }
 log = "0.4"
+serde_json = "1"
+wasmparser = "0.261"
+wasmtime = { version = "50", default-features = false, features = ["anyhow", "cranelift", "runtime", "std", "parallel-compilation", "pulley"] }
 
 [build-dependencies]
 horizon-mod-api-gen = { path = "../horizon-mod-api-gen" }
-heck = "0.5"
-wit-parser = "0.261"
 
 [dev-dependencies]
-horizon-mod-runtime = { path = "../horizon-mod-runtime" }
-# `FakeHost`, the host the tests run mods against.
-horizon-mod-api = { path = "../horizon-mod-api", features = ["testing"] }
-wit-component = { version = "0.261", features = ["dummy-module"] }
-# A component built in the test, importing a function this game doesn't have.
-wasm-encoder = { version = "0.261", features = ["wasmparser"] }
-wasmparser = "0.261"
-horizon-mod-api-gen = { path = "../horizon-mod-api-gen" }
-wit-parser = "0.261"
-# The worldgen side of a mod's structure type, driven from worker threads in the bench test.
-horizon-core = { path = "../horizon-core" }
 horizon-client-core = { path = "../horizon-client-core" }
-horizon-world = { path = "../horizon-world" }
-serde_json = "1"
+mod_api = { package = "horizon-mod-api", path = "../horizon-mod-api", features = ["wasm-guest", "testing"] }
+wat = "1.261"
 
 [lints]
 workspace = true

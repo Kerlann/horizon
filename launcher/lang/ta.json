@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "உருவாக்கப் பதிவைப் படிக்க முடியவில்லை: {error}",
   "Could not read the saved sign-in.": "சேமித்த உள்நுழைவைப் படிக்க முடியவில்லை.",
   "Could not read the saved sign-in. Sign in again.": "சேமித்த உள்நுழைவைப் படிக்க முடியவில்லை. மீண்டும் உள்நுழையவும்.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "{name}: {error} படிக்க முடியவில்லை",
   "Could not run {program}: {error}": "{program}: {error} ஐ இயக்க முடியவில்லை",
   "Could not save the renewed sign-in.": "புதுப்பிக்கப்பட்ட உள்நுழைவைச் சேமிக்க முடியவில்லை.",
