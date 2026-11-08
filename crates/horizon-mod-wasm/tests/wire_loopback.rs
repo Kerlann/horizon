@@ -516,6 +516,14 @@ fn wire_loopback_returned_frame_resource_uses_source_permissions() {
     assert!(out.bytes().is_empty());
 }
 #[test]
+fn wire_loopback_panic_hook_without_transport_does_not_panic_again() {
+    install_counter();
+    guest::set_transport(None);
+    let panic = std::panic::catch_unwind(|| panic!("native panic after the guest call ended"));
+    assert!(panic.is_err());
+}
+
+#[test]
 fn wire_loopback_erased_resource_restores_identity_and_refuses_other_groups() {
     struct Capture(std::sync::Mutex<Vec<String>>);
     impl log::Log for Capture {
@@ -809,5 +817,39 @@ fn wire_loopback_resource_codec_restores_context_between_groups() {
     assert!(
         writer.error().is_some(),
         "no context survives the outer guard"
+    );
+}
+
+#[test]
+fn wire_loopback_resource_load_restores_module_after_cross_group_unwind() {
+    fn load(id: Id) -> Arc<dyn StructurePiece> {
+        let mut bytes = Writer::new();
+        bytes.put(&id);
+        Reader::decode(bytes.bytes()).unwrap()
+    }
+    let id = guest::add_handler(vec![guest::view::<dyn StructurePiece>(Arc::new(Piece))]);
+    let mut first = Box::new(boundary::Cx::default());
+    first.module = Some(WasmMod {
+        group: 1,
+        subscribed: &[],
+        corrupt: false,
+    });
+    let mut second = Box::new(boundary::Cx::default());
+    second.module = Some(WasmMod {
+        group: 2,
+        subscribed: &[],
+        corrupt: true,
+    });
+    let _outer = unsafe { boundary::resource_scope(&mut *first, true) };
+    let unwind = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        let _inner = unsafe { boundary::resource_scope(&mut *second, true) };
+        assert_eq!(load(id).bounding_box(), mod_api::BoundingBox::default());
+        // Resume directly to avoid depending on the process-wide guest panic logger.
+        std::panic::resume_unwind(Box::new(()));
+    }));
+    assert!(unwind.unwrap_err().is::<()>());
+    assert_eq!(
+        load(id).bounding_box(),
+        mod_api::BoundingBox::new([1, 2, 3], [4, 5, 6])
     );
 }

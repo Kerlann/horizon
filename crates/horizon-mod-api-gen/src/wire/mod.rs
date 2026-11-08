@@ -570,6 +570,11 @@ fn layout(surface: &Surface<'_>) -> u64 {
             hash = (hash ^ u64::from(byte)).wrapping_mul(0x0100_0000_01b3);
         }
     };
+    // Resource-control values are part of the interface even though they do not
+    // appear in a catalog signature. Older guests may have allocated identity zero.
+    feed(
+        "resource generation zero reserved; Any identity zero is Unsupported/cross-group capability",
+    );
     for method in &surface.methods {
         feed(&format!("{method:?}"));
     }

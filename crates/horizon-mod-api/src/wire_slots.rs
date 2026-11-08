@@ -22,7 +22,8 @@ struct Slot<T> {
     framed: bool,
 }
 
-/// A generational slot map.
+/// A generational slot map. Generation zero is reserved for protocol control values;
+/// exhausted generations retire their slot rather than wrapping and reviving an old id.
 pub struct Slots<T> {
     slots: Vec<Slot<T>>,
     free: Vec<u32>,
@@ -45,7 +46,7 @@ impl<T> Slots<T> {
             Some(index) => index,
             None => {
                 self.slots.push(Slot {
-                    generation: 0,
+                    generation: 1,
                     value: None,
                     framed: false,
                 });
@@ -99,8 +100,10 @@ impl<T> Slots<T> {
         self.slot(id)?;
         let index = (id.0 & 0xffff_ffff) as u32;
         let slot = &mut self.slots[index as usize];
-        slot.generation = slot.generation.wrapping_add(1);
-        self.free.push(index);
+        if let Some(next) = slot.generation.checked_add(1) {
+            slot.generation = next;
+            self.free.push(index);
+        }
         Ok(slot.value.take().expect("a live slot holds a value"))
     }
 
@@ -110,8 +113,10 @@ impl<T> Slots<T> {
             let slot = &mut self.slots[index as usize];
             if slot.framed && slot.value.is_some() {
                 slot.value = None;
-                slot.generation = slot.generation.wrapping_add(1);
-                self.free.push(index);
+                if let Some(next) = slot.generation.checked_add(1) {
+                    slot.generation = next;
+                    self.free.push(index);
+                }
             }
         }
     }
@@ -121,6 +126,34 @@ impl<T> Slots<T> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn reserved_zero_and_exhausted_generations_never_become_live() {
+        for framed in [false, true] {
+            let mut slots = Slots::default();
+            let old = if framed {
+                slots.insert("old")
+            } else {
+                slots.insert_long("old")
+            };
+            assert!(slots.get(Id(0)).is_err());
+            // Reach the generation boundary without billions of release operations.
+            let index = (old.0 & 0xffff_ffff) as usize;
+            slots.slots[index].generation = u32::MAX;
+            let last = Id(u64::from(u32::MAX) << 32 | index as u64);
+            if framed {
+                slots.end_frame()
+            } else {
+                assert_eq!(slots.remove(last), Ok("old"))
+            }
+            let next = slots.insert_long("next");
+            assert!(slots.get(Id(0)).is_err());
+            assert_eq!(slots.remove(next), Ok("next"));
+            let live = slots.insert_long("live");
+            assert!(slots.get(old).is_err());
+            assert!(slots.get(last).is_err());
+            assert_eq!(slots.get(live), Ok(&"live"));
+        }
+    }
     #[test]
     fn a_freed_id_is_stale_even_when_its_slot_is_reused() {
         let mut slots = Slots::default();

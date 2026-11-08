@@ -3,6 +3,53 @@ use super::*;
 #[path = "runtime_export_bench.rs"]
 mod export_profile;
 
+#[test]
+fn released_queue_empty_fast_path_does_not_wait_for_its_mutex() {
+    let releases = Arc::new(Releases::default());
+    let guard = releases.ids.lock().unwrap();
+    let (send, receive) = std::sync::mpsc::channel();
+    let worker = {
+        let releases = releases.clone();
+        std::thread::spawn(move || send.send(releases.take()).unwrap())
+    };
+    let answer = receive.recv_timeout(Duration::from_secs(2));
+    drop(guard);
+    worker.join().unwrap();
+    assert!(answer.unwrap().is_empty());
+}
+
+#[test]
+fn released_queue_concurrent_pushes_are_delivered_once() {
+    let releases = Arc::new(Releases::default());
+    let (send, receive) = std::sync::mpsc::channel();
+    let workers: Vec<_> = (0..4u64)
+        .map(|producer| {
+            let releases = releases.clone();
+            let send = send.clone();
+            std::thread::spawn(move || {
+                for batch in 0..32u64 {
+                    for item in 0..8u64 {
+                        releases.push(Id(producer * 256 + batch * 8 + item));
+                    }
+                    send.send(()).unwrap();
+                }
+            })
+        })
+        .collect();
+    drop(send);
+    let mut observed = Vec::new();
+    for () in receive {
+        observed.extend(releases.take().into_iter().map(|id| id.0));
+    }
+    for worker in workers {
+        worker.join().unwrap();
+    }
+    observed.extend(releases.take().into_iter().map(|id| id.0));
+    observed.sort_unstable();
+    assert_eq!(observed, (0..1024u64).collect::<Vec<_>>());
+    assert!(releases.take().is_empty());
+}
+
 struct Random<F>(F);
 impl<F: FnMut() -> i64> mod_api::StructureRandom for Random<F> {
     fn next_int_bound(&mut self, _: i32) -> i32 {

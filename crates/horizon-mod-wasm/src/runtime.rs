@@ -85,6 +85,27 @@ pub(crate) fn engine() -> wasmtime::Result<Engine> {
     Ok(engine)
 }
 
+#[derive(Default)]
+struct Releases {
+    pending: AtomicBool,
+    ids: Mutex<Vec<Id>>,
+}
+impl Releases {
+    fn push(&self, id: Id) {
+        let mut ids = self.ids.lock().unwrap_or_else(|e| e.into_inner());
+        ids.push(id);
+        self.pending.store(true, Ordering::Release);
+    }
+    fn take(&self) -> Vec<Id> {
+        if !self.pending.swap(false, Ordering::AcqRel) {
+            return Vec::new();
+        }
+        // A racing push either joins this drain or leaves pending set for the next
+        // call. At worst the next call locks an empty queue; no release is lost.
+        std::mem::take(&mut *self.ids.lock().unwrap_or_else(|e| e.into_inner()))
+    }
+}
+
 struct Running {
     group: Mutex<Group<State>>,
     poisoned: AtomicBool,
@@ -127,7 +148,7 @@ pub struct WasmMod {
     input: TypedFunc<u32, u32>,
     hook: TypedFunc<u32, u64>,
     pub subscribed: &'static [Option<HookId>],
-    released: Arc<Mutex<Vec<Id>>>,
+    released: Arc<Releases>,
     subscriptions: Arc<Mutex<std::collections::HashMap<(Id, u32), &'static [Option<HookId>]>>>,
 }
 /// A guest object never owns the store that may itself retain that object.
@@ -138,7 +159,7 @@ pub(crate) struct WeakWasmMod {
     input: TypedFunc<u32, u32>,
     hook: TypedFunc<u32, u64>,
     subscribed: &'static [Option<HookId>],
-    released: Arc<Mutex<Vec<Id>>>,
+    released: Arc<Releases>,
     subscriptions: Arc<Mutex<std::collections::HashMap<(Id, u32), &'static [Option<HookId>]>>>,
 }
 impl WeakWasmMod {
@@ -222,11 +243,7 @@ impl Drop for WasmHandler {
             .lock()
             .unwrap_or_else(|e| e.into_inner())
             .retain(|(id, _), _| *id != self.index);
-        self.module
-            .released
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .push(self.index);
+        self.module.released.push(self.index);
     }
 }
 
@@ -604,8 +621,7 @@ impl WasmMod {
         // must already see the group stopped.
         let panic_stop = PoisonOnPanic(&self.running.poisoned);
         let result = (|| -> wasmtime::Result<R> {
-            let released =
-                std::mem::take(&mut *self.released.lock().unwrap_or_else(|e| e.into_inner()));
+            let released = self.released.take();
             if !released.is_empty() {
                 w.clear();
                 w.put(&released);

@@ -169,8 +169,22 @@ fn lend_ret(ty: &Ty, e: &str) -> Option<String> {
         Ty::List(_, List::Slice) => format!("{kept}({e}) }}.as_slice()"),
         Ty::Ref(..) => format!("{kept}({e}) }}"),
         Ty::Option(t) if needs(t) => format!("{e}.map(|x| {})", lend_ret(t, "x")?),
-        Ty::Result(a, b) if needs(a) && !needs(b) => {
-            format!("{e}.map(|x| {})", lend_ret(a, "x")?)
+        Ty::Tuple(items) if needs(ty) => format!(
+            "({},)",
+            items
+                .iter()
+                .enumerate()
+                .map(|(i, t)| lend_ret(t, &format!("({e}).{i}")))
+                .collect::<Option<Vec<_>>>()?
+                .join(",")
+        ),
+        Ty::Array(t, _) if needs(t) => format!("{e}.map(|x| {})", lend_ret(t, "x")?),
+        Ty::Result(a, b) if needs(a) || needs(b) => {
+            format!(
+                "{e}.map(|x| {}).map_err(|x| {})",
+                lend_ret(a, "x")?,
+                lend_ret(b, "x")?
+            )
         }
         ty if !needs(ty) => e.to_string(),
         _ => return None,

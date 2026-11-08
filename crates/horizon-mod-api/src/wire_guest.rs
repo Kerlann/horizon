@@ -131,6 +131,10 @@ mod transport {
         fn host_reply(out_ptr: *mut u8);
     }
 
+    pub(super) fn try_call(id: u32, input: &[u8], out: &mut Vec<u8>) -> bool {
+        call(id, input, out);
+        true
+    }
     pub(super) fn call(id: u32, input: &[u8], out: &mut Vec<u8>) {
         let cap = out.capacity();
         // SAFETY: the game writes at most `cap` bytes at `out`'s spare capacity, which it owns;
@@ -167,11 +171,19 @@ mod transport {
         TRANSPORT.with(|t| *t.borrow_mut() = transport);
     }
 
-    pub(super) fn call(id: u32, input: &[u8], out: &mut Vec<u8>) {
+    pub(super) fn try_call(id: u32, input: &[u8], out: &mut Vec<u8>) -> bool {
         let transport = TRANSPORT
-            .with(|t| t.borrow().clone())
-            .expect("no transport to the game is set");
+            .try_with(|t| t.try_borrow().ok().and_then(|t| t.clone()))
+            .ok()
+            .flatten();
+        let Some(transport) = transport else {
+            return false;
+        };
         out.extend_from_slice(&transport(id, input));
+        true
+    }
+    pub(super) fn call(id: u32, input: &[u8], out: &mut Vec<u8>) {
+        assert!(try_call(id, input, out), "no transport to the game is set");
     }
 }
 
@@ -304,10 +316,15 @@ pub fn run(id: u32) -> (*const u8, u32) {
     static HOOK: std::sync::Once = std::sync::Once::new();
     // A trap says nothing about why: the game gets the panic's text first.
     HOOK.call_once(|| {
-        std::panic::set_hook(Box::new(|info| {
-            let mut args = begin();
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            // A panic can originate while the pool is borrowed, or outside a guest
+            // call in a native harness. Logging must not borrow it or require a transport.
+            let mut args = Writer::new();
             args.put_str(&info.to_string());
-            host(crate::wire::HOST_LOG, args);
+            if !transport::try_call(crate::wire::HOST_LOG, args.bytes(), &mut Vec::new()) {
+                previous(info);
+            }
         }));
     });
     let _resources = resource_scope();
