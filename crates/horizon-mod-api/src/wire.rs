@@ -167,8 +167,15 @@ impl Writer {
         if !self.can_fit(bytes) {
             return;
         }
-        self.put_len(text.len());
-        self.put_bytes(text.as_bytes());
+        let Ok(len) = u32::try_from(text.len()) else {
+            self.fail(WireError::Length);
+            return;
+        };
+        // The whole encoding was checked above; do not repeat the limit and
+        // sticky-error checks for its prefix and payload separately.
+        self.bytes.reserve(bytes);
+        self.bytes.extend_from_slice(&len.to_le_bytes());
+        self.bytes.extend_from_slice(text.as_bytes());
     }
     /// A length or count.
     pub fn put_len(&mut self, len: usize) {
@@ -821,6 +828,28 @@ impl Wire for std::time::Duration {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn string_encoding_checks_whole_value_before_writing() {
+        use super::{WireError, Writer};
+        let mut writer = Writer::new();
+        writer.limit(7);
+        writer.put_str("é!");
+        assert_eq!(writer.bytes(), &[3, 0, 0, 0, 0xc3, 0xa9, b'!']);
+        assert_eq!(writer.error(), None);
+        writer.clear();
+        writer.limit(6);
+        writer.put_str("é!");
+        assert_eq!(writer.error(), Some(WireError::Length));
+        assert!(writer.bytes().is_empty());
+        writer.put_str("");
+        assert!(writer.bytes().is_empty());
+        writer.clear();
+        writer.fail(WireError::Depth);
+        writer.put_str("ok");
+        assert_eq!(writer.error(), Some(WireError::Depth));
+        assert!(writer.bytes().is_empty());
+    }
+
     #[test]
     fn resource_context_is_scoped_and_encoding_keeps_first_error() {
         use std::{
