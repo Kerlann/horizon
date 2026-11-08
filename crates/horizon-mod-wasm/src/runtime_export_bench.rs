@@ -34,12 +34,14 @@ fn direct_exports() {
     assert!(loaded.refused.is_empty(), "{:?}", loaded.refused);
     loaded.initialize(&[info]).unwrap();
     let module = loaded.modules[0].clone();
+    let memory_only = std::env::var_os("HORIZON_PROFILE_MEMORY_ONLY").is_some();
     assert!(
-        module
-            .subscribed
-            .iter()
-            .flatten()
-            .any(|hook| *hook == mod_api::HookId::ServerStopped),
+        memory_only
+            || module
+                .subscribed
+                .iter()
+                .flatten()
+                .any(|hook| matches!(hook, mod_api::HookId::ServerStopped)),
         "fixture must register the normal empty-body server_stopped hook"
     );
     // Capture the actual registered handler and encoded arguments via the normal API.
@@ -100,6 +102,52 @@ fn direct_exports() {
         .get_typed_func::<(), u64>(&mut group.store, "horizon_layout")
         .unwrap();
     let memory = group.store.data().memory.unwrap();
+    if memory_only {
+        group.store.set_epoch_deadline(30_000);
+        let before = memory.size(&group.store);
+        let now = Instant::now();
+        let mut answer = 0;
+        for _ in 0..100000 {
+            let ptr = module
+                .input
+                .call(&mut group.store, input.len() as u32)
+                .unwrap();
+            memory
+                .write(&mut group.store, ptr as usize, &input)
+                .unwrap();
+            answer = module.hook.call(&mut group.store, counter_id).unwrap();
+            assert_ne!(answer as u32, u32::MAX);
+            std::hint::black_box(answer);
+        }
+        let elapsed = now.elapsed().as_nanos();
+        let after = memory.size(&group.store);
+        println!(
+            "retention pairs=100000 input={} bytes before={before} pages after={after} pages delta={} pages delta={} bytes mean={:.3} ns/pair",
+            input.len(),
+            after - before,
+            (after - before) * 65536,
+            elapsed as f64 / 100000.0
+        );
+        let output = memory
+            .data(&group.store)
+            .get((answer >> 32) as usize..(answer >> 32) as usize + answer as u32 as usize)
+            .unwrap();
+        let mut reader = Reader::new(output);
+        reader.take::<()>().unwrap();
+        assert_eq!(reader.take::<[i32; 3]>().unwrap(), [0, 64, 0]);
+        let entity = mod_api::ModBlockEntity::from(
+            reader
+                .take::<mod_api::containers::ModBlockEntitySnapshot>()
+                .unwrap(),
+        );
+        assert_eq!(entity.data, [23]);
+        assert_eq!(
+            entity.nbt.get(&"counter".into()),
+            Some(&mod_api::Tag::Int(17))
+        );
+        assert!(reader.rest().is_empty());
+        return;
+    }
     for pass in 0..3 {
         let phases = if pass % 2 == 0 {
             [0, 1, 2, 3, 4, 5]
