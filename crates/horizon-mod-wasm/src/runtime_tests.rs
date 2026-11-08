@@ -148,6 +148,36 @@ fn nested_handler_decodes_in_scope_and_remains_callable_after_return() {
 }
 
 #[test]
+fn imports_inherit_the_root_borrow_token_and_expire_with_the_call() {
+    let id = crate::boundary::import_id("StructureRandom", "next_long").unwrap();
+    let module = module(&format!(
+        "i32.const {id} i32.const 0 i32.const 0 i32.const 1024 i32.const 8 call $host drop i32.const {id} i32.const 0 i32.const 0 i32.const 1024 i32.const 8 call $host drop i64.const 4398046511112"
+    ));
+    let saved = Cell::new(None::<mod_api::wire::ScopeToken>);
+    let calls = Cell::new(0);
+    let mut random = Random(|| {
+        calls.set(calls.get() + 1);
+        if let Some(token) = saved.get() {
+            token.check().unwrap();
+        } else {
+            saved.set(Some(mod_api::wire::borrow_token().unwrap()));
+        }
+        7
+    });
+    let mut frame = Frame::default();
+    frame.set_structure_random_mut(&mut random);
+    assert_eq!(
+        module.call(CallClass::Hook, frame, 0, None, |_| {}, |r| r.take::<i64>()),
+        Some(7)
+    );
+    assert_eq!(calls.get(), 2);
+    assert!(matches!(
+        saved.get().unwrap().check(),
+        Err(mod_api::wire::ScopeError::Stale)
+    ));
+}
+
+#[test]
 fn guest_panic_text_is_logged_with_mod_id_and_no_reply() {
     struct Capture(Mutex<Vec<String>>);
     impl log::Log for Capture {
@@ -227,6 +257,71 @@ fn a_member_cannot_bypass_group_limits_with_private_memories() {
     .err()
     .unwrap();
     assert!(refusal.to_string().contains("must import the group memory"));
+}
+
+#[test]
+#[ignore = "requires shared std and the real noop fixture"]
+fn guest_input_pool_stays_flat_for_100k_no_import_calls() {
+    let std = std::fs::read(std::env::var("HORIZON_WASM_STD").unwrap()).unwrap();
+    let fixture = horizon_mod_package::manifest::Package::read_wasm(std::path::Path::new(
+        &std::env::var("HORIZON_WASM_FIXTURE").unwrap(),
+    ))
+    .unwrap();
+    let module = WasmMod::instantiate(
+        &engine().unwrap(),
+        &[
+            Member {
+                name: "std",
+                module: &std,
+            },
+            Member {
+                name: "fixture",
+                module: &fixture,
+            },
+        ],
+    )
+    .unwrap()
+    .pop()
+    .unwrap();
+    let subscriptions: Vec<String> = module
+        .call(
+            CallClass::Load,
+            Frame::default(),
+            crate::boundary::SUBSCRIBED,
+            None,
+            |_| {},
+            |r| r.take(),
+        )
+        .unwrap();
+    assert!(subscriptions.iter().any(|hook| hook == "server_stopped"));
+    let id = crate::boundary::export_id("Hooks", "server_stopped").unwrap();
+    let mut group = module.running.group.lock().unwrap();
+    group.store.set_epoch_deadline(30_000);
+    fn step(module: &WasmMod, store: &mut Store<State>, id: u32) {
+        let memory = store.data().memory.unwrap();
+        let input = module.input.call(&mut *store, 1).unwrap();
+        memory.write(&mut *store, input as usize, &[0]).unwrap();
+        let reply = module.hook.call(&mut *store, id).unwrap();
+        assert_eq!(reply as u32, 1);
+        let mut bytes = [0xff];
+        memory
+            .read(&*store, (reply >> 32) as usize, &mut bytes)
+            .unwrap();
+        assert_eq!(bytes, [0]);
+    }
+    for _ in 0..1000 {
+        step(&module, &mut group.store, id);
+    }
+    let memory = group.store.data().memory.unwrap();
+    let before = memory.size(&group.store);
+    for _ in 0..100_000 {
+        step(&module, &mut group.store, id);
+    }
+    let after = memory.size(&group.store);
+    assert_eq!(
+        after, before,
+        "warmed no-import calls must not retain inputs"
+    );
 }
 
 #[test]
@@ -647,6 +742,61 @@ fn dropping_a_handler_releases_its_id_on_the_next_call() {
     });
     assert_eq!(call(&module), Some(1));
     assert!(!module.running.poisoned.load(Ordering::Relaxed));
+}
+
+#[test]
+fn returned_builtin_proxy_does_not_keep_its_group_alive() {
+    use mod_api::EnergyHandler;
+    struct World;
+    impl mod_api::Host for World {}
+    mod_api::impl_host_areas!(World);
+    impl mod_api::ServerHost for World {}
+    mod_api::impl_server_host_areas!(World);
+    let amount = crate::boundary::export_id("EnergyHandler", "amount").unwrap();
+    let module = module(&format!(
+        r#"
+        local.get 0 i32.const {amount} i32.eq if (result i64)
+          i32.const 1024 i32.const 17 i32.store
+          i64.const 4398046511108
+        else
+          i64.const 2199023255552 local.get 2 i64.extend_i32_u i64.or
+        end"#
+    ));
+    let proxy: Arc<dyn EnergyHandler> = module
+        .call(
+            CallClass::Hook,
+            Frame::default(),
+            0,
+            None,
+            |w| w.put(&Id(123)),
+            |r| r.take(),
+        )
+        .unwrap();
+    assert_eq!(proxy.amount(&mut World), 17);
+    // Sending this proxy back makes Cx.held retain it. The retained guest proxy
+    // must not create Running -> Cx.held -> WasmHandler -> Running ownership.
+    let _: Id = module
+        .call(
+            CallClass::Hook,
+            Frame::default(),
+            0,
+            None,
+            |w| w.put(&proxy),
+            |r| r.take(),
+        )
+        .unwrap();
+    let running = Arc::downgrade(&module.running);
+    drop(module);
+    assert_eq!(
+        running.strong_count(),
+        0,
+        "a retained guest proxy kept its own group alive"
+    );
+    assert_eq!(
+        proxy.amount(&mut World),
+        0,
+        "an unavailable proxy did not take the call-refused path"
+    );
 }
 
 #[test]

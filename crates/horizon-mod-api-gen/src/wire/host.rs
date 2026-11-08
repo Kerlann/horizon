@@ -248,7 +248,7 @@ fn resources() -> String {
         }
     }
     format!(
-        "struct HostCodec {{ cx:*mut Cx }} impl mod_api::wire::ResourceCodec for HostCodec {{ fn store(&self,value:Box<dyn std::any::Any>)->Result<mod_api::wire::Id,WireError> {{ {store} Err(WireError::Invalid(\"unknown handler type\")) }} fn load(&self,id:mod_api::wire::Id,view:std::any::TypeId)->Result<Box<dyn std::any::Any>,WireError> {{ let module=unsafe {{ (&*self.cx).module.clone() }}.ok_or(WireError::Invalid(\"no calling module\"))?; {load} Err(WireError::Invalid(\"unknown handler view\")) }} }} /// The Cx pointer must stay live for the whole synchronous call.\npub unsafe fn resource_scope(cx:*mut Cx)->mod_api::wire::ResourceScope {{ mod_api::wire::ResourceScope::new(std::rc::Rc::new(HostCodec {{cx}})) }}\n"
+        "struct HostCodec {{ cx:*mut Cx }} impl mod_api::wire::ResourceCodec for HostCodec {{ fn store(&self,value:Box<dyn std::any::Any>)->Result<mod_api::wire::Id,WireError> {{ {store} Err(WireError::Invalid(\"unknown handler type\")) }} fn load(&self,id:mod_api::wire::Id,view:std::any::TypeId)->Result<Box<dyn std::any::Any>,WireError> {{ let module=unsafe {{ (&*self.cx).module.clone() }}.ok_or(WireError::Invalid(\"no calling module\"))?; {load} Err(WireError::Invalid(\"unknown handler view\")) }} }} /// The Cx pointer must stay live for the whole synchronous call.\npub unsafe fn resource_scope(cx:*mut Cx,native_root:bool)->mod_api::wire::ResourceScope {{ let codec=std::rc::Rc::new(HostCodec {{cx}}); if native_root {{ unsafe {{ mod_api::wire::ResourceScope::native_root(codec) }} }} else {{ mod_api::wire::ResourceScope::new(codec) }} }}\n"
     )
 }
 pub(super) fn generate(surface: &mut super::Surface<'_>) -> Result<String, String> {

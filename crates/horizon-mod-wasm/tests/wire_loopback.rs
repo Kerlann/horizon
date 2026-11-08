@@ -72,11 +72,11 @@ impl WasmMod {
         cx.frames.push(frame);
         cx.module = Some(self.clone());
         let pointer = &mut *cx as *mut boundary::Cx;
-        let _resources = unsafe { boundary::resource_scope(pointer) };
+        let _resources = unsafe { boundary::resource_scope(pointer, true) };
         // The pointer remains live until this synchronous call finishes; guest callbacks never retain it.
         guest::set_transport(Some(Rc::new(move |id, bytes| {
             let mut out = Writer::new();
-            let _resources = unsafe { boundary::resource_scope(pointer) };
+            let _resources = unsafe { boundary::resource_scope(pointer, false) };
             unsafe { boundary::serve(id, pointer, bytes, &mut out) }.unwrap();
             out.into_bytes()
         })));
@@ -382,7 +382,7 @@ fn wire_loopback_owned_box_handlers_inside_result_and_vec() {
         corrupt: false,
     });
     {
-        let _resources = unsafe { boundary::resource_scope(&mut cx) };
+        let _resources = unsafe { boundary::resource_scope(&mut cx, true) };
         let value = Reader::decode::<Result<Box<dyn ReloadApply>, u32>>(out.bytes())
             .unwrap()
             .unwrap();
@@ -402,7 +402,7 @@ fn wire_loopback_owned_box_handlers_inside_result_and_vec() {
     }
     assert_eq!(out.error(), None);
     {
-        let _resources = unsafe { boundary::resource_scope(&mut cx) };
+        let _resources = unsafe { boundary::resource_scope(&mut cx, true) };
         for value in Reader::decode::<Vec<Box<dyn ReloadApply>>>(out.bytes()).unwrap() {
             value.apply();
         }

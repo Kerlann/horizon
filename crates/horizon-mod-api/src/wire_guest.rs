@@ -63,6 +63,18 @@ struct Runtime {
     spare: Vec<Vec<u8>>,
 }
 
+impl Runtime {
+    fn recycle(&mut self, buffer: Vec<u8>) {
+        // Retain buffers for bounded call nesting, not the history of all calls. Large
+        // arguments remain allowed, but their storage must not stay pinned in the pool.
+        const MAX_SPARE_BUFFERS: usize = 64;
+        const MAX_SPARE_CAPACITY: usize = 1024 * 1024;
+        if self.spare.len() < MAX_SPARE_BUFFERS && buffer.capacity() <= MAX_SPARE_CAPACITY {
+            self.spare.push(buffer);
+        }
+    }
+}
+
 thread_local! {
     static RUNTIME: RefCell<Runtime> = RefCell::new(Runtime::default());
     static HANDLERS: RefCell<Slots<Vec<Box<dyn Any>>>> = RefCell::new(Slots::default());
@@ -95,7 +107,7 @@ impl Reply {
 impl Drop for Reply {
     fn drop(&mut self) {
         let buffer = std::mem::take(&mut self.0);
-        RUNTIME.with(|rt| rt.borrow_mut().spare.push(buffer));
+        RUNTIME.with(|rt| rt.borrow_mut().recycle(buffer));
     }
 }
 
@@ -107,7 +119,7 @@ pub fn host(id: u32, args: Writer) -> Reply {
     out.clear();
     out.reserve(256);
     transport::call(id, args.bytes(), &mut out);
-    RUNTIME.with(|rt| rt.borrow_mut().spare.push(args.into_bytes()));
+    RUNTIME.with(|rt| rt.borrow_mut().recycle(args.into_bytes()));
     Reply(out)
 }
 
@@ -235,10 +247,13 @@ impl Drop for Held {
 /// The game's buffer for the call about to run, `len` bytes.
 pub fn input(len: usize) -> *mut u8 {
     RUNTIME.with(|rt| {
-        let pending = &mut rt.borrow_mut().pending;
-        pending.clear();
-        pending.resize(len, 0);
-        pending.as_mut_ptr()
+        let mut rt = rt.borrow_mut();
+        if rt.pending.capacity() == 0 {
+            rt.pending = rt.spare.pop().unwrap_or_default();
+        }
+        rt.pending.clear();
+        rt.pending.resize(len, 0);
+        rt.pending.as_mut_ptr()
     })
 }
 
@@ -335,7 +350,7 @@ pub fn run(id: u32) -> (*const u8, u32) {
         // The borrows of this call end with it, newest first, outside the runtime's borrow.
         let keep = rt.keeps.pop();
         rt.replies[depth] = reply;
-        rt.spare.push(input);
+        rt.recycle(input);
         drop(rt);
         drop(keep);
     });

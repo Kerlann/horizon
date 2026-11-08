@@ -40,7 +40,9 @@ jobs:
         env:
           HORIZON_WASM_FIXTURE: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/fixture/target/horizon-mod/wasm_fixture.hmod
           HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
-        run: cargo test -p horizon-mod-wasm --test real_member -- --nocapture
+        run: |
+          cargo test -p horizon-mod-wasm --test real_member -- --nocapture
+          cargo test -p horizon-mod-wasm --lib guest_input_pool_stays_flat_for_100k_no_import_calls -- --ignored --nocapture
       - name: Measure block entity boundary
         if: github.event_name == 'workflow_dispatch'
         env:

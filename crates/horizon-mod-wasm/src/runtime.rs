@@ -253,7 +253,7 @@ fn host(
     let cx = &mut *caller.data_mut().cx as *mut Cx;
     // SAFETY: this import holds the locked/lent store; Cx stays boxed until the
     // synchronous native dispatch and any nested callbacks have returned.
-    let resources = unsafe { crate::boundary::resource_scope(cx) };
+    let resources = unsafe { crate::boundary::resource_scope(cx, false) };
     let mut context = caller.as_context_mut();
     let lending = context.data().lending.clone();
     lending.fetch_add(1, Ordering::Relaxed);
@@ -512,7 +512,7 @@ impl WasmMod {
         // SAFETY: FrameScope keeps the active module installed and the group
         // remains exclusively locked/lent until this resource scope is dropped.
         crate::profile::mark(4);
-        let resources = unsafe { crate::boundary::resource_scope(&mut *store.data_mut().cx) };
+        let resources = unsafe { crate::boundary::resource_scope(&mut *store.data_mut().cx, true) };
         crate::profile::mark(5);
         let mut w = std::mem::take(&mut store.data_mut().inputs[depth]);
         let mut output = std::mem::take(&mut store.data_mut().outputs[depth]);
