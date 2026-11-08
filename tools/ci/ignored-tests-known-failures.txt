@@ -92,8 +92,6 @@ horizon-client game::stateful_block_entity_tests::stateful_creation_uses_actual_
 horizon-client game::native_components::item_resource_property_tests::effective_resource_properties_match_vanilla #2183
 horizon-client game::native_components::item_resource_property_tests::item_resource_changed_defaults_and_consumption #2183
 horizon-client game::transactions::tests::an_aborted_transaction_puts_back_what_it_and_its_committed_children_changed #2183
-horizon-client game::native_hooks::base::screen_open_tests::client_gui_state_matches_screen_init_hook #2184
-horizon-client game::options::resize_state_tests::viewport_resize_notifications_follow_each_player #2184
 horizon-client game::persist::baby_modifier_mutation_tests::a_removed_baby_modifier_stays_removed_until_set_baby #2185
 horizon-client game::persist::baby_modifier_mutation_tests::the_baby_speed_modifier_answers_add_and_remove_like_any_other #2185
 horizon-client game::persist::sulfur_body_attribute_tests::a_bodiless_cube_keeps_its_command_knockback_resistance_effect #2185
