@@ -63,6 +63,8 @@ pub(crate) struct State {
     imports: Vec<Vec<u8>>,
     depth: usize,
     epoch_budget: u64,
+    #[cfg(feature = "boundary-fuel")]
+    fuel_reported: bool,
     #[cfg(feature = "boundary-profile")]
     profile: Option<BoundaryProfile>,
     #[cfg(feature = "boundary-profile")]
@@ -93,6 +95,8 @@ impl Default for State {
             imports: Vec::new(),
             depth: 0,
             epoch_budget: 0,
+            #[cfg(feature = "boundary-fuel")]
+            fuel_reported: false,
             #[cfg(feature = "boundary-profile")]
             profile: None,
             #[cfg(feature = "boundary-profile")]
@@ -531,8 +535,6 @@ impl WasmMod {
                             let profiler = profile.profiler.take().unwrap();
                             let file = std::fs::File::create(&profile.path)?;
                             profiler.finish(file)?;
-                            #[cfg(feature = "boundary-fuel")]
-                            eprintln!("boundary guest fuel: {}", u64::MAX - store.get_fuel()?);
                             eprintln!(
                                 "boundary host cumulative at {} guest export returns: {:?}",
                                 profile.calls,
@@ -799,6 +801,17 @@ impl WasmMod {
             .ok_or_else(|| wasmtime::Error::msg("no memory"))?;
         memory.write(&mut *store, ptr as usize, input.bytes())?;
         let result = self.hook.call(&mut *store, id)?;
+        #[cfg(feature = "boundary-fuel")]
+        if !store.data().fuel_reported
+            && store
+                .data()
+                .profile
+                .as_ref()
+                .is_some_and(|p| p.profiler.is_none())
+        {
+            store.data_mut().fuel_reported = true;
+            eprintln!("boundary guest fuel: {}", u64::MAX - store.get_fuel()?);
+        }
         let ptr = (result >> 32) as usize;
         let len = result as u32;
         if len == u32::MAX {
