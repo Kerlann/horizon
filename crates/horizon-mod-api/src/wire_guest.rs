@@ -401,9 +401,14 @@ pub fn run(id: u32) -> (*const u8, u32) {
             (rt.pool_counts[4] == 200_000).then_some((rt.pool_counts, rt.spare.len()))
         });
         if let Some(counts) = counts {
+            unsafe extern "C" {
+                fn __horizon_diag_alloc_counter(index: u32) -> u64;
+            }
+            let allocs: [u64; 6] =
+                std::array::from_fn(|index| unsafe { __horizon_diag_alloc_counter(index as u32) });
             let mut args = Writer::new();
             args.put_str(&format!(
-                "diagnostic guest pool (kept, full, large, reply drops, exports), spare: {counts:?}"
+                "diagnostic guest pool (kept, full, large, reply drops, exports), spare: {counts:?}; System (alloc, zeroed, free, realloc, alloc bytes, realloc bytes): {allocs:?}"
             ));
             transport::try_call(crate::wire::HOST_LOG, args.bytes(), &mut Vec::new());
         }
