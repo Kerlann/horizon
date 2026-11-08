@@ -350,6 +350,16 @@ impl Game<'_> {
                 })
                 .flatten(),
             Target::Mob(mob) => {
+                if self.sulfur_archetype_attribute(t, name) {
+                    let done = self.write_generic_attribute(t, name, id, write.clone(), default)?;
+                    // The body's map owns the command value, while bodiless physics
+                    // reads the base and permanent modifiers from finalize's cache.
+                    if done && name == "minecraft:knockback_resistance" {
+                        let m = self.mobs.iter_mut().find(|m| m.id == mob && !m.removed)?;
+                        write_own_attribute(m, Attr::KnockbackResistance, write);
+                    }
+                    return Some(done);
+                }
                 let m = self.mobs.iter_mut().find(|m| m.id == mob && !m.removed)?;
                 if let Some(a) = own_attribute(m, name) {
                     return Some(write_own_attribute(m, a, write));
