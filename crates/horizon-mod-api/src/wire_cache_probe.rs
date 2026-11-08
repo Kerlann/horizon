@@ -56,6 +56,7 @@ impl Hasher for Identity {
     }
 }
 struct Entry {
+    sequence: u64,
     bytes: Vec<u8>,
     value: Box<dyn Any>,
     ty: TypeId,
@@ -64,6 +65,7 @@ struct Entry {
 struct Cache {
     rows: HashMap<u64, Entry, BuildHasherDefault<Identity>>,
     captures: usize,
+    sequence: u64,
 }
 thread_local! { static CACHE: RefCell<Cache> = RefCell::new(Cache::default()); }
 
@@ -121,20 +123,21 @@ fn capture_difference<T: 'static>(bytes: &[u8]) {
     }
     let old = CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
-        if cache.captures >= 6 {
+        if cache.captures >= 6 || cache.sequence < 1100 {
             return None;
         }
         let old = cache
             .rows
             .values()
-            .find(|entry| {
+            .filter(|entry| {
                 let old = &entry.bytes;
                 entry.ty == TypeId::of::<T>()
                     && old.len() >= 17
                     && old.last() == Some(&0)
                     && old[old.len() - 17..old.len() - 9]
                         == bytes[bytes.len() - 17..bytes.len() - 9]
-            })?
+            })
+            .max_by_key(|entry| entry.sequence)?
             .bytes
             .clone();
         cache.captures += 1;
@@ -170,7 +173,8 @@ pub(super) fn retain<T: 'static>(value: T, key: Option<Vec<u8>>, bytes: &[u8]) {
     key.clear();
     key.extend_from_slice(bytes);
     let hash = hash(&key);
-    let entry = Entry {
+    let mut entry = Entry {
+        sequence: 0,
         bytes: key,
         value: Box::new(value),
         ty: TypeId::of::<T>(),
@@ -178,6 +182,8 @@ pub(super) fn retain<T: 'static>(value: T, key: Option<Vec<u8>>, bytes: &[u8]) {
     // Move/drop displaced values outside the RefCell borrow, including cap eviction.
     let old = CACHE.with(|cache| {
         let mut cache = cache.borrow_mut();
+        cache.sequence += 1;
+        entry.sequence = cache.sequence;
         let all = if cache.rows.len() >= MAX_ENTRIES {
             Some(std::mem::take(&mut cache.rows))
         } else {
