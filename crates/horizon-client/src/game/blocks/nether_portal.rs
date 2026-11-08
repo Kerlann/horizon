@@ -353,6 +353,16 @@ impl Game<'_> {
             end: false,
         }
     }
+    /// Whether entity `id` may take `plan`'s portal: the rule on entering its
+    /// dimension, then the mods (`entity_travel_to_dimension`).
+    fn may_travel_through(&mut self, id: u32, plan: &Plan) -> bool {
+        self.may_enter(plan.dim)
+            && self.entity_may_travel(
+                id,
+                plan.dim,
+                super::server_travel::TravelCause::of_plan(plan),
+            )
+    }
     /// The plan of an item or mob going through the portal block at `entry`:
     /// an End portal's fixed destination, else the Nether portal's.
     fn entity_plan(
@@ -561,11 +571,7 @@ impl Game<'_> {
     /// the confusion effect (`client_portal_effect`). On a server's client
     /// `portals.player` holds only the LocalPlayer's `portalCooldown`.
     pub(super) fn client_inside_nether_portal(&mut self) {
-        let alive = self
-            .player
-            .as_ref()
-            .is_some_and(|p| !p.health.dead_or_dying());
-        if !alive || self.riding.is_some() {
+        if !self.player_can_use_portal() {
             return;
         }
         if self.portals.player.cooldown > 0 {
@@ -758,6 +764,27 @@ impl Game<'_> {
                 process: None,
             },
         );
+    }
+    /// `LivingEntity.canUsePortal` over a player's body and its transport
+    /// (#943): `Entity.canUsePortal(false)` (alive, nobody's passenger) and
+    /// not asleep (`isSleeping`). The one rule the client's portal entry,
+    /// the player in place and the guest arm of the `LivingRef` read answer
+    /// — a parity fix: the client's own entry used to skip the sleep half
+    /// (vanilla `LivingEntity.canUsePortal` checks it).
+    pub(super) fn can_use_portal_of(
+        &self,
+        p: &horizon_client::motion::PlayerMotion,
+        riding: bool,
+        sleeping: bool,
+    ) -> bool {
+        !p.health.dead_or_dying() && !riding && !sleeping
+    }
+    /// [`can_use_portal_of`](Self::can_use_portal_of) for the player of
+    /// this game.
+    pub(super) fn player_can_use_portal(&self) -> bool {
+        self.player
+            .as_ref()
+            .is_some_and(|p| self.can_use_portal_of(p, self.riding.is_some(), p.sleeping))
     }
     /// `canUsePortal(false)` of a mob: what the mob itself decides
     /// (`mobs::mob_can_use_portal`), riding nothing, not asleep, and not
@@ -995,7 +1022,7 @@ impl Game<'_> {
         if let Some(i) = self.dropped.iter().position(|e| e.id == id) {
             let e = &self.dropped[i];
             let plan = self.entity_plan(entry, e.position, 0.25, 0.25, false);
-            if !self.may_enter(plan.dim) {
+            if !self.may_travel_through(id, &plan) {
                 return;
             }
             let uuid = self.uuid_for(id);
@@ -1012,7 +1039,7 @@ impl Game<'_> {
         } else if let Some(i) = self.tnts.iter().position(|t| t.id == id) {
             let t = &self.tnts[i];
             let plan = self.entity_plan(entry, t.position, 0.98, 0.98, false);
-            if !self.may_enter(plan.dim) {
+            if !self.may_travel_through(id, &plan) {
                 return;
             }
             let tag = self.tnt_nbt(i);
@@ -1022,7 +1049,7 @@ impl Game<'_> {
             self.portals.dirty = true;
         } else if let Some(i) = self.tridents.iter().position(|t| t.id == id) {
             let plan = self.entity_plan(entry, self.tridents[i].position, 0.5, 0.5, false);
-            if !self.may_enter(plan.dim) {
+            if !self.may_travel_through(id, &plan) {
                 return;
             }
             let uuid = self.uuid_for(id);
@@ -1033,7 +1060,7 @@ impl Game<'_> {
             self.portals.dirty = true;
         } else if let Some(i) = self.rockets.iter().position(|r| r.id == id) {
             let plan = self.entity_plan(entry, self.rockets[i].position, 0.25, 0.25, false);
-            if !self.may_enter(plan.dim) {
+            if !self.may_travel_through(id, &plan) {
                 return;
             }
             let uuid = self.uuid_for(id);
@@ -1044,7 +1071,7 @@ impl Game<'_> {
             self.portals.dirty = true;
         } else if let Some(i) = self.orbs.iter().position(|o| o.id == id) {
             let plan = self.entity_plan(entry, self.orbs[i].position, 0.5, 0.5, false);
-            if !self.may_enter(plan.dim) {
+            if !self.may_travel_through(id, &plan) {
                 return;
             }
             let uuid = self.uuid_for(id);
@@ -1056,7 +1083,7 @@ impl Game<'_> {
         } else if let Some(i) = self.mobs.iter().position(|m| m.id == id) {
             let m = &self.mobs[i];
             let plan = self.entity_plan(entry, m.position, m.width(), m.height(), true);
-            if !self.may_enter(plan.dim) {
+            if !self.may_travel_through(id, &plan) {
                 return;
             }
             let mut tag = self.mob_tree_nbt(i);
@@ -1076,21 +1103,13 @@ impl Game<'_> {
             let b = &self.boats[i];
             let (width, height) = (super::boats::WIDTH as f32, super::boats::HEIGHT as f32);
             let plan = self.entity_plan(entry, b.position, width, height, true);
-            if !self.may_enter(plan.dim) {
+            if !self.may_travel_through(id, &plan) {
                 return;
             }
             self.release_vehicle_container(id);
             let uuid = self.uuid_for(id);
             let b = &self.boats[i];
-            let mut tag = horizon_client::entity_nbt::boat_to_nbt(
-                &b.entity_type(),
-                b.position,
-                b.velocity,
-                [b.yaw, b.pitch],
-                uuid,
-                self.persist_raw(id),
-                b.chest.then_some(&b.items[..]),
-            );
+            let mut tag = b.to_nbt(uuid, self.persist_raw(id));
             // The mobs riding it cross with it and mount it again.
             self.put_mob_passengers(&mut tag, id);
             for rider in self.remove_mob_riders(id) {
@@ -1107,7 +1126,7 @@ impl Game<'_> {
                 super::minecarts::HEIGHT as f32,
             );
             let plan = self.entity_plan(entry, c.position, width, height, true);
-            if !self.may_enter(plan.dim) {
+            if !self.may_travel_through(id, &plan) {
                 return;
             }
             self.release_vehicle_container(id);
@@ -1140,7 +1159,7 @@ impl Game<'_> {
             let p = &self.creatures.projectiles[i];
             let (width, height) = projectile_box(p);
             let plan = self.entity_plan(entry, p.position, width, height, false);
-            if !self.may_enter(plan.dim) {
+            if !self.may_travel_through(id, &plan) {
                 return;
             }
             let uuid = self.uuid_for(id);
@@ -1298,7 +1317,13 @@ impl Game<'_> {
         }
         let entry = f.portal.handle(true, 0, ENTITY_DELAY)?;
         let plan = self.entity_plan(entry, f.position, 0.98, 0.98, false);
-        if !self.may_enter(plan.dim) {
+        // An untracked block (id 0) has no handle to ask about.
+        let allowed = if f.id == 0 {
+            self.may_enter(plan.dim)
+        } else {
+            self.may_travel_through(f.id, &plan)
+        };
+        if !allowed {
             return None;
         }
         let uuid = f.saved.as_ref().map_or_else(
@@ -1390,7 +1415,112 @@ impl Game<'_> {
 
 #[cfg(test)]
 mod tests {
+    use super::super::server_travel::TravelCause;
     use super::*;
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicU32, Ordering},
+    };
+
+    /// Cancels the travel of the entity whose id `spare` holds, and logs each
+    /// (entity, dimension, cause) it is asked.
+    struct Gate {
+        spare: Arc<AtomicU32>,
+        heard: Arc<Mutex<Vec<(u32, String, String)>>>,
+    }
+    #[mod_api::__subscriptions]
+    impl mod_api::Hooks for Gate {
+        fn entity_travel_to_dimension(
+            &self,
+            _: &mut dyn mod_api::ServerHost,
+            e: &mut mod_api::EntityTravelToDimensionEvent,
+        ) -> mod_api::Flow {
+            self.heard.lock().unwrap().push((
+                e.entity.id(),
+                e.dimension.to_string(),
+                e.cause.to_string(),
+            ));
+            if e.entity.id() == self.spare.load(Ordering::Relaxed) {
+                mod_api::Flow::Cancel
+            } else {
+                mod_api::Flow::Continue
+            }
+        }
+    }
+
+    /// Runs `test` with a `Gate` installed, on a server with guests 12 and 13.
+    fn with_gate(test: impl FnOnce(&mut Game<'_>, &AtomicU32, &Mutex<Vec<(u32, String, String)>>)) {
+        let spare = Arc::new(AtomicU32::new(0));
+        let heard = Arc::default();
+        let mods = vec![mod_api::ModEntry::new(
+            "gate",
+            Box::new(Gate {
+                spare: Arc::clone(&spare),
+                heard: Arc::clone(&heard),
+            }),
+        )]
+        .into();
+        mod_api::testing::with_mods(mods, || {
+            crate::game::native_guest_turn_tests::with_guests(|game| {
+                game.options.dedicated = Some(Vec::new());
+                test(game, &spare, &heard);
+            });
+        });
+    }
+
+    /// `EntityTravelToDimensionEvent` for server players: both are asked with
+    /// their own id, the target level and the cause; the spared one stays, the
+    /// other may go.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_mod_cancels_one_players_travel_and_allows_the_other() {
+        with_gate(|game, spare, heard| {
+            // Guests 12 and 13 are entities 12 and 13.
+            spare.store(12, Ordering::Relaxed);
+            assert!(!game.server_player_travel_allowed(12, Dim::Nether, TravelCause::NetherPortal));
+            assert!(game.server_player_travel_allowed(13, Dim::End, TravelCause::EndPortal));
+            assert_eq!(
+                *heard.lock().unwrap(),
+                [
+                    (
+                        12,
+                        "minecraft:the_nether".to_owned(),
+                        "nether_portal".to_owned()
+                    ),
+                    (13, "minecraft:the_end".to_owned(), "end_portal".to_owned()),
+                ]
+            );
+        });
+    }
+
+    /// The same for two dropped items at a Nether portal: the spared one is
+    /// still in the level and waits for no arrival, the other has left it for
+    /// one.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_mod_cancels_one_items_portal_trip_and_allows_the_other() {
+        with_gate(|game, spare, heard| {
+            let stone = || horizon_client::items::ItemStack::new("minecraft:stone", 1);
+            game.spawn_item(stone(), [0.5, 64.0, 0.5], [0.0; 3], 0);
+            game.spawn_item(stone(), [2.5, 64.0, 0.5], [0.0; 3], 0);
+            let ids: Vec<u32> = game.dropped.iter().map(|d| d.id).collect();
+            assert_eq!(ids.len(), 2);
+            spare.store(ids[0], Ordering::Relaxed);
+            for id in &ids {
+                game.send_through_portal(*id, BlockPos::new(0, 64, 0));
+            }
+            let left: Vec<u32> = game.dropped.iter().map(|d| d.id).collect();
+            assert_eq!(left, [ids[0]]);
+            assert_eq!(game.portals.arrivals.len(), 1);
+            assert_eq!(game.portals.arrivals[0].plan.dim, Dim::Nether);
+            let nether = || "minecraft:the_nether".to_owned();
+            let cause = || "nether_portal".to_owned();
+            assert_eq!(
+                *heard.lock().unwrap(),
+                [(ids[0], nether(), cause()), (ids[1], nether(), cause())]
+            );
+        });
+    }
 
     #[test]
     fn end_portals_lead_to_the_end_spawn_and_back_to_the_world_spawn() {

@@ -110,7 +110,7 @@ impl Game<'_> {
     /// `RespawnAnchorBlock.canSetSpawn`: the `respawn_anchor_works` attribute
     /// (only the Nether's dimension type sets it).
     pub(super) fn anchor_works(&self) -> bool {
-        self.dim == Dim::Nether
+        self.dimension_type().respawn_anchor_works
     }
     /// `RespawnAnchorBlock.charge`: one more charge, the block change and the sound.
     fn charge_anchor(
@@ -172,7 +172,12 @@ impl Game<'_> {
     /// The mods' say on a server player's respawn point about to be set to
     /// `pos` in `dim` (`ServerPlayer.setRespawnPosition`, NeoForge's
     /// `PlayerSetSpawnEvent`): true when one canceled.
-    pub(super) fn spawn_point_change(&mut self, dim: Dim, pos: [i32; 3], forced: bool) -> bool {
+    pub(super) fn spawn_point_change(
+        &mut self,
+        dim: Dim,
+        pos: Option<[i32; 3]>,
+        forced: bool,
+    ) -> bool {
         let (Some(player), Some(name)) = (self.lan_acting_uuid, self.lan_acting_name.clone())
         else {
             return false;
@@ -184,11 +189,27 @@ impl Game<'_> {
             player_entity_id: id,
             name: &name,
             dimension: dim.id(),
-            pos: Some(pos),
+            pos,
             forced,
             cancel: &mut cancel,
         });
         cancel
+    }
+    /// `ServerPlayer.setRespawnPosition` for the player in place, as
+    /// `/spawnpoint` sets it: the point becomes `config`, or none for None,
+    /// unless a mod cancels the change (the answer is false then). A point
+    /// replaces the fallback spawn, which the world spawn then stands for.
+    pub(super) fn set_respawn_point(&mut self, config: Option<RespawnConfig>) -> bool {
+        let (dim, pos, forced) =
+            config.map_or((self.dim, None, false), |c| (c.dim, Some(c.pos), c.forced));
+        if self.spawn_point_change(dim, pos, forced) {
+            return false;
+        }
+        if config.is_some() {
+            self.spawn = None;
+        }
+        self.respawn_config = config;
+        true
     }
     /// `RespawnAnchorBlock.useWithoutItem` on a charged anchor: outside the
     /// Nether it explodes; inside, it becomes the respawn point.
@@ -208,7 +229,7 @@ impl Game<'_> {
             .respawn_config
             .is_some_and(|c| c.dim == config.dim && c.pos == config.pos);
         if !same {
-            if self.spawn_point_change(self.dim, pos, false) {
+            if self.spawn_point_change(self.dim, Some(pos), false) {
                 return Ok(());
             }
             // setRespawnPosition(config, true): the message, the point; the
@@ -294,7 +315,7 @@ impl Game<'_> {
     /// `BedRule.destroyOnUse` of the dimension's `bed_rule` and
     /// `straw_bed_rule`: true in the Nether and the End.
     pub(super) fn beds_destroy_on_use(&self) -> bool {
-        self.dim != Dim::Overworld
+        self.dimension_type().bed_rule.destroy_on_use
     }
     /// `AbstractBedBlock.useWithoutItem` where the bed rule destroys on use
     /// (the bed's head at `head`): `BedBlock.destroyOnUse` removes both
@@ -485,7 +506,14 @@ impl Game<'_> {
     /// `straw_bed_rule`): only the Overworld's beds set the spawn, straw
     /// beds never.
     pub(super) fn bed_sets_spawn(&self, state: BlockStateId) -> bool {
-        self.dim == Dim::Overworld && &*self.res.facts().get(state).name != "minecraft:straw_bed"
+        let straw = &*self.res.facts().get(state).name == "minecraft:straw_bed";
+        let facts = self.dimension_type();
+        let rule = if straw {
+            facts.straw_bed_rule
+        } else {
+            facts.bed_rule
+        };
+        rule.can_set_spawn.test(self.dark_outside())
     }
     /// `ServerPlayer.findRespawnAndUseSpawnBlock` for a config in the loaded
     /// dimension: the position and yaw, using an anchor's charge; a bed's

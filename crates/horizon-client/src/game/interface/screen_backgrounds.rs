@@ -31,6 +31,28 @@ impl Game<'_> {
             .as_ref()
             .is_some_and(|p| p.backdrop == Backdrop::Panorama)
     }
+    /// Draw the presentation retained by the existing load tracker, if one matched at entry.
+    pub(super) fn draw_dimension_transition_screen(
+        &self,
+        batch: &mut HudBatch,
+        tracker: &horizon_client::level_loading::LevelLoadTracker,
+        progress: Option<f32>,
+    ) -> bool {
+        let Some(screen) = tracker
+            .transition_screen()
+            .and_then(horizon_client_render::dimension_transition::screen)
+        else {
+            return false;
+        };
+        use horizon_client::level_loading::Reason;
+        let reason = match tracker.reason {
+            Reason::NetherPortal => mod_api::DimensionTransitionReason::NetherPortal,
+            Reason::EndPortal => mod_api::DimensionTransitionReason::EndPortal,
+            Reason::Other => mod_api::DimensionTransitionReason::Other,
+        };
+        self.native_dimension_transition_screen_draw(screen, reason, progress, batch);
+        true
+    }
     /// `LevelLoadingScreen.extractBackground`.
     pub(super) fn draw_level_loading_background(
         &self,

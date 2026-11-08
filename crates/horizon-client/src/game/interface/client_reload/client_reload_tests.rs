@@ -718,15 +718,23 @@ fn an_arm_pose_answer_replaces_the_pose_the_item_gives() {
     }
 
     let stick = horizon_client::items::ItemStack::new("minecraft:stick", 1);
-    let stacks = [Some(&stick), Some(&stick)];
     with_game(|game| {
-        assert_eq!(game.held_arm_poses(1, stacks), [None, None]);
+        let mut m = horizon_client::mobs::Mob::new(
+            1,
+            game.res.player_type().clone().unwrap(),
+            horizon_core::geometry::Vec3::ZERO,
+            0.0,
+        );
+        for slot in [
+            horizon_items::equipment::MAINHAND,
+            horizon_items::equipment::OFFHAND,
+        ] {
+            m.extra.set_slot_stack(slot, Some(stick.clone()));
+        }
+        assert_eq!(game.held_arm_poses(1, &m), [None, None]);
         let mods = vec![ModEntry::new("horn", Box::new(Horn))].into();
         with_mods(mods, || {
-            assert_eq!(
-                game.held_arm_poses(1, stacks),
-                [Some(ArmPose::TootHorn), None]
-            );
+            assert_eq!(game.held_arm_poses(1, &m), [Some(ArmPose::TootHorn), None]);
         });
     });
 }
@@ -986,5 +994,162 @@ fn client_startup_finishes_configs_before_the_first_runtime_callback() {
                 assert_eq!(*seen.lock().unwrap(), expected);
             })
         }
+    });
+}
+
+/// The existing item hook sees borrowed mob extraction data, and its answer reaches
+/// the animated model. Other entities, both player paths, and a later no-listener
+/// extraction retain their normal poses.
+#[test]
+#[ignore = "needs prepared resources"]
+fn humanoid_arm_pose_mod_reads_mob_state_and_changes_the_model() {
+    use crate::game::native_entity_refs::tests::with_client_game;
+    use horizon_client::{
+        items::ItemStack,
+        mobs::{
+            Mob,
+            anim::{self, Poses},
+        },
+        motion::PlayerMotion,
+    };
+    use horizon_core::{geometry::Vec3, use_animation::UseAnimation};
+    use horizon_items::equipment::{MAINHAND, OFFHAND};
+    use mod_api::{
+        ArmPose, ClientHost, GetArmPoseEvent, Hand, Hooks, ModEntry, testing::with_mods,
+    };
+    use std::{
+        collections::HashMap,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
+    };
+
+    struct MobPose(Arc<AtomicUsize>);
+    #[mod_api::__subscriptions]
+    impl Hooks for MobPose {
+        fn get_arm_pose(
+            &self,
+            _: &dyn ClientHost,
+            event: &mut GetArmPoseEvent<'_>,
+        ) -> Option<ArmPose> {
+            assert_ne!(
+                event.entity_id, 62,
+                "a quadruped does not extract humanoid poses"
+            );
+            if event.entity_id == 7 {
+                assert_eq!(event.humanoid.off_hand.unwrap().damage(), 9);
+                assert_eq!(event.humanoid.off_hand.unwrap().count(), 3);
+                assert_eq!(event.humanoid.main_arm_pose, ArmPose::Item);
+                assert_eq!(event.humanoid.off_arm_pose, ArmPose::Item);
+            }
+            if event.entity_id != 60 {
+                return None;
+            }
+            let state = event.humanoid;
+            assert!(state.main_arm_left);
+            assert_eq!(state.use_hand, Some(Hand::Off));
+            assert_eq!(state.ticks_using_item, 12);
+            assert_eq!(state.use_animation, UseAnimation::Brush);
+            assert_eq!(state.main_arm_pose, ArmPose::Empty);
+            assert_eq!(state.off_arm_pose, ArmPose::Empty);
+            let main = state.main_hand.unwrap();
+            assert_eq!(
+                (main.item(), main.count()),
+                (mod_api::__private::item_key("minecraft:stick").unwrap(), 2)
+            );
+            let off = state.off_hand.unwrap();
+            assert_eq!(
+                (off.item(), off.count(), off.damage()),
+                (
+                    mod_api::__private::item_key("minecraft:brush").unwrap(),
+                    3,
+                    9
+                )
+            );
+            assert!(std::ptr::eq(
+                event.stack,
+                if event.hand == Hand::Main { main } else { off }
+            ));
+            self.0.fetch_add(1, Ordering::Relaxed);
+            (event.hand == Hand::Main).then_some(ArmPose::ThrowTrident)
+        }
+    }
+    fn arms(m: &Mob) -> [[f32; 9]; 2] {
+        let mut poses = Poses::new(&m.kind.model);
+        anim::setup(m, &anim::state(m, 0.0), &mut poses, &HashMap::new());
+        [*poses.get("right_arm"), *poses.get("left_arm")]
+    }
+    with_client_game(|game| {
+        game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
+        game.player.as_mut().unwrap().entity_id = 7;
+        game.inventory[game.selected] = Some(ItemStack::new("minecraft:stick", 1));
+        game.offhand = Some(ItemStack::new("minecraft:brush", 3));
+        game.offhand.as_mut().unwrap().damage = 9;
+        game.tick_player_model();
+        let own_before =
+            anim::humanoid_arm_poses(game.player_model.as_ref().unwrap(), [None; 2], 0.0);
+        assert_eq!(own_before, [ArmPose::Item, ArmPose::Item]);
+        for (id, kind) in [
+            (60, "minecraft:zombie"),
+            (61, "minecraft:skeleton"),
+            (62, "minecraft:pig"),
+        ] {
+            let mut m = Mob::new(
+                id,
+                game.res.mob_types().get(kind).unwrap().clone(),
+                Vec3::ZERO,
+                0.0,
+            );
+            m.extra
+                .set_slot_stack(MAINHAND, Some(ItemStack::new("minecraft:stick", 2)));
+            m.extra
+                .set_slot_stack(OFFHAND, Some(ItemStack::new("minecraft:brush", 3)));
+            game.mobs.push(m);
+        }
+        let mut player = Mob::new(8, game.res.player_type().clone().unwrap(), Vec3::ZERO, 0.0);
+        player
+            .extra
+            .set_slot_stack(MAINHAND, Some(ItemStack::new("minecraft:stick", 1)));
+        game.mobs.push(player);
+        let m = &mut game.mobs[0];
+        let mut brush = ItemStack::new("minecraft:brush", 3);
+        brush.damage = 9;
+        m.extra.set_slot_stack(OFFHAND, Some(brush));
+        m.extra.main_hand_left = true;
+        m.extra.using_item = 12;
+        m.extra.using_off_hand = true;
+        let baseline: Vec<_> = game.mobs.iter().map(arms).collect();
+        game.tick_remote_arm_poses();
+        assert_eq!(game.mobs.iter().map(arms).collect::<Vec<_>>(), baseline);
+        let calls = Arc::new(AtomicUsize::new(0));
+        with_mods(
+            vec![ModEntry::new("mob-pose", Box::new(MobPose(calls.clone())))].into(),
+            || {
+                game.tick_remote_arm_poses();
+                assert_eq!(
+                    game.mobs[0].extra.held_arm_pose,
+                    [Some(ArmPose::ThrowTrident), None]
+                );
+                let posed = arms(&game.mobs[0]);
+                assert!((posed[1][3] + std::f32::consts::PI).abs() < 1e-6);
+                assert_ne!(posed, baseline[0]);
+                for (m, expected) in game.mobs[1..].iter().zip(&baseline[1..]) {
+                    assert_eq!(arms(m), *expected);
+                }
+                let empty = Mob::new(60, game.mobs[0].kind.clone(), Vec3::ZERO, 0.0);
+                assert_eq!(game.held_arm_poses(60, &empty), [None; 2]);
+                // The local player's extraction also exposes its actual off-hand stack.
+                game.tick_player_model();
+                let own = game.player_model.as_ref().unwrap();
+                assert_eq!(
+                    anim::humanoid_arm_poses(own, own.extra.held_arm_pose, 0.0),
+                    own_before
+                );
+            },
+        );
+        assert_eq!(calls.load(Ordering::Relaxed), 2);
+        game.tick_remote_arm_poses();
+        assert_eq!(game.mobs.iter().map(arms).collect::<Vec<_>>(), baseline);
     });
 }

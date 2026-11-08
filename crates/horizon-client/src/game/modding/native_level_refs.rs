@@ -1319,14 +1319,10 @@ mod tests {
             let chunk = game.level_chunk_ref(level, [5, 6]).unwrap();
             assert!(game.chunk_set_forced(chunk, true));
             assert!(game.levels_to_tick().contains(&game.dim));
-            game.save
-                .save_forced_chunks(&game.streaming.forced)
-                .unwrap();
+            game.save_chunk_tickets().unwrap();
             assert!(game.save.load_forced_chunks().contains(&(5, 6)));
             assert!(game.chunk_set_forced(chunk, false));
-            game.save
-                .save_forced_chunks(&game.streaming.forced)
-                .unwrap();
+            game.save_chunk_tickets().unwrap();
             assert!(game.save.load_forced_chunks().is_empty());
         });
     }

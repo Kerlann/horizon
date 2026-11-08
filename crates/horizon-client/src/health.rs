@@ -625,6 +625,15 @@ pub struct PlayerHealth {
     pub ids: PlayerFloatIds,
     pub food: FoodData,
     pub hurt: State,
+    /// `Entity.permanentlyInvulnerable` (#916): the NBT `Invulnerable` flag,
+    /// what `Entity.setInvulnerable` writes — a field apart from
+    /// `Abilities.invulnerable` (the game mode the client is told about),
+    /// which vanilla keeps separately too. Not saved: Horizon's player save
+    /// keeps no such field yet.
+    pub permanently_invulnerable: bool,
+    /// `Entity.invulnerableTime` (#916): the entity-level invulnerability
+    /// window, its own field — never the damage cooldown (`hurt.cooldown`).
+    pub invulnerable_time: i32,
     /// Client hurt animation; fully blocked hits only refresh the server's hurt state.
     pub hurt_animation_time: i32,
     /// `Player.hurtDir` on a client: the yaw `ClientboundHurtAnimationPacket`
@@ -684,6 +693,8 @@ impl PlayerHealth {
                 last_source: None,
                 last_stamp: 0,
             },
+            permanently_invulnerable: false,
+            invulnerable_time: 0,
             hurt_animation_time: 0,
             hurt_dir: 0.0,
             indicated_dir: None,
@@ -720,6 +731,11 @@ impl PlayerHealth {
         self.tick_count = self.tick_count.wrapping_add(1);
         if self.hurt.cooldown > 0 {
             self.hurt.cooldown -= 1;
+        }
+        // Entity.baseTick: the entity-level window counts down too, its own
+        // timer (#916), never the damage cooldown above.
+        if self.invulnerable_time > 0 {
+            self.invulnerable_time -= 1;
         }
         if self.hurt.hurt_time > 0 {
             self.hurt.hurt_time -= 1;
@@ -794,7 +810,26 @@ impl PlayerMotion {
         amount: f32,
         blocking: Option<Blocking>,
     ) -> Result<BlockOutcome> {
-        self.hurt_caused_by(level, resources, rules, source, amount, blocking, false, 0)
+        self.hurt_caused_by(
+            level, resources, rules, source, amount, blocking, false, 0, false,
+        )
+    }
+    /// [`hurt_blocking`](Self::hurt_blocking) from a source whose hit was a
+    /// creative player's (`DamageSource.isCreativePlayer`): it passes the
+    /// invulnerability the victim has (`Entity.isInvulnerableToBase`'s one
+    /// exception, #916).
+    pub fn hurt_blocking_creative(
+        &mut self,
+        level: &mut DamageLevel<'_>,
+        resources: &HealthResources,
+        rules: HealthRules,
+        source: DamageTypeId,
+        amount: f32,
+        blocking: Option<Blocking>,
+    ) -> Result<BlockOutcome> {
+        self.hurt_caused_by(
+            level, resources, rules, source, amount, blocking, false, 0, true,
+        )
     }
     /// `hurt_blocking` from a source whose causing entity is a living
     /// non-player (`living_cause`), which the `when_caused_by_living_non_player`
@@ -810,6 +845,7 @@ impl PlayerMotion {
         blocking: Option<Blocking>,
         living_cause: bool,
         causing: i32,
+        creative_source: bool,
     ) -> Result<BlockOutcome> {
         let hit = self.start_hurt(
             level,
@@ -820,6 +856,7 @@ impl PlayerMotion {
             blocking,
             living_cause,
             causing,
+            creative_source,
             false,
         )?;
         self.finish_hurt(level, resources, rules, hit)
@@ -837,6 +874,7 @@ impl PlayerMotion {
         blocking: Option<Blocking>,
         living_cause: bool,
         causing: i32,
+        creative_source: bool,
         helmet: bool,
     ) -> Result<PausedHurt> {
         let mut hit = PausedHurt {
@@ -851,6 +889,12 @@ impl PlayerMotion {
             helmet,
             living_cause,
             causing,
+            // The invulnerability refusal's inputs (#916), kept as the hit
+            // was, for the Environment the pipeline's own rule reads.
+            invulnerable: self.invulnerable,
+            permanently_invulnerable: self.health.permanently_invulnerable,
+            invulnerable_time: self.health.invulnerable_time > 0,
+            creative_source,
             blocking,
             blocked: 0.0,
             shield_damage: 0,
@@ -1012,7 +1056,10 @@ impl PlayerMotion {
             entity: self.entity_id,
             victim,
             causing: hit.causing,
-            invulnerable: self.invulnerable,
+            invulnerable: hit.invulnerable,
+            permanently_invulnerable: hit.permanently_invulnerable,
+            invulnerable_time: hit.invulnerable_time,
+            creative_source: hit.creative_source,
             client_loaded: self.client_loaded,
             rules,
             source,
@@ -1082,8 +1129,16 @@ pub(crate) struct Environment<'a> {
     /// Where the player stands and looks, for the incoming-damage hook.
     pub(crate) victim: Victim,
     pub(crate) causing: i32,
-    /// Abilities.invulnerable.
+    /// `Abilities.invulnerable`, the game mode (`Player.hurtServer`'s own
+    /// gate answers it, which no creative hit passes).
     pub(crate) invulnerable: bool,
+    /// `Entity.permanentlyInvulnerable` (#916): the NBT flag.
+    pub(crate) permanently_invulnerable: bool,
+    /// `Entity.invulnerableTime > 0` (#916): the entity-level window.
+    pub(crate) invulnerable_time: bool,
+    /// The hit is a creative player's (`DamageSource.isCreativePlayer`,
+    /// #916): it passes the invulnerability below.
+    pub(crate) creative_source: bool,
     /// The player's client has loaded the world since its last respawn or
     /// level change (`ServerGamePacketListenerImpl.hasClientLoaded`).
     pub(crate) client_loaded: bool,
@@ -1137,6 +1192,14 @@ pub struct PausedHurt {
     helmet: bool,
     living_cause: bool,
     causing: i32,
+    /// `Abilities.invulnerable` at the hit's start (#916).
+    invulnerable: bool,
+    /// `Entity.permanentlyInvulnerable` at the hit's start (#916).
+    permanently_invulnerable: bool,
+    /// `Entity.invulnerableTime > 0` at the hit's start (#916).
+    invulnerable_time: bool,
+    /// The hit is a creative player's (`isCreativePlayer`, #916).
+    creative_source: bool,
     blocking: Option<Blocking>,
     blocked: f32,
     shield_damage: i32,
@@ -1378,16 +1441,16 @@ impl ImmunityWorld for Environment<'_> {
         false
     }
     fn permanently_invulnerable(&mut self) -> io::Result<bool> {
-        Ok(false)
+        Ok(self.permanently_invulnerable)
     }
     fn temporarily_invulnerable(&mut self) -> io::Result<bool> {
-        Ok(false)
+        Ok(self.invulnerable_time)
     }
     fn tag(&mut self, tag: ImmunityTag) -> io::Result<bool> {
         Ok(self.source.immunity_tag(tag))
     }
     fn creative_source(&mut self) -> io::Result<bool> {
-        Ok(false)
+        Ok(self.creative_source)
     }
     fn fire_immune(&mut self) -> io::Result<bool> {
         Ok(false)
@@ -1814,7 +1877,7 @@ mod tests {
                 container.should_cause_side_effects()
             );
             assert_eq!(super::DamageContainer::from(values), *container);
-            SEEN.lock().unwrap().push(*container);
+            SEEN.lock().unwrap().push(container.clone());
         }
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../.local/horizon-client")
@@ -1908,7 +1971,7 @@ mod tests {
         };
         let id = health.damage.id("minecraft:mob_attack").unwrap();
         let o = player
-            .hurt_caused_by(level, health, rules, id, 4.0, Some(shield), true, 0)
+            .hurt_caused_by(level, health, rules, id, 4.0, Some(shield), true, 0, false)
             .unwrap();
         assert_eq!(o.blocked, 3.0, "Easy scales 4 to 3 before the shield");
         assert!(o.fully_blocked && !o.knockback);
@@ -1948,6 +2011,7 @@ mod tests {
                     None,
                     living,
                     0,
+                    false,
                 )
                 .unwrap();
             before - player.health.health()
@@ -1990,7 +2054,8 @@ mod tests {
     static SEEN: std::sync::Mutex<Vec<(i32, String, f32)>> = std::sync::Mutex::new(Vec::new());
     /// Sets the native damage hook of these tests (global: it stays set for
     /// the process): for entities 9001 to 9004 and 9011 to 9013 it records the
-    /// hit, cancels x1's, doubles x2's, makes 9003's -5 and 9004's NaN.
+    /// hit, cancels x1's, doubles x2's, makes 9003's -5 and 9004's NaN, and gives 9005's hit an
+    /// armor and an absorption reduction modifier.
     fn set_hook() -> (super::DamageHooks, fn(i32) -> Vec<(String, f32)>) {
         use super::{DamageContainer, DamageLevel, Hurting, Victim};
         fn hook(
@@ -2005,7 +2070,7 @@ mod tests {
                 }
                 Hurting::Mob(mob, source) => (mob.id as i32, format!("{:?}", source.kind)),
             };
-            if !matches!(entity, 9001..=9004 | 9011..=9013) {
+            if !matches!(entity, 9001..=9005 | 9011..=9013) {
                 return false;
             }
             let amount = container.new_damage();
@@ -2014,6 +2079,13 @@ mod tests {
                 9002 | 9012 => container.set_new_damage(amount * 2.0),
                 9003 => container.set_new_damage(-5.0),
                 9004 => container.set_new_damage(f32::NAN),
+                9005 => {
+                    use horizon_world::living_damage::{Reduction, ReductionChange};
+                    container.add_reduction_modifier(Reduction::Armor, ReductionChange::Add(1.0));
+                    container.add_reduction_modifier(Reduction::Armor, ReductionChange::Scale(2.0));
+                    container
+                        .add_reduction_modifier(Reduction::Absorption, ReductionChange::Scale(0.5));
+                }
                 _ => {}
             }
             entity % 10 == 1
@@ -2066,6 +2138,18 @@ mod tests {
         let (mut negative, mut nan) = (mob(9003), mob(9004));
         assert!(negative.damage(level, 2.0, hit) && nan.damage(level, 2.0, hit));
         assert!(negative.health == 10.0 && nan.health <= 0.0);
+        // 8 damage on a mob with 1.5 absorption hearts. Armor took none: +1 then x2 is 2, so 6
+        // goes on. The hearts would take their 1.5; half of it is 0.75, so 5.25 reaches the
+        // health (10 - 5.25) and 0.75 hearts are left.
+        let mut modified = mob(9005);
+        modified.absorption = 1.5;
+        assert!(modified.damage(level, 8.0, hit));
+        assert_eq!((modified.health, modified.absorption), (4.75, 0.75));
+        // The same hit with no modifier: 8 less the 1.5 hearts.
+        let mut plain = mob(9006);
+        plain.absorption = 1.5;
+        assert!(plain.damage(level, 8.0, hit));
+        assert_eq!((plain.health, plain.absorption), (3.5, 0.0));
     }
 
     /// Needs the prepared data in `.local/horizon-client/26.3`; skipped
@@ -2097,7 +2181,8 @@ mod tests {
         assert!(doubled.hurt(level, health, rules, id, 5.0).unwrap());
         assert_eq!(doubled.health.health(), 10.0);
         // The causing mob when it is known, else 0.
-        let hurt = player(9013).hurt_caused_by(level, health, rules, id, 5.0, None, false, 44);
+        let hurt =
+            player(9013).hurt_caused_by(level, health, rules, id, 5.0, None, false, 44, false);
         assert!(hurt.unwrap().hurt);
         assert_eq!(seen(9011), [("minecraft:arrow 0".to_owned(), 5.0)]);
         assert_eq!(seen(9013), [("minecraft:arrow 44".to_owned(), 5.0)]);

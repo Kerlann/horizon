@@ -88,6 +88,11 @@ pub struct MobData {
     /// [`MobData::placement`] of each species' entity type (by `Species as
     /// usize`), worked out the first time a spawn asks.
     pub species_placements: std::sync::OnceLock<Vec<Placement>>,
+    /// The spawn rules mods declared (`RegisterSpawnPlacementsEvent`), by
+    /// entity type id: resolved once at load by [`MobData::register_mod_spawn`],
+    /// empty with no mod. Their placement type and heightmap sit in
+    /// [`MobData::placements`] and [`MobData::heightmaps`] as vanilla's do.
+    pub mod_spawns: HashMap<String, mod_api::SpawnPlacementRule>,
 }
 impl MobData {
     pub fn load(root: &ResourceRoot, facts: &BlockFacts) -> Self {
@@ -233,6 +238,7 @@ impl MobData {
             entity_tags: HashMap::new(),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
         }
     }
     /// Without the export, approximate path types from the gameplay facts.
@@ -295,6 +301,7 @@ impl MobData {
             entity_tags: HashMap::new(),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
         }
     }
     pub fn state(&self, id: BlockStateId) -> StateData {
@@ -318,6 +325,34 @@ impl MobData {
             .get(entity)
             .copied()
             .unwrap_or(Placement::OnGround)
+    }
+    /// `SpawnPlacements.isSpawnPositionOk`'s placement type for `entity`, a type
+    /// of species `s`: a mod type's declared one, else the species'.
+    pub fn entity_placement(&self, entity: &str, s: super::Species) -> Placement {
+        if self.mod_spawns.contains_key(entity) {
+            self.placement(entity)
+        } else {
+            self.species_placement(s)
+        }
+    }
+    /// Take a mod's spawn rule for its entity type `id` (`SpawnPlacements.register`).
+    pub fn register_mod_spawn(&mut self, id: &str, rule: &mod_api::SpawnPlacementRule) {
+        use mod_api::{NativeHeightmap as H, NativeSpawnPlacementType as T};
+        let placement = match rule.placement {
+            T::OnGround => Placement::OnGround,
+            T::InWater => Placement::InWater,
+            T::InLava => Placement::InLava,
+            _ => Placement::NoRestrictions,
+        };
+        let heightmap = match rule.heightmap {
+            H::WorldSurface => "WORLD_SURFACE",
+            H::MotionBlocking => "MOTION_BLOCKING",
+            H::OceanFloor => "OCEAN_FLOOR",
+            _ => "MOTION_BLOCKING_NO_LEAVES",
+        };
+        self.placements.insert(id.to_owned(), placement);
+        self.heightmaps.insert(id.to_owned(), heightmap.to_owned());
+        self.mod_spawns.insert(id.to_owned(), rule.clone());
     }
     /// [`MobData::placement`] of the species' entity type, without building
     /// its id: natural spawning asks it for every position it tries.

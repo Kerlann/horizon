@@ -304,6 +304,13 @@ pub trait LevelsBackend {
     /// Dimension shape of a loaded server level, including parked levels.
     #[access(WorldOnly)]
     fn level_dimension_shape(&self, level: LevelRef) -> Option<LevelDimensionShape>;
+    /// Side: both.
+    /// The level's dimension type (`Level.dimensionType()` and its gameplay attributes): coordinate
+    /// scale, ambient light, fixed time, infiniburn, monster spawn light, sky and the gameplay
+    /// switches a mod's `DimensionSettings` or a data pack sets. A level whose type neither gave
+    /// fields for has the Overworld's. None for a stale handle; on a client, the level it shows.
+    #[access(WorldOnly)]
+    fn level_dimension_type(&self, level: LevelRef) -> Option<LevelDimensionType>;
     /// Side: server.
     /// The world's seed (`WorldOptions.seed`), as `/seed` shows it.
     #[access(WorldOnly)]

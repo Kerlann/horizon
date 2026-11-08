@@ -582,8 +582,10 @@ mod tests {
     fn push(game: &mut Game<'_>, id: u32, kind: &str) -> DisplayRef {
         game.options.dedicated = Some(Vec::new());
         game.others.push(OtherEntity {
+            knot_check: None,
             join: Default::default(),
             item_transformation: None,
+            interaction: None,
             id,
             kind: kind.into(),
             position: Vec3::new(1.0, 70.0, 1.0),
@@ -606,8 +608,10 @@ mod tests {
             assert_eq!(item.kind(game), Some(NativeDisplayKind::Item));
             assert_eq!(text.entity(), game.entity(21).unwrap());
             game.others.push(OtherEntity {
+                knot_check: None,
                 join: Default::default(),
                 item_transformation: None,
+                interaction: None,
                 id: 24,
                 kind: "minecraft:marker".into(),
                 position: Vec3::ZERO,

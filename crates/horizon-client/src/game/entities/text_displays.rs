@@ -576,8 +576,10 @@ mod tests {
 
         with_game(|game| {
             game.others.push(OtherEntity {
+                knot_check: None,
                 join: Default::default(),
                 item_transformation: None,
+                interaction: None,
                 id: 12,
                 kind: "minecraft:text_display".into(),
                 position: Vec3::ZERO,

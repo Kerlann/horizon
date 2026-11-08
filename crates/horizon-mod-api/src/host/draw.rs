@@ -295,6 +295,24 @@ pub trait BlockEntityDrawContext {
     fn model_part(&mut self, part: &ModelPart, sprite: &str, tint: u32) -> bool {
         unimplemented!("BlockEntityDrawContext::draw_model_part")
     }
+    /// Draws `stack` as a still fluid filling `bounds` (`[x0, y0, z0, x1, y1, z1]` in blocks
+    /// under `draw`'s pose), as a tank's contents: `minecraft:water` or `minecraft:lava` with no
+    /// components. Each face tiles the fluid's animated still sprite (`block/water_still`), one
+    /// tile per block, cut at whole-block lines and keeping each part's place in its tile, with
+    /// no inset of the box. The tint is the stack's, not the biome's water colour, unless
+    /// `options.argb` replaces it. Sky light stays as `draw.light`; block light rises to the
+    /// fluid's own (15 for lava). No face is shaded by direction. Faces are sorted far to
+    /// near, alpha blended, culled from behind and write depth, drawn with the block entities
+    /// before the level's translucent terrain. A stack of 0 draws nothing and is `Ok` without
+    /// checking `bounds`; a refusal draws nothing.
+    fn fluid_box(
+        &mut self,
+        stack: &FluidStack,
+        bounds: [f32; 6],
+        options: FluidBoxOptions,
+    ) -> Result<(), FluidBoxError> {
+        unimplemented!("BlockEntityDrawContext::draw_fluid_box")
+    }
 }
 /// What `block_screen_effect_draw` draws with, one per hook call: quads in camera space, in
 /// blocks, with `+x` right, `+y` up and the camera at the origin looking down `-z`. It is the
@@ -343,9 +361,11 @@ pub trait WorldDrawContext {
     ///
     /// One batch per model. The engine uploads only the instance records on the opaque
     /// and cutout route, and bakes the same prepared geometry on the CPU when a shader
-    /// pack, a copy with an [`Overlay`], or another route cannot take instances. A model
-    /// with a translucent face is refused with [`InstanceError::Translucent`] and is never
-    /// drawn as solid. Tint is `0xAARRGGBB` and light is [`LightCoords`]: both stay in
+    /// pack, a copy with an [`Overlay`], or another route cannot take instances. A
+    /// `shaders/` pack shades those copies as block entities, with the program that shades
+    /// [`BlockEntityDrawContext::model`]. A model with a translucent face is refused with
+    /// [`InstanceError::Translucent`] and is never drawn as solid.
+    /// Tint is `0xAARRGGBB` and light is [`LightCoords`]: both stay in
     /// vanilla's space, and the engine converts them to the frame. A tint's alpha
     /// multiplies only faces that have a tint index, the same as vanilla's model
     /// renderer. The view budget is 16,384 copies. Pass at most that many: a longer

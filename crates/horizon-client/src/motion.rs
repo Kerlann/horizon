@@ -597,6 +597,14 @@ impl PlayerMotion {
             self.air = extra
                 .and_then(|t| crate::save::number(t.get("Air")))
                 .unwrap_or(300) as i32;
+            // Entity.saveWithoutId's `Invulnerable` flag and its
+            // `invulnerable_time` window (#916).
+            self.health.permanently_invulnerable = extra
+                .and_then(|t| crate::save::number(t.get("Invulnerable")))
+                .is_some_and(|v| v != 0);
+            self.health.invulnerable_time = extra
+                .and_then(|t| crate::save::number(t.get("invulnerable_time")))
+                .unwrap_or(0) as i32;
             self.fall_distance = level.fall_distance;
             // LivingEntity.readAdditionalSaveData applies the saved attributes
             // before it reads the health (a raised max_health keeps its hearts).
@@ -1079,6 +1087,7 @@ impl MotionWorld<'_, '_, '_> {
         CollisionContext::for_entity(
             CollisionEntity {
                 identity: EntityIdentity(0),
+                kind: horizon_world::collision_context::EntityContextKind::Player,
                 y: self.player.position.y,
                 descending: self.player.shift_key_down,
                 main_hand: Some(CollisionItem::EMPTY),

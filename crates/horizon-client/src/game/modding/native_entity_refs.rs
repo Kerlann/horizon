@@ -22,6 +22,20 @@ use mod_api::{
     NeighbourUpdate,
 };
 
+/// The engine's direction of a mod API block face.
+pub(super) fn block_face_direction(face: NativeBlockFace) -> horizon_core::geometry::Direction {
+    use horizon_core::geometry::Direction;
+    match face {
+        NativeBlockFace::Down => Direction::Down,
+        NativeBlockFace::Up => Direction::Up,
+        NativeBlockFace::North => Direction::North,
+        NativeBlockFace::South => Direction::South,
+        NativeBlockFace::West => Direction::West,
+        NativeBlockFace::East => Direction::East,
+        _ => unreachable!("NativeBlockFace: unhandled variant"),
+    }
+}
+
 /// `ProjectileUtil.getEntityHitResult`'s test on each candidate: its box grown by `margin`
 /// and clipped against the segment. Every hit, nearest first; a segment that starts inside a
 /// box does not hit it (`AABB.clip`).
@@ -116,6 +130,9 @@ impl Game<'_> {
             return (!self.persist.removals.contains(&Target::Hook(entity.id())))
                 .then_some(Target::Hook(entity.id()));
         }
+        if let Some(part) = self.level_dragon_part(entity.id()) {
+            return Some(part);
+        }
         match self.level_entity(id)? {
             Target::Mob(id) if !self.mobs.iter().any(|m| m.id == id && !m.removed) => None,
             t => Some(t),
@@ -131,6 +148,10 @@ impl Game<'_> {
         let id = i32::try_from(entity.id()).ok()?;
         if id == remote.entity_id {
             return self.player.as_ref().map(|_| Target::Player);
+        }
+        // The server tracks the dragon alone; its parts are the client's own copies of it.
+        if let Some(part) = self.level_dragon_part(entity.id()) {
+            return Some(part);
         }
         remote.tracked(id)?;
         match self.level_entity(id)? {
@@ -157,6 +178,23 @@ impl Game<'_> {
         (self.native_entity_read_target(entity).is_some()
             || self.native_client_tracked(entity).is_some())
         .then_some(entity)
+    }
+    /// Whether the entity is made of parts that are entities of their own
+    /// (`Entity.isMultipartEntity`): the dragon, not one of its parts.
+    pub(super) fn entity_is_multipart(&self, entity: EntityRef) -> Option<bool> {
+        Some(matches!(
+            self.native_entity_read_target(entity)?,
+            Target::Dragon(_)
+        ))
+    }
+    /// The entities a multipart entity is made of (`Entity.getParts`), in
+    /// `getSubEntities` order, each resolved as any handle is (`entity`): the dragon's
+    /// parts have the eight ids after its own. Empty for any other entity.
+    pub(super) fn entity_parts(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
+        let Target::Dragon(id) = self.native_entity_read_target(entity)? else {
+            return Some(Vec::new());
+        };
+        (id + 1..=id + 8).map(|part| self.entity(part)).collect()
     }
     /// The level `dimension` (`minecraft:the_nether`) as a handle: on a client,
     /// the level it shows, whatever the server calls it. None with no world
@@ -414,7 +452,7 @@ impl Game<'_> {
         }
         let at = horizon_core::position::BlockPos::new(pos[0], pos[1], pos[2]);
         let (changed, drops) = self.with_level(|b, level, ticks| {
-            level.drop_tool = tool.cloned();
+            level.drop_tool = Some(((pos[0], pos[1], pos[2]), tool.cloned()));
             level.drop_into = collect.then(Vec::new);
             let changed = b.destroy_block(level, ticks, at, drop);
             (changed, level.drop_into.take().unwrap_or_default())
@@ -528,16 +566,7 @@ impl Game<'_> {
         support: NativeSupportType,
     ) -> Option<bool> {
         let state = self.level_block_state(level, pos)?;
-        use horizon_core::geometry::Direction;
-        let direction = match face {
-            NativeBlockFace::Down => Direction::Down,
-            NativeBlockFace::Up => Direction::Up,
-            NativeBlockFace::North => Direction::North,
-            NativeBlockFace::South => Direction::South,
-            NativeBlockFace::West => Direction::West,
-            NativeBlockFace::East => Direction::East,
-            _ => unreachable!("NativeBlockFace: unhandled variant"),
-        };
+        let direction = block_face_direction(face);
         let b = self.res.behaviours();
         if !b.has_cached_support(state) {
             use horizon_client::collisions::SceneCollisions;
@@ -1787,6 +1816,8 @@ pub(super) mod tests {
                         food_exhaustion: 0.0,
                         food_tick_timer: 0,
                         ticks_frozen: 0,
+                        invulnerable: false,
+                        invulnerable_time: 0,
                     });
                 }
                 guest.inventory[0] = Some(ItemStack::new("minecraft:stone", 1));

@@ -175,6 +175,15 @@ impl BlockEntityDrawContext for GameBlockEntityDrawContext<'_, '_> {
         self.game
             .native_draw_model_part(&mut *self.surface, part, sprite, tint)
     }
+    fn fluid_box(
+        &mut self,
+        stack: &FluidStack,
+        bounds: [f32; 6],
+        options: FluidBoxOptions,
+    ) -> Result<(), FluidBoxError> {
+        self.game
+            .native_draw_fluid_box(&mut *self.surface, stack, bounds, options)
+    }
 }
 /// [`CameraDrawContext`] on the game's `crate::screen_effects::CameraQuads`.
 pub(crate) struct GameCameraDrawContext<'a, 'g> {

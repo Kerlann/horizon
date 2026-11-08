@@ -16,6 +16,16 @@ skylight and ceiling from its dimension shape. It accepts `&dyn Host`, including
 level is parked, and returns `None` for a stale or unavailable level or on a client. It does
 not load a level or allocate.
 
+### Dimension type
+
+`level.dimension_type(host)` reads a level's dimension type (`Level.dimensionType()` and its
+gameplay attributes) as a `LevelDimensionType`: the build range, `coordinate_scale`, `ambient_light`,
+`has_fixed_time`, `infiniburn`, the monster spawn light range, the sky and the gameplay switches. A
+level on a vanilla type returns that type's values, a registered dimension returns what its
+`DimensionSettings` set, and a data pack's dimension type counts the same way. It returns `None` for
+a stale handle, and on a client it reads the level that window shows; a client of another server
+reads the Overworld's values for a level that server's mods added.
+
 ### Registering a dimension
 
 `register_dimension` gives every world a level of the mod's own. Call it once, at startup, in
@@ -35,10 +45,21 @@ impl Hooks for MyMod {
 
 The level is `mymod:pocket`. `DimensionSettings` sets the build height, `has_skylight`,
 `has_ceiling`, the `generator` (`minecraft:noise` by default), its `noise_settings` and the level's
-one `biome`; the default is the Overworld's shape and terrain over plains, and the parts of a
-dimension type not named here are the Overworld's. The level opens, ticks, saves and closes as the
+one `biome`; the default is the Overworld's shape and terrain over plains. It also sets the rest of
+the dimension type the game reads: `has_fixed_time`, `has_ender_dragon_fight`, `coordinate_scale`,
+`ambient_light`, `infiniburn`, the monster spawn light range and block light limit, the `skybox`,
+the `cardinal_light` and the gameplay switches (`water_evaporates`, `fast_lava`,
+`respawn_anchor_works`, `nether_portal_spawns_piglin`, `piglins_zombify`, `snow_golem_melts`,
+`can_start_raid`, `sky_light_level`). A field left at its default is the Overworld's, and the game
+refuses a value out of range (a `coordinate_scale` of 0, an `ambient_light` above 1, an unknown
+`skybox`) at startup with a message naming the mod. The level opens, ticks, saves and closes as the
 Nether and the End do, in `dimensions/mymod/pocket/` of the world, and clients receive its
 dimension type when they join.
+
+The level's biomes are the one `biome` everywhere unless `biome_source` says otherwise:
+`BiomeSourceKind::Checkerboard` alternates the `biomes` in cells `2^biome_scale` chunks wide,
+`MultiNoise` uses the Overworld's or the Nether's biomes (`biome_preset`) and `End` the End's islands.
+Only `Fixed` suits a chunk generator of the mod's own, which writes terrain only.
 
 A dimension in another mod's namespace, an empty name, a name that is not a folder of the world
 (lowercase letters, digits and `_ . -` only, with `/` between segments that are not empty, `.` or
@@ -57,28 +78,30 @@ generator is code, and `register_chunk_generator` is native only.
 
 ### Sending a player to a dimension
 
-There is no portal to a registered level, and no travel call: a mod sends a player there with the
-command vanilla has for it, from a server hook.
+There is no portal to a registered level. A mod sends an entity there with
+`entity.teleport_to_level(host, dimension, pos, rotation)` from a server hook, the call vanilla has
+as `Entity.teleportTo(ServerLevel, ..)`. It works for a player, a mob, a boat and a minecart (a
+vehicle takes its passengers along).
 
 ```rust,ignore
 fn run_mod_command(&self, host: &mut dyn ServerHost, event: &mut RunModCommandEvent<'_>) -> Flow {
     let CommandSource::Player { player, .. } = event.source else {
         return Flow::Continue;
     };
-    let Some(name) = player.name(&*host) else {
-        return Flow::Continue;
-    };
-    let line = format!("execute in mymod:pocket run tp {name} 8 100 8");
-    host.commands().run_command(&line);
+    let entity = player.entity();
+    entity.teleport_to_level(host, "mymod:pocket", [8.5, 100.0, 8.5], None);
     Flow::Cancel
 }
 ```
 
-The teleport happens at the next tick's start, and the level opens then if it isn't open. Name the
-player, as the line runs as the console. `run_command` answers whether the command
-ran, not whether the player arrived: a level that won't open, such as one naming a generator
-nobody registered, logs an error and leaves the player where they were. Nothing builds a platform
-at the destination, so look for the ground first, or place one.
+`pos` is in the destination's own coordinates: nothing scales it by the level's
+`coordinate_scale`. A level nobody has entered opens first, and a player arrives after the current
+tick, when `player_teleported` and `player_changed_dimension` report the move. The call
+answers whether the move was taken, not whether the player arrived: a level that won't open, such
+as one naming a generator nobody registered, logs an error and leaves the player where they were.
+It is false for an unregistered dimension and for an entity that cannot change level (an item, an
+orb, a projectile); a fake player stays where it is. Nothing builds a platform at the destination, so look for the
+ground first, or place one.
 
 ### Chunk generators
 

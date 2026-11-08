@@ -47,6 +47,9 @@ impl Victim {
 pub(super) struct Strike {
     /// The attacking guest, kept after their turn through `as_guest` ends.
     attacker: Option<u32>,
+    /// The attacker's creative mode: their hit passes the victim's
+    /// invulnerability (`DamageSource.isCreativePlayer`, #916).
+    creative: bool,
     amount: f32,
     scale: f32,
     crit: bool,
@@ -86,6 +89,7 @@ impl Strike {
     pub(super) fn test_blow(attacker: u32) -> Self {
         Self {
             attacker: Some(attacker),
+            creative: false,
             amount: 1.0,
             scale: 1.0,
             crit: false,
@@ -108,6 +112,9 @@ impl Strike {
 pub(super) struct Sweep {
     /// The attacking guest (none: the host).
     attacker: Option<u32>,
+    /// The attacker's creative mode: their hit passes the victim's
+    /// invulnerability (`DamageSource.isCreativePlayer`, #916).
+    creative: bool,
     from: [f64; 3],
     /// The damage after the enchantments and the attack strength.
     damage: f32,
@@ -188,6 +195,7 @@ impl Game<'_> {
         let ignite = self.weapon_ignite_seconds();
         Some(Strike {
             attacker: self.lan_acting,
+            creative: self.creative,
             amount,
             scale,
             crit,
@@ -205,7 +213,7 @@ impl Game<'_> {
 
     /// The held weapon's `minecraft:ignite` (Fire Aspect) seconds on a player
     /// victim (`EnchantmentHelper.doPostAttackEffects`).
-    fn weapon_ignite_seconds(&mut self) -> f32 {
+    pub(super) fn weapon_ignite_seconds(&mut self) -> f32 {
         let Some(held) = self.held().cloned() else {
             return 0.0;
         };
@@ -257,6 +265,20 @@ impl Game<'_> {
         }
     }
 
+    /// `ServerPlayer.canHarmPlayer`: the `pvp` game rule is on, and the
+    /// victim's team lets the attacker's hurt it (`Player.canHarmPlayer`:
+    /// allies only with friendly fire on).
+    pub(in crate::game) fn player_may_harm(
+        &self,
+        victim: Option<&horizon_client_core::scoreboard::Team>,
+        attacker: Option<&horizon_client_core::scoreboard::Team>,
+    ) -> bool {
+        self.ui
+            .rules
+            .bool_at(horizon_client::gamerules::vanilla::PVP)
+            && horizon_client::scoreboard::teams_allow_damage(victim, attacker)
+    }
+
     /// A player's projectile on a player: the hit runs as the victim, whose
     /// hurt refuses it when the `pvp` game rule or their teams forbid it
     /// (`ServerPlayer.canHarmPlayer`; `AbstractArrow.onHitEntity` then turns
@@ -281,11 +303,7 @@ impl Game<'_> {
         let target = match victim {
             Victim::Guest(conn) => host.hub.guest(conn).and_then(|g| team_of(self, &g.name)),
         };
-        let refused = !(self
-            .ui
-            .rules
-            .bool_at(horizon_client::gamerules::vanilla::PVP)
-            && horizon_client::scoreboard::teams_allow_damage(target.as_ref(), attacker.as_ref()));
+        let refused = !self.player_may_harm(target.as_ref(), attacker.as_ref());
         let on_player = Hit::Entity {
             who: Who::Player,
             at,
@@ -320,15 +338,13 @@ impl Game<'_> {
         let Some(host) = self.lan.as_ref() else {
             return false;
         };
-        // ServerPlayer.canHarmPlayer: the pvp game rule, then the victim's
-        // team (Player.canHarmPlayer: allies only with friendly fire on).
         let team = match victim {
             Victim::Guest(conn) => host
                 .hub
                 .guest(conn)
                 .and_then(|g| self.score.board.players_team(&g.name)),
         };
-        let harm = horizon_client::scoreboard::teams_allow_damage(team, s.team.as_ref());
+        let harm = self.player_may_harm(team, s.team.as_ref());
         if s.knockback_attack {
             self.audio.play(
                 "minecraft:entity.player.attack.knockback",
@@ -361,7 +377,8 @@ impl Game<'_> {
                         s.item.clone(),
                     );
                 }
-                let hurt = g.mob_hits_player(s.amount, s.from, "minecraft:player_attack");
+                let hurt =
+                    g.mob_hits_player_from(s.amount, s.from, "minecraft:player_attack", s.creative);
                 g.combat.player_attacker = None;
                 let (strength, xd, zd) = s.knockback;
                 if hurt && strength > 0.0 {
@@ -384,39 +401,13 @@ impl Game<'_> {
                 (hurt, thorns)
             })
         };
-        let (hurt, thorns) = if self
-            .ui
-            .rules
-            .bool_at(horizon_client::gamerules::vanilla::PVP)
-            && harm
-        {
+        let (hurt, thorns) = if harm {
             match victim {
                 Victim::Guest(conn) => self.guest_struck_by(conn, land).unwrap_or_default(),
             }
         } else {
             Default::default()
         };
-        // ServerPlayer.awardKillScore: the blow that kills a player.
-        if hurt {
-            let died = match victim {
-                // A totem that fired is applied on the next tick_totem, so the
-                // victim is still at zero health but is not dying.
-                Victim::Guest(conn) => self
-                    .lan
-                    .as_ref()
-                    .and_then(|host| host.hub.guest(conn))
-                    .and_then(|g| g.motion.as_deref())
-                    .is_some_and(|p| p.health.dead_or_dying() && !p.health.totem_used),
-            };
-            if died {
-                match s.attacker {
-                    Some(conn) => {
-                        self.as_guest(conn, |g| g.award_custom_stat("player_kills", 1));
-                    }
-                    None => self.award_custom_stat("player_kills", 1),
-                }
-            }
-        }
         if hurt && (s.crit || s.magic) {
             let target = match victim {
                 Victim::Guest(conn) => self
@@ -440,25 +431,7 @@ impl Game<'_> {
                 }
             }
         }
-        let thorns_cause = self.player_attacker(victim.conn());
-        for damage in thorns {
-            match s.attacker {
-                None => {
-                    if let Some((id, name)) = &thorns_cause {
-                        self.note_named_attacker("minecraft:thorns", *id, name.clone());
-                    }
-                    self.hurt_player_by("minecraft:thorns", damage);
-                }
-                Some(conn) => {
-                    self.guest_hit_by(conn, |g| {
-                        if let Some((id, name)) = &thorns_cause {
-                            g.note_named_attacker("minecraft:thorns", *id, name.clone());
-                        }
-                        g.hurt_player_by("minecraft:thorns", damage)
-                    });
-                }
-            }
-        }
+        self.pvp_aftermath(victim, s.attacker, hurt, thorns);
         let sound = match (hurt, s.crit, s.scale > 0.9) {
             (false, ..) => "minecraft:entity.player.attack.nodamage",
             (true, true, _) => "minecraft:entity.player.attack.crit",
@@ -496,6 +469,56 @@ impl Game<'_> {
         hurt
     }
 
+    /// The victim's kill score and thorns after a player's blow lands.
+    pub(super) fn pvp_aftermath(
+        &mut self,
+        victim: Victim,
+        attacker: Option<u32>,
+        hurt: bool,
+        thorns: Vec<f32>,
+    ) {
+        // ServerPlayer.awardKillScore: the blow that kills a player.
+        if hurt {
+            let died = match victim {
+                // A totem that fired is applied on the next tick_totem, so the
+                // victim is still at zero health but is not dying.
+                Victim::Guest(conn) => self
+                    .lan
+                    .as_ref()
+                    .and_then(|host| host.hub.guest(conn))
+                    .and_then(|g| g.motion.as_deref())
+                    .is_some_and(|p| p.health.dead_or_dying() && !p.health.totem_used),
+            };
+            if died {
+                match attacker {
+                    Some(conn) => {
+                        self.as_guest(conn, |g| g.award_custom_stat("player_kills", 1));
+                    }
+                    None => self.award_custom_stat("player_kills", 1),
+                }
+            }
+        }
+        let thorns_cause = self.player_attacker(victim.conn());
+        for damage in thorns {
+            match attacker {
+                None => {
+                    if let Some((id, name)) = &thorns_cause {
+                        self.note_named_attacker("minecraft:thorns", *id, name.clone());
+                    }
+                    self.hurt_player_by("minecraft:thorns", damage);
+                }
+                Some(conn) => {
+                    self.guest_hit_by(conn, |g| {
+                        if let Some((id, name)) = &thorns_cause {
+                            g.note_named_attacker("minecraft:thorns", *id, name.clone());
+                        }
+                        g.hurt_player_by("minecraft:thorns", damage)
+                    });
+                }
+            }
+        }
+    }
+
     /// The sweep of the player in place, for the players it reaches: the
     /// damage (`1 + ratio * baseDamage`, plus the enchantments against a
     /// player, scaled by the attack strength) and who hits. The box is set
@@ -508,6 +531,7 @@ impl Game<'_> {
         let damage = self.enchanted_damage("minecraft:player", base) * scale;
         Sweep {
             attacker: self.lan_acting,
+            creative: self.creative,
             from,
             damage,
             knockback: self.extra_knockback_direction(),
@@ -571,14 +595,22 @@ impl Game<'_> {
                 if let Some((id, name)) = &attacker {
                     g.note_named_attacker("minecraft:player_attack", *id, name.clone());
                 }
-                if g.mob_hits_player(sweep.damage, sweep.from, "minecraft:player_attack") {
+                if g.mob_hits_player_from(
+                    sweep.damage,
+                    sweep.from,
+                    "minecraft:player_attack",
+                    sweep.creative,
+                ) {
                     g.knock_back_player(0.4, xd, zd, PVP_SOURCE, &attack);
                     if sweep.ignite > 0.0
                         && let Some(p) = g.player.as_mut()
                     {
                         let _ = p.ignite_for_ticks((sweep.ignite * 20.0) as i32);
                     }
+                    // The swept player's thorns are dealt after the hit.
+                    return g.thorns_damage();
                 }
+                Vec::new()
             })
         };
         for (victim, id, team) in victims {
@@ -592,7 +624,28 @@ impl Game<'_> {
                 continue;
             }
             let Victim::Guest(conn) = victim;
-            self.guest_struck_by(conn, land);
+            let thorns = self.guest_struck_by(conn, land).unwrap_or_default();
+            // doPostAttackEffects' victim side: its armour's thorns hurt the
+            // attacker, as on a direct hit (pvp_land).
+            let thorns_cause = self.player_attacker(victim.conn());
+            for damage in thorns {
+                match sweep.attacker {
+                    None => {
+                        if let Some((id, name)) = &thorns_cause {
+                            self.note_named_attacker("minecraft:thorns", *id, name.clone());
+                        }
+                        self.hurt_player_by("minecraft:thorns", damage);
+                    }
+                    Some(conn) => {
+                        self.guest_hit_by(conn, |g| {
+                            if let Some((id, name)) = &thorns_cause {
+                                g.note_named_attacker("minecraft:thorns", *id, name.clone());
+                            }
+                            g.hurt_player_by("minecraft:thorns", damage)
+                        });
+                    }
+                }
+            }
         }
     }
 }

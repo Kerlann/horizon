@@ -9,6 +9,24 @@ Four hooks stand in for the checks and setup around a mob. All run on the server
 | Just before `finalizeSpawn` | `finalize_spawn` | `Flow::Cancel`, `spawn_cancelled`, a new `difficulty`, edits to `mob`, a new `group` |
 | Each tick, before a mob's `checkDespawn` | `mob_despawn` | `NativeDespawn::{Default, Allow, Deny}` |
 
+## Saying where a mod mob spawns
+
+`Registrar::declare_spawn_placement(path, rule)` is NeoForge's `RegisterSpawnPlacementsEvent`: during registration a mod gives its entity type a `SpawnPlacementRule`, and the game's own spawn checks answer from it for that type, wherever they run (natural spawning, chunk generation, spawners, patrols, sieges, reinforcements).
+
+```rust,ignore
+r.declare_spawn_placement("ghoul", mod_api::SpawnPlacementRule {
+    placement: mod_api::NativeSpawnPlacementType::OnGround,
+    heightmap: mod_api::NativeHeightmap::MotionBlockingNoLeaves,
+    spawnable_on: Some("mymod:ghoul_ground".to_owned()), // a block tag the block below is in
+    light: mod_api::NativeSpawnLight::Dark,              // Any, Dark (a monster's) or Bright (an animal's)
+    biome_tag: Some("mymod:haunted".to_owned()),         // a biome tag the spot's biome is in
+}).unwrap();
+```
+
+The placement type is `SpawnPlacements.isSpawnPositionOk`'s first check, and the rule stands in for the type's spawn predicate: every field that is set must hold, and a trial spawner ignores `light`. A type with no declaration keeps its template's rules. The game resolves the declarations once at load, so a check reads one table and never walks the mods. A tag is a namespaced name written without `#`; an id outside the mod's namespace, a bad tag or a second declaration of the same type refuses the mods at startup, and a type no content file defines refuses the resource load.
+
+`mob_spawn_placement_check` is the separate per-check moment: it runs after the rule and is told its answer as `default_result`, so a listener can still overturn it for one position.
+
 ## Stopping a spawn or leaving a mob plain
 
 `finalize_spawn` has two cancels, as in NeoForge. Returning `Flow::Cancel` skips finalization: the mob still spawns, but with no equipment, attributes or class setup. Setting `event.spawn_cancelled = true` adds no mob at all.
@@ -67,6 +85,29 @@ chunk generation's animals share it only inside the generator, out of the hook's
 mob's finalization; carrying it on to the pack's next member comes with that threading.
 
 See [the hook notes](../reference/hook-notes.md#finalize-spawn) for what each spawn site covers and what is left out (breeding, loads, worldgen structure mobs).
+
+## Changing how large a spawn group grows
+
+A natural spawn adds mobs of one type to a group until the group reaches the type's limit (`Mob.getMaxSpawnClusterSize`: 4 by default, more for horses, wolves and schooling fish, 1 for ghasts and pillagers). The entity part of the type changes that limit with `EntityPart::spawn_cluster_size`, which gets the read-only host, the mob just spawned, why and from what it spawned, and the limit vanilla would use. Return `Some(limit)` to replace it, or `None` to leave it to the next part and then to vanilla. The first part to answer wins, and the group stops growing once its size reaches the limit.
+
+```rust,ignore
+struct ZombiePacks;
+#[mod_api::horizon_part]
+impl mod_api::EntityPart for ZombiePacks {
+    fn spawn_cluster_size(
+        &self,
+        _: &dyn mod_api::Host,
+        _: mod_api::UnspawnedMobRef,
+        _: mod_api::NativeSpawnReason,
+        _: Option<mod_api::NativeSpawner>,
+        vanilla: u32,
+    ) -> Option<u32> {
+        Some(vanilla * 2)
+    }
+}
+```
+
+Only natural spawning's packs ask it: vanilla has no group limit anywhere else. A type with no part keeps vanilla's limit and costs nothing. The mob is the same `UnspawnedMobRef` as `finalize_spawn`'s, finalized and not yet in a level, and the call runs on replayed ticks like `finalize_spawn`, so an answer must be a pure function of its inputs. Attach the part with `r.entity_part("minecraft:zombie", ZombiePacks)` as [entity parts](../concepts/trait-mods/023-entity-parts-and-mob-goals.md) describe.
 
 ## Keeping or removing a mob
 

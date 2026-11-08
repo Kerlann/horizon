@@ -24,6 +24,7 @@ use horizon_world::{
     registry::BlockStateId,
     world_ray::{RayBlockMode, RayFluidMode, RayWorld, clip_world},
 };
+use mod_api::Hand;
 use std::{
     io,
     path::{Path, PathBuf},
@@ -262,18 +263,6 @@ fn shadow_pass_takes_own_model(
     shadow_draws_player && !(shader_pack && spectator)
 }
 
-/// `LivingEntityRenderer.solveBodyRot` for the rider of a living vehicle: the
-/// body faces the vehicle's body, the head turning at most 85 degrees from it,
-/// and past 50 degrees the body turns a fifth of the head's offset along.
-fn rider_body_yaw(head: f32, vehicle_body: f32) -> f32 {
-    let diff = wrap(head - vehicle_body).clamp(-85.0, 85.0);
-    let mut body = head - diff;
-    if diff.abs() > 50.0 {
-        body += diff * 0.2;
-    }
-    body
-}
-
 fn wrap(d: f32) -> f32 {
     let d = d % 360.0;
     if d >= 180.0 {
@@ -317,10 +306,21 @@ impl Game<'_> {
     /// front of) it, pulled in where visual shapes are in the way. Returns the
     /// position, yaw and pitch to render from.
     pub(super) fn camera_view(&mut self, partial: f32) -> Option<(glam::DVec3, f32, f32)> {
+        if self.studio_freecam.active {
+            return Some((
+                self.studio_freecam.position,
+                self.studio_freecam.yaw,
+                self.studio_freecam.pitch,
+            ));
+        }
         // Minecraft.cameraEntity: a server's spectator camera on a mob or
         // another player.
-        let (entity, descending) = match self.camera_mob() {
-            Some(m) => (super::remote_camera::mob_camera_entity(m), false),
+        let (entity, descending, entity_kind) = match self.camera_mob() {
+            Some(m) => (
+                super::remote_camera::mob_camera_entity(m),
+                false,
+                horizon_world::collision_context::EntityContextKind::Living,
+            ),
             None => {
                 let mut entity = self.player_camera_entity()?;
                 if let Some(position) = self.remote_minecart_rider_position(partial) {
@@ -329,7 +329,11 @@ impl Game<'_> {
                     entity.position = position;
                     entity.previous = position;
                 }
-                (entity, self.player.as_ref()?.shift_key_down)
+                (
+                    entity,
+                    self.player.as_ref()?.shift_key_down,
+                    horizon_world::collision_context::EntityContextKind::Player,
+                )
             }
         };
         let mut view = self.view;
@@ -337,6 +341,7 @@ impl Game<'_> {
         let context = CollisionContext::for_entity(
             CollisionEntity {
                 identity: EntityIdentity(0),
+                kind: entity_kind,
                 y: entity.position[1],
                 descending,
                 main_hand: Some(CollisionItem::EMPTY),
@@ -497,10 +502,6 @@ impl Game<'_> {
             .using
             .and_then(|(slot, _)| self.stack_in(slot))
             .map_or_else(Default::default, |stack| self.item_use_animation(stack));
-        let held_arm_pose = self.held_arm_poses(
-            self.own_entity_id() as u32,
-            [self.selected, super::shield::OFFHAND_SLOT].map(|slot| self.stack_in(slot)),
-        );
         let charged = self.inventory[self.selected]
             .as_ref()
             .is_some_and(|s| s.data().is_some_and(|d| !d.charged.is_empty()));
@@ -559,7 +560,8 @@ impl Game<'_> {
             // A living vehicle's rider is drawn from its body
             // (`LivingEntityRenderer.solveBodyRot`).
             Some(RiddenBody::Living(body)) => {
-                m.body_yaw += wrap(rider_body_yaw(yaw, body) - m.body_yaw);
+                m.body_yaw +=
+                    wrap(horizon_client::mobs::riders::solve_body_rot(yaw, body) - m.body_yaw);
             }
             // A minecart's, a cushion's: the body turns as on foot.
             None => {
@@ -642,7 +644,7 @@ impl Game<'_> {
         m.extra.using_item = using;
         m.extra.using_off_hand = using_off_hand;
         m.extra.use_animation = use_animation;
-        m.extra.held_arm_pose = held_arm_pose;
+        m.extra.held_arm_pose = [None; 2];
         m.extra.charged = charged;
         m.extra.ints[5] = charge_duration;
         m.extra.elytra.tick(fall_flying, crouching, velocity);
@@ -657,12 +659,23 @@ impl Game<'_> {
         m.extra.swing_right_arm = swing_right_arm;
         m.extra.swing_stab = self.swing.current.is_some_and(|c| c.animation.kind == 2);
         m.hurt_time = hurt;
+        let poses = self.held_arm_poses_with_stacks(
+            self.own_entity_id() as u32,
+            self.player_model.as_ref().unwrap(),
+            [self.selected, super::shield::OFFHAND_SLOT].map(|slot| self.stack_in(slot)),
+        );
+        self.player_model.as_mut().unwrap().extra.held_arm_pose = poses;
     }
     /// `Entity.turn` for the player, by the mouse, a pad, the arrow keys or an
     /// agent's `turn`.
     /// The model's old pitch is the player's `xRotO`, which the turn moves
     /// with `xRot` (`turn_rotation`).
     pub(super) fn turn_player(&mut self, xo: f64, yo: f64) {
+        if self.studio_freecam.active {
+            self.studio_freecam
+                .turn((xo * 0.15) as f32, (yo * 0.15) as f32);
+            return;
+        }
         let pitch_o = self.player_model.as_ref().map(|m| m.previous_head_pitch);
         let rotation = turn_rotation(self.yaw, self.pitch, pitch_o, xo, yo);
         // The held lead's old look (`LocalPlayer.getRopeHoldPosition`'s
@@ -712,7 +725,7 @@ impl Game<'_> {
     /// `LevelExtractor`'s skip of the camera entity: the player's own body
     /// is drawn unless the camera is in first person, or while it sleeps.
     pub(super) fn own_body_in_view(&self) -> bool {
-        !self.camera_type.is_first_person() || self.sleeping.is_some()
+        !self.camera_type.is_first_person() || self.sleeping.is_some() || self.studio_freecam.active
     }
     /// Whether the player's own model shows in the world view (its body or,
     /// while invisible, only its armour and held items).
@@ -1033,16 +1046,23 @@ impl Game<'_> {
         overlay: u32,
         out: &mut Vec<mod_render::render::Vertex>,
     ) {
-        let Some(asset) = chest
-            .and_then(|item| self.items().get(item))
-            .and_then(|i| i.equip_asset.as_ref())
+        // The worn stack's own `equippable`, for the chest slot, with an asset
+        // (getEquipmentIfRenderable: anything else counts as nothing worn).
+        let equippable = match stack {
+            Some(s) => horizon_client::item_sync::equippable(s, self.items()),
+            None => chest
+                .and_then(|item| horizon_client::item_sync::item_equippable(item, self.items())),
+        };
+        let Some(asset) = equippable
+            .filter(|e| e.slot == "chest")
+            .and_then(|e| e.asset_id)
         else {
             return;
         };
         let assets = &self.armor_stand_assets;
         let Some((texture, _)) = assets
             .equipment
-            .get(asset)
+            .get(&asset)
             .and_then(|k| k.get("wings"))
             .and_then(|layers| layers.first())
         else {
@@ -1130,10 +1150,20 @@ impl Game<'_> {
         if m.is_invisible() {
             return;
         }
-        let layers = chest
-            .and_then(|item| self.res.items().get(item))
-            .and_then(|i| i.equip_asset.as_ref())
-            .and_then(|asset| self.armor_stand_assets.equipment.get(asset));
+        // CapeLayer.hasLayer: the worn stack's own `equippable` asset.
+        let items = self.res.items();
+        let equippable = match m
+            .extra
+            .slot_stack(horizon_items::equipment::CHEST)
+            .filter(|s| chest == Some(&*s.item))
+        {
+            Some(s) => horizon_client::item_sync::equippable(s, items),
+            None => chest.and_then(|item| horizon_client::item_sync::item_equippable(item, items)),
+        };
+        let layers = equippable
+            .filter(|e| e.slot == "chest")
+            .and_then(|e| e.asset_id)
+            .and_then(|asset| self.armor_stand_assets.equipment.get(&asset));
         if layers.is_some_and(|k| k.contains_key("wings")) {
             return;
         }
@@ -1185,26 +1215,70 @@ impl Game<'_> {
             out,
         );
     }
-    /// `IClientItemExtensions.getArmPose` for each hand's stack, else the item's declared
-    /// `arm_pose`: the pose that replaces the one `AvatarRenderer.getArmPose` derives. An
-    /// empty hand keeps vanilla's.
+    /// Decide in the render layer, fire with a ClientHost, then stage the answer
+    /// on this tick's model. Stack snapshots are converted only with subscribers.
     pub(super) fn held_arm_poses(
         &self,
         entity_id: u32,
+        m: &Mob,
+    ) -> [Option<horizon_core::arm_pose::ArmPose>; 2] {
+        self.held_arm_poses_with_stacks(
+            entity_id,
+            m,
+            [
+                horizon_items::equipment::MAINHAND,
+                horizon_items::equipment::OFFHAND,
+            ]
+            .map(|slot| m.extra.slot_stack(slot)),
+        )
+    }
+
+    fn held_arm_poses_with_stacks(
+        &self,
+        entity_id: u32,
+        m: &Mob,
         stacks: [Option<&horizon_client::items::ItemStack>; 2],
     ) -> [Option<horizon_core::arm_pose::ArmPose>; 2] {
-        let mut poses = [None; 2];
+        use super::api_values::TryIntoApi;
+        use horizon_client::mobs::anim::humanoid_arm_poses;
+        let stacks =
+            stacks.map(|stack| stack.filter(|s| s.count > 0 && &*s.item != "minecraft:air"));
+        let mut poses = stacks.map(|stack| {
+            stack
+                .and_then(|s| self.items().get(&s.item))
+                .and_then(|info| info.arm_pose)
+        });
+        if !mod_api::__private::listened(mod_api::HookId::GetArmPose) {
+            return poses;
+        }
+        let [main_arm_pose, off_arm_pose] = humanoid_arm_poses(m, poses, m.anim.attack_anim);
+        let api_stacks = stacks.map(|stack| stack.and_then(|stack| stack.try_into_api().ok()));
+        let humanoid = mod_api::HumanoidRenderState {
+            main_hand: api_stacks[0].as_ref(),
+            off_hand: api_stacks[1].as_ref(),
+            main_arm_left: m.main_arm_left(),
+            use_hand: (m.extra.using_item > 0).then_some(if m.extra.using_off_hand {
+                Hand::Off
+            } else {
+                Hand::Main
+            }),
+            ticks_using_item: m.extra.using_item,
+            use_animation: m.extra.use_animation,
+            main_arm_pose,
+            off_arm_pose,
+        };
         for ((pose, stack), hand) in poses
             .iter_mut()
-            .zip(stacks)
-            .zip(mod_api::first_person::Hand::BOTH)
+            .zip(api_stacks.iter().map(Option::as_ref))
+            .zip(Hand::BOTH)
         {
-            let Some(stack) = stack.filter(|s| s.count > 0 && &*s.item != "minecraft:air") else {
+            let Some(stack) = stack else {
                 continue;
             };
-            self.native_get_arm_pose(entity_id, hand, stack, pose);
-            if pose.is_none() {
-                *pose = self.items().get(&stack.item).and_then(|info| info.arm_pose);
+            let mut answer = None;
+            self.native_get_arm_pose(entity_id, hand, stack, &humanoid, &mut answer);
+            if answer.is_some() {
+                *pose = answer;
             }
         }
         poses
@@ -1744,6 +1818,7 @@ mod preview_tests {
             blinks: Default::default(),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
             pathfindable_overrides: Default::default(),
         };
         let draw = |body: bool| {
@@ -1859,7 +1934,9 @@ mod preview_tests {
     /// fifth of the turn.
     #[test]
     fn a_living_vehicles_rider_faces_its_body_within_85_degrees() {
-        let body = |head, vehicle| (super::rider_body_yaw(head, vehicle) * 1000.0).round() / 1000.0;
+        let body = |head, vehicle| {
+            (horizon_client::mobs::riders::solve_body_rot(head, vehicle) * 1000.0).round() / 1000.0
+        };
         assert_eq!(body(60.0, 40.0), 40.0);
         assert_eq!(body(100.0, 40.0), 52.0);
         assert_eq!(body(140.0, 40.0), 72.0);

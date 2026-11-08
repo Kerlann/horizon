@@ -138,6 +138,7 @@ pub(super) struct GuestSwap {
     i: usize,
     play: GuestPlay,
     player: Option<PlayerMotion>,
+    player_save_projection: (Option<i32>, Option<bool>),
     /// The guest's eye height and the game's.
     eye: (f32, f32),
     yaw: f32,
@@ -208,6 +209,7 @@ pub(super) struct GuestSwap {
         Option<u128>,
         Option<u8>,
         Option<u32>,
+        Option<i32>,
     ),
     /// Whether the outer turn is a fake player.
     acting_fake: bool,
@@ -225,6 +227,7 @@ pub(super) struct GuestSwap {
     cooldown_events: Vec<(std::sync::Arc<str>, i32)>,
     /// The player-source sounds queued for that guest.
     player_sounds: Vec<(String, [f64; 3], f32, f32)>,
+    block_sounds: Vec<(String, [f64; 3], f32, f32)>,
     /// The host's count of swings started, kept while the guest acts.
     swings: u32,
     /// How many projectiles there were: those added since are the guest's.
@@ -519,6 +522,8 @@ mod tests {
                     slots: 27,
                     data_slots: 0,
                     results: Vec::new(),
+                    crafting: None,
+                    links: None,
                 }));
                 for is_mod in [false, true] {
                     game.world.block_entities.insert(
@@ -1361,6 +1366,7 @@ mod tests {
                             ))],
                             ticks: 0,
                             playing: false,
+                            song_clock_present: false,
                         },
                     ),
                 );
@@ -1907,6 +1913,7 @@ mod tests {
             mining: Some(Mining {
                 pos,
                 progress: 0.5,
+                per_tick: 0.0,
                 ticks: 8,
             }),
             destroy_pos: Some(pos),
@@ -2417,6 +2424,7 @@ mod pickup_xp_tests {
                 ticks: 0,
                 health: 5,
                 no_gravity: true,
+                following: None,
             });
             game.guest_orbs(0);
             let left = game.orbs.iter().any(|o| o.id == 40);

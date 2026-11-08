@@ -117,7 +117,7 @@ impl Game<'_> {
         let (width, height) = (kind.width as f32, kind.height as f32);
         for _ in 0..ATTEMPTS {
             let [x, y, z] = from.map(|v| v + offset(own));
-            if !spawn_rules::is_spawn_position_ok(kind.species, &level, x, y, z)
+            if !spawn_rules::is_spawn_position_ok(&kind.id, kind.species, &level, x, y, z)
                 || !spawn_rules::check_spawn_rules(
                     &kind.id,
                     kind.species,

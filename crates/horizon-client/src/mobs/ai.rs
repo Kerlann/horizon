@@ -21,6 +21,9 @@ use horizon_core::{
 use horizon_world::native_load_context::LoopContext;
 
 #[cfg(test)]
+#[path = "fall_flying_tests.rs"]
+mod fall_flying_tests;
+#[cfg(test)]
 #[path = "wet_fire_tests.rs"]
 mod wet_fire_tests;
 
@@ -726,6 +729,7 @@ pub fn tick(
     if m.alive() {
         super::spear_use::update_using_item(m, w, known_speed, events);
     }
+    super::sulfur_cube::adopt_body(m);
     let sleep_answer = m
         .extra
         .villager
@@ -742,6 +746,7 @@ pub fn tick(
         super::villager_brain::woken(m, w.game_time);
     }
     if m.no_ai {
+        update_fall_flying(m, w, events);
         reset_effect_fall_distance(m);
         // Mob.aiStep still runs without AI (only serverAiStep is skipped),
         // so undead still burn in daylight and the endermite's life keeps
@@ -779,9 +784,9 @@ pub fn tick(
             super::equine::ai_step(m, w, events);
         }
         // LivingEntity.aiStep ends in the water's hurt with or without AI;
-        // a NoAI enderman's hurts still teleport it (Enderman.hurtServer).
+        // a NoAI enderman's or shulker's hurts still teleport it (hurtServer).
         hurt_by_water(m, w, level, events);
-        enderman_hurt_teleports(m, w, events);
+        hurt_teleports(m, w, events);
         // Ravager.aiStep runs outside serverAiStep: NoAI still advances
         // attack/stun/roar, including the stun-to-roar transition.
         if m.species() == Species::Ravager {
@@ -794,9 +799,15 @@ pub fn tick(
         if m.species() == Species::GlowSquid {
             aquatic::glow_squid_dark_tick(m);
         }
+        // TraderLlama.aiStep still calls maybeDespawn after its super step.
+        // Keep unrelated llama healing and its random draw in the AI path.
+        if m.species() == Species::TraderLlama {
+            super::caravan::trader_llama_tick(m, w);
+        }
     } else {
         ai_step(m, w, level, events);
     }
+    count_fall_fly_ticks(m);
     effects_from_blocks(m, w, level, events);
     extinguish_if_wet(m, w, was_on_fire, events);
     if m.species() == Species::SulfurCube && m.alive() {
@@ -1171,6 +1182,28 @@ fn axolotl_air_supply(m: &mut Mob, w: &MobWorld, level: &mut DamageLevel<'_>) {
         }
     }
 }
+/// `Nautilus.baseTick`: `LivingEntity.baseTick` refills the air of this
+/// water breather, then, unless it has no AI, `Nautilus.handleAirSupply`
+/// takes it back out of water, where the nautilus dries out.
+fn nautilus_air_supply(m: &mut Mob, level: &mut crate::health::DamageLevel<'_>) {
+    const MAX_AIR: i32 = 300;
+    let before = m.air;
+    if m.alive() {
+        m.air = (m.air + 4).min(MAX_AIR);
+    }
+    if m.no_ai {
+        return;
+    }
+    if m.alive() && !m.fluids.in_water {
+        m.air = before - 1;
+        if m.air <= -20 {
+            m.air = 0;
+            m.damage(level, 2.0, Damage::of(DamageKind::DryOut));
+        }
+    } else {
+        m.air = MAX_AIR;
+    }
+}
 /// `Entity.isInWall` (minus the noPhysics early-out, which the caller applies):
 /// visit every cell covered by the thin eye box and ask whether a suffocating
 /// collision shape actually intersects it. Width multiplication is a float.
@@ -1216,6 +1249,9 @@ fn base_tick(
     level: &mut DamageLevel<'_>,
     events: &mut Vec<MobEvent>,
 ) -> bool {
+    if m.first_tick {
+        super::villager::refresh_sleeping_position(m, w);
+    }
     // Entity.canSpawnSprintParticle / spawnSprintParticle (a dashing cat or
     // ocelot): a server level drops the particle, but its spot is drawn
     // from the mob's random first.
@@ -1303,7 +1339,9 @@ fn base_tick(
         // superclass Breath/drown path must still process its air.
         if m.species() == Species::Axolotl {
             axolotl_air_supply(m, w, level);
-        } else if m.kind.flags.needs_water && !(m.no_ai && m.species() == Species::Nautilus) {
+        } else if m.species() == Species::Nautilus {
+            nautilus_air_supply(m, level);
+        } else if m.kind.flags.needs_water {
             if !m.fluids.in_water {
                 m.air -= 1;
                 if m.air == -20 {
@@ -1360,6 +1398,11 @@ fn base_tick(
     if m.invulnerable > 0 {
         m.invulnerable -= 1;
     }
+    // Entity.baseTick: the entity-level invulnerability window counts down
+    // too, its own timer (#916), never the damage cooldown above.
+    if m.invulnerable_time > 0 {
+        m.invulnerable_time -= 1;
+    }
     // LivingEntity.baseTick runs tickEffects after the timers count down.
     tick_effects(m, w.loop_context, level, w.mod_effects);
     // Entity.applyEffectsFromBlocks runs in LivingEntity.aiStep, after
@@ -1368,8 +1411,9 @@ fn base_tick(
     // invulnerable time of that tick has already dropped.
     let was_on_fire = m.fire_ticks > 0;
     block_contact_damage(m, w, level, fire);
-    // Enderman.hurtServer teleports inside the hurt.
-    enderman_hurt_teleports(m, w, events);
+    // Enderman.hurtServer and Shulker.hurtServer teleport inside the hurt
+    // (fire, lava, a block, an effect).
+    hurt_teleports(m, w, events);
     if !m.alive() {
         m.death_time += 1;
     }
@@ -1426,7 +1470,7 @@ pub(super) fn in_powder_snow(m: &Mob, w: &MobWorld) -> bool {
 }
 /// `LivingEntity.canFreeze`: not a `#freeze_immune_entity_types` mob and no
 /// worn piece in `#freeze_immune_wearables`.
-fn can_freeze(m: &Mob, w: &MobWorld) -> bool {
+pub fn can_freeze(m: &Mob, w: &MobWorld) -> bool {
     if w.data
         .entity_has("minecraft:freeze_immune_entity_types", &m.kind.id)
     {
@@ -1649,6 +1693,70 @@ fn ageable_step(
     }
 }
 
+/// `LivingEntity.updateFallFlying` on the server, which `aiStep` calls while
+/// the glide flag is set, with or without AI: a mob that cannot glide
+/// (`canGlide`: on the ground, riding, levitating, or no slot holding a
+/// glider whose next damage will not break it, `canGlideUsing`) stops
+/// gliding; else on every 20th glide tick one of its gliders, picked with
+/// `Util.getRandom` from the mob's own random, takes a point of wear.
+/// `checkFallDistanceAccumulation` and the `ELYTRA_GLIDE` game event of
+/// every 10th tick are not ported here.
+fn update_fall_flying(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
+    use horizon_core::equipment_slot::EquipmentSlot;
+    if !m.extra.fall_flying {
+        return;
+    }
+    let gliders: Vec<EquipmentSlot> = match w.items {
+        Some(items) => EquipmentSlot::ALL
+            .into_iter()
+            .filter(|&slot| {
+                super::finalize::equipment_stack(m, slot).is_some_and(|stack| {
+                    crate::item_sync::can_glide_using(&stack, glider_slot_name(slot), items)
+                })
+            })
+            .collect(),
+        None => Vec::new(),
+    };
+    if m.on_ground
+        || m.extra.mount.is_some()
+        || m.has_effect("minecraft:levitation")
+        || gliders.is_empty()
+    {
+        m.extra.fall_flying = false;
+        return;
+    }
+    let ticks = m.extra.fall_fly_ticks + 1;
+    if ticks % 10 == 0 && (ticks / 10) % 2 == 0 {
+        let pick = m.random.next_int_bound(gliders.len() as i32).unwrap_or(0) as usize;
+        events.push(MobEvent::GliderWear {
+            mob: m.id,
+            slot: gliders[pick],
+        });
+    }
+}
+/// `EquipmentSlot`'s serialized name, which `equippable` names its slot by.
+fn glider_slot_name(slot: horizon_core::equipment_slot::EquipmentSlot) -> &'static str {
+    use horizon_core::equipment_slot::EquipmentSlot as S;
+    match slot {
+        S::MainHand => "mainhand",
+        S::OffHand => "offhand",
+        S::Feet => "feet",
+        S::Legs => "legs",
+        S::Chest => "chest",
+        S::Head => "head",
+        S::Body => "body",
+        S::Saddle => "saddle",
+    }
+}
+/// `LivingEntity.tick` after `aiStep`: the glide's tick count.
+fn count_fall_fly_ticks(m: &mut Mob) {
+    m.extra.fall_fly_ticks = if m.extra.fall_flying {
+        m.extra.fall_fly_ticks + 1
+    } else {
+        0
+    };
+}
+
 /// `LivingEntity.aiStep`: both flight effects discard accumulated fall before
 /// travel, even when NoAI skips the server AI step.
 fn reset_effect_fall_distance(m: &mut Mob) {
@@ -1714,6 +1822,7 @@ fn ai_step(m: &mut Mob, w: &MobWorld, level: &mut DamageLevel<'_>, events: &mut 
         f64::from(m.ai.yya),
         f64::from(m.ai.zza),
     );
+    update_fall_flying(m, w, events);
     reset_effect_fall_distance(m);
     if super::equine::moved_by_client(m) {
         // LivingEntity.travelRidden: the rider's client moves it
@@ -1723,7 +1832,7 @@ fn ai_step(m: &mut Mob, w: &MobWorld, level: &mut DamageLevel<'_>, events: &mut 
         // Mannequin.isEffectiveAi: an immovable one never travels.
         m.travel(w, level, input, events);
         // A fall's hurt (checkFallDamage) teleports at once.
-        enderman_hurt_teleports(m, w, events);
+        hurt_teleports(m, w, events);
     }
     // LivingEntity.aiStep: applyEffectsFromBlocks follows travel.
     m.apply_effects_from_blocks(w, events);
@@ -1750,15 +1859,19 @@ fn hurt_by_water(
 ) {
     if m.kind.flags.water_sensitive && (m.fluids.in_water || in_rain(m, w)) {
         m.damage(level, 1.0, Damage::of(DamageKind::Drown));
-        enderman_hurt_teleports(m, w, events);
+        hurt_teleports(m, w, events);
     }
 }
-/// The teleport `Enderman.hurtServer` makes inside a hurt, after the hurt's
-/// sound; with or without AI.
-fn enderman_hurt_teleports(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
+/// The teleport `Enderman.hurtServer` or `Shulker.hurtServer` makes inside a
+/// hurt, after the hurt's sound; with or without AI.
+fn hurt_teleports(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     if m.species() == Species::Enderman && m.extra.counter2 > 0 {
         events.append(&mut m.outbox);
         super::enderman::run_pending_teleports(m, w, events);
+    }
+    if m.species() == Species::Shulker && m.extra.flag {
+        events.append(&mut m.outbox);
+        super::shulker::hurt_teleport(m, w, events);
     }
 }
 impl Mob {
@@ -1931,6 +2044,245 @@ fn sun_burn_tick(m: &mut Mob, w: &MobWorld) -> bool {
     let wet = m.fluids.in_water || in_rain(m, w);
     br > 0.5 && m.random.next_float() * 30.0 < (br - 0.4) * 2.0 && !wet && w.can_see_sky(x, y, z)
 }
+// Keep the actual selectors (including partially updated goal state) attached to
+// their mob even when a goal callback unwinds. Drop does not invoke goal code.
+struct BorrowedGoalSelectors<'a> {
+    mob: &'a mut Mob,
+    targets: GoalSelector,
+    goals: GoalSelector,
+}
+
+impl<'a> BorrowedGoalSelectors<'a> {
+    fn new(mob: &'a mut Mob) -> Self {
+        Self {
+            targets: std::mem::take(&mut mob.ai.targets),
+            goals: std::mem::take(&mut mob.ai.goals),
+            mob,
+        }
+    }
+}
+
+impl Drop for BorrowedGoalSelectors<'_> {
+    fn drop(&mut self) {
+        self.mob.ai.targets = std::mem::take(&mut self.targets);
+        self.mob.ai.goals = std::mem::take(&mut self.goals);
+    }
+}
+
+#[cfg(test)]
+mod selector_restore_tests {
+    use super::super::goals::Goal;
+    use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[derive(Debug)]
+    struct TrackedGoal {
+        progress: i32,
+        drops: Arc<AtomicUsize>,
+    }
+    impl Drop for TrackedGoal {
+        fn drop(&mut self) {
+            self.drops.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    impl Goal for TrackedGoal {
+        fn flags(&self) -> u8 {
+            0
+        }
+        fn can_use(&mut self, _: &mut Mob, _: &mut Cx) -> bool {
+            false
+        }
+        fn box_clone(&self) -> Box<dyn Goal> {
+            panic!("selectors must not clone goals")
+        }
+        fn set_start_delay(&mut self, ticks: i32) {
+            self.progress = ticks;
+        }
+        fn name(&self) -> &'static str {
+            if self.progress == 7 {
+                "progress"
+            } else {
+                "initial"
+            }
+        }
+    }
+
+    // Exercise the production acquisition site, not just the restoration helper.
+    // This is an engine Goal callback, not native Game integration coverage.
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn server_ai_step_restores_live_selectors_after_goal_unwind() {
+        use crate::mobs::world::with_resource_test_world;
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+        use std::sync::{Mutex, atomic::AtomicBool};
+        #[derive(Debug)]
+        struct Probe {
+            calls: Arc<Mutex<Vec<(usize, u32)>>>,
+            panic: Arc<AtomicBool>,
+            ticks: u32,
+        }
+        impl Goal for Probe {
+            fn flags(&self) -> u8 {
+                0
+            }
+            fn can_use(&mut self, _: &mut Mob, _: &mut Cx) -> bool {
+                true
+            }
+            fn every_tick(&self) -> bool {
+                true
+            }
+            fn box_clone(&self) -> Box<dyn Goal> {
+                panic!("live goals must not clone")
+            }
+            fn tick(&mut self, _: &mut Mob, _: &mut Cx) {
+                self.ticks += 1;
+                self.calls
+                    .lock()
+                    .unwrap()
+                    .push((self as *const Self as usize, self.ticks));
+                if self.panic.load(Ordering::SeqCst) {
+                    std::panic::resume_unwind(Box::new(73_u32));
+                }
+            }
+        }
+        let root = std::path::PathBuf::from(
+            std::env::var_os("HORIZON_TEST_RESOURCES").expect("set HORIZON_TEST_RESOURCES"),
+        );
+        assert!(
+            with_resource_test_world(
+                &root,
+                &[],
+                true,
+                true,
+                |_, _| {},
+                |world, _| {
+                    for panic_at in [None, Some(0), Some(1)] {
+                        // Full selector tick and the alternate running-only production path.
+                        for age in [0, 2] {
+                            let kind = crate::mobs::sensor_scan_tests::kind();
+                            let mut mob = Mob::new(1, kind, Vec3::ZERO, 0.0);
+                            mob.age = 0;
+                            mob.ai.targets.clear();
+                            mob.ai.goals.clear();
+                            let calls = [
+                                Arc::new(Mutex::new(Vec::new())),
+                                Arc::new(Mutex::new(Vec::new())),
+                            ];
+                            let panics = [
+                                Arc::new(AtomicBool::new(false)),
+                                Arc::new(AtomicBool::new(false)),
+                            ];
+                            let mut identities = [0; 2];
+                            for (i, selector) in [&mut mob.ai.targets, &mut mob.ai.goals]
+                                .into_iter()
+                                .enumerate()
+                            {
+                                let goal = Box::new(Probe {
+                                    calls: calls[i].clone(),
+                                    panic: panics[i].clone(),
+                                    ticks: 0,
+                                });
+                                identities[i] = &*goal as *const Probe as usize;
+                                selector.add_boxed(1, goal);
+                            }
+                            let mut level = crate::health::TestLevel::new(0);
+                            let mut events = Vec::new();
+                            // Start both live goals before testing either production branch.
+                            server_ai_step(&mut mob, world, &mut level.level(), &mut events);
+                            mob.age = age;
+                            if let Some(i) = panic_at {
+                                panics[i].store(true, Ordering::SeqCst);
+                            }
+                            let result = catch_unwind(AssertUnwindSafe(|| {
+                                server_ai_step(&mut mob, world, &mut level.level(), &mut events);
+                            }));
+                            if panic_at.is_some() {
+                                assert_eq!(*result.unwrap_err().downcast::<u32>().unwrap(), 73);
+                            } else {
+                                assert!(result.is_ok());
+                            }
+                            assert_eq!(
+                                mob.ai.targets.entries().count(),
+                                1,
+                                "actual target selector lost"
+                            );
+                            assert_eq!(
+                                mob.ai.goals.entries().count(),
+                                1,
+                                "actual action selector lost"
+                            );
+                            for panic in &panics {
+                                panic.store(false, Ordering::SeqCst);
+                            }
+                            server_ai_step(&mut mob, world, &mut level.level(), &mut events);
+                            for i in 0..2 {
+                                let expected_ticks =
+                                    if panic_at == Some(0) && i == 1 { 2 } else { 3 };
+                                let expected: Vec<_> = (1..=expected_ticks)
+                                    .map(|tick| (identities[i], tick))
+                                    .collect();
+                                assert_eq!(
+                                    *calls[i].lock().unwrap(),
+                                    expected,
+                                    "live goal identity/progress {i}"
+                                );
+                            }
+                        }
+                    }
+                }
+            ),
+            "production-site proof requires prepared resources"
+        );
+    }
+
+    // Lower-layer ownership test, not a native callback integration test.
+    #[test]
+    fn selector_ownership_survives_normal_return_and_unwind() {
+        for unwind in [false, true] {
+            let mut mob = Mob::new(1, crate::mobs::sensor_scan_tests::kind(), Vec3::ZERO, 0.0);
+            mob.ai.targets.clear();
+            mob.ai.goals.clear();
+            let drops = Arc::new(AtomicUsize::new(0));
+            for selector in [&mut mob.ai.targets, &mut mob.ai.goals] {
+                selector.add(
+                    1,
+                    TrackedGoal {
+                        progress: 0,
+                        drops: drops.clone(),
+                    },
+                );
+            }
+            let payload = Arc::new(17);
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut borrowed = BorrowedGoalSelectors::new(&mut mob);
+                borrowed.targets.set_start_delay("initial", 7);
+                borrowed.goals.set_start_delay("initial", 7);
+                borrowed.targets.disabled = 3;
+                borrowed.goals.disabled = 5;
+                if unwind {
+                    std::panic::resume_unwind(Box::new(payload.clone()));
+                }
+            }));
+            if unwind {
+                let caught = result.unwrap_err().downcast::<Arc<i32>>().unwrap();
+                assert!(Arc::ptr_eq(&caught, &payload));
+            } else {
+                assert!(result.is_ok());
+            }
+            assert!(mob.ai.targets.has("progress"));
+            assert!(mob.ai.goals.has("progress"));
+            assert_eq!(mob.ai.targets.disabled, 3);
+            assert_eq!(mob.ai.goals.disabled, 5);
+            assert_eq!(drops.load(Ordering::SeqCst), 0);
+            drop(mob);
+            assert_eq!(drops.load(Ordering::SeqCst), 2);
+        }
+    }
+}
+
 /// Mob.serverAiStep
 fn server_ai_step(
     m: &mut Mob,
@@ -1952,20 +2304,21 @@ fn server_ai_step(
     super::riders::drive(m, w);
     let tick_count = m.age as i64;
     let id_based = tick_count + i64::from(m.id);
-    let mut targets = std::mem::take(&mut m.ai.targets);
-    let mut goals = std::mem::take(&mut m.ai.goals);
     {
+        let BorrowedGoalSelectors {
+            mob,
+            targets,
+            goals,
+        } = &mut BorrowedGoalSelectors::new(m);
         let mut cx = Cx { w, level, events };
         if id_based % 2 != 0 && tick_count > 1 {
-            targets.tick_running(m, &mut cx, false);
-            goals.tick_running(m, &mut cx, false);
+            targets.tick_running(mob, &mut cx, false);
+            goals.tick_running(mob, &mut cx, false);
         } else {
-            targets.tick(m, &mut cx);
-            goals.tick(m, &mut cx);
+            targets.tick(mob, &mut cx);
+            goals.tick(mob, &mut cx);
         }
     }
-    m.ai.targets = targets;
-    m.ai.goals = goals;
     // A creaking looked at stands still: its navigation, move, look and jump
     // controls wait (CreakingPathNavigation and the Creaking*Control).
     let frozen = super::creaking::is_creaking(m) && !super::creaking::can_move(m);
@@ -2699,7 +3052,6 @@ pub fn after_hurt(m: &mut Mob, source: &Damage) {
     m.ai.no_action_time = 0;
     match m.species() {
         Species::Armadillo => super::armadillo::after_hurt(m, source),
-        Species::Shulker => super::shulker::after_hurt(m),
         Species::Warden => super::warden::hurt(m, source),
         Species::Nautilus | Species::ZombieNautilus => super::nautilus::after_hurt(m, source),
         Species::Zombie
@@ -3020,6 +3372,12 @@ pub(crate) fn tick_effects(
     // a totem adds its effects to it). An effect a tick appends ticks from
     // the next tick on.
     let first = m.extra.effects.len();
+    let old_boost_amp = m
+        .extra
+        .effects
+        .iter()
+        .find(|e| e.id == "minecraft:health_boost")
+        .map(|e| e.amplifier);
     let mut i = 0;
     while i < m.extra.effects.len() && i < first {
         let (effect, amp) = (m.extra.effects[i].id, m.extra.effects[i].amplifier);
@@ -3068,6 +3426,12 @@ pub(crate) fn tick_effects(
             {
                 m.heal(context, 1.0);
             }
+            // AbsorptionMobEffect.applyEffectTick (asked on every tick): false
+            // once the absorption is used up, so tickServer drops the effect
+            // before it counts down.
+            "minecraft:absorption" if m.absorption <= 0.0 => {
+                expired = true;
+            }
             id if horizon_client_core::potions::is_mod_effect(id) => {
                 // tickServer: one with no ticks left goes unasked.
                 if !infinite && m.extra.effects[i].duration <= 0 {
@@ -3104,6 +3468,9 @@ pub(crate) fn tick_effects(
                     m.absorption = m.absorption.min(4.0 * (hidden.amplifier + 1) as f32);
                 }
                 m.extra.effects[i] = super::StoredEffect::from_instance(effect, &hidden);
+                if effect == "minecraft:health_boost" {
+                    super::finalize::health_boost_changed(m);
+                }
                 m.extra.ambient_effects.retain(|e| *e != effect);
                 if hidden.ambient {
                     m.extra.ambient_effects.push(effect);
@@ -3147,6 +3514,16 @@ pub(crate) fn tick_effects(
         m.needs_sync |= m.invisible != invisible;
         m.invisible = invisible;
         m.effects_dirty = false;
+    }
+
+    if old_boost_amp
+        != m.extra
+            .effects
+            .iter()
+            .find(|e| e.id == "minecraft:health_boost")
+            .map(|e| e.amplifier)
+    {
+        super::finalize::health_boost_changed(m);
     }
 }
 
@@ -3687,25 +4064,26 @@ mod poison_effect_tests {
         assert_eq!(pig.health, 19.2);
         // `onMobHurt` finds Infested in the same in-place list: the hurt mob
         // leaves a silverfish call in the outbox.
-        let mut pig = Mob::new(2, pig_kind.clone(), Vec3::new(0.0, 4.0, 0.0), 0.0);
-        pig.extra
-            .effects
-            .push(crate::mobs::StoredEffect::new("minecraft:poison", 25, 0));
-        pig.extra
-            .effects
-            .push(crate::mobs::StoredEffect::new("minecraft:infested", -1, 0));
-        tick_effects(
-            &mut pig,
-            crate::test_resources::server_loop_context(),
-            level,
-            None,
-        );
-        assert!(
+        let spawned = (0..100).any(|seed| {
+            let mut pig = Mob::new(2, pig_kind.clone(), Vec3::new(0.0, 4.0, 0.0), 0.0);
+            pig.random = horizon_core::random::LegacyRandom::new(seed);
+            pig.extra
+                .effects
+                .push(crate::mobs::StoredEffect::new("minecraft:poison", 25, 0));
+            pig.extra
+                .effects
+                .push(crate::mobs::StoredEffect::new("minecraft:infested", -1, 0));
+            tick_effects(
+                &mut pig,
+                crate::test_resources::server_loop_context(),
+                level,
+                None,
+            );
             pig.outbox
                 .iter()
-                .any(|e| matches!(e, MobEvent::Infested { .. })),
-            "a hurt while infested pushes Infested"
-        );
+                .any(|e| matches!(e, MobEvent::Infested { .. }))
+        });
+        assert!(spawned, "a hurt while infested pushes Infested");
     }
 
     /// `MobEffectInstance.hasRemainingDuration` is false at 0 ticks, so an effect
@@ -4475,6 +4853,124 @@ mod bed_wake_tests {
     use super::*;
     use crate::mobs::world::with_test_world;
 
+    #[test]
+    #[ignore = "needs prepared vanilla resources"]
+    fn loaded_sleeping_position_refreshes_in_actual_mob_tick() {
+        use horizon_core::nbt::Tag;
+        let build = |world: &mut crate::world::World,
+                     registry: &horizon_world::registry::BlockRegistry| {
+            world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(crate::chunk::Chunk::empty(0, 0)),
+            );
+            let stone = registry.default_state("minecraft:stone").unwrap();
+            for x in 0..12 {
+                for z in 0..12 {
+                    world.set(x, 63, z, stone).unwrap();
+                }
+            }
+            let mut bed = registry
+                .state(registry.default_state("minecraft:red_bed").unwrap())
+                .unwrap()
+                .clone();
+            bed.properties.insert("facing".into(), "north".into());
+            bed.properties.insert("occupied".into(), "false".into());
+            for (part, z) in [("head", 0), ("foot", 1)] {
+                bed.properties.insert("part".into(), part.into());
+                world.set(0, 64, z, registry.id(&bed).unwrap()).unwrap();
+            }
+        };
+        let ran = crate::mobs::world::with_built_test_world(&[], build, |w, types| {
+            assert_eq!(w.block_name(0, 64, 0), "minecraft:red_bed");
+            assert_eq!(w.prop(0, 64, 0, "part"), Some("head"));
+            assert_eq!(w.prop(0, 64, 0, "facing"), Some("north"));
+            let types = [(
+                "minecraft:villager".to_owned(),
+                std::sync::Arc::new(types.types["minecraft:villager"].clone()),
+            )]
+            .into_iter()
+            .collect();
+            let input = horizon_core::nbt::parse_snbt(r#"{id:"minecraft:villager",Pos:[0.5d,64.5625d,0.5d],Health:20f,NoAI:1b,NoGravity:1b,PersistenceRequired:1b,sleeping_pos:[I;0,64,0],Motion:[0d,0d,0d]}"#).unwrap().0;
+            let mut loaded =
+                crate::entity_nbt::mob_from_nbt(&input, &types, 233, Some(w.registry)).unwrap();
+            assert_eq!(
+                loaded.position,
+                Vec3::new(0.5, 64.5625, 0.5),
+                "loading alone must not perform the first-tick correction"
+            );
+            assert!(loaded.first_tick && loaded.no_ai && loaded.no_gravity);
+            assert!(super::super::villager::sleeping(&loaded));
+            assert_eq!(
+                super::super::villager::sleeping_pos(&loaded),
+                Some([0, 64, 0])
+            );
+            let mut awake_input = input.clone();
+            let Tag::Compound(ref mut fields) = awake_input else {
+                unreachable!()
+            };
+            fields.remove(&"sleeping_pos".into());
+            fields.insert(
+                "Pos".into(),
+                Tag::List(
+                    [5.5_f64, 64.0, 5.5]
+                        .map(|v| Tag::Double(v.to_bits()))
+                        .to_vec(),
+                ),
+            );
+            let mut awake =
+                crate::entity_nbt::mob_from_nbt(&awake_input, &types, 234, Some(w.registry))
+                    .unwrap();
+            let mut normal = awake.clone();
+            normal.id = 235;
+            let mut normal_events = Vec::new();
+            assert!(super::super::villager::start_sleeping(
+                &mut normal,
+                [0, 64, 0],
+                w,
+                &mut normal_events
+            ));
+            assert_eq!(normal.position, Vec3::new(0.5, 64.6875, 0.5));
+            assert!(normal_events.iter().any(|e| matches!(
+                e,
+                MobEvent::BedOccupied {
+                    pos: [0, 64, 0],
+                    occupied: true
+                }
+            )));
+            let mut fixture = crate::health::TestLevel::new(0);
+            let mut loaded_events = Vec::new();
+            for n in 1..=2 {
+                assert!(loaded.tick(w, &mut fixture.level(), &mut loaded_events));
+                assert_eq!(loaded.age, n);
+                assert!(!loaded.first_tick);
+                assert_eq!(
+                    loaded.position,
+                    Vec3::new(0.5, 64.6875, 0.5),
+                    "actual loaded sleeper at tick {n}"
+                );
+                assert_eq!(loaded.velocity, Vec3::ZERO);
+                assert_eq!(loaded.health, 20.0);
+                assert_eq!(
+                    super::super::villager::sleeping_pos(&loaded),
+                    Some([0, 64, 0])
+                );
+                assert!(awake.tick(w, &mut fixture.level(), &mut Vec::new()));
+                assert_eq!(awake.position, Vec3::new(5.5, 64.0, 5.5));
+                assert!(!super::super::villager::sleeping(&awake));
+                assert!(normal.tick(w, &mut fixture.level(), &mut normal_events));
+                assert_eq!(normal.position, Vec3::new(0.5, 64.6875, 0.5));
+                assert_eq!(normal.velocity, Vec3::ZERO);
+            }
+            assert!(
+                !loaded_events
+                    .iter()
+                    .any(|e| matches!(e, MobEvent::BedOccupied { .. })),
+                "refresh must not re-run startSleeping side effects"
+            );
+        });
+        assert!(ran, "prepared Mob/bed world must actually run");
+    }
+
     /// `LivingEntity.tick` wakes a sleeper whose bed is gone before
     /// `aiStep` — `Mob.no_ai` skips the step, not the check (#7875).
     fn no_ai_sleeper() -> Option<Mob> {
@@ -4855,7 +5351,9 @@ mod fox_screech_tests {
 
             let mut end = night.clone();
             end.daylight = true;
-            end.end = true;
+            end.dimension_type =
+                horizon_world::dimension_type::DimensionFacts::vanilla("minecraft:the_end")
+                    .unwrap();
             assert!(
                 sounds(&end, types)
                     .iter()
@@ -6086,5 +6584,272 @@ mod happy_ghast_ambient_tests {
             },
         );
         assert!(ran, "prepared-data callback did not run");
+    }
+}
+
+#[cfg(test)]
+mod hidden_speed_causal_tests {
+    use super::*;
+    use std::sync::Arc;
+    fn mob() -> Mob {
+        let mut kind = (*crate::mobs::sensor_scan_tests::kind()).clone();
+        kind.id = "minecraft:pig".into();
+        kind.species = Species::Pig;
+        Mob::new(202, Arc::new(kind), Vec3::ZERO, 0.0)
+    }
+    #[test]
+    fn zero_active_never_promotes_and_infinite_fallback_counts_once() {
+        let mut m = mob();
+        m.add_effect("speed", 200, 0);
+        m.add_effect("speed", 0, 1);
+        assert_eq!(m.extra.effect_chains.len(), 1);
+        tick_effects(
+            &mut m,
+            crate::test_resources::server_loop_context(),
+            &mut crate::health::TestLevel::new(0).level(),
+            None,
+        );
+        assert!(m.extra.effects.is_empty() && m.extra.effect_chains.is_empty());
+        m.add_effect("speed", -1, 0);
+        m.add_effect("speed", 2, 1);
+        tick_effects(
+            &mut m,
+            crate::test_resources::server_loop_context(),
+            &mut crate::health::TestLevel::new(0).level(),
+            None,
+        );
+        assert_eq!(
+            m.extra
+                .effects
+                .iter()
+                .map(|e| (e.id, e.duration, e.amplifier))
+                .collect::<Vec<_>>(),
+            [("minecraft:speed", 1, 1)]
+        );
+        assert_eq!(m.extra.effect_chains[0].duration, -1);
+        tick_effects(
+            &mut m,
+            crate::test_resources::server_loop_context(),
+            &mut crate::health::TestLevel::new(0).level(),
+            None,
+        );
+        assert_eq!(
+            m.extra
+                .effects
+                .iter()
+                .map(|e| (e.id, e.duration, e.amplifier))
+                .collect::<Vec<_>>(),
+            [("minecraft:speed", -1, 0)]
+        );
+        tick_effects(
+            &mut m,
+            crate::test_resources::server_loop_context(),
+            &mut crate::health::TestLevel::new(0).level(),
+            None,
+        );
+        assert_eq!(
+            m.extra
+                .effects
+                .iter()
+                .map(|e| (e.id, e.duration, e.amplifier))
+                .collect::<Vec<_>>(),
+            [("minecraft:speed", -1, 0)]
+        );
+        assert!(m.extra.effect_chains.is_empty());
+    }
+    #[test]
+    fn native_cancellation_drops_the_whole_chain_before_promotion() {
+        struct Cancel(std::cell::Cell<usize>);
+        impl crate::mobs::ModEffectTicks for Cancel {
+            fn effect_expired(&self, _: u32, _: usize, _: i32, _: &mut bool) {}
+            fn tick_mod_effect(
+                &self,
+                _: &mut DamageLevel<'_>,
+                _: usize,
+                m: &mut Mob,
+                count: i32,
+                amp: i32,
+            ) -> bool {
+                let (id, mob) = (m.extra.effects[0].id, m.id);
+                assert_eq!((id, mob, amp), ("h202:cancel", 202, 1));
+                assert!(count == 1 || count == 17);
+                self.0.set(self.0.get() + 1);
+                false
+            }
+        }
+        for duration in [1, -1] {
+            let mut m = mob();
+            m.age = 17;
+            m.add_effect("h202:cancel", 200, 0);
+            if duration == -1 {
+                // A loaded subtree can accompany an infinite active instance.
+                m.extra.effects[0].duration = -1;
+                let h = crate::effects::EffectInstance {
+                    id: "h202:cancel",
+                    registry_index: Some(0),
+                    client_blend: (false, false),
+                    duration: 200,
+                    amplifier: 0,
+                    ambient: false,
+                    visible: true,
+                    show_icon: true,
+                    hidden: None,
+                };
+                m.extra.effects[0].amplifier = 1;
+                m.extra.effect_chains.push(h);
+            } else {
+                m.add_effect("h202:cancel", duration, 1);
+            }
+            // This fixture stands in for a registered mod effect at slot zero.
+            m.extra.effects[0].registry_index = Some(0);
+            let cancel = Cancel(std::cell::Cell::new(0));
+            tick_effects(
+                &mut m,
+                crate::test_resources::server_loop_context(),
+                &mut crate::health::TestLevel::new(0).level(),
+                Some(&cancel),
+            );
+            assert_eq!(cancel.0.get(), 1);
+            assert!(m.extra.effects.is_empty() && m.extra.effect_chains.is_empty());
+        }
+    }
+}
+
+#[cfg(test)]
+mod trader_llama_no_ai_tests {
+    use super::*;
+    use std::sync::Arc;
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn eligible_trader_llama_delay_advances_in_actual_no_ai_tick() {
+        let root = std::path::PathBuf::from(
+            std::env::var_os("HORIZON_TEST_RESOURCES").expect("prepared resources required"),
+        );
+        let mut differences = Vec::new();
+        let ran = crate::mobs::world::with_resource_test_world(
+            &root,
+            &[],
+            true,
+            true,
+            |_, _| {},
+            |w, types| {
+                let kind = Arc::new(types.types["minecraft:trader_llama"].clone());
+                let fresh = || {
+                    let mut mob = Mob::new(1, kind.clone(), Vec3::new(4.5, 200.0, 4.5), 0.0);
+                    mob.no_ai = true;
+                    mob.no_gravity = true;
+                    mob.silent = true;
+                    mob.extra.ints[0] = 5;
+                    mob
+                };
+                // Existing eligibility stays in the shared helper. These are focused
+                // model controls, not runtime claims about real leash/rider sessions.
+                let mut trader = Mob::new(
+                    50,
+                    Arc::new(types.types["minecraft:wandering_trader"].clone()),
+                    Vec3::new(30.5, 200.0, 30.5),
+                    0.0,
+                );
+                trader.extra.ints[5] = 13;
+                let cow = Mob::new(
+                    51,
+                    Arc::new(types.types["minecraft:cow"].clone()),
+                    Vec3::new(40.5, 200.0, 40.5),
+                    0.0,
+                );
+                let seen = [trader.seen(None), cow.seen(None)];
+                assert_eq!(seen[0].delay, 13);
+                let view = MobWorld {
+                    others: &seen,
+                    ..w.clone()
+                };
+                for guard in [
+                    "tame",
+                    "persistent",
+                    "age-lock",
+                    "rider",
+                    "other-mob-leash",
+                    "player-leash",
+                ] {
+                    let mut mob = fresh();
+                    match guard {
+                        "tame" => mob.extra.tame = true,
+                        "persistent" => mob.persistent = true,
+                        "age-lock" => mob.extra.age_locked = true,
+                        "rider" => mob.rider = Some(super::super::equine::Rider::default()),
+                        "other-mob-leash" => {
+                            mob.extra.leash = Some(super::super::leash::Holder::Mob(51))
+                        }
+                        "player-leash" => {
+                            mob.extra.leash = Some(super::super::leash::Holder::Player)
+                        }
+                        _ => unreachable!(),
+                    }
+                    super::super::caravan::trader_llama_tick(&mut mob, &view);
+                    assert_eq!(mob.extra.ints[0], 5, "{guard}");
+                    assert!(!mob.removed, "{guard}");
+                }
+                let mut linked = fresh();
+                linked.extra.leash = Some(super::super::leash::Holder::Mob(50));
+                super::super::caravan::trader_llama_tick(&mut linked, &view);
+                assert_eq!(linked.extra.ints[0], 12, "trader delay minus one");
+
+                for initial in [0, 5, 47999] {
+                    let mut mob = fresh();
+                    mob.extra.ints[0] = initial;
+                    mob.health = mob.attrs.max_health - 2.0;
+                    let health = mob.health;
+                    let steps = if initial == 0 { 1 } else { 5 };
+                    for elapsed in 1..=steps {
+                        let mut expected_random = mob.random.clone();
+                        expected_random.next_int_bound(1000).unwrap(); // Existing Mob.baseTick ambient draw only.
+                        let mut test_level = crate::health::TestLevel::new(0);
+                        let mut events = Vec::new();
+                        tick(&mut mob, w, &mut test_level.level(), &mut events);
+                        assert_eq!(mob.age, elapsed as u32, "actual tick reached");
+                        assert_eq!(
+                            mob.health, health,
+                            "NoAI must not run unrelated llama healing"
+                        );
+                        assert_eq!(
+                            mob.random.state(),
+                            expected_random.state(),
+                            "NoAI must not add the healing draw"
+                        );
+                        let expected = initial - elapsed;
+                        if mob.extra.ints[0] != expected || mob.removed != (expected <= 0) {
+                            differences.push((
+                                initial,
+                                elapsed,
+                                expected,
+                                mob.extra.ints[0],
+                                mob.removed,
+                            ));
+                        }
+                    }
+                }
+                // The normal-AI caller already reaches the same timer.
+                let mut normal = fresh();
+                normal.no_ai = false;
+                normal.health = normal.attrs.max_health;
+                let mut events = Vec::new();
+                tick(
+                    &mut normal,
+                    w,
+                    &mut crate::health::TestLevel::new(0).level(),
+                    &mut events,
+                );
+                assert_eq!(normal.extra.ints[0], 4);
+            },
+        );
+        assert!(
+            ran,
+            "prepared resources must actually admit the mob tick world"
+        );
+        assert!(
+            differences.is_empty(),
+            "NoAI trader timer mismatch: {differences:?}"
+        );
     }
 }

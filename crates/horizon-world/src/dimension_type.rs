@@ -1,6 +1,7 @@
 //! The parts of vanilla's `DimensionType` Horizon reads, and the attributes keyed on the level today.
 
-use std::sync::LazyLock;
+use std::collections::HashMap;
+use std::sync::{LazyLock, RwLock};
 
 use horizon_core::level_key::LevelKey;
 use serde_json::Value;
@@ -222,7 +223,38 @@ static VANILLA: LazyLock<[DimensionFacts; 4]> = LazyLock::new(|| {
     [overworld_type, caves, nether, end]
 });
 
+/// The levels whose dimension type a data pack or a mod changed or added, by level key: set at each
+/// world load, so a pack-less world reads none.
+static LEVELS: LazyLock<RwLock<HashMap<LevelKey, &'static DimensionFacts>>> =
+    LazyLock::new(Default::default);
+
 impl DimensionFacts {
+    /// A level's dimension type: the one a data pack or a mod gave it (`set_levels`), else a
+    /// built-in level's own, else the Overworld's.
+    pub fn of_level(level: LevelKey) -> &'static Self {
+        let levels = LEVELS.read().unwrap_or_else(|e| e.into_inner());
+        levels
+            .get(&level)
+            .copied()
+            .unwrap_or_else(|| Self::of_builtin_level(level))
+    }
+
+    /// The vanilla type `id` names, or the Overworld's for any other id: what a pack's type for `id`
+    /// changes.
+    pub fn base_for_type(id: &str) -> &'static Self {
+        Self::vanilla(id).unwrap_or_else(Self::overworld)
+    }
+
+    /// Replaces the levels' own dimension types, at a world's load. The table is leaked, as
+    /// `LevelKey`s are: one small entry per level and world load.
+    pub fn set_levels(levels: Vec<(LevelKey, Self)>) {
+        let table = levels
+            .into_iter()
+            .map(|(key, facts)| (key, &*Box::leak(Box::new(facts))))
+            .collect();
+        *LEVELS.write().unwrap_or_else(|e| e.into_inner()) = table;
+    }
+
     /// A vanilla dimension type by id.
     pub fn vanilla(type_id: &str) -> Option<&'static Self> {
         VANILLA_TYPES
@@ -321,6 +353,88 @@ impl DimensionFacts {
             bed_rule: bed("bed_rule", BedRule::CAN_SLEEP_WHEN_DARK)?,
             straw_bed_rule: bed("straw_bed_rule", BedRule::DESTROY_ON_LEAVE)?,
         })
+    }
+
+    /// `base` with the fields `json` names over it: a mod's dimension type names only what it
+    /// changes, and a data pack's names them all. Timelines and the clock stay `base`'s, and a field
+    /// the codec refuses is an error.
+    pub fn patched(base: &Self, id: &str, json: &Value) -> Result<Self, String> {
+        let mut out = base.clone();
+        out.id = id.to_owned();
+        out.height = LevelHeight::of_json(json).ok_or("invalid level height")?;
+        let flag = |k: &str| json[k].as_bool();
+        let attributes = &json["attributes"];
+        let attribute = |k: &str| &attributes[format!("minecraft:gameplay/{k}")];
+        let bool_attr = |k: &str| attribute(k).as_bool();
+        if let Some(v) = flag("has_fixed_time") {
+            out.has_fixed_time = v;
+        }
+        if let Some(v) = flag("has_ender_dragon_fight") {
+            out.has_ender_dragon_fight = v;
+        }
+        if let Some(v) = json["coordinate_scale"].as_f64() {
+            out.coordinate_scale = v;
+        }
+        if let Some(v) = json["infiniburn"].as_str() {
+            out.infiniburn = v.to_owned();
+        }
+        if let Some(v) = json["ambient_light"].as_f64() {
+            out.ambient_light = v as f32;
+        }
+        if !json["monster_spawn_light_level"].is_null() {
+            out.monster_spawn_light_level =
+                IntProvider::from_json(&json["monster_spawn_light_level"].to_string())
+                    .map_err(|e| format!("{id} monster_spawn_light_level: {e:?}"))?;
+        }
+        if let Some(v) = json["monster_spawn_block_light_limit"]
+            .as_i64()
+            .and_then(|n| i32::try_from(n).ok())
+        {
+            out.monster_spawn_block_light_limit = v;
+        }
+        if let Some(name) = json["skybox"].as_str() {
+            out.skybox = match name {
+                "none" => Skybox::None,
+                "overworld" => Skybox::Overworld,
+                "end" => Skybox::End,
+                other => return Err(format!("unknown skybox {other:?}")),
+            };
+        }
+        if let Some(name) = json["cardinal_light"].as_str() {
+            out.cardinal_light = match name {
+                "default" => CardinalLight::Default,
+                "nether" => CardinalLight::Nether,
+                other => return Err(format!("unknown cardinal light {other:?}")),
+            };
+        }
+        for (key, field) in [
+            ("water_evaporates", &mut out.water_evaporates),
+            ("fast_lava", &mut out.fast_lava),
+            ("respawn_anchor_works", &mut out.respawn_anchor_works),
+            (
+                "nether_portal_spawns_piglin",
+                &mut out.nether_portal_spawns_piglin,
+            ),
+            ("piglins_zombify", &mut out.piglins_zombify),
+            ("snow_golem_melts", &mut out.snow_golem_melts),
+            ("can_start_raid", &mut out.can_start_raid),
+        ] {
+            if let Some(v) = bool_attr(key) {
+                *field = v;
+            }
+        }
+        if let Some(v) = attribute("sky_light_level").as_f64() {
+            out.sky_light_level = v as f32;
+        }
+        for (key, rule) in [
+            ("bed_rule", &mut out.bed_rule),
+            ("straw_bed_rule", &mut out.straw_bed_rule),
+        ] {
+            if !attribute(key).is_null() {
+                *rule = BedRule::from_json(attribute(key))?;
+            }
+        }
+        Ok(out)
     }
 
     pub fn has_timeline(&self, id: &str) -> bool {
@@ -438,5 +552,74 @@ mod tests {
         let end = DimensionFacts::of_builtin_level(LevelKey::END);
         assert!(!end.has_timeline("minecraft:day"));
         assert!(end.has_timeline("minecraft:villager_schedule"));
+    }
+}
+
+#[cfg(test)]
+mod level_type_tests {
+    use super::*;
+
+    #[test]
+    fn a_partial_type_changes_only_the_fields_it_names() {
+        let json = serde_json::json!({
+            "min_y": -32, "height": 128, "logical_height": 128,
+            "coordinate_scale": 8.0,
+            "has_fixed_time": true,
+            "monster_spawn_light_level": {"type": "minecraft:uniform", "min_inclusive": 0, "max_inclusive": 15},
+            "attributes": {"minecraft:gameplay/fast_lava": true, "minecraft:gameplay/sky_light_level": 4.0},
+        });
+        let facts =
+            DimensionFacts::patched(DimensionFacts::overworld(), "test:pocket", &json).unwrap();
+        assert_eq!(facts.id, "test:pocket");
+        assert_eq!((facts.height.min_y, facts.height.height), (-32, 128));
+        assert_eq!(facts.coordinate_scale, 8.0);
+        assert!(facts.has_fixed_time && facts.fast_lava);
+        assert_eq!(facts.sky_light_level, 4.0);
+        assert!(matches!(
+            facts.monster_spawn_light_level,
+            IntProvider::Uniform { min: 0, max: 15 }
+        ));
+        // untouched fields stay the Overworld's
+        assert_eq!(facts.infiniburn, "#minecraft:infiniburn_overworld");
+        assert!(facts.piglins_zombify && facts.can_start_raid && !facts.respawn_anchor_works);
+    }
+
+    #[test]
+    fn a_refused_field_is_an_error_not_a_default() {
+        let bad = |extra: serde_json::Value| {
+            let mut json = serde_json::json!({"min_y": 0, "height": 64});
+            json.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            DimensionFacts::patched(DimensionFacts::overworld(), "test:x", &json).is_err()
+        };
+        assert!(bad(serde_json::json!({"skybox": "moon"})));
+        assert!(bad(serde_json::json!({"cardinal_light": "up"})));
+        assert!(
+            DimensionFacts::patched(
+                DimensionFacts::overworld(),
+                "test:x",
+                &serde_json::json!({"min_y": 7, "height": 64}),
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn levels_answer_their_own_type_until_the_table_is_replaced() {
+        let key = LevelKey::parse("test:facts_pocket").unwrap();
+        assert_eq!(DimensionFacts::of_level(key).id, "minecraft:overworld");
+        let mut own = DimensionFacts::overworld().clone();
+        own.id = "test:facts_pocket".into();
+        own.coordinate_scale = 4.0;
+        DimensionFacts::set_levels(vec![(key, own)]);
+        assert_eq!(DimensionFacts::of_level(key).coordinate_scale, 4.0);
+        // a built-in level without its own entry still answers its vanilla type
+        assert_eq!(
+            DimensionFacts::of_level(LevelKey::NETHER).coordinate_scale,
+            8.0
+        );
+        DimensionFacts::set_levels(Vec::new());
+        assert_eq!(DimensionFacts::of_level(key).id, "minecraft:overworld");
     }
 }

@@ -881,6 +881,7 @@ mod tests {
             blinks: Default::default(),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
             pathfindable_overrides: Default::default(),
         };
         // Every texture its own rect, so a swapped texture shows.

@@ -16,20 +16,21 @@ use mod_api::{EntityRef, NativeRemovalReason};
 impl Game<'_> {
     /// Removes the entity with no death and no loot (`Entity.discard`): a
     /// chest boat or a minecart with a chest still drops what it holds, and
-    /// a boat its lead, as vanilla's `remove` does. False for a player, or a
-    /// stale handle.
+    /// a boat its lead, as vanilla's `remove` does. False for a player, a dragon part,
+    /// or a stale handle.
     pub(super) fn entity_discard(&mut self, entity: EntityRef) -> bool {
         self.entity_remove(entity, NativeRemovalReason::Discarded)
     }
     /// Removes the entity for `reason` (`Entity.remove`): `Discarded`, as
     /// `discard`, or `Killed`, which also runs a mob's effects that act on
     /// removal (Oozing's slimes, Weaving's cobwebs, Wind Charged's burst),
-    /// still with no death and no loot. False for a player, or a stale
+    /// still with no death and no loot. False for a player, a dragon part, or a stale
     /// handle.
     pub(super) fn entity_remove(&mut self, entity: EntityRef, reason: NativeRemovalReason) -> bool {
         let killed = reason == NativeRemovalReason::Killed;
         match self.native_entity_target(entity) {
-            None | Some(Target::Player | Target::Guest(_)) => false,
+            // A part leaves the level with its dragon, never alone.
+            None | Some(Target::Player | Target::Guest(_) | Target::DragonPart(_)) => false,
             Some(Target::Mob(id)) => {
                 self.remove_mob_now(id, killed);
                 true
@@ -225,8 +226,10 @@ mod tests {
 
         with_game(|game| {
             game.others.push(OtherEntity {
+                knot_check: None,
                 join: Default::default(),
                 item_transformation: None,
+                interaction: None,
                 id: 12,
                 kind: "minecraft:marker".into(),
                 position: Vec3::ZERO,
@@ -331,8 +334,10 @@ mod tests {
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
             game.others.push(OtherEntity {
+                knot_check: None,
                 join: Default::default(),
                 item_transformation: None,
+                interaction: None,
                 id: 12,
                 kind: "minecraft:text_display".into(),
                 position: Vec3::new(1.0, 70.0, 1.0),
@@ -513,8 +518,10 @@ mod tests {
 
         with_game(|game| {
             game.others.push(OtherEntity {
+                knot_check: None,
                 join: Default::default(),
                 item_transformation: None,
+                interaction: None,
                 id: 12,
                 kind: "minecraft:marker".into(),
                 position: Vec3::ZERO,

@@ -192,6 +192,9 @@ impl FoodWorld for TickWorld<'_> {
             victim: self.victim,
             causing: 0,
             invulnerable: false,
+            permanently_invulnerable: false,
+            invulnerable_time: false,
+            creative_source: false,
             client_loaded: self.client_loaded,
             rules: self.rules,
             source: self

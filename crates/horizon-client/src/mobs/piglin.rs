@@ -405,7 +405,7 @@ fn is_baby_riding_baby(m: &Mob, w: &MobWorld) -> bool {
 /// `Hoglin.isConverting` and `AbstractPiglin.isConverting`: in a dimension
 /// that is not piglin safe, a mob that is not immune and has AI.
 fn converting(m: &Mob, w: &MobWorld) -> bool {
-    !w.nether && !m.extra.flag2 && !m.no_ai
+    w.dimension_type.piglins_zombify && !m.extra.flag2 && !m.no_ai
 }
 /// `Hoglin.getAmbientSound`: the sound of the activity it is in
 /// (`HoglinAi.getSoundForCurrentActivity`).
@@ -1811,7 +1811,7 @@ pub fn ai_step(
         }
     }
     // Zombification outside the Nether (piglins without immunity, hoglins).
-    if !w.nether && !m.extra.flag2 && m.alive() {
+    if w.dimension_type.piglins_zombify && !m.extra.flag2 && m.alive() {
         m.extra.counter2 += 1;
         if m.extra.counter2 > CONVERSION {
             // `Piglin.finishConversion` runs `PiglinAi.cancelAdmiring` first:
@@ -1856,6 +1856,19 @@ pub fn ai_step(
                 ),
             };
             events.push(MobEvent::Sound(sound, m.center(), 1.0, 1.0));
+            // Conversion also drops the piglin's internal inventory.
+            if m.species() == Species::Piglin {
+                for stack in m.extra.inventory.drain(..).filter(|stack| stack.count > 0) {
+                    events.push(MobEvent::DropStack {
+                        mob: m.id,
+                        stack,
+                        at: [m.position.x, m.position.y, m.position.z],
+                    });
+                }
+            }
+            // `Hoglin.finishConversion` is `ConversionParams.single(this, true,
+            // false)`, `AbstractPiglin.finishConversion` `(this, true, true)`;
+            // both leave the new mob nauseous (the game adds it).
             events.push(MobEvent::Convert {
                 from: Box::new(m.clone()),
                 kind,
@@ -2014,14 +2027,14 @@ pub fn piglin_anim(m: &Mob, s: &State, p: &mut Poses) {
     } else {
         PiglinPose::Default
     };
-    piglin_pose_holding(
+    piglin_pose_humanoid(
         p,
         s,
         pose,
         (25.0, m.extra.using_item as f32),
-        m.main_arm_left(),
-        m.extra.passenger,
+        (m.main_arm_left(), m.extra.passenger),
         spear,
+        Some(m),
     );
 }
 /// `PiglinArmPose`.
@@ -2058,6 +2071,26 @@ pub fn piglin_pose_holding(
     passenger: bool,
     spear: Option<(crate::spear::Kinetic, f32)>,
 ) {
+    piglin_pose_humanoid(
+        p,
+        s,
+        pose,
+        (max_charge, ticks),
+        (left, passenger),
+        spear,
+        None,
+    );
+}
+
+fn piglin_pose_humanoid(
+    p: &mut Poses,
+    s: &State,
+    pose: PiglinPose,
+    (max_charge, ticks): (f32, f32),
+    (left, passenger): (bool, bool),
+    spear: Option<(crate::spear::Kinetic, f32)>,
+    selected: Option<&Mob>,
+) {
     use super::anim::{ArmPose, Hum, crossbow_charge, crossbow_hold, humanoid};
     let mut h = Hum::new(ArmPose::Empty, ArmPose::Empty);
     if let Some((kinetic, ticks_using)) = spear {
@@ -2069,6 +2102,14 @@ pub fn piglin_pose_holding(
         }
         h.spear[side] = Some(kinetic);
         h.spear_ticks[side] = ticks_using;
+    }
+    if let Some(m) = selected {
+        let [main, off] = super::anim::humanoid_arm_poses(m, m.extra.held_arm_pose, s.swing);
+        (h.right, h.left) = if left { (off, main) } else { (main, off) };
+        let main_ticks = h.spear_ticks[usize::from(left)];
+        super::anim::humanoid_spears(m, &mut h, s.partial);
+        // An admired off-hand item leaves the main-hand spear at rest.
+        h.spear_ticks[usize::from(left)] = main_ticks;
     }
     h.weapon_swing = pose == PiglinPose::MeleeWeapon;
     h.left_main = left;
@@ -2303,6 +2344,7 @@ mod crossbow_tests {
             loot: &loot,
             damage: None,
             player: None,
+            player_killed: false,
             luck: 0.0,
             vehicle: None,
             mob_drops: true,
@@ -2392,6 +2434,59 @@ mod crossbow_tests {
 mod conversion_tests {
     use super::*;
     use crate::mobs::world::with_test_world;
+
+    #[test]
+    fn converting_piglin_drops_its_inventory_before_conversion() {
+        let ran = with_test_world(&[], |w, types| {
+            let at = [0.5, 64.0, 0.5];
+            let mut m = Mob::new(
+                1,
+                std::sync::Arc::new(types.types["minecraft:piglin"].clone()),
+                Vec3::new(at[0], at[1], at[2]),
+                0.0,
+            );
+            let stacks = vec![
+                crate::items::ItemStack {
+                    item: "minecraft:gold_nugget".into(),
+                    count: 7,
+                    damage: 0,
+                    extra: None,
+                },
+                crate::items::ItemStack {
+                    item: "minecraft:gold_ingot".into(),
+                    count: 3,
+                    damage: 0,
+                    extra: None,
+                },
+            ];
+            m.extra.inventory = stacks.clone();
+            m.extra.set_slot_id(
+                horizon_items::equipment::OFFHAND,
+                Some("minecraft:gold_ingot".into()),
+            );
+            m.extra.using_item = 60;
+            m.extra.counter2 = CONVERSION + 1;
+            let mut events = Vec::new();
+            ai_step(&mut m, w, &mut LegacyRandom::new(0), &mut events);
+            let relevant: Vec<_> = events
+                .iter()
+                .filter(|e| {
+                    matches!(
+                        e,
+                        MobEvent::DropItem { .. }
+                            | MobEvent::DropStack { .. }
+                            | MobEvent::Convert { .. }
+                    )
+                })
+                .collect();
+            assert!(
+                matches!(relevant.as_slice(), [MobEvent::DropItem { .. }, MobEvent::DropStack { stack: a, at: p, .. }, MobEvent::DropStack { stack: b, .. }, MobEvent::Convert { from, .. }] if *a == stacks[0] && *b == stacks[1] && *p == at && from.extra.inventory.is_empty())
+            );
+            assert!(m.extra.inventory.is_empty());
+        });
+        // Without the vanilla data there is nothing to check.
+        let _ = ran;
+    }
 
     /// `Piglin.finishConversion` cancels the admire before it converts: the
     /// item in the off hand is dropped at the piglin's feet and the zombified

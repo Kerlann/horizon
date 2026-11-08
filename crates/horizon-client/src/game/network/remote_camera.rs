@@ -67,7 +67,7 @@ pub(super) fn entity_post_effect(kind: &str) -> Option<&'static str> {
 
 impl Game<'_> {
     /// `ClientPacketListener.handleSetCamera`.
-    pub(super) fn remote_set_camera(&mut self, camera_id: i32) {
+    pub(in crate::game) fn remote_set_camera(&mut self, camera_id: i32) {
         let in_level = self.mobs.iter().any(|m| m.id == camera_id as u32);
         let player = self
             .remote

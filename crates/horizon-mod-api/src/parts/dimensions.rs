@@ -114,6 +114,14 @@ impl DimensionsRegistrar for PartRegistrar {
                  height {}, logical_height {}",
                 self.mod_id, settings.min_y, settings.height, settings.logical_height
             ))
+        } else if let Some(why) = settings
+            .invalid_biome_source()
+            .or_else(|| settings.invalid_field())
+        {
+            Some(format!(
+                "{} registered dimension {id} with a dimension type the game refuses: {why}",
+                self.mod_id
+            ))
         } else {
             None
         };

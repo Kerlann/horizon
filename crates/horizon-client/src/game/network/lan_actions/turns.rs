@@ -92,6 +92,12 @@ impl Game<'_> {
         conn: u32,
         outer_dimension: Dim,
     ) -> Result<GuestSwap, TurnRefused> {
+        let spawn_protection = self.lan.as_ref().and_then(|host| {
+            host.hub
+                .guests
+                .get(i)
+                .and_then(|g| self.spawn_protection_for(host, g.uuid))
+        });
         let outer = BuildingPlayer {
             conn: self.lan_acting,
             dimension: outer_dimension,
@@ -349,6 +355,10 @@ impl Game<'_> {
             std::mem::swap(&mut self.level.player_extra, &mut g.saved);
             std::mem::swap(&mut self.level.last_death, &mut g.last_death);
         });
+        let player_save_projection = (
+            self.level.player_impulse_grace.take(),
+            self.level.player_fall_particles.take(),
+        );
         let g = &host.hub.guests[i];
         std::mem::swap(&mut self.stats, &mut play.stats);
         std::mem::swap(&mut self.hook, &mut play.hook);
@@ -365,12 +375,14 @@ impl Game<'_> {
             self.lan_acting_uuid.replace(g.uuid),
             self.lan_acting_permission.replace(g.permission),
             self.lan_acting_entity.replace(g.entity_id as u32),
+            std::mem::replace(&mut self.lan_acting_spawn_protection, spawn_protection),
         );
         let acting_fake = std::mem::replace(&mut self.lan_acting_fake, !g.participates_online());
         let packets = std::mem::take(&mut self.guest_packets);
         let entity_events = std::mem::take(&mut self.guest_entity_events);
         let cooldown_events = std::mem::take(&mut self.guest_cooldowns);
         let player_sounds = std::mem::take(&mut self.guest_player_sounds);
+        let block_sounds = std::mem::take(&mut self.guest_block_sounds);
         let equipment_breaks = std::mem::take(&mut self.guest_equipment_breaks);
         let swings = self.swings_started;
         let projectiles = self.creatures.projectiles.len();
@@ -401,6 +413,7 @@ impl Game<'_> {
             i,
             play,
             player,
+            player_save_projection,
             eye,
             yaw,
             pitch,
@@ -462,6 +475,7 @@ impl Game<'_> {
             modifiers,
             cooldown_events,
             player_sounds,
+            block_sounds,
             combat: host_combat,
             building_boxes,
         })
@@ -518,6 +532,7 @@ impl Game<'_> {
             i,
             mut play,
             mut player,
+            player_save_projection,
             eye,
             yaw,
             pitch,
@@ -581,6 +596,7 @@ impl Game<'_> {
             modifiers,
             cooldown_events,
             player_sounds,
+            block_sounds,
         } = swap;
         // `ServerPlayer.permissions()` back to the host's after the turn.
         self.ui.registries.permission = permission;
@@ -640,6 +656,13 @@ impl Game<'_> {
             let sound = LevelSound::new(&name, at, volume, pitch).in_source(SoundSource::Players);
             self.send_level_sound(sound, Some(conn));
         }
+        // Block-source sounds exclude the acting player, like player sounds.
+        for (name, at, volume, pitch) in
+            std::mem::replace(&mut self.guest_block_sounds, block_sounds)
+        {
+            let sound = LevelSound::new(&name, at, volume, pitch).in_source(SoundSource::Blocks);
+            self.send_level_sound(sound, Some(conn));
+        }
         let outgoing = std::mem::replace(&mut self.guest_packets, packets);
         let Some(host) = self.lan.as_mut() else {
             unreachable!("LanHost dropped inside a guest turn; closes are deferred");
@@ -686,6 +709,7 @@ impl Game<'_> {
             self.lan_acting_uuid,
             self.lan_acting_permission,
             self.lan_acting_entity,
+            self.lan_acting_spawn_protection,
         ) = acting;
         self.lan_acting_fake = acting_fake;
         self.known_movement = known_movement;
@@ -784,6 +808,8 @@ impl Game<'_> {
             std::mem::swap(&mut self.level.recipe_book, &mut g.recipe_book);
             std::mem::swap(&mut self.level.player_extra, &mut g.saved);
             std::mem::swap(&mut self.level.last_death, &mut g.last_death);
+            self.level.player_impulse_grace = player_save_projection.0;
+            self.level.player_fall_particles = player_save_projection.1;
             std::mem::swap(&mut self.stats, &mut play.stats);
             std::mem::swap(&mut self.hook, &mut play.hook);
             self.adv.loaded = adv_loaded;
@@ -833,6 +859,8 @@ impl Game<'_> {
             self.eye = eye.1;
             std::mem::swap(&mut self.player, &mut player);
             if let Some(mut m) = player {
+                // Travel can end a glide on a climbable before the next action.
+                g.fall_flying = m.fall_flying;
                 g.health = m.health.health();
                 g.food = m.health.food.food;
                 g.saturation = m.health.food.saturation;

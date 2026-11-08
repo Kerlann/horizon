@@ -14,12 +14,8 @@ use horizon_core::{
 /// A new projectile entity's own random: vanilla seeds every entity's random
 /// unpredictably, and a projectile's spread (and an arrow's base damage) come
 /// from it, never from the shooter's random.
-pub fn own_random(shooter: &crate::mobs::Mob) -> horizon_core::random::LegacyRandom {
-    horizon_core::random::LegacyRandom::new(
-        i64::from(shooter.id).wrapping_mul(0x9E37_79B9)
-            ^ i64::from(shooter.age)
-            ^ shooter.position.x.to_bits() as i64,
-    )
+pub fn own_random(_shooter: &crate::mobs::Mob) -> horizon_core::random::LegacyRandom {
+    crate::random_source::entity()
 }
 
 /// A projectile's `Entity.random`. Two projectiles are equal whatever their
@@ -34,31 +30,10 @@ impl PartialEq for OwnRandom {
 }
 
 /// `RandomSource.create()` for a new entity's random: `seedUniquifier ^
-/// nanoTime`. Every call steps a process-wide uniquifier (as `Random`'s) and
-/// mixes the position in through a splitmix64 finalizer, so two entities made
-/// at one spot get independent streams. Draws nothing from any level random.
-pub fn unique_random(position: Vec3) -> horizon_core::random::LegacyRandom {
-    use std::sync::atomic::{AtomicI64, Ordering};
-    static UNIQUIFIER: AtomicI64 = AtomicI64::new(0x1F3D_5B79_A2C4_E681);
-    const STEP: i64 = 1_181_783_497_276_652_981;
-    let mut current = UNIQUIFIER.load(Ordering::Relaxed);
-    let step = loop {
-        let next = current
-            .wrapping_mul(STEP)
-            .wrapping_add(0x9E37_79B9_7F4A_7C15_u64 as i64);
-        match UNIQUIFIER.compare_exchange_weak(current, next, Ordering::Relaxed, Ordering::Relaxed)
-        {
-            Ok(_) => break next,
-            Err(actual) => current = actual,
-        }
-    };
-    let mut z = (step as u64)
-        ^ position.x.to_bits()
-        ^ position.y.to_bits().rotate_left(21)
-        ^ position.z.to_bits().rotate_left(42);
-    z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
-    z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
-    horizon_core::random::LegacyRandom::new((z ^ (z >> 31)) as i64)
+/// nanoTime`, shared with the other entity constructors. Draws nothing from
+/// any level random.
+pub fn unique_random(_position: Vec3) -> horizon_core::random::LegacyRandom {
+    crate::random_source::entity()
 }
 
 /// `ProjectileDeflection`: how a projectile's movement turns.
@@ -382,8 +357,10 @@ pub trait ProjectileWorld {
     fn empty(&self, _p: [i32; 3]) -> bool {
         true
     }
-    /// `loadedAndEntityCanStandOn`: a sturdy top face.
-    fn solid(&self, _p: [i32; 3]) -> bool {
+    /// `Level.loadedAndEntityCanStandOn(p, projectile)` with the projectile's
+    /// feet at `entity_y`: the top face of the block's collision shape is
+    /// full (`Block.isFaceFull`), as on a top slab, not only a full cube.
+    fn can_stand_on(&self, _p: [i32; 3], _entity_y: f64) -> bool {
         false
     }
     /// The block at `p` is a `BaseFireBlock` (fire, soul fire) whose
@@ -937,21 +914,18 @@ impl Projectile {
         self.previous_yaw = self.yaw;
         self.previous_pitch = self.pitch;
     }
-    /// A shulker's bullet from its block toward `target`, first leaving
+    /// `ShulkerBullet.<init>(level, owner, target, invalidStartAxis)`: a
+    /// shulker's bullet at `at`, the centre of its owner's box
+    /// (`owner.getBoundingBox().getCenter()`), toward `target`, first leaving
     /// along an axis other than the one it is attached on.
     pub fn shulker_bullet(
         w: &impl ProjectileWorld,
-        owner_block: [i32; 3],
+        at: Vec3,
         owner: Who,
         target: Who,
         attach_axis: u8,
         seed: u64,
     ) -> Self {
-        let at = Vec3::new(
-            f64::from(owner_block[0]) + 0.5,
-            f64::from(owner_block[1]) + 0.5,
-            f64::from(owner_block[2]) + 0.5,
-        );
         let mut p = Self::new(
             ProjectileKind::ShulkerBullet {
                 target: Some(target),
@@ -1169,7 +1143,7 @@ impl Projectile {
                     lo.y.floor() as i32,
                     ((lo.z + hi.z) / 2.0).floor() as i32,
                 ];
-                if w.solid([p[0] + s[0], p[1] + s[1], p[2] + s[2]])
+                if w.can_stand_on([p[0] + s[0], p[1] + s[1], p[2] + s[2]], self.position.y)
                     || p[axis as usize] == t[axis as usize]
                 {
                     self.select_next_move(w, Some(axis));
@@ -1185,9 +1159,9 @@ impl Projectile {
         let inertia = f64::from(match self.kind {
             ProjectileKind::WitherSkull { dangerous: true } => 0.73_f32,
             // AbstractWindCharge.getInertia and getLiquidInertia.
-            ProjectileKind::WindCharge | ProjectileKind::BreezeWindCharge => 1.0,
-            _ if water => 0.8,
-            _ => 0.95,
+            ProjectileKind::WindCharge | ProjectileKind::BreezeWindCharge => 1.0_f32,
+            _ if water => 0.8_f32,
+            _ => 0.95_f32,
         });
         let v = self.velocity;
         let len = (v.x * v.x + v.y * v.y + v.z * v.z).sqrt().max(1.0e-9);
@@ -1458,10 +1432,12 @@ impl Projectile {
                 return (false, Hit::None);
             }
             self.position = to;
+            // LlamaSpit.getAirDrag is 0.99F, widened before it scales motion.
+            let drag = f64::from(0.99_f32);
             self.velocity = Vec3::new(
-                self.velocity.x * 0.99,
-                self.velocity.y * 0.99 - self.get_gravity(),
-                self.velocity.z * 0.99,
+                self.velocity.x * drag,
+                self.velocity.y * drag - self.get_gravity(),
+                self.velocity.z * drag,
             );
             self.update_rotation();
             return (self.position.y > -128.0 && self.age < 6000, spit_hit);
@@ -1684,8 +1660,8 @@ mod tests {
         p.tick(&w);
         // ThrowableProjectile: gravity before inertia, then move.
         // `getAirDrag` is 0.99F, widened to double: 0.9900000095367432.
-        assert!((p.velocity.y - (-0.03 * 0.99)).abs() < 1e-9);
-        assert!((p.position.x - f64::from(0.99_f32)).abs() < 1e-9);
+        assert_eq!(p.velocity.y.to_bits(), 0xbf9e_69ad_47ae_147b);
+        assert_eq!(p.position.x.to_bits(), 0x3fef_ae14_8000_0000);
     }
     /// One fire block in the cell (0, 99, 0), open air around it: a throwable
     /// inside that cell is set alight, and one that has left it burns down.
@@ -2087,6 +2063,47 @@ mod tests {
         );
         assert_eq!(held.position, Vec3::new(0.5, 110.0, 0.5));
     }
+    /// `ShulkerBullet.tick`: a bullet turns off its axis before the block
+    /// ahead when it could stand on it (`loadedAndEntityCanStandOn`, asked
+    /// at the bullet's own height), and flies on toward one it could not.
+    #[test]
+    fn a_shulker_bullet_turns_before_a_block_it_could_stand_on() {
+        struct Ahead(Vec<(Who, Aabb)>, bool);
+        impl ProjectileWorld for Ahead {
+            fn clip(&self, _: Vec3, _: Vec3) -> Option<(Vec3, [i32; 3], [i32; 3])> {
+                None
+            }
+            fn in_water(&self, _: Aabb) -> bool {
+                false
+            }
+            fn targets(&self) -> &[(Who, Aabb)] {
+                &self.0
+            }
+            fn can_stand_on(&self, p: [i32; 3], entity_y: f64) -> bool {
+                self.1 && p == [1, 64, 0] && (64.0..65.0).contains(&entity_y)
+            }
+        }
+        // East and above: with the X axis ruled out, up is the only way on.
+        let target = Aabb::new(Vec3::new(20.0, 70.0, 0.0), Vec3::new(21.0, 71.0, 1.0));
+        for standable in [false, true] {
+            let mut p = Projectile::new(
+                ProjectileKind::ShulkerBullet {
+                    target: Some(Who::Mob(2)),
+                    dir: Some(5),
+                    steps: 30,
+                    delta: [0.15, 0.0, 0.0],
+                    seed: 1,
+                },
+                Vec3::new(0.5, 64.5, 0.5),
+                None,
+            );
+            p.tick(&Ahead(vec![(Who::Mob(2), target)], standable));
+            let ProjectileKind::ShulkerBullet { dir, .. } = p.kind else {
+                unreachable!()
+            };
+            assert_eq!(dir, Some(if standable { 1 } else { 5 }), "{standable}");
+        }
+    }
     #[test]
     fn llama_spit_moves_first_then_drags_and_falls() {
         let mut p = Projectile::new(ProjectileKind::LlamaSpit, Vec3::new(0.0, 100.0, 0.0), None);
@@ -2095,7 +2112,7 @@ mod tests {
         let (keep, _) = p.tick(&w);
         assert!(keep);
         assert!((p.position.x - 1.0).abs() < 1e-9);
-        assert!((p.velocity.x - 0.99).abs() < 1e-9);
+        assert_eq!(p.velocity.x.to_bits(), 0x3fef_ae14_8000_0000);
         assert!((p.velocity.y + 0.06).abs() < 1e-9);
     }
     #[test]

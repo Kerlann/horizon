@@ -14,12 +14,12 @@ use glam::{DVec3, Mat4};
 use horizon_client::{
     block_entity_render::diffuse_lights,
     mesher::Vertex,
-    mobs::{Mob, anim, living::wrap},
+    mobs::{Mob, anim},
 };
 
 /// The render state of `m` at `partial` (`LivingEntityRenderer.extractRenderState`).
 pub(super) fn mob_render<'a>(m: &'a Mob, partial: f32) -> NativeMobRender<'a> {
-    let body = m.previous_body_yaw + wrap(m.body_yaw - m.previous_body_yaw) * partial;
+    let body = anim::body_rot(m, partial);
     // The walk cycle, head turn and age as the vanilla models read them:
     // no walking while riding or dead, a baby's legs three times as far
     // (`WalkAnimationState.position(partial)`, `positionScale`).

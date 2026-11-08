@@ -357,6 +357,32 @@ impl WorldgenOverrides {
         };
         LevelHeight::of_type(&ty, types)
     }
+    /// The dimension type a mod or a pack gave `level`, resolved as `level_height` does: a built-in
+    /// type's facts with the fields the pack's JSON names over them. None when the level takes a vanilla
+    /// type unchanged, and an error when a field the game reads is refused.
+    pub fn level_facts(
+        &self,
+        level: &str,
+    ) -> Option<Result<crate::dimension_type::DimensionFacts, String>> {
+        use crate::dimension_type::DimensionFacts;
+        let none = BTreeMap::new();
+        let types = self.entries.get(DIMENSION_TYPES).unwrap_or(&none);
+        let ty = match self.entries.get(DIMENSIONS).and_then(|d| d.get(level)) {
+            Some(stem) => serde_json::from_str::<Value>(stem).ok()?["type"].clone(),
+            None => Value::String(level.to_owned()),
+        };
+        let (id, json) = match &ty {
+            Value::String(id) => (
+                id.as_str(),
+                serde_json::from_str::<Value>(types.get(id)?).ok()?,
+            ),
+            inline @ Value::Object(_) => (level, inline.clone()),
+            _ => return None,
+        };
+        // A pack's type for a vanilla id changes that type; any other starts from the Overworld's.
+        let base = DimensionFacts::base_for_type(id);
+        Some(DimensionFacts::patched(base, id, &json))
+    }
     /// The entries packs give `bundle`.
     pub fn entries(&self, bundle: &str) -> impl Iterator<Item = (&str, &str)> {
         self.entries
@@ -638,5 +664,53 @@ mod tests {
         assert_eq!(tag, r#"{"values":["minecraft:plains"]}"#);
         let (_, stem) = o.entries(DIMENSIONS).next().unwrap();
         assert!(!stem.contains("molten_peaks") && stem.contains("minecraft:plains"));
+    }
+}
+
+#[cfg(test)]
+mod level_facts_tests {
+    use super::*;
+
+    #[test]
+    fn a_mods_level_takes_the_fields_it_set_over_the_overworlds() {
+        let mut o = WorldgenOverrides::default();
+        o.add_mod_dimension(&ModDimension {
+            id: "test:pocket".into(),
+            stem: r#"{"type":"test:pocket"}"#.into(),
+            dimension_type: r#"{"min_y":-64,"height":384,"coordinate_scale":2.0,
+                "attributes":{"minecraft:gameplay/water_evaporates":true}}"#
+                .into(),
+        });
+        let facts = o.level_facts("test:pocket").unwrap().unwrap();
+        assert_eq!(facts.coordinate_scale, 2.0);
+        assert!(facts.water_evaporates && !facts.fast_lava);
+        // a level on a vanilla type no pack changed has nothing of its own
+        assert!(o.level_facts("minecraft:the_nether").is_none());
+    }
+
+    #[test]
+    fn a_packs_type_for_a_vanilla_id_changes_that_vanilla_type() {
+        let mut o = WorldgenOverrides::default();
+        o.set(
+            DIMENSION_TYPES,
+            "minecraft:the_nether",
+            r#"{"min_y":0,"height":256,"logical_height":128,"has_ceiling":true,"has_skylight":false,"ambient_light":0.5}"#.into(),
+        );
+        let facts = o.level_facts("minecraft:the_nether").unwrap().unwrap();
+        assert_eq!(facts.ambient_light, 0.5);
+        // the rest stays the Nether's, not the Overworld's
+        assert!(facts.fast_lava && facts.respawn_anchor_works);
+        assert_eq!(facts.coordinate_scale, 8.0);
+    }
+
+    #[test]
+    fn a_field_the_game_refuses_is_reported() {
+        let mut o = WorldgenOverrides::default();
+        o.add_mod_dimension(&ModDimension {
+            id: "test:bad".into(),
+            stem: r#"{"type":"test:bad"}"#.into(),
+            dimension_type: r#"{"min_y":0,"height":64,"skybox":"moon"}"#.into(),
+        });
+        assert!(o.level_facts("test:bad").unwrap().is_err());
     }
 }

@@ -5,7 +5,7 @@
 //! Reads return `None`, writes false, for a stale handle or on a client.
 use super::entity::{Entity as _, EntityHandle, with_entity_mut};
 use super::{
-    Game,
+    Dim, Game,
     commands::{Target, entity_pitch},
 };
 use horizon_core::geometry::Vec3;
@@ -29,7 +29,7 @@ impl Game<'_> {
     /// Moves the entity to `pos` in its level (`Entity.teleportTo`), as
     /// `/tp` does: a player is placed there and told, a rider gets off. With
     /// `rotation` (yaw, pitch in degrees) it also turns. False for a position
-    /// outside the world's bounds, for wall-mounted entities, or when the
+    /// outside the world's bounds, for wall-mounted entities or dragon parts, or when the
     /// requested rotation cannot be stored.
     pub(super) fn entity_teleport_to(
         &mut self,
@@ -37,11 +37,47 @@ impl Game<'_> {
         pos: [f64; 3],
         rotation: Option<[f32; 2]>,
     ) -> bool {
-        let Some(t) = self.native_entity_target(entity) else {
+        let Some(t) = self.teleport_target(entity, pos, rotation) else {
             return false;
         };
+        self.teleport_to(t, pos, rotation, true);
+        true
+    }
+    /// Sends the entity to `pos` in the level `dimension`
+    /// (`Entity.teleportTo(ServerLevel, ..)`), as `/execute in <dimension> run
+    /// tp` does: the level opens if it isn't, a player arrives after the
+    /// current tick, a vehicle takes its passengers along. In the entity's own
+    /// level it is `entity_teleport_to`. False for what `entity_teleport_to`
+    /// refuses, a dimension that isn't registered, and kinds that cannot change
+    /// level here (anything but a server guest, a mob, a boat or a minecart).
+    pub(super) fn entity_teleport_to_level(
+        &mut self,
+        entity: EntityRef,
+        dimension: &str,
+        pos: [f64; 3],
+        rotation: Option<[f32; 2]>,
+    ) -> bool {
+        let Some(t) = self.teleport_target(entity, pos, rotation) else {
+            return false;
+        };
+        if !Dim::exists(dimension) {
+            return false;
+        }
+        self.teleport_to_level(t, Dim::from_id(dimension), pos, rotation)
+    }
+    /// What a teleport of `entity` to `pos` moves, when `/tp` could place it there.
+    fn teleport_target(
+        &self,
+        entity: EntityRef,
+        pos: [f64; 3],
+        rotation: Option<[f32; 2]>,
+    ) -> Option<Target> {
+        let t = self.native_entity_target(entity)?;
         if !in_bounds(pos)
-            || matches!(t, Target::Frame(_) | Target::Painting(_))
+            || matches!(
+                t,
+                Target::Frame(_) | Target::Painting(_) | Target::DragonPart(_)
+            )
             || rotation.is_some_and(|r| {
                 !r.iter().all(|v| v.is_finite())
                     || !matches!(
@@ -50,10 +86,9 @@ impl Game<'_> {
                     )
             })
         {
-            return false;
+            return None;
         }
-        self.teleport_to(t, pos, rotation, true);
-        true
+        Some(t)
     }
     /// Turns the entity to `yaw` and `pitch` in degrees (`Entity.setYRot`,
     /// `setXRot`): the pitch wraps and is clamped to -90..90. False for kinds
@@ -284,8 +319,10 @@ mod tests {
             let stand = game.entity(13).unwrap();
             assert!(!stand.set_rotation(game, 30.0, 10.0));
             game.others.push(super::super::commands::OtherEntity {
+                knot_check: None,
                 join: Default::default(),
                 item_transformation: None,
+                interaction: None,
                 id: 14,
                 kind: "minecraft:marker".into(),
                 position: Vec3::ZERO,

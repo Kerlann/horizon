@@ -522,8 +522,8 @@ fn vanilla_part(model: &str, part: &str) -> String {
         ("puffer_fish_big" | "puffer_fish_medium", "fin_right") => Some("right_blue_fin".into()),
         ("puffer_fish_big" | "puffer_fish_medium", "fin_left") => Some("left_blue_fin".into()),
         // RabbitModel's hind feet (rabbit.rs).
-        ("rabbit", "left_foot") => Some("left_hind_foot".into()),
-        ("rabbit", "right_foot") => Some("right_hind_foot".into()),
+        ("rabbit", "left_foot") => Some("left_hind_leg".into()),
+        ("rabbit", "right_foot") => Some("right_hind_leg".into()),
         (_, "fin_right") => Some("right_fin".into()),
         (_, "fin_left") => Some("left_fin".into()),
         (_, "fin_bottom") => Some("bottom_fin".into()),
@@ -786,7 +786,7 @@ mod tests {
             ("squid", "tentacle0", "tentacle0"),
             ("puffer_fish_medium", "fin_left", "left_blue_fin"),
             ("puffer_fish_small", "fin_right", "right_fin"),
-            ("rabbit", "left_foot", "left_hind_foot"),
+            ("rabbit", "left_foot", "left_hind_leg"),
         ] {
             assert_eq!(vanilla_part(model, part), vanilla, "{model} {part}");
         }
@@ -1107,6 +1107,7 @@ mod tests {
             blinks: Default::default(),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
             pathfindable_overrides: Default::default(),
         };
         // Sprite i spans u and v from 0.2 i to 0.2 i + 0.1.
@@ -1299,6 +1300,10 @@ mod tests {
             let Some((model, layer)) = key.split_once('#') else {
                 continue;
             };
+            // Humanoid equipment slots are internal render layers, not CEM models.
+            if matches!(layer, "helmet" | "chestplate" | "leggings" | "boots") {
+                continue;
+            }
             let Some(adult) = model.strip_suffix("_baby") else {
                 continue;
             };

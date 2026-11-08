@@ -7,7 +7,34 @@
 use super::entity::{Entity as _, EntityHandle, with_entity, with_entity_mut};
 use super::{Game, commands::Target};
 use horizon_core::geometry::{Aabb, Axis, Vec3};
-use mod_api::EntityRef;
+use horizon_core::position::BlockPos;
+use mod_api::{EntityRef, NativeClipBlock, NativeClipFluid, NativeClipHit};
+
+/// `Entity.calculateViewVector` for a look turned `pitch_offset` degrees down: the unit
+/// vector along `yaw` and `pitch + pitch_offset`.
+fn turned_view_vector(yaw: f32, pitch: f32, pitch_offset: f32) -> [f64; 3] {
+    let v = horizon_world::view_direction::view_vector(pitch + pitch_offset, yaw);
+    [v.x, v.y, v.z]
+}
+
+/// `Entity.getOnPos()`: the supporting block when there is one, else the block `1.0E-5F`
+/// under the feet at `position`.
+fn on_block_position(support: Option<BlockPos>, position: Vec3) -> [i32; 3] {
+    match support {
+        Some(p) => [p.x, p.y, p.z],
+        None => [
+            position.x.floor() as i32,
+            (position.y - f64::from(1.0e-5_f32)).floor() as i32,
+            position.z.floor() as i32,
+        ],
+    }
+}
+
+/// The end of a ray `distance` blocks from `from` along the unit vector `look`
+/// (`from.add(look.scale(distance))`).
+fn ray_end(from: [f64; 3], look: [f64; 3], distance: f64) -> [f64; 3] {
+    std::array::from_fn(|i| from[i] + look[i] * distance)
+}
 
 fn corners(b: Aabb) -> [[f64; 3]; 2] {
     let axes = [Axis::X, Axis::Y, Axis::Z];
@@ -186,7 +213,7 @@ impl Game<'_> {
     }
     /// The entity's box (`Entity.getBoundingBox`): its lowest and highest
     /// corner. None for the kinds whose box Horizon doesn't keep (displays,
-    /// markers, End crystals, the dragon). API 379.
+    /// markers, End crystals, the dragon); a dragon part's is its own. API 379.
     pub(super) fn entity_bounding_box(&self, entity: EntityRef) -> Option<[[f64; 3]; 2]> {
         let t = self.native_entity_read_target(entity)?;
         if let Some(p) = self.native_client_player(t) {
@@ -199,6 +226,10 @@ impl Game<'_> {
             return Some(corners(with_entity!(self, h, e => e.bounds())));
         }
         let (lo, hi) = match t {
+            Target::DragonPart(id) => {
+                let (dragon, part) = self.resident_dragon_part(id)?;
+                return Some(corners(dragon.part_geometry(part).1));
+            }
             Target::Frame(id) => self.item_frames.iter().find(|f| f.id == id)?.bounds(),
             Target::Painting(id) => self.paintings.iter().find(|p| p.id == id)?.bounds(),
             _ => return None,
@@ -220,8 +251,62 @@ impl Game<'_> {
     /// its pitch and yaw). API 379.
     pub(super) fn entity_view_vector(&self, entity: EntityRef) -> Option<[f64; 3]> {
         let [yaw, pitch] = self.entity_rotation(entity)?;
-        let v = horizon_world::view_direction::view_vector(pitch, yaw);
-        Some([v.x, v.y, v.z])
+        Some(turned_view_vector(yaw, pitch, 0.0))
+    }
+    /// The unit vector that points up out of the entity's head
+    /// (`Entity.getUpVector`): its view vector turned a quarter of a turn
+    /// toward the zenith.
+    pub(super) fn entity_up_vector(&self, entity: EntityRef) -> Option<[f64; 3]> {
+        let [yaw, pitch] = self.entity_rotation(entity)?;
+        Some(turned_view_vector(yaw, pitch, -90.0))
+    }
+    /// `Entity.mainSupportingBlockPos` of an entity on the ground: the player's own, kept
+    /// as it moved, or the one `Entity.checkSupportingBlock` finds under the box of any
+    /// other that stands.
+    fn native_supporting_block(&self, entity: EntityRef, t: Target) -> Option<BlockPos> {
+        if t == Target::Player
+            && let Some(player) = &self.player
+        {
+            return player.ground.supporting_block;
+        }
+        if !self.entity_on_ground(entity)? {
+            return None;
+        }
+        let (position, bounds) = match self.native_target_guest(t) {
+            Some(g) => (
+                Vec3::new(g.position[0], g.position[1], g.position[2]),
+                g.bounds(),
+            ),
+            None => {
+                with_entity!(self, self.native_walk_entity(entity.id())?, e => (e.position(), e.bounds()))
+            }
+        };
+        self.supporting_block(position, bounds)
+    }
+    /// The block the entity stands on (`Entity.getOnPos`). API 379.
+    pub(super) fn entity_on_block(&self, entity: EntityRef) -> Option<[i32; 3]> {
+        let t = self.native_entity_target(entity)?;
+        let [x, y, z] = self.entity_position(entity)?;
+        Some(on_block_position(
+            self.native_supporting_block(entity, t),
+            Vec3::new(x, y, z),
+        ))
+    }
+    /// What the entity looks at within `distance` blocks of its eyes: `Entity.pick`'s block
+    /// ray along the view vector, outlines and no fluids.
+    pub(super) fn entity_pick(&self, entity: EntityRef, distance: f64) -> Option<NativeClipHit> {
+        if !(distance.is_finite() && distance >= 0.0) {
+            return None;
+        }
+        let from = self.entity_eye_position(entity)?;
+        let to = ray_end(from, self.entity_view_vector(entity)?, distance);
+        self.level_clip(
+            self.entity_level(entity)?,
+            from,
+            to,
+            NativeClipBlock::Outline,
+            NativeClipFluid::None,
+        )
     }
     /// The square of the distance from the entity's feet to `pos`
     /// (`Entity.distanceToSqr`). API 379.
@@ -235,6 +320,164 @@ impl Game<'_> {
 #[cfg(test)]
 mod tests {
     use horizon_core::geometry::{Aabb, Vec3};
+    use mod_api::EntityRef;
+
+    fn assert_near(got: [f64; 3], want: [f64; 3]) {
+        for i in 0..3 {
+            assert!((got[i] - want[i]).abs() < 1.0e-4, "{got:?} is not {want:?}");
+        }
+    }
+
+    /// Unit vectors worked out by hand from `Entity.calculateViewVector`
+    /// (`x = -sin(yaw) cos(pitch)`, `y = -sin(pitch)`, `z = cos(yaw) cos(pitch)`),
+    /// the look turned 90 degrees up for the up vector.
+    #[test]
+    fn the_up_vector_tilts_with_the_look() {
+        let half = std::f64::consts::FRAC_1_SQRT_2;
+        // Level and facing south: straight up.
+        assert_near(super::turned_view_vector(0.0, 0.0, -90.0), [0.0, 1.0, 0.0]);
+        // Looking down 45 degrees, the top of the head leans forward (south).
+        assert_near(
+            super::turned_view_vector(0.0, 45.0, -90.0),
+            [0.0, half, half],
+        );
+        // The same look facing west (yaw 90): forward is -x.
+        assert_near(
+            super::turned_view_vector(90.0, 45.0, -90.0),
+            [-half, half, 0.0],
+        );
+        // Looking straight up, the head's top points back (north when facing south).
+        assert_near(
+            super::turned_view_vector(0.0, -90.0, -90.0),
+            [0.0, 0.0, -1.0],
+        );
+        // No turn is the view vector itself: south, and down 30 degrees.
+        assert_near(super::turned_view_vector(0.0, 0.0, 0.0), [0.0, 0.0, 1.0]);
+        assert_near(
+            super::turned_view_vector(0.0, 30.0, 0.0),
+            [0.0, -0.5, 3.0_f64.sqrt() / 2.0],
+        );
+    }
+
+    #[test]
+    fn on_block_is_the_support_else_the_cell_just_under_the_feet() {
+        use horizon_core::position::BlockPos;
+        let feet = Vec3::new(0.9, 65.0, -0.2);
+        // A support wins even where it is not under the feet's own column.
+        assert_eq!(
+            super::on_block_position(Some(BlockPos::new(1, 64, -1)), feet),
+            [1, 64, -1]
+        );
+        // None: the cell under the feet; a hair under, so the block of a flush stand.
+        assert_eq!(super::on_block_position(None, feet), [0, 64, -1]);
+        assert_eq!(
+            super::on_block_position(None, Vec3::new(0.5, 65.5, 0.5)),
+            [0, 65, 0]
+        );
+    }
+
+    #[test]
+    fn a_pick_ray_ends_a_distance_along_the_look() {
+        assert_eq!(
+            super::ray_end([1.0, 2.0, 3.0], [0.0, -1.0, 0.0], 4.5),
+            [1.0, -2.5, 3.0]
+        );
+        assert_eq!(
+            super::ray_end([1.0, 2.0, 3.0], [0.6, 0.0, 0.8], 0.0),
+            [1.0, 2.0, 3.0]
+        );
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn on_block_picks_the_support_nearest_the_entity_and_pick_clips_blocks() {
+        use super::super::native_entity_refs::tests::with_game;
+        use horizon_client::{chunk::Chunk, mobs::Mob};
+        use mod_api::NativeBlockFace;
+        use std::sync::Arc;
+        with_game(|game| {
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            let stone = game
+                .pack
+                .assets
+                .registry
+                .default_state("minecraft:stone")
+                .unwrap();
+            let kind = game
+                .res
+                .mob_types()
+                .get("minecraft:zombie")
+                .unwrap()
+                .clone();
+            // A zombie 0.6 wide straddling x = 1: its box is over blocks 0 and 1.
+            let mut zombie = Mob::new(40, kind, Vec3::new(0.9, 65.0, 0.5), 0.0);
+            zombie.on_ground = true;
+            game.mobs.push(zombie);
+            let entity = game.entity(40).unwrap();
+            // Only block 1 is under the box: it supports, not the block of the feet's own column.
+            game.world.set(1, 64, 0, stone).unwrap();
+            assert_eq!(game.entity_on_block(entity), Some([1, 64, 0]));
+            // With both, the one whose centre is nearest the feet: 0.4 against 0.6 away.
+            game.world.set(0, 64, 0, stone).unwrap();
+            assert_eq!(game.entity_on_block(entity), Some([0, 64, 0]));
+            game.mobs[0].position = Vec3::new(1.1, 65.0, 0.5);
+            assert_eq!(game.entity_on_block(entity), Some([1, 64, 0]));
+            // Off the ground there is no support: the cell under the feet.
+            game.mobs[0].position = Vec3::new(0.9, 65.0, 0.5);
+            game.mobs[0].on_ground = false;
+            assert_eq!(game.entity_on_block(entity), Some([0, 64, 0]));
+            let air = game
+                .pack
+                .assets
+                .registry
+                .default_state("minecraft:air")
+                .unwrap();
+            game.world.set(0, 64, 0, air).unwrap();
+            game.mobs[0].on_ground = true;
+            assert_eq!(game.entity_on_block(entity), Some([1, 64, 0]));
+
+            // Facing south (yaw 0) level, the eyes see a block two cells ahead.
+            game.mobs[0].position = Vec3::new(0.5, 65.0, 0.5);
+            let eyes = game.entity_eye_position(entity).unwrap();
+            let wall = [0, eyes[1].floor() as i32, 2];
+            game.world.set(wall[0], wall[1], wall[2], stone).unwrap();
+            let hit = game.entity_pick(entity, 3.0).unwrap();
+            assert!(!hit.miss);
+            assert_eq!(hit.block, wall);
+            assert_eq!(hit.face, NativeBlockFace::North);
+            assert_near(hit.location, [0.5, eyes[1], 2.0]);
+            // Too short a ray misses, as does one over an empty column.
+            assert!(game.entity_pick(entity, 1.0).unwrap().miss);
+            game.mobs[0].position = Vec3::new(5.5, 65.0, 0.5);
+            assert!(game.entity_pick(entity, 3.0).unwrap().miss);
+            // Looking straight down from the stand hits the top of its support.
+            game.mobs[0].position = Vec3::new(1.5, 65.0, 0.5);
+            game.mobs[0].head_pitch = 90.0;
+            let down = game.entity_pick(entity, 3.0).unwrap();
+            assert_eq!((down.block, down.face), ([1, 64, 0], NativeBlockFace::Up));
+            assert_near(down.location, [1.5, 65.0, 0.5]);
+            // Looking down 45 degrees tilts the up vector forward.
+            game.mobs[0].head_pitch = 45.0;
+            assert_near(
+                game.entity_up_vector(entity).unwrap(),
+                [
+                    0.0,
+                    std::f64::consts::FRAC_1_SQRT_2,
+                    std::f64::consts::FRAC_1_SQRT_2,
+                ],
+            );
+            // A ray without a length, or with none, or from a stale handle: nothing.
+            assert!(game.entity_pick(entity, -1.0).is_none());
+            assert!(game.entity_pick(entity, f64::NAN).is_none());
+            let stale =
+                EntityRef::new(mod_api::NativeWorldEpoch::new(entity.epoch().get() + 1), 40);
+            assert!(game.entity_pick(stale, 3.0).is_none());
+            assert!(game.entity_on_block(stale).is_none());
+            assert!(game.entity_up_vector(stale).is_none());
+        });
+    }
 
     #[test]
     fn corners_are_lowest_then_highest() {
