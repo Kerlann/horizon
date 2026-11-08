@@ -48,7 +48,7 @@ impl Drop for BoundaryProfile {
         if let Some(profiler) = self.profiler.take() {
             match std::fs::File::create(&self.path)
                 .map_err(wasmtime::Error::from)
-                .and_then(|file| profiler.finish(file))
+                .and_then(|file| profiler.finish(std::io::BufWriter::new(file)))
             {
                 Ok(()) => {}
                 Err(error) => eprintln!("boundary profile: {error}"),
@@ -556,7 +556,7 @@ impl WasmMod {
                                 .push(std::thread::spawn(move || {
                                     let result = std::fs::File::create(path)
                                         .map_err(wasmtime::Error::from)
-                                        .and_then(|file| profiler.finish(file));
+                                        .and_then(|file| profiler.finish(std::io::BufWriter::new(file)));
                                     if let Err(error) = result {
                                         eprintln!("boundary profile: {error}");
                                     }
