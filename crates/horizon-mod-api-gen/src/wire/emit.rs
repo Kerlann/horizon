@@ -244,19 +244,7 @@ fn record(rust: &str, f: &[(&str, String)]) -> String {
         .map(|(n, _)| format!("{n}: input.take()?,"))
         .collect();
     let min = min_of(&f.iter().map(|(_, t)| t.clone()).collect::<Vec<_>>());
-    let reuse: String = f
-        .iter()
-        .map(|(n, _)| format!("crate::wire::Wire::take_into(&mut self.{n}, input)?;"))
-        .collect();
-    let retained: String = f
-        .iter()
-        .map(|(n, _)| {
-            format!(
-                "let bytes = bytes.checked_add(crate::wire::Wire::retained_bytes(&self.{n})?)?;"
-            )
-        })
-        .collect();
-    let code = with_owned(
+    with_owned(
         imp(
             rust,
             &min,
@@ -264,8 +252,7 @@ fn record(rust: &str, f: &[(&str, String)]) -> String {
             &format!("input.nested(|input| Ok(Self {{ {take} }}))"),
         ),
         put.replace("out.put(&self.", "out.put_owned(self."),
-    );
-    code.replacen("fn take(input", &format!("fn retained_bytes(&self)->Option<usize> {{ let bytes = ::std::mem::size_of::<Self>(); {retained} Some(bytes) }}\nfn take_into(&mut self, input: &mut crate::wire::Reader<'_>)->Result<(), crate::wire::WireError> {{ input.nested(|input| {{ {reuse} Ok(()) }}) }}\nfn take(input"), 1)
+    )
 }
 
 fn tuple_record(rust: &str, t: &[String]) -> String {

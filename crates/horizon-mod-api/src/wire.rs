@@ -548,23 +548,11 @@ pub trait Wire: Sized {
         self.put(out);
     }
     fn take(input: &mut Reader<'_>) -> Result<Self, WireError>;
-    /// Retained heap storage, including this value; unknown implementations are not cached.
-    #[doc(hidden)]
-    fn retained_bytes(&self) -> Option<usize> {
-        None
-    }
-    /// Decode into exclusive owned storage. On failure the value must not be exposed.
-    #[doc(hidden)]
-    fn take_into(&mut self, input: &mut Reader<'_>) -> Result<(), WireError> {
-        *self = Self::take(input)?;
-        Ok(())
-    }
 }
 
 macro_rules! numbers {
     ($($ty:ty),*) => {$(
         impl Wire for $ty {
-            fn retained_bytes(&self) -> Option<usize> { Some(std::mem::size_of::<Self>()) }
             const MIN: usize = std::mem::size_of::<$ty>();
             fn put(&self, out: &mut Writer) {
                 out.put_bytes(&self.to_le_bytes());
@@ -622,16 +610,6 @@ impl Wire for () {
 }
 
 impl Wire for String {
-    fn retained_bytes(&self) -> Option<usize> {
-        std::mem::size_of::<Self>().checked_add(self.capacity())
-    }
-    fn take_into(&mut self, input: &mut Reader<'_>) -> Result<(), WireError> {
-        let len = input.take_len(1)?;
-        let text = std::str::from_utf8(input.take_bytes(len)?).map_err(|_| WireError::Utf8)?;
-        self.clear();
-        self.push_str(text);
-        Ok(())
-    }
     const MIN: usize = 4;
     fn put(&self, out: &mut Writer) {
         out.put_str(self);
@@ -790,26 +768,6 @@ impl<T: Wire> Wire for Arc<T> {
 }
 
 impl<T: Wire> Wire for Vec<T> {
-    fn retained_bytes(&self) -> Option<usize> {
-        let mut bytes = std::mem::size_of::<Self>()
-            .checked_add(self.capacity().checked_mul(std::mem::size_of::<T>())?)?;
-        for value in self {
-            bytes = bytes.checked_add(value.retained_bytes()?)?;
-        }
-        Some(bytes)
-    }
-    fn take_into(&mut self, input: &mut Reader<'_>) -> Result<(), WireError> {
-        let len = input.take_len(T::MIN)?;
-        let reused = len.min(self.len());
-        for value in &mut self[..reused] {
-            value.take_into(input)?;
-        }
-        self.truncate(reused);
-        for _ in reused..len {
-            self.push(input.take()?);
-        }
-        Ok(())
-    }
     const MIN: usize = 4;
     fn put(&self, out: &mut Writer) {
         out.put_len(self.len());
