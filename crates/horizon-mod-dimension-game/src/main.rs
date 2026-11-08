@@ -133,5 +133,6 @@ fn main() {
         vec![ModEntry::new("dimprobe", Box::<DimProbe>::default())],
         &[],
         BUILT,
+        None,
     );
 }

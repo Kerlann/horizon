@@ -4,8 +4,8 @@ use horizon_mod_package::selection::{Argument, LaunchArguments};
 use mod_api::__private::game::*;
 
 /// Start the game. The executable supplies the allocator and retains the mod API marker.
-pub fn main() {
-    main_with(Vec::new(), &[], &[]);
+pub fn main(launch: Option<LaunchArguments>) {
+    main_with(Vec::new(), &[], &[], launch);
 }
 
 /// A native function slot, checked against its place's exact type before erasure.
@@ -20,6 +20,7 @@ pub fn main_with(
     mods: Vec<mod_api::ModEntry>,
     slots: &[NativeSlot],
     built: &'static [horizon_mod_package::runtime::BuiltMod],
+    launch: Option<LaunchArguments>,
 ) {
     let exe = std::env::current_exe();
     let native: crate::Result<_> = exe
@@ -38,14 +39,18 @@ pub fn main_with(
     horizon_threads::configure_allocator();
     horizon_client::spans::startup::init(std::time::Instant::now());
     horizon_client::spans::trace::start_from_env();
-    let launch: crate::Result<_> = std::env::current_dir().map_err(Into::into).and_then(|cwd| {
-        Ok(LaunchArguments::parse(
-            std::env::args().skip(1),
-            &cwd,
-            &logging::game_home(),
-            std::env::var_os("HORIZON_HOME").as_deref(),
-        )?)
-    });
+    // Managed main already validated these exact roots before native hooks could change cwd/env.
+    let launch: crate::Result<_> = match launch {
+        Some(launch) => Ok(launch),
+        None => std::env::current_dir().map_err(Into::into).and_then(|cwd| {
+            Ok(LaunchArguments::parse(
+                std::env::args().skip(1),
+                &cwd,
+                &logging::game_home(),
+                std::env::var_os("HORIZON_HOME").as_deref(),
+            )?)
+        }),
+    };
     let launch = match launch {
         Ok(launch) => launch,
         Err(error) => {
