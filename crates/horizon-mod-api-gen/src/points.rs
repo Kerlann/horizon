@@ -1002,10 +1002,15 @@ mod tests {
         let points = game_points(&root).unwrap();
         let sources = source::read(&root).unwrap();
         let full = serde_json::to_vec_pretty(&points).unwrap();
+        if let Ok(path) = std::env::var("RETURN_MUTABILITY_FULL") {
+            fs::write(path, &full).unwrap();
+        }
         let mut existing = serde_json::to_value(&points).unwrap();
         let mut added = 0;
         for point in existing.as_array_mut().unwrap() {
             if let Some(raw) = point.get_mut("raw_shape") {
+                assert!(raw.get("return_record_mutable").is_some());
+                raw.as_object_mut().unwrap().remove("return_record_mutable");
                 for arg in raw["args"].as_array_mut().unwrap() {
                     assert_eq!(arg["record_mutable"].as_bool(), Some(true));
                     added += usize::from(
