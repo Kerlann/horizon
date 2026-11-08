@@ -95,6 +95,27 @@ thread_local! {
     static HANDLERS: RefCell<Slots<Vec<Box<dyn Any>>>> = RefCell::new(Slots::default());
 }
 
+#[cfg(feature = "wire-roundtrip-profile")]
+thread_local! { static ROUNDTRIPS: std::cell::Cell<[u64; 3]> = const { std::cell::Cell::new([0; 3]) }; }
+#[cfg(feature = "wire-roundtrip-profile")]
+pub(crate) fn diagnostic_roundtrip(before: &[u8], after: &[u8], valid: bool) {
+    ROUNDTRIPS.with(|counts| {
+        let mut next = counts.get();
+        next[if !valid {
+            2
+        } else if before == after {
+            0
+        } else {
+            1
+        }] += 1;
+        counts.set(next);
+    });
+}
+#[cfg(feature = "wire-roundtrip-profile")]
+pub(crate) fn diagnostic_roundtrip_counts() -> [u64; 3] {
+    ROUNDTRIPS.with(|counts| counts.get())
+}
+
 /// A buffer to write a call's arguments into.
 pub fn begin() -> Writer {
     let mut writer = Writer::new();
@@ -440,6 +461,15 @@ pub fn run(id: u32) -> (*const u8, u32) {
                 chunk.copy_from_slice(&value.to_le_bytes());
             }
             transport::try_call(0xFFFF_FE01, &bytes, &mut Vec::new());
+            #[cfg(feature = "wire-roundtrip-profile")]
+            {
+                let mut args = Writer::new();
+                args.put_str(&format!(
+                    "actual guest entity roundtrip (equal, different, invalid)={:?}",
+                    diagnostic_roundtrip_counts()
+                ));
+                transport::try_call(crate::wire::HOST_LOG, args.bytes(), &mut Vec::new());
+            }
         }
     }
     (pointer, outcome)

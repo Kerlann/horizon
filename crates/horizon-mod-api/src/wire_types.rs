@@ -794,7 +794,9 @@ impl Wire for crate::ModBlockEntity {
         out.put(&self.revision.changes());
     }
     fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self {
+        #[cfg(feature = "wire-roundtrip-profile")]
+        let original = input.rest();
+        let value = Self {
             id: input.take()?,
             fields: crate::containers::ModBlockEntityFields {
                 nbt: input.take()?,
@@ -802,7 +804,18 @@ impl Wire for crate::ModBlockEntity {
                 data: input.take()?,
             },
             revision: crate::containers::ModRevision::from_snapshot(input.take()?, input.take()?),
-        })
+        };
+        #[cfg(feature = "wire-roundtrip-profile")]
+        {
+            let mut encoded = Writer::new();
+            value.put(&mut encoded);
+            crate::wire_guest::diagnostic_roundtrip(
+                &original[..original.len() - input.rest().len()],
+                encoded.bytes(),
+                encoded.error().is_none(),
+            );
+        }
+        Ok(value)
     }
 }
 
