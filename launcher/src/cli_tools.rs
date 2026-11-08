@@ -4,7 +4,7 @@
 //! returns what it printed. A few commands keep a process or a sign-in going for the session;
 //! mcp.rs runs those itself under the same names (`play`, `server`, `account_sign_in`...).
 use clap::{ArgAction, Command};
-use serde_json::{Map, Value, json};
+use serde_json::{json, Map, Value};
 
 /// CLI commands that are not generated tools: the MCP server itself; No AI, the player's switch
 /// and never an agent's; trusting native mods' code, the player's decision too; the ones
@@ -429,11 +429,10 @@ mod tests {
                 .unwrap(),
             ["servers", "run", "My server", "--", "status"]
         );
-        assert!(
-            run.argv(&json!({ "server": "x" }))
-                .unwrap_err()
-                .contains("args is required")
-        );
+        assert!(run
+            .argv(&json!({ "server": "x" }))
+            .unwrap_err()
+            .contains("args is required"));
         let logs = tool("logs").describe();
         assert_eq!(
             logs["inputSchema"]["properties"]["lines"]["type"],
@@ -481,12 +480,10 @@ mod tests {
     fn destructive_tools_need_confirm() {
         let remove = tool("remove");
         assert_eq!(remove.describe()["annotations"]["destructiveHint"], true);
-        assert!(
-            remove
-                .argv(&json!({ "tag": "v1" }))
-                .unwrap_err()
-                .contains("confirm")
-        );
+        assert!(remove
+            .argv(&json!({ "tag": "v1" }))
+            .unwrap_err()
+            .contains("confirm"));
         assert_eq!(
             remove
                 .argv(&json!({ "tag": "v1", "confirm": true }))

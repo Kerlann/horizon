@@ -1,6 +1,6 @@
 //! The sidebar's card above the links: what Horizon is, and a way into the mod API's open tasks.
 //! No picture, no tracking, nothing fetched: the words are the card.
-use gpui::{ClickEvent, Div, FontWeight, Hsla, SharedString, Stateful, div, prelude::*, px};
+use gpui::{div, prelude::*, px, ClickEvent, Div, FontWeight, Hsla, SharedString, Stateful};
 use horizon_launcher::i18n::tr;
 
 /// The board's task view, where a visitor picks something to build.

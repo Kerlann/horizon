@@ -17,10 +17,10 @@
 //! [`Backdrop`] is the same picture blurred, for the glass plates (`glass.rs`): GPUI has no
 //! backdrop filter, but the only thing under a plate is this scene.
 use crate::art;
-use crate::sky::{Clock, Motion, motion};
+use crate::sky::{motion, Clock, Motion};
 use gpui::{
-    Bounds, Context, Corners, Hsla, Pixels, RenderImage, Rgba, Window, canvas, div, fill, img,
-    point, prelude::*, px, size,
+    canvas, div, fill, img, point, prelude::*, px, size, Bounds, Context, Corners, Hsla, Pixels,
+    RenderImage, Rgba, Window,
 };
 use std::f64::consts::PI;
 use std::sync::Arc;

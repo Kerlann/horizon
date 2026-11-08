@@ -368,6 +368,7 @@ impl ResourceSource {
             ));
         }
         match self.0.as_ref() {
+            #[cfg(not(target_arch = "wasm32"))]
             Storage::Archive(archive) => archive.copy_to(name, out, budget).map(|_| ()),
             Storage::Prefix { source, prefix } => {
                 source.copy_to(&format!("{prefix}{name}"), out, budget)

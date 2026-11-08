@@ -4,7 +4,7 @@
 //! the launcher's own control endpoint; a game the player started with Agent Control on answers
 //! on the game's default endpoint instead. The child talks to whichever of them answers.
 use horizon_launcher::backend;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::ffi::OsString;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{Ipv4Addr, SocketAddr, TcpStream};
@@ -438,12 +438,10 @@ mod tests {
         let tools = prefixed(&listed);
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0]["name"], "game_click_slot");
-        assert!(
-            tools[0]["description"]
-                .as_str()
-                .unwrap()
-                .ends_with("Click a slot")
-        );
+        assert!(tools[0]["description"]
+            .as_str()
+            .unwrap()
+            .ends_with("Click a slot"));
         assert_eq!(tools[0]["inputSchema"], json!({ "type": "object" }));
     }
 
@@ -453,18 +451,14 @@ mod tests {
         let result = explain_unreachable(
             json!({ "content": [{ "type": "text", "text": text }], "isError": true }),
         );
-        assert!(
-            result["content"][0]["text"]
-                .as_str()
-                .unwrap()
-                .contains("with play")
-        );
-        assert!(
-            result["content"][0]["text"]
-                .as_str()
-                .unwrap()
-                .contains("Agent Control")
-        );
+        assert!(result["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("with play"));
+        assert!(result["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("Agent Control"));
         let other = json!({ "content": [{ "type": "text", "text": "{\"error\":\"no world\"}" }], "isError": true });
         assert_eq!(explain_unreachable(other.clone()), other);
     }

@@ -6,7 +6,7 @@
 use super::*;
 use crate::glass_instance::{choice, choice_text, list_box, list_choice, section, tick};
 use crate::glass_ui::{self as ui, white};
-use gpui::{ImageFormat, img};
+use gpui::{img, ImageFormat};
 use horizon_theme::glass::{fill, ink, radius};
 use std::sync::{Arc, LazyLock};
 
