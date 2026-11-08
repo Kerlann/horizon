@@ -10,7 +10,6 @@ pub(super) struct Site {
     pub ordinal: usize,
     #[serde(default)]
     pub private: bool,
-    pub hash: String,
     pub listener: String,
     pub record: String,
     pub output: String,
@@ -24,7 +23,6 @@ impl From<horizon_mod_api_gen::sites::Site> for Site {
             call: site.call,
             ctx: site.ctx,
             ordinal: site.ordinal,
-            hash: site.hash,
             listener: site.listener,
             record: site.record,
             output: site.output,

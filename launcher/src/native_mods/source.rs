@@ -438,7 +438,7 @@ fn private_calls_use_ctx_shared_ids_and_real_registration_priorities() {
     assert_eq!(catalog.sites.len(), 1);
     assert!(catalog.sites[0].private);
     assert_eq!(catalog.sites[0].ctx, discovered.ctx);
-    assert_ne!(catalog.sites[0].hash, discovered.ctx);
+    assert_ne!(discovered.hash, discovered.ctx);
     assert!(super::slots::routes(&catalog, &bundle.manifest)
         .unwrap()
         .iter()
