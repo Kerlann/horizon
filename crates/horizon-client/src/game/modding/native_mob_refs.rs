@@ -1239,10 +1239,11 @@ mod tests {
             game.mobs.push(Mob::new(13, zombie, Vec3::ZERO, 0.0));
             game.armor_stands.push(ArmorStand::new(14, Vec3::ZERO, 0.0));
             let mut dragon = super::super::dragon::Dragon::new(Vec3::ZERO, 0.0, 0);
-            dragon.id = 15;
+            // Reserve the dragon's eight consecutive part IDs away from the mobs.
+            dragon.id = 40;
             game.dragon.replace(dragon);
             assert!(
-                game.mob(game.entity(15).unwrap()).is_some(),
+                game.mob(game.entity(40).unwrap()).is_some(),
                 "the dragon is a Mob"
             );
             let entity = game.entity(12).unwrap();

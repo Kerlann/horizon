@@ -2168,9 +2168,10 @@ mod tests {
             ));
             assert_eq!(game.living_equipment(horse, EquipmentSlot::Body), None);
             let mut dragon = super::super::dragon::Dragon::new(Vec3::ZERO, 0.0, 0);
-            dragon.id = 15;
+            // Reserve the dragon's eight consecutive part IDs away from the stand.
+            dragon.id = 40;
             game.dragon.replace(dragon);
-            let dragon = game.living(game.entity(15).unwrap()).unwrap();
+            let dragon = game.living(game.entity(40).unwrap()).unwrap();
             // The dragon and an armor stand store all eight slots, full
             // stacks included, and save them through the real codecs.
             let mut stand = horizon_client::entities::ArmorStand::new(16, Vec3::ZERO, 0.0);

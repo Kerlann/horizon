@@ -712,14 +712,15 @@ mod tests {
             assert_eq!(values(game), (8.0, 0.0));
             // A horse's body piece armors it by its stack's rows.
             let horse_kind = game.res.mob_types().get("minecraft:horse").unwrap().clone();
-            game.mobs.push(Mob::new(15, horse_kind, Vec3::ZERO, 0.0));
-            let horse = living(game, 15);
+            // The fixture dragon owns IDs 14 through 22, including its parts.
+            game.mobs.push(Mob::new(40, horse_kind, Vec3::ZERO, 0.0));
+            let horse = living(game, 40);
             assert!(game.living_set_equipment(
                 horse,
                 EquipmentSlot::Body,
                 stack("minecraft:diamond_horse_armor")
             ));
-            let armored = armor::values(game.mobs.iter().find(|m| m.id == 15).unwrap());
+            let armored = armor::values(game.mobs.iter().find(|m| m.id == 40).unwrap());
             assert!(
                 armored.0 >= 1.0,
                 "the body piece armors the horse: {armored:?}"
