@@ -18,7 +18,7 @@ pub use crate::wire_slots::{Id, Slots, Stale};
 #[path = "wire_arena.rs"]
 mod arena;
 #[doc(hidden)]
-pub use arena::ArenaWriter;
+pub use arena::{ArenaOp, ArenaWriter};
 #[path = "wire_resources.rs"]
 mod resources;
 pub use resources::{

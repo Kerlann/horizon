@@ -116,7 +116,7 @@ fn malformed_arena_pointer_refuses_without_panicking() {
         "local.get 0 if (result i32) i32.const -1 else i32.const 512 end",
     ] {
         let engine = engine().unwrap();
-        let bytes = guest_arena(mod_api::wire::LAYOUT, "i64.const 0", arena);
+        let bytes = guest_arena(mod_api::wire::LAYOUT, "i64.const 2199023255556", arena);
         let module = WasmMod::instantiate(
             &engine,
             &[Member {
@@ -200,6 +200,7 @@ fn hook_round_trip_and_malformed_reply_poison() {
 #[test]
 fn encoding_failure_refuses_partial_arguments() {
     let module = module("i64.const 2199023255556");
+    let dropped = hold_stop_probe(&module);
     assert_eq!(
         module.call(
             CallClass::Hook,
@@ -215,6 +216,7 @@ fn encoding_failure_refuses_partial_arguments() {
         None
     );
     assert!(module.is_stopped());
+    assert!(dropped.load(Ordering::Relaxed));
 }
 
 #[test]

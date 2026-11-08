@@ -9,7 +9,7 @@ use crate::{
 };
 use mod_api::{
     HookId,
-    wire::{ArenaWriter, Id, Reader, WireError, Writer},
+    wire::{ArenaOp, ArenaWriter, Id, Reader, WireError, Writer},
 };
 use std::{
     cell::Cell,
@@ -708,22 +708,35 @@ impl WasmMod {
         let mut capacity = 256u32;
         let mut ptr = self.input.call(&mut *store, (0, capacity))?;
         let mut failure = None;
-        let mut sink = |offset: usize, bytes: &[u8]| {
+        let mut sink = |operation: ArenaOp<'_>| {
             let result = (|| -> wasmtime::Result<()> {
-                let end = offset.checked_add(bytes.len()).ok_or(WireError::Length)?;
-                let required = u32::try_from(end)?;
-                if required > capacity {
-                    capacity = required.checked_next_power_of_two().unwrap_or(required);
-                    ptr = self
-                        .input
-                        .call(&mut *store, (u32::try_from(offset)?, capacity))?;
+                match operation {
+                    ArenaOp::Read(len, writer) => {
+                        let end = (ptr as usize).checked_add(len).ok_or(WireError::Length)?;
+                        let bytes = memory
+                            .data(&*store)
+                            .get(ptr as usize..end)
+                            .ok_or(WireError::Eof)?;
+                        writer.put_bytes(bytes);
+                        Ok(())
+                    }
+                    ArenaOp::Write(offset, bytes) => {
+                        let end = offset.checked_add(bytes.len()).ok_or(WireError::Length)?;
+                        let required = u32::try_from(end)?;
+                        if required > capacity {
+                            capacity = required.checked_next_power_of_two().unwrap_or(required);
+                            ptr = self
+                                .input
+                                .call(&mut *store, (u32::try_from(offset)?, capacity))?;
+                        }
+                        let start = (ptr as usize)
+                            .checked_add(offset)
+                            .ok_or(WireError::Length)?;
+                        // Each write reacquires linear memory after possible guest memory growth.
+                        memory.write(&mut *store, start, bytes)?;
+                        Ok(())
+                    }
                 }
-                let start = (ptr as usize)
-                    .checked_add(offset)
-                    .ok_or(WireError::Length)?;
-                // Each write reacquires linear memory after possible guest memory growth.
-                memory.write(&mut *store, start, bytes)?;
-                Ok(())
             })();
             if let Err(error) = result {
                 failure = Some(error);

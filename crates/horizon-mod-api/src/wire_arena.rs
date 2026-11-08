@@ -4,13 +4,18 @@ use std::cell::RefCell;
 thread_local! { static BUFFERS: RefCell<Vec<Vec<u8>>> = const { RefCell::new(Vec::new()) }; }
 
 #[doc(hidden)]
+pub enum ArenaOp<'a> {
+    Write(usize, &'a [u8]),
+    Read(usize, &'a mut Writer),
+}
+#[doc(hidden)]
 pub struct ArenaWriter<'a> {
-    sink: &'a mut dyn FnMut(usize, &[u8]) -> Result<(), WireError>,
+    sink: &'a mut dyn FnMut(ArenaOp<'_>) -> Result<(), WireError>,
     len: usize,
     error: Option<WireError>,
 }
 impl<'a> ArenaWriter<'a> {
-    pub fn new(sink: &'a mut dyn FnMut(usize, &[u8]) -> Result<(), WireError>) -> Self {
+    pub fn new(sink: &'a mut dyn FnMut(ArenaOp<'_>) -> Result<(), WireError>) -> Self {
         Self {
             sink,
             len: 0,
@@ -39,7 +44,7 @@ impl<'a> ArenaWriter<'a> {
             self.fail(WireError::Length);
             return;
         };
-        match (self.sink)(self.len, bytes) {
+        match (self.sink)(ArenaOp::Write(self.len, bytes)) {
             Ok(()) => self.len = end,
             Err(error) => self.fail(error),
         }
@@ -82,10 +87,18 @@ impl<'a> ArenaWriter<'a> {
         }
         let mut writer = Writer::new();
         writer.replace(BUFFERS.with(|pool| pool.borrow_mut().pop().unwrap_or_default()));
-        encode(&mut writer);
-        match writer.error() {
-            Some(error) => self.fail(error),
-            None => self.put_bytes(writer.bytes()),
+        if let Err(error) = (self.sink)(ArenaOp::Read(self.len, &mut writer)) {
+            self.fail(error);
+        } else {
+            encode(&mut writer);
+            match writer.error() {
+                Some(error) => self.fail(error),
+                None => {
+                    // A custom codec may clear, replace, or transform the entire prefix.
+                    self.len = 0;
+                    self.put_bytes(writer.bytes());
+                }
+            }
         }
         let bytes = writer.into_bytes();
         if bytes.capacity() <= 1024 * 1024 {

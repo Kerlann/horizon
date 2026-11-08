@@ -1,5 +1,15 @@
-use mod_api::wire::{ArenaWriter, Reader, Wire, WireError, Writer};
+use mod_api::wire::{ArenaOp, ArenaWriter, Reader, Wire, WireError, Writer};
 
+fn memory(bytes: &mut Vec<u8>, operation: ArenaOp<'_>) -> Result<(), WireError> {
+    match operation {
+        ArenaOp::Read(len, writer) => writer.put_bytes(&bytes[..len]),
+        ArenaOp::Write(offset, data) => {
+            bytes.truncate(offset);
+            bytes.extend_from_slice(data);
+        }
+    }
+    Ok(())
+}
 struct ObservesBuffer;
 impl Wire for ObservesBuffer {
     const MIN: usize = 8;
@@ -27,18 +37,14 @@ fn custom_buffer_observation_and_writer_auto_traits_are_unchanged() {
     };
     assert!(stored.writer.bytes().is_empty());
     let mut bytes = Vec::new();
-    let mut sink = |offset: usize, data: &[u8]| {
-        assert_eq!(offset, bytes.len());
-        bytes.extend_from_slice(data);
-        Ok(())
-    };
+    let mut sink = |operation: ArenaOp<'_>| memory(&mut bytes, operation);
     let mut arena = ArenaWriter::new(&mut sink);
-    arena.put(&ObservesBuffer);
-    assert_eq!(arena.len(), 8);
+    arena.put(&(9u32, ObservesBuffer));
+    assert_eq!(arena.len(), 12);
     assert_eq!(arena.error(), None);
     drop(arena);
     drop(sink);
-    assert_eq!(bytes, [42, 0, 0, 0, 4, 0, 0, 0]);
+    assert_eq!(bytes, [9, 0, 0, 0, 42, 0, 0, 0, 8, 0, 0, 0]);
 }
 
 #[test]
@@ -53,11 +59,7 @@ fn direct_snapshot_codec_matches_buffered_codec_and_stops_on_error() {
     let mut expected = Writer::new();
     expected.put(&snapshot);
     let mut bytes = Vec::new();
-    let mut sink = |offset: usize, data: &[u8]| {
-        assert_eq!(offset, bytes.len());
-        bytes.extend_from_slice(data);
-        Ok(())
-    };
+    let mut sink = |operation: ArenaOp<'_>| memory(&mut bytes, operation);
     let mut arena = ArenaWriter::new(&mut sink);
     arena.put(&snapshot);
     assert_eq!(arena.error(), None);
@@ -65,7 +67,7 @@ fn direct_snapshot_codec_matches_buffered_codec_and_stops_on_error() {
     drop(sink);
     assert_eq!(bytes, expected.bytes());
     let mut calls = 0;
-    let mut sink = |_: usize, _: &[u8]| {
+    let mut sink = |_: ArenaOp<'_>| {
         calls += 1;
         Err(WireError::Eof)
     };
