@@ -234,7 +234,10 @@ impl Game<'_> {
             let Ok((tag, _)) = horizon_core::nbt::parse_snbt(raw) else {
                 return Vec::new();
             };
-            self.inline_slots(owner, &horizon_client::scoreboard::tag_to_json(&tag))
+            let Ok(source) = horizon_core::json_nbt::tag_to_json(&tag) else {
+                return Vec::new();
+            };
+            self.inline_slots(owner, &source)
         } else {
             self.slots_named(owner, raw)
         }
@@ -299,7 +302,7 @@ impl Game<'_> {
     fn command_slot_candidates(&mut self, owner: &Owner, raw: &str) -> Vec<SlotCandidate> {
         let source = horizon_core::nbt::parse_snbt(raw)
             .ok()
-            .map(|(tag, _)| horizon_client::scoreboard::tag_to_json(&tag));
+            .and_then(|(tag, _)| horizon_core::json_nbt::tag_to_json(&tag).ok());
         if raw.starts_with('{') || raw.starts_with('[') {
             let mut out = Vec::new();
             if let Some(source) = source {
@@ -1154,7 +1157,8 @@ impl Game<'_> {
         if raw.starts_with('{') || raw.starts_with('[') {
             let (tag, _) = horizon_core::nbt::parse_snbt(&raw)
                 .map_err(|e| err("argument.nbt.invalid", &[&e]))?;
-            return Ok(horizon_client::scoreboard::tag_to_json(&tag));
+            return horizon_core::json_nbt::tag_to_json(&tag)
+                .map_err(|e| err("argument.nbt.invalid", &[&e.to_string()]));
         }
         let id = if raw.contains(':') {
             raw
@@ -1744,6 +1748,54 @@ mod mob_equipment_command_tests {
         assert!(game.run_command("difficulty normal"));
         assert!(game.run_command("forceload add 0 0"));
         test(&mut game);
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn inline_codec_arguments_preserve_explicit_byte_numbers() {
+        use super::Owner;
+        use crate::game::commands::compute::ComputeContext;
+        use horizon_client::command::{Arg, Context, ParsedArg};
+        with_game(|game| {
+            let owner = Owner::Entity(Target::Player);
+            let raw = r#"{type:"minecraft:limit_slots",limit:7b,slot_source:{type:"minecraft:slot_range",slots:"hotbar.*"}}"#;
+            assert_eq!(game.command_slots(&owner, raw).len(), 7);
+            let candidates = game.command_slot_candidates(&owner, raw);
+            assert!(!candidates.is_empty());
+            assert!(candidates.iter().all(|candidate| candidate.limit == 7));
+
+            let mut ctx = Context {
+                root: 0,
+                nodes: Vec::new(),
+                command: None,
+                range: (0, 0),
+                child: None,
+                literals: Vec::new(),
+                args: vec![ParsedArg {
+                    name: "provider".into(),
+                    value: Arg::Resource("7b".into()),
+                    range: (0, 2),
+                }],
+            };
+            let (_, provider) = game
+                .provider_arg(&ctx, "minecraft:context_int_provider")
+                .unwrap();
+            assert_eq!(
+                game.provider_int(&provider, &ComputeContext::default(), 0)
+                    .unwrap(),
+                7
+            );
+            ctx.args[0].name = "modifier".into();
+            ctx.args[0].value = Arg::Resource(r#"{type:"minecraft:set_count",count:7b}"#.into());
+            assert_eq!(
+                game.item_modifier_arg(&ctx, "modifier").unwrap()["count"],
+                7
+            );
+            assert!(
+                game.check_predicate(r#"{condition:"minecraft:random_chance",chance:7b}"#)
+                    .unwrap()
+            );
+        });
     }
 
     #[test]

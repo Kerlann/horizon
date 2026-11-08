@@ -613,7 +613,8 @@ impl Game<'_> {
                 if table.starts_with('{') {
                     let (tag, _) = horizon_core::nbt::parse_snbt(&table)
                         .map_err(|e| err("argument.nbt.invalid", &[&e]))?;
-                    let json = horizon_client::scoreboard::tag_to_json(&tag);
+                    let json = horizon_core::json_nbt::tag_to_json(&tag)
+                        .map_err(|e| err("argument.nbt.invalid", &[&e.to_string()]))?;
                     // LootCommand's omitted fishing tool is EMPTY, not mainhand.
                     let held = if id == "loot.fish"
                         && (ctx.get("tool").is_some() || ctx.has("mainhand") || ctx.has("offhand"))
