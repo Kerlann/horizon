@@ -32,6 +32,9 @@ pub enum CallClass {
 }
 
 pub(crate) struct State {
+    diag_counter: Option<wasmtime::TypedFunc<u32, u64>>,
+    diag_calls: std::collections::BTreeMap<u32, u64>,
+    diag_total: u64,
     limits: wasmtime::StoreLimits,
     cx: Box<Cx>,
     memory: Option<Memory>,
@@ -52,6 +55,9 @@ unsafe impl Send for State {}
 impl Default for State {
     fn default() -> Self {
         Self {
+            diag_counter: None,
+            diag_calls: Default::default(),
+            diag_total: 0,
             limits: wasmtime::StoreLimitsBuilder::new()
                 .trap_on_grow_failure(false)
                 .memory_size(256 << 20)
@@ -74,6 +80,7 @@ impl Default for State {
 pub(crate) fn engine() -> wasmtime::Result<Engine> {
     let mut config = wasmtime::Config::new();
     config.epoch_interruption(true);
+    config.consume_fuel(true);
     let engine = Engine::new(&config)?;
     let weak = engine.weak();
     std::thread::Builder::new()
@@ -446,6 +453,7 @@ impl WasmMod {
         members: &[Member<'_>],
     ) -> Result<Vec<Self>, Refusal> {
         let mut store = Store::new(engine, State::default());
+        store.set_fuel(u64::MAX).unwrap();
         store.limiter(|state| &mut state.limits);
         store.set_epoch_deadline(30_000);
         let mut armed = false;
@@ -466,6 +474,17 @@ impl WasmMod {
         })
         .map_err(|e| Refusal::Runtime(e.to_string()))?;
         group.store.data_mut().memory = Some(group.memory);
+        for (_, instance) in group.members.clone() {
+            if let Ok(counter) = instance
+                .get_typed_func::<u32, u64>(&mut group.store, "__horizon_diag_alloc_counter")
+            {
+                group.store.data_mut().diag_counter = Some(counter);
+            }
+        }
+        assert!(
+            group.store.data().diag_counter.is_some(),
+            "diagnostic std required"
+        );
         let mut exports = Vec::new();
         for (name, instance) in group.members.clone() {
             // The std member is a library, not a mod.
@@ -721,6 +740,20 @@ impl WasmMod {
                 .get(ptr..end)
                 .ok_or_else(|| wasmtime::Error::msg("reply outside memory"))?,
         );
+        *store.data_mut().diag_calls.entry(id).or_default() += 1;
+        store.data_mut().diag_total += 1;
+        if store.data().diag_total == 200_000 {
+            let fuel = u64::MAX - store.get_fuel()?;
+            let counter = store.data().diag_counter.clone().unwrap();
+            let mut counts = [0u64; 6];
+            for (i, count) in counts.iter_mut().enumerate() {
+                *count = counter.call(&mut *store, i as u32)?;
+            }
+            eprintln!(
+                "WIRE_DIAG fuel={fuel} system={counts:?} exports={:?}",
+                store.data().diag_calls
+            );
+        }
         Ok(())
     }
 }
