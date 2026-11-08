@@ -81,6 +81,37 @@ pub fn generate_runtime(
         quote!({ let __np_value = &mut (#place); let __np_tree = #tree; let __np_plan = &mut (#plan); #body; }),
     )
 }
+/// Generate runtime patch planners once per owning crate.
+pub fn helpers(
+    rule: &Rule,
+    graph: &crate::native_policy::Graph,
+) -> Result<Vec<(String, TokenStream)>, String> {
+    let mut result = Vec::new();
+    for (id, layout) in graph.layouts.iter().enumerate() {
+        if rule.named(&layout.name).is_none() || layout.opaque.is_some() {
+            continue;
+        }
+        let owner = layout.name.split("::").next().ok_or("missing crate")?;
+        let native: Type =
+            syn::parse_str(&layout.name.replacen(owner, "crate", 1)).map_err(|e| e.to_string())?;
+        let shape = rule.shape(
+            "",
+            None,
+            &syn::parse_str::<Type>(&layout.name).map_err(|e| e.to_string())?,
+        );
+        let helper = quote::format_ident!("__horizon_patch_{id}");
+        let body = emit(
+            rule,
+            &shape,
+            quote!(*__np_value),
+            &crate::native_schema::All,
+            Some((graph, &quote!(__policy))),
+            0,
+        )?;
+        result.push((owner.to_string(), quote!(fn #helper<'a>(__np_value: &'a mut #native, __np_tree: &mod_points::native_patch::PatchTree<'_>, __np_plan: &mut mod_api::wire::PatchPlan<'a>, __policy: &mod_points::exposure::Plan) -> Result<(), mod_api::wire::WireError> { #body; Ok(()) })));
+    }
+    Ok(result)
+}
 fn emit(
     rule: &Rule,
     shape: &Shape,
@@ -91,6 +122,13 @@ fn emit(
 ) -> Result<TokenStream, String> {
     if depth > 128 {
         return Err("unimplemented: recursive patch shape".into());
+    }
+    if depth > 0 {
+        if let (Shape::Named(_, _), Some((graph, policy))) = (shape, runtime) {
+            let id = graph.id(shape).ok_or("missing runtime patch layout")?;
+            let helper = quote::format_ident!("__horizon_patch_{id}");
+            return Ok(quote!(#helper(&mut (#place), __np_tree, __np_plan, &(#policy))?;));
+        }
     }
     let reject = quote!(
         return Err(mod_api::wire::WireError::Invalid(
