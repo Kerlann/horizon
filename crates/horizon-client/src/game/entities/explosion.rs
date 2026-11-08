@@ -1629,6 +1629,27 @@ mod tests {
                 *seen.lock().unwrap(),
                 [[1, 64, 1], [2, 64, 1], [3, 64, 1], [4, 64, 1], [5, 64, 1]]
             );
+            game.ui
+                .rules
+                .set("block_drops", horizon_client::gamerules::Value::Bool(true));
+            game.world.set(6, 64, 1, infested).unwrap();
+            game.handle_mob_events(vec![MobEvent::BreakBlock {
+                pos: [6, 64, 1],
+                drop: true,
+                by: None,
+                breaker: None,
+            }])
+            .unwrap();
+            assert_eq!(game.world.block(6, 64, 1), game.world.air);
+            assert_eq!(
+                game.mobs.len(),
+                1,
+                "allowed spawnAfterBreak runs exactly once"
+            );
+            assert_eq!(
+                game.mobs[0].species(),
+                horizon_client::mobs::Species::Silverfish
+            );
         });
     }
 

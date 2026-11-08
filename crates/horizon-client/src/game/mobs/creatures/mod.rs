@@ -3387,27 +3387,6 @@ impl Game<'_> {
                         broke.push(mob);
                     }
                     let old = self.world.block(pos[0], pos[1], pos[2]);
-                    if drop
-                        && self
-                            .res
-                            .facts()
-                            .get(old)
-                            .name
-                            .starts_with("minecraft:infested_")
-                        && self
-                            .ui
-                            .rules
-                            .bool_at(horizon_client::gamerules::vanilla::BLOCK_DROPS)
-                    {
-                        let at = [
-                            f64::from(pos[0]) + 0.5,
-                            f64::from(pos[1]),
-                            f64::from(pos[2]) + 0.5,
-                        ];
-                        if let Some(id) = self.spawn_mob_raw("minecraft:silverfish", at, false) {
-                            self.mob_poof(id);
-                        }
-                    }
                     // Block.spawnDestroyParticles: fire breaks leave nothing.
                     if !self.res.facts().get(old).has_class("BaseFireBlock") {
                         self.level_event_at(2001, pos, old.0 as i32);
