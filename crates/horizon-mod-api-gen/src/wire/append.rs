@@ -129,10 +129,7 @@ pub(super) fn detect(
             if segments.len() != 2 || segments[0].ident != type_name {
                 return Ok(None);
             }
-            let Some(case) = cases
-                .iter()
-                .find(|c| c.rust == segments[1].ident.to_string())
-            else {
+            let Some(case) = cases.iter().find(|c| segments[1].ident == c.rust) else {
                 return Ok(None);
             };
             let Payload::Tuple(payload) = &case.payload else {
