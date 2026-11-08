@@ -390,7 +390,12 @@ pub fn link(role: &str, args: Vec<String>) -> Result<(), String> {
     out.extend(
         [
             "--shared",
-            "--strip-all",
+            // Diagnostic only: names change metadata, never executable code.
+            if std::env::var("HORIZON_MOD_KEEP_NAMES").is_ok_and(|value| value == "1") {
+                "--strip-debug"
+            } else {
+                "--strip-all"
+            },
             "--unresolved-symbols=import-dynamic",
         ]
         .map(str::to_owned),
