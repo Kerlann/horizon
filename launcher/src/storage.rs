@@ -1,5 +1,5 @@
 //! Disposable launcher storage. Player-owned files are never accepted as cleanup targets.
-use crate::cache_cleanup::Plan;
+use crate::cache_cleanup::{Access, Plan};
 pub use crate::native_cache::Error;
 use crate::native_cache::{checked, linked, Cache};
 use cap_fs_ext::DirExt;
@@ -59,6 +59,13 @@ impl BuildCache {
         }
     }
 
+    fn access(self) -> Access {
+        match self {
+            Self::Rust | Self::Cargo | Self::Scratch => Access::BuildTools,
+            _ => Access::UninstrumentedGame,
+        }
+    }
+
     pub fn category(self) -> Category {
         match self {
             Self::Prebuilt => Category::PrebuiltGames,
@@ -114,7 +121,7 @@ impl Storage {
 
     /// Detach on the same volume before removal. Failed removals remain for the next sweep.
     pub fn clear(&self, cache: BuildCache) -> Result<u64, Error> {
-        self.trash(&self.path(cache)?)
+        self.trash(&self.path(cache)?, cache.access())
     }
 
     pub fn clear_targets(&self) -> Result<u64, Error> {
@@ -134,12 +141,13 @@ impl Storage {
         Ok(())
     }
 
-    fn trash(&self, path: &Path) -> Result<u64, Error> {
+    fn trash(&self, path: &Path, access: Access) -> Result<u64, Error> {
         self.validate_root()?;
         let bytes = allocated_bytes(path)?;
         if !path.try_exists()? {
             return Ok(0);
         }
+        access.check()?;
         let relative = path
             .strip_prefix(&self.root)
             .map_err(|_| Error::Unsafe(path.to_owned()))?;
@@ -170,6 +178,8 @@ impl Storage {
         for entry in self.directory.entries()? {
             let entry = entry?;
             if entry.file_name().to_string_lossy().starts_with(".trash-") {
+                // Detached leftovers have lost their category; absence of a game is not proof.
+                Access::UninstrumentedGame.check()?;
                 Self::clear_entry(
                     &self.directory,
                     &self.directory,

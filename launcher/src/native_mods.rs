@@ -569,6 +569,13 @@ pub fn cache_error(error: crate::storage::Error) -> String {
         crate::native_cache::Error::Busy => {
             tr("A native build or cache cleanup is running. Try again when it finishes.").into()
         }
+        crate::native_cache::Error::UnprovenExclusion => tr(
+            "Game cache cleanup is unavailable because running games cannot be reliably excluded.",
+        )
+        .into(),
+        crate::native_cache::Error::UnsupportedFilesystem => {
+            tr("Game cache leases require a supported local filesystem.").into()
+        }
         crate::native_cache::Error::Unsafe(path) => trf(
             "Refusing native cache cleanup at an unexpected file or link: {path}",
             &[("path", &path.display().to_string())],

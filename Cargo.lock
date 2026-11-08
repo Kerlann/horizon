@@ -2152,21 +2152,30 @@ dependencies = [
 name = "horizon-mod-package"
 version = "0.1.0"
 dependencies = [
+ "cap-fs-ext",
  "cap-std",
  "flate2",
+ "getrandom 0.4.3",
  "horizon-core",
  "horizon-shader-api",
+ "libc",
  "log",
  "minisign-verify",
+ "os_pipe",
  "png",
+ "rustix 1.1.5",
  "semver",
  "serde",
  "serde_json",
  "sha2",
+ "socket2 0.6.5",
+ "subtle",
  "tar",
+ "tempfile",
  "toml",
  "wasmparser 0.261.0",
  "wat",
+ "windows-sys 0.61.2",
  "zip",
 ]
 

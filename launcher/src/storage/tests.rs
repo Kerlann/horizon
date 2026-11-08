@@ -44,12 +44,27 @@ fn clears_only_fixed_cache_and_sweeps_detached_tree() {
     home.seed("worlds/keep/level.dat");
     let storage = Storage::at(&home.0).unwrap();
     assert!(storage.bytes(BuildCache::Source).unwrap() > 0);
-    assert!(storage.clear(BuildCache::Source).unwrap() > 0);
+    assert!(
+        storage
+            .trash(
+                &storage.path(BuildCache::Source).unwrap(),
+                Access::BuildTools
+            )
+            .unwrap()
+            > 0
+    );
     assert!(!home.0.join("native/source/revision/lib.rs").exists());
     assert!(home.0.join("settings.json").exists());
     assert!(home.0.join("worlds/keep/level.dat").exists());
     home.seed(".trash-interrupted/file");
-    storage.sweep().unwrap();
+    assert!(matches!(storage.sweep(), Err(Error::UnprovenExclusion)));
+    assert!(home.0.join(".trash-interrupted/file").exists());
+    Storage::clear_entry(
+        &storage.directory,
+        &storage.directory,
+        Path::new(".trash-interrupted"),
+    )
+    .unwrap();
     assert!(!home.0.join(".trash-interrupted/file").exists());
 }
 
@@ -88,7 +103,12 @@ fn read_only_file_can_be_removed() {
     permissions.set_readonly(true);
     fs::set_permissions(file, permissions).unwrap();
     let storage = Storage::at(&home.0).unwrap();
-    storage.clear(BuildCache::Tools).unwrap();
+    storage
+        .trash(
+            &storage.path(BuildCache::Tools).unwrap(),
+            Access::BuildTools,
+        )
+        .unwrap();
     assert!(!home.0.join("native/tools/tool").exists());
 }
 
@@ -107,7 +127,12 @@ fn held_open_file_is_kept_for_next_sweep() {
     assert!(storage.clear(BuildCache::Source).is_err());
     drop(held);
     storage.sweep().unwrap();
-    storage.clear(BuildCache::Source).unwrap();
+    storage
+        .trash(
+            &storage.path(BuildCache::Source).unwrap(),
+            Access::BuildTools,
+        )
+        .unwrap();
 }
 
 #[cfg(unix)]
@@ -157,10 +182,22 @@ fn child_cargo_locks_prevent_clear_and_survive_idle_cleanup() {
             held.lock().unwrap();
             let world = home.seed("worlds/precious/level.dat");
             let storage = Storage::at(&home.0).unwrap();
-            assert!(matches!(storage.clear(cache), Err(Error::Busy)));
+            assert!(matches!(
+                storage.trash(&storage.path(cache).unwrap(), Access::BuildTools),
+                Err(Error::Busy)
+            ));
             assert!(output.exists());
             held.unlock().unwrap();
-            storage.clear(cache).unwrap();
+            if matches!(cache.access(), Access::UninstrumentedGame) {
+                assert!(matches!(
+                    storage.clear(cache),
+                    Err(Error::UnprovenExclusion)
+                ));
+                assert!(output.exists());
+            }
+            storage
+                .trash(&storage.path(cache).unwrap(), Access::BuildTools)
+                .unwrap();
             assert!(!output.exists());
             assert!(lock_path.exists());
             assert!(world.exists());
@@ -202,7 +239,12 @@ fn freed_bytes_exclude_the_retained_lock_skeleton() {
     home.seed("native/source/rev/.cargo-lock");
     let storage = Storage::at(&home.0).unwrap();
     let before = storage.bytes(BuildCache::Source).unwrap();
-    let freed = storage.clear(BuildCache::Source).unwrap();
+    let freed = storage
+        .trash(
+            &storage.path(BuildCache::Source).unwrap(),
+            Access::BuildTools,
+        )
+        .unwrap();
     let after = storage.bytes(BuildCache::Source).unwrap();
     assert!(after > 0);
     assert_eq!(freed, before.saturating_sub(after));

@@ -114,6 +114,11 @@ impl Entry {
         let Some(root) = &self.directory else {
             return Ok(());
         };
+        match self.category {
+            Category::RustCompiler => Access::BuildTools,
+            _ => Access::UninstrumentedGame,
+        }
+        .check()?;
         let mut parent = root.try_clone()?;
         for part in self.relative.parent().unwrap_or(Path::new("")).components() {
             parent = parent.open_dir_nofollow(part.as_os_str())?;
@@ -226,6 +231,18 @@ impl Storage {
     pub fn report(&self, clear: Option<Category>, all: bool) -> Result<Report, Error> {
         // Also refuse an external Cargo holding a target lock before starting a cleanup.
         self.lease.bytes()?;
+        if clear.is_some() || all {
+            use horizon_mod_package::runtime_leases::{cleanup::Cleanup, Error as LeaseError};
+            match Cleanup::existing(&backend::data_dir()) {
+                Ok(cleanup) => {
+                    cleanup.collect_records()?;
+                    cleanup.collect().map_err(Error::from)?;
+                }
+                Err(LeaseError::Busy) => {} // Other cache classes can still be reported/retained.
+                Err(LeaseError::Io(error)) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
         self.apply(self.entries()?, clear, all)
     }
 

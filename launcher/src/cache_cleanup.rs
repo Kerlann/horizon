@@ -4,13 +4,27 @@
 //! each file's removal. A late Cargo either blocks deletion or starts after it has completed.
 //! Only snapshotted files are selected. Same-user swaps inside caches are not a security boundary.
 pub use crate::native_cache::Error;
-use crate::native_cache::{locked, Locked};
+use crate::native_cache::{locked, LockMode, Locked};
 use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
 use cap_std::fs::{Dir, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const LOCKS: [&str; 3] = [".cargo-lock", ".package-cache", ".package-cache-mutate"];
+
+/// Classification belongs to the fixed-path inventory, never a process snapshot.
+pub(crate) enum Access {
+    BuildTools,
+    UninstrumentedGame,
+}
+impl Access {
+    pub(crate) fn check(self) -> Result<(), Error> {
+        match self {
+            Self::BuildTools => Ok(()),
+            Self::UninstrumentedGame => Err(Error::UnprovenExclusion),
+        }
+    }
+}
 
 /// Operational locks are neither disposable outputs nor user reports/jar-cache entries.
 pub(crate) fn reserved(name: &Path) -> bool {
@@ -53,7 +67,10 @@ fn guard(directory: &Dir, relative: &Path) -> Result<Vec<Locked>, Error> {
         (LOCKS[2], packages),
     ] {
         if needed {
-            locks.push(locked(directory.open_with(name, &options)?.into_std())?);
+            locks.push(locked(
+                directory.open_with(name, &options)?.into_std(),
+                LockMode::Exclusive,
+            )?);
         }
     }
     Ok(locks)

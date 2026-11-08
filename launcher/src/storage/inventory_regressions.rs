@@ -12,14 +12,14 @@ fn entry_uses_held_directory_after_root_path_is_redirected() {
     let entry = Entry::fixed(
         &Root::open(&home.0).unwrap(),
         Path::new("cache"),
-        Category::OtherCaches,
+        Category::RustCompiler,
     )
     .unwrap();
     let moved = home.0.with_extension("original");
     fs::rename(&home.0, &moved).unwrap();
     std::os::unix::fs::symlink(&outside.0, &home.0).unwrap();
     storage
-        .apply(vec![entry], Some(Category::OtherCaches), false)
+        .apply(vec![entry], Some(Category::RustCompiler), false)
         .unwrap();
     assert!(precious.exists());
     assert!(!moved.join("cache/output").exists());
@@ -65,7 +65,7 @@ fn hard_linked_outputs_across_entries_count_once() {
 }
 
 #[test]
-fn referenced_jar_path_is_kept_and_unused_jar_is_removed() {
+fn referenced_jar_and_uninstrumented_unused_jar_are_kept() {
     use horizon_mod_package::{manifest::JarRef, Package};
     use sha2::{Digest, Sha512};
     use std::io::Write;
@@ -97,9 +97,10 @@ fn referenced_jar_path_is_kept_and_unused_jar_is_removed() {
     unused_jars(&mut entries, &Root::open(&home.0).unwrap()).unwrap();
     assert_eq!(entries.len(), 1);
     assert_eq!(entries[0].path, unused);
-    storage
-        .apply(entries, Some(Category::OtherCaches), false)
-        .unwrap();
+    assert!(matches!(
+        storage.apply(entries, Some(Category::OtherCaches), false),
+        Err(Error::UnprovenExclusion)
+    ));
     assert!(referenced.exists());
-    assert!(!unused.exists());
+    assert!(unused.exists());
 }

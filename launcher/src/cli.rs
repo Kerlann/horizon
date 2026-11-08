@@ -1156,7 +1156,7 @@ pub fn run() -> Option<i32> {
     let command = cli.command?;
     let result = match command {
         Cmd::Mcp | Cmd::AgentConfig { .. } if no_ai => Err(horizon_core::no_ai::REFUSAL.into()),
-        Cmd::Mcp => crate::mcp::serve(),
+        Cmd::Mcp => crate::mcp::serve().map(|()| 0),
         command => {
             let result = execute(command, cli.json);
             // A game it started has ended (attached) or none did (an error): a session file it
@@ -1166,7 +1166,7 @@ pub fn run() -> Option<i32> {
         }
     };
     Some(match result {
-        Ok(()) => 0,
+        Ok(code) => code,
         Err(e) => {
             eprintln!("error: {e}");
             1
@@ -1196,15 +1196,18 @@ fn json(value: serde_json::Value) {
 }
 
 /// Runs a game process in this terminal and reports how it ended.
-fn attached(cmd: Command) -> Result<(), String> {
+fn attached(cmd: Command) -> Result<i32, String> {
     let (mut cmd, _runtime) = backend::prepare_command(cmd)?;
     let status = cmd
         .status()
         .map_err(|e| format!("Could not start {:?}: {e}", cmd.get_program()))?;
-    if status.success() {
-        Ok(())
-    } else {
-        Err(format!("Exited with {status}"))
+    #[cfg(unix)]
+    {
+        horizon_launcher::process::supervisor::exit_code(status).map_err(|error| error.to_string())
+    }
+    #[cfg(not(unix))]
+    {
+        status.code().ok_or_else(|| format!("Exited with {status}"))
     }
 }
 
@@ -1215,7 +1218,7 @@ fn release_json(r: &Release) -> serde_json::Value {
     })
 }
 
-fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
+fn execute(command: Cmd, as_json: bool) -> Result<i32, String> {
     if matches!(command, Cmd::Versions { .. } | Cmd::Update { .. }) {
         for (tag, from) in backend::reuse_prepared_everywhere() {
             if !as_json {
@@ -1260,7 +1263,7 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
             let releases = backend::releases()?;
             if as_json {
                 json(releases.iter().map(release_json).collect());
-                return Ok(());
+                return Ok(0);
             }
             let installed = backend::installed();
             for r in &releases {
@@ -1317,7 +1320,7 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                     "{}",
                     serde_json::to_string(&entries).map_err(|error| error.to_string())?
                 );
-                return Ok(());
+                return Ok(0);
             }
             let steps = |step: native_mods::Step| eprintln!("{}", step.label());
             if let Some(output) = server_output {
@@ -1352,7 +1355,7 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                         server.toml (docs/hosting.md); the launcher writes nothing itself."
                     )
                 );
-                return Ok(());
+                return Ok(0);
             }
             let target = match &instance {
                 Some(name) => instances::find(name)?,
@@ -1435,7 +1438,12 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 backend::preparer(&tag, &minecraft, from, &|line| eprintln!("{line}"))?;
             backend::sounds(&tag, &minecraft, &|line| println!("{line}"));
             match preparer {
-                backend::Preparer::Process(cmd) => attached(cmd)?,
+                backend::Preparer::Process(cmd) => {
+                    let code = attached(cmd)?;
+                    if code != 0 {
+                        return Ok(code);
+                    }
+                }
                 backend::Preparer::InProcess(options) => {
                     backend::prepare_in_process(&options, &|line| println!("{line}"))?
                 }
@@ -1544,7 +1552,7 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 eprintln!("Play time not saved: {e}");
             }
             after_exit(&instance, &vars);
-            played?
+            return played;
         }
         Cmd::Server {
             dir,
@@ -1562,7 +1570,7 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                 horizon_launcher::jars::Permission::headless(allow_jar_downloads),
             )
             .map_err(|error| error.to_string())?;
-            attached(cmd)?
+            return attached(cmd);
         }
         Cmd::Notes { tag } => {
             let r = backend::release_notes(tag.as_deref())?;
@@ -1639,7 +1647,7 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
                         .collect();
                 }
                 json(all);
-                return Ok(());
+                return Ok(0);
             }
             for c in agents::clients(exe)
                 .iter()
@@ -1779,14 +1787,14 @@ fn execute(command: Cmd, as_json: bool) -> Result<(), String> {
             as_json,
         )?,
         Cmd::Instance { action } => instance(action.unwrap_or(InstanceCmd::List), as_json)?,
-        Cmd::Modpack { action } => modpack(action.unwrap_or(ModpackCmd::List), as_json)?,
+        Cmd::Modpack { action } => return modpack(action.unwrap_or(ModpackCmd::List), as_json),
         Cmd::Mods { action } => mods(action.unwrap_or(ModsCmd::List { instance: None }), as_json)?,
         Cmd::Servers { action } => servers(action.unwrap_or(ServersCmd::List), as_json)?,
         Cmd::Rust { action } => rust(action.unwrap_or(RustCmd::Status), as_json)?,
         Cmd::Java { action } => java(action.unwrap_or(JavaCmd::List), as_json)?,
         Cmd::Mcp => unreachable!(),
     }
-    Ok(())
+    Ok(0)
 }
 
 fn java(action: JavaCmd, as_json: bool) -> Result<(), String> {
@@ -3601,7 +3609,7 @@ fn worlds(action: WorldsCmd, as_json: bool) -> Result<(), String> {
     Ok(())
 }
 
-fn modpack(action: ModpackCmd, as_json: bool) -> Result<(), String> {
+fn modpack(action: ModpackCmd, as_json: bool) -> Result<i32, String> {
     use horizon_launcher::browser::horizon;
     use horizon_launcher::modpacks::{self, Imported};
     use horizon_port_pack::report::Status;
@@ -3700,17 +3708,108 @@ fn modpack(action: ModpackCmd, as_json: bool) -> Result<(), String> {
                 horizon_launcher::jars::Permission::headless(allow_jar_downloads),
             )
             .map_err(|error| error.to_string())?;
-            attached(cmd)?
+            return attached(cmd);
         }
         ModpackCmd::Remove { pack } => modpacks::remove(&work(&pack)?)?,
     }
-    Ok(())
+    Ok(0)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
     use clap::Parser;
+
+    #[test]
+    fn attached_preserves_real_process_codes_and_unix_signals() {
+        let mut codes = vec![0, 37];
+        #[cfg(unix)]
+        codes.push(143);
+        #[cfg(windows)]
+        codes.push(0xFEDC_BA98u32 as i32);
+        for code in codes {
+            let root = tempfile::tempdir().unwrap();
+            let mut command = Command::new(std::env::current_exe().unwrap());
+            command
+                .args([
+                    "--exact",
+                    "cli::tests::attached_status_actor",
+                    "--nocapture",
+                ])
+                .env("HORIZON_CLI_STATUS_ROLE", "wrapper")
+                .env("HORIZON_CLI_STATUS_CODE", code.to_string())
+                .env("HORIZON_LAUNCHER_NO_SELF_UPDATE", "1")
+                .env("HORIZON_NO_AUDIO", "1")
+                .current_dir(root.path())
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::inherit());
+            for (key, folder) in [
+                ("HORIZON_HOME", "logs"),
+                ("HORIZON_LAUNCHER_HOME", "launcher"),
+                ("XDG_DATA_HOME", "xdg-data"),
+                ("XDG_CONFIG_HOME", "xdg-config"),
+                ("HORIZON_LAUNCHER_TRASH", "trash"),
+                ("HORIZON_LAUNCHER_CLIPBOARD", "clipboard"),
+                ("HORIZON_LAUNCHER_DESKTOP", "desktop"),
+            ] {
+                command.env(key, root.path().join(folder));
+            }
+            assert_eq!(command.status().unwrap().code(), Some(code));
+        }
+    }
+
+    #[test]
+    fn attached_status_actor() {
+        let Ok(role) = std::env::var("HORIZON_CLI_STATUS_ROLE") else {
+            return;
+        };
+        let code: i32 = std::env::var("HORIZON_CLI_STATUS_CODE")
+            .unwrap()
+            .parse()
+            .unwrap();
+        if role == "child" {
+            assert!(std::env::var_os(horizon_mod_package::holder::ENV).is_none());
+            assert!(std::env::var_os(horizon_mod_package::holder::ENTRY).is_none());
+            use std::io::IsTerminal;
+            let shape = format!(
+                "{}:{}:{}",
+                std::io::stdin().is_terminal(),
+                std::io::stdout().is_terminal(),
+                std::io::stderr().is_terminal()
+            );
+            assert_eq!(shape, std::env::var("HORIZON_CLI_STDIO_SHAPE").unwrap());
+            #[cfg(unix)]
+            if code == 143 {
+                unsafe {
+                    libc::signal(libc::SIGTERM, libc::SIG_DFL);
+                    libc::raise(libc::SIGTERM);
+                }
+                panic!("SIGTERM did not terminate the actor");
+            }
+            std::process::exit(code);
+        }
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "cli::tests::attached_status_actor",
+                "--nocapture",
+            ])
+            .env("HORIZON_CLI_STATUS_ROLE", "child");
+        use std::io::IsTerminal;
+        command.env(
+            "HORIZON_CLI_STDIO_SHAPE",
+            format!(
+                "{}:{}:{}",
+                std::io::stdin().is_terminal(),
+                std::io::stdout().is_terminal(),
+                std::io::stderr().is_terminal()
+            ),
+        );
+        assert_eq!(attached(command).unwrap(), code);
+        std::process::exit(code);
+    }
 
     #[test]
     fn completions_cover_each_shell_and_nested_commands() {

@@ -12,6 +12,8 @@ const PROFILES: [&str; 2] = ["fast", "release"];
 #[derive(Debug)]
 pub enum Error {
     Busy,
+    UnprovenExclusion,
+    UnsupportedFilesystem,
     Unsafe(PathBuf),
     Io(io::Error),
 }
@@ -28,45 +30,21 @@ pub(crate) struct Cache {
     _lease: Locked,
 }
 
-/// A held lock that is released before its file closes. A child process spawned at that moment
-/// (Cargo, git) holds a copy of the descriptor until its exec, and closing ours alone would leave
-/// the lock taken through that copy: the next lease or cleanup would read Busy.
-pub(crate) struct Locked(File);
+pub(crate) use horizon_mod_package::locks::{LockMode, Locked, Release};
 
-impl Drop for Locked {
-    fn drop(&mut self) {
-        let _ = self.0.unlock();
-    }
-}
-
-pub(crate) fn linked(metadata: &Metadata) -> bool {
-    #[cfg(windows)]
-    {
-        use std::os::windows::fs::MetadataExt;
-        // Includes junctions and other reparse points, not just symbolic links.
-        metadata.file_attributes() & 0x400 != 0
-    }
-    #[cfg(not(windows))]
-    {
-        metadata.file_type().is_symlink()
-    }
-}
-
+pub(crate) use horizon_mod_package::runtime_leases::linked;
 pub(crate) fn checked(path: &Path, directory: bool) -> Result<Option<Metadata>, Error> {
-    match fs::symlink_metadata(path) {
-        Ok(meta)
-            if linked(&meta)
-                || (if directory {
-                    !meta.is_dir()
-                } else {
-                    !meta.is_file()
-                }) =>
-        {
-            Err(Error::Unsafe(path.to_owned()))
+    horizon_mod_package::runtime_leases::checked(path, directory).map_err(Into::into)
+}
+impl From<horizon_mod_package::runtime_leases::Error> for Error {
+    fn from(error: horizon_mod_package::runtime_leases::Error) -> Self {
+        use horizon_mod_package::runtime_leases::Error as Shared;
+        match error {
+            Shared::Busy => Self::Busy,
+            Shared::UnsupportedFilesystem => Self::UnsupportedFilesystem,
+            Shared::Unsafe(path) => Self::Unsafe(path),
+            Shared::Io(error) => Self::Io(error),
         }
-        Ok(meta) => Ok(Some(meta)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error.into()),
     }
 }
 
@@ -78,15 +56,14 @@ fn lock(path: &Path) -> Result<Locked, Error> {
         .create(true)
         .truncate(false)
         .open(path)?;
-    locked(file)
+    locked(file, LockMode::Exclusive)
 }
 
-pub(crate) fn locked(file: File) -> Result<Locked, Error> {
-    file.try_lock().map_err(|error| match error {
+pub(crate) fn locked(file: File, mode: LockMode) -> Result<Locked, Error> {
+    horizon_mod_package::locks::locked(file, mode).map_err(|error| match error {
         fs::TryLockError::WouldBlock => Error::Busy,
         fs::TryLockError::Error(error) => Error::Io(error),
-    })?;
-    Ok(Locked(file))
+    })
 }
 
 fn size(path: &Path) -> Result<u64, Error> {
@@ -147,12 +124,17 @@ impl Cache {
         self.process(None, false)
     }
     pub(crate) fn clear(&self) -> Result<u64, Error> {
+        crate::cache_cleanup::Access::UninstrumentedGame.check()?;
         self.process(None, true)
     }
     pub(crate) fn trim(&self, limit: u64) -> Result<u64, Error> {
         if limit == 0 {
             return Ok(0);
         }
+        if self.bytes()? <= limit {
+            return Ok(0);
+        }
+        crate::cache_cleanup::Access::UninstrumentedGame.check()?;
         self.process(Some(limit), true)
     }
 
