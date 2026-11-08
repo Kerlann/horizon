@@ -80,6 +80,13 @@ pub(crate) fn answered<T: ?Sized>(
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct ProviderCursorRefusal {
+    owner: &'static str,
+    previous: u32,
+    returned: u32,
+}
+
 /// Asks the providers `next` gives (advancing a registration cursor in dispatch order: those
 /// registered `before_game`, then the others), and the game's own (`game`: whether it answers) between the
 /// two, in the fork's chosen order (NeoForge's javadoc doesn't state one between mods'
@@ -95,7 +102,35 @@ pub(crate) fn ask_providers<O, P: ?Sized + 'static, T: ?Sized>(
 ) -> Answer<T> {
     let mut game = Some(game);
     let mut index = 0;
-    while let Some((provider, owner, before_game)) = next(&mut index) {
+    loop {
+        // The maximum cursor is terminal: another call could overflow an advancing provider.
+        if index == u32::MAX {
+            break;
+        }
+        let previous = index;
+        let Some((provider, owner, before_game)) = next(&mut index) else {
+            break;
+        };
+        let cursor = if index > previous {
+            Ok(())
+        } else {
+            Err(ProviderCursorRefusal {
+                owner,
+                previous,
+                returned: index,
+            })
+        };
+        if let Err(refusal) = cursor {
+            static WARNED: std::sync::Mutex<Option<std::collections::HashSet<&'static str>>> =
+                std::sync::Mutex::new(None);
+            let mut warned = WARNED.lock().unwrap_or_else(|e| e.into_inner());
+            if warned.get_or_insert_default().insert(refusal.owner) {
+                log::warn!(
+                    "Horizon: refusing capability provider with non-advancing cursor: {refusal:?}"
+                );
+            }
+            return Answer::Nobody;
+        }
         if !before_game
             && let Some(game) = game.take()
             && game(host)
@@ -228,6 +263,49 @@ pub mod tests {
     #[cfg(test)]
     use crate::parts::tests::*;
     use crate::*;
+
+    #[cfg(test)]
+    #[test]
+    fn provider_cursor_refuses_nonadvancing_and_stops_at_terminal() {
+        use std::cell::Cell;
+        let mut host = FakeHost::new();
+        for backwards in [false, true] {
+            let calls = Cell::new(0);
+            let answer = ask_providers::<Arc<()>, (), ()>(
+                &mut host,
+                |index| {
+                    let count = calls.get();
+                    calls.set(count + 1);
+                    assert!(count < 2, "non-advancing provider was called again");
+                    if backwards && count == 0 {
+                        *index = 2;
+                    } else if backwards {
+                        *index = 1;
+                    }
+                    Some((Arc::new(()), "cursor-test", true))
+                },
+                |provider| Some(provider),
+                |_, _| None,
+                |_| true,
+            );
+            assert!(matches!(answer, Answer::Nobody));
+            assert_eq!(calls.get(), if backwards { 2 } else { 1 });
+        }
+        let calls = Cell::new(0);
+        let answer = ask_providers::<Arc<()>, (), ()>(
+            &mut host,
+            |index| {
+                assert_eq!(calls.replace(calls.get() + 1), 0);
+                *index = u32::MAX;
+                Some((Arc::new(()), "cursor-terminal-test", true))
+            },
+            |provider| Some(provider),
+            |_, _| None,
+            |_| true,
+        );
+        assert!(matches!(answer, Answer::Game));
+        assert_eq!(calls.get(), 1);
+    }
 
     /// A chemical, as Mekanism's: the test mods' own resource, which the game knows nothing of.
     #[derive(Clone, Debug, PartialEq)]
