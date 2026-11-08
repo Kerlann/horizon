@@ -584,6 +584,12 @@ pub fn generate_host(root: &std::path::Path) -> Result<String, String> {
         )
         .unwrap();
     }
+    report.push_str("\n| Library mod plain `pub fn` / `pub static` called by a dependent | OPEN | crate identity + rustc drops unused public functions in cdylib; fix owned by shm-build: group build with exact rlib through --extern, -C metadata=<id>, rlib,cdylib; see /box/shared/shm-lead/inter-mod-functions.md |\n");
+    let gaps = report
+        .lines()
+        .filter(|line| line.contains("| gap |") || line.contains("| OPEN |"))
+        .count();
+    writeln!(report, "\nRequired gap total: {gaps}.").unwrap();
     std::fs::write(root.join("target/wire-coverage.md"), report).map_err(|e| e.to_string())?;
     writeln!(code, "pub const SUBSCRIBED: u32 = {count};").unwrap();
     code.push_str("pub fn hook_id(name: &str) -> Option<mod_api::HookId> { match name {\n");

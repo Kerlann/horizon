@@ -2206,6 +2206,7 @@ dependencies = [
 name = "horizon-mod-wasm"
 version = "0.1.0"
 dependencies = [
+ "horizon-client-core",
  "horizon-core",
  "horizon-mod-api",
  "horizon-mod-api-gen",

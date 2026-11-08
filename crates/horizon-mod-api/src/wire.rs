@@ -17,7 +17,7 @@ use std::sync::Arc;
 pub use crate::wire_slots::{Id, Slots, Stale};
 #[path = "wire_resources.rs"]
 mod resources;
-pub use resources::{ResourceCodec, ResourceScope};
+pub use resources::{ResourceCodec, ResourceScope, ScopeError, ScopeToken, borrow_token};
 
 /// The guest's start-up call: its input is the package list.
 pub const INIT: u32 = 0xFFFF_FF00;

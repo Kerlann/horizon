@@ -11,8 +11,71 @@ pub trait ResourceCodec {
     fn store(&self, value: Box<dyn Any>) -> Result<Id, WireError>;
     fn load(&self, id: Id, view: TypeId) -> Result<Box<dyn Any>, WireError>;
 }
+/// A lease's scope ended, or the caller left its owning thread.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ScopeError {
+    Stale,
+    WrongThread,
+}
+impl std::fmt::Display for ScopeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Self::Stale => "expired resource scope",
+            Self::WrongThread => "resource scope belongs to another thread",
+        })
+    }
+}
+impl std::error::Error for ScopeError {}
+/// A non-owning native lease. Checking it never retains the scope, codec, or pointee.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ScopeToken {
+    slot: usize,
+    generation: u64,
+    thread: std::thread::ThreadId,
+}
+impl ScopeToken {
+    pub fn check(&self) -> Result<(), ScopeError> {
+        if self.thread != std::thread::current().id() {
+            return Err(ScopeError::WrongThread);
+        }
+        ACTIVE
+            .try_with(|active| {
+                let scopes = active.borrow();
+                scopes
+                    .slots
+                    .get(self.slot)
+                    .filter(|s| s.generation == self.generation && s.codec.is_some())
+                    .map(|_| ())
+                    .ok_or(ScopeError::Stale)
+            })
+            .unwrap_or(Err(ScopeError::Stale))
+    }
+}
+/// The nearest live runtime root, never an attestation supplied by a user codec.
+pub fn borrow_token() -> Result<ScopeToken, ScopeError> {
+    ACTIVE
+        .try_with(|active| {
+            let scopes = active.borrow();
+            let mut at = scopes.current;
+            while let Some(slot) = at {
+                let scope = &scopes.slots[slot];
+                if scope.native_root {
+                    return Ok(ScopeToken {
+                        slot,
+                        generation: scope.generation,
+                        thread: std::thread::current().id(),
+                    });
+                }
+                at = scope.previous;
+            }
+            Err(ScopeError::Stale)
+        })
+        .unwrap_or(Err(ScopeError::Stale))
+}
 struct Scope {
     codec: Option<Rc<dyn ResourceCodec>>,
+    generation: u64,
+    native_root: bool,
     previous: Option<usize>,
     next: Option<usize>,
 }
@@ -28,13 +91,21 @@ thread_local! { static ACTIVE: RefCell<Scopes> = RefCell::new(Scopes::default())
 /// Slots are reused, so steady-state calls allocate no scope bookkeeping.
 pub struct ResourceScope {
     slot: usize,
+    generation: u64,
     // The slot belongs to this thread even though its index alone would be Send + Sync.
     _thread: std::marker::PhantomData<Rc<()>>,
 }
 impl ResourceScope {
     pub fn new(codec: Rc<dyn ResourceCodec>) -> Self {
-        let slot = ACTIVE.with(|active| {
+        let (slot, generation) = ACTIVE.with(|active| {
             let mut scopes = active.borrow_mut();
+            // Retire exhausted slots rather than ever reviving a wrapped generation.
+            while let Some(slot) = scopes.free {
+                if scopes.slots[slot].generation < u64::MAX {
+                    break;
+                }
+                scopes.free = scopes.slots[slot].next;
+            }
             let slot = match scopes.free {
                 Some(slot) => {
                     scopes.free = scopes.slots[slot].next;
@@ -44,6 +115,8 @@ impl ResourceScope {
                     let slot = scopes.slots.len();
                     scopes.slots.push(Scope {
                         codec: None,
+                        generation: 0,
+                        native_root: false,
                         previous: None,
                         next: None,
                     });
@@ -51,8 +124,11 @@ impl ResourceScope {
                 }
             };
             let previous = scopes.current;
+            let generation = scopes.slots[slot].generation + 1;
             scopes.slots[slot] = Scope {
                 codec: Some(codec),
+                generation,
+                native_root: false,
                 previous,
                 next: None,
             };
@@ -60,12 +136,33 @@ impl ResourceScope {
                 scopes.slots[previous].next = Some(slot);
             }
             scopes.current = Some(slot);
-            slot
+            (slot, generation)
         });
         Self {
             slot,
+            generation,
             _thread: std::marker::PhantomData,
         }
+    }
+    /// A non-owning token for this scope. Copying it cannot extend the scope's lifetime.
+    pub fn token(&self) -> ScopeToken {
+        ScopeToken {
+            slot: self.slot,
+            generation: self.generation,
+            thread: std::thread::current().id(),
+        }
+    }
+    /// Marks the runtime's root call, from which native borrowed roots receive their lease.
+    ///
+    /// # Safety
+    /// Every native root exposed under this marker must remain at a stable address and
+    /// valid until the marker is dropped. Locators into mutable containers must be resolved
+    /// afresh from that root; this lease does not make element addresses stable.
+    #[doc(hidden)]
+    pub unsafe fn native_root(codec: Rc<dyn ResourceCodec>) -> Self {
+        let scope = Self::new(codec);
+        ACTIVE.with(|active| active.borrow_mut().slots[scope.slot].native_root = true);
+        scope
     }
 }
 impl Drop for ResourceScope {
@@ -113,6 +210,43 @@ mod tests {
         fn load(&self, _: Id, _: TypeId) -> Result<Box<dyn Any>, WireError> {
             Ok(Box::new(self.0))
         }
+    }
+    #[test]
+    fn resource_scope_token_refuses_expiration_slot_reuse_and_foreign_thread() {
+        let scope = ResourceScope::new(Rc::new(Codec(11)));
+        let token = scope.token();
+        assert_eq!(token.check(), Ok(()));
+        assert_eq!(
+            std::thread::spawn(move || token.check()).join().unwrap(),
+            Err(ScopeError::WrongThread)
+        );
+        drop(scope);
+        assert_eq!(token.check(), Err(ScopeError::Stale));
+        let replacement = ResourceScope::new(Rc::new(Codec(12)));
+        assert_eq!(token.check(), Err(ScopeError::Stale));
+        assert_eq!(replacement.token().check(), Ok(()));
+    }
+    #[test]
+    fn resource_scope_native_root_cannot_be_extended_by_safe_custom_scope() {
+        assert_eq!(borrow_token().unwrap_err(), ScopeError::Stale);
+        let outer = unsafe { ResourceScope::native_root(Rc::new(Codec(13))) };
+        let outer_token = borrow_token().unwrap();
+        let inner = unsafe { ResourceScope::native_root(Rc::new(Codec(14))) };
+        let inner_token = borrow_token().unwrap();
+        let retained = ResourceScope::new(Rc::new(Codec(15)));
+        assert_eq!(borrow_token(), Ok(inner_token));
+        drop(inner);
+        assert_eq!(inner_token.check(), Err(ScopeError::Stale));
+        assert_eq!(outer_token.check(), Ok(()));
+        assert_eq!(borrow_token(), Ok(outer_token));
+        drop(outer);
+        assert_eq!(borrow_token().unwrap_err(), ScopeError::Stale);
+        assert_eq!(inner_token.check(), Err(ScopeError::Stale));
+        drop(retained);
+        assert_eq!(borrow_token().unwrap_err(), ScopeError::Stale);
+        let safe = ResourceScope::new(Rc::new(Codec(16)));
+        assert_eq!(safe.token().check(), Ok(()));
+        assert_eq!(borrow_token().unwrap_err(), ScopeError::Stale);
     }
     #[test]
     fn resource_scope_out_of_order_drop_never_revives_expired_codec() {

@@ -21,6 +21,7 @@ wasmtime = { version = "50", default-features = false, features = ["anyhow", "cr
 horizon-mod-api-gen = { path = "../horizon-mod-api-gen" }
 
 [dev-dependencies]
+horizon-client-core = { path = "../horizon-client-core" }
 mod_api = { package = "horizon-mod-api", path = "../horizon-mod-api", features = ["wasm-guest", "testing"] }
 wat = "1.261"
 
