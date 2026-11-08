@@ -1551,7 +1551,26 @@ mod tests {
             json.as_object_mut().unwrap().remove("raw_shape");
         }
         assert_eq!(serde_json::to_vec(&after).unwrap(), before_json);
-        assert_eq!(records(&points, &sources), before_records);
+        // Raw shape metadata participates in the layout fingerprint, but does not change
+        // the records or dispatch code emitted for these same points.
+        let split_layout = |code: &str| {
+            let mut file = syn::parse_file(code).unwrap();
+            let index = file
+                .items
+                .iter()
+                .position(|item| {
+                    matches!(item,
+                        syn::Item::Const(item) if item.ident == "POINT_LAYOUT"
+                    )
+                })
+                .unwrap();
+            let layout = file.items.remove(index).to_token_stream().to_string();
+            (layout, file.to_token_stream().to_string())
+        };
+        let (before_layout, before_code) = split_layout(&before_records);
+        let (after_layout, after_code) = split_layout(&records(&points, &sources));
+        assert_ne!(before_layout, after_layout);
+        assert_eq!(before_code, after_code);
         if let Ok(path) = std::env::var("RAW_SHAPE_BASELINE") {
             let baseline = fs::read(path).unwrap();
             assert!(
@@ -1796,7 +1815,7 @@ mod tests {
         let api = records(&points, &[]);
         assert!(
             api.contains("fn tick_return")
-                && !api.contains("fn slot_return")
+                && api.contains("fn slot_return")
                 && api.contains("SlotReturn")
                 && api.contains("fn game_remote_other_send (args"),
             "{api}"
@@ -1811,11 +1830,38 @@ mod tests {
             }
         );
         let game = std::fs::read_to_string(root.join("crates/horizon-client/src/game.rs")).unwrap();
+        let parsed = syn::parse_file(&game).unwrap();
+        for name in ["tick", "slot"] {
+            let method = parsed
+                .items
+                .iter()
+                .filter_map(|item| match item {
+                    syn::Item::Impl(item) => Some(&item.items),
+                    _ => None,
+                })
+                .flatten()
+                .find_map(|item| match item {
+                    syn::ImplItem::Fn(method) if method.sig.ident == name => Some(method),
+                    _ => None,
+                })
+                .unwrap();
+            assert!(
+                method
+                    .attrs
+                    .iter()
+                    .any(|attr| attr.to_token_stream().to_string()
+                        == "# [horizon_mod_api_macros :: point (side = \"both\" , raw)]")
+            );
+            assert!(
+                method
+                    .attrs
+                    .iter()
+                    .any(|attr| attr.path().is_ident("horizon_raw_plan"))
+            );
+        }
         assert!(
-            game.contains("    #[horizon_mod_api_macros::point(side = \"both\", raw)] fn tick(")
-                && game.contains(
-                    "#[horizon_mod_api_macros::point(side = \"both\", raw)] pub(super) fn slot("
-                )
+            game.contains("fn tick(")
+                && game.contains("pub(super) fn slot(")
                 && !game.contains("raw)] fn native_tick")
                 // `Game`'s associated functions are named and hosted like any other type's.
                 && game.contains("point(name = \"game_game_new\"")
@@ -1833,7 +1879,8 @@ mod tests {
         let render = root.join("crates/horizon-client-render");
         let mesher = std::fs::read_to_string(render.join("src/mesher.rs")).unwrap();
         assert!(
-            mesher.contains("point(name = \"client_render_mesher_mesher_mesh\", raw)] pub fn mesh")
+            mesher.contains("point(name = \"client_render_mesher_mesher_mesh\", raw)]")
+                && mesher.contains("pub fn mesh")
                 && !mesher.contains("client_render_mesher_mesher_face")
                 && mesher.contains("& 'r mut Mesher < '__self0 >"),
             "{mesher}"

@@ -2192,12 +2192,28 @@ pub struct ItemStack { a: First, b: Second, c: second::Kind }
             "struct Guarded { #[cfg(feature = \"audio\")] sound: u8 }\nenum Cases { #[cfg_attr(feature = \"audio\", cfg(unix))] Audio, Normal }\n",
         );
         let widened = widen_with(&fixture.0, &[]).unwrap();
-        let guarded = widened
-            .entries
-            .iter()
-            .filter(|entry| entry.opaque_reason.is_some())
-            .count();
-        assert_eq!(guarded, 2);
+        // Opacity is decided by the crossing rule, not the source collector. Check
+        // the staged signatures too: widening must not discard conditional members.
+        for entries in [
+            widened.entries,
+            collect(&fixture.0, &[], false)
+                .unwrap()
+                .entries
+                .into_values()
+                .collect(),
+        ] {
+            let rule = crate::crossing::Rule::new(&entries);
+            for name in ["Guarded", "Cases"] {
+                let ty = syn::parse_str(name).unwrap();
+                let shape = rule.shape("horizon_client::game", None, &ty);
+                assert!(matches!(shape, crate::crossing::Shape::Named(..)));
+                assert_eq!(
+                    rule.crossing_of(&shape),
+                    crate::crossing::Crossing::Opaque,
+                    "{name}"
+                );
+            }
+        }
     }
 
     #[test]
