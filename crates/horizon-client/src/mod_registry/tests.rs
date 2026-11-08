@@ -319,7 +319,16 @@ fn a_mod_the_player_put_there_is_never_replaced() {
 /// rather than treat that capability list as proof that it contains no code.
 #[test]
 fn code_packages_never_reach_the_content_browser_install_path() {
-    let module = b"\0asm\x01\0\0\0";
+    // The smallest shared group member: `dylink.0` memory info and the three guest exports.
+    let module = &[
+        b"\0asm\x01\0\0\0".as_slice(),
+        b"\0\x0f\x08dylink.0\x01\x04\0\0\0\0",
+        b"\x01\x04\x01\x60\0\0",
+        b"\x03\x04\x03\0\0\0",
+        b"\x07\x2e\x03\x0ehorizon_layout\0\0\x0ahorizon_in\0\x01\x0chorizon_hook\0\x02",
+        b"\x0a\x0a\x03\x02\0\x0b\x02\0\x0b\x02\0\x0b",
+    ]
+    .concat()[..];
     let manifest = format!(
         "id = \"ruby\"\nname = \"Ruby\"\nversion = \"1.0\"\napi = \"0.2\"\nside = \"both\"\ncapabilities = [\"registries\"]\n[wasm]\nsha512 = \"{}\"\ntoolchain = \"1.99.1\"\nbuilt_with = \"test\"\n",
         horizon_mod_package::manifest::sha512_of(module)
