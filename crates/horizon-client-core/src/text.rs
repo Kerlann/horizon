@@ -184,18 +184,15 @@ fn discard(root: Discard) {
                 );
             }
             Discard::Style(mut style) => {
-                match style.click.take() {
-                    Some(
-                        ClickEvent::ShowDialog(tag)
-                        | ClickEvent::Custom {
-                            payload: Some(tag), ..
-                        },
-                    ) => {
-                        if let Ok(tag) = std::sync::Arc::try_unwrap(tag) {
-                            horizon_core::nbt::discard_tag(tag);
-                        }
-                    }
-                    _ => {}
+                if let Some(
+                    ClickEvent::ShowDialog(tag)
+                    | ClickEvent::Custom {
+                        payload: Some(tag), ..
+                    },
+                ) = style.click.take()
+                    && let Ok(tag) = std::sync::Arc::try_unwrap(tag)
+                {
+                    horizon_core::nbt::discard_tag(tag);
                 }
                 if let Some(hover) = style.hover.take()
                     && let Ok(text) = std::sync::Arc::try_unwrap(hover)
@@ -210,10 +207,10 @@ fn discard(root: Discard) {
                         crate::component::discard_component(value);
                     }
                 }
-                if let Some(InlineObject::Player { profile, .. }) = style.inline_object.take() {
-                    if let Ok(profile) = std::sync::Arc::try_unwrap(profile) {
-                        crate::component::discard_component(profile);
-                    }
+                if let Some(InlineObject::Player { profile, .. }) = style.inline_object.take()
+                    && let Ok(profile) = std::sync::Arc::try_unwrap(profile)
+                {
+                    crate::component::discard_component(profile);
                 }
             }
         }

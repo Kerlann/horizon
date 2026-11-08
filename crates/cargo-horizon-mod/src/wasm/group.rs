@@ -376,20 +376,18 @@ pub(super) fn build(
                 if let Some(package) = member_metadata["packages"]
                     .as_array()
                     .and_then(|packages| packages.iter().find(|p| p["id"] == dependency["pkg"]))
-                {
-                    if let Some(path) = package["manifest_path"]
+                    && let Some(path) = package["manifest_path"]
                         .as_str()
                         .and_then(|p| Path::new(p).parent())
                         .and_then(|p| staged.get(p))
-                    {
-                        mod_paths.insert(
-                            dependency["name"]
-                                .as_str()
-                                .ok_or("dependency has no name")?
-                                .to_owned(),
-                            path.clone(),
-                        );
-                    }
+                {
+                    mod_paths.insert(
+                        dependency["name"]
+                            .as_str()
+                            .ok_or("dependency has no name")?
+                            .to_owned(),
+                        path.clone(),
+                    );
                 }
             }
         }

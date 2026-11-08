@@ -646,7 +646,7 @@ fn build_node<'a>(
             // its text is empty.
             for sibling in rest {
                 let sibling = child(sibling);
-                sourced.append(&mut base, sourced.styled(sibling, &style));
+                sourced.append(&mut base, sourced.styled(sibling, style));
             }
             base
         }
@@ -668,7 +668,7 @@ fn build_node<'a>(
                 let args: Vec<Text> = o
                     .get("with")
                     .and_then(Value::as_array)
-                    .map(|a| a.iter().map(|x| child(x)).collect())
+                    .map(|a| a.iter().map(child).collect())
                     .unwrap_or_default();
                 let text = sourced.translate(key, o.get("fallback").and_then(Value::as_str), &args);
                 for arg in args {
