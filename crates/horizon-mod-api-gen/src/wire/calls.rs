@@ -846,7 +846,7 @@ pub(super) fn dispatch(types: &Types<'_>, methods: &[Method]) -> (String, Vec<St
         };
         writeln!(
             arms,
-            "{id} => {{ let receiver = {receiver}; {body} let answer = {answer}; out.put_owned(answer); {back} }}"
+            "{id} => {{ crate::wire::guest::diagnostic_phase({id}, 0); let receiver = {receiver}; {body} crate::wire::guest::diagnostic_phase({id}, 1); let answer = {answer}; crate::wire::guest::diagnostic_phase({id}, 2); out.put_owned(answer); {back} crate::wire::guest::diagnostic_phase({id}, 3); }}"
         )
         .unwrap();
     }

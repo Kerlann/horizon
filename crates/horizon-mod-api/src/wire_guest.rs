@@ -133,6 +133,20 @@ impl Drop for Reply {
     }
 }
 
+/// Diagnostic marker for generated decode / mod / encode phase boundaries.
+#[inline]
+pub fn diagnostic_phase(id: u32, phase: u32) {
+    #[cfg(feature = "wire-phase-profile")]
+    {
+        let mut bytes = [0; 8];
+        bytes[..4].copy_from_slice(&id.to_le_bytes());
+        bytes[4..].copy_from_slice(&phase.to_le_bytes());
+        transport::call(0xFFFF_FE00, &bytes, &mut Vec::new());
+    }
+    #[cfg(not(feature = "wire-phase-profile"))]
+    let _ = (id, phase);
+}
+
 /// Calls the game's import `id` with `args` and returns its answer.
 pub fn host(id: u32, args: Writer) -> Reply {
     let mut out = RUNTIME
@@ -406,11 +420,26 @@ pub fn run(id: u32) -> (*const u8, u32) {
             }
             let allocs: [u64; 6] =
                 std::array::from_fn(|index| unsafe { __horizon_diag_alloc_counter(index as u32) });
-            let mut args = Writer::new();
-            args.put_str(&format!(
-                "diagnostic guest pool (kept, full, large, reply drops, exports), spare: {counts:?}; System (alloc, zeroed, free, realloc, alloc bytes, realloc bytes): {allocs:?}"
-            ));
-            transport::try_call(crate::wire::HOST_LOG, args.bytes(), &mut Vec::new());
+            let values = [
+                counts.0[0],
+                counts.0[1],
+                counts.0[2],
+                counts.0[3],
+                counts.0[4],
+                counts.1 as u64,
+                allocs[0],
+                allocs[1],
+                allocs[2],
+                allocs[3],
+                allocs[4],
+                allocs[5],
+            ];
+            let mut bytes = [0; 100];
+            bytes[..4].copy_from_slice(&id.to_le_bytes());
+            for (chunk, value) in bytes[4..].chunks_exact_mut(8).zip(values) {
+                chunk.copy_from_slice(&value.to_le_bytes());
+            }
+            transport::try_call(0xFFFF_FE01, &bytes, &mut Vec::new());
         }
     }
     (pointer, outcome)
