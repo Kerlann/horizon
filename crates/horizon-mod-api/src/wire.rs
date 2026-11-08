@@ -900,6 +900,37 @@ impl Wire for std::time::Duration {
 #[cfg(test)]
 mod tests {
     #[test]
+    fn entity_wire_roundtrip_preserves_float_bits_and_java_keys() {
+        use super::{Reader, Writer};
+        for bits in [
+            0u64,
+            0x8000_0000_0000_0000,
+            0x7ff8_0000_0000_1234,
+            0x7ff0_0000_0000_1234,
+            0x7ff0_0000_0000_0000,
+            0xfff0_0000_0000_0000,
+        ] {
+            let mut entity = crate::ModBlockEntity::new(String::new(), Default::default());
+            entity.nbt.insert(
+                horizon_core::nbt::JavaString(vec![0xd800, 0x0061, 0xdc00]),
+                crate::Tag::Double(f64::from_bits(bits)),
+            );
+            entity.nbt.insert(
+                "float".into(),
+                crate::Tag::Float(f32::from_bits((bits >> 32) as u32)),
+            );
+            entity.items = vec![None, None];
+            entity.data = vec![i32::MIN, i32::MAX];
+            let mut original = Writer::new();
+            original.put(&entity);
+            let copy: crate::ModBlockEntity = Reader::new(original.bytes()).take().unwrap();
+            let mut encoded = Writer::new();
+            encoded.put(&copy);
+            assert_eq!(encoded.bytes(), original.bytes(), "float bits {bits:x}");
+        }
+    }
+
+    #[test]
     fn string_encoding_checks_whole_value_before_writing() {
         use super::{WireError, Writer};
         let mut writer = Writer::new();

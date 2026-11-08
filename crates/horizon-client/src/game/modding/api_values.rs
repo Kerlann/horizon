@@ -1698,6 +1698,59 @@ enum BlockEntitySnapshotError {
     InvalidStack,
 }
 
+// Scratch stage-zero measurements only; do not carry this into production.
+type Stage0EntityState = (
+    std::collections::BTreeMap<u64, (u64, Vec<u8>)>,
+    [u64; 8],
+    [u128; 3],
+);
+fn stage0_entity_state() -> Option<&'static std::sync::Mutex<Stage0EntityState>> {
+    static STATE: std::sync::OnceLock<Option<std::sync::Mutex<Stage0EntityState>>> =
+        std::sync::OnceLock::new();
+    STATE
+        .get_or_init(|| {
+            std::env::var_os("BENCH_STAGE0").map(|_| std::sync::Mutex::new(Default::default()))
+        })
+        .as_ref()
+}
+fn stage0_observe_entity(
+    state: &std::sync::Mutex<Stage0EntityState>,
+    api: &mod_api::ModBlockEntity,
+) {
+    use mod_api::wire::{Reader, Writer};
+    let mut fields = Writer::new();
+    fields.put_str(api.id());
+    fields.put(&api.nbt);
+    fields.put(&api.items);
+    fields.put(&api.data);
+    fields.put(&api.client_update_fields().cloned());
+    let revision = api.revision();
+    let mut state = state.lock().unwrap();
+    if let Some((changes, bytes)) = state.0.insert(
+        revision.identity(),
+        (revision.changes(), fields.into_bytes()),
+    ) {
+        state.1[0] += 1;
+        let same = state.0[&revision.identity()].1 == bytes;
+        state.1[1] += u64::from(same && changes != revision.changes());
+        state.1[2] += u64::from(!same && changes == revision.changes());
+    }
+    let mut original = Writer::new();
+    original.put(api);
+    match Reader::new(original.bytes()).take::<mod_api::ModBlockEntity>() {
+        Ok(value) => {
+            let mut encoded = Writer::new();
+            encoded.put(&value);
+            state.1[if encoded.bytes() == original.bytes() {
+                3
+            } else {
+                4
+            }] += 1;
+        }
+        Err(_) => state.1[5] += 1,
+    }
+}
+
 fn apply_block_entity_snapshot(
     entity: &mut crate::containers::ModBlockEntity,
     snapshot: &mod_api::ModBlockEntity,
@@ -1733,12 +1786,36 @@ impl super::Game<'_> {
         if !mod_api::__private::has_part_hook(mod_api::HookId::BlockEntityTick) {
             return;
         }
+        let stage0 = stage0_entity_state();
+        let started = stage0.map(|_| std::time::Instant::now());
         let Ok(mut api) = entity.try_into_api() else {
             return;
         };
+        let conversion_ns = started.map_or(0, |s| s.elapsed().as_nanos());
+        if let Some(state) = stage0 {
+            stage0_observe_entity(state, &api);
+        }
         let revision = api.revision();
+        let started = stage0.map(|_| std::time::Instant::now());
         self.native_block_entity_tick(pos, &mut api);
-        let _ = apply_block_entity_snapshot(entity, &api, revision, self.items());
+        let call_ns = started.map_or(0, |s| s.elapsed().as_nanos());
+        let started = stage0.map(|_| std::time::Instant::now());
+        let applied = apply_block_entity_snapshot(entity, &api, revision, self.items());
+        let apply_ns = started.map_or(0, |s| s.elapsed().as_nanos());
+        if let Some(state) = stage0 {
+            let mut state = state.lock().unwrap();
+            state.1[6] += 1;
+            state.1[7] += u64::from(applied.is_err());
+            state.2[0] += conversion_ns;
+            state.2[1] += call_ns;
+            state.2[2] += apply_ns;
+            if state.1[6] == 200_000 {
+                eprintln!(
+                    "stage0 game (comparisons, counter-only changes, bytes-only changes, exact roundtrip, changed roundtrip, decode failures, applies, rejected)={:?}; ns (engine-to-api, native call, apply)={:?}",
+                    state.1, state.2
+                );
+            }
+        }
     }
     pub(in crate::game) fn api_block_entity_update_tag(
         pos: [i32; 3],
