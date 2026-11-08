@@ -72,14 +72,15 @@ fn generate_inner(
                 return Ok(quote!(mod_points::native_nodes::Opaque((#plan).key(#id).unwrap_or(0))));
             }
         }
-        if depth > 0 && runtime.is_some() {
-            if let Shape::Named(path, _) = shape {
-                let (graph, plan) = runtime.as_ref().unwrap();
-                let id = graph.id(shape).ok_or("missing runtime schema")?;
-                let helper = quote::format_ident!("__horizon_node_{id}");
-                let _ = path;
-                return Ok(quote!(crate::__horizon_points::#helper(&(#place), &(#plan))));
-            }
+        if depth > 0
+            && runtime.is_some()
+            && let Shape::Named(path, _) = shape
+        {
+            let (graph, plan) = runtime.as_ref().unwrap();
+            let id = graph.id(shape).ok_or("missing runtime schema")?;
+            let helper = quote::format_ident!("__horizon_node_{id}");
+            let _ = path;
+            return Ok(quote!(crate::__horizon_points::#helper(&(#place), &(#plan))));
         }
         let identity = if runtime.is_some() {
             format!("runtime:{shape:?}")
