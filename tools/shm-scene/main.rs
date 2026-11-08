@@ -1,4 +1,4 @@
-include!("/box/work/shm-machine-scene/src/lib.rs");
+include!("/box/work/shm-prof2-current-sample/src/lib.rs");
 
 struct EarlyLog;
 impl log::Log for EarlyLog {
@@ -72,4 +72,5 @@ fn main() {
     } else {
         horizon_client::entry::main();
     }
+    horizon_mod_wasm::finish_boundary_profiles();
 }
