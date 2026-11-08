@@ -113,6 +113,7 @@ fn malformed_arena_pointer_refuses_without_panicking() {
     for arena in [
         "i32.const -1",
         "memory.size i32.const 16 i32.shl i32.const 1 i32.sub",
+        "local.get 0 if (result i32) i32.const -1 else i32.const 512 end",
     ] {
         let engine = engine().unwrap();
         let bytes = guest_arena(mod_api::wire::LAYOUT, "i64.const 0", arena);
@@ -125,7 +126,17 @@ fn malformed_arena_pointer_refuses_without_panicking() {
         )
         .unwrap()
         .remove(0);
-        assert_eq!(call(&module), None);
+        assert_eq!(
+            module.call_arena(
+                CallClass::Hook,
+                Frame::default(),
+                0,
+                None,
+                |w| w.put(&vec![7u8; 300]),
+                |r| r.take::<u32>()
+            ),
+            None
+        );
         assert!(module.running.poisoned.load(Ordering::Relaxed));
     }
 }
@@ -147,7 +158,7 @@ fn encoding_reacquires_memory_after_arena_growth() {
     )
     .unwrap()
     .remove(0);
-    let result = module.call(
+    let result = module.call_arena(
         CallClass::Hook,
         Frame::default(),
         0,
@@ -159,7 +170,7 @@ fn encoding_reacquires_memory_after_arena_growth() {
 }
 
 #[test]
-fn encoder_can_replace_stream_with_owned_writer() {
+fn custom_buffered_encoder_can_replace_its_writer() {
     let module = module("i64.const 2199023255556");
     let result = module.call(
         CallClass::Hook,

@@ -147,7 +147,7 @@ struct Runtime {
     /// The input the game is writing for the next call.
     pending: Vec<u8>,
     /// One reply per call depth: the game reads it once the call returns.
-    replies: Vec<Writer<'static>>,
+    replies: Vec<Writer>,
     keeps: Vec<Keep>,
     /// Buffers for arguments and answers, reused so a steady state allocates nothing.
     spare: Vec<Vec<u8>>,
@@ -376,7 +376,7 @@ pub fn reset_static_strings() {
 }
 
 /// A buffer to write a call's arguments into.
-pub fn begin() -> Writer<'static> {
+pub fn begin() -> Writer {
     let mut writer = Writer::new();
     if let Some(buffer) = RUNTIME.with(|rt| rt.borrow_mut().spare.pop()) {
         writer.replace(buffer);

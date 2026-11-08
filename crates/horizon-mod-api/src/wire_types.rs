@@ -1,5 +1,5 @@
 //! Checked wire decoding for opaque API values.
-use crate::wire::{Reader, Wire, WireError, Writer};
+use crate::wire::{ArenaWriter, Reader, Wire, WireError, Writer};
 use crate::{
     BlockEntityTypeKey, BlockKey, BoolGameRuleKey, DimensionKey, EffectKey, FluidKey, ItemKey,
     TagKey, UnresolvedFluid,
@@ -163,6 +163,7 @@ mod resource_wire_tests {
 macro_rules! slot_keys {
     ($width:ty; $($key:ty),+ $(,)?) => {$ (
         impl Wire for $key {
+            fn put_arena(&self, out: &mut ArenaWriter<'_>) { out.put(&self.0); }
             const MIN: usize = <$width as Wire>::MIN;
             fn put(&self, out: &mut Writer) { out.put(&self.0); }
             fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
@@ -231,6 +232,10 @@ entity_handles!(
 );
 
 impl Wire for crate::Identifier {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put_str(self.namespace());
+        out.put_str(self.path());
+    }
     const MIN: usize = 8;
     fn put(&self, out: &mut Writer) {
         out.put_str(self.namespace());
@@ -321,6 +326,9 @@ impl Wire for crate::BlockStateRange {
 
 /// An NBT key: UTF-16 units, in the bytes of a `Vec<u16>` but written and read in one pass.
 impl Wire for horizon_core::nbt::JavaString {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put(&self.0);
+    }
     const MIN: usize = <Vec<u16> as Wire>::MIN;
     fn put(&self, out: &mut Writer) {
         out.put_u16s(&self.0);
@@ -331,6 +339,9 @@ impl Wire for horizon_core::nbt::JavaString {
 }
 
 impl Wire for crate::Components {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put(self.as_nbt());
+    }
     const MIN: usize = 4;
     fn put(&self, out: &mut Writer) {
         out.put(self.as_nbt());
@@ -340,6 +351,12 @@ impl Wire for crate::Components {
     }
 }
 impl Wire for crate::ItemStack {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put(&self.item());
+        out.put(&self.count());
+        out.put(&self.damage_component());
+        out.put_opt(self.components());
+    }
     const MIN: usize = 10;
     fn put(&self, out: &mut Writer) {
         out.put(&self.item());

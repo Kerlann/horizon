@@ -211,7 +211,7 @@ pub(super) fn types(types: &Types<'_>) -> String {
 
 fn imp(rust: &str, min: &str, put: &str, take: &str) -> String {
     format!(
-        "#[allow(unreachable_patterns, unused_variables)]\nimpl crate::wire::Wire for {rust} {{\nconst MIN: usize = {min};\nfn put(&self, out: &mut crate::wire::Writer) {{ {put} }}\nfn take(input: &mut crate::wire::Reader<'_>) -> ::std::result::Result<Self, crate::wire::WireError> {{ {take} }}\n}}\n"
+        "#[allow(unreachable_patterns, unused_variables)]\nimpl crate::wire::Wire for {rust} {{\nconst MIN: usize = {min};\nfn put(&self, out: &mut crate::wire::Writer) {{ {put} }}\nfn put_arena(&self, out: &mut crate::wire::ArenaWriter<'_>) {{ {put} }}\nfn take(input: &mut crate::wire::Reader<'_>) -> ::std::result::Result<Self, crate::wire::WireError> {{ {take} }}\n}}\n"
     )
 }
 

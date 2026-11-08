@@ -15,6 +15,10 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 pub use crate::wire_slots::{Id, Slots, Stale};
+#[path = "wire_arena.rs"]
+mod arena;
+#[doc(hidden)]
+pub use arena::ArenaWriter;
 #[path = "wire_resources.rs"]
 mod resources;
 pub use resources::{
@@ -115,30 +119,19 @@ impl std::error::Error for WireError {}
 
 /// A buffer values are written to. Reuse one to keep the allocation.
 #[derive(Default)]
-pub struct Writer<'a> {
+pub struct Writer {
     bytes: Vec<u8>,
-    sink: Option<&'a mut dyn FnMut(usize, &[u8]) -> Result<(), WireError>>,
-    written: usize,
     error: Option<WireError>,
     limit: Option<usize>,
 }
 
-impl<'a> Writer<'a> {
-    /// Internal transport writer. The sink owns bounds checks and reacquires memory after growth.
-    #[doc(hidden)]
-    pub fn sink(sink: &'a mut dyn FnMut(usize, &[u8]) -> Result<(), WireError>) -> Self {
-        Self {
-            sink: Some(sink),
-            ..Self::default()
-        }
-    }
+impl Writer {
     pub fn new() -> Self {
         Self::default()
     }
     /// Empties it, keeping its allocation and resetting any per-call error and byte limit.
     pub fn clear(&mut self) {
         self.bytes.clear();
-        self.written = 0;
         self.error = None;
         self.limit = None;
     }
@@ -146,7 +139,6 @@ impl<'a> Writer<'a> {
     pub fn replace(&mut self, mut buffer: Vec<u8>) {
         buffer.clear();
         self.bytes = buffer;
-        self.written = 0;
         self.error = None;
         self.limit = None;
     }
@@ -156,17 +148,6 @@ impl<'a> Writer<'a> {
     }
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
-    }
-    #[doc(hidden)]
-    pub fn is_streaming(&self) -> bool {
-        self.sink.is_some()
-    }
-    /// Bytes written, including bytes streamed to an external transport.
-    pub fn len(&self) -> usize {
-        self.written
-    }
-    pub fn is_empty(&self) -> bool {
-        self.written == 0
     }
     /// Bound this call's encoded bytes. A refusal is recorded before any growth or copy.
     /// A new writer has no limit; `clear` and `replace` remove it.
@@ -178,7 +159,7 @@ impl<'a> Writer<'a> {
         if self.error.is_some() {
             return false;
         }
-        let fits = self.written.checked_add(bytes).is_some_and(|total| {
+        let fits = self.bytes.len().checked_add(bytes).is_some_and(|total| {
             total <= self.limit.unwrap_or(isize::MAX as usize) && total <= isize::MAX as usize
         });
         if !fits {
@@ -188,15 +169,7 @@ impl<'a> Writer<'a> {
     }
     pub fn put_bytes(&mut self, bytes: &[u8]) {
         if self.can_fit(bytes.len()) {
-            if let Some(sink) = &mut self.sink {
-                if let Err(error) = sink(self.written, bytes) {
-                    self.fail(error);
-                    return;
-                }
-            } else {
-                self.bytes.extend_from_slice(bytes);
-            }
-            self.written += bytes.len();
+            self.bytes.extend_from_slice(bytes);
         }
     }
     /// A string: its length, then its bytes.
@@ -221,8 +194,10 @@ impl<'a> Writer<'a> {
             return;
         }
         self.put_len(items.len());
-        for item in items {
-            self.put_bytes(&item.to_le_bytes());
+        let start = self.bytes.len();
+        self.bytes.resize(start + items.len() * 2, 0);
+        for (to, item) in self.bytes[start..].chunks_exact_mut(2).zip(items) {
+            to.copy_from_slice(&item.to_le_bytes());
         }
     }
     /// A length or count.
@@ -430,21 +405,34 @@ impl<T> Append<T> {
 pub trait Put {
     /// Writes it.
     fn put_to(&self, out: &mut Writer);
+    #[doc(hidden)]
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.buffered(|w| self.put_to(w));
+    }
 }
 
 impl<T: Wire> Put for T {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        Wire::put_arena(self, out);
+    }
     fn put_to(&self, out: &mut Writer) {
         self.put(out);
     }
 }
 
 impl Put for str {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put_str(self);
+    }
     fn put_to(&self, out: &mut Writer) {
         out.put_str(self);
     }
 }
 
 impl Wire for &str {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put_str(self);
+    }
     const MIN: usize = 4;
     fn put(&self, out: &mut Writer) {
         out.put_str(self);
@@ -455,6 +443,12 @@ impl Wire for &str {
 }
 
 impl<T: Put> Put for [T] {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put_len(self.len());
+        for item in self {
+            out.put(item);
+        }
+    }
     fn put_to(&self, out: &mut Writer) {
         out.put_len(self.len());
         for item in self {
@@ -569,6 +563,14 @@ impl<'a> Reader<'a> {
 
 /// A type with a wire form.
 pub trait Wire: Sized {
+    #[doc(hidden)]
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.buffered(|w| self.put(w));
+    }
+    #[doc(hidden)]
+    fn put_owned_arena(self, out: &mut ArenaWriter<'_>) {
+        out.buffered(|w| self.put_owned(w));
+    }
     /// The fewest bytes a value takes, so a length can be checked before anything is allocated.
     const MIN: usize;
     fn put(&self, out: &mut Writer);
@@ -582,6 +584,8 @@ pub trait Wire: Sized {
 macro_rules! numbers {
     ($($ty:ty),*) => {$(
         impl Wire for $ty {
+            fn put_arena(&self, out: &mut ArenaWriter<'_>) { out.put_bytes(&self.to_le_bytes()); }
+            fn put_owned_arena(self, out: &mut ArenaWriter<'_>) { Wire::put_arena(&self, out); }
             const MIN: usize = std::mem::size_of::<$ty>();
             fn put(&self, out: &mut Writer) {
                 out.put_bytes(&self.to_le_bytes());
@@ -607,6 +611,9 @@ impl Wire for usize {
 }
 
 impl Wire for bool {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put(&u8::from(*self));
+    }
     const MIN: usize = 1;
     fn put(&self, out: &mut Writer) {
         out.put(&u8::from(*self));
@@ -639,6 +646,9 @@ impl Wire for () {
 }
 
 impl Wire for String {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put_str(self);
+    }
     const MIN: usize = 4;
     fn put(&self, out: &mut Writer) {
         out.put_str(self);
@@ -684,6 +694,9 @@ impl Wire for Arc<str> {
 }
 
 impl<T: Wire> Wire for Option<T> {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put_opt(self.as_ref());
+    }
     const MIN: usize = 1;
     fn put(&self, out: &mut Writer) {
         match self {
@@ -797,6 +810,18 @@ impl<T: Wire> Wire for Arc<T> {
 }
 
 impl<T: Wire> Wire for Vec<T> {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put_len(self.len());
+        for v in self {
+            out.put(v);
+        }
+    }
+    fn put_owned_arena(self, out: &mut ArenaWriter<'_>) {
+        out.put_len(self.len());
+        for v in self {
+            out.put_owned(v);
+        }
+    }
     const MIN: usize = 4;
     fn put(&self, out: &mut Writer) {
         out.put_len(self.len());
@@ -835,6 +860,11 @@ impl<T: Wire> Wire for VecDeque<T> {
 }
 
 impl<T: Wire, const N: usize> Wire for [T; N] {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        for v in self {
+            out.put(v);
+        }
+    }
     const MIN: usize = T::MIN * N;
     fn put(&self, out: &mut Writer) {
         for item in self {
@@ -885,6 +915,7 @@ sets!(BTreeSet[Ord], HashSet[Eq + Hash]);
 macro_rules! maps {
     ($($ty:ident [$($bound:tt)+]),*) => {$(
         impl<K: Wire + $($bound)+, V: Wire> Wire for $ty<K, V> {
+            fn put_arena(&self, out: &mut ArenaWriter<'_>) { out.put_len(self.len()); for (k,v) in self { out.put(k); out.put(v); } }
             const MIN: usize = 4;
             fn put(&self, out: &mut Writer) {
                 out.put_len(self.len());
@@ -912,6 +943,7 @@ macro_rules! tuples {
     ($(($($name:ident),+)),*) => {$(
         #[allow(non_snake_case)]
         impl<$($name: Wire),+> Wire for ($($name,)+) {
+            fn put_arena(&self, out: &mut ArenaWriter<'_>) { let ($($name,)+)=self; $(out.put($name);)+ }
             const MIN: usize = 0 $(+ $name::MIN)+;
             fn put(&self, out: &mut Writer) {
                 let ($($name,)+) = self;

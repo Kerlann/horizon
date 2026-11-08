@@ -9,7 +9,7 @@ use crate::{
 };
 use mod_api::{
     HookId,
-    wire::{Id, Reader, WireError, Writer},
+    wire::{ArenaWriter, Id, Reader, WireError, Writer},
 };
 use std::{
     cell::Cell,
@@ -35,7 +35,7 @@ pub(crate) struct State {
     limits: wasmtime::StoreLimits,
     cx: Box<Cx>,
     memory: Option<Memory>,
-    replies: Vec<Writer<'static>>,
+    replies: Vec<Writer>,
     imports: Vec<Vec<u8>>,
     depth: usize,
     epoch_budget: u64,
@@ -182,6 +182,17 @@ impl WeakWasmMod {
         args: impl FnOnce(&mut Writer),
         reply: impl FnOnce(&mut Reader<'_>) -> Result<R, WireError>,
     ) -> Option<R> {
+        self.call_arena(class, frame, id, handler, |out| out.buffered(args), reply)
+    }
+    pub(crate) fn call_arena<R>(
+        &self,
+        class: CallClass,
+        frame: Frame,
+        id: u32,
+        handler: Option<Id>,
+        args: impl FnOnce(&mut ArenaWriter<'_>),
+        reply: impl FnOnce(&mut Reader<'_>) -> Result<R, WireError>,
+    ) -> Option<R> {
         let module = WasmMod {
             id: self.id.clone(),
             running: self.running.upgrade()?,
@@ -191,7 +202,7 @@ impl WeakWasmMod {
             released: self.released.clone(),
             subscriptions: self.subscriptions.clone(),
         };
-        module.call(class, frame, id, handler, args, reply)
+        module.call_arena(class, frame, id, handler, args, reply)
     }
 }
 pub struct WasmHandler {
@@ -543,6 +554,17 @@ impl WasmMod {
         args: impl FnOnce(&mut Writer),
         reply: impl FnOnce(&mut Reader<'_>) -> Result<R, WireError>,
     ) -> Option<R> {
+        self.call_arena(class, frame, id, handler, |out| out.buffered(args), reply)
+    }
+    pub(crate) fn call_arena<R>(
+        &self,
+        class: CallClass,
+        frame: Frame,
+        id: u32,
+        handler: Option<Id>,
+        args: impl FnOnce(&mut ArenaWriter<'_>),
+        reply: impl FnOnce(&mut Reader<'_>) -> Result<R, WireError>,
+    ) -> Option<R> {
         // Dispatch-owned native receivers can unwind before our outer call
         // guards. Their destructors must not reenter the still-lent guest.
         if std::thread::panicking() {
@@ -676,7 +698,7 @@ impl WasmMod {
         &self,
         store: &mut StoreContextMut<'_, State>,
         id: u32,
-        encode: impl FnOnce(&mut Writer),
+        encode: impl FnOnce(&mut ArenaWriter<'_>),
         decode: impl FnOnce(&mut Reader<'_>) -> Result<R, WireError>,
     ) -> wasmtime::Result<R> {
         let memory = store
@@ -709,16 +731,11 @@ impl WasmMod {
             }
             Ok(())
         };
-        let mut input = Writer::sink(&mut sink);
+        let mut input = ArenaWriter::new(&mut sink);
         encode(&mut input);
         let error = input.error();
         let len = u32::try_from(input.len())?;
-        let streaming = input.is_streaming();
-        let fallback = input.into_bytes();
-        // A custom encoder may replace the writer entirely. Preserve its valid owned form.
-        if !streaming && error.is_none() {
-            let _ = sink(0, &fallback);
-        }
+        drop(input);
         drop(sink);
         if let Some(error) = failure {
             return Err(error);
