@@ -15,6 +15,9 @@ enum Family {
     Damage,
     Shield,
     Totem,
+    Movement,
+    Breathing,
+    Goal,
 }
 struct Probe {
     family: Family,
@@ -32,9 +35,40 @@ impl Probe {
         }
     }
 }
+struct NativeGoal(Arc<Probe>);
+impl mod_api::Goal for NativeGoal {
+    fn name(&self) -> &'static str {
+        "BorrowedProbe"
+    }
+    fn flags(&self) -> mod_api::GoalFlags {
+        mod_api::GoalFlags::MOVE
+    }
+    fn can_use(&mut self, _: &mut mod_api::GoalContext<'_>) -> bool {
+        true
+    }
+    fn tick(&mut self, cx: &mut mod_api::GoalContext<'_>) {
+        assert_eq!(
+            cx.mob().entity().position(cx.host()),
+            Some([2.0, 80.0, 0.5])
+        );
+        self.0.hear(Family::Goal, cx.mob().entity().id() == 72);
+    }
+}
+struct GoalPart(Arc<Probe>);
+#[mod_api::horizon_part]
+impl mod_api::EntityPart for GoalPart {
+    fn register_goals(&self, goals: &mut mod_api::GoalRegistrar<'_>) {
+        goals.add_goal(0, NativeGoal(self.0.clone()));
+    }
+}
 struct Hooks(Arc<Probe>);
 #[mod_api::__subscriptions]
 impl mod_api::Hooks for Hooks {
+    fn register(&self, r: &mut dyn mod_api::Registrar, _: &mod_api::RegistrationContext) {
+        if self.0.family == Family::Goal {
+            r.entity_part("minecraft:zombie", GoalPart(self.0.clone()));
+        }
+    }
     fn living_incoming_damage(
         &self,
         _: &mut dyn mod_api::LevelRandomHost,
@@ -49,6 +83,20 @@ impl mod_api::Hooks for Hooks {
         event: &mut mod_api::LivingShieldBlockEvent<'_>,
     ) {
         self.0.hear(Family::Shield, event.entity == 72);
+    }
+    fn living_speed(
+        &self,
+        _: &dyn mod_api::LoopContext,
+        event: &mut mod_api::LivingSpeedEvent<'_>,
+    ) {
+        self.0.hear(Family::Movement, event.entity == 72);
+    }
+    fn living_breathe(
+        &self,
+        _: &dyn mod_api::LoopContext,
+        event: &mut mod_api::LivingBreatheEvent<'_>,
+    ) {
+        self.0.hear(Family::Breathing, event.entity == 72);
     }
     fn living_use_totem(
         &self,
@@ -74,6 +122,7 @@ impl Drop for Scratch {
     }
 }
 fn run(family: Family) {
+    crate::entry::install_client_hooks();
     eprintln!("BORROWED_ASSERTIONS_DISABLED:{}", !cfg!(debug_assertions));
     for dim in [Dim::Overworld, Dim::Nether] {
         eprintln!("BORROWED_CASE:{family:?}:{dim:?}");
@@ -94,6 +143,11 @@ fn run(family: Family) {
             )]
             .into(),
             || {
+                crate::game::api_values::install_parts(&[mod_api::ModEntry::new(
+                    "borrowed-panic",
+                    Box::new(Hooks(probe.clone())),
+                )])
+                .unwrap();
                 crate::game::native_entity_refs::tests::with_game(|game| {
                     game.world_root = scratch.0.clone();
                     game.enter_level(dim).unwrap();
@@ -124,7 +178,21 @@ fn run(family: Family) {
                             Mob::new(id, kind, Vec3::new(f64::from(id - 70), 80.0, 0.5), 0.0);
                         mob.no_ai = true;
                         if id == 72 {
-                            mob.fire_ticks = 20;
+                            mob.air = 100;
+                            if matches!(family, Family::Damage | Family::Shield | Family::Totem) {
+                                mob.fire_ticks = 20;
+                            }
+                            if family == Family::Goal {
+                                mob.no_ai = false;
+                                assert!(mob.ai.goals.has("BorrowedProbe"));
+                            }
+                            if family == Family::Movement {
+                                // NoAI skips aiStep's travel: this must be a
+                                // real moving mob, not just a grounded corpse.
+                                mob.no_ai = false;
+                                mob.on_ground = true;
+                                mob.ai.speed = 0.2;
+                            }
                             if family == Family::Totem {
                                 mob.health = 0.5;
                                 mob.extra
@@ -147,6 +215,9 @@ fn run(family: Family) {
                         .default_state("minecraft:stone")
                         .unwrap();
                     game.world.set(4, 80, 4, stone).unwrap();
+                    if family == Family::Movement {
+                        game.world.set(2, 79, 0, stone).unwrap();
+                    }
                     let writes = game.world.path_writes.clone();
                     game.world.random = LegacyRandom::new(0x5eed);
                     let draw = game.world.random.clone().next_long();
@@ -214,6 +285,12 @@ fn run(family: Family) {
                         );
                     }
                     table.end_tick().unwrap();
+                    if family == Family::Goal {
+                        assert!(
+                            game.mobs[1].ai.goals.is_running("BorrowedProbe"),
+                            "actual native goal selector was lost"
+                        );
+                    }
                     game.tick_creature_entities().unwrap();
                     table.end_tick().unwrap();
                 })
@@ -228,4 +305,4 @@ macro_rules! cases {
         fn $name() { run(Family::$family); }
     )*};
 }
-cases!(damage => Damage, shield => Shield, totem => Totem);
+cases!(damage => Damage, shield => Shield, totem => Totem, movement => Movement, breathing => Breathing, goal => Goal);
