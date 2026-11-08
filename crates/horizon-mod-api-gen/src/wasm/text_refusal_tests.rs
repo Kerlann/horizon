@@ -11,7 +11,7 @@ fn generated_text_refusals_are_typed_on_both_sides() {
     ];
     let mut types = ty::Types::new(index::Index::new(&root, &included)).unwrap();
     let module = types.index.module("mod_api", &[]).unwrap();
-    types.index.modules[module].items.extend(syn::parse_file("pub struct TextBatch { pub values: Vec<Option<Text>>, pub shape: [u32; 13] } pub enum TextFormError { TooDeep, Malformed, Invalid } pub struct TextEvent { pub first: u32, pub text: Text, pub last: u32 }").unwrap().items);
+    types.index.modules[module].items.extend(syn::parse_file("pub struct TextBatch { pub values: Vec<Option<Text>>, pub shape: [u32; 13] } pub enum TextFormError { Unavailable, TooDeep, Malformed, NonFinite, InvalidString, NestedNull } pub struct TextCarrier; pub struct TextEvent { pub first: u32, pub text: Text, pub last: u32 }").unwrap().items);
     let text = types
         .ty(module, &syn::parse_str("Text").unwrap(), &[])
         .unwrap();
@@ -25,9 +25,28 @@ fn generated_text_refusals_are_typed_on_both_sides() {
     let Ty::Named(error_id) = error else { panic!() };
     // Isolate the adapter contract from TextForm's own tree validation. The real Text
     // name and Via rule are used; the fixture supplies independent refusal values.
-    types.defs[text_id].kind = ty::Kind::Via(Ty::Prim("u32", "u32"));
-    types.defs[error_id].kind =
-        ty::Kind::Enum(vec!["TooDeep".into(), "Malformed".into(), "Invalid".into()]);
+    // A second fallible Via models TextForm's Tag carrier, independently of the
+    // legacy Tag codec and its limits. Failures at this stage are Text refusals too.
+    let carrier = types
+        .ty(module, &syn::parse_str("TextCarrier").unwrap(), &[])
+        .unwrap();
+    let Ty::Named(carrier_id) = carrier else {
+        panic!()
+    };
+    types.defs[carrier_id].kind = ty::Kind::Via(Ty::Prim("u32", "u32"));
+    types.defs[text_id].kind = ty::Kind::Via(carrier);
+    types.defs[error_id].kind = ty::Kind::Enum(
+        [
+            "Unavailable",
+            "TooDeep",
+            "Malformed",
+            "NonFinite",
+            "InvalidString",
+            "NestedNull",
+        ]
+        .map(String::from)
+        .to_vec(),
+    );
     let methods: Vec<_> = [
         (
             "direct",

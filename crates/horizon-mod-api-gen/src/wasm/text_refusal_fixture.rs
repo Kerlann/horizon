@@ -17,7 +17,10 @@ impl From<Refused> for Error {
 pub enum TextFormError {
     TooDeep,
     Malformed,
-    Invalid,
+    NonFinite,
+    Unavailable,
+    InvalidString,
+    NestedNull,
 }
 impl std::fmt::Display for TextFormError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -46,21 +49,45 @@ fn unsent<T>(
     *module.borrow_mut() = Some(why);
     no_answer()
 }
-impl TryFrom<&Text> for u32 {
+pub struct TextCarrier(u32);
+impl TryFrom<&TextCarrier> for u32 {
+    type Error = &'static str;
+    fn try_from(t: &TextCarrier) -> Result<Self, Self::Error> {
+        if t.0 == 800 {
+            Err("carrier cannot encode")
+        } else {
+            Ok(t.0)
+        }
+    }
+}
+impl TryFrom<u32> for TextCarrier {
+    type Error = &'static str;
+    fn try_from(n: u32) -> Result<Self, Self::Error> {
+        if n == 900 {
+            Err("carrier cannot decode")
+        } else {
+            Ok(Self(n))
+        }
+    }
+}
+impl TryFrom<&Text> for TextCarrier {
     type Error = TextFormError;
     fn try_from(t: &Text) -> Result<Self, Self::Error> {
         match t.0 {
             513 => Err(TextFormError::TooDeep),
             600 => Err(TextFormError::Malformed),
-            700 => Err(TextFormError::Invalid),
-            n => Ok(n),
+            700 => Err(TextFormError::NonFinite),
+            701 => Err(TextFormError::Unavailable),
+            702 => Err(TextFormError::InvalidString),
+            703 => Err(TextFormError::NestedNull),
+            n => Ok(TextCarrier(n)),
         }
     }
 }
-impl TryFrom<u32> for Text {
+impl TryFrom<TextCarrier> for Text {
     type Error = TextFormError;
-    fn try_from(n: u32) -> Result<Self, Self::Error> {
-        u32::try_from(&Text(n)).map(Text)
+    fn try_from(n: TextCarrier) -> Result<Self, Self::Error> {
+        TextCarrier::try_from(&Text(n.0)).map(|c| Text(c.0))
     }
 }
 pub struct TextBatch {
@@ -75,6 +102,7 @@ trait TextProbe {
 #[derive(Default)]
 struct Probe {
     calls: u32,
+    output: u32,
 }
 impl TextProbe for Probe {
     fn direct(&mut self, input: Text) -> Result<u32, TextFormError> {
@@ -87,7 +115,7 @@ impl TextProbe for Probe {
     }
     fn output(&mut self) -> Result<Text, TextFormError> {
         self.calls += 1;
-        Ok(Text(513))
+        Ok(Text(self.output))
     }
 }
 fn expect<T>(value: Result<T, Refused>) -> T {
@@ -102,6 +130,7 @@ mod horizon {
     pub mod mod_api {
         pub mod types {
             pub type Text = u32;
+            pub type TextCarrier = u32;
             #[derive(Debug)]
             pub enum GuiDraw {
                 Label(Text),
@@ -120,7 +149,10 @@ mod horizon {
             pub enum TextFormError {
                 TooDeep,
                 Malformed,
-                Invalid,
+                NonFinite,
+                Unavailable,
+                InvalidString,
+                NestedNull,
             }
             pub struct TextBatch {
                 pub values: Vec<Option<Text>>,
@@ -141,8 +173,9 @@ mod imports {
         Ok(input.values.len() as u32)
     }
     pub fn output() -> Result<u32, wire::TextFormError> {
-        Ok(513)
+        Ok(OUTPUT.with(|v| v.get()))
     }
+    thread_local! { pub static OUTPUT: std::cell::Cell<u32> = const { std::cell::Cell::new(513) }; }
 }
 // GENERATED
 #[test]
@@ -157,7 +190,11 @@ fn health_hud_refuses_as_typed_data_instead_of_trapping() {
     for (depth, error) in [
         (513, TextFormError::TooDeep),
         (600, TextFormError::Malformed),
-        (700, TextFormError::Invalid),
+        (700, TextFormError::NonFinite),
+        (701, TextFormError::Unavailable),
+        (702, TextFormError::InvalidString),
+        (703, TextFormError::NestedNull),
+        (800, TextFormError::Malformed),
     ] {
         assert_eq!(proxy.health(depth).unwrap(), None);
         assert!(matches!(proxy.module.take(), Some(Refused::Text(why)) if why == error));
@@ -173,19 +210,31 @@ fn refused_event_writeback_keeps_every_field_unchanged() {
         text: Text(2),
         last: 3,
     };
-    proxy.multi(&mut event, 513).unwrap();
-    assert_eq!(
-        event,
-        TextEvent {
-            first: 1,
-            text: Text(2),
-            last: 3
+    for n in [513, 800, 900] {
+        if n == 900 {
+            assert!(matches!(
+                proxy.multi(&mut event, n),
+                Err(Refused::Text(TextFormError::Malformed))
+            ));
+        } else {
+            proxy.multi(&mut event, n).unwrap();
         }
-    );
-    assert!(matches!(
-        proxy.module.take(),
-        Some(Refused::Text(TextFormError::TooDeep))
-    ));
+        assert_eq!(
+            event,
+            TextEvent {
+                first: 1,
+                text: Text(2),
+                last: 3
+            }
+        );
+        if n == 900 {
+            assert!(proxy.module.take().is_none());
+        } else {
+            assert!(
+                matches!(proxy.module.take(), Some(Refused::Text(why)) if why == if n == 513 { TextFormError::TooDeep } else { TextFormError::Malformed })
+            );
+        }
+    }
     proxy.multi(&mut event, 512).unwrap();
     assert_eq!(
         event,
@@ -204,7 +253,11 @@ fn guest_refuses_before_import_and_preserves_variants() {
     for (n, why) in [
         (513, TextFormError::TooDeep),
         (600, TextFormError::Malformed),
-        (700, TextFormError::Invalid),
+        (700, TextFormError::NonFinite),
+        (701, TextFormError::Unavailable),
+        (702, TextFormError::InvalidString),
+        (703, TextFormError::NestedNull),
+        (800, TextFormError::Malformed),
     ] {
         assert_eq!(g.direct(Text(n)), Err(why));
     }
@@ -216,6 +269,8 @@ fn guest_refuses_before_import_and_preserves_variants() {
         Err(TextFormError::TooDeep)
     );
     assert!(matches!(g.output(), Err(TextFormError::TooDeep)));
+    imports::OUTPUT.with(|v| v.set(900));
+    assert_eq!(g.output(), Err(TextFormError::Malformed));
 }
 #[test]
 fn host_refuses_before_write_and_preserves_variants() {
@@ -224,7 +279,11 @@ fn host_refuses_before_write_and_preserves_variants() {
     for (n, why) in [
         (513, wire::TextFormError::TooDeep),
         (600, wire::TextFormError::Malformed),
-        (700, wire::TextFormError::Invalid),
+        (700, wire::TextFormError::NonFinite),
+        (701, wire::TextFormError::Unavailable),
+        (702, wire::TextFormError::InvalidString),
+        (703, wire::TextFormError::NestedNull),
+        (900, wire::TextFormError::Malformed),
     ] {
         assert_eq!(host::ProbeCalls::direct(&mut p, n).unwrap(), Err(why));
     }
@@ -240,10 +299,13 @@ fn host_refuses_before_write_and_preserves_variants() {
         Err(wire::TextFormError::TooDeep)
     );
     assert_eq!(p.calls, 1);
-    assert!(matches!(
-        host::ProbeCalls::output(&mut p).unwrap(),
-        Err(wire::TextFormError::TooDeep)
-    ));
+    for (n, why) in [
+        (513, wire::TextFormError::TooDeep),
+        (800, wire::TextFormError::Malformed),
+    ] {
+        p.output = n;
+        assert_eq!(host::ProbeCalls::output(&mut p).unwrap(), Err(why));
+    }
 }
 #[test]
 fn unrelated_transport_errors_stay_transport_errors() {
