@@ -7,6 +7,7 @@ use std::{
 const N: usize = 17;
 thread_local! {
     static ACTIVE: Cell<bool> = const { Cell::new(false) };
+    static TIMING: Cell<bool> = const { Cell::new(true) };
     static PHASE: Cell<usize> = const { Cell::new(0) };
     static LAST: Cell<Option<Instant>> = const { Cell::new(None) };
     static TIME: Cell<[u64; N]> = const { Cell::new([0; N]) };
@@ -17,11 +18,13 @@ pub fn mark(next: usize) {
     if !ACTIVE.get() {
         return;
     }
-    let now = Instant::now();
-    if let Some(last) = LAST.replace(Some(now)) {
-        let mut times = TIME.get();
-        times[PHASE.get()] += now.duration_since(last).as_nanos() as u64;
-        TIME.set(times);
+    if TIMING.get() {
+        let now = Instant::now();
+        if let Some(last) = LAST.replace(Some(now)) {
+            let mut times = TIME.get();
+            times[PHASE.get()] += now.duration_since(last).as_nanos() as u64;
+            TIME.set(times);
+        }
     }
     PHASE.set(next);
 }
@@ -37,12 +40,19 @@ impl Drop for Scope {
     }
 }
 pub fn start() {
+    TIMING.set(true);
     TIME.set([0; N]);
     ALLOCS.set([0; N]);
     BYTES.set([0; N]);
     PHASE.set(0);
     LAST.set(Some(Instant::now()));
     ACTIVE.set(true);
+}
+/// Count allocations by phase without reading clocks at phase transitions.
+pub fn start_allocations() {
+    start();
+    TIMING.set(false);
+    LAST.set(None);
 }
 pub fn finish() -> ([u64; N], [u64; N], [u64; N]) {
     mark(0);

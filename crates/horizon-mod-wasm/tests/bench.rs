@@ -18,6 +18,7 @@ impl mod_api::prelude::LevelsHost for World {
 impl ServerHost for World {}
 mod_api::impl_server_host_areas!(World);
 fn measure(label: &str, mods: Vec<ModEntry>) {
+    let allocations_only = std::env::var_os("HORIZON_PROFILE_ALLOCATIONS_ONLY").is_some();
     mod_api::testing::with_mods(mods.into(), || {
         mod_api::__private::install_parts(
             mod_api::__private::mods(),
@@ -44,7 +45,11 @@ fn measure(label: &str, mods: Vec<ModEntry>) {
             let mut samples = Vec::with_capacity(100);
             for round in 0..120 {
                 if round == 20 {
-                    horizon_mod_wasm::profile::start();
+                    if allocations_only {
+                        horizon_mod_wasm::profile::start_allocations();
+                    } else {
+                        horizon_mod_wasm::profile::start();
+                    }
                 }
                 let now = Instant::now();
                 for entity in &mut entities {
@@ -56,10 +61,12 @@ fn measure(label: &str, mods: Vec<ModEntry>) {
                 }
             }
             let (times, allocations, bytes) = horizon_mod_wasm::profile::finish();
-            println!(
-                "{label} {kind} phase ns per call: {:?}",
-                times.map(|n| n as f64 / 100000.0)
-            );
+            if !allocations_only {
+                println!(
+                    "{label} {kind} phase ns per call: {:?}",
+                    times.map(|n| n as f64 / 100000.0)
+                );
+            }
             println!(
                 "{label} {kind} allocations per call: {:?}",
                 allocations.map(|n| n as f64 / 100000.0)
@@ -68,6 +75,11 @@ fn measure(label: &str, mods: Vec<ModEntry>) {
                 "{label} {kind} allocated bytes per call: {:?}",
                 bytes.map(|n| n as f64 / 100000.0)
             );
+            // Prove the guest still runs after the measured workload, rather than
+            // accepting snapshots left over from an earlier successful dispatch.
+            entities[0].data.clear();
+            entities[0].nbt.clear();
+            mod_api::dispatch_block_entity_tick(&mut World, [0, 64, 0], &mut entities[0]);
             assert!(entities.iter().all(|entity| entity.data == [expected]
                 && entity.nbt.get(&"counter".into()) == Some(&mod_api::Tag::Int(17))));
             samples.sort_unstable();
@@ -109,6 +121,9 @@ fn block_entity_ticks() {
         vec![ModEntry::new("wasm_fixture", Box::new(fixture::Mod))],
     );
     measure("wasm", loaded.mods);
+    if std::env::var_os("HORIZON_PROFILE_ALLOCATIONS_ONLY").is_some() {
+        return;
+    }
     horizon_mod_wasm::profile::start();
     for i in 0..1000000 {
         horizon_mod_wasm::profile::mark(i % 16);
