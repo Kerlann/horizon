@@ -11,7 +11,7 @@ use std::sync::{
 };
 
 mod stdio;
-const LIMIT: u64 = 16 * 1024 * 1024;
+pub(crate) const LIMIT: u64 = 16 * 1024 * 1024;
 
 struct Rotating {
     directory: Dir,

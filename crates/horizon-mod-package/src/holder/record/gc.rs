@@ -3,6 +3,11 @@ use super::*;
 use crate::runtime_leases::cleanup::Cleanup;
 use cap_fs_ext::DirExt;
 
+fn retained_dir(dir: Dir) -> io::Result<Dir> {
+    Ok(Dir::from_std_file(crate::runtime_leases::retained(
+        dir.into_std_file(),
+    )?))
+}
 fn regular(meta: &cap_std::fs::Metadata) -> bool {
     #[cfg(windows)]
     {
@@ -18,7 +23,7 @@ impl Cleanup {
     /// Unknown or malformed groups are retained. Never opens a shared registry or upgrades.
     pub fn collect_records(&self) -> io::Result<usize> {
         let records = match self.data.open_dir_nofollow("run-records") {
-            Ok(dir) => dir,
+            Ok(dir) => retained_dir(dir)?,
             Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(0),
             Err(e) => return Err(e),
         };
@@ -36,6 +41,7 @@ impl Cleanup {
             let Ok(group) = records.open_dir_nofollow(&name) else {
                 continue;
             };
+            let group = retained_dir(group)?;
             #[cfg(windows)]
             {
                 use cap_std::fs::MetadataExt;
@@ -63,13 +69,17 @@ impl Cleanup {
                     break;
                 }
                 let meta = group.symlink_metadata(&file_name)?;
-                if !regular(&meta) {
+                if !regular(&meta)
+                    || (file_name != "launch.json" && meta.len() > crate::output::LIMIT)
+                {
                     valid = false;
                     break;
                 }
                 let mut options = OpenOptions::new();
                 options.read(true).follow(FollowSymlinks::No);
-                let file = group.open_with(&file_name, &options)?;
+                let file = File::from_std(crate::runtime_leases::retained(
+                    group.open_with(&file_name, &options)?.into_std(),
+                )?);
                 if token(&file)? != [meta.dev(), meta.ino()] || !regular(&file.metadata()?) {
                     valid = false;
                     break;
@@ -86,11 +96,17 @@ impl Cleanup {
             let Some(payload) = payload else { continue };
             if !valid
                 || payload.entry.validate(16).is_err()
-                || !payload
-                    .entry
-                    .trees
-                    .iter()
-                    .any(|tree| tree.identity == group_id)
+                || open_directory(&payload.entry.data)
+                    .ok()
+                    .and_then(|dir| identity(&dir).ok())
+                    != Some(identity(&self.data)?)
+                || !payload.entry.trees.iter().any(|tree| {
+                    tree.identity == group_id
+                        && open_directory(&tree.path)
+                            .ok()
+                            .and_then(|dir| identity(&dir).ok())
+                            == Some(group_id)
+                })
             {
                 continue;
             }
@@ -101,13 +117,18 @@ impl Cleanup {
                     valid = false;
                 }
             }
-            let current = records.open_dir_nofollow(&name)?;
+            let current = retained_dir(records.open_dir_nofollow(&name)?)?;
             if !valid || identity(&current)? != group_id {
                 continue;
             }
             for (name, _file) in &files {
                 group.remove_file(name)?;
             }
+            // Windows directory handles can deny deletion; the exclusive gate still excludes owners.
+            // Arbitrary same-user namespace swaps are outside this protocol.
+            drop(files);
+            drop(current);
+            drop(group);
             records.remove_dir(&name)?;
             removed += 1;
         }

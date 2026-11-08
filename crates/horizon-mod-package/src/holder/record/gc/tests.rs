@@ -1,5 +1,7 @@
 use super::*;
 use crate::runtime_leases::{Error, Registry};
+// Fork temporarily inherits other threads' locks until exec closes them.
+static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn fixture() -> (tempfile::TempDir, PathBuf) {
     let root = tempfile::tempdir().unwrap();
@@ -32,6 +34,40 @@ fn fixture() -> (tempfile::TempDir, PathBuf) {
     (root, path)
 }
 
+#[cfg(unix)]
+#[test]
+fn closed_stdio_actor() {
+    use std::os::fd::AsRawFd;
+    let Some(root) = std::env::var_os("RECORD_GC_CLOSED_ROOT") else {
+        return;
+    };
+    // SAFETY: isolated child process, no further standard IO is required.
+    unsafe {
+        for fd in 0..3 {
+            libc::close(fd);
+        }
+    }
+    let cleanup = Cleanup::existing(Path::new(&root)).unwrap();
+    let dir = retained_dir(cleanup.data.open_dir_nofollow("run-records").unwrap()).unwrap();
+    assert!(dir.as_raw_fd() > 2);
+    assert_eq!(cleanup.collect_records().unwrap(), 1);
+    std::process::exit(0);
+}
+
+#[cfg(unix)]
+#[test]
+fn collection_with_closed_stdio() {
+    let _serial = SERIAL.lock().unwrap();
+    let (root, path) = fixture();
+    let status = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", "holder::record::gc::tests::closed_stdio_actor"])
+        .env("RECORD_GC_CLOSED_ROOT", root.path())
+        .status()
+        .unwrap();
+    assert!(status.success());
+    assert!(!path.exists());
+}
+
 #[test]
 fn independent_owner_actor() {
     let Some(root) = std::env::var_os("RECORD_GC_OWNER_ROOT") else {
@@ -46,6 +82,7 @@ fn independent_owner_actor() {
 
 #[test]
 fn final_process_exit_authorizes_collection() {
+    let _serial = SERIAL.lock().unwrap();
     use std::io::{BufRead, BufReader};
     use std::process::Stdio;
     let (root, path) = fixture();
@@ -93,6 +130,7 @@ fn final_process_exit_authorizes_collection() {
 
 #[test]
 fn collective_owners_and_complete_group() {
+    let _serial = SERIAL.lock().unwrap();
     let (root, path) = fixture();
     let first = Registry::existing(root.path()).unwrap();
     let last = Registry::existing(root.path()).unwrap();
@@ -110,7 +148,8 @@ fn collective_owners_and_complete_group() {
 
 #[test]
 fn malformed_unknown_and_wrong_identity_retain_entire_group() {
-    for variant in 0..7 {
+    let _serial = SERIAL.lock().unwrap();
+    for variant in 0..10 {
         let (root, path) = fixture();
         let payload = path.join("launch.json");
         match variant {
@@ -130,7 +169,17 @@ fn malformed_unknown_and_wrong_identity_retain_entire_group() {
                 match variant {
                     4 => record.entry.trees[0].identity = [0; 2],
                     5 => record.version = 255,
-                    _ => record.entry.trees.clear(),
+                    6 => record.entry.trees.clear(),
+                    7 => record.entry.data = path.clone(),
+                    8 => record.entry.trees[0].path = root.path().to_owned(),
+                    _ => {
+                        std::fs::OpenOptions::new()
+                            .write(true)
+                            .open(path.join("stdout.log"))
+                            .unwrap()
+                            .set_len(crate::output::LIMIT + 1)
+                            .unwrap();
+                    }
                 }
                 std::fs::write(&payload, serde_json::to_vec(&record).unwrap()).unwrap();
             }
@@ -143,16 +192,14 @@ fn malformed_unknown_and_wrong_identity_retain_entire_group() {
             0
         );
         assert!(payload.exists());
-        assert_eq!(
-            std::fs::read(path.join("stdout.log")).unwrap(),
-            b"raw capture"
-        );
+        assert!(path.join("stdout.log").exists());
     }
 }
 
 #[cfg(unix)]
 #[test]
 fn links_are_not_followed_or_unlinked() {
+    let _serial = SERIAL.lock().unwrap();
     for hard in [false, true] {
         let (root, path) = fixture();
         let outside = root.path().join("outside");
