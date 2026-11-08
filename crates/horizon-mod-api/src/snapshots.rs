@@ -198,42 +198,6 @@ pub struct NativeLootLevel {
     pub thundering: bool,
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn loot_snapshot_retains_unknown_patch_removal_and_order() {
-        let patches = vec![
-            ("test:unknown".to_owned(), Some(Tag::Int(42))),
-            ("minecraft:damage".to_owned(), None),
-            ("test:unknown".to_owned(), Some(Tag::String("later".into()))),
-        ];
-        let stack = LootStack {
-            item: ItemKey(0),
-            count: -1,
-            damage: 0,
-            enchantments: vec![],
-            potion: None,
-            map: false,
-            exploration: None,
-            ominous_amplifier: None,
-            stew_effects: vec![],
-            names: vec![],
-            components: patches,
-        };
-        assert_eq!(
-            stack.components[0],
-            ("test:unknown".into(), Some(Tag::Int(42)))
-        );
-        assert_eq!(stack.components[1], ("minecraft:damage".into(), None));
-        assert_eq!(
-            stack.components[2],
-            ("test:unknown".into(), Some(Tag::String("later".into())))
-        );
-    }
-}
-
 impl LootStack {
     /// A candidate with signed count, before inventory materialization.
     pub fn new(item: ItemKey, count: i32) -> Self {
@@ -290,5 +254,41 @@ impl ExplorationMap {
             search_radius,
             skip_existing_chunks,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn loot_snapshot_retains_unknown_patch_removal_and_order() {
+        let patches = vec![
+            ("test:unknown".to_owned(), Some(Tag::Int(42))),
+            ("minecraft:damage".to_owned(), None),
+            ("test:unknown".to_owned(), Some(Tag::String("later".into()))),
+        ];
+        let stack = LootStack {
+            item: ItemKey(0),
+            count: -1,
+            damage: 0,
+            enchantments: vec![],
+            potion: None,
+            map: false,
+            exploration: None,
+            ominous_amplifier: None,
+            stew_effects: vec![],
+            names: vec![],
+            components: patches,
+        };
+        assert_eq!(
+            stack.components[0],
+            ("test:unknown".into(), Some(Tag::Int(42)))
+        );
+        assert_eq!(stack.components[1], ("minecraft:damage".into(), None));
+        assert_eq!(
+            stack.components[2],
+            ("test:unknown".into(), Some(Tag::String("later".into())))
+        );
     }
 }

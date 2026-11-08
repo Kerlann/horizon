@@ -125,6 +125,16 @@ impl<T> Slots<T> {
     }
 }
 
+impl crate::wire::Wire for Id {
+    const MIN: usize = 8;
+    fn put(&self, out: &mut crate::wire::Writer) {
+        out.put(&self.0);
+    }
+    fn take(input: &mut crate::wire::Reader<'_>) -> Result<Self, crate::wire::WireError> {
+        input.take().map(Self)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -188,15 +198,5 @@ mod tests {
             assert_eq!(slots.get(Id(raw)), Err(Stale));
             assert_eq!(slots.get_mut(Id(raw)), Err(Stale));
         }
-    }
-}
-
-impl crate::wire::Wire for Id {
-    const MIN: usize = 8;
-    fn put(&self, out: &mut crate::wire::Writer) {
-        out.put(&self.0);
-    }
-    fn take(input: &mut crate::wire::Reader<'_>) -> Result<Self, crate::wire::WireError> {
-        input.take().map(Self)
     }
 }

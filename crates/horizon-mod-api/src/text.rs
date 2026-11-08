@@ -551,11 +551,9 @@ impl Text {
         }
         match &self.style.hover {
             Some(TextHover::Text(child)) => visit(child, TextRelation::HoverText),
-            Some(TextHover::Entity { name, .. }) => {
-                if let Some(child) = name {
-                    visit(child, TextRelation::HoverEntityName);
-                }
-            }
+            Some(TextHover::Entity {
+                name: Some(child), ..
+            }) => visit(child, TextRelation::HoverEntityName),
             _ => {}
         }
     }
@@ -1202,10 +1200,12 @@ mod tests {
                         if slot == 2 {
                             profile.metadata = metadata();
                         } else {
-                            let mut property = TextProfileProperty::default();
-                            property.name = "textures".into();
-                            property.value = "value".into();
-                            property.metadata = metadata();
+                            let property = TextProfileProperty {
+                                name: "textures".into(),
+                                value: "value".into(),
+                                metadata: metadata(),
+                                ..Default::default()
+                            };
                             profile.properties.push(property);
                         }
                         text.content = TextContent::Object(TextObject::Player {

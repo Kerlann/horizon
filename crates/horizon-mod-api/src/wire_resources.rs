@@ -289,6 +289,22 @@ fn current() -> Result<Rc<dyn ResourceCodec>, WireError> {
         })
         .ok_or(WireError::Invalid("no resource context"))
 }
+pub(super) fn refused(handler: &str) {
+    if let Ok(codec) = current() {
+        codec.refused(handler);
+    }
+}
+pub(super) fn store(value: Box<dyn Any>) -> Result<Id, WireError> {
+    current()?.store(value)
+}
+pub(super) fn load<T: 'static>(id: Id) -> Result<T, WireError> {
+    current()?
+        .load(id, TypeId::of::<T>())?
+        .downcast::<T>()
+        .map(|value| *value)
+        .map_err(|_| WireError::Invalid("wrong resource view"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -447,19 +463,4 @@ mod tests {
             Err(WireError::Invalid("no resource context"))
         );
     }
-}
-pub(super) fn refused(handler: &str) {
-    if let Ok(codec) = current() {
-        codec.refused(handler);
-    }
-}
-pub(super) fn store(value: Box<dyn Any>) -> Result<Id, WireError> {
-    current()?.store(value)
-}
-pub(super) fn load<T: 'static>(id: Id) -> Result<T, WireError> {
-    current()?
-        .load(id, TypeId::of::<T>())?
-        .downcast::<T>()
-        .map(|value| *value)
-        .map_err(|_| WireError::Invalid("wrong resource view"))
 }

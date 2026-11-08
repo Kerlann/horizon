@@ -105,7 +105,7 @@ pub(super) fn rust_sig(types: &Types<'_>, method: &Method) -> String {
 
 /// The ids of every imported method, in the order they are generated: the table both sides
 /// share, so an id is never sent as a name.
-pub(super) fn imports<'m>(methods: &'m [Method]) -> Vec<&'m Method> {
+pub(super) fn imports(methods: &[Method]) -> Vec<&Method> {
     methods
         .iter()
         .filter(|m| !exports().contains(&m.owner))
@@ -552,14 +552,12 @@ pub(super) fn snapshot(types: &Types<'_>, ty: &Ty, place: &str) -> Option<String
     Some(match ty {
         Ty::Named(d) if types.defs[*d].lifetimes != 0 => {
             let fields = types.defs[*d].kind.fields()?;
-            format!(
-                "{}",
-                fields
-                    .iter()
-                    .map(|f| snapshot(types, &f.ty, &format!("({place}).{}", f.rust)))
-                    .collect::<Option<Vec<_>>>()?
-                    .join("")
-            )
+            fields
+                .iter()
+                .map(|f| snapshot(types, &f.ty, &format!("({place}).{}", f.rust)))
+                .collect::<Option<Vec<_>>>()?
+                .join("")
+                .to_string()
         }
         Ty::Ref(t, _) => snapshot(types, t, &format!("*({place})"))?,
         Ty::Option(t) => format!(
@@ -842,7 +840,7 @@ fn borrowed(
             build.join(", ")
         ));
     }
-    Some((read, format!("{name}"), back))
+    Some((read, name.to_string(), back))
 }
 
 /// The export a mod answers with the hooks it listens to: they cross as names, which stay
