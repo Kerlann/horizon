@@ -1,8 +1,8 @@
 //! Running independent work at once: the exporter JVMs of each side, the asset copy, hashing.
 //! `HORIZON_PREPARE_JOBS=1` runs everything one step after another.
 
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::Mutex;
 
 /// How many threads each copying, hashing or compiling step spreads over: HORIZON_PREPARE_JOBS,
 /// else the processors (at most 8). With 1 the lanes run one after another too.

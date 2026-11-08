@@ -780,7 +780,14 @@ pub mod tests {
                 "minecraft:lava",
                 "minecraft:flowing_lava",
             ],
-            &[],
+            // The engine's world fluids in vanilla registry order, as the game resolves them.
+            &[
+                "minecraft:empty",
+                "minecraft:flowing_water",
+                "minecraft:water",
+                "minecraft:flowing_lava",
+                "minecraft:lava",
+            ],
         )
         .unwrap();
     }

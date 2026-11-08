@@ -1,4 +1,7 @@
-# Typed bulk block edits
+<!-- chapter: Typed bulk block edits -->
+<!-- separator: 1 -->
+
+### Typed bulk block edits
 
 `NativeBlockEdit.palette` contains complete `BlockState` values. Construct them with
 `BlockState::of(&host.block_states(), block, constraints)` (or change an existing state

@@ -11,6 +11,7 @@ pub struct TooltipDisplay<'a> {
     pub(crate) ominous_banner: bool,
 }
 impl<'a> TooltipDisplay<'a> {
+    // hidden: a constructor for generated wire code, not for mods
     /// Reconstruct the read-only projection transported by the mod boundary.
     #[doc(hidden)]
     pub fn __wire_from_fields(component: Option<&'a Tag>, ominous_banner: bool) -> Self {

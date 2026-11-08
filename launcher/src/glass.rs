@@ -7,8 +7,8 @@
 //! 24 px blur has nothing finer), kept while the pages that drew them may still be on screen.
 use crate::scene::{Backdrop, Model};
 use gpui::{
-    AnyElement, Bounds, Corners, Div, Pixels, RenderImage, Size, Window, canvas, div, prelude::*,
-    px, rgb,
+    canvas, div, prelude::*, px, rgb, AnyElement, Bounds, Corners, Div, Pixels, RenderImage, Size,
+    Window,
 };
 use horizon_theme::glass::Glass;
 use std::cell::Cell;

@@ -11,7 +11,6 @@ use horizon_client::{
     screen_effects::{Blend, ScreenQuad},
 };
 use horizon_core::{geometry::Vec3, position::BlockPos};
-use horizon_world::registry::BlockStateId;
 use mod_api::{
     BlockScreenEffect, BlockScreenEffectDrawEvent, ClientHost, ExtractBlockScreenEffectEvent, Flow,
     GuiRenderPostEvent, Hooks, ModEntry, Mods,

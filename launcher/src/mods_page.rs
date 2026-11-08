@@ -9,8 +9,8 @@
 use super::line_edit::{self, Key, LineEdit};
 use super::*;
 use horizon_launcher::browser::{
-    self, Kind as PackKind, Project, Query, SourceId, Support, horizon, installed, java,
-    java_instance,
+    self, horizon, installed, java, java_instance, Kind as PackKind, Project, Query, SourceId,
+    Support,
 };
 use horizon_launcher::modpacks;
 use horizon_launcher::native_status;
