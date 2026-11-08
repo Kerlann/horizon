@@ -8,6 +8,7 @@ description = "The runtime for wasm mods: groups packages by their dependencies 
 
 [features]
 boundary-profile = ["wasmtime/profiling", "wasmtime/call-hook"]
+boundary-fuel = ["boundary-profile"]
 
 [dependencies]
 horizon-core = { path = "../horizon-core" }
