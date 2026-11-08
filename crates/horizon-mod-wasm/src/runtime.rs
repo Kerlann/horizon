@@ -34,6 +34,7 @@ pub enum CallClass {
 pub(crate) struct State {
     diag_counter: Option<wasmtime::TypedFunc<u32, u64>>,
     diag_calls: std::collections::BTreeMap<u32, u64>,
+    diag_imports: std::collections::BTreeMap<u32, u64>,
     diag_total: u64,
     limits: wasmtime::StoreLimits,
     cx: Box<Cx>,
@@ -57,6 +58,7 @@ impl Default for State {
         Self {
             diag_counter: None,
             diag_calls: Default::default(),
+            diag_imports: Default::default(),
             diag_total: 0,
             limits: wasmtime::StoreLimitsBuilder::new()
                 .trap_on_grow_failure(false)
@@ -320,6 +322,7 @@ fn host(
     out: u32,
     cap: u32,
 ) -> wasmtime::Result<u32> {
+    *caller.data_mut().diag_imports.entry(id).or_default() += 1;
     let memory = caller
         .data()
         .memory
@@ -750,8 +753,9 @@ impl WasmMod {
                 *count = counter.call(&mut *store, i as u32)?;
             }
             eprintln!(
-                "WIRE_DIAG fuel={fuel} system={counts:?} exports={:?}",
-                store.data().diag_calls
+                "WIRE_DIAG fuel={fuel} system={counts:?} exports={:?} imports={:?}",
+                store.data().diag_calls,
+                store.data().diag_imports
             );
         }
         Ok(())
