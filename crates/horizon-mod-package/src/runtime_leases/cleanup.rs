@@ -76,7 +76,7 @@ fn regular(meta: &cap_std::fs::Metadata) -> bool {
             return false;
         }
     }
-    meta.is_file() && !meta.file_type().is_symlink() && meta.nlink() == 1
+    meta.is_file() && !meta.file_type().is_symlink() && meta.nlink() == 1 && meta.len() == 0
 }
 
 #[cfg(test)]

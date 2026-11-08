@@ -69,7 +69,13 @@ fn every_claim_owner_holds_the_gate_until_its_last_reference() {
 fn unknown_entries_never_count_or_disappear() {
     let (root, registry) = setup();
     populate(&registry, 4095);
-    let odd = ["unknown", &"A".repeat(64), &"g".repeat(64), &"f".repeat(63)];
+    let odd = [
+        "unknown",
+        &"A".repeat(64),
+        &"g".repeat(64),
+        &"f".repeat(63),
+        &"c".repeat(64),
+    ];
     for name in odd {
         registry.directory.write(name, b"retained").unwrap();
     }
