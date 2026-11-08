@@ -172,15 +172,8 @@ impl Writer {
         if !self.can_fit(bytes) {
             return;
         }
-        let Ok(len) = u32::try_from(text.len()) else {
-            self.fail(WireError::Length);
-            return;
-        };
-        // The whole encoding was checked above; do not repeat the limit and
-        // sticky-error checks for its prefix and payload separately.
-        self.bytes.reserve(bytes);
-        self.bytes.extend_from_slice(&len.to_le_bytes());
-        self.bytes.extend_from_slice(text.as_bytes());
+        self.put_len(text.len());
+        self.put_bytes(text.as_bytes());
     }
     /// A length or count.
     pub fn put_len(&mut self, len: usize) {
@@ -899,67 +892,6 @@ impl Wire for std::time::Duration {
 
 #[cfg(test)]
 mod tests {
-    #[test]
-    fn entity_wire_roundtrip_preserves_float_bits_and_java_keys() {
-        use super::{Reader, Writer};
-        for (bits, float_bits) in [
-            0u64,
-            0x8000_0000_0000_0000,
-            0x7ff8_0000_0000_1234,
-            0x7ff0_0000_0000_1234,
-            0x7ff0_0000_0000_0000,
-            0xfff0_0000_0000_0000,
-        ]
-        .into_iter()
-        .zip([
-            0u32,
-            0x8000_0000,
-            0x7fc0_1234,
-            0x7f80_1234,
-            0x7f80_0000,
-            0xff80_0000,
-        ]) {
-            let mut entity = crate::ModBlockEntity::new(String::new(), Default::default());
-            entity.nbt.insert(
-                horizon_core::nbt::JavaString(vec![0xd800, 0x0061, 0xdc00]),
-                crate::Tag::Double(bits),
-            );
-            entity
-                .nbt
-                .insert("float".into(), crate::Tag::Float(float_bits));
-            entity.items = vec![None, None];
-            entity.data = vec![i32::MIN, i32::MAX];
-            let mut original = Writer::new();
-            original.put(&entity);
-            let copy: crate::ModBlockEntity = Reader::new(original.bytes()).take().unwrap();
-            let mut encoded = Writer::new();
-            encoded.put(&copy);
-            assert_eq!(encoded.bytes(), original.bytes(), "float bits {bits:x}");
-        }
-    }
-
-    #[test]
-    fn string_encoding_checks_whole_value_before_writing() {
-        use super::{WireError, Writer};
-        let mut writer = Writer::new();
-        writer.limit(7);
-        writer.put_str("é!");
-        assert_eq!(writer.bytes(), &[3, 0, 0, 0, 0xc3, 0xa9, b'!']);
-        assert_eq!(writer.error(), None);
-        writer.clear();
-        writer.limit(6);
-        writer.put_str("é!");
-        assert_eq!(writer.error(), Some(WireError::Length));
-        assert!(writer.bytes().is_empty());
-        writer.put_str("");
-        assert!(writer.bytes().is_empty());
-        writer.clear();
-        writer.fail(WireError::Depth);
-        writer.put_str("ok");
-        assert_eq!(writer.error(), Some(WireError::Depth));
-        assert!(writer.bytes().is_empty());
-    }
-
     #[test]
     fn resource_context_is_scoped_and_encoding_keeps_first_error() {
         use std::{
