@@ -94,6 +94,11 @@ mod tests {
     /// A server's game with its own player in survival standing at the
     /// origin chunk, holding `held`: their UUID.
     fn with_player(game: &mut Game<'_>, held: ItemStack) -> u128 {
+        // The shared fixture does not open a server or register a ticking chunk.
+        game.options.dedicated = Some(Vec::new());
+        let _ = game
+            .block_ticks
+            .add_empty_chunk(horizon_core::position::ChunkPos::new(0, 0));
         game.player = Some(PlayerMotion::new(game.motion, Vec3::new(4.5, 64.0, 4.5)).unwrap());
         game.set_mode(GameMode::Survival);
         game.inventory[game.selected] = Some(held);

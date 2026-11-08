@@ -62,8 +62,6 @@ horizon-client game::creatures::chorus_projectile_drop_tests::a_registered_snowb
 horizon-client game::explosion::tests::explosion_and_mob_breaks_apply_block_drops #2176
 horizon-client game::kill_die_cancel_tests::a_vetoed_kill_keeps_the_mob_and_a_later_kill_dies_once #2176
 horizon-client game::kill_die_vibration_tests::a_killed_mob_posts_its_death_before_the_command_returns #2176
-horizon-client game::native_player_break::tests::a_mod_breaks_stone_as_the_player_with_their_pickaxe #2176
-horizon-client game::native_player_break::tests::drops_go_into_the_inventory_rolled_for_the_tools_enchantments #2176
 horizon-client game::explosion::tests::explosion_items_parity_fixture #2177 harness
 horizon-client game::native_live_holder_tests::thousand_live_block_entity_ticks #2177 harness
 horizon-client game::remote_vehicles::tests::steering_mount_control_matches_vanilla #2177 harness
