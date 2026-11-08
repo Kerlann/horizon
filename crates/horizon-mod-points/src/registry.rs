@@ -35,6 +35,8 @@ pub enum RawKind {
     /// associated function, and at a borrowed-return place. A shared receiver must not be written
     /// to; its mutable pointer only erases the type, not its mutability.
     Erased(unsafe fn(usize, *mut (), *mut ())),
+    /// A checked hook endpoint receiving an owned read-only row snapshot and declared outputs.
+    Snapshot(&'static dyn RawForward, u32),
 }
 
 // Function pointers: no data behind them, so they move between threads.
@@ -59,6 +61,17 @@ pub enum PointHost<'a> {
 pub trait Forward: Send + Sync {
     /// Dispatches one generated listener id with its mutable wire record.
     fn forward(&self, id: u32, host: PointHost<'_>, record: &mut dyn mod_api::wire::Record);
+}
+
+/// A raw hook endpoint; its only engine inputs are the staged reader's owned rows.
+pub trait RawForward: Send + Sync {
+    /// Dispatches the listener through the ordinary hook transport. Record writeback is atomic.
+    fn forward(
+        &self,
+        id: u32,
+        rows: &[crate::snapshot::Row],
+        record: &mut dyn mod_api::wire::Record,
+    );
 }
 
 /// A typed API function.
@@ -279,6 +292,25 @@ impl SlotListener {
             priority: 0,
             injection: "",
         }
+    }
+
+    /// A raw hook endpoint at a place with a generated snapshot reader.
+    pub fn snapshot(
+        id: &'static str,
+        place: PointId,
+        endpoint: &'static dyn RawForward,
+        export: u32,
+    ) -> Result<Self, RegisterError> {
+        if !crate::RAW_PLACES.iter().any(|(at, _, _)| *at == place) {
+            return Err(RegisterError::Unsupported);
+        }
+        Ok(Self {
+            id,
+            place: place as usize,
+            kind: Kind::Raw(RawKind::Snapshot(endpoint, export)),
+            priority: 0,
+            injection: "",
+        })
     }
 
     /// Orders a point by priority, then dependency order, then inject id within its mod.

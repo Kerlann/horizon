@@ -352,7 +352,9 @@ fn import_body(types: &Types<'_>, m: &Method, id: usize, prefix: &str) -> String
                     m.owner, m.name
                 );
             }
-            ty if has_ref_in_data(ty) || lifetime_def(types, ty) => {
+            ty if (has_ref_in_data(ty) && lend(types, ty, "p").is_none())
+                || lifetime_def(types, ty) =>
+            {
                 return format!(
                     "{sig} {{ {guest}::unsupported(\"{}::{}\") }}",
                     m.owner, m.name
@@ -440,6 +442,25 @@ pub(super) struct Lent {
     pub(super) mutable: bool,
 }
 
+fn reborrow(ty: &Ty, place: &str) -> Option<String> {
+    Some(match ty {
+        Ty::Prim(..) | Ty::Wide(..) | Ty::Unit | Ty::Str(Str::Static) => format!("({place})"),
+        Ty::Str(Str::Borrowed) => format!("({place}).as_str()"),
+        Ty::Str(Str::Owned) => format!("({place}).clone()"),
+        Ty::Ref(_, false) => format!("&({place})"),
+        Ty::List(_, List::Slice) => format!("({place}).as_slice()"),
+        Ty::Option(t) => format!("({place}).as_ref().map(|x|{})", reborrow(t, "*x")?),
+        Ty::Tuple(v) => format!(
+            "({},)",
+            v.iter()
+                .enumerate()
+                .map(|(i, t)| reborrow(t, &format!("({place}).{i}")))
+                .collect::<Option<Vec<_>>>()?
+                .join(",")
+        ),
+        _ => return None,
+    })
+}
 pub(super) fn lend(types: &Types<'_>, ty: &Ty, local: &str) -> Option<Lent> {
     let (owned, expr, mutable) = match ty {
         Ty::Ref(inner, m) if !matches!(**inner, Ty::Dyn(..)) => (
@@ -448,6 +469,14 @@ pub(super) fn lend(types: &Types<'_>, ty: &Ty, local: &str) -> Option<Lent> {
             *m,
         ),
         Ty::Str(Str::Borrowed) => ("String".into(), format!("&{local}"), false),
+        Ty::List(item, List::Slice) if has_ref_in_data(ty) => (
+            held(types, ty)?,
+            format!(
+                "&{local}.iter().map(|x|{}).collect::<Vec<_>>()",
+                reborrow(item, "*x")?
+            ),
+            false,
+        ),
         Ty::List(_, List::Slice) => (held(types, ty)?, format!("&{local}"), false),
         Ty::Option(inner) => match &**inner {
             Ty::Ref(t, m) => (
@@ -459,10 +488,10 @@ pub(super) fn lend(types: &Types<'_>, ty: &Ty, local: &str) -> Option<Lent> {
             Ty::Str(Str::Borrowed) | Ty::List(_, List::Slice) => {
                 (held(types, ty)?, format!("{local}.as_deref()"), false)
             }
-            _ if has_ref_in_data(ty) => return None,
+            _ if has_ref_in_data(ty) => (held(types, ty)?, reborrow(ty, local)?, false),
             _ => (held(types, ty)?, local.to_string(), true),
         },
-        _ if has_ref_in_data(ty) => return None,
+        _ if has_ref_in_data(ty) => (held(types, ty)?, reborrow(ty, local)?, false),
         _ => (held(types, ty)?, local.to_string(), true),
     };
     Some(Lent {

@@ -36,6 +36,8 @@ pub struct GamePoint {
     pub at_return: bool,
     /// Whether it has a raw form: listeners with the receiver and every parameter by its own type.
     pub raw: bool,
+    #[serde(skip)]
+    snapshot: bool,
     /// Full raw listener contract, including engine-typed parameters.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub raw_shape: Option<point_shape::RawShape>,
@@ -658,6 +660,7 @@ pub fn game_points(root: &Path) -> Result<Vec<GamePoint>, String> {
             ],
             at_return: shape.has_return(),
             raw: shape.raw,
+            snapshot: shape.snapshot_able(found.sig),
             raw_shape: shape
                 .raw
                 .then(|| point_shape::raw_shape(&shape, found.sig, found.owner.map(|(ty, _)| ty))),
@@ -932,12 +935,36 @@ pub(crate) fn records_selected(
     let dispatch = points.iter().map(|point| parse(&point.api[2]));
     let mut guest_functions = proc_macro2::TokenStream::new();
     let mut guest_entries = proc_macro2::TokenStream::new();
+    let mut raw_entries = proc_macro2::TokenStream::new();
+    let mut raw_places = proc_macro2::TokenStream::new();
+    let mut raw_listeners = proc_macro2::TokenStream::new();
     let mut api_places = proc_macro2::TokenStream::new();
     let mut layout = 0xcbf29ce484222325u64;
+    let snapshot = syn::parse_file(include_str!("../../horizon-mod-points/src/snapshot.rs"))
+        .expect("snapshot row schema");
+    for item in snapshot.items {
+        let schema = match item {
+            syn::Item::Type(alias) if alias.ident == "Row" => {
+                alias.ty.to_token_stream().to_string()
+            }
+            syn::Item::Fn(function) if function.sig.ident == "key" => {
+                function.block.to_token_stream().to_string()
+            }
+            _ => continue,
+        };
+        for byte in schema.bytes() {
+            layout = (layout ^ u64::from(byte)).wrapping_mul(0x100000001b3);
+        }
+    }
     for point in points {
         for byte in format!(
-            "{}:{}:{}:{}",
-            point.name, point.host, point.record_item, point.at_return
+            "{}:{}:{}:{}:{}:{:?}",
+            point.name,
+            point.host,
+            point.record_item,
+            point.at_return,
+            point.snapshot,
+            point.raw_shape
         )
         .bytes()
         {
@@ -964,7 +991,7 @@ pub(crate) fn records_selected(
                 #side
                 let mut args: #record = input.take()?;
                 let mut host = ::mod_api::wire::guest::Guest;
-                crate::guest::fire(place, listener, |function| {
+                crate::guest::fire(place, listener, false, |function| {
                     // SAFETY: head and return have the same checked host and record type.
                     let function = unsafe { ::std::mem::transmute::<*const (), listeners::#listener>(function) };
                     function(#passed &mut args);
@@ -975,6 +1002,25 @@ pub(crate) fn records_selected(
             }
         });
         }
+        let raw_function = quote::format_ident!("raw_point_{}", point.name);
+        if point.snapshot && enabled(point) {
+            let raw_listener =
+                quote::format_ident!("{}RowsListener", point_shape::camel(&point.name));
+            guest_functions.extend(quote! {
+                fn #raw_function(place: PointId, input: &mut ::mod_api::wire::Reader<'_>, out: &mut ::mod_api::wire::Writer) -> Result<(), ::mod_api::wire::WireError> {
+                    let listener: u32 = input.take()?;
+                    let rows: crate::snapshot::Rows = input.take()?;
+                    let mut args: #record = input.take()?;
+                    crate::guest::fire(place, listener, true, |function| {
+                        // SAFETY: the generated row constructor checked this record's exact type.
+                        let function = unsafe { ::std::mem::transmute::<*const (), raw_listeners::#raw_listener>(function) };
+                        function(crate::snapshot::Snapshot::new(&rows), &mut args);
+                    })?;
+                    out.put(&()); out.put(&args); Ok(())
+                }
+            });
+            raw_listeners.extend(quote! { pub type #raw_listener = fn(crate::snapshot::Snapshot<'_>, &mut #record); });
+        }
         for name in std::iter::once(point.name.clone())
             .chain(point.at_return.then(|| format!("{}_return", point.name)))
         {
@@ -982,8 +1028,25 @@ pub(crate) fn records_selected(
             let target = &point.target;
             let at_return = name.ends_with("_return") && name != point.name;
             api_places.extend(quote! { (PointId::#variant, #target, #at_return), });
+            if point.snapshot {
+                raw_places.extend(quote! { (PointId::#variant, #target, #at_return), });
+                if enabled(point) {
+                    let raw_listener =
+                        quote::format_ident!("{}RowsListener", point_shape::camel(&point.name));
+                    let constructor = quote::format_ident!("{name}");
+                    raw_listeners.extend(quote! {
+                        pub const fn #constructor(injection: &'static str, function: #raw_listener) -> crate::guest::RawListener {
+                            // SAFETY: the alias above checks this place's exact snapshot and record signature.
+                            unsafe { crate::guest::RawListener::new(PointId::#variant, injection, function as *const ()) }
+                        }
+                    });
+                }
+            }
             if selected.is_some_and(|names| !names.contains(&name)) {
                 continue;
+            }
+            if point.snapshot {
+                raw_entries.extend(quote! { table[PointId::#variant as usize] = Some((PointId::#variant, #raw_function as Dispatch)); });
             }
             guest_entries.extend(quote! {
                 table[PointId::#variant as usize] = Some((PointId::#variant, #function as Dispatch));
@@ -1003,11 +1066,19 @@ pub(crate) fn records_selected(
         /// API places as (place, target function, return phase), for manifest validation.
         #[doc(hidden)]
         pub const API_PLACES: &[(PointId, &str, bool)] = &[#api_places];
+        /// Raw places whose staged slots have snapshot readers.
+        #[doc(hidden)]
+        pub const RAW_PLACES: &[(PointId, &str, bool)] = &[#raw_places];
+        #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
+        #[allow(missing_docs)]
+        pub mod raw_listeners { use super::*; #raw_listeners }
         #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
         fn guest_dispatch(id: u32, input: &mut ::mod_api::wire::Reader<'_>, out: &mut ::mod_api::wire::Writer) -> Result<(), ::mod_api::wire::WireError> {
             if id == 0xBFFF_FFFF { out.put(&crate::guest::subscriptions()); return Ok(()); }
-            let index = id.checked_sub(0x8000_0000).ok_or(::mod_api::wire::WireError::Tag(id))? as usize;
-            let (place, function) = guest_exports::TABLE.get(index).copied().flatten().ok_or(::mod_api::wire::WireError::Tag(id))?;
+            let raw = id & 0xC000_0000 == 0xC000_0000;
+            let index = (id & 0x3FFF_FFFF) as usize;
+            let table = if raw { &guest_exports::RAW_TABLE } else { &guest_exports::TABLE };
+            let (place, function) = table.get(index).copied().flatten().ok_or(::mod_api::wire::WireError::Tag(id))?;
             function(place, input, out)
         }
         #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
@@ -1019,6 +1090,9 @@ pub(crate) fn records_selected(
                 let mut table = [None; POINT_COUNT];
                 #guest_entries
                 table
+            };
+            pub(super) const RAW_TABLE: [Option<(PointId, Dispatch)>; POINT_COUNT] = {
+                let mut table = [None; POINT_COUNT]; #raw_entries table
             };
             #guest_functions
         }
@@ -1060,6 +1134,7 @@ mod tests {
                 returns: "cancel",
                 at_return: true,
                 raw: false,
+                snapshot: false,
                 raw_shape: None,
                 listener: None,
                 return_listener: None,
@@ -1114,7 +1189,8 @@ mod tests {
                     "target": point.target,
                     "api": !at_return || point.at_return,
                     "raw_shape": point.raw_shape,
-                    "raw_status": if point.raw { "snapshot generator needed" } else { "no raw place" },
+                    "raw_status": if point.snapshot { "generated primitive rows" } else if point.raw { "staged nominal reader needed" } else { "no raw place" },
+                    "raw_snapshot": point.snapshot,
                 }));
             }
         }
@@ -1122,11 +1198,34 @@ mod tests {
             fs::write(path, serde_json::to_vec_pretty(&inventory).unwrap()).unwrap();
         }
         println!(
-            "{} functions; {} places; {} raw functions",
+            "{} functions; {} places; {} raw functions; {} generated raw snapshot functions",
             points.len(),
             inventory.len(),
-            points.iter().filter(|point| point.raw).count()
+            points.iter().filter(|point| point.raw).count(),
+            points.iter().filter(|point| point.snapshot).count()
         );
+        for class in ["plain", "callback", "unclassified"] {
+            let functions = points
+                .iter()
+                .filter_map(|p| p.raw_shape.as_ref())
+                .filter(|shape| shape.args.iter().any(|arg| arg.class == class))
+                .count();
+            let arguments = points
+                .iter()
+                .filter_map(|p| p.raw_shape.as_ref())
+                .flat_map(|shape| &shape.args)
+                .filter(|arg| arg.class == class)
+                .count();
+            println!("argument class {class}: {functions} functions; {arguments} arguments");
+        }
+        for class in ["plain", "borrowed_return", "callback", "unclassified"] {
+            let functions = points
+                .iter()
+                .filter_map(|p| p.raw_shape.as_ref())
+                .filter(|shape| shape.return_class == class)
+                .count();
+            println!("return class {class}: {functions} functions");
+        }
     }
 
     #[test]

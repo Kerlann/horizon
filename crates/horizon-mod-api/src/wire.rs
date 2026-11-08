@@ -106,22 +106,25 @@ impl std::error::Error for WireError {}
 pub struct Writer {
     bytes: Vec<u8>,
     error: Option<WireError>,
+    limit: Option<usize>,
 }
 
 impl Writer {
     pub fn new() -> Self {
         Self::default()
     }
-    /// Empties it, keeping its allocation.
+    /// Empties it, keeping its allocation and resetting any per-call error and byte limit.
     pub fn clear(&mut self) {
         self.bytes.clear();
         self.error = None;
+        self.limit = None;
     }
-    /// Takes `buffer` as its storage, emptied.
+    /// Takes `buffer` as its storage, emptied, resetting the error and byte limit.
     pub fn replace(&mut self, mut buffer: Vec<u8>) {
         buffer.clear();
         self.bytes = buffer;
         self.error = None;
+        self.limit = None;
     }
     /// The bytes written, leaving the writer's storage to the caller.
     pub fn into_bytes(self) -> Vec<u8> {
@@ -130,17 +133,47 @@ impl Writer {
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
+    /// Bound this call's encoded bytes. A refusal is recorded before any growth or copy.
+    /// A new writer has no limit; `clear` and `replace` remove it.
+    pub fn limit(&mut self, max_bytes: usize) {
+        self.limit = Some(max_bytes);
+        self.can_fit(0);
+    }
+    fn can_fit(&mut self, bytes: usize) -> bool {
+        if self.error.is_some() {
+            return false;
+        }
+        let fits = self.bytes.len().checked_add(bytes).is_some_and(|total| {
+            total <= self.limit.unwrap_or(isize::MAX as usize) && total <= isize::MAX as usize
+        });
+        if !fits {
+            self.fail(WireError::Length);
+        }
+        fits
+    }
     pub fn put_bytes(&mut self, bytes: &[u8]) {
-        self.bytes.extend_from_slice(bytes);
+        if self.can_fit(bytes.len()) {
+            self.bytes.extend_from_slice(bytes);
+        }
     }
     /// A string: its length, then its bytes.
     pub fn put_str(&mut self, text: &str) {
+        let Some(bytes) = text.len().checked_add(4) else {
+            self.fail(WireError::Length);
+            return;
+        };
+        if !self.can_fit(bytes) {
+            return;
+        }
         self.put_len(text.len());
         self.put_bytes(text.as_bytes());
     }
     /// A length or count.
     pub fn put_len(&mut self, len: usize) {
-        self.put(&u32::try_from(len).expect("a value longer than the wire carries"));
+        match u32::try_from(len) {
+            Ok(len) => self.put(&len),
+            Err(_) => self.fail(WireError::Length),
+        }
     }
     /// An optional borrowed value, written as the `Option` it stands for.
     pub fn put_opt<T: Put + ?Sized>(&mut self, value: Option<&T>) {
@@ -153,11 +186,15 @@ impl Writer {
         }
     }
     pub fn put<T: Put + ?Sized>(&mut self, value: &T) {
-        value.put_to(self);
+        if self.error.is_none() {
+            value.put_to(self);
+        }
     }
     /// Transfers owned resources while leaving plain data on the normal zero-copy path.
     pub fn put_owned<T: Wire>(&mut self, value: T) {
-        value.put_owned(self);
+        if self.error.is_none() {
+            value.put_owned(self);
+        }
     }
     /// The first encoding failure; callers refuse the call rather than sending partial bytes.
     pub fn error(&self) -> Option<WireError> {
@@ -167,6 +204,9 @@ impl Writer {
         self.error.get_or_insert(error);
     }
     pub fn put_resource(&mut self, value: Box<dyn std::any::Any>) {
+        if !self.can_fit(<Id as Wire>::MIN) {
+            return;
+        }
         match resources::store(value) {
             Ok(id) => self.put(&id),
             Err(error) => self.fail(error),
@@ -181,6 +221,18 @@ pub trait Record {
     fn encode(&self, out: &mut Writer);
     /// Applies one complete reply, refusing malformed or trailing bytes atomically.
     fn apply(&mut self, bytes: &[u8]) -> Result<(), WireError>;
+}
+
+/// A call record refused before it can be encoded, such as an oversized owned snapshot.
+/// It follows the normal Writer error path instead of sending a truncated call.
+pub struct Refused(pub WireError);
+impl Record for Refused {
+    fn encode(&self, out: &mut Writer) {
+        out.fail(self.0);
+    }
+    fn apply(&mut self, _: &[u8]) -> Result<(), WireError> {
+        Err(self.0)
+    }
 }
 
 impl<T: Wire> Record for T {
@@ -201,6 +253,9 @@ impl<T: Wire> Record for T {
 /// A hook record's writable fields, in declaration order. Sharing these tuple codecs avoids
 /// generating and compiling a separate native codec for every named point record.
 pub struct Fields<T>(pub T);
+
+/// A field which crosses with a record but is not a declared writeback destination.
+pub struct ReadOnly<T>(pub T);
 
 #[doc(hidden)]
 pub trait FieldSet {
@@ -230,6 +285,20 @@ impl<H: Wire, T: FieldSet> FieldSet for (&mut H, T) {
     }
     fn commit(&mut self, (head, tail): Self::Value) {
         *self.0 = head;
+        self.1.commit(tail);
+    }
+}
+
+impl<H: Wire, T: FieldSet> FieldSet for (ReadOnly<&H>, T) {
+    type Value = (H, T::Value);
+    fn encode(&self, out: &mut Writer) {
+        out.put(self.0.0);
+        self.1.encode(out);
+    }
+    fn take(input: &mut Reader<'_>) -> Result<Self::Value, WireError> {
+        Ok((input.take()?, T::take(input)?))
+    }
+    fn commit(&mut self, (_, tail): Self::Value) {
         self.1.commit(tail);
     }
 }

@@ -41,6 +41,55 @@ fn dump_members() {
 }
 
 #[test]
+#[ignore = "inter-mod plain functions: see inter-mod-functions.md"]
+fn real_library_dependency() {
+    let (Ok(library), Ok(dependent), Ok(std)) = (
+        std::env::var("HORIZON_WASM_LIBRARY"),
+        std::env::var("HORIZON_WASM_DEPENDENT"),
+        std::env::var("HORIZON_WASM_STD"),
+    ) else {
+        eprintln!("skipping: inter-mod wasm fixtures are not set");
+        return;
+    };
+    let mut packages = Vec::new();
+    let mut infos = Vec::new();
+    for path in [&library, &dependent] {
+        let path = std::path::Path::new(path);
+        let manifest = Package::read(path).unwrap().manifest;
+        infos.push(mod_api::PackageInfo::new(
+            manifest.id.clone(),
+            manifest.version.clone(),
+            mod_api::PackageKind::Code,
+            mod_api::Side::Both,
+            vec![manifest.id.clone()],
+            manifest.dependencies.keys().cloned().collect(),
+        ));
+        packages.push(WasmPackage {
+            manifest,
+            module: Package::read_wasm(path).unwrap(),
+        });
+    }
+    let loaded = load(&std::fs::read(std).unwrap(), packages);
+    assert!(loaded.refused.is_empty(), "{:?}", loaded.refused);
+    assert_eq!(loaded.mods.len(), 2);
+    loaded.initialize(&infos).unwrap();
+    mod_api::testing::with_mods(loaded.mods.into(), || {
+        mod_api::__private::install_parts(
+            mod_api::__private::mods(),
+            &mod_api::__private::part_tests::rule_schema(),
+        )
+        .unwrap();
+        mod_api::__private::mark_game_thread();
+        let mut entity = mod_api::ModBlockEntity::new(
+            "wasm_test_dependent:dependent".into(),
+            Default::default(),
+        );
+        mod_api::dispatch_block_entity_tick(&mut Quiet, [0, 64, 0], &mut entity);
+        assert_eq!(entity.data, [37], "dependent must call the library member");
+    });
+}
+
+#[test]
 fn real_member() {
     let (Ok(fixture), Ok(std)) = (
         std::env::var("HORIZON_WASM_FIXTURE"),

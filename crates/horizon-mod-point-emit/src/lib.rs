@@ -70,7 +70,10 @@ fn resolve<'a>(
         .iter()
         .filter(|entry| entry.access == Access::Api && entry.call.is_none())
         .map(|entry| {
-            if !matches!(entry.kind, Kind::Head | Kind::Return) {
+            if !matches!(
+                entry.kind,
+                Kind::Head | Kind::ModifyArg | Kind::Replace | Kind::Return
+            ) {
                 return Err(format!(
                     "{}: expected an API head/return injection",
                     entry.id
@@ -146,6 +149,14 @@ hash = "pin"
                 "        mod_points::listeners::tick_return(\"fixture\", 0, \"after\", mod_3::tail),\n"
             )
         );
+        for kind in [Kind::ModifyArg, Kind::Replace] {
+            let mut alternate = manifest.clone();
+            alternate.inject[0].kind = kind;
+            assert_eq!(
+                api(&alternate, &points, "mod_3::").unwrap()[0],
+                api(&manifest, &points, "mod_3::").unwrap()[0]
+            );
+        }
         let wasm = api(&manifest, &points, "original_mod::").unwrap();
         assert_eq!(
             wasm[0],

@@ -55,6 +55,23 @@ the Mods page. An optional dependency is built in with the Cargo feature of its 
 entry in `Cargo.toml` is `optional = true` under that id; an absent one is left out of the group at
 load, and `if_installed!` keeps the mod from calling it.
 
+## Injection points
+
+API-typed `[[inject]]` listeners use the same generated `mod_points` records and constructors as
+native listeners. The wasm build takes the pinned game's staged `points.json` as an explicit
+`--points` input when injections are declared. Only the declared places' guest codecs and dispatch
+functions are compiled into the member; the complete catalog still determines its layout hash.
+Listeners register in the host's ordinary point list, with the same priority, dependency order,
+owner enable flag and stop behavior as native listeners. Mixins remain native-only.
+
+Raw listeners read an owned per-call snapshot, never engine addresses or Rust memory layouts.
+Rows identify a node, its parent, a declaration-order field/index, a generated type key and a
+plain Wire value. Reads cannot mutate the snapshot. Declared mutable raw-record fields, including
+by-value arguments which native raw records expose as `&mut`, use checked, atomic writeback.
+Rejected replies apply no argument or outcome writes. The initial generated readers cover free
+functions with primitive arguments and unit/primitive returns; engine receivers, nominal types,
+callbacks and borrowed returns need staged catalog readers and are refused until those exist.
+
 ## ABI reference
 
 A dependency group consists of core wasm shared modules with `dylink.0`, not components.
@@ -75,6 +92,8 @@ Pointers and lengths below are wasm32 `u32` values. The game provides these impo
 Each guest exports:
 
 - `horizon_layout() -> u64`: the generated layout hash. A mismatch is refused.
+- `horizon_layout_ext() -> u64`, when `mod_points` is linked: the full point catalog and row-schema
+  layout hash. The loader checks it before accepting any listener.
 - `horizon_in(len) -> ptr`: the buffer into which the game writes the next call's input.
 - `horizon_hook(id) -> u64`: runs the generated export ID after the input is written. The high
   32 bits are the reply pointer and the low 32 bits its length; `u32::MAX` as the length denotes
@@ -83,8 +102,18 @@ Each guest exports:
 
 The reserved IDs are `INIT = 0xFFFF_FF00` (guest package-list initialization),
 `RELEASE = 0xFFFF_FF01` (guest handler IDs to release), and `HOST_RELEASE = 0xFFFF_FF02`
-(host object ID to release). Other IDs index the generated import or export table. A hook reply
+(host object ID to release), and `HOST_LOG = 0xFFFF_FF03` (a guest panic string, with no reply).
+Other IDs index the generated import or export table. A hook reply
 contains its return value followed by writable arguments in field order.
+
+Points use that same hook export, call arena and execution budget. API place IDs are
+`0x8000_0000 + place`; raw place IDs are `0xC000_0000 + place`. The subscription query
+`0xBFFF_FFFF` returns `(place, injection_id)` pairs, with bit 30 of the place marking raw access.
+Point call input starts with the `u32` subscription index. An API `HostSide` point then carries a
+server/client boolean; a raw call instead carries its flattened row list. Both then carry the
+listener record and reply with unit followed by the record; the host applies only fields which
+are writable at that place. Raw snapshots are
+bounded to 65,536 rows and 1 MiB of encoded plain values, independently of runtime group limits.
 
 Wire values use little-endian numbers; lengths and collection counts are `u32`, strings are a
 byte length followed by UTF-8 bytes, options have a byte tag (`0` or `1`), enums have a `u32`
@@ -95,10 +124,9 @@ strings per process. Execution, memory and table limits are enforced separately 
 
 ## In the game
 
-The game's wasm boundary is being rebuilt. Each dependency group uses shared memory and one copy
-of the standard library; its members are core wasm shared modules, not components. A layout mismatch
-or an unresolved dependency is refused and named on the Mods page. Until the new loader lands, the
-game refuses `mod.wasm`.
+Each dependency group uses shared memory and one copy of the standard library; its members are
+core wasm shared modules, not components. A layout mismatch or an unresolved dependency is refused
+and named on the Mods page.
 
 The game limits execution time, memory and table usage. A trap or limit hit disables the affected
 group. APIs marked `Not on wasm` in their Rust documentation cannot be used by wasm mods.

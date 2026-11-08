@@ -1,5 +1,18 @@
-use mod_api::wire::{Fields, Record, Writer};
+use mod_api::wire::{Fields, ReadOnly, Record, Writer};
 use std::borrow::Cow;
+
+#[test]
+fn readonly_fields_are_decoded_but_never_written_back() {
+    let original = 7u32;
+    let mut changed = false;
+    let mut fields = Fields((ReadOnly(&original), (&mut changed, ())));
+    let mut reply = Writer::new();
+    reply.put(&99u32);
+    reply.put(&true);
+    fields.apply(reply.bytes()).unwrap();
+    assert_eq!(original, 7);
+    assert!(changed);
+}
 
 #[test]
 fn fields_share_record_encoding_and_apply_atomically() {

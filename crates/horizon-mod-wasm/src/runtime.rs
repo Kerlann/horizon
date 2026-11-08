@@ -323,6 +323,12 @@ fn host_reply(mut caller: Caller<'_, State>, ptr: u32) -> wasmtime::Result<()> {
 }
 
 impl WasmMod {
+    pub(crate) fn same_group(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.running, &other.running)
+    }
+    pub(crate) fn mod_id(&self) -> &str {
+        &self.id
+    }
     pub(crate) fn is_stopped(&self) -> bool {
         self.running.poisoned.load(Ordering::Relaxed)
     }

@@ -22,6 +22,7 @@ pub struct Pen {
 }
 
 mod mod_points {
+    pub use ::mod_points::snapshot;
     use mod_api::ServerHost;
     use std::sync::Mutex;
     use std::sync::atomic::AtomicBool;

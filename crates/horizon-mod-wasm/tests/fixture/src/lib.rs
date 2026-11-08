@@ -5,6 +5,9 @@ pub struct Mod;
 
 #[mod_api::horizon_mod]
 impl Hooks for Mod {
+    fn server_stopped(&self, _: &mut dyn mod_api::ServerHost, _: &mut mod_api::ServerStoppedEvent) {
+    }
+
     fn register(&self, registrar: &mut dyn mod_api::Registrar, _: &mod_api::RegistrationContext) {
         let kind = registrar.block_entity_type("counter").blocks(&[]).build();
         registrar.block_entity_part(&kind, Counter).unwrap();

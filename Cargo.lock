@@ -2210,6 +2210,7 @@ dependencies = [
  "horizon-mod-api",
  "horizon-mod-api-gen",
  "horizon-mod-package",
+ "horizon-mod-point-emit",
  "horizon-mod-points",
  "log",
  "serde_json",

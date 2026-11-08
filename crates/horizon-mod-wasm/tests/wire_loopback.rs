@@ -137,6 +137,15 @@ fn __horizon_mod_hooks() -> Box<dyn Hooks> {
         fn subscribed(&self) -> &'static [Option<mod_api::HookId>] {
             &[]
         }
+        fn loot_drops(
+            &self,
+            _: &mut dyn mod_api::ServerHost,
+            event: &mut mod_api::LootDropsEvent<'_>,
+        ) {
+            assert_eq!(event.context.entity, Some((12, "test:mob")));
+            assert_eq!(event.context.table.len(), 300);
+            event.drops.clear();
+        }
         fn item_stacked_on_other(
             &self,
             _: &dyn LoopContext,
@@ -244,6 +253,36 @@ fn wire_loopback_machine_tick_uses_checked_snapshot_writeback() {
     );
     assert_eq!(entity.data, vec![8]);
     assert_eq!(entity.revision().changes(), before);
+}
+#[test]
+fn wire_loopback_borrowed_tuple_inside_optional_context() {
+    install_counter();
+    let table = "t".repeat(300);
+    let context: mod_api::NativeLootDrops = mod_api::__private::built::NativeLootDrops {
+        table: &table,
+        dimension: "minecraft:overworld",
+        origin: [0.; 3],
+        block: None,
+        entity: Some((12, "test:mob")),
+        player: None,
+        tool: None,
+        explosion: None,
+        used: false,
+    }
+    .into();
+    let mut drops = vec![mod_api::ItemStack::new(REGISTERED_ITEM.get().unwrap(), 1).unwrap()];
+    WasmMod {
+        subscribed: &[],
+        corrupt: false,
+    }
+    .loot_drops(
+        &mut guest::Guest,
+        &mut mod_api::LootDropsEvent {
+            context: &context,
+            drops: &mut drops,
+        },
+    );
+    assert!(drops.is_empty());
 }
 #[test]
 fn wire_loopback_nested_tuple_reference_writes_back() {
@@ -369,6 +408,89 @@ fn wire_loopback_owned_box_handlers_inside_result_and_vec() {
         }
     }
     assert_eq!(*trace.lock().unwrap(), vec![7, 0, 1, 2]);
+}
+#[test]
+fn wire_loopback_returned_frame_resource_uses_source_permissions() {
+    struct Start {
+        draws: i64,
+    }
+    impl mod_api::StructureRandom for Start {
+        fn next_long(&mut self) -> i64 {
+            self.draws += 1;
+            41 + self.draws
+        }
+        fn next_int_bound(&mut self, _: i32) -> i32 {
+            unreachable!()
+        }
+        fn next_float(&mut self) -> f32 {
+            unreachable!()
+        }
+        fn next_double(&mut self) -> f64 {
+            unreachable!()
+        }
+        fn next_boolean(&mut self) -> bool {
+            unreachable!()
+        }
+    }
+    impl mod_api::GenerationContext for Start {
+        fn random(&mut self) -> &mut dyn mod_api::StructureRandom {
+            self
+        }
+        fn chunk(&self) -> mod_api::ChunkPos {
+            unreachable!()
+        }
+        fn seed(&self) -> i64 {
+            unreachable!()
+        }
+        fn sea_level(&self) -> i32 {
+            unreachable!()
+        }
+        fn min_y(&self) -> i32 {
+            unreachable!()
+        }
+        fn max_y(&self) -> i32 {
+            unreachable!()
+        }
+        fn base_height(&mut self, _: i32, _: i32, _: mod_api::HeightmapType) -> i32 {
+            unreachable!()
+        }
+        fn base_columns(&mut self, _: i32, _: i32, _: &[mod_api::HeightmapType]) -> Vec<Vec<bool>> {
+            unreachable!()
+        }
+        fn noise_column(&mut self, _: i32, _: i32) -> mod_api::NoiseColumn {
+            unreachable!()
+        }
+        fn noise_biome(&mut self, _: [i32; 3]) -> mod_api::BiomeId {
+            unreachable!()
+        }
+        fn column_has_valid_biome(&mut self, _: i32, _: i32, _: i32, _: i32) -> bool {
+            unreachable!()
+        }
+        fn config(&self) -> Arc<serde_json::Value> {
+            unreachable!()
+        }
+    }
+    let mut start = Start { draws: 0 };
+    let mut cx = boundary::Cx::default();
+    let mut frame = boundary::Frame::default();
+    frame.set_generation_context_mut(&mut start);
+    cx.frames.push(frame);
+    let mut out = Writer::new();
+    let id = boundary::import_id("StructureRandom", "next_long").unwrap();
+    unsafe { boundary::serve(id, &mut cx, &[], &mut out) }.unwrap();
+    assert_eq!(Reader::decode::<i64>(out.bytes()).unwrap(), 42);
+    assert_eq!(start.draws, 1);
+    cx.frames.clear();
+    let mut frame = boundary::Frame::default();
+    frame.set_generation_context(&start);
+    cx.frames.push(frame);
+    out.clear();
+    assert!(matches!(
+        unsafe { boundary::serve(id, &mut cx, &[], &mut out) },
+        Err(boundary::ServeError::Missing(_))
+    ));
+    assert_eq!(start.draws, 1);
+    assert!(out.bytes().is_empty());
 }
 #[test]
 fn wire_loopback_bad_import_bytes_are_typed_errors() {

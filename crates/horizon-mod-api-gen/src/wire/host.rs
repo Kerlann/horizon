@@ -97,6 +97,26 @@ fn frame(surface: &mut super::Surface<'_>) -> Result<String, String> {
                     ));
                 }
             }
+            // A zero-argument accessor lends another frame resource. Resolve directly
+            // from a stored source pointer, not recursively through getters: cyclic
+            // accessor graphs cannot recurse when no source is present.
+            for method in &surface.methods {
+                let Ty::Dyn(target, ret_mut) = &method.ret else {
+                    continue;
+                };
+                if target != owner.rsplit("::").next().unwrap()
+                    || (mutable && !ret_mut)
+                    || !method.params.is_empty()
+                    || !super::IMPORTS.contains(&method.owner)
+                    || method.owner == *owner
+                    || super::REACHED.iter().any(|(o, ..)| *o == method.owner)
+                {
+                    continue;
+                }
+                let source = snake(method.owner);
+                let source_mut = method.receiver == Some(true);
+                choices.push(format!("self.{source}{filter}.map(|(p,_)| unsafe {{ (&{s}*p).{}() as &{m}dyn {path} }})",method.name,filter=if source_mut {".filter(|(_,m)|*m)"} else {""},s=if source_mut {"mut "} else {""},m=if mutable {"mut "} else {""}));
+            }
             let expr = choices.join(".or_else(|| ");
             let expr = format!("{expr}{}", ")".repeat(choices.len().saturating_sub(1)));
             writeln!(methods, "pub unsafe fn {name}{suffix}(&self) -> Result<&'static {m}dyn {path}, ServeError> {{ {expr}.ok_or(ServeError::Missing(\"{name}\")) }}", suffix=if mutable {"_mut"} else {""}, m=if mutable {"mut "} else {""}).unwrap();
@@ -277,7 +297,7 @@ pub(super) fn generate(surface: &mut super::Surface<'_>) -> Result<String, Strin
             || m.params.iter().any(|(_, t)| matches!(t, Ty::Ref(_, true)))
             || m.params.iter().any(|(_, t)| {
                 lifetime_def(types, t)
-                    || has_ref_in_data(t)
+                    || (has_ref_in_data(t) && lend(types, t, "p").is_none())
                     || (!matches!(t, Ty::Dyn(..)) && !resource(t) && held(types, t).is_none())
             })
         {
@@ -326,17 +346,7 @@ pub(super) fn generate(surface: &mut super::Surface<'_>) -> Result<String, Strin
             };
             args.push(arg);
         }
-        let answer: String = if matches!(&m.ret,Ty::Result(t,_) if matches!(&**t,Ty::Option(s) if matches!(**s,Ty::Str(super::ty::Str::Borrowed))))
-            || matches!(&m.ret, Ty::Option(t) if matches!(**t,Ty::Option(_)))
-        {
-            import_gaps.push(format!(
-                "{}{}::{}",
-                if is_held { "held-" } else { "" },
-                m.owner,
-                m.name
-            ));
-            continue;
-        } else if resource(&m.ret) {
+        let answer: String = if resource(&m.ret) {
             "out.put_owned(answer);".into()
         } else if matches!(&m.ret,Ty::Option(t) if matches!(**t,Ty::Str(super::ty::Str::Borrowed | super::ty::Str::Static) | Ty::Ref(..) | Ty::List(_,super::ty::List::Slice)))
         {

@@ -16,6 +16,7 @@
 include!(concat!(env!("OUT_DIR"), "/points_generated.rs"));
 
 mod registry;
+pub mod snapshot;
 #[cfg(target_arch = "wasm32")]
 pub use guest::register;
 #[cfg(not(target_arch = "wasm32"))]
@@ -30,7 +31,7 @@ pub mod guest;
 pub mod __private {
     use crate::PointId;
     pub use crate::registry::{
-        ApiKind, Forward, POINTS, PointHost, RawKind, SITES, SlotListener, seal, wrap,
+        ApiKind, Forward, POINTS, PointHost, RawForward, RawKind, SITES, SlotListener, seal, wrap,
     };
 
     /// Runs the checked API functions and forwarding endpoints under their owner guards.

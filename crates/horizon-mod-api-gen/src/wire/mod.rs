@@ -448,7 +448,7 @@ pub(super) fn surface<'a>(
 pub(super) fn frame_accessor(method: &Method) -> bool {
     method.params.is_empty()
         && IMPORTS.contains(&method.owner)
-        && matches!(&method.ret, Ty::Dyn(name, _) if REACHED.iter().any(|(owner, ..)| name == owner))
+        && matches!(&method.ret, Ty::Dyn(name, _) if IMPORTS.iter().any(|owner| owner.rsplit("::").next() == Some(name.as_str())))
 }
 
 /// The coverage check: every method of the bound traits crosses to wasm, or its doc says why

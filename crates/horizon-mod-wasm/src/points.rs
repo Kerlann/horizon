@@ -4,10 +4,11 @@ use horizon_mod_package::manifest::{
     Manifest,
     inject::{Access, Kind},
 };
-use mod_points::__private::{Forward, PointHost, SlotListener};
+use mod_points::__private::{Forward, PointHost, RawForward, SlotListener};
 use std::cell::RefCell;
 
 struct Endpoint {
+    owner: &'static str,
     module: WasmMod,
     listener: u32,
 }
@@ -30,6 +31,38 @@ impl Forward for Endpoint {
             }
             PointHost::None => {}
         }
+        self.invoke(
+            frame,
+            id,
+            |out| {
+                if let Some(server) = side {
+                    out.put(&server);
+                }
+            },
+            record,
+        );
+    }
+}
+
+impl RawForward for Endpoint {
+    fn forward(
+        &self,
+        id: u32,
+        rows: &[mod_points::snapshot::Row],
+        record: &mut dyn mod_api::wire::Record,
+    ) {
+        self.invoke(Frame::default(), id, |out| out.put(rows), record);
+    }
+}
+
+impl Endpoint {
+    fn invoke(
+        &self,
+        frame: Frame,
+        id: u32,
+        prefix: impl FnOnce(&mut mod_api::wire::Writer),
+        record: &mut dyn mod_api::wire::Record,
+    ) {
         let record = RefCell::new(record);
         self.module.call(
             CallClass::Hook,
@@ -38,9 +71,7 @@ impl Forward for Endpoint {
             None,
             |out| {
                 out.put(&self.listener);
-                if let Some(server) = side {
-                    out.put(&server);
-                }
+                prefix(out);
                 record.borrow().encode(out);
             },
             |input| {
@@ -49,6 +80,9 @@ impl Forward for Endpoint {
                 record.borrow_mut().apply(bytes)
             },
         );
+        if self.module.is_stopped() {
+            mod_points::stop(self.owner);
+        }
     }
 }
 
@@ -77,38 +111,62 @@ pub(crate) fn listen(manifest: &Manifest, module: &WasmMod) -> Result<(), String
         let inject = declared
             .remove(id.as_str())
             .ok_or_else(|| format!("undeclared point listener {id}"))?;
-        let Some(&(point, target, at_return)) = mod_points::API_PLACES
-            .iter()
-            .find(|(point, _, _)| *point as u32 == place)
-        else {
-            return Err(format!("{id}: unknown API place {place}"));
+        if place & 0x8000_0000 != 0 {
+            return Err(format!("{id}: invalid point subscription id"));
+        }
+        let raw = place & 0x4000_0000 != 0;
+        let place = place & 0x3FFF_FFFF;
+        if raw && !manifest.internals.is_empty() {
+            return Err(format!(
+                "{id}: declared engine internals require staged nominal snapshot readers"
+            ));
+        }
+        let catalog = if raw {
+            mod_points::RAW_PLACES
+        } else {
+            mod_points::API_PLACES
         };
-        if inject.access != Access::Api
-            || !matches!(inject.kind, Kind::Head | Kind::Return)
+        let Some(&(point, target, at_return)) =
+            catalog.iter().find(|(point, _, _)| *point as u32 == place)
+        else {
+            return Err(format!(
+                "{id}: no generated {} snapshot/record for place {place}",
+                if raw { "raw" } else { "API" }
+            ));
+        };
+        if inject.access != if raw { Access::Internals } else { Access::Api }
+            || !matches!(
+                inject.kind,
+                Kind::Head | Kind::ModifyArg | Kind::Replace | Kind::Return
+            )
             || (inject.kind == Kind::Return) != at_return
-            || inject.at != target
+            || horizon_mod_point_emit::plain_path(&inject.at)
+                != horizon_mod_point_emit::plain_path(target)
         {
             return Err(format!(
                 "{id}: listener does not match its declared API head/return target"
             ));
         }
-        slots.push((point, index as u32, inject.priority, id));
+        slots.push((point, index as u32, inject.priority, id, raw));
     }
     if let Some(id) = declared.keys().next() {
         return Err(format!("unfilled point listener {id}"));
     }
     let owner = Box::leak(manifest.id.clone().into_boxed_str());
-    for (place, listener, priority, id) in slots {
+    for (place, listener, priority, id, raw) in slots {
         let endpoint = Box::leak(Box::new(Endpoint {
+            owner,
             module: module.clone(),
             listener,
         }));
         let id = Box::leak(id.into_boxed_str());
-        mod_points::register(
-            &SlotListener::forwarded(owner, place, endpoint, 0x8000_0000 + place as u32)
-                .ordered(priority, id),
-        )
-        .map_err(|error| error.to_string())?;
+        let slot = if raw {
+            SlotListener::snapshot(owner, place, endpoint, 0xC000_0000 + place as u32)
+                .map_err(|error| error.to_string())?
+        } else {
+            SlotListener::forwarded(owner, place, endpoint, 0x8000_0000 + place as u32)
+        };
+        mod_points::register(&slot.ordered(priority, id)).map_err(|error| error.to_string())?;
     }
     Ok(())
 }

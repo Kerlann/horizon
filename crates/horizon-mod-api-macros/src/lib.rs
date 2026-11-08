@@ -430,6 +430,96 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
         };
         quote!(#ty { #(#fields,)* #outcome })
     };
+    let snapshot = |at_return: bool| {
+        if !shape.snapshot_able(&function.sig) {
+            return quote!();
+        }
+        let raw_fields = point_shape::raw_fields(&function.sig);
+        let contract = point_shape::raw_shape(&shape, &function.sig, None);
+        let writable_outcome = contract.outcome_record_mutable == Some(true);
+        let rows = if at_return {
+            let ty = match &function.sig.output {
+                syn::ReturnType::Default => "()".to_string(),
+                syn::ReturnType::Type(_, ty) => quote!(#ty).to_string(),
+            };
+            quote!(__snapshot.value(Some(__root), 0, const { mod_points::snapshot::key(#ty) }, &__result)?;)
+        } else {
+            let rows = raw_fields.iter().enumerate().map(|(index, field)| {
+                let index = index as u32;
+                let ty = &field.ty;
+                let ty = quote!(#ty).to_string();
+                let place = &places[&field.input];
+                quote!(__snapshot.value(Some(__root), #index, const { mod_points::snapshot::key(#ty) }, &#place)?;)
+            });
+            quote!(#(#rows)*)
+        };
+        let (prepare, outcome, apply) = match (&shape.returns, at_return) {
+            (point_shape::Returns::Value(_), true) => (
+                quote!(let mut __snapshot_result = Some(__result);),
+                if writable_outcome {
+                    quote!(&mut __snapshot_result)
+                } else {
+                    quote!(mod_api::wire::ReadOnly(&__snapshot_result))
+                },
+                quote!(if let Some(__value) = __snapshot_result {
+                    __result = __value;
+                }),
+            ),
+            (point_shape::Returns::Value(_), false) => (
+                quote!(),
+                if writable_outcome {
+                    quote!(&mut #result_place)
+                } else {
+                    quote!(mod_api::wire::ReadOnly(&#result_place))
+                },
+                quote!(),
+            ),
+            (_, true) => (
+                quote!(),
+                quote!(mod_api::wire::ReadOnly(&#cancel)),
+                quote!(),
+            ),
+            (_, false) => (
+                quote!(),
+                if writable_outcome {
+                    quote!(&mut #cancel)
+                } else {
+                    quote!(mod_api::wire::ReadOnly(&#cancel))
+                },
+                quote!(),
+            ),
+        };
+        let fields = raw_fields.iter().zip(&contract.args).rev().fold(
+            quote!((#outcome, ())),
+            |tail, (field, metadata)| {
+                if at_return || !metadata.record_mutable {
+                    let name = &field.name;
+                    quote!((mod_api::wire::ReadOnly(&__args.#name), #tail))
+                } else {
+                    let place = &places[&field.input];
+                    quote!((&mut #place, #tail))
+                }
+            },
+        );
+        quote! {
+            #prepare
+            let mut __snapshot = mod_points::snapshot::Builder::default();
+            let __rows = (|| -> Result<_, mod_api::wire::WireError> {
+                let __root = __snapshot.node(None, 0, const { mod_points::snapshot::key("raw-call") })?;
+                #rows
+                Ok(__snapshot.finish())
+            })();
+            match __rows {
+                Ok(__rows) => {
+                    __endpoint.forward(__index, &__rows, &mut mod_api::wire::Fields(#fields));
+                    #apply
+                }
+                Err(__error) => __endpoint.forward(__index, &[], &mut mod_api::wire::Refused(__error)),
+            }
+        }
+    };
+    let head_snapshot = snapshot(false);
+    let return_snapshot = snapshot(true);
     let fire = |variant: &syn::Ident, method: &syn::Ident, api: bool| {
         let name = method.to_string();
         let api = api.then(|| {
@@ -453,9 +543,7 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
                                 )
                             }
                         }
-                        mod_points::__private::RawKind::Indexed(__function, __index) => {
-                            unsafe { __function(mod_points::PointId::#variant as usize, __index, #erased_receiver, &mut #raw_record as *mut _ as *mut ()) };
-                        }
+                        mod_points::__private::RawKind::Snapshot(__endpoint, __index) => { #head_snapshot }
                         mod_points::__private::RawKind::Erased(__function) => {
                             // SAFETY: this slot supplies its exact receiver and raw record types.
                             unsafe {
@@ -549,9 +637,7 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
                                 )
                             }
                         }
-                        mod_points::__private::RawKind::Indexed(__function, __index) => {
-                            unsafe { __function(mod_points::PointId::#variant as usize, __index, #erased_receiver, &mut __result as *mut _ as *mut ()) };
-                        }
+                        mod_points::__private::RawKind::Snapshot(__endpoint, __index) => { #return_snapshot }
                         mod_points::__private::RawKind::Erased(__function) => {
                             // SAFETY: this slot supplies its exact receiver and return types.
                             unsafe {

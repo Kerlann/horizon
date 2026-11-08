@@ -488,10 +488,7 @@ impl Shape {
             && !self.raw_only
             && self.receiver == Receiver::None
             && raw_fields(sig).iter().all(|field| scalar(&field.ty))
-            && matches!(
-                &self.returns,
-                Returns::Unit | Returns::UnitResult | Returns::Value(_)
-            )
+            && matches!(&self.returns, Returns::Unit | Returns::Value(_))
     }
 
     /// The record fields as a shared shape codec's nested mutable field list.

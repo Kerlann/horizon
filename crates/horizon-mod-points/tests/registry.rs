@@ -122,7 +122,7 @@ fn one_list_registered_sealed_and_stopped() {
                 assert_eq!(function, raw_listener as *const ());
                 order.push("typed");
             }
-            RawKind::Indexed(..) => unreachable!(),
+            RawKind::Snapshot(..) => unreachable!(),
             RawKind::Erased(function) => {
                 assert_eq!(function as usize, erased_listener as *const () as usize);
                 order.push("erased");
