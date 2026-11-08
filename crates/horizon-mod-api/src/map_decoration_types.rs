@@ -10,6 +10,7 @@ pub struct MapDecorationType {
     pub id: String,
     /// The GUI atlas sprite that draws it (`MapDecorationType.assetId`): a pack's texture or a
     /// mod's runtime sprite (`register_runtime_sprites`), such as `mymod:gui/treasure`.
+    /// A sprite used by a vanilla decoration or another mod type is refused.
     pub sprite: String,
     /// Whether it shows on a map in an item frame and on the cartography table's screen
     /// (`showOnItemFrame`); a held map shows every decoration.

@@ -677,48 +677,8 @@ pub(super) fn map_id(stack: &ItemStack) -> Option<i32> {
     stack.data().and_then(|d| d.map_id)
 }
 /// `MapDecorationTypes` Horizon draws: (type, sprite).
-const DECORATION_TYPES: [(&str, &str); 40] = [
-    ("player", "map/decorations/player"),
-    ("frame", "map/decorations/frame"),
-    ("red_marker", "map/decorations/red_marker"),
-    ("blue_marker", "map/decorations/blue_marker"),
-    ("target_x", "map/decorations/target_x"),
-    ("target_point", "map/decorations/target_point"),
-    ("player_off_map", "map/decorations/player_off_map"),
-    ("player_off_limits", "map/decorations/player_off_limits"),
-    ("mansion", "map/decorations/woodland_mansion"),
-    ("monument", "map/decorations/ocean_monument"),
-    ("banner_white", "map/decorations/white_banner"),
-    ("banner_orange", "map/decorations/orange_banner"),
-    ("banner_magenta", "map/decorations/magenta_banner"),
-    ("banner_light_blue", "map/decorations/light_blue_banner"),
-    ("banner_yellow", "map/decorations/yellow_banner"),
-    ("banner_lime", "map/decorations/lime_banner"),
-    ("banner_pink", "map/decorations/pink_banner"),
-    ("banner_gray", "map/decorations/gray_banner"),
-    ("banner_light_gray", "map/decorations/light_gray_banner"),
-    ("banner_cyan", "map/decorations/cyan_banner"),
-    ("banner_purple", "map/decorations/purple_banner"),
-    ("banner_blue", "map/decorations/blue_banner"),
-    ("banner_brown", "map/decorations/brown_banner"),
-    ("banner_green", "map/decorations/green_banner"),
-    ("banner_red", "map/decorations/red_banner"),
-    ("banner_black", "map/decorations/black_banner"),
-    ("red_x", "map/decorations/red_x"),
-    ("village_desert", "map/decorations/desert_village"),
-    ("village_plains", "map/decorations/plains_village"),
-    ("village_savanna", "map/decorations/savanna_village"),
-    ("village_snowy", "map/decorations/snowy_village"),
-    ("village_taiga", "map/decorations/taiga_village"),
-    ("jungle_temple", "map/decorations/jungle_temple"),
-    ("swamp_hut", "map/decorations/swamp_hut"),
-    ("trial_chambers", "map/decorations/trial_chambers"),
-    ("abandoned_camp", "map/decorations/abandoned_camp"),
-    ("ancient_city", "map/decorations/ancient_city"),
-    ("desert_pyramid", "map/decorations/desert_pyramid"),
-    ("mineshaft", "map/decorations/mineshaft"),
-    ("ocean_ruin_warm", "map/decorations/warm_ocean_ruins"),
-];
+const DECORATION_TYPES: [(&str, &str); 40] = horizon_client::map_decoration_types::VANILLA_TYPES;
+
 /// `MapDecorationType.showOnItemFrame` is false for the player arrows and the two markers.
 /// `MapRenderer.render`'s pose for decoration `d` in map pixels (0..128,
 /// y down) at depth `z`: its quad is (-1, -1) to (1, 1) under it.
@@ -1979,6 +1939,28 @@ mod tests {
         assert!(
             (at.x - 74.0).abs() < 0.6 && (at.y - 49.0).abs() < 0.6,
             "{at:?}"
+        );
+    }
+
+    #[test]
+    fn reviewer_map_registration_preserves_vanilla_and_mod_counting() {
+        horizon_client::map_decoration_types::register(vec![
+            mod_api::MapDecorationType {
+                id: "reviewer:custom".into(),
+                sprite: "reviewer:gui/custom".into(),
+                show_on_item_frame: true,
+            },
+            mod_api::MapDecorationType {
+                id: "reviewer:player_alias".into(),
+                sprite: PLAYER.into(),
+                show_on_item_frame: true,
+            },
+        ]);
+        assert!(!tracks_count("reviewer:gui/custom"));
+        assert_eq!(decoration_sprite("reviewer:missing"), None);
+        assert!(
+            !shown_on_frame(PLAYER),
+            "a mod must not change vanilla player frame visibility"
         );
     }
 
