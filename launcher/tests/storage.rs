@@ -46,6 +46,16 @@ impl Home {
         }
         command.output().unwrap()
     }
+    fn refuse(&self, row: &str) {
+        let output = self.run(&["storage", "--clear", row]);
+        assert!(!output.status.success(), "{output:?}");
+        assert!(
+            String::from_utf8_lossy(&output.stderr).contains(
+                "Game cache cleanup is unavailable because running games cannot be reliably excluded."
+            ),
+            "{output:?}"
+        );
+    }
     fn clear(&self, row: &str) -> serde_json::Value {
         let output = self.run(&["storage", "--clear", row]);
         assert!(output.status.success(), "{output:?}");
@@ -76,32 +86,26 @@ fn trust_native_code_flag_persists_install_consent() {
 }
 
 #[test]
-fn build_files_clear_selects_target_not_worlds_or_prebuilt_games() {
+fn build_files_refuse_without_touching_targets_sources_or_player_data() {
     let home = Home::new();
     let world = home.file("launcher/worlds/precious/level.dat", b"world");
     let game_world = home.file("game/worlds/precious/level.dat", b"world");
     let output = home.file("launcher/native/target/fast/output", &[7; 8192]);
     let source = home.file("launcher/native/source/rev/lib.rs", b"source");
     let prebuilt = home.file("launcher/native/prebuilt/rev/game", b"prebuilt");
-    let report = home.clear("build-files");
+    home.refuse("build-files");
+    home.refuse("prebuilt-games");
     assert_eq!(fs::read(prebuilt).unwrap(), b"prebuilt");
-    assert!(!output.exists());
-    assert!(!source.exists());
-    let row = report["rows"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|row| row["category"] == "build-files")
-        .unwrap();
-    assert!(row["freed_bytes"].as_u64().unwrap() > 0);
-    home.clear("all");
+    assert_eq!(fs::read(output).unwrap(), vec![7; 8192]);
+    assert_eq!(fs::read(source).unwrap(), b"source");
+    home.refuse("all");
     assert_eq!(fs::read(world).unwrap(), b"world");
     assert_eq!(fs::read(game_world).unwrap(), b"world");
 }
 
 #[cfg(unix)]
 #[test]
-fn running_unplayed_version_is_excluded_until_its_process_exits() {
+fn running_unplayed_version_is_excluded_even_after_its_process_exits() {
     use std::process::Stdio;
     let home = Home::new();
     home.file("launcher/versions/v0.0.1/.installed", b"");
@@ -132,9 +136,9 @@ fn running_unplayed_version_is_excluded_until_its_process_exits() {
     );
     process.kill().unwrap();
     process.wait().unwrap();
-    home.clear("spare-game-builds");
-    assert!(!game.exists());
-    home.clear("all");
+    home.refuse("spare-game-builds");
+    assert_eq!(fs::read(game).unwrap(), b"running");
+    home.refuse("all");
     assert!(
         played.exists(),
         "Clear all selected an instance-pinned native version"
@@ -150,7 +154,7 @@ impl Home {
 
 #[cfg(unix)]
 #[test]
-fn instance_caches_are_preserved_while_running_and_cleared_when_idle() {
+fn instance_caches_are_preserved_while_running_and_when_idle() {
     use std::process::Stdio;
     let home = Home::new();
     home.installed_version();
@@ -170,8 +174,8 @@ fn instance_caches_are_preserved_while_running_and_cleared_when_idle() {
     );
     process.kill().unwrap();
     process.wait().unwrap();
-    home.clear("other-caches");
-    assert!(!cache.exists(), "idle instance cache was not selected");
+    home.refuse("other-caches");
+    assert_eq!(fs::read(cache).unwrap(), b"active instance cache");
 }
 
 #[test]
@@ -191,7 +195,7 @@ fn unresolved_instance_caches_are_never_selected() {
 }
 
 #[test]
-fn retention_removes_only_reports_older_than_fourteen_days_and_keeps_the_newest() {
+fn report_cleanup_refuses_and_retains_old_recent_and_newest_reports() {
     use std::time::{Duration, SystemTime};
     let home = Home::new();
     home.installed_version();
@@ -211,10 +215,35 @@ fn retention_removes_only_reports_older_than_fourteen_days_and_keeps_the_newest(
             .set_times(fs::FileTimes::new().set_modified(modified))
             .unwrap();
     }
-    home.clear("other-caches");
+    // Inventory still selects only the two old, non-newest reports.
+    #[cfg(target_os = "linux")]
+    {
+        use std::os::unix::fs::MetadataExt;
+        let output = home.run(&["storage"]);
+        assert!(output.status.success(), "{output:?}");
+        let report: serde_json::Value = serde_json::from_slice(&output.stdout).unwrap();
+        let row = report["rows"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|row| row["category"] == "other-caches")
+            .unwrap();
+        let selected_bytes: u64 = ["logs/old.log", "crash-reports/old.txt"]
+            .iter()
+            .map(|name| {
+                fs::metadata(home.0.path().join("game").join(name))
+                    .unwrap()
+                    .blocks()
+                    * 512
+            })
+            .sum();
+        assert!(selected_bytes > 0);
+        assert_eq!(row["bytes"], selected_bytes);
+    }
+    home.refuse("other-caches");
     assert!(
-        !home.0.path().join("game/logs/old.log").exists(),
-        "14.5-day log was not cleared"
+        home.0.path().join("game/logs/old.log").exists(),
+        "14.5-day log was cleared despite refusal"
     );
     assert!(
         home.0.path().join("game/logs/recent.log").exists(),
@@ -225,8 +254,8 @@ fn retention_removes_only_reports_older_than_fourteen_days_and_keeps_the_newest(
         "latest log was cleared"
     );
     assert!(
-        !home.0.path().join("game/crash-reports/old.txt").exists(),
-        "old crash report was not cleared"
+        home.0.path().join("game/crash-reports/old.txt").exists(),
+        "old crash report was cleared despite refusal"
     );
     assert!(
         home.0.path().join("game/crash-reports/newest.txt").exists(),
@@ -235,14 +264,14 @@ fn retention_removes_only_reports_older_than_fourteen_days_and_keeps_the_newest(
 }
 
 #[test]
-fn all_clears_other_caches_but_never_worlds_or_mod_packages() {
+fn all_refuses_and_retains_caches_worlds_and_mod_packages() {
     let home = Home::new();
     home.installed_version();
     let cache = home.file("game/.horizon-cache/output", b"cache");
     let world = home.file("game/worlds/precious/level.dat", b"world");
     let package = home.file("game/horizon-mods/precious.hmod", b"mod package");
-    home.clear("all");
-    assert!(!cache.exists(), "Clear all skipped Other caches");
+    home.refuse("all");
+    assert_eq!(fs::read(cache).unwrap(), b"cache");
     assert_eq!(
         fs::read(world).unwrap(),
         b"world",
@@ -282,7 +311,7 @@ fn symlink_named_instance_is_refused_without_touching_its_outside_target() {
 
 #[cfg(target_os = "linux")]
 #[test]
-fn hundreds_of_reports_and_jars_fit_the_descriptor_budget_and_clear_repeatedly() {
+fn hundreds_of_reports_and_jars_fit_the_descriptor_budget_and_refuse_repeatedly() {
     let home = Home::new();
     home.installed_version();
     let old = std::time::SystemTime::now() - std::time::Duration::from_secs(15 * 86400);
@@ -301,15 +330,72 @@ fn hundreds_of_reports_and_jars_fit_the_descriptor_budget_and_clear_repeatedly()
         report.status.success(),
         "read-only report exceeded 256 FDs: {report:?}"
     );
-    home.clear("other-caches");
-    home.clear("other-caches");
-    assert!(!home.0.path().join("game/jars/399.jar").exists());
+    home.refuse("other-caches");
+    home.refuse("other-caches");
+    assert_eq!(
+        fs::read(home.0.path().join("game/jars/399.jar")).unwrap(),
+        b"unused jar"
+    );
     assert_eq!(
         fs::read_dir(home.0.path().join("game/logs"))
             .unwrap()
             .filter_map(Result::ok)
             .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "log"))
             .count(),
-        1
+        400
     );
+    assert_eq!(
+        fs::read_dir(home.0.path().join("game/jars"))
+            .unwrap()
+            .count(),
+        400
+    );
+}
+
+#[test]
+fn private_build_tools_still_clear_and_report_freed_bytes() {
+    let home = Home::new();
+    let rust = home.file("launcher/rust/toolchain/bin/rustc", &[1; 8192]);
+    let cargo = home.file("launcher/cargo/registry/cache/output", &[2; 8192]);
+    let scratch = home.file("launcher/tmp/output", &[3; 8192]);
+    let lock_path = home.file("launcher/cargo/.package-cache", b"");
+    let lock = fs::File::options()
+        .read(true)
+        .write(true)
+        .open(lock_path)
+        .unwrap();
+    lock.lock().unwrap();
+    let busy = home.run(&["storage", "--clear", "rust-compiler"]);
+    assert!(!busy.status.success(), "{busy:?}");
+    assert_eq!(fs::read(&cargo).unwrap(), vec![2; 8192]);
+    drop(lock);
+    let report = home.clear("rust-compiler");
+    for path in [rust, cargo, scratch] {
+        assert!(!path.exists(), "{path:?}");
+    }
+    let row = report["rows"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|row| row["category"] == "rust-compiler")
+        .unwrap();
+    assert!(row["freed_bytes"].as_u64().unwrap() > 0);
+    assert_eq!(row["remaining_bytes"], 0);
+}
+
+#[test]
+fn explicit_version_removal_refuses_before_changing_install_metadata() {
+    let home = Home::new();
+    let marker = home.file("launcher/versions/spare/.installed", b"installed");
+    let game = home.file("launcher/versions/spare/game", b"game binary");
+    let output = home.run(&["remove", "spare"]);
+    assert!(!output.status.success(), "{output:?}");
+    assert!(
+        String::from_utf8_lossy(&output.stderr).contains(
+            "Game cache cleanup is unavailable because running games cannot be reliably excluded."
+        ),
+        "{output:?}"
+    );
+    assert_eq!(fs::read(marker).unwrap(), b"installed");
+    assert_eq!(fs::read(game).unwrap(), b"game binary");
 }
