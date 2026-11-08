@@ -257,8 +257,6 @@
   "Game internals must be declared: run cargo horizon-mod internals sync in the mod's folder, then build again.": "Game internals must be declared: run cargo horizon-mod internals sync in the mod's folder, then build again.",
   "E_INTERNAL_PATH: {path} cannot be re-exported as a declared internal; declare its types or free functions instead.": "E_INTERNAL_PATH: {path} cannot be re-exported as a declared internal; declare its types or free functions instead.",
   "E_NOT_RAW: {mod}: {target} has no raw form: it is generic or takes impl Trait.": "E_NOT_RAW: {mod}: {target} has no raw form: it is generic or takes impl Trait.",
-  "E_NOT_SITE: {mod}: add `{line}` to crates/horizon-mod-api-gen/slots/{mod}.txt and rebuild the game; this call is not a compiled-in site.": "E_NOT_SITE: {mod}: add `{line}` to crates/horizon-mod-api-gen/slots/{mod}.txt and rebuild the game; this call is not a compiled-in site.",
-  "E_SITE_KIND: {mod}: injection {injection}: WRAP_WITH_CONDITION requires a unit-returning call.": "E_SITE_KIND: {mod}: injection {injection}: WRAP_WITH_CONDITION requires a unit-returning call.",
   "Easy": "Jednoduché",
   "Edit instance": "Upraviť inštanciu",
   "Edit {name}": "Upraviť {name}",
