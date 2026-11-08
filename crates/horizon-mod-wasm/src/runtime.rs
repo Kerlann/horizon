@@ -28,6 +28,7 @@ use wasmtime::{
 struct BoundaryProfile {
     profiler: Option<wasmtime::GuestProfiler>,
     path: std::path::PathBuf,
+    calls: u64,
 }
 #[cfg(feature = "boundary-profile")]
 impl Drop for BoundaryProfile {
@@ -494,21 +495,32 @@ impl WasmMod {
             group.store.data_mut().profile = Some(BoundaryProfile {
                 profiler: Some(profiler),
                 path: path.into(),
+                calls: 0,
             });
             group.store.call_hook(|mut store, kind| {
                 if let Some(mut profile) = store.data_mut().profile.take() {
-                    profile.profiler.as_mut().unwrap().call_hook(&store, kind);
+                    if let Some(profiler) = profile.profiler.as_mut() {
+                        profiler.call_hook(&store, kind);
+                        if matches!(kind, wasmtime::CallHook::ReturningFromWasm) {
+                            profile.calls += 1;
+                        }
+                        // A game retains loaded modules until process exit. Finish explicitly
+                        // rather than relying on their destructor to run at shutdown.
+                        if profile.calls == 200_000 {
+                            let profiler = profile.profiler.take().unwrap();
+                            let file = std::fs::File::create(&profile.path)?;
+                            profiler.finish(file)?;
+                        }
+                    }
                     store.data_mut().profile = Some(profile);
                 }
                 Ok(())
             });
             group.store.epoch_deadline_callback(|mut store| {
                 if let Some(mut profile) = store.data_mut().profile.take() {
-                    profile
-                        .profiler
-                        .as_mut()
-                        .unwrap()
-                        .sample(&store, Duration::from_millis(1));
+                    if let Some(profiler) = profile.profiler.as_mut() {
+                        profiler.sample(&store, Duration::from_millis(1));
+                    }
                     store.data_mut().profile = Some(profile);
                 }
                 let left = store.data().epochs_left;
