@@ -5653,7 +5653,7 @@ mod world_spawn_sync_tests {
             game.level.world_spawn = None;
             let personal = horizon_core::geometry::Vec3::new(96.5, 145.0, -31.5);
             game.spawn = Some(personal);
-            for (x, z) in [(6, -2), (-1, 0)] {
+            for (x, z) in [(0, 0), (6, -2), (-1, 0)] {
                 game.world
                     .chunks
                     .insert((x, z), Arc::new(horizon_client::chunk::Chunk::empty(x, z)));
