@@ -478,7 +478,6 @@ pub(super) struct Writeback {
     pub(super) owned: String,
     pub(super) reference: bool,
     pub(super) optional: bool,
-    pub(super) by_ref: bool,
     pub(super) view: bool,
 }
 /// Writable leaves in wire order, shared by the guest's reply and host's atomic apply.
@@ -491,9 +490,7 @@ pub(super) fn writeback_fields(
     if frame_cases(types, def).is_some() {
         return Some(Vec::new());
     }
-    let super::ty::Kind::Record(fields) = &types.defs[def].kind else {
-        return None;
-    };
+    let fields = types.defs[def].kind.fields()?;
     let mut own = Vec::new();
     let mut refs = Vec::new();
     for (i, f) in fields.iter().enumerate() {
@@ -503,7 +500,7 @@ pub(super) fn writeback_fields(
         }
         let (inner, m) = match &f.ty {
             Ty::Ref(t, m) => (&**t, *m),
-            ty => (ty, false),
+            ty => (ty, true),
         };
         if let Ty::Named(d) = inner
             && frame_cases(types, *d).is_some()
@@ -520,7 +517,6 @@ pub(super) fn writeback_fields(
                     owned: rust_ty(types, &view.snapshot, false),
                     reference: false,
                     optional: false,
-                    by_ref: false,
                     view: true,
                 });
             }
@@ -544,7 +540,6 @@ pub(super) fn writeback_fields(
                 owned: lent.owned,
                 reference: matches!(f.ty, Ty::Ref(_, true)),
                 optional: matches!(&f.ty,Ty::Option(t) if matches!(**t,Ty::Ref(_,true))),
-                by_ref,
                 view: false,
             };
             if by_ref {
@@ -599,9 +594,7 @@ fn borrowed(
             format!("out.put(&{name}.__wire_snapshot());"),
         ));
     }
-    let super::ty::Kind::Record(fields) = &d.kind else {
-        return None;
-    };
+    let fields = d.kind.fields()?;
     let (mut read, mut build, mut back) = (String::new(), Vec::new(), String::new());
     for (i, f) in fields.iter().enumerate() {
         let local = format!("{name}_{i}");
@@ -618,7 +611,7 @@ fn borrowed(
         // An event inside the event is read the same way, down to its own fields.
         let nested = match &f.ty {
             Ty::Ref(t, m) => Some((&**t, *m, true)),
-            ty => Some((ty, false, false)),
+            ty => Some((ty, mutable, false)),
         };
         if let Some((Ty::Named(d), m, by_ref)) = nested
             && types.defs[*d].lifetimes != 0
@@ -650,18 +643,22 @@ fn borrowed(
         build.push(format!("{}: {}", f.rust, lent.expr));
     }
     for leaf in writeback_fields(types, def, name, mutable)? {
-        write!(
-            back,
-            "out.put(&{});",
-            if leaf.view {
-                format!("{}.__wire_snapshot()", leaf.path)
-            } else if leaf.by_ref {
-                leaf.local
-            } else {
-                leaf.path
-            }
-        )
-        .unwrap();
+        if leaf.optional {
+            write!(back, "out.put_opt({}.as_deref());", leaf.path).unwrap();
+        } else {
+            write!(
+                back,
+                "out.put(&{});",
+                if leaf.view {
+                    format!("{}.__wire_snapshot()", leaf.path)
+                } else if leaf.reference {
+                    format!("*{}", leaf.path)
+                } else {
+                    leaf.path
+                }
+            )
+            .unwrap();
+        }
     }
     let m = if mutable { "mut " } else { "" };
     read.push_str(&format!(

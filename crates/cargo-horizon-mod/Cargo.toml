@@ -17,6 +17,7 @@ pkg-fmt = "tgz"
 [dependencies]
 cap-std = "3.4.6"
 horizon-mod-package = { path = "../horizon-mod-package", default-features = false, features = ["index", "prebuilt"] }
+horizon-mod-point-emit = { path = "../horizon-mod-point-emit" }
 horizon-port-pack = { path = "../horizon-port-pack" }
 serde_json = "1.0.151"
 sha2 = "0.10"

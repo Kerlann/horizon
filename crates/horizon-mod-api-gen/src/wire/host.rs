@@ -2,11 +2,7 @@
 //! `fn call<R>(&self, class: CallClass, frame: Frame, id: u32, handler: Option<Id>,
 //! encode: impl FnOnce(&mut Writer), decode: impl FnOnce(&mut Reader<'_>) -> Result<R, WireError>) -> Option<R>`.
 //! `None` means refused/trapped; the runtime poisons the group before returning it.
-use super::{
-    Method,
-    calls::*,
-    ty::{Kind, Ty},
-};
+use super::{Method, calls::*, ty::Ty};
 use heck::ToSnakeCase;
 use std::fmt::Write;
 
@@ -176,10 +172,10 @@ fn event_input(
         write!(put, "w.put(&{tag});").unwrap();
         return;
     }
-    let Kind::Record(fields) = &types.defs[def].kind else {
+    let Some(fields) = types.defs[def].kind.fields() else {
         return;
     };
-    for f in fields {
+    for f in fields.iter() {
         let path = format!("{expr}.{}", f.rust);
         match &f.ty {
             Ty::Dyn(name, m) => {

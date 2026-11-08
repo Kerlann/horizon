@@ -70,6 +70,27 @@ fn real_member() {
     loaded
         .initialize(&[info])
         .expect("guest initialization and point registration");
+    mod_api::testing::with_mods(loaded.mods.into(), || {
+        mod_api::__private::install_parts(
+            mod_api::__private::mods(),
+            &mod_api::__private::part_tests::rule_schema(),
+        )
+        .unwrap();
+        assert!(
+            mod_api::__private::block_entity_types()
+                .iter()
+                .any(|kind| kind.id == "wasm_fixture:counter")
+        );
+        mod_api::__private::mark_game_thread();
+        let mut entity =
+            mod_api::ModBlockEntity::new("wasm_fixture:counter".into(), Default::default());
+        mod_api::dispatch_block_entity_tick(&mut Quiet, [0, 64, 0], &mut entity);
+        assert_eq!(entity.data, [23]);
+        assert_eq!(
+            entity.nbt.get(&"counter".into()),
+            Some(&mod_api::Tag::Int(17))
+        );
+    });
     mod_points::__private::seal();
     let mut args = mod_points::TickArgs::__new();
     mod_points::dispatch::tick(mod_api::HostSide::Server(&mut Quiet), &mut args);

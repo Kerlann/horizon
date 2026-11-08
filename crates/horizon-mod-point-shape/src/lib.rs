@@ -458,12 +458,15 @@ impl Shape {
                 #( #[doc = #field_docs] pub #names: #fields, )*
                 #extra
             }
+            #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
             impl #lifetime ::mod_api::wire::Wire for #record #lifetime {
                 const MIN: usize = 0;
                 fn put(&self, out: &mut ::mod_api::wire::Writer) {
+                    let _ = &out;
                     #(#wire_puts)*
                 }
                 fn take(input: &mut ::mod_api::wire::Reader<'_>) -> Result<Self, ::mod_api::wire::WireError> {
+                    let _ = &input;
                     Ok(Self { #(#wire_names: #wire_reads,)* })
                 }
             }
@@ -476,6 +479,33 @@ impl Shape {
                 }
             }
         }
+    }
+
+    /// Whether the initial raw snapshot reader can encode every argument without engine layout.
+    /// Nominal receiver/argument readers are supplied by the staged internals catalog separately.
+    pub fn snapshot_able(&self, sig: &syn::Signature) -> bool {
+        self.raw
+            && !self.raw_only
+            && self.receiver == Receiver::None
+            && raw_fields(sig).iter().all(|field| scalar(&field.ty))
+            && matches!(
+                &self.returns,
+                Returns::Unit | Returns::UnitResult | Returns::Value(_)
+            )
+    }
+
+    /// The record fields as a shared shape codec's nested mutable field list.
+    pub fn wire_fields(&self, args: TokenStream) -> TokenStream {
+        let mut fields: Vec<_> = self.args.iter().map(|arg| arg.name.clone()).collect();
+        match self.returns {
+            Returns::Unit | Returns::UnitResult => fields.push(format_ident!("cancel")),
+            Returns::Value(_) => fields.push(format_ident!("result")),
+            Returns::Opaque => {}
+        }
+        fields
+            .iter()
+            .rev()
+            .fold(quote!(()), |tail, field| quote!((&mut #args.#field, #tail)))
     }
 
     /// Typed API function constructors, dispatchers and place ids for this point.
@@ -518,6 +548,7 @@ impl Shape {
             }
             (_, Some(_)) => quote!(crate::__private::PointHost::Read(host)),
         };
+        let wire_fields = self.wire_fields(quote!(args));
         let mut places = vec![(self.name.clone(), "head")];
         if self.has_return() {
             places.push((format!("{}_return", self.name), "return"));
@@ -548,7 +579,7 @@ impl Shape {
                             function(#passed args);
                         }
                         crate::__private::ApiKind::Forwarded(endpoint, id) => {
-                            endpoint.forward(id, #forwarded_host, args);
+                            endpoint.forward(id, #forwarded_host, &mut ::mod_api::wire::Fields(#wire_fields));
                         }
                     });
                 }

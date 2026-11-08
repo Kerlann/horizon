@@ -43,8 +43,19 @@ fn call_refused<E: From<(mod_api::Identifier, String)>>() -> E {
     ))
 }
 impl WasmHandler {
-    fn subscriptions(&self, _: &'static str, _: u32) -> &'static [Option<mod_api::HookId>] {
-        &[]
+    fn subscriptions(&self, owner: &'static str, id: u32) -> &'static [Option<mod_api::HookId>] {
+        let names = self
+            .module
+            .call(
+                CallClass::Load,
+                boundary::Frame::default(),
+                id,
+                Some(self.index),
+                |_| {},
+                |r| r.take(),
+            )
+            .unwrap();
+        boundary::subscriptions_of(owner, names)
     }
 }
 impl WasmMod {
@@ -114,8 +125,26 @@ impl LoopContext for Context {
 fn __horizon_mod_hooks() -> Box<dyn Hooks> {
     struct Mod;
     impl Hooks for Mod {
+        fn register(
+            &self,
+            registrar: &mut dyn mod_api::Registrar,
+            _: &mod_api::RegistrationContext,
+        ) {
+            REGISTERED_ITEM.set(Some(registrar.item_key("minecraft:stone")));
+            let kind = registrar.block_entity_type("counter").blocks(&[]).build();
+            registrar.block_entity_part(&kind, MachineBlock).unwrap();
+        }
         fn subscribed(&self) -> &'static [Option<mod_api::HookId>] {
             &[]
+        }
+        fn item_stacked_on_other(
+            &self,
+            _: &dyn LoopContext,
+            event: &mut mod_api::ItemStackedOnOtherEvent<'_, '_>,
+        ) -> mod_api::Flow {
+            *event.event.carried.0 = None;
+            event.event.cancellation_result = true;
+            mod_api::Flow::Continue
         }
         fn living_jump_power(
             &self,
@@ -153,7 +182,7 @@ impl mod_api::BlockPart for MachineBlock {
 }
 impl mod_api::BlockEntityPart for MachineBlock {
     fn block_entity_subscribed(&self) -> &'static [Option<mod_api::HookId>] {
-        &[]
+        &[Some(mod_api::HookId::BlockEntityTick)]
     }
     fn block_entity(
         &self,
@@ -215,6 +244,57 @@ fn wire_loopback_machine_tick_uses_checked_snapshot_writeback() {
     );
     assert_eq!(entity.data, vec![8]);
     assert_eq!(entity.revision().changes(), before);
+}
+#[test]
+fn wire_loopback_nested_tuple_reference_writes_back() {
+    let module = WasmMod {
+        subscribed: &[],
+        corrupt: false,
+    };
+    install_counter();
+    let mut carried = Some(mod_api::ItemStack::new(REGISTERED_ITEM.get().unwrap(), 1).unwrap());
+    let mut clicked = guest::Guest;
+    let mut stack = mod_api::StackedOnOther {
+        player: None,
+        player_entity_id: None,
+        slot: 0,
+        container: 0,
+        container_slot: 0,
+        primary: true,
+        carried: mod_api::menu::CarriedAccess(&mut carried),
+        clicked: &mut clicked,
+        cancellation_result: false,
+    };
+    module.item_stacked_on_other(
+        &Context,
+        &mut mod_api::ItemStackedOnOtherEvent { event: &mut stack },
+    );
+    assert!(stack.carried.0.is_none());
+    assert!(stack.cancellation_result);
+}
+thread_local! { static REGISTERED_ITEM:std::cell::Cell<Option<mod_api::ItemKey>> = const {std::cell::Cell::new(None)}; }
+fn install_counter() {
+    let mods = [mod_api::ModEntry::new(
+        "wire_test",
+        Box::new(WasmMod {
+            subscribed: &[],
+            corrupt: false,
+        }),
+    )];
+    mod_api::__private::install_parts(&mods, &mod_api::__private::part_tests::rule_schema())
+        .unwrap();
+}
+#[test]
+fn wire_loopback_registration_attaches_subscribed_part() {
+    install_counter();
+    assert!(
+        mod_api::__private::block_entity_types()
+            .iter()
+            .any(|decl| decl.id == "wire_test:counter")
+    );
+    assert!(mod_api::__private::has_part_hook(
+        mod_api::HookId::BlockEntityTick
+    ));
 }
 #[test]
 fn wire_loopback_tagged_frame_enum_preserves_side() {

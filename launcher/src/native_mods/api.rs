@@ -60,29 +60,19 @@ pub(super) fn main_rs(
             .iter()
             .enumerate()
             .flat_map(|(i, manifest)| {
-                manifest
-                    .inject
+                let api_points = listed
                     .iter()
-                    .filter(|entry| {
-                        entry.access == horizon_mod_package::manifest::inject::Access::Api
-                            && entry.call.is_none()
+                    .map(|point| horizon_mod_point_emit::Point {
+                        name: point.name.clone(),
+                        target: point.target.clone(),
+                        private: point.private,
+                        at_return: point.at_return,
                     })
-                    .map(move |entry| {
-                        let point = listed
-                            .iter()
-                            .find(|point| {
-                                internals::plain_path(&point.target)
-                                    == internals::plain_path(&entry.at)
-                            })
-                            .expect("API slot checked");
-                        let place = point.place(
-                            entry.kind == horizon_mod_package::manifest::inject::Kind::Return,
-                        );
-                        format!(
-                        "        mod_points::listeners::{place}({:?}, {}, {:?}, mod_{i}::{}),\n",
-                        manifest.id, entry.priority, entry.id, entry.with
-                    )
-                    })
+                    .collect::<Vec<_>>();
+                horizon_mod_point_emit::api(manifest, &api_points, &format!("mod_{i}::"))
+                    .expect("API slots checked")
+                    .into_iter()
+                    .map(|expression| format!("        {expression},\n"))
             })
             .collect::<String>();
     let raw = raw
@@ -632,6 +622,58 @@ mod tests {
                 ][..count]
             );
         }
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
+    fn shared_api_emitter_preserves_native_slot_bytes() {
+        use horizon_mod_package::manifest::inject::{Access, Inject, Kind};
+        let dir = fixture();
+        let mut manifest = horizon_mod_package::Package::read(&dir).unwrap().manifest;
+        manifest.id = "fixture".into();
+        manifest.inject = [Kind::Head, Kind::Return]
+            .into_iter()
+            .enumerate()
+            .map(|(index, kind)| Inject {
+                id: format!("listen_{index}"),
+                at: "game::Game<'_>::tick".into(),
+                kind,
+                with: format!("listen_{index}"),
+                access: Access::Api,
+                priority: 12,
+                hash: "pin".into(),
+                call: None,
+                nth: None,
+                ctx: None,
+            })
+            .collect();
+        let listed = [super::super::inject::ListedPoint {
+            name: "tick".into(),
+            private: false,
+            record_name: None,
+            target: "game::Game::tick".into(),
+            raw: true,
+            at_return: true,
+            listener: None,
+            return_listener: None,
+        }];
+        let output = main_rs(
+            "/* MOD_ENTRIES */START\n/* MOD_SLOTS */END/* BUILT_MODS */",
+            &[&manifest],
+            &listed,
+            &[],
+        );
+        let slots = output
+            .split_once("START\n")
+            .unwrap()
+            .1
+            .split_once("END")
+            .unwrap()
+            .0;
+        assert_eq!(slots, concat!(
+            "        mod_points::listeners::tick(\"fixture\", 12, \"listen_0\", mod_0::listen_0),\n",
+            "        mod_points::listeners::tick_return(\"fixture\", 12, \"listen_1\", mod_0::listen_1),\n",
+        ));
         fs::remove_dir_all(dir).unwrap();
     }
 

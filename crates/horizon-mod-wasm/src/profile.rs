@@ -4,7 +4,7 @@ use std::{
     cell::Cell,
     time::Instant,
 };
-const N: usize = 16;
+const N: usize = 17;
 thread_local! {
     static ACTIVE: Cell<bool> = const { Cell::new(false) };
     static PHASE: Cell<usize> = const { Cell::new(0) };
@@ -24,6 +24,17 @@ pub fn mark(next: usize) {
         TIME.set(times);
     }
     PHASE.set(next);
+}
+pub struct Scope(usize);
+pub fn enter(next: usize) -> Scope {
+    let previous = PHASE.get();
+    mark(next);
+    Scope(previous)
+}
+impl Drop for Scope {
+    fn drop(&mut self) {
+        mark(self.0);
+    }
 }
 pub fn start() {
     TIME.set([0; N]);

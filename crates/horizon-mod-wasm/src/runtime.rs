@@ -228,6 +228,7 @@ fn host(
     out: u32,
     cap: u32,
 ) -> wasmtime::Result<u32> {
+    let _profile = crate::profile::enter(16);
     let memory = caller
         .data()
         .memory

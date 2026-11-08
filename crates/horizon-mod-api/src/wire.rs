@@ -198,6 +198,57 @@ impl<T: Wire> Record for T {
     }
 }
 
+/// A hook record's writable fields, in declaration order. Sharing these tuple codecs avoids
+/// generating and compiling a separate native codec for every named point record.
+pub struct Fields<T>(pub T);
+
+#[doc(hidden)]
+pub trait FieldSet {
+    type Value;
+    fn encode(&self, out: &mut Writer);
+    fn take(input: &mut Reader<'_>) -> Result<Self::Value, WireError>;
+    fn commit(&mut self, value: Self::Value);
+}
+
+impl FieldSet for () {
+    type Value = ();
+    fn encode(&self, _: &mut Writer) {}
+    fn take(_: &mut Reader<'_>) -> Result<(), WireError> {
+        Ok(())
+    }
+    fn commit(&mut self, _: ()) {}
+}
+
+impl<H: Wire, T: FieldSet> FieldSet for (&mut H, T) {
+    type Value = (H, T::Value);
+    fn encode(&self, out: &mut Writer) {
+        out.put(&*self.0);
+        self.1.encode(out);
+    }
+    fn take(input: &mut Reader<'_>) -> Result<Self::Value, WireError> {
+        Ok((input.take()?, T::take(input)?))
+    }
+    fn commit(&mut self, (head, tail): Self::Value) {
+        *self.0 = head;
+        self.1.commit(tail);
+    }
+}
+
+impl<T: FieldSet> Record for Fields<T> {
+    fn encode(&self, out: &mut Writer) {
+        self.0.encode(out);
+    }
+    fn apply(&mut self, bytes: &[u8]) -> Result<(), WireError> {
+        let mut input = Reader::new(bytes);
+        let value = T::take(&mut input)?;
+        if !input.rest().is_empty() {
+            return Err(WireError::Trailing);
+        }
+        self.0.commit(value);
+        Ok(())
+    }
+}
+
 /// What can be written: every [`Wire`] value, and the borrowed forms a call passes
 /// (`&str`, `&[T]`, `Option<&T>`), which are written as the owned value they stand for.
 pub trait Put {
@@ -382,7 +433,7 @@ impl Wire for String {
 }
 
 /// A mod's own text, owned once read: a `Cow<'static, str>` field is how the API takes either.
-impl Wire for std::borrow::Cow<'static, str> {
+impl Wire for std::borrow::Cow<'_, str> {
     const MIN: usize = 4;
     fn put(&self, out: &mut Writer) {
         out.put_str(self);

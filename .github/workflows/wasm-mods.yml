@@ -33,10 +33,16 @@ jobs:
         run: |
           cargo build -p cargo-horizon-mod
           cd crates/horizon-mod-wasm/tests/fixture
-          "$GITHUB_WORKSPACE/target/debug/cargo-horizon-mod" horizon-mod build --wasm
-          "$GITHUB_WORKSPACE/target/debug/cargo-horizon-mod" horizon-mod wasm-std "$GITHUB_WORKSPACE/target/horizon-wasm-std.wasm"
+          "$GITHUB_WORKSPACE/target/debug/cargo-horizon-mod" horizon-mod build --wasm --catalog points.json
+          "$GITHUB_WORKSPACE/target/debug/cargo-horizon-mod" horizon-mod wasm-std "$GITHUB_WORKSPACE/target/horizon-wasm-std.wasm" --catalog points.json
       - name: Validate and load the fixture
         env:
           HORIZON_WASM_FIXTURE: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/fixture/target/horizon-mod/wasm_fixture.hmod
           HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
         run: cargo test -p horizon-mod-wasm --test real_member -- --nocapture
+      - name: Measure block entity boundary
+        if: github.event_name == 'workflow_dispatch'
+        env:
+          HORIZON_WASM_FIXTURE: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/fixture/target/horizon-mod/wasm_fixture.hmod
+          HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
+        run: cargo test --release -p horizon-mod-wasm --test bench block_entity_ticks -- --ignored --nocapture

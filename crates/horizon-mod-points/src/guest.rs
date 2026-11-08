@@ -53,6 +53,7 @@ pub(crate) fn fire(
     Ok(())
 }
 
+/// The full point catalog layout, checked by the host before this guest can subscribe.
 #[cfg(target_arch = "wasm32")]
 #[unsafe(no_mangle)]
 pub extern "C" fn horizon_layout_ext() -> u64 {

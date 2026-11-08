@@ -2637,6 +2637,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ed5909b6e89a2db4456e54cd5f673791d7eca6732202bbf2a9cc504fe2f9b84a"
 dependencies = [
  "foldhash",
+ "serde",
+ "serde_core",
 ]
 
 [[package]]
@@ -2735,6 +2737,7 @@ version = "0.1.0"
 dependencies = [
  "libm",
  "serde",
+ "serde_json",
 ]
 
 [[package]]
@@ -2775,6 +2778,7 @@ dependencies = [
  "horizon-mcp",
  "horizon-mod-api-gen",
  "horizon-mod-package",
+ "horizon-mod-point-emit",
  "horizon-mod-point-shape",
  "horizon-port-pack",
  "horizon-prepare",
@@ -2854,7 +2858,16 @@ dependencies = [
  "serde_json",
  "sha2",
  "toml 1.1.8+spec-1.1.0",
+ "wasmparser",
  "zip",
+]
+
+[[package]]
+name = "horizon-mod-point-emit"
+version = "0.1.0"
+dependencies = [
+ "horizon-mod-package",
+ "serde",
 ]
 
 [[package]]
@@ -6531,8 +6544,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4f20f20e44f7e8aeb6744823ea9d869ede51e51be4fdaedede2852282e54d2d8"
 dependencies = [
  "bitflags 2.13.2",
+ "hashbrown 0.17.1",
  "indexmap",
  "semver",
+ "serde",
 ]
 
 [[package]]

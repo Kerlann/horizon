@@ -6,5 +6,6 @@ publish = false
 
 [dependencies]
 horizon-mod-api = { path = "../../../horizon-mod-api" }
+horizon-mod-points = { path = "../../../horizon-mod-points", features = ["wasm-guest"] }
 
 [workspace]

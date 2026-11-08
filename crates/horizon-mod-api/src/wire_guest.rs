@@ -296,6 +296,7 @@ pub fn run(id: u32) -> (*const u8, u32) {
         }));
     });
     let _resources = resource_scope();
+    let _ = hooks();
     let (input, depth, mut reply) = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         let depth = rt.keeps.len();

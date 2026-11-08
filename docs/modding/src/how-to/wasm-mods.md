@@ -1,5 +1,15 @@
 # Building a mod to `mod.wasm`
 
+## Boundary benchmark
+
+After building the shared std and the test fixture, run the release benchmark with their paths:
+
+```sh
+HORIZON_WASM_STD="$PWD/target/horizon-wasm-std.wasm" HORIZON_WASM_FIXTURE="$PWD/crates/horizon-mod-wasm/tests/fixture/target/horizon-mod/wasm_fixture.hmod" cargo test --release -p horizon-mod-wasm --test bench block_entity_ticks -- --ignored --nocapture
+```
+
+It measures 1,000 block entity ticks against an in-memory host, both without and with two host reads per tick; it is not a full game-world benchmark. The `wasm-mods` workflow runs it only on manual dispatch.
+
 A mod written against `mod_api` builds either way from the same source: native, compiled into
 the game by the launcher ([Native mods](native-mods.md)), or to `mod.wasm`, which any game with
 the same mod API runs with no rebuild. Only the build step differs: the hooks, Parts,
@@ -28,6 +38,12 @@ my_library = "…"
 ```
 
 A mod carries native code or wasm code, not both. A wasm mod has no `[native]` table.
+
+A mod with `[[inject]]` listeners builds against the game's staged point catalog. Pass
+`--catalog path/to/points.json`, or set `HORIZON_WASM_STD` to the toolchain's std member
+with `points.json` beside it. Mods without listeners need no catalog. When packaging the
+wasm toolchain, `cargo horizon-mod wasm-std <out.wasm> --catalog <staged-points.json>`
+copies that catalog beside the std member.
 
 ## Dependencies
 

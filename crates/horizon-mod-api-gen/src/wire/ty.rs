@@ -110,7 +110,26 @@ pub(crate) enum Kind {
     Opaque(String),
 }
 
-#[derive(Debug)]
+impl Kind {
+    pub(super) fn fields(&self) -> Option<std::borrow::Cow<'_, [Field]>> {
+        match self {
+            Self::Record(fields) => Some(std::borrow::Cow::Borrowed(fields)),
+            Self::TupleRecord(fields) => Some(std::borrow::Cow::Owned(
+                fields
+                    .iter()
+                    .enumerate()
+                    .map(|(i, ty)| Field {
+                        rust: i.to_string(),
+                        wit: i.to_string(),
+                        ty: ty.clone(),
+                    })
+                    .collect(),
+            )),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Debug)]
 pub(crate) struct Field {
     pub(super) rust: String,
     pub(super) wit: String,
