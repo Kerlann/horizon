@@ -10,14 +10,16 @@ impl Game<'_> {
         ingredient: &Ingredient,
     ) -> Result<std::sync::Arc<[mod_api::ItemKey]>, mod_api::IngredientKeysError> {
         use mod_api::IngredientKeysError::*;
-        let mut pending = vec![ingredient];
+        let mut pending = Vec::from([ingredient]);
         let mut candidates = std::collections::HashSet::new();
         while let Some(node) = pending.pop() {
             if node.custom.is_some() {
                 return Err(NotEnumerable);
             }
             if let Some((shape, children)) = &node.children {
-                if matches!(shape, mod_api::crafting::Shape::Intersection) && children.is_empty() {
+                if let mod_api::crafting::Shape::Intersection = shape
+                    && children.is_empty()
+                {
                     // The existing matcher defines all([]) as true. Such a programmatically
                     // constructed shape needs the full candidate universe, not an empty list.
                     candidates.extend(self.items().items.keys().map(|name| &**name));

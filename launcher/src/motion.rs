@@ -4,7 +4,7 @@
 //! 6 px rise over 200 ms); a switch's knob slides for 200 ms. Under reduced motion
 //! ([`crate::sky::motion`]) nothing moves: everything is drawn where it ends. Menus open at once:
 //! an animation inside a `deferred` menu kept its first frame (invisible) under GPUI Fast.
-use gpui::{Animation, AnimationExt, AnyElement, Div, ElementId, IntoElement, Styled, px};
+use gpui::{px, Animation, AnimationExt, AnyElement, Div, ElementId, IntoElement, Styled};
 use horizon_theme as tokens;
 use std::cell::RefCell;
 use std::collections::HashMap;

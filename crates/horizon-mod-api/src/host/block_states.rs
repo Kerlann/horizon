@@ -168,7 +168,6 @@ pub trait BlockStatesBackend {
     /// block, or air for the empty fluid. None for a state no fluid can be in (a tank-only
     /// fluid, an amount above 8, a zero amount for anything but the empty fluid, or a source
     /// that isn't full) and without a resolved registry.
-    /// Not on wasm: the block state id has no wire layout yet.
     #[access(Metadata)]
     fn fluid_legacy_block(&self, state: FluidState) -> Option<BlockStateId>;
     /// Side: both.

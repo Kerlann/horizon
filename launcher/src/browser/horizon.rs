@@ -4,9 +4,8 @@
 //! (`horizon_mod_package::index::check_file`: size, SHA-256, the author's signature, the file's own
 //! manifest), and files the index says were taken down are refused and turned off.
 use super::{
-    FileRef, GAME, Kind, Project, Query, Source, SourceId, Version,
     details::{Details, GitHub, Link},
-    download, installed, java,
+    download, installed, java, FileRef, Kind, Project, Query, Source, SourceId, Version, GAME,
 };
 use horizon_mod_package::index::{self, Index, Trust};
 use std::collections::HashMap;

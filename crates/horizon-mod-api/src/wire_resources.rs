@@ -13,6 +13,8 @@ pub trait ResourceCodec {
     /// Reports a refused erased view; codecs may log this once per caller and handler.
     fn refused(&self, _handler: &str) {}
 }
+// exhaustive: wasm boundary plumbing that generated code builds field by field
+// hidden: wasm boundary plumbing used by generated code, not a mod's API
 /// A deliberate refusal to move an erased Rust capability between link groups.
 /// Typed resources never use this marker; their zero identity is still stale.
 #[doc(hidden)]
@@ -34,6 +36,7 @@ impl Unsupported {
             .clone()
     }
 }
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// A lease's scope ended, or the caller left its owning thread.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScopeError {
@@ -49,6 +52,7 @@ impl std::fmt::Display for ScopeError {
     }
 }
 impl std::error::Error for ScopeError {}
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// A non-owning native lease. Checking it never retains the scope, codec, or pointee.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ScopeToken {
@@ -110,6 +114,7 @@ struct Scopes {
     free: Option<usize>,
 }
 thread_local! { static ACTIVE: RefCell<Scopes> = RefCell::new(Scopes::default()); }
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// A detached value lease. It never installs a codec or attests a native call root.
 /// Its lifetime is independent of the active resource scopes.
 pub struct ScopeLease {
@@ -184,6 +189,7 @@ impl Drop for ScopeLease {
         });
     }
 }
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// Activates a call's codec, including guest-to-host-to-guest callbacks. Dropping scopes
 /// out of order unlinks them: a retained inner guard cannot revive an expired outer codec.
 /// Slots are reused, so steady-state calls allocate no scope bookkeeping.
@@ -232,6 +238,7 @@ impl ResourceScope {
             thread: std::thread::current().id(),
         }
     }
+    // hidden: wasm boundary plumbing used by generated code, not a mod's API
     /// Marks the runtime's root call, from which native borrowed roots receive their lease.
     ///
     /// # Safety

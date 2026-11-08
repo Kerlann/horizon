@@ -40,6 +40,8 @@ pub struct ModRevision {
     pub(crate) born: u64,
     pub(crate) changes: u64,
 }
+// exhaustive: the game builds the snapshot; mods only read it
+// hidden: the game's snapshot of a mod block entity, read by generated boundary code
 /// An entity's transport form; identity and revision are read-only on writeback.
 #[doc(hidden)]
 pub struct ModBlockEntitySnapshot {

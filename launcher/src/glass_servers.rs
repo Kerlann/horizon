@@ -4,7 +4,7 @@
 //! friends reach the open one. Below, what the mockup has no room for: the server's Players,
 //! Settings and Backups. Dark appearance only.
 use super::*;
-use crate::glass_ui::{self as ui, Tone, white};
+use crate::glass_ui::{self as ui, white, Tone};
 use horizon_theme::glass::{fill, ink, radius};
 
 /// The right column's width (`lg:grid-cols-[minmax(0,1fr)_320px]`).

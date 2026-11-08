@@ -109,7 +109,7 @@ impl Ingredient {
 /// recipe's `ingredient`, and the result as `results[0]`. Stonecutting,
 /// smithing and special crafting recipes instead expose their typed [`RecipeRule`]
 /// in `rule`, keeping these two lists empty. Dynamic outputs are rules/templates,
-/// not fixed stacks; use [`LevelRef::craft`] to assemble a crafting grid.
+/// not fixed stacks; use [`LevelRef::recipe_for`] to match and assemble a crafting grid.
 /// A mod's own type leaves these fields empty and keeps its `json`.
 #[derive(Clone, Debug)]
 #[non_exhaustive]

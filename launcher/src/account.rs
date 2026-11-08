@@ -14,7 +14,7 @@
 //! build time, or at run time to override it. Without one, sign-in says it is not configured.
 pub mod session;
 
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
@@ -968,7 +968,7 @@ impl FileStore {
 
     /// `json` sealed for the file ([`SEALED`]), under [`file_key`] with this install's secret.
     fn seal(&self, json: &[u8]) -> Result<Vec<u8>, String> {
-        use chacha20poly1305::{KeyInit, aead::Aead};
+        use chacha20poly1305::{aead::Aead, KeyInit};
         let key = file_key(&self.install_secret(true)?.expect("made"));
         let mut nonce = [0u8; 12];
         getrandom::fill(&mut nonce).map_err(|e| e.to_string())?;
@@ -982,7 +982,7 @@ impl FileStore {
     /// again; `None` for a file in another format, changed, sealed on another computer or by
     /// another install, or whose install secret is gone.
     fn unseal(&self, bytes: &[u8]) -> Result<Option<(Vec<u8>, bool)>, String> {
-        use chacha20poly1305::{KeyInit, aead::Aead};
+        use chacha20poly1305::{aead::Aead, KeyInit};
         let (key, old, rest) = if let Some(rest) = bytes.strip_prefix(SEALED) {
             let Some(secret) = self.install_secret(false)? else {
                 return Ok(None);
@@ -2177,16 +2177,14 @@ fn write_launch_session_file(
         // as it ends starts the next).
         let _ = std::thread::Builder::new()
             .name("Session files".into())
-            .spawn(|| {
-                loop {
-                    std::thread::sleep(Duration::from_secs(5));
-                    let Ok(mut unread) = UNREAD.lock() else {
-                        return;
-                    };
-                    reap(&mut unread, SESSION_FILE_LIFE);
-                    if unread.is_empty() {
-                        return;
-                    }
+            .spawn(|| loop {
+                std::thread::sleep(Duration::from_secs(5));
+                let Ok(mut unread) = UNREAD.lock() else {
+                    return;
+                };
+                reap(&mut unread, SESSION_FILE_LIFE);
+                if unread.is_empty() {
+                    return;
                 }
             });
     }

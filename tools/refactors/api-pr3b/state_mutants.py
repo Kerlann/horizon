@@ -5,9 +5,13 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 
 root = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(root / "tools"))
+import lab  # noqa: E402
+
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--output", type=Path, required=True)
 parser.add_argument("--group", choices=["state", "range", "write"], default="state")
@@ -74,7 +78,7 @@ for name, path, old, new, command in cases:
                     home = scratch / key
                     home.mkdir()
                     env[key] = str(home)
-                env.update(HORIZON_LAUNCHER_NO_SELF_UPDATE="1", HORIZON_NO_AUDIO="1")
+                env = lab.game_env(env)
                 run = subprocess.run([binaries[0], command[-1], "--ignored", "--test-threads=1", "--nocapture"], cwd=scratch, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=540)
         else:
             run = subprocess.run(command, cwd=root, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, timeout=600)

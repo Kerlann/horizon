@@ -14,8 +14,8 @@
 //! worlds): the notice says which. The file an update replaces is kept in
 //! `mod-browser/replaced/` until the next start: an update cut short (a crash between moving the
 //! file and saving the list) is rolled back from it then.
-use super::{Index, install_version_guarded};
-use crate::browser::{GAME, Kind, SourceId, installed};
+use super::{install_version_guarded, Index};
+use crate::browser::{installed, Kind, SourceId, GAME};
 use crate::i18n::trf;
 use horizon_mod_package::index;
 use serde::{Deserialize, Serialize};

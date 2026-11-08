@@ -13,9 +13,9 @@ use super::mods_page::{Checking, Event};
 use super::*;
 use gpui::img;
 use horizon_launcher::browser::{
-    self, Kind as PackKind, Project, SourceId, Support, Version,
+    self,
     details::{self, Details, Environment, Filters, Image, Sort, Tags},
-    images, java,
+    images, java, Kind as PackKind, Project, SourceId, Support, Version,
 };
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
@@ -261,21 +261,19 @@ impl Launcher {
                 let home = backend::data_dir();
                 for _ in 0..IMAGE_WORKERS {
                     let (receive, tx, home) = (receive.clone(), tx.clone(), home.clone());
-                    std::thread::spawn(move || {
-                        loop {
-                            let Ok(next) = receive.lock().map(|r| r.recv()) else {
-                                break;
-                            };
-                            let Ok((url, size)) = next else {
-                                break;
-                            };
-                            let path = images::fetch(&home, &url, size).ok();
-                            if tx
-                                .send(Event::Loaded(Loaded::Image((url, size), path)))
-                                .is_err()
-                            {
-                                break;
-                            }
+                    std::thread::spawn(move || loop {
+                        let Ok(next) = receive.lock().map(|r| r.recv()) else {
+                            break;
+                        };
+                        let Ok((url, size)) = next else {
+                            break;
+                        };
+                        let path = images::fetch(&home, &url, size).ok();
+                        if tx
+                            .send(Event::Loaded(Loaded::Image((url, size), path)))
+                            .is_err()
+                        {
+                            break;
                         }
                     });
                 }

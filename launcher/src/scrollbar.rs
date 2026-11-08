@@ -1,8 +1,8 @@
 //! Pointer-operated scrollbars for the launcher's vertical scroll areas.
 use crate::theme::Theme;
 use gpui::{
-    Bounds, Div, HitboxBehavior, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    ScrollHandle, Stateful, canvas, div, fill, point, prelude::*, px, size,
+    canvas, div, fill, point, prelude::*, px, size, Bounds, Div, HitboxBehavior, MouseButton,
+    MouseDownEvent, MouseMoveEvent, MouseUpEvent, ScrollHandle, Stateful,
 };
 use std::{cell::Cell, rc::Rc};
 

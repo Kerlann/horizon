@@ -522,13 +522,11 @@ pub fn curseforge_folders(os: Os, folders: &Folders) -> Vec<PathBuf> {
     match os {
         // One component at a time, so the path shows with one kind of separator.
         Os::Windows => vec![folders.home.join("curseforge").join("minecraft")],
-        Os::MacOs | Os::Linux => vec![
-            folders
-                .home
-                .join("Documents")
-                .join("curseforge")
-                .join("minecraft"),
-        ],
+        Os::MacOs | Os::Linux => vec![folders
+            .home
+            .join("Documents")
+            .join("curseforge")
+            .join("minecraft")],
     }
 }
 
