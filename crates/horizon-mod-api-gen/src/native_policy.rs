@@ -121,15 +121,13 @@ impl Graph {
                     {
                         opaque = Some(named.opaque_reason.unwrap_or("inaccessible layout").into());
                     }
-                    if named.foreign {
-                        if let syn::Item::Struct(s) = item {
-                            if s.fields
-                                .iter()
-                                .any(|f| !matches!(f.vis, syn::Visibility::Public(_)))
-                            {
-                                opaque = Some("private foreign fields".into());
-                            }
-                        }
+                    if named.foreign
+                        && let syn::Item::Struct(s) = item
+                        && s.fields
+                            .iter()
+                            .any(|f| !matches!(f.vis, syn::Visibility::Public(_)))
+                    {
+                        opaque = Some("private foreign fields".into());
                     }
                     let mut ordinals = BTreeMap::<Option<u32>, u32>::new();
                     for f in rule.fields(path) {
@@ -228,12 +226,12 @@ impl Graph {
                 auxiliaries.push(("pair".to_string(), self.layouts[id].children.clone()))
             }
             Shape::Named(path, _) => {
-                if let Some(named) = rule.named(path) {
-                    if let syn::Item::Enum(item) = &named.item {
-                        for tag in 0..item.variants.len() {
-                            let targets = vec![id];
-                            auxiliaries.push((format!("variant({tag})"), targets));
-                        }
+                if let Some(named) = rule.named(path)
+                    && let syn::Item::Enum(item) = &named.item
+                {
+                    for tag in 0..item.variants.len() {
+                        let targets = vec![id];
+                        auxiliaries.push((format!("variant({tag})"), targets));
                     }
                 }
             }

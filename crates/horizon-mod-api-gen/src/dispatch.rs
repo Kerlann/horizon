@@ -502,16 +502,14 @@ pub(super) fn emit<'a>(
                     "pub(in crate::game) struct {carrier}{generics} {{ {fields} }}\n"
                 ));
                 for arg in &mut signature.inputs {
-                    if let FnArg::Typed(arg) = arg {
-                        if arg.pat.to_token_stream().to_string() == "call" {
-                            arg.ty = Box::new(
-                                syn::parse_str(&format!(
-                                    "{carrier}{}",
-                                    if generics.is_empty() { "" } else { "<'_>" }
-                                ))
-                                .unwrap(),
-                            );
-                        }
+                    if let FnArg::Typed(arg) = arg
+                        && arg.pat.to_token_stream().to_string() == "call"
+                    {
+                        *arg.ty = syn::parse_str(&format!(
+                            "{carrier}{}",
+                            if generics.is_empty() { "" } else { "<'_>" }
+                        ))
+                        .unwrap();
                     }
                 }
             }
@@ -846,9 +844,7 @@ fn stack_crossing_routed(
             continue;
         }
         let local = format!("__api_{name}");
-        let value = if infallible {
-            format!("match {name}.try_into_api() {{ Ok(value) => value, Err(_) => return }}")
-        } else if stack || block {
+        let value = if infallible || stack || block {
             format!("match {name}.try_into_api() {{ Ok(value) => value, Err(_) => return }}")
         } else {
             format!("(*{name}).to_owned()")
