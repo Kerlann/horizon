@@ -1246,6 +1246,39 @@ fn shuffle<T>(list: &mut [T], random: &mut impl RandomSource) {
         list.swap(i - 1, j);
     }
 }
+/// EnchantmentHelper's weighted selection over the eligible registry entries.
+fn weighted_enchantment(
+    data: &LootData,
+    random: &mut impl RandomSource,
+    list: &[(usize, i32)],
+) -> Option<(usize, i32)> {
+    let total: i64 = list
+        .iter()
+        .map(|&(i, _)| i64::from(data.enchantments[i].weight))
+        .sum();
+    if total <= 0 {
+        return None;
+    }
+    let mut selection = weight_draw(random, total);
+    for &entry in list {
+        selection -= i64::from(data.enchantments[entry.0].weight);
+        if selection < 0 {
+            return Some(entry);
+        }
+    }
+    None
+}
+
+// Preserve vanilla's int draw. Oversized pack totals use one unsigned long
+// modulo the total, a bounded, slightly biased fallback.
+fn weight_draw(random: &mut impl RandomSource, total: i64) -> i64 {
+    if total <= i64::from(i32::MAX) {
+        i64::from(random.next_int_bound(total as i32).unwrap_or(0))
+    } else {
+        ((random.next_long() as u64) % total as u64) as i64
+    }
+}
+
 /// Mth.nextInt.
 fn next_int(random: &mut impl RandomSource, min: i32, max: i32) -> i32 {
     if min >= max {
@@ -1920,20 +1953,7 @@ impl<R: RandomSource> Context<'_, R> {
         if available.is_empty() {
             return results;
         }
-        let pick = |random: &mut R, list: &[(usize, i32)]| -> Option<(usize, i32)> {
-            let total: i32 = list.iter().map(|&(i, _)| data.enchantments[i].weight).sum();
-            if total <= 0 {
-                return None;
-            }
-            let mut selection = random.next_int_bound(total).unwrap_or(0);
-            for &entry in list {
-                selection -= data.enchantments[entry.0].weight;
-                if selection < 0 {
-                    return Some(entry);
-                }
-            }
-            None
-        };
+        let pick = |random: &mut R, list: &[(usize, i32)]| weighted_enchantment(data, random, list);
         results.extend(pick(&mut self.random, &available));
         while self.random.next_int_bound(50).unwrap_or(0) <= cost {
             if let Some(&(last, _)) = results.last() {
@@ -2000,16 +2020,16 @@ impl<R: RandomSource> Context<'_, R> {
                 + int_value(&e["quality"]).unwrap_or(0) as f32 * luck;
             w.floor().max(0.0) as i32
         };
-        let total: i32 = valid.iter().map(&weight).sum();
+        let total: i64 = valid.iter().map(|e| i64::from(weight(e))).sum();
         if total == 0 || valid.is_empty() {
             return;
         }
         let chosen = if valid.len() == 1 {
             valid.swap_remove(0)
         } else {
-            let mut index = self.random.next_int_bound(total).unwrap_or(0);
+            let mut index = weight_draw(&mut self.random, total);
             let Some(at) = valid.iter().position(|e| {
-                index -= weight(e);
+                index -= i64::from(weight(e));
                 index < 0
             }) else {
                 return;
@@ -2569,6 +2589,80 @@ mod namespace_tests {
 #[cfg(test)]
 mod native_kinds_tests {
     use super::*;
+
+    #[test]
+    fn weight_totals_pool_and_enchantments() {
+        for weights in [
+            [0, 0, 0],
+            [1, 2, 3],
+            [7, 0, 11],
+            // Exactly i32::MAX, with weights representable by loot's f32 calculation.
+            [1_073_741_760, 1_073_741_760, 127],
+            [i32::MAX; 3],
+        ] {
+            let entries: Vec<_> = weights.iter().enumerate().map(|(i,w)| serde_json::json!({"type":"minecraft:item", "name":format!("minecraft:item{i}"), "weight":w})).collect();
+            let mut data = table(
+                "weight_totals",
+                &serde_json::json!({"pools":[{"rolls":1,"entries":entries}]}).to_string(),
+            );
+            data.enchantments = weights
+                .iter()
+                .enumerate()
+                .map(|(i, &weight)| Enchantment {
+                    name: format!("test:{i}"),
+                    supported: Value::Null,
+                    primary: None,
+                    exclusive: Value::Null,
+                    max_level: 1,
+                    weight,
+                    min_cost: (0, 0),
+                    max_cost: (100, 0),
+                    slots: vec![],
+                    effects: Value::Null,
+                })
+                .collect();
+            let total: i64 = weights.iter().map(|&w| i64::from(w)).sum();
+            for seed in 0..64 {
+                let mut expected = LegacyRandom::new(seed);
+                let expected_pick = if total == 0 {
+                    None
+                } else {
+                    let mut at = if total <= i64::from(i32::MAX) {
+                        i64::from(expected.next_int_bound(total as i32).unwrap())
+                    } else {
+                        ((expected.next_long() as u64) % total as u64) as i64
+                    };
+                    weights.iter().position(|&w| {
+                        at -= i64::from(w);
+                        at < 0
+                    })
+                };
+                let mut random = LegacyRandom::new(seed);
+                assert_eq!(
+                    weighted_enchantment(&data, &mut random, &[(0, 1), (1, 1), (2, 1)])
+                        .map(|e| e.0),
+                    expected_pick
+                );
+                assert_eq!(random.next_long(), expected.next_long());
+                let mut random = LegacyRandom::new(seed);
+                let drops = data.roll("minecraft:test", &mut random, 0.0, None, None);
+                assert_eq!(
+                    drops.first().map(|s| s.item.clone()),
+                    expected_pick.map(|i| format!("minecraft:item{i}"))
+                );
+                let mut expected = LegacyRandom::new(seed);
+                if total > 0 {
+                    if total <= i64::from(i32::MAX) {
+                        expected.next_int_bound(total as i32).unwrap();
+                    } else {
+                        expected.next_long();
+                    }
+                }
+                assert_eq!(random.next_long(), expected.next_long());
+            }
+            assert!(weighted_enchantment(&data, &mut LegacyRandom::new(1), &[]).is_none());
+        }
+    }
 
     fn table(name: &str, json: &str) -> LootData {
         let root = std::env::temp_dir().join(format!("loot-{name}-{}", std::process::id()));

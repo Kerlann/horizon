@@ -60,6 +60,7 @@ use horizon_core::{
 use horizon_world::level::{BonemealCheck, PlaceContext};
 use mod_api::CommandSource;
 use mod_api::GameMode;
+use mod_api::GameTests;
 pub use mod_api::game::{NativeClock, NativeShake, PhantomSpawnResult, SleepProblem};
 use mod_api::{
     self, Answered, BlockPlacement, BlockTintSources, ClientAudioOptions, ClientChatOptions,
@@ -82,8 +83,7 @@ use mod_api::{
     TaskId,
 };
 use mod_api::{
-    CameraType, Identifier, MobRef, NativeDespawn, NativePermissionLevel, NativeSpawnCheck,
-    NativeSpawnReason, SoundPlay, SoundRef,
+    CameraType, Identifier, MobRef, NativeDespawn, NativePermissionLevel, SoundPlay, SoundRef,
 };
 pub(crate) use mod_api::{
     ClientPacket, ClientPayload, NativeBlockRim, NativeColoredLight, NativeExplosionStart,

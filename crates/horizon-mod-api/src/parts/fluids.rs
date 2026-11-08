@@ -106,6 +106,10 @@ pub mod tests {
         .into();
         crate::install(mods.clone());
         install_parts(&mods, &crate::parts::tests::rule_schema()).unwrap();
+        assert!(
+            fluid_key("minecraft:water").is_none(),
+            "no key before the registry is complete"
+        );
         let error = resolve_fluids(&[]).unwrap_err();
         assert_eq!(
             error,
@@ -133,6 +137,7 @@ pub mod tests {
         }
         assert_eq!(FluidKey::from_slot(chocolate.0), Ok(chocolate));
         assert!(fluid_key("missing:fluid").is_none());
+        assert_eq!(fluid_id(FluidKey(u32::MAX)), None);
     }
     /// A mod's tank: the game's tank at its position, reached from every side but its top, and
     /// misanswering as `lie` says.

@@ -30,6 +30,39 @@ pub struct ModList {
     pub keys: BTreeMap<String, BTreeMap<String, String>>,
     /// What the Mods page shows, filled by the game from the mods it found.
     pub installed: Vec<Installed>,
+    /// What the Mods screen's panel shows of each installed mod, by id.
+    pub info: BTreeMap<String, ModInfo>,
+}
+
+/// What the Mods screen shows of a mod besides its row: the manifest's descriptive fields and
+/// its `icon.png`.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ModInfo {
+    pub name: String,
+    pub version: String,
+    pub authors: Vec<String>,
+    pub credits: String,
+    pub license: String,
+    pub license_url: Option<String>,
+    pub homepage: Option<String>,
+    pub issues: Option<String>,
+    /// The PNG bytes of `icon.png`.
+    pub icon: Option<std::sync::Arc<[u8]>>,
+}
+impl ModInfo {
+    pub fn of(manifest: &crate::Manifest, icon: Option<&crate::icon::Icon>) -> Self {
+        Self {
+            name: manifest.name.clone(),
+            version: manifest.version.clone(),
+            authors: manifest.authors.clone(),
+            credits: manifest.credits.clone(),
+            license: manifest.license.clone(),
+            license_url: manifest.license_url.clone(),
+            homepage: manifest.homepage.clone(),
+            issues: manifest.issues.clone(),
+            icon: icon.map(|icon| icon.bytes().into()),
+        }
+    }
 }
 
 /// One installed mod as the Mods page shows it.
@@ -194,6 +227,7 @@ impl ModList {
             disabled,
             keys,
             installed: Vec::new(),
+            info: BTreeMap::new(),
         }
     }
     pub fn serialize(&self) -> String {

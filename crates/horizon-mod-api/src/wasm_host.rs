@@ -905,6 +905,30 @@ impl glue::horizon::mod_api::held_handles::Host for State {
     }
 }
 
+/// Refuse subscriptions whose worker/provider contract is not available in wasm yet.
+fn refuse_held_hooks(names: &[String]) -> Result<(), LoadError> {
+    if names
+        .iter()
+        .any(|name| matches!(glue::hook_id(name), Some(HookId::AlterGround)))
+    {
+        return Err(LoadError::Import {
+            import: "alter_ground".to_owned(),
+            why: "worldgen ground providers are not yet available to wasm mods".to_owned(),
+        });
+    }
+    Ok(())
+}
+
+#[test]
+fn ground_provider_subscription_is_refused() {
+    assert!(matches!(
+        refuse_held_hooks(&["alter_ground".to_owned()]),
+        Err(LoadError::Import { import, why })
+            if import == "alter_ground" && why.contains("not yet available to wasm mods")
+    ));
+    assert!(refuse_held_hooks(&[]).is_ok());
+}
+
 /// The hooks a subscribed-hooks export named.
 fn hook_ids(names: Vec<String>) -> &'static [Option<HookId>] {
     Box::leak(
@@ -1011,6 +1035,7 @@ pub fn instantiate(
         let names = module.call_or(Frame::default(), Call::Load, Vec::new, |m, store| {
             m.horizon_mod_api_hooks().call_subscribed(store)
         });
+        refuse_held_hooks(&names)?;
         let hooks = WasmMod {
             module: module.clone(),
             subscribed: hook_ids(names),

@@ -48,8 +48,6 @@
   "horizon.pages.open.horizon_graphics": "Gráficos do Horizon...",
   "horizon.pages.open.controller_binds": "Atalhos do comando...",
   "horizon.pages.open.horizon_settings": "Definições do Horizon...",
-  "horizon.mods.empty": "Sem mods: coloca ficheiros .hmod na pasta horizon-mods",
-  "horizon.mods.stopped": " (Parado)",
   "horizon.mods.not_built": " (Não construído)",
   "horizon.mods.settings": "Definições",
   "horizon.mods.open_folder": "Abrir pasta de mods",

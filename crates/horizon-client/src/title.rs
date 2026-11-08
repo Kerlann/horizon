@@ -373,6 +373,8 @@ pub enum Action {
     Options,
     Accessibility,
     Language,
+    /// The Mods icon of the main menu: the NeoForge-style mod list.
+    Mods,
     /// AccessibilityOnboardingScreen's Music & Sounds button.
     Sounds,
     /// The title's bottom text (`PlainTextButton`): `CreditsAndAttributionScreen`.
@@ -2015,6 +2017,7 @@ impl Title {
                 // CommonButtons' icon buttons; Horizon's Join a Friend (an
                 // invite code) sits behind vanilla's Friends button.
                 for (i, (key, plain, id, icon)) in [
+                    ("horizon.mods.screen.title", "Mods", 9, "icon/mods"),
                     ("gui.friends.open", "Friends", 5, "friends/friends"),
                     ("options.language", "Language...", 6, "icon/language"),
                     (
@@ -2028,7 +2031,7 @@ impl Title {
                 .enumerate()
                 {
                     let mut button = b(
-                        cx - 34.0 + i as f32 * 24.0,
+                        cx - 46.0 + i as f32 * 24.0,
                         y + 72.0,
                         20.0,
                         &lang::get_or(key, plain),
@@ -2678,6 +2681,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             }
         };
         let narratable = match b.id {
+            9 => icon("horizon.mods.screen.narration"),
             5 => icon("gui.friends.open.narration"),
             6 => icon("options.language.narration"),
             7 => icon("accessibility.onboarding.accessibility.button.narration"),
@@ -2686,7 +2690,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         // TitleScreen.init adds the icon row after Minecraft Realms and before
         // Options... and Quit Game, which Horizon draws first.
         narratable.order(match b.id {
-            5..=7 => 1,
+            5..=7 | 9 => 1,
             2 | 3 => 2,
             _ => 0,
         })
@@ -2698,6 +2702,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
     /// (always, for Horizon's Join a Friend).
     fn button_tooltip(&self, id: u8) -> Option<&'static str> {
         match (&self.mode, id) {
+            (Mode::Main, 9) => Some("horizon.pages.mods.tooltip"),
             (Mode::Main, 5) => Some("gui.friends.open.tooltip"),
             (Mode::Main, 6) | (Mode::Onboarding(_), onboarding::LANGUAGE) => {
                 Some("options.language.tooltip")
@@ -3857,6 +3862,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             }
             (Mode::Main, Some(3)) => Action::Options,
             (Mode::Main, Some(7)) => Action::Accessibility,
+            (Mode::Main, Some(9)) => Action::Mods,
             (Mode::Main, Some(6)) => Action::Language,
             (Mode::Select { worlds, selected }, Some(10)) => {
                 match selected.and_then(|i| worlds.get(i)).cloned() {
@@ -5363,7 +5369,7 @@ mod classic_tests {
     }
 
     #[test]
-    fn classic_main_menu_icons_route_language_and_accessibility() {
+    fn classic_main_menu_icons_route_mods_language_and_accessibility() {
         let mut title = Title::new(
             PathBuf::new(),
             Path::new("/nonexistent/horizon-test-resources"),
@@ -5373,9 +5379,10 @@ mod classic_tests {
             let cx = (w / 2.0).floor();
             let y = (h / 4.0).floor() + 48.0;
             for (id, x, enabled, icon) in [
-                (5, cx - 34.0, true, "friends/friends"),
-                (6, cx - 10.0, true, "icon/language"),
-                (7, cx + 14.0, true, "icon/accessibility"),
+                (9, cx - 46.0, true, "icon/mods"),
+                (5, cx - 22.0, true, "friends/friends"),
+                (6, cx + 2.0, true, "icon/language"),
+                (7, cx + 26.0, true, "icon/accessibility"),
             ] {
                 let b = buttons.iter().find(|b| b.id == id).unwrap();
                 assert_eq!(
@@ -5385,6 +5392,7 @@ mod classic_tests {
                 assert_eq!(
                     title.click(x + 10.0, y + 82.0, (w, h)),
                     match id {
+                        9 => (Action::Mods, true),
                         6 => (Action::Language, true),
                         7 => (Action::Accessibility, true),
                         _ => (Action::None, true),
@@ -5403,11 +5411,11 @@ mod classic_tests {
             }
             // The four-pixel gaps around icons must not activate a button.
             assert_eq!(
-                title.click(cx + 12.0, y + 82.0, (w, h)),
+                title.click(cx + 24.0, y + 82.0, (w, h)),
                 (Action::None, false)
             );
             assert_eq!(
-                title.click(cx + 24.0, y + 92.0, (w, h)),
+                title.click(cx + 36.0, y + 92.0, (w, h)),
                 (Action::None, false)
             );
         }
@@ -5466,9 +5474,14 @@ mod classic_tests {
             "gui/title/edition".into(),
             crate::hud::Rect { w: 128, h: 16, ..r },
         );
-        for (i, icon) in ["friends/friends", "icon/language", "icon/accessibility"]
-            .into_iter()
-            .enumerate()
+        for (i, icon) in [
+            "icon/mods",
+            "friends/friends",
+            "icon/language",
+            "icon/accessibility",
+        ]
+        .into_iter()
+        .enumerate()
         {
             atlas.sprites.insert(
                 format!("gui/sprites/{icon}"),
@@ -5491,7 +5504,7 @@ mod classic_tests {
         assert_eq!(batch.vertices[6].pos, [cx - 64.0, 67.0]);
         assert_eq!(batch.vertices[8].pos, [cx + 64.0, 81.0]);
         assert_eq!(batch.vertices[8].uv, [1.0, 14.0 / 16.0]);
-        for i in 0..3 {
+        for i in 0..4 {
             let quad = batch
                 .vertices
                 .as_chunks::<6>()
@@ -5499,7 +5512,7 @@ mod classic_tests {
                 .iter()
                 .find(|quad| quad[0].uv == [0.25 + i as f32 * 0.125, 0.0])
                 .unwrap();
-            let x = cx - 34.0 + i as f32 * 24.0 + 3.0;
+            let x = cx - 46.0 + i as f32 * 24.0 + 3.0;
             let y = (batch.height / 4.0).floor() + 48.0 + 72.0 + 3.0;
             assert_eq!(quad[0].pos, [x, y]);
             assert_eq!(quad[2].pos, [x + 15.0, y + 15.0]);

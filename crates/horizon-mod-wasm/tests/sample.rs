@@ -80,7 +80,16 @@ impl mod_api::prelude::BlockStatesBackend for Server {
                 can_extinguish: false,
                 can_hydrate: true,
                 supports_boating: false,
+                explosion_resistance: 7.5,
+                randomly_ticks: true,
+                drip_particle: Some("sample:dripping_water".into()),
             }
+        })
+    }
+    fn fluid_legacy_block(&self, state: mod_api::FluidState) -> Option<mod_api::BlockStateId> {
+        // A canned answer that depends on the lifted record, so the guest's state really crosses.
+        (mod_api::__private::fluid_id(state.fluid)? == "minecraft:water").then(|| {
+            mod_api::BlockStateId(1000 + u32::from(state.amount) + u32::from(state.falling))
         })
     }
     fn fluid_state_validate(

@@ -129,10 +129,8 @@ impl Game<'_> {
         self.options_from_title = from_title;
         self.options_to_game = false;
         let minecart_improvements = self.minecart_improvements();
-        let mods_live = self.mods_live_now();
         let ui = &mut self.ui.options;
         ui.open_at(!from_title && self.title.is_none(), page);
-        ui.mods_live = mods_live;
         ui.minecart_improvements = minecart_improvements;
         ui.languages = lang::available(&[&self.pack.source]);
         self.refresh_pack_lists();
@@ -438,6 +436,12 @@ impl Game<'_> {
                     let dir = Self::game_dir().join(horizon_client::mod_list::DIR);
                     let _ = std::fs::create_dir_all(&dir);
                     super::packs::open_folder(&dir);
+                }
+                // The Mods screen's links go through ConfirmLinkScreen, back to the options.
+                Event::OpenLink(url) => self.confirm_untrusted_link(&url, Screen::Options),
+                Event::CopyText(text) => {
+                    use horizon_client::clipboard::Clipboard;
+                    self.clipboard.set(&text);
                 }
                 Event::BrowseMods => {
                     let ui = &mut self.ui.options.mod_browser;

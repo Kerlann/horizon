@@ -345,6 +345,8 @@ struct BlockFile {
     close_sound: Option<String>,
     block_item: Option<String>,
     #[serde(default)]
+    pick_item: Option<String>,
+    #[serde(default)]
     components: BTreeMap<String, serde_json::Value>,
 }
 fn yes() -> bool {
@@ -384,6 +386,10 @@ pub struct Block {
     /// it is not a block item of its own: an item of this mod or a vanilla
     /// one, checked to exist when the content loads. Needs `item` false.
     pub block_item: Option<String>,
+    /// The item pick-block takes from this block (`getCloneItemStack`), when it is not
+    /// the block's item: a mature crop picks its seed. An item of this mod or a vanilla
+    /// one, checked to exist when the content loads. Absent is the block's item.
+    pub pick_item: Option<String>,
     /// Its item's component patch, as an [`Item`]'s.
     pub components: BTreeMap<String, serde_json::Value>,
     /// A connecting block (template `minecraft:chorus_plant`, a `PipeBlock`
@@ -1092,6 +1098,7 @@ impl Content {
                 open_sound: file.open_sound,
                 close_sound: file.close_sound,
                 block_item: file.block_item,
+                pick_item: file.pick_item,
                 components: file.components,
                 connects_to: file
                     .connects_to
@@ -1589,6 +1596,11 @@ fn check_block(file: &Block) -> Result<(), String> {
             return Err("block_item is an item id, namespace:path".into());
         }
     }
+    if let Some(item) = &file.pick_item
+        && !namespaced_id(item)
+    {
+        return Err("pick_item is an item id, namespace:path".into());
+    }
     if let Some(wall) = &file.wall_block {
         if !sign || file.template.contains("_wall_") {
             return Err("wall_block needs a standing or ceiling sign template".into());
@@ -1631,6 +1643,11 @@ fn check_sign_walls(blocks: &[&Block]) -> Result<(), String> {
         if block.block_item.is_some() {
             return Err(format!(
                 "{id}: wall_block {wall} has this sign's item, so it declares no block_item"
+            ));
+        }
+        if block.pick_item.is_some() {
+            return Err(format!(
+                "{id}: wall_block {wall} picks this sign's item, so it declares no pick_item"
             ));
         }
         if block.item {
@@ -1957,6 +1974,7 @@ capabilities = ["registries"]
                 open_sound: None,
                 close_sound: None,
                 block_item: None,
+                pick_item: None,
                 components: BTreeMap::new(),
                 connects_to: None,
                 thickness: None,
@@ -2663,6 +2681,39 @@ capabilities = ["registries"]
         ] {
             let e = block(bad).unwrap_err();
             assert!(e.contains(word), "{bad}: {e}");
+        }
+    }
+
+    #[test]
+    fn pick_item_names_an_item_whatever_the_blocks_own_is() {
+        let block = |json: &str| {
+            hmod(
+                "pickitem",
+                MANIFEST_TEXT,
+                &[("data/ruby/horizon/block/crop.json", json.as_bytes())],
+            )
+        };
+        for json in [
+            r#"{"template": "minecraft:stone", "item": false, "pick_item": "ruby:seed"}"#,
+            r#"{"template": "minecraft:stone", "pick_item": "ruby:seed"}"#,
+            r#"{"template": "minecraft:stone", "item": false, "block_item": "ruby:fruit", "pick_item": "ruby:seed"}"#,
+        ] {
+            let parsed = block(json).unwrap();
+            assert_eq!(parsed.blocks[0].pick_item.as_deref(), Some("ruby:seed"));
+        }
+        assert_eq!(
+            block(r#"{"template": "minecraft:stone"}"#).unwrap().blocks[0].pick_item,
+            None
+        );
+        for bad in ["seed", "none", ""] {
+            let e = block(&format!(
+                r#"{{"template": "minecraft:stone", "pick_item": "{bad}"}}"#
+            ))
+            .unwrap_err();
+            assert!(
+                e.contains("pick_item") && e.contains("namespace:path"),
+                "{bad}: {e}"
+            );
         }
     }
 

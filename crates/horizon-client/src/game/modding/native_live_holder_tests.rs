@@ -6,7 +6,8 @@ use horizon_client::{
     containers::{BlockEntity, ModBlockEntity},
 };
 use mod_api::{
-    BlockEntityPart, BlockEntityTickEvent, BlockPart, Hooks, HostTransaction, Registrar, ServerHost,
+    BlockEntityPart, BlockEntityTickEvent, BlockEntityTicksEvent, BlockPart, BlocksEvent, Hooks,
+    Host, HostTransaction, Registrar, ServerHost,
 };
 
 struct Ticker(bool);
@@ -235,6 +236,135 @@ fn data_slot_sizing_after_creation_and_load_joins_the_existing_journal() {
             assert_eq!(entity.set_data_slots(game, vec![0]), Ok(true));
             assert!(entity.set_data_slot(game, 0, 1).unwrap());
             assert_eq!(entity.data_slots(game), Some(vec![1]));
+        });
+    });
+}
+
+/// The two block entity types of #2051's fixture: `tick_paths:both` is
+/// named by both paths (a `block_entity_type` declaration and a Registrar
+/// part carrying the ticker), `tick_paths:bare` is a declaration alone.
+const BOTH_BLOCK: &str = "tick_paths:press";
+const BARE_BLOCK: &str = "tick_paths:bare";
+struct TickPaths;
+#[mod_api::__subscriptions]
+impl Hooks for TickPaths {
+    fn register(&self, r: &mut dyn Registrar, _: &mod_api::RegistrationContext) {
+        let both = r.block_entity_type("both").blocks(&[BOTH_BLOCK]).build();
+        r.block_entity_part(&both, BothPaths).unwrap();
+        r.block_entity_type("bare").blocks(&[BARE_BLOCK]).build();
+    }
+    fn blocks(&self, _: &mod_api::RegistrationContext, event: &mut BlocksEvent<'_>) {
+        for id in [BOTH_BLOCK, BARE_BLOCK] {
+            event.blocks.push(horizon_mod_package::content::Block {
+                id: id.into(),
+                template: "minecraft:stone".into(),
+                ..Default::default()
+            });
+        }
+    }
+}
+/// Carries `tick_paths:both`'s ticker: its block ticks, and each tick adds
+/// one data slot.
+struct BothPaths;
+#[mod_api::horizon_part]
+impl BlockPart for BothPaths {}
+#[mod_api::horizon_part]
+impl BlockEntityPart for BothPaths {
+    fn block_entity_ticks(&self, _: &dyn Host, event: &mut BlockEntityTicksEvent<'_>) {
+        if event.block == BOTH_BLOCK {
+            event.ticks = true;
+        }
+    }
+    fn block_entity_tick(&self, _: &mut dyn ServerHost, event: &mut BlockEntityTickEvent<'_>) {
+        event.entity.data.push(1);
+    }
+}
+
+/// #2051: the one decision whether a mod block entity ticks is its type's
+/// own ticker, whichever path named the type — a type both a declaration
+/// and a Registrar part carry ticks exactly once per tick, and a bare
+/// declaration, whose type declares no ticker, never reaches the level's
+/// ticking list.
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+fn a_declared_type_ticks_once_whichever_path_named_it() {
+    // The overlay's `.horizon-cache` lives under the working directory and
+    // `native_declared()` caches the first fire per process, so tests sharing
+    // one process poison each other's mod content (`mods::tests::run_in_child`).
+    if super::native_entity_refs::tests::run_fresh_cases(
+        "game::native_live_holder_tests::a_declared_type_ticks_once_whichever_path_named_it",
+        "HORIZON_TICK_PATHS_GAME_CHILD",
+        &["run"],
+    ) {
+        return;
+    }
+    let mods: mod_api::Mods =
+        vec![mod_api::ModEntry::new("tick_paths", Box::new(TickPaths))].into();
+    mod_api::testing::with_mods(mods.clone(), || {
+        crate::game::api_values::install_parts(&mods).unwrap();
+        mod_api::__private::mark_game_thread();
+        let base = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let root = super::mods::content_root(&base, &Default::default()).unwrap();
+        super::native_entity_refs::tests::with_game_at(root.prepared().to_path_buf(), |game| {
+            game.options.dedicated = Some(Vec::new());
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            let registry = game.pack.assets.registry;
+            let press = registry.default_state(BOTH_BLOCK).unwrap();
+            let bare = registry.default_state(BARE_BLOCK).unwrap();
+            game.world.set(1, 64, 1, press).unwrap();
+            game.world.set(2, 64, 1, bare).unwrap();
+            for (pos, kind) in [
+                ((1, 64, 1), "tick_paths:both"),
+                ((2, 64, 1), "tick_paths:bare"),
+            ] {
+                game.world.block_entities.insert(
+                    pos,
+                    BlockEntity::Mod(Box::new(ModBlockEntity::new(
+                        kind.into(),
+                        Default::default(),
+                    ))),
+                );
+            }
+            // The type's own ticker is the one decision: the part's answer
+            // for the press block, nothing for the bare declaration.
+            assert!(game.native_ticks(BOTH_BLOCK));
+            assert!(!game.native_ticks(BARE_BLOCK));
+            // The level's ticking list carries exactly the ticker's answer:
+            // one slot for the press, none for the bare declaration.
+            game.world.block_entities.set_states(game.ticking_states());
+            let tickers = game.world.block_entity_tickers();
+            assert_eq!(
+                tickers.iter().filter(|(pos, _)| *pos == (1, 64, 1)).count(),
+                1
+            );
+            assert!(
+                !tickers.iter().any(|(pos, _)| *pos == (2, 64, 1)),
+                "a type with no ticker never reaches the ticking list"
+            );
+            // Exactly one tick per game tick, the type named by both paths:
+            // the declaration and the part each count once, not twice.
+            for expected in [1, 2, 3] {
+                game.tick_mod_block_entity((1, 64, 1));
+                let BlockEntity::Mod(entity) = game.world.block_entities.get(&(1, 64, 1)).unwrap()
+                else {
+                    panic!("press entity missing")
+                };
+                assert_eq!(entity.data, vec![1; expected]);
+            }
+            // A declared type with no listener stays inert through its tick
+            // call: no data, no write.
+            game.tick_mod_block_entity((2, 64, 1));
+            let BlockEntity::Mod(entity) = game.world.block_entities.get(&(2, 64, 1)).unwrap()
+            else {
+                panic!("bare entity missing")
+            };
+            assert!(
+                entity.data.is_empty(),
+                "a type no path gave a ticker changes nothing"
+            );
+            assert_eq!(entity.revision().changes(), 0, "no listener, no write");
         });
     });
 }

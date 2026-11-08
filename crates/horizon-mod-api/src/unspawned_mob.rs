@@ -12,7 +12,8 @@ pub enum UnspawnedMobError {
     /// or there is no game.
     Expired,
     /// This mob's type has no such attribute, or the game keeps no mob behind this lend (the
-    /// ender dragon, which it stores apart from mobs).
+    /// ender dragon, which it stores apart from mobs, or a position check where the game creates
+    /// the mob later from saved data or the world generator).
     Unsupported,
     /// The value is refused: an unknown attribute, a non-finite number, a modifier id the
     /// attribute already has, an empty or full tag list, or invalid item data.

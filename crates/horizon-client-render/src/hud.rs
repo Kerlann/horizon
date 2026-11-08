@@ -1386,6 +1386,11 @@ impl HudAtlas {
             edition.3 = pixels;
         }
         images.push(("horizon/white".into(), 4, 4, vec![255; 64]));
+        // The main menu's Mods button, unless a pack brought its own icon.
+        let mods_icon = crate::mods_screen::icon_image();
+        if !images.iter().any(|i| i.0 == mods_icon.0) {
+            images.push(mods_icon);
+        }
         // The controller's art, unless a pack brought its own (walked above, as a mod's GUI
         // textures are).
         for image in crate::pad_glyph::images() {

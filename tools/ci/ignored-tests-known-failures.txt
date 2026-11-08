@@ -99,8 +99,6 @@ horizon-client game::potions::tests::lifecycle_cloud_commands_and_parked_owners 
 horizon-client-lib vanillagen::lod::tests::decorated_lod_refines_real_seed_canopies_and_all_dimensions #2132 flaky
 
 # Additional failures in the current-main honest run (42497697222).
-horizon-client game::commands::data::residency_tests::mob_data_load_keeps_runtime_identity #2198
-horizon-client game::commands::data::wolf_live_anger_tests::live_wolf_anger_writes_use_the_level_clock_and_keep_bee_state #2198
 horizon-client game::living_attributes::tests::a_hits_armor_follows_the_live_map_at_once #2199
 horizon-client game::native_living_refs::tests::mob_equipment_writes_keep_full_stacks #2199
 horizon-client game::native_mob_refs::tests::mob_handles_read_write_and_refuse_unavailable_entities #2199

@@ -143,6 +143,8 @@ impl VanillaTerrain {
             let block = facts.get(state);
             if let Some(declared) = crate::block_entity_types::type_for(&block.name) {
                 *kind = Some(declared);
+            } else if let Some(kind_id) = crate::lan::chunks::block_entity_type(&block.name) {
+                *kind = Some(kind_id);
             } else if let Some(form) = block.sign_form() {
                 *kind = Some(form.block_entity_type());
             }
@@ -234,6 +236,10 @@ impl VanillaTerrain {
         )?;
         terrain.flat = true;
         Ok(terrain)
+    }
+    /// `ChunkGenerator.getSeaLevel`: the sea level the terrain is generated with.
+    pub fn sea_level(&self) -> i32 {
+        self.generator.sea_level()
     }
     /// Whether this is a superflat generator, whose `spawnOriginalMobs` places nothing.
     pub fn is_flat(&self) -> bool {

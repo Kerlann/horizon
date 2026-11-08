@@ -121,6 +121,40 @@ fn scale_icon((w, h, rgba): (u32, u32, Vec<u8>)) -> Option<Arc<[u8]>> {
     }
     Some(out.into())
 }
+/// Points the icon blits of `draws` at the atlas's pack icon slots and writes the `icons` they
+/// name into them, one slot per blit (vanilla registers a texture per icon). Icons past the last
+/// slot keep `unknown_pack`.
+pub fn bind_icon_slots(
+    icons: &HashMap<String, Arc<[u8]>>,
+    draws: &mut [Draw],
+    atlas: &HudAtlas,
+    patches: &mut Vec<Patch>,
+) {
+    let mut slots = 0..PACK_ICON_SLOTS;
+    for draw in draws {
+        let Draw::Blit { texture, .. } = draw else {
+            continue;
+        };
+        let Some(icon) = icons.get(texture.as_str()) else {
+            continue;
+        };
+        let Some(slot) = slots.next() else {
+            return;
+        };
+        let sprite = format!("horizon/pack-icon{slot}");
+        let Some(rect) = atlas.sprites.get(&sprite) else {
+            return;
+        };
+        patches.push(Patch {
+            x: (rect.u0 * atlas.width as f32).round() as u32,
+            y: (rect.v0 * atlas.height as f32).round() as u32,
+            width: PACK_ICON_SIZE,
+            height: PACK_ICON_SIZE,
+            rgba: icon.to_vec(),
+        });
+        *texture = sprite;
+    }
+}
 /// `PackSelectionScreen.loadPackIcon`'s texture for a pack with an icon.
 pub fn icon_texture(id: &str) -> String {
     let sanitized: String = id
@@ -921,30 +955,7 @@ impl PackScreen {
     /// writes the icons into them, one slot per icon drawn (vanilla registers a
     /// texture per pack). Icons past the last slot keep `unknown_pack`.
     pub fn bind_icons(&self, draws: &mut [Draw], atlas: &HudAtlas, patches: &mut Vec<Patch>) {
-        let mut slots = 0..PACK_ICON_SLOTS;
-        for draw in draws {
-            let Draw::Blit { texture, .. } = draw else {
-                continue;
-            };
-            let Some(icon) = self.icons.get(texture.as_str()) else {
-                continue;
-            };
-            let Some(slot) = slots.next() else {
-                return;
-            };
-            let sprite = format!("horizon/pack-icon{slot}");
-            let Some(rect) = atlas.sprites.get(&sprite) else {
-                return;
-            };
-            patches.push(Patch {
-                x: (rect.u0 * atlas.width as f32).round() as u32,
-                y: (rect.v0 * atlas.height as f32).round() as u32,
-                width: PACK_ICON_SIZE,
-                height: PACK_ICON_SIZE,
-                rgba: icon.to_vec(),
-            });
-            *texture = sprite;
-        }
+        bind_icon_slots(&self.icons, draws, atlas, patches);
     }
 
     /// The shown screen's calls (`Screen.extractRenderState`); `blink_ms`

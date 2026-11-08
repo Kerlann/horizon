@@ -27,6 +27,41 @@ The placement type is `SpawnPlacements.isSpawnPositionOk`'s first check, and the
 
 `mob_spawn_placement_check` is the separate per-check moment: it runs after the rule and is told its answer as `default_result`, so a listener can still overturn it for one position.
 
+## Checking a spawn
+
+`mob_spawn_placement_check` and `mob_spawn_position_check` both get the `level` the mob would join (a `LevelRef`, so a
+listener can read the blocks around `pos` through the host) and the `spawner` that asked: `Spawner::Block { pos }` for a
+spawner block, `Spawner::Trial { pos }` for a trial spawner, and `None` for natural spawning, chunk generation, patrols,
+sieges, reinforcements and a spawner minecart. Set `*event.result` to `NativeSpawnCheck::Succeed` or `Fail` to force the
+check; `Default` keeps vanilla's answer.
+
+```rust,ignore
+fn mob_spawn_placement_check(&self, _: &dyn mod_api::Host, event: &mut mod_api::MobSpawnPlacementCheckEvent<'_>) {
+    // spawner blocks work as usual; nothing else spawns zombies here
+    if event.kind == "minecraft:zombie" && event.spawner.is_none() {
+        *event.result = mod_api::NativeSpawnCheck::Fail;
+    }
+}
+```
+
+The position check also gets `event.mob`, the mob about to spawn, as an `UnspawnedMobRef` with the same reads as
+`finalize_spawn`'s (no editor: the hook only reads). Vanilla creates the mob before this check; Horizon creates it there
+only when the hook has a listener, the same way the spawn would, and the spawn then goes on with that very mob, so what
+the listener read is what joins the level. A refused check drops the mob: it never joins the level. Creating it draws
+nothing from the level's random, so a listener that answers `Default` changes no draw.
+
+```rust,ignore
+fn mob_spawn_position_check(&self, host: &dyn mod_api::Host, event: &mut mod_api::MobSpawnPositionCheckEvent<'_>) {
+    if event.mob.custom_name(host).is_ok_and(|name| name.is_some()) {
+        *event.result = mod_api::NativeSpawnCheck::Succeed;
+    }
+}
+```
+
+Where the game does not create the mob fresh, the handle answers only `kind` and `position` (the rest is
+`UnspawnedMobError::Unsupported`): chunk generation's packs, which the world generator creates and finalizes after the
+check, and a spawner or trial spawner whose spawn data carries entity data, which the game loads after the tick.
+
 ## Stopping a spawn or leaving a mob plain
 
 `finalize_spawn` has two cancels, as in NeoForge. Returning `Flow::Cancel` skips finalization: the mob still spawns, but with no equipment, attributes or class setup. Setting `event.spawn_cancelled = true` adds no mob at all.

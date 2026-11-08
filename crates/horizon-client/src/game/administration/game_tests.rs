@@ -1037,15 +1037,38 @@ impl Game<'_> {
         if info.def.block_based {
             return self.run_block_based(info);
         }
-        // FunctionGameTestInstance: the function from the test function
-        // registry (`BuiltinTestFunctions`).
+        if let Some(callback) = info.def.callback.clone() {
+            let context = mod_api::GameTestContext::new(
+                self.level(self.dim.id()).expect("test server level"),
+                self.test_origin(info),
+                match info.rotation() {
+                    Rotation::None => 0,
+                    Rotation::Clockwise90 => 1,
+                    Rotation::Clockwise180 => 2,
+                    Rotation::Counterclockwise90 => 3,
+                },
+            );
+            // A test exception fails this attempt, as GameTestInfo.startTest does;
+            // it must not unwind out of the server tick and stop the remaining tests.
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                callback.run(self, &context)
+            }))
+            .map_err(|payload| {
+                TestError::Unknown(super::dedicated::panic_message(payload.as_ref()))
+            })?;
+            return match result {
+                mod_api::GameTestResult::Pass => {
+                    info.succeed();
+                    Ok(())
+                }
+                mod_api::GameTestResult::Fail(message) => {
+                    Err(info.assertion(Text::literal(message)))
+                }
+                mod_api::GameTestResult::Pending => Ok(()),
+            };
+        }
         let function = info.def.function.as_deref().unwrap_or_default();
-        let function = if function.contains(':') {
-            function.to_owned()
-        } else {
-            format!("minecraft:{function}")
-        };
-        match function.as_str() {
+        match function {
             // ALWAYS_PASS: GameTestHelper::succeed.
             "minecraft:always_pass" => {
                 info.succeed();
@@ -1669,5 +1692,197 @@ mod tests {
         *report_of(&mut reports, copy.origin).0 += 1;
         *report_of(&mut reports, original.origin).1 += 1;
         assert_eq!(reports, vec![(1, 1, 1)]);
+    }
+}
+
+#[cfg(test)]
+mod registered_game_test_tests {
+    use super::*;
+    use mod_api::{GameTestContext, GameTestFunction, GameTestResult, GameTests};
+    use std::sync::Arc;
+
+    struct ChangeBlock(horizon_world::registry::BlockStateId);
+    impl GameTestFunction for ChangeBlock {
+        fn run(
+            &self,
+            host: &mut dyn mod_api::ServerHost,
+            context: &GameTestContext,
+        ) -> GameTestResult {
+            let pos = context.absolute_pos([1, 64, 1]);
+            assert!(context.level.set_block(
+                host,
+                pos,
+                self.0,
+                mod_api::NativeBlockUpdateFlags::CLIENTS
+                    | mod_api::NativeBlockUpdateFlags::NEIGHBORS
+            ));
+            assert_eq!(
+                context.level.block(host, pos).as_deref(),
+                Some("minecraft:stone")
+            );
+            GameTestResult::Pass
+        }
+    }
+    struct Fail;
+    impl GameTestFunction for Fail {
+        fn run(&self, _: &mut dyn mod_api::ServerHost, _: &GameTestContext) -> GameTestResult {
+            GameTestResult::Fail("registered failure".into())
+        }
+    }
+    struct Panics;
+    impl GameTestFunction for Panics {
+        fn run(&self, _: &mut dyn mod_api::ServerHost, _: &GameTestContext) -> GameTestResult {
+            let attempt = 1;
+            panic!("registered panic in attempt {attempt}");
+        }
+    }
+    struct TestMod(horizon_world::registry::BlockStateId);
+    #[mod_api::__subscriptions]
+    impl mod_api::Hooks for TestMod {
+        fn register_game_tests(
+            &self,
+            _: &dyn mod_api::Host,
+            event: &mut mod_api::RegisterGameTestsEvent<'_>,
+        ) {
+            event
+                .functions
+                .register("example:pass", Arc::new(ChangeBlock(self.0)))
+                .unwrap();
+            event
+                .functions
+                .register("example:fail", Arc::new(Fail))
+                .unwrap();
+            event
+                .functions
+                .register("example:panic", Arc::new(Panics))
+                .unwrap();
+            event
+                .functions
+                .register_test(
+                    "example:passing",
+                    mod_api::GameTestDefinition::new(
+                        "minecraft:empty".into(),
+                        "example:pass".into(),
+                    ),
+                )
+                .unwrap();
+        }
+    }
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn registered_game_tests_report_pass_failure_and_unknown_in_real_level() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            game.options.dedicated = Some(Vec::new());
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(horizon_client::chunk::Chunk::empty(0, 0)));
+            let stone = game
+                .pack
+                .assets
+                .registry
+                .default_state("minecraft:stone")
+                .unwrap();
+            let mut functions = mod_api::GameTestFunctions::default();
+            game.native_register_game_tests(&mut functions);
+            assert!(functions.resolve("example:pass").is_none());
+            let hooks = Box::new(TestMod(stone));
+            let mods = vec![mod_api::ModEntry::new("example", hooks)];
+            mod_api::testing::with_mods(mods.into(), || {
+                game.native_register_game_tests(&mut functions);
+                game.snapshot_test_defs();
+                let registered = game.test_def("example:passing").unwrap();
+                assert!(registered.callback.is_some());
+                assert_eq!(registered.max_ticks, 100);
+            });
+            assert!(functions.register("example:pass", Arc::new(Fail)).is_err());
+            assert!(
+                functions
+                    .register("minecraft:always_pass", Arc::new(Fail))
+                    .is_err()
+            );
+            game.game_tests.runner = Some(Runner {
+                batches: Vec::new(),
+                current: 0,
+                batch_pending: 5,
+                tracked: (1..=5)
+                    .map(|id| Tracked {
+                        id,
+                        required: true,
+                        done: false,
+                        failed: false,
+                    })
+                    .collect(),
+                halt_on_error: false,
+                batch_size: 50,
+                clear_between_batches: false,
+                grid_for_existing: false,
+                last_batch: Vec::new(),
+                grid: None,
+                reports: Vec::new(),
+                scheduled: Vec::new(),
+                stopped: false,
+            });
+            let mut outcomes = Vec::new();
+            for (index, id) in [
+                "example:panic",
+                "example:pass",
+                "example:fail",
+                "example:missing",
+                "minecraft:always_pass",
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let mut def = TestDef::sample(false, 10, 0);
+                def.function = Some(id.into());
+                def.callback = functions.resolve(id);
+                let mut info = Info::new(
+                    index as u32 + 1,
+                    id.into(),
+                    def,
+                    Some((0, 64, 0)),
+                    Dim::Overworld,
+                    Rotation::None,
+                );
+                game.start_test(&mut info);
+                if info.error.is_some() {
+                    info.finish();
+                }
+                if id == "example:panic" {
+                    let Some(TestError::Unknown(message)) = &info.error else {
+                        panic!("expected panic to become an unknown test failure");
+                    };
+                    assert!(
+                        message.contains("registered panic in attempt 1"),
+                        "{message}"
+                    );
+                }
+                if id == "example:fail" {
+                    let Some(TestError::Assert { message, .. }) = &info.error else {
+                        panic!("expected assertion");
+                    };
+                    assert_eq!(message.plain(), "registered failure");
+                }
+                game.test_finished(&info);
+                outcomes.push((info.done, info.error.is_none()));
+            }
+            let runner = game.game_tests.runner.as_ref().unwrap();
+            assert_eq!(runner.tracked.iter().filter(|t| t.done).count(), 5);
+            assert_eq!(runner.tracked.iter().filter(|t| t.failed).count(), 3);
+            assert_eq!(
+                game.game_tests.failed,
+                ["example:panic", "example:fail", "example:missing"]
+            );
+            assert_eq!(
+                outcomes,
+                [
+                    (true, false),
+                    (true, true),
+                    (true, false),
+                    (true, false),
+                    (true, true)
+                ]
+            );
+        });
     }
 }

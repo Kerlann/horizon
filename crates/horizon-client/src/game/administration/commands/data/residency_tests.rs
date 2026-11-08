@@ -142,3 +142,41 @@ fn stand_data_load_keeps_runtime_identity() {
 fn frame_data_load_keeps_runtime_identity() {
     reload_preserves_runtime_identity("minecraft:item_frame");
 }
+
+/// Loading saved fields must not reopen LivingEntity's damage cooldown. The
+/// separate Entity immunity field remains writable through its saved NBT key.
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn data_edits_keep_hit_cooldown_separate_from_saved_immunity() {
+    with_game(|game| {
+        game.build_registries();
+        game.set_allow_commands(true);
+        assert!(game.run_command("summon cow 8.5 65 8.5"));
+        let id = game
+            .mobs
+            .iter()
+            .find(|m| m.species() == horizon_client::mobs::Species::Cow)
+            .unwrap()
+            .id;
+        let health = |game: &Game<'_>| game.mobs.iter().find(|m| m.id == id).unwrap().health;
+        assert!(game.run_command("damage @e[type=cow,limit=1] 4 minecraft:generic"));
+        assert_eq!(health(game), 6.0);
+        assert!(game.run_command("data merge entity @e[type=cow,limit=1] {Silent:1b}"));
+        assert!(!game.run_command("damage @e[type=cow,limit=1] 2 minecraft:generic"));
+        assert_eq!(
+            health(game),
+            6.0,
+            "a weaker hit during cooldown does no damage"
+        );
+        assert!(game.run_command("damage @e[type=cow,limit=1] 6 minecraft:generic"));
+        assert_eq!(
+            health(game),
+            4.0,
+            "a stronger hit only deals the difference"
+        );
+        assert!(game.run_command("data merge entity @e[type=cow,limit=1] {invulnerable_time:7}"));
+        let mob = game.mobs.iter().find(|m| m.id == id).unwrap();
+        assert_eq!(mob.invulnerable, 20);
+        assert_eq!(mob.invulnerable_time, 7);
+    });
+}

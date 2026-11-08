@@ -336,6 +336,7 @@ impl Game<'_> {
     /// until the reload's new function store is available.
     pub(super) fn install_world_tables(&mut self, prepared: PreparedWorldReload) {
         let PreparedWorldReload {
+            structure_spawns,
             tables,
             health,
             parts,
@@ -357,6 +358,7 @@ impl Game<'_> {
             );
         }
         self.world_tables = tables;
+        self.structure_spawns = structure_spawns;
         self.health_resources = health;
         self.server_items = None;
         self.install_parts(parts);
@@ -556,6 +558,7 @@ impl Game<'_> {
             None
         };
         Ok(PreparedWorldReload {
+            structure_spawns: horizon_client::mobs::spawn_selection::StructureSpawns::load(root),
             tables,
             health,
             parts,

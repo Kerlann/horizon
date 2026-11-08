@@ -43,6 +43,21 @@ pub struct Manifest {
     pub description: String,
     #[serde(default)]
     pub authors: Vec<String>,
+    /// The Mods screen's `License:` line (a name such as `MIT`); empty shows it as not given.
+    #[serde(default)]
+    pub license: String,
+    /// Where the license text is: the screen makes its name a link.
+    #[serde(default)]
+    pub license_url: Option<String>,
+    /// The Mods screen's `Credits:` line.
+    #[serde(default)]
+    pub credits: String,
+    /// The mod's home page, the Mods screen's Homepage button.
+    #[serde(default)]
+    pub homepage: Option<String>,
+    /// Where to report problems, the Mods screen's Issues button.
+    #[serde(default)]
+    pub issues: Option<String>,
     /// The content API line: `0.2`.
     pub api: String,
     #[serde(default)]
@@ -300,6 +315,20 @@ impl Manifest {
             return Err(format!(
                 "{MANIFEST}: a content mod has capabilities = [\"registries\"]"
             ));
+        }
+        for (field, url) in [
+            ("license_url", &m.license_url),
+            ("homepage", &m.homepage),
+            ("issues", &m.issues),
+        ] {
+            if let Some(url) = url
+                && (url.len() > 2048
+                    || !(url.starts_with("https://") || url.starts_with("http://")))
+            {
+                return Err(format!(
+                    "{MANIFEST}: {field} is an http(s) link of at most 2048 characters"
+                ));
+            }
         }
         for (i, ns) in m.namespaces.iter().enumerate() {
             // Vanilla's namespace characters, at most as long as an id.
@@ -1255,6 +1284,31 @@ capabilities = ["registries"]
         assert!(with("\"a\", \"a\"").unwrap_err().contains("twice"));
         assert!(with("\"Kaisyn\"").unwrap_err().contains("is not"));
         assert!(with("\"\"").unwrap_err().contains("is not"));
+    }
+
+    #[test]
+    fn the_mods_screen_fields_are_optional_and_links_must_be_http() {
+        let m = Manifest::parse(EXAMPLE).unwrap();
+        assert!(m.license.is_empty() && m.credits.is_empty());
+        assert!(m.license_url.is_none() && m.homepage.is_none() && m.issues.is_none());
+        let full = format!(
+            "{EXAMPLE}license = \"MIT\"
+credits = \"Alex\"
+homepage = \"https://example.org\"
+issues = \"http://example.org/issues\"
+"
+        );
+        let m = Manifest::parse(&full).unwrap();
+        assert_eq!((m.license.as_str(), m.credits.as_str()), ("MIT", "Alex"));
+        assert_eq!(m.homepage.as_deref(), Some("https://example.org"));
+        for field in ["license_url", "homepage", "issues"] {
+            let e = Manifest::parse(&format!(
+                "{EXAMPLE}{field} = \"file:///etc/passwd\"
+"
+            ))
+            .unwrap_err();
+            assert!(e.contains(field), "{e}");
+        }
     }
 
     #[test]

@@ -30,11 +30,31 @@ pub(super) fn is_modifier(file: &str) -> bool {
 
 /// One mob spawner entry in an `add_spawns` modifier.
 #[derive(Debug, PartialEq)]
-struct Spawner {
-    entity: String,
+pub(super) struct Spawner {
+    pub entity: String,
     weight: i64,
     min_count: i64,
     max_count: i64,
+}
+
+impl Spawner {
+    /// The canonical 26.3 weighted spawn entry, shared by biome and structure modifiers.
+    pub(super) fn entry(&self) -> J {
+        let count = if self.min_count == self.max_count {
+            J::Num(self.min_count.into())
+        } else {
+            J::Obj(vec![
+                ("type".into(), J::Str("minecraft:uniform".into())),
+                ("min_inclusive".into(), J::Num(self.min_count.into())),
+                ("max_inclusive".into(), J::Num(self.max_count.into())),
+            ])
+        };
+        J::Obj(vec![
+            ("type".into(), J::Str(self.entity.clone())),
+            ("count".into(), count),
+            ("weight".into(), J::Num(self.weight.into())),
+        ])
+    }
 }
 
 /// What a modifier does to its biomes.
@@ -86,7 +106,7 @@ fn step(v: &Value) -> std::result::Result<usize, String> {
 }
 
 /// One NeoForge `SpawnerData` object from `spawners`.
-fn spawner(v: &Value) -> std::result::Result<Spawner, String> {
+pub(super) fn spawner(v: &Value) -> std::result::Result<Spawner, String> {
     let o = v.as_object().ok_or("spawner: not an object")?;
     let entity = o
         .get("type")
@@ -95,6 +115,7 @@ fn spawner(v: &Value) -> std::result::Result<Spawner, String> {
     let int = |k: &str| {
         o.get(k)
             .and_then(Value::as_i64)
+            .filter(|value| i32::try_from(*value).is_ok())
             .ok_or_else(|| format!("spawner: no {k}"))
     };
     let weight = int("weight")?;
@@ -227,7 +248,7 @@ impl Registry<'_> {
     /// `#tag`, a list of ids, or one of NeoForge's `any`, `or`, `and` and
     /// `not` objects. Unknown ids and tags are errors; inside a tag, entries
     /// nobody registers are left out, as the worldgen loader leaves them out.
-    fn resolve(&self, set: &Value) -> std::result::Result<Vec<String>, String> {
+    pub(super) fn resolve(&self, set: &Value) -> std::result::Result<Vec<String>, String> {
         Selector::read(set.clone(), false)?.resolve(self, None)
     }
 
@@ -679,22 +700,19 @@ fn add_spawns(
         let Some(J::Arr(list)) = by_cat.get_mut(cat) else {
             return Err(format!("spawns_by_category.{cat}: not a list"));
         };
-        let count = if s.min_count == s.max_count {
-            J::Num(s.min_count.into())
-        } else {
-            J::Obj(vec![
-                ("type".into(), J::Str("minecraft:uniform".into())),
-                ("min_inclusive".into(), J::Num(s.min_count.into())),
-                ("max_inclusive".into(), J::Num(s.max_count.into())),
-            ])
-        };
-        list.push(J::Obj(vec![
-            ("type".into(), J::Str(s.entity.clone())),
-            ("count".into(), count),
-            ("weight".into(), J::Num(s.weight.into())),
-        ]));
+        list.push(s.entry());
     }
     Ok(())
+}
+
+/// Remove entity ids from a canonical weighted spawn list.
+pub(super) fn remove_entities(entries: &mut Vec<J>, entities: &[String]) {
+    entries.retain(|entry| {
+        entry
+            .get("type")
+            .and_then(J::as_str)
+            .is_none_or(|t| !entities.contains(&full(t)))
+    });
 }
 
 fn remove_spawns(biome: &mut J, entities: &[String]) -> std::result::Result<(), String> {
@@ -719,12 +737,7 @@ fn remove_spawns(biome: &mut J, entities: &[String]) -> std::result::Result<(), 
         let J::Arr(entries) = list else {
             return Err(format!("spawns_by_category.{cat}: not a list"));
         };
-        entries.retain(|entry| {
-            entry
-                .get("type")
-                .and_then(J::as_str)
-                .is_none_or(|t| !entities.contains(&full(t)))
-        });
+        remove_entities(entries, entities);
     }
     Ok(())
 }

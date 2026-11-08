@@ -107,6 +107,17 @@ impl Hooks for Mod {
         assert_eq!(properties.fall_distance_modifier, 0.25);
         assert!(properties.can_push_entity && properties.can_drown && properties.can_hydrate);
         assert!(!properties.can_swim && !properties.can_extinguish && !properties.supports_boating);
+        assert_eq!(properties.explosion_resistance, 7.5);
+        assert!(properties.randomly_ticks);
+        assert_eq!(
+            properties.drip_particle.as_deref(),
+            Some("sample:dripping_water")
+        );
+        // The sample host answers 1000 plus the amount (8) plus one for a falling state.
+        assert_eq!(
+            service.legacy_block(default).map(|state| state.0),
+            Some(1009)
+        );
         assert_eq!(service.type_properties(chocolate), None);
         assert_eq!(
             service.definition(chocolate),

@@ -18,8 +18,10 @@ use mod_api::{EffectKey, LivingRef, NativeActiveEffect};
 /// A player's effect as the API's load-owned key and instance data.
 pub(super) fn active_effect(e: &EffectInstance) -> NativeActiveEffect {
     NativeActiveEffect::from(mod_api::__private::built::NativeActiveEffect {
-        id: mod_api::__private::effect_key(e.registry_index.expect("active effect registry index"))
-            .expect("effects resolved at load"),
+        id: mod_api::__private::effect_key_by_index(
+            e.registry_index.expect("active effect registry index"),
+        )
+        .expect("effects resolved at load"),
         duration: e.duration,
         amplifier: e.amplifier,
         ambient: e.ambient,
@@ -30,8 +32,10 @@ pub(super) fn active_effect(e: &EffectInstance) -> NativeActiveEffect {
 /// A mob's stored effect as the API's: ambient and particle flags remain in their own lists.
 pub(super) fn mob_effect(m: &Mob, e: &horizon_client::mobs::StoredEffect) -> NativeActiveEffect {
     NativeActiveEffect::from(mod_api::__private::built::NativeActiveEffect {
-        id: mod_api::__private::effect_key(e.registry_index.expect("active effect registry index"))
-            .expect("effects resolved at load"),
+        id: mod_api::__private::effect_key_by_index(
+            e.registry_index.expect("active effect registry index"),
+        )
+        .expect("effects resolved at load"),
         duration: e.duration,
         amplifier: e.amplifier,
         ambient: m.extra.ambient_effects.contains(&e.id),
@@ -319,7 +323,7 @@ impl Game<'_> {
                     .iter()
                     .filter(|(name, amplifier)| {
                         let mut cancel = false;
-                        if let Some(key) = mod_api::__private::effect_key(*name) {
+                        if let Some(key) = mod_api::__private::effect_key_by_index(*name) {
                             self.native_mob_effect_remove(living, key, *amplifier, &mut cancel);
                         }
                         cancel

@@ -3,6 +3,9 @@ pub use horizon_core::bounding_box::BoundingBox;
 pub use horizon_core::equipment_slot::EquipmentSlot;
 #[horizon_mod_api_macros::wasm(via = String)]
 pub use horizon_core::identifier::Identifier;
+/// A level's key (`LevelDimension::Custom`), as its `namespace:path` on wasm.
+#[horizon_mod_api_macros::wasm(via = String)]
+pub use horizon_core::level_key::LevelKey;
 #[horizon_mod_api_macros::wasm(via = Tag)]
 pub use horizon_core::nbt::Compound;
 #[horizon_mod_api_macros::wasm(via = Vec<u8>)]

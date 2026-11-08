@@ -44,7 +44,7 @@ load, and `if_installed!` keeps the mod from calling it.
 
 ## In the game
 
-The game loads every `mod.wasm` turned on in the Mods page (or passed with `--dev-mod`) at start,
+The game loads every `mod.wasm` turned on in the launcher or `horizon-mods.txt` (or passed with `--dev-mod`) at start,
 after the native mods. Each runs sandboxed with a memory limit and a time limit per call: 100 ms
 for a hook or part call, 30 s for start-up and a call of the load phase (registration, a data
 load, a resource reload). A mod that traps or runs past its limit stops its group, not the game.

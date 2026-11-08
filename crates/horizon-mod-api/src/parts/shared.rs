@@ -804,7 +804,7 @@ pub mod tests {
         let index = horizon_client_core::potions::effect(id)
             .expect("fixture registered this effect")
             .index;
-        crate::registry_keys::effect_key(index).expect("fixture resolved effect keys")
+        crate::registry_keys::effect_key_by_index(index).expect("fixture resolved effect keys")
     }
 
     #[cfg(test)]

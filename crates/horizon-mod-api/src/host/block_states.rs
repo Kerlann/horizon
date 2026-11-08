@@ -139,6 +139,14 @@ pub trait BlockStatesBackend {
     #[access(Metadata)]
     fn fluid_type_properties(&self, fluid: FluidKey) -> Option<FluidTypeProperties>;
     /// Side: both.
+    /// `FluidState.createLegacyBlock`: the block state that holds `state` in the world, a water or
+    /// lava block of the matching level (source, flowing amount, falling), a mod's world fluid's
+    /// block, or air for the empty fluid. None for a state no fluid can be in (a tank-only
+    /// fluid, an amount above 8, a zero amount for anything but the empty fluid, or a source
+    /// that isn't full) and without a resolved registry.
+    #[access(Metadata)]
+    fn fluid_legacy_block(&self, state: FluidState) -> Option<BlockStateId>;
+    /// Side: both.
     /// Validate partial property constraints in input order with indexed errors.
     /// An unavailable or tank-only definition returns NoWorldState.
     #[access(Metadata)]

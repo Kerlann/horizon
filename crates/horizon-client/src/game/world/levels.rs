@@ -555,7 +555,10 @@ impl Game<'_> {
                 None => (self.open_level(target)?, true),
             };
             p.world.game_time = self.world.game_time;
-            p.world.day_time = self.world.day_time;
+            // The level's day time is its default clock's; a level without one follows the
+            // Overworld's.
+            let clock = self.level_clock_name(target);
+            p.world.day_time = self.switch_clock(&clock);
             p.world.weather = self.world.weather;
             // The game rules and the difficulty are the server's, not a
             // level's: natural regeneration holds in every dimension.
@@ -587,6 +590,7 @@ impl Game<'_> {
         if let Some(h) = self.lan.as_mut() {
             h.hub.set_dimension(target.id());
         }
+        self.sync_hub_clocks();
         Ok(())
     }
 

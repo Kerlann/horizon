@@ -42,6 +42,19 @@ level: `description_id`, `light_level`, `fall_distance_modifier`, and whether th
 swum in, drown, extinguish, hydrate and carry boats. Flowing forms answer as their source. The empty fluid and
 tank-only fluids emit no light, do nothing to an entity and have a fall modifier of 1. Anything that depends on
 a level, such as lava's current or source conversion, isn't in the record.
+The record also carries three `Fluid` facts: `explosion_resistance` (100 for water, lava and a mod's
+world fluid, 0 for the empty or a tank-only fluid), `randomly_ticks` (lava only) and `drip_particle`
+(`minecraft:dripping_water` or `minecraft:dripping_lava`, none for the rest).
+
+`legacy_block(state)` is `FluidState.createLegacyBlock`: the water, lava or mod-fluid block that holds a
+fluid state (a source is level 0, a flowing amount is `8 - amount`, falling adds 8) and air for the empty
+fluid. It is `None` for a state no fluid can be in: a tank-only fluid, an amount above 8, a zero amount
+for anything but the empty fluid, or a source that isn't full.
+
+What depends on a position is on `LevelRef`, not in this service: `fluid_tick_delay(host, fluid, pos)`
+(water 5, lava 30 and 10 in the Nether, a mod fluid's as its `fluid_rules` parts change it there),
+`fluid_height`, `fluid_height_for_camera` and `fluid_can_be_replaced_with(host, pos, fluid, direction)`.
+`fluid_tick(server, pos)` runs a fluid's flow step now; `schedule_fluid_tick` queues one.
 
 `FluidState::matches(constraints)` is a pure local check of carried vanilla fields. Unknown properties
 or noncanonical serialized values return false. A falling source remains a source; a flowing state

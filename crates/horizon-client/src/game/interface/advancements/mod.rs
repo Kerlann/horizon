@@ -277,7 +277,7 @@ impl adv::World for View<'_, '_> {
 type Tags = std::collections::HashMap<String, std::collections::HashSet<String>>;
 /// The game's own `worldgen/structure` tags (a world without data packs has
 /// no `WorldTables` to hold them), loaded once for the resource root first
-/// asked for, as `StructureSpawns::shared`.
+/// asked for.
 fn vanilla_structure_tags(root: &std::path::Path) -> &'static Tags {
     static TAGS: std::sync::OnceLock<Tags> = std::sync::OnceLock::new();
     TAGS.get_or_init(|| {

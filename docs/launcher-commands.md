@@ -879,7 +879,7 @@ MCP: `mods_remove`, needs `confirm: true`.
 
 ## `horizon-launcher mods enable`
 
-Turn on a mod the browser installed (horizon-mods.txt, as the game's Options > Mods does; in a Java instance, its file loses `.disabled`).
+Turn on a mod the browser installed (horizon-mods.txt; the game's Mods screen has no switch; in a Java instance, its file loses `.disabled`).
 
     horizon-launcher mods enable <PROJECT>
 

@@ -682,6 +682,17 @@ impl Game<'_> {
         let _ = self.process_level_events();
         true
     }
+    /// The flow step of the fluid at `pos` now (`Behaviours::scheduled_fluid_tick`, the body of
+    /// a due fluid tick). False as for `level_block_tick`.
+    pub(super) fn level_fluid_tick(&mut self, level: LevelRef, pos: [i32; 3]) -> bool {
+        if !self.native_level_tick_allowed(level, pos) {
+            return false;
+        }
+        let at = block_pos(pos);
+        self.with_level(|b, level, ticks| b.scheduled_fluid_tick(level, ticks, at));
+        let _ = self.process_level_events();
+        true
+    }
     /// `tickChunk`'s random tick of `pos` now (`Behaviours::random_tick`). False as for
     /// `level_block_tick`.
     pub(super) fn level_block_random_tick(&mut self, level: LevelRef, pos: [i32; 3]) -> bool {
@@ -755,10 +766,22 @@ impl Game<'_> {
     pub(super) fn level_day_time(&self, level: LevelRef) -> Option<i64> {
         self.native_level_read_world(level)?;
         if self.is_logical_server() {
-            Some(self.world.day_time)
+            Some(self.command_clock_time("minecraft:overworld"))
         } else {
             self.remote.as_ref().map(|r| r.overworld_clock_time())
         }
+    }
+    /// The time of the level's own clock (its dimension type's `default_clock`) in ticks: what the
+    /// level's sky, spawning and beds go by, and what `/time` sets there. None for a level without
+    /// a default clock, a stale handle and a client.
+    pub(super) fn level_clock_time(&self, level: LevelRef) -> Option<i64> {
+        self.native_level_read_world(level)?;
+        if !self.is_logical_server() {
+            return None;
+        }
+        let dim = super::Dim::from_id(level.dimension_id());
+        self.dimension_type_of(dim).default_clock.as_ref()?;
+        Some(self.command_clock_time(&self.level_clock_name(dim)))
     }
 }
 
@@ -773,6 +796,27 @@ mod tests {
     use super::super::{Dim, native_entity_refs::tests::with_game};
     use horizon_core::position::BlockPos;
     use mod_api::{ChunkRef, LevelRef, LightLayer, NativeWorldEpoch};
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_level_with_its_own_clock_counts_apart_from_the_overworlds() {
+        with_game(|game| {
+            game.world.day_time = 100;
+            game.enter_level(Dim::End).unwrap();
+            assert_eq!(game.active_clock(), "minecraft:the_end");
+            assert_eq!(game.world.day_time, 0, "the End's clock has its own total");
+            game.world.day_time = 50;
+            assert_eq!(game.command_clock_time("minecraft:overworld"), 100);
+            game.enter_level(Dim::Nether).unwrap();
+            assert_eq!(
+                game.world.day_time, 100,
+                "a level without a clock follows the Overworld's"
+            );
+            assert_eq!(game.command_clock_time("minecraft:the_end"), 50);
+            game.enter_level(Dim::Overworld).unwrap();
+            assert_eq!(game.world.day_time, 100);
+        });
+    }
 
     #[test]
     fn biome_search_budget_bounds_columns_and_heights_before_sampling() {
@@ -1273,6 +1317,198 @@ mod tests {
             assert_eq!(level.fluid_flow(game, [8, y, 8]), Some(Vec3::ZERO));
             assert_eq!(level.fluid_flow(game, [5, y, 5]), Some(Vec3::ZERO));
             assert_eq!(level.fluid_flow(game, [16, y, 0]), None);
+        });
+    }
+
+    /// A stone floor under chunk (0, 0) at `y - 1` and the standing level `y` returned, with
+    /// `fluids` placed `dy` blocks above it: each a block id and its `level` property (0 is a
+    /// source).
+    fn pool(game: &mut super::super::Game<'_>, fluids: &[([i32; 3], &str, &str)]) -> i32 {
+        use horizon_client::chunk::Chunk;
+        use std::sync::Arc;
+
+        game.world
+            .chunks
+            .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        let registry = game.pack.assets.registry;
+        let stone = registry.default_state("minecraft:stone").unwrap();
+        let y = game.world.bottom_y() + 1;
+        for x in 0..16 {
+            for z in 0..16 {
+                game.world.set(x, y - 1, z, stone).unwrap();
+            }
+        }
+        for &([x, dy, z], name, level) in fluids {
+            let mut state = registry
+                .state(registry.default_state(name).unwrap())
+                .unwrap()
+                .clone();
+            state.properties.insert("level".into(), level.into());
+            game.world
+                .set(x, y + dy, z, registry.resolve(&state).unwrap())
+                .unwrap();
+        }
+        y
+    }
+
+    /// Vanilla's fluid facts at a position, each against a value worked out by hand: water's 5
+    /// and lava's 30 ticks (10 where lava flows fast), an empty fluid's 0, a source 8/9 high
+    /// under air and a full block under water, flowing water of level 5 a third high, the
+    /// camera's full block under a sturdy ceiling, and what water and lava replace.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn fluid_queries_answer_vanilla_values_at_a_position() {
+        use mod_api::{Direction, Host};
+
+        with_game(|game| {
+            let level = game.level(game.dim.id()).unwrap();
+            let y = pool(
+                game,
+                &[
+                    ([1, 0, 1], "minecraft:water", "0"),
+                    ([1, 0, 4], "minecraft:water", "0"),
+                    ([1, 1, 4], "minecraft:water", "0"),
+                    ([1, 0, 7], "minecraft:water", "5"),
+                    ([1, 0, 10], "minecraft:lava", "0"),
+                    ([1, 0, 12], "minecraft:lava", "5"),
+                ],
+            );
+            let stone = game.pack.assets.registry.default_state("minecraft:stone");
+            game.world.set(1, y + 1, 1, stone.unwrap()).unwrap();
+            let (water, flowing_water, lava, flowing_lava, empty) = {
+                let host: &dyn Host = game;
+                let key = |id| host.fluid_key(id).unwrap();
+                (
+                    key("minecraft:water"),
+                    key("minecraft:flowing_water"),
+                    key("minecraft:lava"),
+                    key("minecraft:flowing_lava"),
+                    key("minecraft:empty"),
+                )
+            };
+            let tank_only = game.fluid_key("horizon:definition_test").unwrap();
+            let host: &dyn Host = game;
+            let at = |x, y, z| [x, y, z];
+
+            // `Fluid.getTickDelay`: water 5 and lava 30 in the Overworld, a flowing form as its source.
+            for (fluid, delay) in [
+                (water, 5),
+                (flowing_water, 5),
+                (lava, 30),
+                (flowing_lava, 30),
+                (empty, 0),
+            ] {
+                assert_eq!(
+                    level.fluid_tick_delay(host, fluid, at(1, y, 1)),
+                    Some(delay)
+                );
+            }
+            assert_eq!(level.fluid_tick_delay(host, tank_only, at(1, y, 1)), None);
+            assert_eq!(level.fluid_tick_delay(host, water, at(16, y, 0)), None);
+            let height = level.height(host).unwrap();
+            assert_eq!(
+                level.fluid_tick_delay(host, water, at(1, height.0, 1)),
+                Some(5)
+            );
+            assert_eq!(
+                level.fluid_tick_delay(host, water, at(1, height.0 - 1, 1)),
+                None
+            );
+
+            // The surface: 8/9 under air, a full block under the same fluid, `amount / 9` flowing.
+            let ninth = |n: f32| n / 9.0;
+            assert_eq!(level.fluid_height(host, at(1, y, 4)), Some(1.0));
+            assert_eq!(level.fluid_height(host, at(1, y + 1, 4)), Some(ninth(8.0)));
+            assert_eq!(level.fluid_height(host, at(1, y, 7)), Some(ninth(3.0)));
+            assert_eq!(level.fluid_height(host, at(1, y, 9)), Some(0.0));
+            assert_eq!(level.fluid_height(host, at(16, y, 0)), None);
+            // The camera sees a source under a sturdy block as full, and nothing else differently.
+            assert_eq!(level.fluid_height_for_camera(host, at(1, y, 1)), Some(1.0));
+            assert_eq!(level.fluid_height(host, at(1, y, 1)), Some(ninth(8.0)));
+            assert_eq!(
+                level.fluid_height_for_camera(host, at(1, y + 1, 4)),
+                Some(ninth(8.0))
+            );
+            assert_eq!(
+                level.fluid_height_for_camera(host, at(1, y, 7)),
+                Some(ninth(3.0))
+            );
+
+            // Water gives way to lava flowing down only, lava to water from 4/9 of a block high.
+            let replaced = |fluid, x, z, direction| {
+                level.fluid_can_be_replaced_with(host, at(x, y, z), fluid, direction)
+            };
+            assert_eq!(replaced(lava, 1, 1, Direction::Down), Some(true));
+            assert_eq!(replaced(lava, 1, 1, Direction::East), Some(false));
+            assert_eq!(replaced(water, 1, 1, Direction::Down), Some(false));
+            assert_eq!(replaced(flowing_water, 1, 10, Direction::East), Some(true));
+            assert_eq!(replaced(flowing_water, 1, 12, Direction::East), Some(false));
+            assert_eq!(replaced(lava, 1, 10, Direction::East), Some(false));
+            assert_eq!(replaced(water, 1, 9, Direction::Up), Some(true));
+            assert_eq!(replaced(tank_only, 1, 9, Direction::Up), Some(false));
+            assert_eq!(
+                level.fluid_can_be_replaced_with(host, at(16, y, 0), water, Direction::Down),
+                None
+            );
+        });
+    }
+
+    /// Lava flows fast in the Nether: the delay follows the level's own dimension.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn lava_ticks_every_ten_in_a_fast_lava_level() {
+        use mod_api::Host;
+
+        with_game(|game| {
+            let level = game.level(game.dim.id()).unwrap();
+            let y = pool(game, &[]);
+            game.world.fast_lava = true;
+            let host: &dyn Host = game;
+            let delay = |id| level.fluid_tick_delay(host, host.fluid_key(id).unwrap(), [1, y, 1]);
+            assert_eq!(delay("minecraft:lava"), Some(10));
+            assert_eq!(delay("minecraft:flowing_lava"), Some(10));
+            assert_eq!(delay("minecraft:water"), Some(5));
+        });
+    }
+
+    /// An explicit fluid tick runs the flow step: a water source on a floor fills its four
+    /// neighbours with flowing water of level 1 (amount 7), once; an empty cell, an unloaded
+    /// column, a position below the world, a stale handle and a level not in place do nothing.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn an_explicit_fluid_tick_spreads_a_source_and_refuses_other_positions() {
+        with_game(|game| {
+            let level = game.level(game.dim.id()).unwrap();
+            let stale = LevelRef::new(
+                NativeWorldEpoch::new(level.epoch().get() + 1),
+                level.dimension(),
+            );
+            let nether = LevelRef::new(level.epoch(), mod_api::DimensionKey::NETHER);
+            let y = pool(game, &[([8, 0, 8], "minecraft:water", "0")]);
+            let amounts = |game: &mut super::super::Game<'_>| {
+                [[9, 8], [7, 8], [8, 9], [8, 7], [8, 8]]
+                    .map(|[x, z]| level.fluid_state(game, [x, y, z]).map(|f| f.amount))
+            };
+            assert_eq!(amounts(game), [Some(0), Some(0), Some(0), Some(0), Some(8)]);
+            assert!(level.fluid_tick(game, [8, y, 8]));
+            assert_eq!(amounts(game), [Some(7), Some(7), Some(7), Some(7), Some(8)]);
+            let flowing = level.fluid_state(game, [9, y, 8]).unwrap();
+            assert!(!flowing.is_source() && !flowing.falling);
+
+            // Ticking the empty fluid is allowed and changes nothing.
+            assert!(level.fluid_tick(game, [3, y, 3]));
+            assert_eq!(
+                level.fluid_state(game, [3, y, 3]).map(|f| f.amount),
+                Some(0)
+            );
+            assert!(
+                !level.fluid_tick(game, [1_000_000, y, 1_000_000]),
+                "unloaded"
+            );
+            let below = game.world.bottom_y() - 1;
+            assert!(!level.fluid_tick(game, [8, below, 8]), "below the world");
+            assert!(!stale.fluid_tick(game, [8, y, 8]));
+            assert!(!nether.fluid_tick(game, [8, y, 8]), "a level not in place");
         });
     }
 

@@ -1243,9 +1243,9 @@ fn icon_buttons_show_their_tooltip_while_hovered() {
     // MenuTooltipPositioner puts the text 12 right of the pointer and at
     // 195 + 3 + round(lerp(13 / 20, 17, 5)) = 198 + 9 = 207.
     for (id, text, top_left) in [
-        (5, "Friends", (228.0, 207.0)),
-        (6, "Change Language", (252.0, 207.0)),
-        (7, "Accessibility Settings", (276.0, 207.0)),
+        (5, "Friends", (240.0, 207.0)),
+        (6, "Change Language", (264.0, 207.0)),
+        (7, "Accessibility Settings", (288.0, 207.0)),
     ] {
         let mouse = button_middle(&f.title, id);
         let (tooltip, drawn) = draw_hovered(&f.title, &atlas, mouse, &mut frame);

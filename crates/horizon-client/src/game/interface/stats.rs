@@ -493,7 +493,7 @@ impl Game<'_> {
         }
         let attempt = match result.unwrap_or(PhantomSpawnResult::Default) {
             PhantomSpawnResult::Allow => true,
-            PhantomSpawnResult::Default => pos[1] >= 63 && self.can_see_sky(pos),
+            PhantomSpawnResult::Default => pos[1] >= self.dim.sea_level() && self.can_see_sky(pos),
             PhantomSpawnResult::Deny => false,
             _ => unreachable!("PhantomSpawnResult: unhandled variant"),
         };

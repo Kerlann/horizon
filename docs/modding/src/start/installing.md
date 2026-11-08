@@ -19,15 +19,18 @@ Mods are **off by default**. A fresh install has no `horizon-mods` folder and pl
    game folder (the one holding `options.txt`): a content mod's `.hmod` (or a folder holding `horizon-mod.toml`) in
    `horizon-mods/`. Native mods go in `horizon-native-mods/`, and the launcher builds them
    ([native mods](../how-to/native-mods.md)).
-2. Options > **Mods** lists them with what each may do ("May add blocks, items, mob effects and entity types to your
-   worlds") and a switch. They start off. The choice is kept in `horizon-mods.txt` (`mod.<id>:true`).
-3. A content mod with only assets and reloadable data (textures, models, sounds, languages, recipes, tags, loot,
-   advancements and functions) switches live: the game reloads its resources, then its world's data as `/reload`
-   does, including for LAN guests. Content that adds registry entries or changes world generation still needs a
-   restart, and its switch is frozen while a world is open. Packages with jar layers also wait for a restart,
-   because those layers may contain world generation. On another server all content switches wait: the server
-   owns its data. Code mods keep their startup content; pausing their dispatch is not a content unload.
-4. A mod that can't load shows why, in red, on its row.
+2. The **Mods** button on the title screen (also Options > Mods) opens the mod list, laid out as NeoForge's: Minecraft
+   and Horizon first, then each installed mod with its icon, name and version. Search the list, sort it A-Z or Z-A, and
+   pick a mod to read its id, version, license, authors, credits and description. Homepage and Issues open the mod's
+   links after a confirmation, and Config opens the settings page of a native mod that has one. The screen has no
+   switch. A mod starts off: the launcher (`horizon-launcher mods enable <id>`) or `horizon-mods.txt` (`mod.<id>:true`)
+   turns it on, and a mod that is not on says so in the list.
+3. A turned-on content mod with only assets and reloadable data (textures, models, sounds, languages, recipes, tags,
+   loot, advancements and functions) is picked up live when a mod is installed from Browse Mods: the game reloads its
+   resources, then its world's data as `/reload` does, including for LAN guests. Content that adds registry entries or
+   changes world generation still needs a restart. Packages with jar layers also wait for a restart, because those
+   layers may contain world generation. On another server all content waits: the server owns its data.
+4. A mod that can't load shows why, in red, in its panel.
 
 Two turned-on content mods never own the same namespace: the first by file name loads, and the other stays out with
 the reason in the log.

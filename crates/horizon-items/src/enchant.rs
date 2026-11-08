@@ -563,16 +563,22 @@ impl Enchantments {
         random: &mut R,
         list: &[(Arc<str>, u32)],
     ) -> Option<(Arc<str>, u32)> {
-        let total: i32 = list
+        let total: i64 = list
             .iter()
-            .map(|(id, _)| self.get(id).map_or(0, |e| e.weight as i32))
+            .map(|(id, _)| self.get(id).map_or(0, |e| i64::from(e.weight)))
             .sum();
         if total <= 0 {
             return None;
         }
-        let mut index = next_int(random, total);
+        // Preserve vanilla's int draw. Oversized pack totals use one unsigned
+        // long modulo the total, a bounded, slightly biased fallback.
+        let mut index = if total <= i64::from(i32::MAX) {
+            i64::from(next_int(random, total as i32))
+        } else {
+            ((random.next_long() as u64) % total as u64) as i64
+        };
         for (id, l) in list {
-            index -= self.get(id).map_or(0, |e| e.weight as i32);
+            index -= self.get(id).map_or(0, |e| i64::from(e.weight));
             if index < 0 {
                 return Some((id.clone(), *l));
             }
@@ -1530,6 +1536,55 @@ mod ignite_tests {
             list: vec![fire_aspect],
             index,
             ..Default::default()
+        }
+    }
+
+    #[test]
+    fn weight_totals_enchantments() {
+        for weights in [
+            [0, 0, 0],
+            [1, 2, 3],
+            [7, 0, 11],
+            [i32::MAX as u32; 3],
+            [u32::MAX; 3],
+        ] {
+            let mut reg = registry();
+            let template = reg.list[0].clone();
+            reg.list.clear();
+            reg.index.clear();
+            let mut list = vec![];
+            for (i, weight) in weights.into_iter().enumerate() {
+                let mut e = template.clone();
+                e.id = Arc::from(format!("test:{i}"));
+                e.weight = weight;
+                list.push((e.id.clone(), 1));
+                reg.index.insert(e.id.clone(), i);
+                reg.list.push(e);
+            }
+            let total: i64 = weights.iter().map(|&w| i64::from(w)).sum();
+            for seed in 0..64 {
+                let mut expected = LegacyRandom::new(seed);
+                let pick = if total == 0 {
+                    None
+                } else {
+                    let mut at = if total <= i64::from(i32::MAX) {
+                        i64::from(expected.next_int_bound(total as i32).unwrap())
+                    } else {
+                        ((expected.next_long() as u64) % total as u64) as i64
+                    };
+                    weights
+                        .iter()
+                        .position(|&w| {
+                            at -= i64::from(w);
+                            at < 0
+                        })
+                        .map(|i| list[i].clone())
+                };
+                let mut random = LegacyRandom::new(seed);
+                assert_eq!(reg.weighted(&mut random, &list), pick);
+                assert_eq!(random.next_long(), expected.next_long());
+            }
+            assert!(reg.weighted(&mut LegacyRandom::new(0), &[]).is_none());
         }
     }
 

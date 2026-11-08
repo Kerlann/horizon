@@ -636,8 +636,8 @@ enum ModsCmd {
         #[arg(long)]
         instance: Option<String>,
     },
-    /// Turn on a mod the browser installed (horizon-mods.txt, as the game's Options > Mods does;
-    /// in a Java instance, its file loses `.disabled`)
+    /// Turn on a mod the browser installed (horizon-mods.txt; the game's Mods screen has no
+    /// switch; in a Java instance, its file loses `.disabled`)
     Enable {
         project: String,
         /// The instance (default: the selected one)

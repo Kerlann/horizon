@@ -4,22 +4,45 @@
 use super::{Behaviours, LevelAccess, LevelEvent, Sim, feature_world::LevelFeatureWorld, flags};
 use crate::{registry::BlockStateId, worldgen::live::LiveFeatures};
 use horizon_core::{position::BlockPos, random::RandomSource};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, RwLock};
 
 /// Runtime extensions of [`Behaviours`] that depend on the worldgen bundle.
 #[derive(Default)]
 pub struct Growth {
-    features: OnceLock<Arc<LiveFeatures>>,
+    /// The open world's feature registry. Replaced whole when another world
+    /// opens: a reader holds its own `Arc`, so it sees the old registry or the
+    /// new one, never a mix.
+    features: RwLock<Option<Arc<LiveFeatures>>>,
 }
 
 impl Behaviours {
-    /// Install the live feature registry used by sapling growth and bone meal.
-    /// Without it, saplings report [`LevelEvent::GrowTree`] instead of growing.
-    pub fn set_live_features(&self, features: Arc<LiveFeatures>) -> bool {
-        self.growth.features.set(features).is_ok()
+    /// Install the live feature registry used by sapling growth and bone meal,
+    /// replacing the previous world's: vanilla resolves features through the
+    /// world's own registry, data packs included. Without one, saplings
+    /// report [`LevelEvent::GrowTree`] instead of growing.
+    pub fn set_live_features(&self, features: Arc<LiveFeatures>) {
+        *self
+            .growth
+            .features
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = Some(features);
     }
-    pub fn live_features(&self) -> Option<&Arc<LiveFeatures>> {
-        self.growth.features.get()
+    /// Drop the installed registry (a world whose features failed to load must
+    /// not keep the previous world's).
+    pub fn clear_live_features(&self) {
+        *self
+            .growth
+            .features
+            .write()
+            .unwrap_or_else(|poisoned| poisoned.into_inner()) = None;
+    }
+    /// The installed registry. Take it once per operation and reuse it.
+    pub fn live_features(&self) -> Option<Arc<LiveFeatures>> {
+        self.growth
+            .features
+            .read()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .clone()
     }
     /// `JigsawPlacement.generateJigsaw`: `assemble` builds the pieces (from
     /// the generation context's own random), then each piece is placed into
@@ -45,7 +68,7 @@ impl Behaviours {
         let entities = {
             let mut world = LevelFeatureWorld {
                 sim: &mut sim,
-                features,
+                features: &features,
                 entities: Vec::new(),
             };
             let unbounded =
@@ -106,7 +129,7 @@ impl Behaviours {
         let entities = {
             let mut world = LevelFeatureWorld {
                 sim: &mut sim,
-                features,
+                features: &features,
                 entities: Vec::new(),
             };
             let mut place_feature =
@@ -276,7 +299,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         let placed = {
             let mut world = LevelFeatureWorld {
                 sim: self,
-                features,
+                features: &features,
                 entities: Vec::new(),
             };
             features.place_configured(name, &mut world, &mut random, [pos.x, pos.y, pos.z])
@@ -299,7 +322,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         let placed = {
             let mut world = LevelFeatureWorld {
                 sim: self,
-                features,
+                features: &features,
                 entities: Vec::new(),
             };
             features.place_definition(
@@ -323,7 +346,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
         let placed = {
             let mut world = LevelFeatureWorld {
                 sim: self,
-                features,
+                features: &features,
                 entities: Vec::new(),
             };
             features.place_placed(name, &mut world, &mut random, [pos.x, pos.y, pos.z])

@@ -1751,6 +1751,7 @@ fn dimension_id(dimension: LevelDimension) -> &'static str {
         LevelDimension::Overworld => "minecraft:overworld",
         LevelDimension::Nether => "minecraft:the_nether",
         LevelDimension::End => "minecraft:the_end",
+        LevelDimension::Custom(key) => key.id(),
     }
 }
 
@@ -3095,7 +3096,7 @@ impl Game<'_> {
         out
     }
     /// Whether a native mod's block `name` has a ticking block entity.
-    pub(super) fn native_ticks(&self, name: &str) -> bool {
+    pub(in crate::game) fn native_ticks(&self, name: &str) -> bool {
         let mut ticks = false;
         self.native_block_entity_ticks(name, &mut ticks);
         ticks
@@ -3506,6 +3507,10 @@ impl Game<'_> {
             .collect();
         rows.extend(native.packages().iter().map(|package| {
             let m = &package.manifest;
+            self.settings
+                .mods
+                .info
+                .insert(m.id.clone(), horizon_client::mod_list::ModInfo::of(m, None));
             Installed {
                 id: m.id.clone(),
                 title: [m.name.as_str(), " ", m.version.as_str()].concat(),

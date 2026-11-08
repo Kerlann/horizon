@@ -40,6 +40,15 @@ impl BedRuleTest {
         }
     }
 
+    /// The name a dimension type's JSON gives it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Self::Always => "always",
+            Self::WhenDark => "when_dark",
+            Self::Never => "never",
+        }
+    }
+
     fn parse(name: &str) -> Result<Self, String> {
         match name {
             "always" => Ok(Self::Always),
@@ -315,7 +324,9 @@ impl DimensionFacts {
             id: id.to_owned(),
             has_fixed_time: flag("has_fixed_time", false),
             has_ender_dragon_fight: flag("has_ender_dragon_fight", false),
-            coordinate_scale: number("coordinate_scale")?,
+            coordinate_scale: Some(number("coordinate_scale")?)
+                .filter(|scale| Self::valid_coordinate_scale(*scale))
+                .ok_or_else(|| format!("{id} coordinate_scale is outside 1.0E-5 to 3.0E7"))?,
             height,
             infiniburn: name("infiniburn")
                 .ok_or_else(|| format!("{id} needs infiniburn"))?
@@ -356,8 +367,10 @@ impl DimensionFacts {
     }
 
     /// `base` with the fields `json` names over it: a mod's dimension type names only what it
-    /// changes, and a data pack's names them all. Timelines and the clock stay `base`'s, and a field
-    /// the codec refuses is an error.
+    /// changes, and a data pack's names them all. Timelines and the clock change when `json` names
+    /// `timelines` as a vanilla tag (`#minecraft:in_overworld`, `in_nether` or `in_end`), a timeline
+    /// id or a list of ids (any other tag stays `base`'s), and a field the codec refuses is an
+    /// error.
     pub fn patched(base: &Self, id: &str, json: &Value) -> Result<Self, String> {
         let mut out = base.clone();
         out.id = id.to_owned();
@@ -373,6 +386,9 @@ impl DimensionFacts {
             out.has_ender_dragon_fight = v;
         }
         if let Some(v) = json["coordinate_scale"].as_f64() {
+            if !Self::valid_coordinate_scale(v) {
+                return Err(format!("{id} coordinate_scale is outside 1.0E-5 to 3.0E7"));
+            }
             out.coordinate_scale = v;
         }
         if let Some(v) = json["infiniburn"].as_str() {
@@ -407,6 +423,31 @@ impl DimensionFacts {
                 other => return Err(format!("unknown cardinal light {other:?}")),
             };
         }
+        let timelines = match &json["timelines"] {
+            Value::String(tag) => match tag.as_str() {
+                "#minecraft:in_overworld" => Some(VANILLA[0].timelines.clone()),
+                "#minecraft:in_nether" => Some(VANILLA[2].timelines.clone()),
+                "#minecraft:in_end" => Some(VANILLA[3].timelines.clone()),
+                tag if tag.starts_with('#') => None,
+                id => Some(vec![id.to_owned()]),
+            },
+            Value::Array(ids) => Some(
+                ids.iter()
+                    .filter_map(Value::as_str)
+                    .map(str::to_owned)
+                    .collect(),
+            ),
+            _ => None,
+        };
+        if let Some(timelines) = timelines {
+            out.timelines = timelines;
+            // A type with its own timelines has the clock it names, or none.
+            out.default_clock = match &json["default_clock"] {
+                Value::String(s) => Some(s.clone()),
+                Value::Object(o) => o.get("id").and_then(Value::as_str).map(str::to_owned),
+                _ => None,
+            };
+        }
         for (key, field) in [
             ("water_evaporates", &mut out.water_evaporates),
             ("fast_lava", &mut out.fast_lava),
@@ -439,6 +480,12 @@ impl DimensionFacts {
 
     pub fn has_timeline(&self, id: &str) -> bool {
         self.timelines.iter().any(|t| t == id)
+    }
+
+    /// Whether `scale` is a coordinate scale the codec takes: `Codec.doubleRange(1.0E-5F, 3.0E7)`
+    /// (`DimensionType.java:89`, the float widened). Inside it the ratio of two scales is finite.
+    pub fn valid_coordinate_scale(scale: f64) -> bool {
+        (f64::from(1.0e-5_f32)..=3.0e7).contains(&scale)
     }
 
     /// `DimensionType.getTeleportationScale`.
@@ -584,6 +631,38 @@ mod level_type_tests {
         assert!(facts.piglins_zombify && facts.can_start_raid && !facts.respawn_anchor_works);
     }
 
+    /// A type that names `timelines` takes them and its clock; one that does not keeps the base's.
+    #[test]
+    fn named_timelines_and_a_clock_replace_the_bases() {
+        let with = |extra: serde_json::Value| {
+            let mut json = serde_json::json!({"min_y": 0, "height": 64});
+            json.as_object_mut()
+                .unwrap()
+                .extend(extra.as_object().unwrap().clone());
+            DimensionFacts::patched(DimensionFacts::overworld(), "test:x", &json).unwrap()
+        };
+        let base = DimensionFacts::overworld();
+        let kept = with(serde_json::json!({}));
+        assert_eq!(
+            (&kept.timelines, &kept.default_clock),
+            (&base.timelines, &base.default_clock)
+        );
+        let nether = with(serde_json::json!({"timelines": "#minecraft:in_nether"}));
+        assert!(!nether.has_timeline("minecraft:day"));
+        assert!(nether.has_timeline("minecraft:villager_schedule"));
+        assert_eq!(nether.default_clock, None);
+        let none = with(serde_json::json!({"timelines": []}));
+        assert!(none.timelines.is_empty() && none.default_clock.is_none());
+        let own = with(serde_json::json!({
+            "timelines": ["test:cycle"], "default_clock": "test:clock",
+        }));
+        assert_eq!(own.timelines, ["test:cycle"]);
+        assert_eq!(own.default_clock.as_deref(), Some("test:clock"));
+        // a tag this table cannot expand leaves the base's
+        let unknown = with(serde_json::json!({"timelines": "#test:cycles"}));
+        assert_eq!(unknown.timelines, base.timelines);
+    }
+
     #[test]
     fn a_refused_field_is_an_error_not_a_default() {
         let bad = |extra: serde_json::Value| {
@@ -595,6 +674,17 @@ mod level_type_tests {
         };
         assert!(bad(serde_json::json!({"skybox": "moon"})));
         assert!(bad(serde_json::json!({"cardinal_light": "up"})));
+        // a scale outside the codec's range would make a portal's ratio infinite or NaN
+        for scale in [0.0, f64::from_bits(1), 1.0e-6, 3.1e7, -1.0] {
+            assert!(
+                bad(serde_json::json!({"coordinate_scale": scale})),
+                "{scale}"
+            );
+        }
+        assert!(!bad(
+            serde_json::json!({"coordinate_scale": f64::from(1.0e-5_f32)})
+        ));
+        assert!(!bad(serde_json::json!({"coordinate_scale": 3.0e7})));
         assert!(
             DimensionFacts::patched(
                 DimensionFacts::overworld(),

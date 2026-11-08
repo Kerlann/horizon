@@ -626,6 +626,13 @@ impl Loading {
                     self.menu.mod_jobs.install(ui, Game::game_dir(), id);
                 }
                 Event::OpenModPage(url) => packs::open_uri(&url),
+                // The startup menu has no screen stack for ConfirmLinkScreen; the link opens
+                // directly, as the menu's other links do.
+                Event::OpenLink(url) => packs::open_uri(&url),
+                Event::CopyText(text) => {
+                    use horizon_client::clipboard::Clipboard;
+                    self.menu.clipboard.set(&text);
+                }
                 Event::ListShaderPacks => {
                     let (key, _) = horizon_client::shader_pack_list::resolve(
                         &Game::shader_packs_dir(),
@@ -797,6 +804,10 @@ impl Loading {
             Action::Language => self.open_menu_options(Page::Language),
             Action::Sounds => self.open_menu_options(Page::Sound),
             Action::Credits => self.open_menu_options(Page::Credits),
+            Action::Mods => {
+                list_menu_mods(&mut self.settings.mods);
+                self.open_menu_options(Page::Mods);
+            }
             Action::OpenUri(uri) => super::packs::open_uri(&uri),
             Action::CopyText(text) => {
                 use horizon_client::clipboard::Clipboard;
@@ -1382,6 +1393,30 @@ impl Loading {
         self.handle = Some(handle);
         self.menu.reload_packs = false;
         Ok(())
+    }
+}
+
+/// The Mods screen before a game exists lists the installed packages as `Game::start_mods`
+/// does, without what loading finds out (refusals, the native mods built in).
+fn list_menu_mods(mods: &mut horizon_client::mod_list::ModList) {
+    use horizon_client::mod_list::{DIR, Installed, ModInfo};
+    mods.installed.clear();
+    mods.info.clear();
+    for path in horizon_mod_package::find(&Game::game_dir().join(DIR)) {
+        let Ok(package) = horizon_mod_package::Package::read(&path) else {
+            continue;
+        };
+        let m = &package.manifest;
+        mods.info
+            .insert(m.id.clone(), ModInfo::of(m, package.icon.as_ref()));
+        mods.installed.push(Installed {
+            id: m.id.clone(),
+            title: format!("{} {}", m.name, m.version),
+            description: m.description.clone(),
+            problem: None,
+            dev: false,
+            native: None,
+        });
     }
 }
 

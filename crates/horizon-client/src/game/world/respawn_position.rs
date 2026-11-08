@@ -32,12 +32,16 @@ pub(super) struct RespawnDecision {
 }
 
 impl Dim {
-    pub(super) fn from_level(level: LevelDimension) -> Self {
-        match level {
+    /// The level the world has for `level`; None for a `Custom` level it lacks.
+    pub(super) fn from_level(level: LevelDimension) -> Option<Self> {
+        Some(match level {
             LevelDimension::Overworld => Self::Overworld,
             LevelDimension::Nether => Self::Nether,
             LevelDimension::End => Self::End,
-        }
+            LevelDimension::Custom(key) => {
+                Self::exists(key.id()).then(|| Self::from_id(key.id()))?
+            }
+        })
     }
 }
 
@@ -81,11 +85,19 @@ impl Game<'_> {
             pitch: &mut pitch,
             copy_original_spawn_position: &mut copy,
         });
-        let to = Respawn {
-            dim: Dim::from_level(level),
-            at: Vec3::new(position[0], position[1], position[2]),
-            yaw,
-            pitch,
+        // A level the world lacks leaves the player at the whole found point: the mod's
+        // coordinates are for that level.
+        let to = match Dim::from_level(level) {
+            Some(dim) => Respawn {
+                dim,
+                at: Vec3::new(position[0], position[1], position[2]),
+                yaw,
+                pitch,
+            },
+            None => {
+                log::warn!("Horizon: a mod chose a respawn in a level the world does not have");
+                found
+            }
         };
         Some(RespawnDecision {
             to,

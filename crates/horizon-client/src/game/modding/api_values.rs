@@ -1525,9 +1525,14 @@ impl super::Game<'_> {
         pos: [i32; 3],
         entity: &mut crate::containers::ModBlockEntity,
     ) {
-        if !mod_api::__private::has_part_hook(mod_api::HookId::BlockEntityTick) {
-            return;
-        }
+        // #2051: the one decision whether a block entity ticks is its
+        // type's own ticker (`native_block_entity_ticks`,
+        // `EntityBlock.getTicker`), answered when the world opens — the
+        // level's ticking list carries it here, whichever path registered
+        // the type (a Registrar part or a bare declaration whose tick
+        // arrives another way). No second gate: a parts-only check here
+        // kept declared types' ticks — and the injections on
+        // `native_block_entity_tick` — unreachable.
         let Ok(mut api) = entity.try_into_api() else {
             return;
         };

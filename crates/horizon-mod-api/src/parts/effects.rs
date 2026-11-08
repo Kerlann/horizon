@@ -43,6 +43,11 @@ pub mod tests {
             crate::registry_keys::effect(speed_key).is_none(),
             "startup has no resolved effects"
         );
+        assert_eq!(
+            crate::registry_keys::effect_key("minecraft:speed"),
+            None,
+            "an id has no key before the registry is complete"
+        );
         assert!(horizon_client_core::potions::register_mod_effects([(
             "key_test:later".to_owned(),
             0x123456,
@@ -57,14 +62,33 @@ pub mod tests {
         let keys = requested.lock().unwrap();
         assert_eq!(keys[0], keys[2]);
         assert_eq!(keys[1], keys[3]);
+        assert_eq!(
+            crate::registry_keys::effect_key("minecraft:speed"),
+            Some(keys[0])
+        );
+        assert_eq!(
+            crate::registry_keys::effect_key("key_test:later"),
+            Some(keys[1])
+        );
+        for def in horizon_client_core::potions::all_effects() {
+            let id = horizon_client_core::potions::namespaced(def.id);
+            let key = crate::registry_keys::effect_key(id).unwrap();
+            assert_eq!(crate::registry_keys::effect_id(key), Some(id));
+        }
+        for unknown in ["", "speed", "missing:effect", "minecraft:不存在"] {
+            assert_eq!(crate::registry_keys::effect_key(unknown), None);
+        }
         let speed = crate::registry_keys::effect(keys[0]).unwrap();
         let later = crate::registry_keys::effect(keys[1]).unwrap();
         assert_eq!(speed.id, "speed");
         assert_eq!(later.id, "key_test:later");
         assert_eq!(later.color, 0x123456);
-        assert_eq!(crate::registry_keys::effect_key(later.index), Some(keys[1]));
+        assert_eq!(
+            crate::registry_keys::effect_key_by_index(later.index),
+            Some(keys[1])
+        );
         for def in horizon_client_core::potions::all_effects() {
-            let key = crate::registry_keys::effect_key(def.index).unwrap();
+            let key = crate::registry_keys::effect_key_by_index(def.index).unwrap();
             assert_eq!(crate::registry_keys::effect(key).unwrap().id, def.id);
             assert_eq!(
                 crate::registry_keys::effect_id(key),

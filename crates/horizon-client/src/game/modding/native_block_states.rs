@@ -4,12 +4,13 @@ use super::Game;
 use horizon_client::command::{Reader, args::Registries, block};
 use horizon_client::items::ItemStack;
 use horizon_world::chunk::BlockState;
-use horizon_world::fluid::FluidKind;
+use horizon_world::fluid::{FluidKind, FluidState as EngineFluidState};
+use horizon_world::level::{fluid_drip_particle, fluid_explosion_resistance, fluid_randomly_ticks};
 use horizon_world::registry::{BlockRegistry, BlockStateId};
 use mod_api::{
     BlockEntityTypeKey, BlockKey, BlockSoundType, BlockStateRange, EffectKey, FluidDefinition,
-    FluidKey, FluidStateError, FluidTypeProperties, ItemKey, StateConstraint, StateMatchError,
-    StateProperty,
+    FluidKey, FluidState, FluidStateError, FluidTypeProperties, ItemKey, StateConstraint,
+    StateMatchError, StateProperty,
 };
 use std::sync::{Arc, Mutex};
 
@@ -64,7 +65,24 @@ impl Game<'_> {
             can_extinguish: water,
             can_hydrate: water,
             supports_boating: water,
+            explosion_resistance: kind.map_or(0.0, fluid_explosion_resistance),
+            randomly_ticks: kind.is_some_and(fluid_randomly_ticks),
+            drip_particle: kind.and_then(fluid_drip_particle).map(str::to_owned),
         })
+    }
+
+    /// `FluidState.createLegacyBlock` for `state`, through the one table the engine converts
+    /// fluid states with. None for a state no fluid can be in: no world form, an amount above
+    /// 8, a zero amount for anything but the empty fluid, or a source that isn't full.
+    pub(super) fn fluid_legacy_block(&self, state: FluidState) -> Option<BlockStateId> {
+        let kind = super::native_world_read::engine_fluid_kind(state.fluid)?;
+        let engine = EngineFluidState::new(kind, state.amount, state.falling);
+        let consistent = match kind {
+            FluidKind::Empty => state.amount == 0,
+            _ if engine.is_source() => state.amount == 8,
+            _ => (1..=8).contains(&state.amount),
+        };
+        consistent.then(|| self.res.behaviours().legacy_block(engine))
     }
 
     /// Validate fluid constraints against the exported property definition.
@@ -123,6 +141,20 @@ impl Game<'_> {
             .to_owned()
     }
 
+    /// The canonical fluid id retained by the completed registry.
+    pub(super) fn fluid_key_id(&self, key: FluidKey) -> String {
+        mod_api::__private::fluid_id(key)
+            .expect("invalid fluid key slot")
+            .to_owned()
+    }
+    /// The key of a block in the completed registry.
+    pub(super) fn block_key(&self, id: &str) -> Option<BlockKey> {
+        mod_api::__private::block_key(id)
+    }
+    /// The key of an effect in the completed registry.
+    pub(super) fn effect_key(&self, id: &str) -> Option<EffectKey> {
+        mod_api::__private::effect_key(id)
+    }
     /// The canonical block entity type id retained by the load-owned slot.
     pub(super) fn block_entity_type_key_id(&self, key: BlockEntityTypeKey) -> String {
         mod_api::__private::block_entity_type_name(key)
@@ -418,6 +450,9 @@ mod tests {
                 can_extinguish: true,
                 can_hydrate: true,
                 supports_boating: true,
+                explosion_resistance: 100.0,
+                randomly_ticks: false,
+                drip_particle: Some("minecraft:dripping_water".into()),
             };
             let lava = FluidTypeProperties {
                 description_id: "block.minecraft.lava".into(),
@@ -429,12 +464,18 @@ mod tests {
                 can_extinguish: false,
                 can_hydrate: false,
                 supports_boating: false,
+                explosion_resistance: 100.0,
+                randomly_ticks: true,
+                drip_particle: Some("minecraft:dripping_lava".into()),
             };
             let inert = |description_id: &str| FluidTypeProperties {
                 description_id: description_id.into(),
                 light_level: 0,
                 fall_distance_modifier: 1.0,
                 can_push_entity: false,
+                explosion_resistance: 0.0,
+                randomly_ticks: false,
+                drip_particle: None,
                 ..lava.clone()
             };
             assert_eq!(read("minecraft:water"), water);
@@ -447,6 +488,69 @@ mod tests {
                 inert("fluid_type.horizon.definition_test")
             );
             assert_eq!(host.fluid_key("minecraft:no_such_fluid"), None);
+        });
+    }
+
+    /// `FluidState.createLegacyBlock`: a source is its block at level 0, flowing water of amount
+    /// 3 is level 5, falling adds 8, the empty fluid is air; states no fluid can be in have none.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn legacy_blocks_follow_the_liquid_levels() {
+        use mod_api::{Host, HostFluidStates};
+        super::super::native_entity_refs::tests::with_game(|game| {
+            let host: &dyn Host = game;
+            let service = host.fluid_states();
+            // A mod may edit the copy it is given, so any amount and source flag can reach the
+            // service: start from the engine's state and overwrite them.
+            let state = |id: &str, amount, falling, source| {
+                let kind = FluidKind::from_name(id).unwrap_or(FluidKind::Water);
+                let mut state = mod_api::__private::engine_fluid_state(
+                    host.fluid_key(id).unwrap(),
+                    EngineFluidState::new(kind, 1, falling),
+                );
+                (state.amount, state.source) = (amount, source);
+                state
+            };
+            let block = |state: FluidState| {
+                let id = service.legacy_block(state)?;
+                game.pack.assets.registry.state(id).cloned()
+            };
+            let liquid = |name: &str, level: &str| {
+                Some(BlockState {
+                    name: name.into(),
+                    properties: [("level".to_owned(), level.to_owned())].into(),
+                })
+            };
+            assert_eq!(
+                block(state("minecraft:water", 8, false, true)),
+                liquid("minecraft:water", "0")
+            );
+            assert_eq!(
+                block(state("minecraft:flowing_water", 3, false, false)),
+                liquid("minecraft:water", "5")
+            );
+            assert_eq!(
+                block(state("minecraft:flowing_lava", 3, true, false)),
+                liquid("minecraft:lava", "13")
+            );
+            assert_eq!(
+                block(state("minecraft:flowing_water", 1, false, false)),
+                liquid("minecraft:water", "7")
+            );
+            assert_eq!(
+                block(state("minecraft:empty", 0, false, false)).map(|s| s.name),
+                Some("minecraft:air".into())
+            );
+            for refused in [
+                state("minecraft:flowing_water", 9, false, false),
+                state("minecraft:flowing_water", 0, false, false),
+                state("minecraft:water", 3, false, true),
+                state("minecraft:empty", 8, false, false),
+                state("horizon:definition_test", 8, false, true),
+                state("minecraft:flowing_water", u8::MAX, true, false),
+            ] {
+                assert_eq!(service.legacy_block(refused), None, "{refused:?}");
+            }
         });
     }
 

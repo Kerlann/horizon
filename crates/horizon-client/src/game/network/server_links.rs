@@ -301,6 +301,14 @@ impl Game<'_> {
         self.links_ui.back = Some(parent);
         self.set_screen(Screen::ConfirmLink);
     }
+    /// `ConfirmLinkScreen.confirmLinkNow(parent, uri, false)`: ask about a link that is not
+    /// Mojang's, with the warning, whatever the "Web Links" options say.
+    pub(super) fn confirm_untrusted_link(&mut self, url: &str, parent: Screen) {
+        self.links_ui.confirm = Some(url.to_owned());
+        self.links_ui.trusted = false;
+        self.links_ui.back = Some(parent);
+        self.set_screen(Screen::ConfirmLink);
+    }
     /// The screen `ConfirmLinkScreen`'s callback returns to (`setScreen(parent)`).
     pub(super) fn confirm_link_back(&self) -> Screen {
         self.links_ui.back.unwrap_or(Screen::ServerLinks)

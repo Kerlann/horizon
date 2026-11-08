@@ -27,6 +27,14 @@ Block reload rebinds that mapping without changing the key's identity or canonic
 a refused rebind clears the old mapping. Effect registration is process-owned and fixed
 until restart, matching the engine's effect registry.
 
+A name that only arrives at run time (data, config, a command, a network message) turns into a key
+with the host: `host.block_key("minecraft:stone")`, `host.effect_key("mymod:rage")` and
+`host.fluid_key("minecraft:water")` return `Option`, and `key.id(host)` gives the name back for
+blocks, effects, fluids and items. Names are full registry names; the lookup reads the completed
+registry and does not allocate, so a hook can call it. It returns `None` for a name the registry does
+not hold, and before the registry is complete, so a mod uses `r.block_key(id)` in `register`. These
+work on the client and the server, for native and wasm mods alike.
+
 Block tag membership is bound from the same merged item/block tag snapshot at world load and
 reload, including worlds without pack overrides. A read maps the slot to a numeric block id,
 looks up the tag name and tests a `BlockSet` bit; it never resolves the block's name. A fully

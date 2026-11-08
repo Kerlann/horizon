@@ -334,12 +334,8 @@ impl Game<'_> {
             }
             None => (true, Vec3::new(0.5, 0.0, 0.0)),
         };
-        // DimensionType.getTeleportationScale: 8 out of the Nether, 1/8 into it.
-        let scale = if self.dim == Dim::Nether {
-            8.0
-        } else {
-            1.0 / 8.0
-        };
+        // DimensionType.getTeleportationScale: the coordinate scales of the two levels.
+        let scale = Dim::teleportation_scale(self.dim, target);
         Plan {
             dim: target,
             // getPortalDestination clamps to the border of the level it leads to.

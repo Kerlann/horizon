@@ -64,6 +64,7 @@ fn generated_key_imports_use_canonical_slots_and_refuse_before_the_backend() {
         &crate::parts::tests::rule_schema(),
     )
     .unwrap();
+    crate::registry_keys::resolve_block_keys(["minecraft:stone"]).unwrap();
     crate::registry_keys::resolve_effects(
         horizon_client_core::potions::all_effects()
             .map(|def| horizon_client_core::potions::namespaced(def.id)),
@@ -93,6 +94,14 @@ fn generated_key_imports_use_canonical_slots_and_refuse_before_the_backend() {
         fn effect_key_id(&self, key: EffectKey) -> String {
             self.0.set(self.0.get() + 1);
             crate::registry_keys::effect_id(key).unwrap().to_owned()
+        }
+        fn block_key(&self, id: &str) -> Option<BlockKey> {
+            self.0.set(self.0.get() + 1);
+            crate::registry_keys::block_key(id)
+        }
+        fn effect_key(&self, id: &str) -> Option<EffectKey> {
+            self.0.set(self.0.get() + 1);
+            crate::registry_keys::effect_key(id)
         }
     }
     impl Backend for Table {}
@@ -175,6 +184,23 @@ fn generated_key_imports_use_canonical_slots_and_refuse_before_the_backend() {
         Imports::effect_key_id(&mut state, poison.0).unwrap(),
         "minecraft:poison"
     );
+    // A name only known at run time reaches the same canonical slots as the registration request.
+    assert_eq!(
+        Imports::block_key(&mut state, "minecraft:stone".to_owned()).unwrap(),
+        Some(0)
+    );
+    assert_eq!(
+        Imports::effect_key(&mut state, "minecraft:poison".to_owned()).unwrap(),
+        Some(poison.0)
+    );
+    assert_eq!(
+        Imports::block_key(&mut state, "missing:block".to_owned()).unwrap(),
+        None
+    );
+    assert_eq!(
+        Imports::effect_key(&mut state, "missing:effect".to_owned()).unwrap(),
+        None
+    );
     let handle = crate::unresolved_fluid::intern("absent:wasm").unwrap();
     use glue::horizon::mod_api::host::Host as Reads;
     assert_eq!(
@@ -183,7 +209,7 @@ fn generated_key_imports_use_canonical_slots_and_refuse_before_the_backend() {
     );
     assert!(Reads::unresolved_fluid_id(&mut state, u64::MAX).is_err());
     let calls = table.0.get();
-    assert_eq!(calls, 4);
+    assert_eq!(calls, 8);
     for slot in [1, u32::MAX] {
         assert!(
             Imports::block_key_id(&mut state, slot)

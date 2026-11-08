@@ -50,9 +50,14 @@ the dimension type the game reads: `has_fixed_time`, `has_ender_dragon_fight`, `
 `ambient_light`, `infiniburn`, the monster spawn light range and block light limit, the `skybox`,
 the `cardinal_light` and the gameplay switches (`water_evaporates`, `fast_lava`,
 `respawn_anchor_works`, `nether_portal_spawns_piglin`, `piglins_zombify`, `snow_golem_melts`,
-`can_start_raid`, `sky_light_level`). A field left at its default is the Overworld's, and the game
-refuses a value out of range (a `coordinate_scale` of 0, an `ambient_light` above 1, an unknown
-`skybox`) at startup with a message naming the mod. The level opens, ticks, saves and closes as the
+`can_start_raid`, `sky_light_level`) and the bed rule (`bed_can_sleep`, `bed_can_set_spawn`,
+`bed_destroy_on_use`, `bed_destroy_on_leave`: `always`, `when_dark` or `never`, and whether a bed
+explodes or breaks; the same four with `straw_bed_` for the straw bed). A field left at its default is the Overworld's, and the game
+refuses a value out of range (a `coordinate_scale` outside 0.00001 to 30000000, an `ambient_light` that is not a number, an unknown
+`skybox`, a bed rule that is none of the three) at startup with a message naming the mod. The
+`coordinate_scale` is what `execute in mymod:pocket` scales a position by, and what a portal
+between two levels scales by (`DimensionType.getTeleportationScale`); a position given to a
+teleport call is taken as it is. The level opens, ticks, saves and closes as the
 Nether and the End do, in `dimensions/mymod/pocket/` of the world, and clients receive its
 dimension type when they join. A client of a server takes the whole type, not only the build
 range: the level's fluids, mobs, beds and time follow the type the server sent, as on the host,
@@ -61,6 +66,12 @@ whether or not the client has the mod that registered the level.
 `sky_color`, `fog_color` (`#rrggbb`) and `cloud_height` set the sky overhead, the fog at the
 horizon and the clouds' height; left as None they are the Overworld's. They apply to the host's own
 world: a client of another server that has the mod's dimension shows the Overworld's sky there.
+
+`day_cycle` picks the timelines and the clock the dimension type names: `overworld` (the day and moon
+cycles, the villagers' schedule and the Overworld's clock, the default), `nether` (the schedule only,
+no clock), `end` or `none`. It sets how the level's sky and light change over the day in the host's
+world, whether monsters burn in daylight, and which clock `/time` reads there. `level.dimension_type(host)`
+gives the timelines and `default_clock` back. The day time itself is the world's one clock.
 
 The level's biomes are the one `biome` everywhere unless `biome_source` says otherwise:
 `BiomeSourceKind::Checkerboard` alternates the `biomes` in cells `2^biome_scale` chunks wide,
@@ -108,6 +119,35 @@ as one naming a generator nobody registered, logs an error and leaves the player
 It is false for an unregistered dimension and for an entity that cannot change level (an item, an
 orb, a projectile); a fake player stays where it is. Nothing builds a platform at the destination, so look for the
 ground first, or place one.
+
+### Sea level
+
+`level.sea_level(host)` reads `Level.getSeaLevel`: 63 in the Overworld, 32 in the Nether, 0 in the End. For a level of
+the noise generator it is the `sea_level` of its noise settings, a data pack's too when it replaces them. A level
+of a chunk generator the mod wrote has no noise settings to read: set `DimensionSettings::sea_level` to give it one
+(a level of the noise generator keeps its noise settings'), else it is 63 (-63 for a superflat generator). It is the sea
+level the game uses for the level: mob spawning and behaviour (drowned, turtles, phantoms), rain and snow, and maps.
+Terrain and aquifers are built with the generator's own sea level, which for a noise level is the noise settings' and
+which `DimensionSettings::sea_level` never changes: it only gives `level.sea_level(host)` a value for a generator that has
+none, so it does not move where the water is.
+
+### Day clocks
+
+Each level goes by its dimension type's `default_clock`: the Overworld by `minecraft:overworld`, the End by
+`minecraft:the_end`, a level without one (the Nether) by the Overworld's. Every clock the world has met runs at its
+own rate and keeps its own total, saved in `world_clocks.dat`, so a level with a clock of its own has its own day:
+its sky, its spawning and its beds follow that clock, and `/time` in the level sets it.
+`level.clock_time(host)` reads the level's own clock in ticks (None for a level without a default clock);
+`level.day_time(host)` stays the Overworld's, whichever level is asked.
+
+### Which level a hook is in
+
+The block-behaviour hooks (`neighbor_changed`, `random_tick`, `crop_grow`, `block_changed` and the rest) name their
+level with a `LevelDimension`: `Overworld`, `Nether`, `End`, or `Custom(key)` for any other level, a mod's or a data
+pack's. `LevelDimension::key()` gives the level's key (`key.id()` its `namespace:path`) and `LevelDimension::of_level`
+goes back. Match it with a final `Custom(_)` arm. The game's own rules read the level's own dimension type for these
+too (water that evaporates, fast lava, infiniburn, piglin portals), and `player_respawn_position` may send a player to
+a `Custom` level.
 
 ### Saving a level
 

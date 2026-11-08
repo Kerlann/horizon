@@ -835,6 +835,7 @@ mod mod_spawn_rule_tests {
             friction: 0.6,
             explosion_resistance: 1.0,
             item: Arc::from(name),
+            pick_item: Arc::from(name),
             sounds: Sounds {
                 volume: 1.0,
                 pitch: 1.0,

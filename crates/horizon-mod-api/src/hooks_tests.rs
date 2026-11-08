@@ -389,6 +389,18 @@ fn dimension_types_take_a_host(
     Some((ty.coordinate_scale, ty.fast_lava, nether_like))
 }
 
+/// Compile-only: a mod reads the time of a level's own clock from a handle on a shared host.
+#[allow(dead_code)]
+fn clock_time_takes_a_host(host: &dyn Host, level: LevelRef) -> Option<i64> {
+    level.clock_time(host)
+}
+
+/// Compile-only: a mod reads a level's sea level from a handle on a shared host.
+#[allow(dead_code)]
+fn sea_level_takes_a_host(host: &dyn Host, level: LevelRef) -> Option<i32> {
+    level.sea_level(host)
+}
+
 /// Compile-only: a client mod reads column heights of the world its window shows.
 #[allow(dead_code)]
 fn client_heights_take_a_client_host(host: &dyn ClientHost) -> Result<Vec<Option<i32>>, String> {
@@ -443,11 +455,17 @@ fn level_queries_take_their_hosts(
     tool: &ItemStack,
 ) {
     let _: Option<Vec<[f64; 6]>> = level.fluid_shape(read, [0, 64, 0]);
+    let _: Option<i32> = level.fluid_tick_delay(read, FluidKey(0), [0, 64, 0]);
+    let _: Option<f32> = level.fluid_height(read, [0, 64, 0]);
+    let _: Option<f32> = level.fluid_height_for_camera(read, [0, 64, 0]);
+    let _: Option<bool> =
+        level.fluid_can_be_replaced_with(read, [0, 64, 0], FluidKey(0), Direction::Down);
     let _: Option<bool> = level.has_collisions(read, [0.0, 64.0, 0.0, 1.0, 65.0, 1.0]);
     let _: Option<Vec<EntityRayHit>> =
         level.ray_trace_entities(read, [0.0; 3], [8.0, 0.0, 0.0], 0.3, Some(shooter));
     let _: Result<Option<Vec<ItemStack>>, StackWriteError> =
         level.block_drops(server, [0, 64, 0], Some(tool), Some(shooter));
+    let _: bool = level.fluid_tick(server, [0, 64, 0]);
 }
 
 /// Compile-only: the entity queries for contact, picking and multipart parts as a mod calls

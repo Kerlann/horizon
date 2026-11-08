@@ -37,6 +37,7 @@ impl Game<'_> {
             Action::Credits => {
                 self.open_options_at(true, horizon_client::options_ui::Page::Credits)
             }
+            Action::Mods => self.open_options_at(true, horizon_client::options_ui::Page::Mods),
             Action::OpenUri(uri) => packs::open_uri(&uri),
             Action::CopyText(text) => {
                 use horizon_client::clipboard::Clipboard;

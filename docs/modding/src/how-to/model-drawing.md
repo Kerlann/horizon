@@ -6,6 +6,38 @@ through `RenderAssets::model` after resources are published. World render hooks 
 copies in a group. GUI scenes, mobs and kept/spinning renderers use their existing
 CPU routes; groups are a world-drawing facility, not another renderer.
 
+## Terrain materials in a block entity
+
+`draw.model(model, tint)` draws a resolved model as an entity model. A block entity, mob or
+player submit hook that wants the terrain's own materials calls
+`draw.terrain_model(model, options)` instead. That covers a machine's belts, shafts and
+casings, cut out and shaded as blocks are:
+
+```rust,ignore
+let belt = TerrainUvShift::new("mymod:block/belt", "mymod:block/belt_scroll", [1.0, 0.5], [0.0, scroll]);
+let options = TerrainModelOptions::default()
+    .with_material(TerrainMaterial::Cutout)
+    .with_uv_shift(belt);
+draw.terrain_model(self.belt, options)?;
+```
+
+- Faces sample the animated block sprites, cull back faces and write colour and depth like
+  opaque terrain. Light is the draw's own, raised by each quad's emission.
+- `material`: `Model` keeps each quad's `render_type` (solid, `cutout`, `cutout_mipped`), and
+  a translucent quad refuses the draw. `Solid`, `Cutout` (alpha under 0.1 discarded, no
+  mipmaps) and `CutoutMipped` (under 0.5, mipmapped) choose one material for all quads.
+- `shade`: `Model` follows each quad's `shade` flag, `Off` turns directional shading off, and
+  `Entity` shades every quad by the level's entity light directions. Full-bright light never
+  turns shading off.
+- `uv_shift` draws faces of exactly one sprite with another, their UVs scaled then moved.
+  `uv_shrink_ratio` (`0.0..=1.0`, default `0.0`) pulls UVs towards each face's centre first,
+  for a model baked with an older `FaceBakery`'s atlas shrink. The engine never guesses it.
+- `tint` (`0xRRGGBB`) multiplies only quads with a tint index.
+- A stale handle is `TerrainModelError::Model`. If any quad can't be drawn, the result is
+  `TerrainModelError::Refused` and nothing is drawn. That covers a translucent quad under
+  `Model`, a missing sprite, a pose that flattens the model, a ratio out of range, and a shift
+  whose numbers aren't finite, whose sprites are unknown or whose source sprite no face uses.
+
 ## Persistent groups
 
 - `host.create_group(model, capacity)` reserves up to 16,384 copies of a solid model.

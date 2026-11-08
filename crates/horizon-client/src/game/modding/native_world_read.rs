@@ -1,14 +1,16 @@
 //! Read-only block, tag and fluid queries for native mods.
+use super::native_level_signals::ReadLevel;
 use super::{Dim, Game};
 use horizon_client::{items::Items, world::World};
+use horizon_core::{geometry::Direction, position::BlockPos};
 use horizon_world::{
     chunk::BlockState,
-    fluid::{FluidKind, FluidState as EngineFluidState},
-    level::Behaviours,
+    fluid::{FluidHeightWorld, FluidKind, FluidState as EngineFluidState},
+    level::{Behaviours, fluid_can_be_replaced_with, fluid_tick_delay},
     registry::{BlockRegistry, BlockStateId},
 };
 use mod_api::BlockKey;
-use mod_api::{FluidState, LevelRef, NativeLifecycleContext, UnresolvedFluid};
+use mod_api::{FluidKey, FluidState, LevelRef, NativeLifecycleContext, UnresolvedFluid};
 
 /// Why a server block cannot be read.
 #[allow(dead_code)]
@@ -113,6 +115,45 @@ fn fluid_kind(fluid: &str) -> Option<FluidKind> {
     FluidKind::from_name(&horizon_client::command::args::normalized(fluid))
 }
 
+/// The world fluid a registered key names. None for a tank-only fluid, which has no world
+/// form, and for a key the registry doesn't hold.
+pub(super) fn engine_fluid_kind(fluid: FluidKey) -> Option<FluidKind> {
+    FluidKind::from_name(mod_api::__private::fluid_id(fluid)?)
+}
+
+/// The blocks around one position of a level, as `FluidState.getHeight` reads them: an unloaded
+/// block is empty and has no sturdy underside.
+struct FluidColumn<'a, 'g> {
+    game: &'a Game<'g>,
+    level: LevelRef,
+}
+impl FluidColumn<'_, '_> {
+    fn fluid_at(&self, pos: [i32; 3]) -> EngineFluidState {
+        self.game
+            .level_block_state(self.level, pos)
+            .map_or(EngineFluidState::EMPTY, |state| {
+                self.game.res.behaviours().fluid(state)
+            })
+    }
+}
+impl FluidHeightWorld for FluidColumn<'_, '_> {
+    type Error = std::convert::Infallible;
+    fn fluid(&mut self, pos: [i32; 3]) -> Result<EngineFluidState, Self::Error> {
+        Ok(self.fluid_at(pos))
+    }
+    fn sturdy_down(&mut self, pos: [i32; 3]) -> Result<bool, Self::Error> {
+        Ok(self
+            .game
+            .level_block_state(self.level, pos)
+            .is_some_and(|state| {
+                self.game
+                    .res
+                    .behaviours()
+                    .is_face_sturdy(state, Direction::Down)
+            }))
+    }
+}
+
 impl Game<'_> {
     /// The saved name for an engine-issued unresolved fluid.
     pub(super) fn unresolved_fluid_id(&self, fluid: UnresolvedFluid) -> String {
@@ -198,6 +239,78 @@ impl Game<'_> {
         Some(fluid_shape(fluid, above).into_iter().collect())
     }
 
+    /// `Fluid.getTickDelay(level)` of `fluid` at `pos` in the level in place: vanilla's by its
+    /// family and the dimension (`World::fast_lava`), a mod fluid's as registered and as its
+    /// `fluid_rules` parts change it there (the one rule path the flow itself reads). None for
+    /// another level, a stale handle, a client, an unloaded or out-of-height position and a
+    /// fluid with no world form.
+    pub(super) fn level_fluid_tick_delay(
+        &self,
+        level: LevelRef,
+        fluid: FluidKey,
+        pos: [i32; 3],
+    ) -> Option<i32> {
+        let [x, y, z] = pos;
+        if !self.level_in_place(level) || !self.world.is_loaded_at(x, y, z) {
+            return None;
+        }
+        let kind = engine_fluid_kind(fluid)?;
+        let view = ReadLevel { game: self, level };
+        Some(fluid_tick_delay(kind, self.world.fast_lava, || {
+            let fluid = kind.mod_fluid()?;
+            Some(super::GameLevel::answered_fluid_rules(
+                self.dim.level(),
+                BlockPos::new(x, y, z),
+                fluid,
+                fluid.get().rules,
+                |call| mod_api::dispatch_fluid_rules(&view, call),
+            ))
+        }))
+    }
+
+    /// `FluidState.getHeight(level, pos)` of the fluid at `pos`. None for a stale handle or a
+    /// position that isn't loaded, as `level_block_state`.
+    pub(super) fn level_fluid_height(&self, level: LevelRef, pos: [i32; 3]) -> Option<f32> {
+        let mut column = FluidColumn { game: self, level };
+        self.level_block_state(level, pos)?;
+        let Ok(height) = column.fluid_at(pos).height_at(&mut column, pos);
+        Some(height)
+    }
+
+    /// The surface height the camera's immersion test reads at `pos`
+    /// (`FluidState::camera_height_at`). None as for `level_fluid_height`.
+    pub(super) fn level_fluid_height_for_camera(
+        &self,
+        level: LevelRef,
+        pos: [i32; 3],
+    ) -> Option<f32> {
+        let mut column = FluidColumn { game: self, level };
+        self.level_block_state(level, pos)?;
+        let Ok(height) = column.fluid_at(pos).camera_height_at(&mut column, pos);
+        Some(height)
+    }
+
+    /// `FluidState.canBeReplacedWith(level, pos, fluid, direction)` for the fluid at `pos`. False
+    /// for a `fluid` with no world form; None as for `level_fluid_height`.
+    pub(super) fn level_fluid_can_be_replaced_with(
+        &self,
+        level: LevelRef,
+        pos: [i32; 3],
+        fluid: FluidKey,
+        direction: Direction,
+    ) -> Option<bool> {
+        let mut column = FluidColumn { game: self, level };
+        self.level_block_state(level, pos)?;
+        let here = column.fluid_at(pos);
+        let Some(other) = engine_fluid_kind(fluid) else {
+            return Some(false);
+        };
+        Some(fluid_can_be_replaced_with(here, other, direction, || {
+            let Ok(height) = here.height_at(&mut column, pos);
+            height
+        }))
+    }
+
     /// Whether `fluid` and `other` are the same fluid (`Fluid.isSame`): a source and its
     /// flowing form are, so `minecraft:water` and `minecraft:flowing_water` are the same, water
     /// and lava not. Names are fluid ids, with or without `minecraft:`; false when either
@@ -235,12 +348,10 @@ impl Game<'_> {
         if !self.native_lifecycle.permits_read(context) {
             return Err(NativeBlockReadError::InactiveContext);
         }
-        let dim = match dimension {
-            "minecraft:overworld" => Dim::Overworld,
-            "minecraft:the_nether" => Dim::Nether,
-            "minecraft:the_end" => Dim::End,
-            _ => return Err(NativeBlockReadError::UnavailableDimension),
-        };
+        if !Dim::exists(dimension) {
+            return Err(NativeBlockReadError::UnavailableDimension);
+        }
+        let dim = Dim::from_id(dimension);
         let world = if dim == self.dim {
             Some(&self.world)
         } else {

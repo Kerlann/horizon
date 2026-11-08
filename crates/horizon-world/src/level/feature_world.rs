@@ -31,7 +31,7 @@ fn pos([x, y, z]: [i32; 3]) -> BlockPos {
 
 impl<L: LevelAccess + ?Sized> LevelFeatureWorld<'_, '_, L> {
     fn sea(&self) -> i32 {
-        super::vanilla_sea_level(self.sim.level.level_key())
+        self.sim.level.sea_level()
     }
     fn in_tag(&self, state: BlockStateId, tag: &str) -> bool {
         let name = tag.trim_start_matches('#');

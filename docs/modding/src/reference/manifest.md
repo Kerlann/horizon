@@ -149,7 +149,7 @@ cache path. Direct game resource or world loading with a missing native
 requirement fails as a whole; it never publishes code without the matching data.
 A missing input during `/reload` reports the typed failure to the command source
 and keeps the previous data and composed root. Content-only mods have no code to
-strand: each whole mod can instead be refused on its Mods page row, including
+strand: each whole mod can instead be refused, with the reason in its Mods screen panel, including
 every owner of a shared missing file. The game never downloads jars.
 
 ## Source paths

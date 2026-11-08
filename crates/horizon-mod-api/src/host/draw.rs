@@ -262,6 +262,22 @@ pub trait BlockEntityDrawContext {
     fn model(&mut self, model: ModelRef, tint: u32) -> Result<(), ModelError> {
         unimplemented!("BlockEntityDrawContext::draw_model")
     }
+    /// Draws the resolved standalone model under `draw`'s pose, as [`Self::model`] places it,
+    /// with the terrain's own materials: the block sprites (animated, mipmapped as the options
+    /// set), back faces culled, colour and depth written as opaque terrain, lit by
+    /// `draw.light` raised by each quad's own emission. `options` picks the material
+    /// (each quad's `solid`, `cutout` or `cutout_mipped`, or one for all: cutout discards
+    /// under alpha 0.1 without mipmaps, cutout-mipped under 0.5 with them), the directional
+    /// shading (independent of light), one sprite drawn as another with moved UVs, a UV
+    /// shrink, and a `0xRRGGBB` tint on quads with a tint index. What a machine's belts,
+    /// shafts and casings draw with. A refusal draws nothing.
+    fn terrain_model(
+        &mut self,
+        model: ModelRef,
+        options: TerrainModelOptions<'_>,
+    ) -> Result<(), TerrainModelError> {
+        unimplemented!("BlockEntityDrawContext::draw_terrain_model")
+    }
     /// Draws `text` under `draw`'s pose as a sign draws its lines
     /// (`Font.drawInBatch` in a `BlockEntityRenderer`): in the pose's x-y
     /// plane, one unit a font pixel, y down, its left end at `at`, facing

@@ -42,11 +42,21 @@ name = "My mod"
 version = "0.1.0"
 description = "..."
 authors = ["..."]
+license = "MIT"              # optional: the Mods screen shows it
+license_url = "https://..."  # optional: makes the license a link
+credits = "..."              # optional: thanks, shown under the authors
+homepage = "https://..."     # optional: the Mods screen's Homepage button
+issues = "https://..."       # optional: the Mods screen's Issues button
 api = "0.2"                  # content mods
 side = "both"
 capabilities = ["registries"]
 namespaces = []              # optional: more namespaces the mod's files use (below)
 ```
+
+The optional fields fill the game's Mods screen, which lists every mod with its icon, name, version, id, license,
+authors, credits and description, as NeoForge's mod list does. A link must be `http` or `https` and at most 2048
+characters; the others are plain text. The screen has no switch: a mod runs or not by what the launcher and
+`horizon-mods.txt` say.
 
 Unknown keys are refused, so a typo is an error, not a silently ignored permission. The shared manifest
 uses exactly `api = "0.2"` and `capabilities = ["registries"]`, with `side = "client"` (the default) or `"both"`.
@@ -141,6 +151,11 @@ A block gets a block item of its own id by default. `"item": false` gives it non
 that other item instead, an item of the mod or a vanilla one, such as `"minecraft:diamond"`: pick-block and
 `Block.asItem` both read it, and the load fails naming the block when no such item exists. `"none"` is not an item id;
 write `"item": false`. A sign's wall form takes its sign's item through `wall_block`, not `block_item`.
+
+Pick-block takes the block's item by default. `"pick_item": "<item id>"` names a different one, with any `item` and
+`block_item`: vanilla's `getCloneItemStack`, which lets a mature crop pick its seed while `Block.asItem` stays what it
+is (air for `"item": false`). It is an item of the mod or a vanilla one, and the load fails naming the block when no
+such item exists. A sign's wall form picks its sign's item through `wall_block`, so it declares no `pick_item`.
 
 `push_reaction` sets vanilla's `BlockBehaviour.Properties.pushReaction` to `"PUSH_PULL"`, `"PUSH"`, `"POPPED"`, `"IMMOVEABLE"`, or `"IGNORE_ENTITY"`.
 

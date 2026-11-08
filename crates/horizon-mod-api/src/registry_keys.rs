@@ -234,7 +234,7 @@ pub fn world_fluid_key(kind: horizon_world::fluid::FluidKind) -> Option<FluidKey
     }
 }
 
-/// Find a fluid key at a data-loading boundary.
+/// Find a fluid key at a data-loading boundary; a bare name means `minecraft:`.
 pub fn fluid_key(id: &str) -> Option<FluidKey> {
     let names = crate::parts::resolved_fluids().get()?;
     let slot = if id.contains(':') {
@@ -403,8 +403,19 @@ pub fn item_id(key: ItemKey) -> Option<&'static str> {
         .id(key.0)
 }
 
+/// Find an effect by its full registry name in the completed registry, without allocating.
+pub fn effect_key(id: &str) -> Option<EffectKey> {
+    Some(EffectKey(
+        *crate::parts::resolved_effects()
+            .get()?
+            .names
+            .slots
+            .get(id)?,
+    ))
+}
+
 /// The API key for an engine registry index, also for entries not explicitly requested by mods.
-pub fn effect_key(index: usize) -> Option<EffectKey> {
+pub fn effect_key_by_index(index: usize) -> Option<EffectKey> {
     crate::parts::resolved_effects()
         .get()?
         .keys

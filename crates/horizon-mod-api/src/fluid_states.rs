@@ -1,5 +1,7 @@
 //! Read-only fluid-state definitions from the owning host's loaded registry.
-use crate::{Backend, BackendRef, FluidKey, FluidState, Host, StateConstraint, StateProperty};
+use crate::{
+    Backend, BackendRef, BlockStateId, FluidKey, FluidState, Host, StateConstraint, StateProperty,
+};
 
 /// A registered fluid's world-state definition, or an identity used only in tanks.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -19,7 +21,7 @@ pub enum FluidDefinition {
 /// What a registered fluid is, apart from any level or entity. Vanilla reads the entity
 /// behaviours off `FluidTags.WATER` and `FluidTags.LAVA`, so `minecraft:flowing_water` answers as
 /// `minecraft:water`. The empty fluid and a tank-only fluid emit no light, nothing can be done in
-/// them and their fall modifier scales nothing.
+/// them, their fall modifier scales nothing and they drip nothing and never tick randomly.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
 pub struct FluidTypeProperties {
@@ -43,6 +45,15 @@ pub struct FluidTypeProperties {
     pub can_hydrate: bool,
     /// `FluidType.supportsBoating`: whether a boat floats on it.
     pub supports_boating: bool,
+    /// `Fluid.getExplosionResistance`: how much of an explosion's power the fluid soaks up per
+    /// block, 100 for water, lava and a mod's world fluid, 0 for the empty fluid and a
+    /// tank-only fluid. A flowing form answers as its source.
+    pub explosion_resistance: f32,
+    /// `Fluid.isRandomlyTicking`: whether the fluid takes random ticks, which only lava does.
+    pub randomly_ticks: bool,
+    /// `Fluid.getDripParticle`: the particle id a block of the fluid drips beneath it
+    /// (`minecraft:dripping_water`, `minecraft:dripping_lava`), none for any other fluid.
+    pub drip_particle: Option<String>,
 }
 
 /// Why fluid-state constraints could not be validated.
@@ -93,6 +104,14 @@ impl FluidStates<'_> {
     pub fn type_properties(&self, fluid: FluidKey) -> Option<FluidTypeProperties> {
         self.backend?.fluid_type_properties(fluid)
     }
+    /// `FluidState.createLegacyBlock`: the block state that holds `state` in the world, a water
+    /// or lava block of the matching level, a mod's world fluid's block, or air for the empty
+    /// fluid. None for a state no fluid can be in (a tank-only fluid, an amount above 8, a zero
+    /// amount for anything but the empty fluid, a source that isn't full) and without a resolved
+    /// registry.
+    pub fn legacy_block(&self, state: FluidState) -> Option<BlockStateId> {
+        self.backend?.fluid_legacy_block(state)
+    }
     /// Validate partial constraints in input order, without matching a particular state.
     /// Tank-only or unavailable definitions return `NoWorldState`; use `definition`
     /// to distinguish them. Indices identify the first offending constraint.
@@ -118,6 +137,15 @@ mod tests {
         let key = FluidKey(0);
         assert_eq!(Unavailable.fluid_states().definition(key), None);
         assert_eq!(Unavailable.fluid_states().type_properties(key), None);
+        assert_eq!(
+            Unavailable.fluid_states().legacy_block(FluidState {
+                fluid: key,
+                amount: 8,
+                falling: false,
+                source: true,
+            }),
+            None
+        );
         assert_eq!(
             Unavailable.fluid_states().validate(key, &[]),
             Err(FluidStateError::NoWorldState)

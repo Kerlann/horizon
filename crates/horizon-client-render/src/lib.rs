@@ -77,6 +77,7 @@ pub mod mod_chunk_tickets;
 pub mod mod_list;
 pub mod model_library;
 pub mod models;
+pub mod mods_screen;
 pub mod monitor;
 pub mod multiline_edit;
 pub mod native_emissive;

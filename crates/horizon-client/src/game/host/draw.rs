@@ -164,6 +164,14 @@ impl BlockEntityDrawContext for GameBlockEntityDrawContext<'_, '_> {
     fn model(&mut self, model: ModelRef, tint: u32) -> Result<(), ModelError> {
         self.game.native_draw_model(&mut *self.surface, model, tint)
     }
+    fn terrain_model(
+        &mut self,
+        model: ModelRef,
+        options: TerrainModelOptions<'_>,
+    ) -> Result<(), TerrainModelError> {
+        self.game
+            .native_draw_terrain_model(&mut *self.surface, model, options)
+    }
     fn text(&mut self, text: &Text, at: [f32; 2], color: u32, glowing: bool, outline: u32) -> f32 {
         self.game
             .native_draw_text(&mut *self.surface, text, at, color, glowing, outline)

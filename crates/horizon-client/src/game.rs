@@ -1141,22 +1141,12 @@ impl LevelAccess for GameLevel<'_> {
         fluid: horizon_world::fluid::ModFluid,
         registered: horizon_world::fluid::ModFluidRules,
     ) -> horizon_world::fluid::ModFluidRules {
-        let mut rules = registered;
-        if self.native_authoritative {
-            self.native_fluid_rules(mod_api::__private::FluidRulesCall {
-                dimension: self.dimension,
-                pos,
-                fluid: &fluid.get().id,
-                tick_delay: &mut rules.tick_delay,
-                drop_off: &mut rules.drop_off,
-                slope_find_distance: &mut rules.slope_find_distance,
-                converts_to_source: &mut rules.converts_to_source,
-            });
-            rules.tick_delay = rules.tick_delay.max(1);
-            rules.drop_off = rules.drop_off.clamp(1, 7);
-            rules.slope_find_distance = rules.slope_find_distance.clamp(1, 4);
+        if !self.native_authoritative {
+            return registered;
         }
-        rules
+        Self::answered_fluid_rules(self.dimension, pos, fluid, registered, |call| {
+            self.native_fluid_rules(call)
+        })
     }
     fn allow_block_ignite(&self, pos: BlockPos, cause: &'static str) -> bool {
         let mut cancel = false;
@@ -2181,6 +2171,7 @@ struct PreparedParts {
 }
 
 struct PreparedWorldReload {
+    structure_spawns: horizon_client::mobs::spawn_selection::StructureSpawns,
     tables: Option<WorldTables>,
     health: horizon_client::health::HealthResources,
     parts: PreparedParts,
@@ -3213,6 +3204,7 @@ struct Game<'a> {
     /// `StructureTemplateManager.structureRepository`: the templates in memory
     /// by id, a miss included (game/administration/structure_blocks.rs).
     structure_templates: HashMap<String, Option<structure_blocks::TemplateEntry>>,
+    structure_spawns: horizon_client::mobs::spawn_selection::StructureSpawns,
     /// The game tests read so far, by id (the test instance registry).
     test_defs: std::cell::RefCell<HashMap<String, Option<test_instances::TestDef>>>,
     /// `test_defs` holds the world's whole test instance registry
@@ -3473,7 +3465,10 @@ impl Dim {
             Self::Overworld => LevelDimension::Overworld,
             Self::Nether => LevelDimension::Nether,
             Self::End => LevelDimension::End,
-            Self::Extra(_) => LevelDimension::Overworld,
+            Self::Extra(_) => LevelDimension::of_level(
+                horizon_core::LevelKey::parse(self.id())
+                    .unwrap_or(horizon_core::LevelKey::OVERWORLD),
+            ),
         }
     }
     fn id(self) -> &'static str {
@@ -3491,6 +3486,29 @@ impl Dim {
             "minecraft:the_nether" => Self::Nether,
             "minecraft:the_end" => Self::End,
             _ => Self::extra(id).unwrap_or(Self::Overworld),
+        }
+    }
+    /// `Level.getSeaLevel` of the level: the sea level its noise settings give a mod's level, else
+    /// the built-in level's.
+    fn sea_level(self) -> i32 {
+        Self::sea_level_of_id(self.id())
+    }
+    /// [`Self::sea_level`] of the level `id` names.
+    fn sea_level_of_id(id: &str) -> i32 {
+        horizon_core::LevelKey::parse(id).map_or(63, horizon_world::level::sea_level_of)
+    }
+    /// `DimensionType.getTeleportationScale`: how a coordinate in `source` scales into `target`,
+    /// the source's `coordinate_scale` over the target's (8 into the Overworld from the Nether).
+    fn teleportation_scale(source: Self, target: Self) -> f64 {
+        use horizon_world::dimension_type::DimensionFacts;
+        let facts = |dim: Self| {
+            horizon_core::LevelKey::parse(dim.id())
+                .ok()
+                .map(DimensionFacts::of_level)
+        };
+        match (facts(source), facts(target)) {
+            (Some(from), Some(to)) => DimensionFacts::teleportation_scale(from, to),
+            _ => 1.0,
         }
     }
     /// The open world's dimension `id` past vanilla's three.
@@ -3522,6 +3540,16 @@ impl Dim {
     /// The dimensions past vanilla's three of the world being opened.
     fn set_extra<'a>(ids: impl Iterator<Item = &'a str>) {
         *EXTRA_DIMS.write().unwrap() = ids.map(mod_api::__private::dimension_key).collect();
+    }
+    /// Adds the dimension `id` a remote server sent, which no local world told of, so that
+    /// [`Self::from_id`] finds it.
+    fn add_extra(id: &str) {
+        if !Self::exists(id) {
+            EXTRA_DIMS
+                .write()
+                .unwrap()
+                .push(mod_api::__private::dimension_key(id));
+        }
     }
     /// The dimension as mods' level handles name it.
     fn key(self) -> mod_api::DimensionKey {
@@ -5185,6 +5213,10 @@ impl Game<'_> {
                 LevelDimension::Overworld => self.res.environment(),
                 LevelDimension::Nether => self.res.nether_environment(),
                 LevelDimension::End => self.res.end_environment(),
+                LevelDimension::Custom(key) => horizon_client::environment::Environment::for_level(
+                    key.id(),
+                    self.res.environment(),
+                ),
             },
             raining: rain > 0.2,
             thundering: thunder > 0.9,
@@ -7886,7 +7918,7 @@ impl Game<'_> {
                     };
                     if let Some(living) = mob {
                         let effect = mod_api::NativeActiveEffect::new(
-                            mod_api::__private::effect_key(def.index)
+                            mod_api::__private::effect_key_by_index(def.index)
                                 .expect("effects resolved at load"),
                             eff.duration,
                             eff.amplifier,
@@ -7917,7 +7949,7 @@ impl Game<'_> {
                 for effect in effects {
                     changed |= match mob {
                         Some(living) => horizon_client::brewing::effect(effect)
-                            .and_then(|def| mod_api::__private::effect_key(def.index))
+                            .and_then(|def| mod_api::__private::effect_key_by_index(def.index))
                             .is_some_and(|key| self.living_remove_effect(living, key)),
                         None => horizon_client::brewing::effect(effect)
                             .is_some_and(|def| self.remove_player_effects(Some(def.index))),
@@ -11773,6 +11805,8 @@ impl Game<'_> {
             self.build_world_tables(&stack, false, &root, self.mods.data_switched)?;
         self.damage_tag_generation = self.damage_tag_generation.wrapping_add(1);
         self.resolve_parts()?;
+        // A code-mod switch can have rebuilt the root since `Game::new`.
+        self.structure_spawns = horizon_client::mobs::spawn_selection::StructureSpawns::load(&root);
         // Native tag reads use the lock to tell that the tag tables are ready.
         self.session_lock = Some(session_lock);
         // Keep the no-pack preload; a world's packs replace it atomically.
@@ -12291,10 +12325,6 @@ impl Game<'_> {
             .definition(source)
             .map(|d| d.name.clone())
             .unwrap_or_default();
-        let fire = self
-            .health_resources
-            .damage
-            .in_tag(source, "minecraft:is_fire");
         // The pieces that may wear (`doHurtEquipment`'s checks).
         let mut eligible: [Option<ItemStack>; 4] = std::array::from_fn(|i| {
             let stack = self.armor[i].clone().filter(|_| slots.contains(&i))?;
@@ -12307,7 +12337,7 @@ impl Game<'_> {
                 || component("minecraft:unbreakable").is_some()
                 || component("!minecraft:max_damage").is_some()
                 || component("!minecraft:damage").is_some()
-                || (fire && world_items!(self).resists_fire(&stack, &name))
+                || !self.stack_can_be_hurt_by(&stack, &name).unwrap_or(true)
             {
                 return None;
             }
@@ -14639,7 +14669,8 @@ impl Game<'_> {
             horizon_client::title::DIFFICULTIES[usize::from(self.ui.difficulty) & 3].into();
         self.level.time = self.world.game_time;
         self.level.weather = self.world.weather;
-        self.level.day_time = self.world.day_time;
+        // level.dat holds the Overworld clock's total, whichever level is in place.
+        self.level.day_time = self.command_clock_time("minecraft:overworld");
         // A server has no player of its own; `enter_guest` puts one in
         // `self.player` only while a command reads it.
         if self.player.is_none() && self.options.dedicated.is_some() {
@@ -16311,6 +16342,9 @@ impl<'a> Game<'a> {
         );
         let resource_source = pack.source.clone();
         let game = Game {
+            structure_spawns: horizon_client::mobs::spawn_selection::StructureSpawns::load(
+                &options.resources,
+            ),
             world_biomes: None,
             world_biomes_base: None,
             res: res.clone(),

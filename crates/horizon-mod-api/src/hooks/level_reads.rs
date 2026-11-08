@@ -75,4 +75,30 @@ accepts, for example the first living entity. A ray starting inside a box does n
 pass the shooter as `exclude` or start outside it. Candidates are the entities `entities_in`
 finds, so spectators are never hit."#]
     fn level_reads_note2();
+    #[notes = r#"## Fluid properties and the explicit fluid tick
+
+The fluid queries answer for a mod's world fluid as they do for water and lava, through the same
+rules the flow reads, so a custom fluid behaves like one of them without a table of its own.
+
+Position-dependent answers are `LevelRef` reads. `fluid_tick_delay(host, fluid, pos)` is
+`Fluid.getTickDelay`: water 5, lava 30 and 10 in the Nether, the empty fluid 0, a flowing form as its
+source; a mod's fluid answers what it declared as its `fluid_rules` parts change it at `pos`. It reads
+the level in place on the server and is `None` for a position that isn't loaded. `fluid_height(host,
+pos)` is `FluidState.getHeight` (a full block under the same fluid, else `amount / 9`),
+`fluid_height_for_camera` is the surface the camera's immersion test reads (a source under a block
+with a sturdy underside is 1), and `fluid_can_be_replaced_with(host, pos, fluid, direction)` is
+`FluidState.canBeReplacedWith`: water yields to a non-water fluid flowing down, lava to water from 4/9
+of a block high, the empty fluid to anything and a mod's fluid to nothing.
+
+World-independent facts are in the fluid service (`host.fluid_states()`): `type_properties(key)` now
+also carries `explosion_resistance` (100 for a fluid, 0 for the empty one), `randomly_ticks` (lava
+only) and `drip_particle` (`minecraft:dripping_water`, `minecraft:dripping_lava`, else none), and
+`legacy_block(state)` is `FluidState.createLegacyBlock`, the water, lava or mod fluid block that holds
+a fluid state, air for the empty fluid.
+
+`fluid_tick(host, pos)` takes a `ServerHost` and runs the flow step of the fluid at `pos` now, the
+body of a due fluid tick: it levels, spreads and schedules its next step with the same random draws,
+hooks and level events. Like `block_tick` it neither reads nor changes the tick queue; `schedule_fluid_tick`
+queues one."#]
+    fn level_reads_note4();
 }

@@ -44,12 +44,9 @@ Native mods are native code with the player's rights, not sandboxed. The first i
 and every build waits behind a red warning; the registry lists one only after a review (its later releases are
 checked by machine). They play in a game of their own, built for the instance they are installed in.
 
-Options > Mods can pause a loaded code mod without rebuilding. Native and wasm mods use the same switch:
-subsequent hooks, render hooks, Parts, slot listeners and capability-provider lookups skip the disabled owner's
-registrations. Re-enabling resumes those registrations without re-registering them. This pauses dispatch, not
-unloads code or undoes earlier world changes; a trapped wasm group stays stopped even if its switch is turned
-back on. Content-mod selection stays frozen while a world is open, including on a browser project page. A browser
-install that finishes after a world opens waits until the world closes before activating its content.
+The game's Mods screen only lists code mods (it has no switch, as NeoForge's has none). A code mod's settings page,
+when it has one, opens from the Config button. The launcher decides which mods are on. A browser install that
+finishes after a world opens waits until the world closes before activating its content.
 
 Villager handles preserve the full signed integer level (at least 1), including values above the
 five vanilla trade tiers. Higher levels use the master badge and do not gain further vanilla trades.

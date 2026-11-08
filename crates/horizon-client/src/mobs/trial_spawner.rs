@@ -1088,7 +1088,11 @@ impl TrialSpawnerExt for TrialSpawner {
             width * scale,
             height * scale,
         );
-        if !spawn_selection::position_ok(l, &id, Reason::TrialSpawner, placed, || {
+        let pending = spawn_selection::Pending {
+            yaw,
+            fresh: data.unconfigured(),
+        };
+        if !spawn_selection::position_ok(l, &id, Reason::TrialSpawner, placed, pending, || {
             spawn_selection::spawn_obstruction(
                 species,
                 l,
