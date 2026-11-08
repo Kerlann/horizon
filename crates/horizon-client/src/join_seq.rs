@@ -19,6 +19,24 @@ use std::{
 pub mod residency;
 
 static NEXT: AtomicU64 = AtomicU64::new(1);
+static NEXT_LIST: AtomicU64 = AtomicU64::new(1);
+
+/// Identifies a list and its write generation. Equal stamps mean the same list
+/// with no intervening mutable access. Clones receive a fresh identity.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ListStamp {
+    list: u64,
+    writes: u64,
+}
+
+impl ListStamp {
+    fn new() -> Self {
+        Self {
+            list: NEXT_LIST.fetch_add(1, Ordering::Relaxed),
+            writes: 0,
+        }
+    }
+}
 
 /// When an entity joined: a number above every earlier join's. Zero means it
 /// has not joined a list yet. One counter for the process, so entities of
@@ -146,10 +164,10 @@ macro_rules! impl_joined {
 /// Bound owners must prohibit replacement or explicitly retire/install identities;
 /// Game bindings must audit and test every such call site before enabling emission.
 #[derive(Debug)]
-pub struct JoinList<T, const DIRECT: bool = true>(Vec<T>, Option<residency::Binding<T>>);
+pub struct JoinList<T, const DIRECT: bool = true>(Vec<T>, Option<residency::Binding<T>>, ListStamp);
 impl<T: Clone, const DIRECT: bool> Clone for JoinList<T, DIRECT> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), None)
+        Self(self.0.clone(), None, ListStamp::new())
     }
 }
 impl<T, const DIRECT: bool> Drop for JoinList<T, DIRECT> {
@@ -350,9 +368,11 @@ impl<T: Joined> ResidentList<T> {
         self.0.drain(range)
     }
     pub fn update<R>(&mut self, index: usize, edit: impl FnOnce(&mut T) -> R) -> R {
+        self.0.written();
         edit(&mut self.0.0[index])
     }
     pub fn for_each_mut(&mut self, edit: impl FnMut(&mut T)) {
+        self.0.written();
         self.0.0.iter_mut().for_each(edit);
     }
     /// Take the owners for a pass, leaving a spawn buffer in their place.
@@ -388,11 +408,19 @@ impl<'a, T> IntoIterator for &'a ResidentList<T> {
 
 impl<T, const DIRECT: bool> Default for JoinList<T, DIRECT> {
     fn default() -> Self {
-        Self(Vec::new(), None)
+        Self(Vec::new(), None, ListStamp::new())
     }
 }
 
 impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
+    /// This list's identity and write generation. Any mutable element access or
+    /// structural operation invalidates earlier stamps, even if it is a no-op.
+    pub fn stamp(&self) -> ListStamp {
+        self.2
+    }
+    fn written(&mut self) {
+        self.2.writes += 1;
+    }
     /// Associate storage with its owning dimension; old membership leaves first.
     pub fn bind_residency(
         &mut self,
@@ -400,9 +428,11 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
         owner: residency::Owner,
         identity: fn(&T) -> (u32, JoinSeq),
     ) {
+        self.written();
         self.bind_to(journal.bind(owner, identity));
     }
     fn bind_to(&mut self, binding: residency::Binding<T>) {
+        self.written();
         if let Some(old) = &self.1 {
             old.all(&self.0, residency::Change::Remove);
         }
@@ -423,6 +453,7 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
     }
     /// Lift a whole pass, leaving an empty spawn buffer behind.
     pub fn lift(&mut self) -> Self {
+        self.written();
         let taken = std::mem::take(self);
         self.1 = taken.1.clone();
         if let Some(binding) = &self.1 {
@@ -434,11 +465,13 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
     /// empty and unbound. This emits no new marker: consume the moved pass with
     /// `restore` to close its existing lift. Resident storage must use `lift`.
     pub fn take_owned_pass(&mut self) -> Self {
+        self.written();
         std::mem::take(self)
     }
     /// Restore a lifted pass using its established spawn-buffer ordering.
     /// An unbound staged batch is admitted without closing another pass.
     pub fn restore(&mut self, mut taken: Self, order: RestoreOrder) {
+        self.written();
         let closes_lift = taken.1.is_some();
         match (&self.1, &taken.1) {
             (Some(a), Some(b)) => assert!(a.same(b), "restoring a different entity owner"),
@@ -459,10 +492,11 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
         }
     }
     pub fn with_capacity(capacity: usize) -> Self {
-        Self(Vec::with_capacity(capacity), None)
+        Self(Vec::with_capacity(capacity), None, ListStamp::new())
     }
     /// Move a batch back without changing its join numbers or order.
     pub fn append(&mut self, other: &mut Self) {
+        self.written();
         let same = match (&self.1, &other.1) {
             (Some(a), Some(b)) => a.same(b),
             (None, None) => true,
@@ -476,9 +510,11 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
                 binding.all(&other.0, residency::Change::Install);
             }
         }
+        other.written();
         self.0.append(&mut other.0);
     }
     pub fn remove(&mut self, index: usize) -> T {
+        self.written();
         let entity = self.0.remove(index);
         if let Some(binding) = &self.1 {
             binding.entity(&entity, residency::Change::Remove);
@@ -488,6 +524,7 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
     /// Extract selected owners eagerly in list order, compacting survivors in place.
     /// The predicate cannot replace an entity or change its identity.
     pub fn extract_if(&mut self, mut take: impl FnMut(&T) -> bool) -> std::vec::IntoIter<T> {
+        self.written();
         let binding = &self.1;
         self.0
             .extract_if(.., |entity| {
@@ -501,6 +538,7 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
             .into_iter()
     }
     pub fn swap_remove(&mut self, index: usize) -> T {
+        self.written();
         let entity = self.0.swap_remove(index);
         if let Some(binding) = &self.1 {
             binding.entity(&entity, residency::Change::Remove);
@@ -508,6 +546,7 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
         entity
     }
     pub fn pop(&mut self) -> Option<T> {
+        self.written();
         let entity = self.0.pop()?;
         if let Some(binding) = &self.1 {
             binding.entity(&entity, residency::Change::Remove);
@@ -515,18 +554,22 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
         Some(entity)
     }
     pub fn clear(&mut self) {
+        self.written();
         self.truncate(0);
     }
     pub fn truncate(&mut self, len: usize) {
+        self.written();
         if let Some(binding) = &self.1 {
             binding.all(&self.0[len.min(self.0.len())..], residency::Change::Remove);
         }
         self.0.truncate(len);
     }
     pub fn retain(&mut self, mut keep: impl FnMut(&T) -> bool) {
+        self.written();
         self.retain_where(|entity| keep(entity));
     }
     fn retain_where(&mut self, mut keep: impl FnMut(&mut T) -> bool) {
+        self.written();
         let binding = &self.1;
         self.0.retain_mut(|entity| {
             let before = binding.as_ref().map(|b| b.read(entity));
@@ -539,6 +582,7 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
     }
     /// Remove the range before returning, even if the owned iterator is forgotten.
     pub fn drain(&mut self, range: impl RangeBounds<usize>) -> std::vec::IntoIter<T> {
+        self.written();
         let drained: Vec<_> = self.0.drain(range).collect();
         if let Some(binding) = &self.1 {
             binding.all(drained.as_slice(), residency::Change::Remove);
@@ -546,12 +590,14 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
         drained.into_iter()
     }
     pub fn swap(&mut self, a: usize, b: usize) {
+        self.written();
         self.0.swap(a, b);
     }
 }
 
 impl<T> JoinList<T> {
     pub fn retain_mut(&mut self, keep: impl FnMut(&mut T) -> bool) {
+        self.written();
         self.retain_where(keep);
     }
     /// Run an audited state edit without returning a mutable entity reference.
@@ -563,19 +609,24 @@ impl<T> JoinList<T> {
     /// let escaped = list.update(0, |entity| entity);
     /// ```
     pub fn update<R>(&mut self, index: usize, edit: impl FnOnce(&mut T) -> R) -> R {
+        self.written();
         edit(&mut self.0[index])
     }
     /// Edit each entity in list order without lending out mutable iteration.
     pub fn for_each_mut(&mut self, edit: impl FnMut(&mut T)) {
+        self.written();
         self.0.iter_mut().for_each(edit);
     }
     pub fn iter_mut(&mut self) -> IterMut<'_, T> {
+        self.written();
         IterMut(self.0.iter_mut())
     }
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
+        self.written();
         self.0.get_mut(index)
     }
     pub fn last_mut(&mut self) -> Option<&mut T> {
+        self.written();
         self.0.last_mut()
     }
     /// Borrow distinct entities without lending out a mutable slice.
@@ -583,6 +634,7 @@ impl<T> JoinList<T> {
         &mut self,
         indices: [usize; N],
     ) -> Result<[&mut T; N], std::slice::GetDisjointMutError> {
+        self.written();
         self.0.get_disjoint_mut(indices)
     }
 }
@@ -593,6 +645,7 @@ impl<T: horizon_mod_runtime::attachments::HasAttachmentLifetime, const DIRECT: b
     /// Remove an owner leaving this level, retiring its source registration now.
     /// The retained token records whether arrival must rebind; it owns no live row.
     pub fn remove_for_transfer(&mut self, index: usize) -> T {
+        self.written();
         let mut entity = self.remove(index);
         entity.attachment_lifetime().retire();
         entity
@@ -602,9 +655,11 @@ impl<T: horizon_mod_runtime::attachments::HasAttachmentLifetime, const DIRECT: b
 impl<T: horizon_mod_runtime::attachments::HasAttachmentLifetime> JoinList<T, false> {
     /// Audited state edit; debug assertions detect a changed bound registration.
     pub fn update<R>(&mut self, index: usize, edit: impl FnOnce(&mut T) -> R) -> R {
+        self.written();
         checked_edit(&mut self.0[index], edit)
     }
     pub fn for_each_mut(&mut self, mut edit: impl FnMut(&mut T)) {
+        self.written();
         for entity in &mut self.0 {
             checked_edit(entity, &mut edit);
         }
@@ -614,6 +669,7 @@ impl<T: horizon_mod_runtime::attachments::HasAttachmentLifetime> JoinList<T, fal
     where
         T: Joined,
     {
+        self.written();
         let join = entity.join_seq();
         let Some(index) = Some(index)
             .filter(|&i| self.0.get(i).is_some_and(|old| old.join_seq() == join))
@@ -675,6 +731,7 @@ impl<T, I: SliceIndex<[T]>, const DIRECT: bool> Index<I> for JoinList<T, DIRECT>
 }
 impl<T> IndexMut<usize> for JoinList<T> {
     fn index_mut(&mut self, index: usize) -> &mut T {
+        self.written();
         &mut self.0[index]
     }
 }
@@ -692,6 +749,7 @@ impl<T: Joined, const DIRECT: bool> JoinList<T, DIRECT> {
 
     /// Temporarily lift one numbered owner without treating it as a retirement.
     pub fn extract(&mut self, join: JoinSeq) -> Option<T> {
+        self.written();
         let index = self.locate(join)?;
         let entity = self.0.remove(index);
         if let Some(binding) = &self.1 {
@@ -703,6 +761,7 @@ impl<T: Joined, const DIRECT: bool> JoinList<T, DIRECT> {
     /// Return an extracted owner at its former position, preserving its number.
     /// If other mutations shortened the list, restore it at the end instead.
     pub fn put_back(&mut self, index: usize, entity: T) {
+        self.written();
         let index = index.min(self.0.len());
         self.0.insert(index, entity);
         if let Some(binding) = &self.1 {
@@ -716,6 +775,7 @@ impl<T: Joined, const DIRECT: bool> JoinList<T, DIRECT> {
         }
     }
     pub fn push(&mut self, mut entity: T) {
+        self.written();
         Self::number(&mut entity);
         self.0.push(entity);
         if let Some(binding) = &self.1 {
@@ -723,6 +783,7 @@ impl<T: Joined, const DIRECT: bool> JoinList<T, DIRECT> {
         }
     }
     pub fn insert(&mut self, index: usize, mut entity: T) {
+        self.written();
         Self::number(&mut entity);
         self.0.insert(index, entity);
         if let Some(binding) = &self.1 {
@@ -730,6 +791,7 @@ impl<T: Joined, const DIRECT: bool> JoinList<T, DIRECT> {
         }
     }
     pub fn extend(&mut self, entities: impl IntoIterator<Item = T>) {
+        self.written();
         for entity in entities {
             self.push(entity);
         }
@@ -790,6 +852,7 @@ impl<T, const DIRECT: bool> IntoIterator for JoinList<T, DIRECT> {
     type Item = T;
     type IntoIter = std::vec::IntoIter<T>;
     fn into_iter(mut self) -> Self::IntoIter {
+        self.written();
         if let Some(binding) = &self.1 {
             binding.all(&self.0, residency::Change::Remove);
         }
@@ -813,6 +876,129 @@ mod tests {
             join: JoinSeq::UNJOINED,
             value,
         }
+    }
+
+    #[test]
+    fn stamps_track_every_mutable_boundary_and_preserve_reads() {
+        let writes: &[fn(&mut JoinList<Entity>)] = &[
+            |l| {
+                l[0].value += 1;
+            },
+            |l| {
+                l.get_mut(0);
+            },
+            |l| {
+                l.last_mut();
+            },
+            |l| {
+                l.get_disjoint_mut([0, 1]).unwrap();
+            },
+            |l| {
+                l.iter_mut();
+            },
+            |l| {
+                for _ in &mut *l {}
+            },
+            |l| {
+                l.update(0, |_| ());
+            },
+            |l| {
+                l.for_each_mut(|_| ());
+            },
+            |l| {
+                l.retain(|_| true);
+            },
+            |l| {
+                l.retain_mut(|_| true);
+            },
+            |l| {
+                l.extract_if(|_| false);
+            },
+            |l| {
+                l.drain(0..0);
+            },
+            |l| {
+                l.swap(0, 0);
+            },
+            |l| {
+                l.remove(0);
+            },
+            |l| {
+                l.swap_remove(0);
+            },
+            |l| {
+                l.pop();
+            },
+            |l| {
+                l.truncate(100);
+            },
+            |l| {
+                l.clear();
+            },
+            |l| {
+                l.push(entity(9));
+            },
+            |l| {
+                l.insert(0, entity(9));
+            },
+            |l| {
+                l.extend([]);
+            },
+            |l| {
+                l.extract(JoinSeq::UNJOINED);
+            },
+            |l| {
+                l.put_back(0, entity(9));
+            },
+            |l| {
+                l.append(&mut JoinList::default());
+            },
+            |l| {
+                l.restore(JoinList::default(), RestoreOrder::SpawnsFirst);
+            },
+        ];
+        for write in writes {
+            let mut list: JoinList<_> = (1..=3).map(entity).collect();
+            let stamp = list.stamp();
+            let _ = (list.len(), list[0].value, list.iter().count());
+            for _ in &list {}
+            assert_eq!(list.stamp(), stamp);
+            write(&mut list);
+            assert_ne!(list.stamp(), stamp);
+        }
+        let mut list: JoinList<_> = (1..=3).map(entity).collect();
+        let stamp = list.stamp();
+        assert_ne!(list.clone().stamp(), stamp);
+        assert_ne!(JoinList::<Entity>::default().stamp(), stamp);
+        let mut target = JoinList::default();
+        target.append(&mut list);
+        assert_ne!(list.stamp(), stamp);
+        for order in [RestoreOrder::SurvivorsFirst, RestoreOrder::SpawnsFirst] {
+            let stamp = target.stamp();
+            let pass = target.lift();
+            assert_ne!(target.stamp(), stamp);
+            assert_ne!(pass.stamp(), stamp);
+            target.restore(pass, order);
+            assert_ne!(target.stamp(), stamp);
+        }
+    }
+
+    #[test]
+    fn restricted_state_edits_and_store_back_invalidate_stamps() {
+        let mut list = JoinList::<_, false>::default();
+        list.push(Bound {
+            join: JoinSeq::UNJOINED,
+            lifetime: Default::default(),
+        });
+        let stamp = list.stamp();
+        list.update(0, |_| ());
+        assert_ne!(list.stamp(), stamp);
+        let stamp = list.stamp();
+        list.for_each_mut(|_| ());
+        assert_ne!(list.stamp(), stamp);
+        let stamp = list.stamp();
+        assert!(list.store_back(0, list[0].clone()));
+        assert_ne!(list.stamp(), stamp);
     }
 
     fn snapshot(list: &JoinList<Entity>) -> Vec<(u32, JoinSeq)> {
