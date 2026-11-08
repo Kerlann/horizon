@@ -2740,7 +2740,7 @@ mod tests {
             },
             ids: |game| game.breath_clouds.iter().map(|c| c.id).collect(),
             target: super::super::commands::Target::Cloud,
-            unloads_with_chunk: false,
+            unloads_with_chunk: true,
             remote: None,
         }
         .run();

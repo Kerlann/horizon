@@ -102,7 +102,6 @@ horizon-client game::potions::mob_absorption_max_tests::absorption_follows_the_m
 horizon-client game::piston_push::order_tests::a_pushed_entity_meets_the_other_moving_blocks_as_they_are_at_its_push #2186
 horizon-client game::piston_push::order_tests::a_pushed_tnt_bounces_on_slime #2186
 horizon-client game::potent_sulfur::pass_tests::nausea_listener_moving_a_mob_invalidates_the_pass_grid #2186
-horizon-client game::potions::tests::lifecycle_cloud_commands_and_parked_owners #2186
 
 # Deterministic CPU work at or over its 30 s deadline in the unoptimized shard (no deadlock); see the issue.
 horizon-client-lib vanillagen::lod::tests::decorated_lod_refines_real_seed_canopies_and_all_dimensions #2132 flaky
