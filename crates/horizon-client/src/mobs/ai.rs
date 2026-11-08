@@ -2034,6 +2034,117 @@ fn sun_burn_tick(m: &mut Mob, w: &MobWorld) -> bool {
     let wet = m.fluids.in_water || in_rain(m, w);
     br > 0.5 && m.random.next_float() * 30.0 < (br - 0.4) * 2.0 && !wet && w.can_see_sky(x, y, z)
 }
+// Keep the actual selectors (including partially updated goal state) attached to
+// their mob even when a goal callback unwinds. Drop does not invoke goal code.
+struct BorrowedGoalSelectors<'a> {
+    mob: &'a mut Mob,
+    targets: GoalSelector,
+    goals: GoalSelector,
+}
+
+impl<'a> BorrowedGoalSelectors<'a> {
+    fn new(mob: &'a mut Mob) -> Self {
+        Self {
+            targets: std::mem::take(&mut mob.ai.targets),
+            goals: std::mem::take(&mut mob.ai.goals),
+            mob,
+        }
+    }
+}
+
+impl Drop for BorrowedGoalSelectors<'_> {
+    fn drop(&mut self) {
+        self.mob.ai.targets = std::mem::take(&mut self.targets);
+        self.mob.ai.goals = std::mem::take(&mut self.goals);
+    }
+}
+
+#[cfg(test)]
+mod selector_restore_tests {
+    use super::super::goals::Goal;
+    use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[derive(Debug)]
+    struct TrackedGoal {
+        progress: i32,
+        drops: Arc<AtomicUsize>,
+    }
+    impl Drop for TrackedGoal {
+        fn drop(&mut self) {
+            self.drops.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    impl Goal for TrackedGoal {
+        fn flags(&self) -> u8 {
+            0
+        }
+        fn can_use(&mut self, _: &mut Mob, _: &mut Cx) -> bool {
+            false
+        }
+        fn box_clone(&self) -> Box<dyn Goal> {
+            panic!("selectors must not clone goals")
+        }
+        fn set_start_delay(&mut self, ticks: i32) {
+            self.progress = ticks;
+        }
+        fn name(&self) -> &'static str {
+            if self.progress == 7 {
+                "progress"
+            } else {
+                "initial"
+            }
+        }
+    }
+
+    // Lower-layer ownership test, not a native callback integration test.
+    #[test]
+    fn selector_ownership_survives_normal_return_and_unwind() {
+        for unwind in [false, true] {
+            let mut mob = Mob::new(1, crate::mobs::sensor_scan_tests::kind(), Vec3::ZERO, 0.0);
+            mob.ai.targets.clear();
+            mob.ai.goals.clear();
+            let drops = Arc::new(AtomicUsize::new(0));
+            for selector in [&mut mob.ai.targets, &mut mob.ai.goals] {
+                selector.add(
+                    1,
+                    TrackedGoal {
+                        progress: 0,
+                        drops: drops.clone(),
+                    },
+                );
+            }
+            let payload = Arc::new(17);
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut borrowed = BorrowedGoalSelectors::new(&mut mob);
+                borrowed.targets.set_start_delay("initial", 7);
+                borrowed.goals.set_start_delay("initial", 7);
+                borrowed.targets.disabled = 3;
+                borrowed.goals.disabled = 5;
+                if unwind {
+                    std::panic::resume_unwind(Box::new(payload.clone()));
+                }
+            }));
+            if unwind {
+                let caught = result.unwrap_err().downcast::<Arc<i32>>().unwrap();
+                assert!(Arc::ptr_eq(&caught, &payload));
+            } else {
+                assert!(result.is_ok());
+            }
+            assert!(mob.ai.targets.has("progress"));
+            assert!(mob.ai.goals.has("progress"));
+            assert_eq!(mob.ai.targets.disabled, 3);
+            assert_eq!(mob.ai.goals.disabled, 5);
+            assert_eq!(drops.load(Ordering::SeqCst), 0);
+            drop(mob);
+            assert_eq!(drops.load(Ordering::SeqCst), 2);
+        }
+    }
+}
+
 /// Mob.serverAiStep
 fn server_ai_step(
     m: &mut Mob,
@@ -2055,20 +2166,21 @@ fn server_ai_step(
     super::riders::drive(m, w);
     let tick_count = m.age as i64;
     let id_based = tick_count + i64::from(m.id);
-    let mut targets = std::mem::take(&mut m.ai.targets);
-    let mut goals = std::mem::take(&mut m.ai.goals);
     {
+        let BorrowedGoalSelectors {
+            mob,
+            targets,
+            goals,
+        } = &mut BorrowedGoalSelectors::new(m);
         let mut cx = Cx { w, level, events };
         if id_based % 2 != 0 && tick_count > 1 {
-            targets.tick_running(m, &mut cx, false);
-            goals.tick_running(m, &mut cx, false);
+            targets.tick_running(mob, &mut cx, false);
+            goals.tick_running(mob, &mut cx, false);
         } else {
-            targets.tick(m, &mut cx);
-            goals.tick(m, &mut cx);
+            targets.tick(mob, &mut cx);
+            goals.tick(mob, &mut cx);
         }
     }
-    m.ai.targets = targets;
-    m.ai.goals = goals;
     // A creaking looked at stands still: its navigation, move, look and jump
     // controls wait (CreakingPathNavigation and the Creaking*Control).
     let frozen = super::creaking::is_creaking(m) && !super::creaking::can_move(m);
