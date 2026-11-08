@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Impossible de lire le journal de compilation : {error}",
   "Could not read the saved sign-in.": "Impossible de lire la connexion enregistrée.",
   "Could not read the saved sign-in. Sign in again.": "Impossible de lire la connexion enregistrée. Reconnectez-vous.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Impossible de lire {name} : {error}",
   "Could not run {program}: {error}": "Impossible d'exécuter {program} : {error}",
   "Could not save the renewed sign-in.": "Impossible d'enregistrer la connexion renouvelée.",

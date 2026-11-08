@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "نمی توان گزارش ساخت را خواند: {error}",
   "Could not read the saved sign-in.": "ورود به سیستم ذخیره شده خوانده نشد.",
   "Could not read the saved sign-in. Sign in again.": "ورود به سیستم ذخیره شده خوانده نشد. دوباره وارد شوید.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "نمی توانم بخوانم {name}: {error}",
   "Could not run {program}: {error}": "اجرا نشد {program}: {error}",
   "Could not save the renewed sign-in.": "ورود مجدد به سیستم ذخیره نشد.",

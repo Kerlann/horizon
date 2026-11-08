@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "تعذر قراءة سجل البناء: {error}",
   "Could not read the saved sign-in.": "تعذر قراءة تسجيل الدخول المحفوظ.",
   "Could not read the saved sign-in. Sign in again.": "تعذر قراءة تسجيل الدخول المحفوظ. سجل الدخول مرة أخرى.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "تعذر قراءة {name}: {error}",
   "Could not run {program}: {error}": "تعذر تشغيل {program}: {error}",
   "Could not save the renewed sign-in.": "تعذر حفظ تسجيل الدخول المجدد.",

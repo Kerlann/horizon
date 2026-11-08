@@ -470,6 +470,117 @@ impl<'a> Types<'a> {
         }
         Ok(Some(described))
     }
+    /// Recover a field-preserving snapshot conversion without constructing its owned result.
+    /// Restrict discovery to unqualified types defined in the same module: name matches
+    /// across modules or through imports are not proof of type identity.
+    pub(super) fn snapshot_projection(&self, view: &View) -> Option<Vec<String>> {
+        let (Ty::Named(source), Ty::Named(target)) = (&view.pointee, &view.snapshot) else {
+            return None;
+        };
+        let source_id = self.by_item.iter().find(|(_, d)| **d == *source)?.0;
+        let target_id = self.by_item.iter().find(|(_, d)| **d == *target)?.0;
+        if source_id.module != target_id.module {
+            return None;
+        }
+        let Item::Struct(source_record) = self.index.item(*source_id) else {
+            return None;
+        };
+        let Item::Struct(target_record) = self.index.item(*target_id) else {
+            return None;
+        };
+        let Kind::Record(fields) = &self.defs[*target].kind else {
+            return None;
+        };
+        for item in &self.index.modules[source_id.module].items {
+            let Item::Impl(i) = item else {
+                continue;
+            };
+            let syn::Type::Path(to) = &*i.self_ty else {
+                continue;
+            };
+            if !to.path.is_ident(&target_record.ident) {
+                continue;
+            }
+            let Some((_, from, _)) = &i.trait_ else {
+                continue;
+            };
+            if from.segments.len() != 1 || from.segments[0].ident != "From" {
+                continue;
+            }
+            let syn::PathArguments::AngleBracketed(args) = &from.segments[0].arguments else {
+                continue;
+            };
+            let Some(syn::GenericArgument::Type(syn::Type::Reference(reference))) =
+                args.args.first()
+            else {
+                continue;
+            };
+            let syn::Type::Path(from_type) = &*reference.elem else {
+                continue;
+            };
+            if reference.mutability.is_some() || !from_type.path.is_ident(&source_record.ident) {
+                continue;
+            }
+            let Some(f) = i.items.iter().find_map(|item| match item {
+                syn::ImplItem::Fn(f) if f.sig.ident == "from" => Some(f),
+                _ => None,
+            }) else {
+                continue;
+            };
+            let Some(syn::FnArg::Typed(arg)) = f.sig.inputs.first() else {
+                continue;
+            };
+            let syn::Pat::Ident(binding) = &*arg.pat else {
+                continue;
+            };
+            let [syn::Stmt::Expr(syn::Expr::Struct(result), None)] = &f.block.stmts[..] else {
+                continue;
+            };
+            if !result.path.is_ident("Self")
+                || result.rest.is_some()
+                || result.fields.len() != fields.len()
+            {
+                continue;
+            }
+            let projection = fields
+                .iter()
+                .map(|field| {
+                    let value = result
+                        .fields
+                        .iter()
+                        .find(|v| matches!(&v.member, syn::Member::Named(n) if *n == field.rust))?;
+                    let expr = match &value.expr {
+                        syn::Expr::MethodCall(call)
+                            if call.method == "clone"
+                                && call.args.is_empty()
+                                && call.turbofish.is_none() =>
+                        {
+                            &*call.receiver
+                        }
+                        expr => expr,
+                    };
+                    let syn::Expr::Field(access) = expr else {
+                        return None;
+                    };
+                    let syn::Expr::Path(base) = &*access.base else {
+                        return None;
+                    };
+                    if !base.path.is_ident(&binding.ident) {
+                        return None;
+                    }
+                    let syn::Member::Named(member) = &access.member else {
+                        return None;
+                    };
+                    Some(member.to_string())
+                })
+                .collect::<Option<Vec<_>>>();
+            if projection.is_some() {
+                return projection;
+            }
+        }
+        None
+    }
+
     fn view(&mut self, id: ItemId, item: &Item) -> Result<Option<View>, String> {
         let Item::Struct(record) = item else {
             return Ok(None);

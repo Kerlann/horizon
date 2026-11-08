@@ -45,6 +45,11 @@ with `points.json` beside it. Mods without listeners need no catalog. When packa
 wasm toolchain, `cargo horizon-mod wasm-std <out.wasm> --catalog <staged-points.json>`
 copies that catalog beside the std member.
 
+The std member also owns the one table of handlers (capability providers and parts) that the mods of a
+group give the game, so a handler one mod of a group gave is usable by another mod of the same group. A
+mod built for a toolchain whose std lacks that table is refused at load; rebuild the mod and the std
+together.
+
 ## Dependencies
 
 `[dependencies]` work as for native mods. List the library mod in `horizon-mod.toml` and its

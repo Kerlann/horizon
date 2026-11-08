@@ -725,7 +725,7 @@ fn borrowed(
         return Some((
             read,
             name.into(),
-            format!("out.put(&{name}.__wire_snapshot());"),
+            format!("{name}.__wire_put_snapshot(out);"),
         ));
     }
     let fields = d.borrow_fields()?;
@@ -792,13 +792,13 @@ fn borrowed(
             write!(back, "out.put({name}.__wire_changes());").unwrap();
         } else if leaf.optional {
             write!(back, "out.put_opt({}.as_deref());", leaf.path).unwrap();
+        } else if leaf.view {
+            write!(back, "{}.__wire_put_snapshot(out);", leaf.path).unwrap();
         } else {
             write!(
                 back,
                 "out.put(&{});",
-                if leaf.view {
-                    format!("{}.__wire_snapshot()", leaf.path)
-                } else if leaf.reference {
+                if leaf.reference {
                     format!("*{}", leaf.path)
                 } else {
                     leaf.path

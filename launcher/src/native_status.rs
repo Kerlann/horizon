@@ -329,7 +329,7 @@ mod tests {
     }
 
     #[test]
-    fn regular_wasm_package_changes_invalidate_the_build_view_cache() {
+    fn regular_wasm_package_changes_leave_the_build_view_cache_alone() {
         let home = std::env::temp_dir().join(format!("wasm-build-view-{}", std::process::id()));
         fs::create_dir_all(home.join(horizon_mod_package::mod_list::DIR)).unwrap();
         let package = home
@@ -338,7 +338,13 @@ mod tests {
         fs::write(&package, b"a").unwrap();
         let before = fingerprint(&home, None);
         fs::write(&package, b"ab").unwrap();
-        assert_ne!(before, fingerprint(&home, None));
+        // If staged internals selection for wasm mods returns, a wasm package is a build input
+        // again and this must go back to `assert_ne!` (main's original assertion).
+        assert_eq!(
+            before,
+            fingerprint(&home, None),
+            "a wasm package is not a build input: the native build never reads it"
+        );
         fs::remove_dir_all(home).unwrap();
     }
 

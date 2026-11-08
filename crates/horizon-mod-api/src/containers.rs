@@ -31,6 +31,8 @@ pub struct ModBlockEntityFields {
 }
 /// Which contents a `ModBlockEntity` has had: one per entity made (a clone
 /// is another), counted on by each change. Equal revisions, equal contents.
+/// Rejected callback writebacks also advance the engine revision to invalidate stale copies;
+/// this may cause one extra client redraw even though the fields were retained.
 /// Neither saved nor compared.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
@@ -279,6 +281,50 @@ mod tests {
         assert_ne!(other_kind, machine);
         let fresh = ModBlockEntity::default();
         assert_ne!(fresh.revision(), ModBlockEntity::default().revision());
+    }
+
+    #[test]
+    fn snapshot_preserves_negative_zero_writes() {
+        for (positive, negative) in [
+            (
+                Tag::Float(0.0f32.to_bits()),
+                Tag::Float((-0.0f32).to_bits()),
+            ),
+            (
+                Tag::Double(0.0f64.to_bits()),
+                Tag::Double((-0.0f64).to_bits()),
+            ),
+        ] {
+            let mut entity = ModBlockEntity::default();
+            entity.nbt.insert("value".into(), positive);
+            let before = entity.revision();
+            let mut snapshot = ModBlockEntitySnapshot::from(&entity);
+            snapshot.fields.nbt.insert("value".into(), negative.clone());
+            entity.apply_snapshot(snapshot);
+            assert_eq!(entity.nbt.get(&"value".into()), Some(&negative));
+            assert_ne!(entity.revision(), before);
+        }
+    }
+
+    #[test]
+    fn unchanged_nan_snapshots_do_not_advance_revision() {
+        let mut entity = ModBlockEntity::default();
+        entity.nbt.insert("float".into(), Tag::Float(0x7fc0_0123));
+        entity
+            .nbt
+            .insert("double".into(), Tag::Double(0x7ff8_0000_0000_0123));
+        let before = entity.revision();
+        for _ in 0..20 {
+            entity.apply_snapshot(ModBlockEntitySnapshot::from(&entity));
+            assert_eq!(entity.revision(), before);
+        }
+        let mut snapshot = ModBlockEntitySnapshot::from(&entity);
+        snapshot
+            .fields
+            .nbt
+            .insert("float".into(), Tag::Float(0x7fc0_0124));
+        entity.apply_snapshot(snapshot);
+        assert_ne!(entity.revision(), before);
     }
 
     #[test]

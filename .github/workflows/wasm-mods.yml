@@ -44,6 +44,20 @@ jobs:
           cargo test -p horizon-mod-api --features wasm-guest --lib guest_pool_
           cargo test -p horizon-mod-wasm --test real_member -- --nocapture
           cargo test -p horizon-mod-wasm --lib guest_input_pool_stays_flat_for_100k_no_import_calls -- --ignored --nocapture
+      - name: Build independent library members
+        run: |
+          tool="$GITHUB_WORKSPACE/target/debug/cargo-horizon-mod"
+          root="$GITHUB_WORKSPACE/crates/horizon-mod-wasm/tests/library-fixture"
+          for member in library observer dependent; do
+            (cd "$root/$member" && "$tool" horizon-mod build --wasm --catalog "$root/points.json")
+          done
+      - name: Load independently built library members
+        env:
+          HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
+          HORIZON_WASM_LIBRARY: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/library-fixture/library/target/horizon-mod/wasm_test_library.hmod
+          HORIZON_WASM_OBSERVER: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/library-fixture/observer/target/horizon-mod/wasm_test_observer.hmod
+          HORIZON_WASM_DEPENDENT: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/library-fixture/dependent/target/horizon-mod/wasm_test_dependent.hmod
+        run: cargo test -p horizon-mod-wasm --test real_member real_library_dependency -- --nocapture
       - name: Measure block entity boundary
         if: github.event_name == 'workflow_dispatch'
         env:

@@ -76,6 +76,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `ServerHost::net_send_to_player` | crosses | Wire call |
 | `ServerHost::fake_player` | crosses | Wire call |
 | `ServerHost::projectile` | crosses | Wire call |
+| `ServerHost::fishing_hook` | crosses | Wire call |
 | `ServerHost::edit_blocks` | crosses | Wire call |
 | `ServerHost::surface_heights` | crosses | Wire call |
 | `ServerHost::read_columns` | crosses | Wire call |
@@ -97,6 +98,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `ClientHost::audio_options` | crosses | Wire call |
 | `ClientHost::instance_group_write` | crosses | Wire call |
 | `ClientHost::instance_group_set_len` | crosses | Wire call |
+| `ClientHost::instance_group_set_transform` | crosses | Wire call |
 | `ClientHost::instance_group_destroy` | crosses | Wire call |
 | `ClientHost::refresh_render_visibility` | crosses | Wire call |
 | `ClientHost::refresh_biome_colors` | crosses | Wire call |
@@ -120,6 +122,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `ClientHost::translate` | crosses | Wire call |
 | `ClientHost::fluid_name` | crosses | Wire call |
 | `ClientHost::bake_layer` | crosses | Wire call |
+| `ClientHost::muffle_sounds` | crosses | Wire call |
 | `ClientHost::flame_particle` | crosses | Wire call |
 | `ClientHost::play_local_sound` | crosses | Wire call |
 | `ClientHost::particle_count` | crosses | Wire call |
@@ -162,6 +165,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::block_entity_viewers` | crosses | Wire call |
 | `Backend::block_entity_data_slots` | crosses | Wire call |
 | `Backend::block_entity_item_slot` | crosses | Wire call |
+| `Backend::block_metadata_name` | crosses | Wire call |
 | `Backend::block_metadata_property` | crosses | Wire call |
 | `Backend::block_metadata_with` | crosses | Wire call |
 | `Backend::block_metadata_of` | crosses | Wire call |
@@ -173,6 +177,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::block_state_definition` | crosses | Wire call |
 | `Backend::block_state_matches` | crosses | Wire call |
 | `Backend::fluid_state_definition` | crosses | Wire call |
+| `Backend::fluid_type_properties` | crosses | Wire call |
 | `Backend::fluid_state_validate` | crosses | Wire call |
 | `Backend::boss_bar_id` | crosses | Wire call |
 | `Backend::boss_bar_name` | crosses | Wire call |
@@ -224,6 +229,9 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::entity_level` | crosses | Wire call |
 | `Backend::entity_permanently_invulnerable` | crosses | Wire call |
 | `Backend::entity_damage_cooldown_time` | crosses | Wire call |
+| `Backend::entity_invulnerable_to_damage` | crosses | Wire call |
+| `Backend::entity_entities_team_damage_allowed` | crosses | Wire call |
+| `Backend::entity_invulnerable_to_piercing_weapon` | crosses | Wire call |
 | `Backend::entity_velocity` | crosses | Wire call |
 | `Backend::entity_on_ground` | crosses | Wire call |
 | `Backend::entity_bounding_box` | crosses | Wire call |
@@ -279,6 +287,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::item_resource_repairable` | crosses | Wire call |
 | `Backend::item_resource_use_duration` | crosses | Wire call |
 | `Backend::item_resource_bar` | crosses | Wire call |
+| `Backend::item_resource_tooltip` | crosses | Wire call |
 | `Backend::container_size` | crosses | Wire call |
 | `Backend::container_stack` | crosses | Wire call |
 | `Backend::container_capacity` | crosses | Wire call |
@@ -291,6 +300,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::item_container_capacity` | crosses | Wire call |
 | `Backend::entity_container_size` | crosses | Wire call |
 | `Backend::entity_automation_size` | crosses | Wire call |
+| `Backend::entity_equipment_size` | crosses | Wire call |
 | `Backend::block_key_id` | crosses | Wire call |
 | `Backend::item_key_id` | crosses | Wire call |
 | `Backend::effect_key_id` | crosses | Wire call |
@@ -309,7 +319,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::level_mod_forced_chunks` | crosses | Wire call |
 | `Backend::chunk_loaded` | crosses | Wire call |
 | `Backend::chunk_status` | crosses | Wire call |
-| `Backend::level_craft` | crosses | Wire call |
+| `Backend::level_recipe_for` | crosses | Wire call |
 | `Backend::level_entities_in` | crosses | Wire call |
 | `Backend::level_block_state` | crosses | Wire call |
 | `Backend::level_block_transform` | crosses | Wire call |
@@ -350,6 +360,10 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::level_fluid_state` | crosses | Wire call |
 | `Backend::level_loaded_chunks` | crosses | Wire call |
 | `Backend::level_collision_boxes` | crosses | Wire call |
+| `Backend::level_respawn_data` | crosses | Wire call |
+| `Backend::level_map_data` | crosses | Wire call |
+| `Backend::level_can_see_sky` | crosses | Wire call |
+| `Backend::level_line_of_sight` | crosses | Wire call |
 | `Backend::level_has_collisions` | crosses | Wire call |
 | `Backend::level_fluid_shape` | crosses | Wire call |
 | `Backend::level_ray_trace_entities` | crosses | Wire call |
@@ -475,6 +489,9 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::projectile_pierce_level` | crosses | Wire call |
 | `Backend::projectile_base_damage` | crosses | Wire call |
 | `Backend::projectile_critical` | crosses | Wire call |
+| `Backend::fishing_hook_player_owner` | crosses | Wire call |
+| `Backend::fishing_hook_hooked_in` | crosses | Wire call |
+| `Backend::fishing_hook_open_water` | crosses | Wire call |
 | `Backend::raid_center` | crosses | Wire call |
 | `Backend::raid_omen_level` | crosses | Wire call |
 | `Backend::raid_groups_spawned` | crosses | Wire call |
@@ -489,6 +506,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::raid_raiders` | crosses | Wire call |
 | `Backend::raid_wave_raiders` | crosses | Wire call |
 | `Backend::raid_heroes` | crosses | Wire call |
+| `Backend::recipe_ingredient_item_keys` | crosses | Wire call |
 | `Backend::recipe_ingredient_test` | crosses | Wire call |
 | `BackendMut::block_entity_set_lock` | crosses | Wire call |
 | `BackendMut::block_entity_merge_data` | crosses | Wire call |
@@ -543,6 +561,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `BackendMut::entity_uuid` | crosses | Wire call |
 | `BackendMut::entity_set_invulnerable` | crosses | Wire call |
 | `BackendMut::entity_set_damage_cooldown_time` | crosses | Wire call |
+| `BackendMut::entity_hurt` | crosses | Wire call |
 | `BackendMut::entity_set_velocity` | crosses | Wire call |
 | `BackendMut::entity_teleport_to` | crosses | Wire call |
 | `BackendMut::entity_set_rotation` | crosses | Wire call |
@@ -579,6 +598,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `BackendMut::item_entity_set_no_pickup_delay` | crosses | Wire call |
 | `BackendMut::item_entity_set_never_pickup` | crosses | Wire call |
 | `BackendMut::item_entity_set_target` | crosses | Wire call |
+| `BackendMut::item_resource_enchant_randomly` | crosses | Wire call |
 | `BackendMut::container_insert` | crosses | Wire call |
 | `BackendMut::container_extract` | crosses | Wire call |
 | `BackendMut::game_stack` | crosses | Wire call |
@@ -590,6 +610,11 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `BackendMut::level_set_block` | crosses | Wire call |
 | `BackendMut::level_remove_block` | crosses | Wire call |
 | `BackendMut::level_destroy_block` | crosses | Wire call |
+| `BackendMut::level_set_respawn_data` | crosses | Wire call |
+| `BackendMut::level_set_map_data` | crosses | Wire call |
+| `BackendMut::level_block_tick` | crosses | Wire call |
+| `BackendMut::level_block_random_tick` | crosses | Wire call |
+| `BackendMut::level_lightning_target` | crosses | Wire call |
 | `BackendMut::level_block_drops` | crosses | Wire call |
 | `BackendMut::level_set_break_progress` | crosses | Wire call |
 | `BackendMut::level_play_sound` | crosses | Wire call |
@@ -771,6 +796,8 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `WorldDrawContext::quads` | crosses | Wire call |
 | `WorldDrawContext::usage` | crosses | Wire call |
 | `WorldDrawContext::draw_model_instances` | crosses | Wire call |
+| `CameraDrawContext::quad` | crosses | Wire call |
+| `CameraDrawContext::sprite` | crosses | Wire call |
 | `LevelHost::block_state` | crosses | Wire call |
 | `LevelHost::state_block` | crosses | Wire call |
 | `LevelHost::block_state_id` | crosses | Wire call |
@@ -826,6 +853,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Tags::is_in_tag` | crosses | Wire call |
 | `Tags::items` | crosses | Wire call |
 | `Tags::fluids` | crosses | Wire call |
+| `Tags::blocks` | crosses | Wire call |
 | `menu::SlotView::item` | crosses | Wire call |
 | `menu::SlotView::may_place` | crosses | Wire call |
 | `menu::SlotView::may_pickup` | crosses | Wire call |
@@ -843,6 +871,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Registrar::effect_key` | crosses | Wire call |
 | `Registrar::provide_entity_capability` | crosses | Wire call |
 | `Registrar::declare_entity_attributes` | crosses | Wire call |
+| `Registrar::modify_entity_attributes` | crosses | Wire call |
 | `Registrar::fluid_key` | crosses | Wire call |
 | `Registrar::declare_fluid` | crosses | Wire call |
 | `Registrar::game_rule_category` | crosses | Wire call |
@@ -855,6 +884,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Registrar::register_tooltip_appender` | crosses | Wire call |
 | `Registrar::register_key_mapping` | crosses | Wire call |
 | `Registrar::attach_menu_part` | crosses | Wire call |
+| `Registrar::particle_key` | crosses | Wire call |
 | `Registrar::add_structure_type` | crosses | Wire call |
 | `Registrar::register_ticket_controller` | crosses | Wire call |
 | `CapabilityProviders::block_entity_provider` | crosses | Wire call |
@@ -878,6 +908,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `LoopContext::registry` | crosses | Wire call |
 | `LoopContext::setting` | crosses | Wire call |
 | `LoopContext::mods` | crosses | Wire call |
+| `GenerationContext::metadata` | crosses | frame accessor; no bytes |
 | `GenerationContext::chunk` | crosses | Wire call |
 | `GenerationContext::seed` | crosses | Wire call |
 | `GenerationContext::sea_level` | crosses | Wire call |
@@ -890,12 +921,12 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `GenerationContext::noise_biome` | crosses | Wire call |
 | `GenerationContext::column_has_valid_biome` | crosses | Wire call |
 | `GenerationContext::config` | crosses | Wire call |
+| `PieceContext::metadata` | crosses | frame accessor; no bytes |
 | `PieceContext::chunk` | crosses | Wire call |
 | `PieceContext::chunk_box` | crosses | Wire call |
 | `PieceContext::random` | crosses | frame accessor; no bytes |
 | `PieceContext::state` | crosses | Wire call |
 | `PieceContext::state_with` | crosses | Wire call |
-| `PieceContext::name` | crosses | Wire call |
 | `PieceContext::is_air` | crosses | Wire call |
 | `PieceContext::block` | crosses | Wire call |
 | `PieceContext::set_block` | crosses | Wire call |
@@ -937,6 +968,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `BlockAndTintGetter::block_tint` | crosses | Wire call |
 | `BlockAndTintGetter::min_y` | crosses | Wire call |
 | `BlockAndTintGetter::height` | crosses | Wire call |
+| `BlockMetadata::name` | crosses | Wire call |
 | `BlockMetadata::property` | crosses | Wire call |
 | `BlockMetadata::with` | crosses | Wire call |
 | `BlockMetadata::of` | crosses | Wire call |
@@ -1033,7 +1065,6 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Hooks::screen_char_typed_pre` | crosses | Wire call |
 | `Hooks::data_pack_files` | crosses | Wire call |
 | `Hooks::biome_colors` | crosses | Wire call |
-| `Hooks::server_data_loaded` | crosses | Wire call |
 | `Hooks::compute_fov` | crosses | Wire call |
 | `Hooks::mob_submit` | crosses | Wire call |
 | `Hooks::camera_distance` | crosses | Wire call |
@@ -1283,6 +1314,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Hooks::baby_entity_spawn` | crosses | Wire call |
 | `Hooks::block_drops` | crosses | Wire call |
 | `Hooks::block_grow_feature` | crosses | Wire call |
+| `Hooks::block_screen_effect_draw` | crosses | Wire call |
 | `Hooks::block_tool_modification` | crosses | Wire call |
 | `Hooks::bonemeal` | crosses | Wire call |
 | `Hooks::calculate_player_turn` | crosses | Wire call |
@@ -1297,6 +1329,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Hooks::client_chat` | crosses | Wire call |
 | `Hooks::client_chat_received` | crosses | Wire call |
 | `Hooks::client_information_updated` | crosses | Wire call |
+| `Hooks::client_mining_predict` | crosses | Wire call |
 | `Hooks::client_packet` | crosses | Wire call |
 | `Hooks::client_packet_send` | crosses | Wire call |
 | `Hooks::client_pause_change_pre` | crosses | Wire call |
@@ -1336,6 +1369,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Hooks::entity_mob_griefing` | crosses | Wire call |
 | `Hooks::entity_outline` | crosses | Wire call |
 | `Hooks::entity_place` | crosses | Wire call |
+| `Hooks::entity_size` | crosses | Wire call |
 | `Hooks::entity_struck_by_lightning` | crosses | Wire call |
 | `Hooks::explosion_knockback` | crosses | Wire call |
 | `Hooks::explosion_start` | crosses | Wire call |
@@ -1433,6 +1467,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Hooks::register_gui_layers` | crosses | Wire call |
 | `Hooks::register_item_tint_sources` | crosses | Wire call |
 | `Hooks::register_range_select_item_model_property` | crosses | Wire call |
+| `Hooks::register_runtime_sprites` | crosses | Wire call |
 | `Hooks::register_select_item_model_property` | crosses | Wire call |
 | `Hooks::render_arm` | crosses | Wire call |
 | `Hooks::render_frame_post` | crosses | Wire call |
@@ -1467,6 +1502,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Hooks::screen_transparent_background` | crosses | Wire call |
 | `Hooks::screenshot` | crosses | Wire call |
 | `Hooks::server_chat` | crosses | Wire call |
+| `Hooks::server_tick_rate_changed` | crosses | Wire call |
 | `Hooks::play_sound` | crosses | Wire call |
 | `Hooks::play_sound_source` | crosses | Wire call |
 | `Hooks::play_streaming_source` | crosses | Wire call |
@@ -1474,6 +1510,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Hooks::spread_players_teleport` | crosses | Wire call |
 | `Hooks::submit_custom_geometry` | crosses | Wire call |
 | `Hooks::sweep_attack` | crosses | Wire call |
+| `Hooks::tags_updated` | crosses | Wire call |
 | `Hooks::teleport_command` | crosses | Wire call |
 | `Hooks::texture_atlas_stitched` | crosses | Wire call |
 | `Hooks::tick_target_millis` | crosses | Wire call |
@@ -1540,6 +1577,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `BlockEntityPart::menu_quick_move` | crosses | Wire call |
 | `BlockEntityPart::block_entity_view_distance` | crosses | Wire call |
 | `BlockEntityPart::pre_remove_side_effects` | crosses | Wire call |
+| `BlockEntityPart::stateful_block_entity` | crosses | Wire call |
 | `ItemPart::item_subscribed` | crosses | Wire call |
 | `ItemPart::tooltip` | crosses | Wire call |
 | `ItemPart::use_on` | crosses | Wire call |
@@ -1570,6 +1608,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `TooltipAppender::append` | crosses | Wire call |
 | `CriterionTest::test` | crosses | Wire call |
 | `RowPages::window` | crosses | Wire call |
+| `RowFunction::invoke` | crosses | Wire call |
 | `ResourceHandler<ItemResource>::size` | crosses | Wire call |
 | `ResourceHandler<ItemResource>::resource` | crosses | Wire call |
 | `ResourceHandler<ItemResource>::amount` | crosses | Wire call |
@@ -1606,6 +1645,10 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | Library mod plain `pub fn` / `pub static` called by a dependent | crosses | shared dependency rlib, stable crate identity, and retained public exports; production-loader library fixture covers separate library/observer/dependent builds |
 
 Required gap total: 0.
+
+## Entity snapshot revision boundary
+
+`client_update_fields` is on the wire but outside the entity revision counter (`containers.rs:18`, `lib.rs:312`, `containers.rs:75`). Any future revision-keyed cache must treat it as excluded from the revision guarantee and synchronize it independently. Stage 1b must clarify the `ModRevision` documentation's "Equal revisions, equal contents" statement accordingly.
 
 ## Provider-query review: trust boundaries and native-side notes
 

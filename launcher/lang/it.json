@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Impossibile leggere il registro di creazione: {error}",
   "Could not read the saved sign-in.": "Impossibile leggere l'accesso salvato.",
   "Could not read the saved sign-in. Sign in again.": "Impossibile leggere l'accesso salvato. Accedi di nuovo.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Impossibile leggere {name}: {error}",
   "Could not run {program}: {error}": "Impossibile eseguire {program}: {error}",
   "Could not save the renewed sign-in.": "Impossibile salvare il nuovo accesso.",

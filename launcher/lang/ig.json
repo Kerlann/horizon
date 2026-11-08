@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Enweghị ike ịgụ ndekọ ihe owuwu: {error}",
   "Could not read the saved sign-in.": "Enweghị ike ịgụ nbanye echekwara.",
   "Could not read the saved sign-in. Sign in again.": "Enweghị ike ịgụ nbanye echekwara. Banye ọzọ.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Enweghị ike ịgụ {name}: {error}",
   "Could not run {program}: {error}": "Enweghị ike ịgba ọsọ {program}: {error}",
   "Could not save the renewed sign-in.": "Enweghị ike ichekwa nbanye ọhụrụ ahụ.",

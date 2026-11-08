@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "קען נישט לייענען די בויען קלאָץ: {error}",
   "Could not read the saved sign-in.": "קען נישט לייענען די געראטעוועט צייכן אין.",
   "Could not read the saved sign-in. Sign in again.": "קען נישט לייענען די געראטעוועט צייכן אין. צייכן אין ווידער.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "קען נישט לייענען {name}: {error}",
   "Could not run {program}: {error}": "קען נישט לויפן {program}: {error}",
   "Could not save the renewed sign-in.": "קען נישט ראַטעווען די באנייט צייכן אין.",

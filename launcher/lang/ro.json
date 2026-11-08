@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Nu s-a putut citi jurnalul de construire: {error}",
   "Could not read the saved sign-in.": "Nu s-a putut citi înregistrarea salvată.",
   "Could not read the saved sign-in. Sign in again.": "Nu s-a putut citi înregistrarea salvată. Conectați-vă din nou.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Nu s-a putut citi {name}: {error}",
   "Could not run {program}: {error}": "Nu s-a putut rula {program}: {error}",
   "Could not save the renewed sign-in.": "Nu s-a putut salva conectarea reînnoită.",

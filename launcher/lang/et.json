@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Ehituslogi ei õnnestunud lugeda: {error}",
   "Could not read the saved sign-in.": "Salvestatud sisselogimist ei õnnestunud lugeda.",
   "Could not read the saved sign-in. Sign in again.": "Salvestatud sisselogimist ei õnnestunud lugeda. Logige uuesti sisse.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Ei saanud lugeda {name}: {error}",
   "Could not run {program}: {error}": "Ei saanud käivitada {program}: {error}",
   "Could not save the renewed sign-in.": "Uuendatud sisselogimist ei saanud salvestada.",

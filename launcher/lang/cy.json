@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Methu darllen y log adeiladu: {error}",
   "Could not read the saved sign-in.": "Methu darllen y mewngofnodi a gadwyd.",
   "Could not read the saved sign-in. Sign in again.": "Methu darllen y mewngofnodi a gadwyd. Mewngofnodwch eto.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Methu darllen {name}: {error}",
   "Could not run {program}: {error}": "Methu rhedeg {program}: {error}",
   "Could not save the renewed sign-in.": "Ni fu modd cadw'r mewngofnodiad newydd.",

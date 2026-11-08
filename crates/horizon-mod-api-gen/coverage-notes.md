@@ -1,4 +1,8 @@
 
+## Entity snapshot revision boundary
+
+`client_update_fields` is on the wire but outside the entity revision counter (`containers.rs:18`, `lib.rs:312`, `containers.rs:75`). Any future revision-keyed cache must treat it as excluded from the revision guarantee and synchronize it independently. Stage 1b must clarify the `ModRevision` documentation's "Equal revisions, equal contents" statement accordingly.
+
 ## Provider-query review: trust boundaries and native-side notes
 
 The implementation at fdccc11a1d and exact-variant tests at 40b17368f1 were independently reviewed. Full structural reply decoding, including trailing-byte validation and static owner conversion, completes before any cursor writeback. The reviewer reproduced refusal without cursor mutation for incomplete cursors, invalid Option/bool tags and trailing bytes, and killed missing-writeback and late-validation mutants.

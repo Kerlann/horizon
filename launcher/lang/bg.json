@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Не можах да прочета регистрационния файл на компилацията: {error}",
   "Could not read the saved sign-in.": "Не може да се прочете запазеното влизане.",
   "Could not read the saved sign-in. Sign in again.": "Не може да се прочете запазеното влизане. Влезте отново.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Не можах да прочета {name}: {error}",
   "Could not run {program}: {error}": "Не можа да се изпълни {program}: {error}",
   "Could not save the renewed sign-in.": "Подновеното влизане не можа да бъде запазено.",

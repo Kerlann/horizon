@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Derleme günlüğü okunamadı: {error}",
   "Could not read the saved sign-in.": "Kaydedilen oturum okunamadı.",
   "Could not read the saved sign-in. Sign in again.": "Kaydedilen oturum okunamadı. Tekrar oturum açın.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Could not read {name}: {error}",
   "Could not run {program}: {error}": "{program} çalıştırılamadı: {error}",
   "Could not save the renewed sign-in.": "Yenilenen oturum kaydedilemedi.",

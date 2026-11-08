@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Não foi possível ler o registo de construção: {error}",
   "Could not read the saved sign-in.": "Não foi possível ler o início de sessão guardado.",
   "Could not read the saved sign-in. Sign in again.": "Não foi possível ler o início de sessão guardado. Inicia sessão novamente.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Não foi possível ler {name}: {error}",
   "Could not run {program}: {error}": "Não foi possível executar {program}: {error}",
   "Could not save the renewed sign-in.": "Não foi possível guardar o início de sessão renovado.",

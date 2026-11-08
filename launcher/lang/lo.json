@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "ບໍ່ສາມາດອ່ານບັນທຶກການສ້າງ: {error}",
   "Could not read the saved sign-in.": "ບໍ່ສາມາດອ່ານການເຂົ້າສູ່ລະບົບທີ່ບັນທຶກໄວ້ໄດ້.",
   "Could not read the saved sign-in. Sign in again.": "ບໍ່ສາມາດອ່ານການເຂົ້າສູ່ລະບົບທີ່ບັນທຶກໄວ້ໄດ້. ເຂົ້າສູ່ລະບົບອີກຄັ້ງ.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "ບໍ່ສາມາດອ່ານ {name}: {error}",
   "Could not run {program}: {error}": "ບໍ່ສາມາດແລ່ນ {program}: {error}",
   "Could not save the renewed sign-in.": "ບໍ່ສາມາດບັນທຶກການເຂົ້າສູ່ລະບົບໃໝ່ໄດ້.",

@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Koe it boulogboek net lêze: {error}",
   "Could not read the saved sign-in.": "Koe de bewarre oanmelding net lêze.",
   "Could not read the saved sign-in. Sign in again.": "Koe de bewarre oanmelding net lêze. Oanmelde wer.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Koe {name} net lêze: {error}",
   "Could not run {program}: {error}": "Koe {program} net útfiere: {error}",
   "Could not save the renewed sign-in.": "Koe de fernijde oanmelding net bewarje.",

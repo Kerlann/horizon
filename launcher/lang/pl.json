@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Nie można odczytać dziennika kompilacji: {error}",
   "Could not read the saved sign-in.": "Nie można odczytać zapisanego logowania.",
   "Could not read the saved sign-in. Sign in again.": "Nie można odczytać zapisanego logowania. Zaloguj się ponownie.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Nie udało się odczytać {name}: {error}",
   "Could not run {program}: {error}": "Could not run {program}: {error}",
   "Could not save the renewed sign-in.": "Nie można zapisać odnowionego logowania.",

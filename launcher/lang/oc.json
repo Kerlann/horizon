@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Impossible de legir lo jornal de construccion : {error}",
   "Could not read the saved sign-in.": "Impossible de legir la connexion enregistrada.",
   "Could not read the saved sign-in. Sign in again.": "Impossible de legir la connexion enregistrada. Connectatz-vos tornarmai.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Poguèt pas legir {name} : {error}",
   "Could not run {program}: {error}": "Poguèt pas executar {program} : {error}",
   "Could not save the renewed sign-in.": "Impossible d'enregistrar la connexion renovelada.",

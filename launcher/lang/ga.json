@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Níorbh fhéidir an loga tógála a léamh: {error}",
   "Could not read the saved sign-in.": "Níorbh fhéidir an síniú isteach sábháilte a léamh.",
   "Could not read the saved sign-in. Sign in again.": "Níorbh fhéidir an síniú isteach sábháilte a léamh. Sínigh isteach arís.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Níorbh fhéidir {name} a léamh: {error}",
   "Could not run {program}: {error}": "Níorbh fhéidir rith {program}: {error}",
   "Could not save the renewed sign-in.": "Níorbh fhéidir an síniú isteach athnuaite a shábháil.",

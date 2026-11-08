@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "无法读取构建日志：{error}",
   "Could not read the saved sign-in.": "无法读取已保存的登录信息。",
   "Could not read the saved sign-in. Sign in again.": "无法读取已保存的登录信息。请重新登录。",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "无法读取 {name}：{error}",
   "Could not run {program}: {error}": "无法运行 {program}：{error}",
   "Could not save the renewed sign-in.": "无法保存续期后的登录信息。",

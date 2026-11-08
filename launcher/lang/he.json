@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "לא ניתן היה לקרוא את יומן הבנייה: {error}",
   "Could not read the saved sign-in.": "לא ניתן היה לקרוא את הכניסה השמורה.",
   "Could not read the saved sign-in. Sign in again.": "לא ניתן היה לקרוא את הכניסה השמורה. היכנס שוב.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "לא ניתן היה לקרוא את {name}: {error}",
   "Could not run {program}: {error}": "לא ניתן להפעיל את {program}: {error}",
   "Could not save the renewed sign-in.": "לא ניתן לשמור את הכניסה המחודשת.",

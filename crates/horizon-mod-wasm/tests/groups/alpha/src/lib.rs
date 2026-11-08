@@ -3,8 +3,10 @@ use counter_lib::{COUNTER, Counter};
 use mod_api::{
     BoolGameRuleKey, Flow, Hooks, Registrar, RegistrationContext, ServerChatEvent, ServerHost, Text,
 };
-use std::sync::OnceLock;
-static RULE: OnceLock<BoolGameRuleKey> = OnceLock::new();
+use std::sync::Mutex;
+/// The test harness registers every mod once to collect its controllers and again to install it,
+/// so each registration replaces the key.
+static RULE: Mutex<Option<BoolGameRuleKey>> = Mutex::new(None);
 
 /// Where the test world's counter box is.
 const BOX: [i32; 3] = [0, 64, 0];
@@ -23,12 +25,11 @@ pub struct Mod;
 impl Hooks for Mod {
     fn register(&self, registrar: &mut dyn Registrar, _cx: &RegistrationContext) {
         registrar.game_rule_category("machines").expect("category");
-        RULE.set(
+        *RULE.lock().unwrap() = Some(
             registrar
                 .game_rule_bool("enabled", "alpha:machines", true)
                 .expect("rule"),
-        )
-        .unwrap();
+        );
         let kind = registrar.block_entity_type_key("test:counter_box");
         registrar.block_entity_capability(&COUNTER, &kind, |_, _| {
             Some(Box::new(Seven) as Box<dyn Counter>)
@@ -42,7 +43,7 @@ impl Hooks for Mod {
             .map_or("none".to_string(), |counter| counter.count().to_string());
         let rule = host
             .level("minecraft:overworld")
-            .and_then(|level| level.game_rule_bool(host, *RULE.get().unwrap()))
+            .and_then(|level| level.game_rule_bool(host, RULE.lock().unwrap().unwrap()))
             .unwrap();
         *event.message = Text::literal(format!("{}: {answer} {rule}", env!("CARGO_PKG_NAME")));
         Flow::Continue

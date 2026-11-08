@@ -1782,6 +1782,47 @@ fn apply_block_entity_snapshot(
     Ok(())
 }
 
+// Validation runs after all listeners return; dispatch does not retain per-mod provenance.
+// Bound diagnostics even when mods register many entity types.
+fn finish_block_entity_writeback<T>(
+    entity: &mut crate::containers::ModBlockEntity,
+    snapshot: &mod_api::ModBlockEntity,
+    before: mod_api::containers::ModRevision,
+    items: &Items,
+    hook: &'static str,
+    output: Result<T, BlockEntitySnapshotError>,
+) -> Result<T, BlockEntitySnapshotError> {
+    let result = output.and_then(|output| {
+        apply_block_entity_snapshot(entity, snapshot, before, items)?;
+        Ok(output)
+    });
+    if let Err(reason) = &result {
+        let changes = entity
+            .revision()
+            .changes()
+            .max(snapshot.revision().changes())
+            .saturating_add(1);
+        entity.apply_snapshot((**entity).clone(), changes);
+        static REPORTED: std::sync::Mutex<Vec<(String, &'static str)>> =
+            std::sync::Mutex::new(Vec::new());
+        let mut reported = REPORTED.lock().unwrap_or_else(|poison| poison.into_inner());
+        if reported.len() < 1024
+            && !reported
+                .iter()
+                .any(|(id, name)| id == entity.id() && *name == hook)
+        {
+            reported.push((entity.id().to_owned(), hook));
+            log::warn!(
+                "Rejected block entity writeback: entity type {}, hook {}, reason {:?}",
+                entity.id(),
+                hook,
+                reason
+            );
+        }
+    }
+    result
+}
+
 impl super::Game<'_> {
     pub(in crate::game) fn api_block_entity_tick(
         &mut self,
@@ -1805,7 +1846,14 @@ impl super::Game<'_> {
         self.native_block_entity_tick(pos, &mut api);
         let call_ns = started.map_or(0, |s| s.elapsed().as_nanos());
         let started = stage0.map(|_| std::time::Instant::now());
-        let applied = apply_block_entity_snapshot(entity, &api, revision, self.items());
+        let applied = finish_block_entity_writeback(
+            entity,
+            &api,
+            revision,
+            self.items(),
+            "block_entity_tick",
+            Ok(()),
+        );
         let apply_ns = started.map_or(0, |s| s.elapsed().as_nanos());
         if let Some(state) = stage0 {
             let after = entity.try_into_api().ok().map(|after| {
@@ -1912,9 +1960,17 @@ impl super::Game<'_> {
         };
         let revision = api.revision();
         self.native_menu_button(context, &mut api, &mut cursor);
-        if let Ok(cursor) = cursor.try_into_engine(self.items())
-            && apply_block_entity_snapshot(entity, &api, revision, self.items()).is_ok()
-        {
+        let cursor = cursor
+            .try_into_engine(self.items())
+            .map_err(|_| BlockEntitySnapshotError::InvalidStack);
+        if let Ok(cursor) = finish_block_entity_writeback(
+            entity,
+            &api,
+            revision,
+            self.items(),
+            "menu_button",
+            cursor,
+        ) {
             *carried = cursor;
         }
     }
@@ -1943,9 +1999,17 @@ impl super::Game<'_> {
             &mut held,
             &mut candidate_handled,
         );
-        if let Ok(held) = held.try_into_engine(self.items())
-            && apply_block_entity_snapshot(entity, &api, revision, self.items()).is_ok()
-        {
+        let held = held
+            .try_into_engine(self.items())
+            .map_err(|_| BlockEntitySnapshotError::InvalidStack);
+        if let Ok(held) = finish_block_entity_writeback(
+            entity,
+            &api,
+            revision,
+            self.items(),
+            "menu_quick_move",
+            held,
+        ) {
             *stack = held;
             *handled = candidate_handled;
         }
@@ -1978,6 +2042,48 @@ mod stacked_slot_tests;
 #[cfg(test)]
 mod block_entity_snapshot_tests {
     use super::*;
+    #[test]
+    fn rejected_writebacks_invalidate_tick() {
+        assert_rejected_writeback("block_entity_tick");
+    }
+    #[test]
+    fn rejected_writebacks_invalidate_menu_button() {
+        assert_rejected_writeback("menu_button");
+    }
+    #[test]
+    fn rejected_writebacks_invalidate_menu_quick_move() {
+        assert_rejected_writeback("menu_quick_move");
+    }
+    fn assert_rejected_writeback(hook: &'static str) {
+        let items = Items::for_tests(Default::default());
+        let mut entity =
+            crate::containers::ModBlockEntity::new("test:rejected".into(), Default::default());
+        let mut snapshot = entity.try_into_api().unwrap();
+        let before = snapshot.revision();
+        snapshot.data.push(42);
+        let claimed = snapshot.revision().changes();
+        // Tick rejection: wrong identity. Menu rejection: invalid cursor/held output.
+        let output = if hook == "block_entity_tick" {
+            snapshot = mod_api::ModBlockEntity::new("other:type".into(), Default::default());
+            Ok(())
+        } else {
+            Err(BlockEntitySnapshotError::InvalidStack)
+        };
+        assert!(
+            finish_block_entity_writeback(&mut entity, &snapshot, before, &items, hook, output)
+                .is_err()
+        );
+        assert!(entity.data.is_empty());
+        assert_eq!(
+            entity.revision().changes(),
+            if hook == "block_entity_tick" {
+                1
+            } else {
+                claimed + 1
+            }
+        );
+    }
+
     #[test]
     fn unchanged_snapshots_keep_revision_and_callback_writes_advance_it() {
         let mut entity =

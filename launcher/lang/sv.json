@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Kunde inte läsa byggloggen: {error}",
   "Could not read the saved sign-in.": "Det gick inte att läsa den sparade inloggningen.",
   "Could not read the saved sign-in. Sign in again.": "Det gick inte att läsa den sparade inloggningen. Logga in igen.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Kunde inte läsa {name}: {error}",
   "Could not run {program}: {error}": "Kunde inte köra {program}: {error}",
   "Could not save the renewed sign-in.": "Det gick inte att spara den förnyade inloggningen.",

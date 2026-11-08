@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Không thể đọc nhật ký bản dựng: {error}",
   "Could not read the saved sign-in.": "Không thể đọc thông tin đăng nhập đã lưu.",
   "Could not read the saved sign-in. Sign in again.": "Không thể đọc thông tin đăng nhập đã lưu. Đăng nhập lại.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Không thể đọc được {name}: {error}",
   "Could not run {program}: {error}": "Không thể chạy {program}: {error}",
   "Could not save the renewed sign-in.": "Không thể lưu thông tin đăng nhập được gia hạn.",

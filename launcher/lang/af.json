@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Kon nie die boulogboek lees nie: {error}",
   "Could not read the saved sign-in.": "Kon nie die gestoorde aanmelding lees nie.",
   "Could not read the saved sign-in. Sign in again.": "Kon nie die gestoorde aanmelding lees nie. Meld weer aan.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Kon nie {name} lees nie: {error}",
   "Could not run {program}: {error}": "Kon nie {program}: {error} laat loop nie",
   "Could not save the renewed sign-in.": "Kon nie die hernude aanmelding stoor nie.",

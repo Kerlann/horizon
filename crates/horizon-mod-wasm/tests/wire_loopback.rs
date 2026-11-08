@@ -344,6 +344,44 @@ fn wire_loopback_machine_tick_uses_checked_snapshot_writeback() {
     assert_eq!(entity.revision().changes(), before);
 }
 #[test]
+fn borrowed_view_reply_is_byte_identical_to_owned_snapshot() {
+    use horizon_core::nbt::Tag;
+    install_counter();
+    let stack = mod_api::ItemStack::new(REGISTERED_ITEM.get().unwrap(), 17).unwrap();
+    let mut entity = mod_api::ModBlockEntity::default();
+    entity.items = vec![Some(stack), None];
+    entity.data = vec![i32::MIN, 7, i32::MAX];
+    entity.nbt.insert(
+        "nested".into(),
+        Tag::compound([
+            ("float", Tag::Float(0x7fc01234)),
+            ("double", Tag::Double(0x7ff8000000001234)),
+            ("negative_zero", Tag::Float((-0.0f32).to_bits())),
+            (
+                "list",
+                Tag::List(vec![
+                    Tag::Double((-0.0f64).to_bits()),
+                    Tag::String("payload".into()),
+                ]),
+            ),
+        ]),
+    );
+    let mut update = mod_api::Compound::new();
+    update.insert("display".into(), Tag::Int(42));
+    mod_api::ModBlockEntityView::new(&mut entity).set_client_update_fields(update);
+    let mut owned = Writer::new();
+    owned.put(&mod_api::containers::ModBlockEntitySnapshot::from(&entity));
+    let mut borrowed = Writer::new();
+    borrowed.put(&mod_api::ModBlockEntityView::new(&mut entity));
+    assert!(owned.error().is_none());
+    assert!(borrowed.error().is_none());
+    assert_eq!(borrowed.bytes(), owned.bytes());
+    let mut reply = Writer::new();
+    mod_api::ModBlockEntityView::new(&mut entity).__wire_put_snapshot(&mut reply);
+    assert!(reply.error().is_none());
+    assert_eq!(reply.bytes(), owned.bytes());
+}
+#[test]
 fn wire_loopback_readonly_private_projection() {
     use horizon_core::nbt::Tag;
     struct Client;

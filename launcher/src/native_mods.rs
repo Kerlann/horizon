@@ -1784,11 +1784,6 @@ fn pipeline(
     if found.is_empty() {
         return Err(Failed::Nothing);
     }
-    // #6490: said before anything runs, so a build that fails later still
-    // shows them.
-    for warning in warn_conflicts(&found) {
-        log_warning(&warning);
-    }
     // A native build starts from the release or Nightly it was made from, on its own revision.
     let origin = built_on.as_ref().map_or(base, |a| a.base.as_str());
     let mut ids = std::collections::HashSet::new();

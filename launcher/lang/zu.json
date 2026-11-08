@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Ayikwazanga ukufunda umbhalo wokwakha: {error}",
   "Could not read the saved sign-in.": "Ayikwazanga ukufunda ukungena ngemvume okulondoloziwe.",
   "Could not read the saved sign-in. Sign in again.": "Ayikwazanga ukufunda ukungena ngemvume okulondoloziwe. Ngena ngemvume futhi.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Ayikwazanga ukufunda {name}: {error}",
   "Could not run {program}: {error}": "Ayikwazanga ukugijima {program}: {error}",
   "Could not save the renewed sign-in.": "Ayikwazanga ukulondoloza ukungena ngemvume okuvuselelwe.",

@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Ne eblis legi la konstruprotokolon: {error}",
   "Could not read the saved sign-in.": "Ne eblis legi la konservitan ensaluto.",
   "Could not read the saved sign-in. Sign in again.": "Ne eblis legi la konservitan ensaluto. Ensalutu denove.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Ne eblis legi {name}: {error}",
   "Could not run {program}: {error}": "Ne eblis ruliĝi {program}: {error}",
   "Could not save the renewed sign-in.": "Ne eblis konservi la renovigitan ensaluti.",

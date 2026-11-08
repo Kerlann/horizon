@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Nem sikerült beolvasni az összeállítási naplót: {error}",
   "Could not read the saved sign-in.": "Nem sikerült beolvasni a mentett bejelentkezést.",
   "Could not read the saved sign-in. Sign in again.": "Nem sikerült beolvasni a mentett bejelentkezést. Jelentkezzen be újra.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Nem sikerült elolvasni {name}: {error}",
   "Could not run {program}: {error}": "Nem sikerült futtatni a {program}: {error}",
   "Could not save the renewed sign-in.": "Nem sikerült menteni a megújított bejelentkezést.",

@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Куруу журналын окуй алган жок: {error}",
   "Could not read the saved sign-in.": "Сакталган кирүү окулбай койду.",
   "Could not read the saved sign-in. Sign in again.": "Сакталган кирүү окулбай койду. Кайра кириңиз.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "{name} окуй алган жок: {error}",
   "Could not run {program}: {error}": "{program} иштетилбей койду: {error}",
   "Could not save the renewed sign-in.": "Жаңыртылган кирүү сакталбай койду.",

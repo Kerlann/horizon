@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "빌드 로그를 읽을 수 없습니다: {error}",
   "Could not read the saved sign-in.": "저장된 로그인 정보를 읽을 수 없습니다.",
   "Could not read the saved sign-in. Sign in again.": "저장된 로그인 정보를 읽을 수 없습니다. 다시 로그인하세요.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "{name}을(를) 읽을 수 없습니다: {error}",
   "Could not run {program}: {error}": "{program}을(를) 실행할 수 없습니다: {error}",
   "Could not save the renewed sign-in.": "갱신된 로그인 정보를 저장할 수 없습니다.",

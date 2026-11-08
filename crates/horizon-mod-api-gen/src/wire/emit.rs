@@ -170,7 +170,16 @@ pub(super) fn types(types: &Types<'_>) -> String {
             let path = def.rust.split('<').next().unwrap();
             let snapshot = super::calls::rust_ty(types, &view.snapshot, false);
             let field = &view.field;
-            writeln!(out,"impl crate::wire::Put for {path}<'_> {{ fn put_to(&self,out:&mut crate::wire::Writer) {{ out.put(&*self.{field}); }} }} impl {path}<'_> {{ #[doc(hidden)] pub fn __wire_snapshot(&self)->{snapshot} {{ (&*self.{field}).into() }} #[doc(hidden)] pub fn __wire_apply(&mut self,snapshot:{snapshot}) {{ self.{field}.apply_snapshot(snapshot); }} }}").unwrap();
+            let put_snapshot = match types.snapshot_projection(view) {
+                Some(fields) => fields
+                    .iter()
+                    .map(|f| format!("out.put(&self.{field}.{f});"))
+                    .collect::<String>(),
+                None => {
+                    format!("let snapshot:{snapshot}=(&*self.{field}).into();out.put(&snapshot);")
+                }
+            };
+            writeln!(out,"impl crate::wire::Put for {path}<'_> {{ fn put_to(&self,out:&mut crate::wire::Writer) {{ out.put(&*self.{field}); }} }} impl {path}<'_> {{ #[doc(hidden)] pub fn __wire_put_snapshot(&self,out:&mut crate::wire::Writer) {{ {put_snapshot} }} #[doc(hidden)] pub fn __wire_apply(&mut self,snapshot:{snapshot}) {{ self.{field}.apply_snapshot(snapshot); }} }}").unwrap();
         }
         if def.lifetimes != 0 || manual.contains(&def.rust.replace(' ', "")) {
             continue;

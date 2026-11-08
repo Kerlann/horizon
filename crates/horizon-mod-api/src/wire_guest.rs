@@ -92,7 +92,45 @@ impl Runtime {
 
 thread_local! {
     static RUNTIME: RefCell<Runtime> = RefCell::new(Runtime::default());
-    static HANDLERS: RefCell<Slots<Vec<Box<dyn Any>>>> = RefCell::new(Slots::default());
+}
+
+type Handlers = RefCell<Slots<Vec<Box<dyn Any>>>>;
+
+#[cfg(not(target_arch = "wasm32"))]
+thread_local! {
+    static HANDLERS: Handlers = RefCell::new(Slots::default());
+}
+
+#[cfg(target_arch = "wasm32")]
+unsafe extern "C" {
+    /// One word in the group's shared std member that points at the group's handler table.
+    #[link_name = "horizon_handler_table"]
+    static HANDLER_TABLE: std::sync::atomic::AtomicUsize;
+}
+
+/// Runs `f` on the handlers the game holds for this mod's group. Members of a group share one
+/// memory and one std, so they share one table: a handler a member gave the game is found by
+/// another member of its group when the game returns its id. The table is made by the first
+/// member to need it and lives as long as the group's memory.
+fn with_handlers<R>(f: impl FnOnce(&Handlers) -> R) -> R {
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        HANDLERS.with(f)
+    }
+    #[cfg(target_arch = "wasm32")]
+    {
+        use std::sync::atomic::Ordering::Relaxed;
+        // SAFETY: the std member defines the word, zero until a member makes the table, and a
+        // wasm group runs on one thread.
+        let word = unsafe { &HANDLER_TABLE };
+        let mut table = word.load(Relaxed) as *const Handlers;
+        if table.is_null() {
+            table = Box::into_raw(Box::new(Handlers::default()));
+            word.store(table as usize, Relaxed);
+        }
+        // SAFETY: made above or by another member of this group from the same type, never freed.
+        f(unsafe { &*table })
+    }
 }
 
 #[cfg(feature = "wire-roundtrip-profile")]
@@ -269,7 +307,7 @@ pub unsafe fn kept<'a, T>(value: T) -> &'a T {
 
 /// Keeps the mod's handler `views` for the game's calls and gives its id.
 pub fn add_handler(views: Vec<Box<dyn Any>>) -> Id {
-    HANDLERS.with(|h| h.borrow_mut().insert_long(views))
+    with_handlers(|h| h.borrow_mut().insert_long(views))
 }
 
 /// One view of a handler: it as the trait `T`.
@@ -282,7 +320,7 @@ pub fn view<T: ?Sized + 'static>(handler: Arc<T>) -> Box<dyn Any> {
 
 /// The handler `id` as `T`: stale when the game let it go or never had it from this mod.
 pub fn handler<T: ?Sized + 'static>(id: Id) -> Result<Arc<T>, WireError> {
-    HANDLERS.with(|h| {
+    with_handlers(|h| {
         let handlers = h.borrow();
         let views = handlers
             .get(id)
@@ -478,7 +516,7 @@ pub fn run(id: u32) -> (*const u8, u32) {
 /// Drops the handlers the game let go of. A handler's drop may call the game: not under the lock.
 fn release(ids: Vec<Id>) {
     for id in ids {
-        let views = HANDLERS.with(|h| h.borrow_mut().remove(id));
+        let views = with_handlers(|h| h.borrow_mut().remove(id));
         drop(views);
     }
 }
@@ -486,6 +524,32 @@ fn release(ids: Vec<Id>) {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
+
+    trait Probe {
+        fn answer(&self) -> u32;
+    }
+    struct Seven;
+    impl Probe for Seven {
+        fn answer(&self) -> u32 {
+            7
+        }
+    }
+
+    #[test]
+    fn handlers_resolve_until_released_and_forged_ids_are_refused() {
+        let provider: Arc<dyn Probe> = Arc::new(Seven);
+        let id = add_handler(vec![view(provider)]);
+        assert_eq!(handler::<dyn Probe>(id).unwrap().answer(), 7);
+        // Another kind, an unissued slot and a stale generation answer with errors, never a panic.
+        assert!(matches!(handler::<dyn Any>(id), Err(WireError::Invalid(_))));
+        assert!(handler::<dyn Probe>(Id((1 << 32) | 0xffff)).is_err());
+        assert!(handler::<dyn Probe>(Id(0)).is_err());
+        release(vec![id]);
+        assert!(matches!(
+            handler::<dyn Probe>(id),
+            Err(WireError::Invalid("a handler the game no longer holds"))
+        ));
+    }
 
     #[test]
     fn guest_pool_bounds_returned_leases_and_discards_large_buffers() {

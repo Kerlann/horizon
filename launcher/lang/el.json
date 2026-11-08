@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Δεν ήταν δυνατή η ανάγνωση του αρχείου καταγραφής: {error}",
   "Could not read the saved sign-in.": "Δεν ήταν δυνατή η ανάγνωση της αποθηκευμένης σύνδεσης.",
   "Could not read the saved sign-in. Sign in again.": "Δεν ήταν δυνατή η ανάγνωση της αποθηκευμένης σύνδεσης. Συνδεθείτε ξανά.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Δεν μπορούσα να διαβάσω {name}: {error}",
   "Could not run {program}: {error}": "Δεν ήταν δυνατή η εκτέλεση {program}: {error}",
   "Could not save the renewed sign-in.": "Δεν ήταν δυνατή η αποθήκευση της ανανεωμένης σύνδεσης.",

@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Pudeva minga legg el registr de compilaziun: {error}",
   "Could not read the saved sign-in.": "Pudeva minga legg l'access salvà.",
   "Could not read the saved sign-in. Sign in again.": "Pudeva minga legg l'access salvà. Accedi ancamò.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Pudeva minga lègg {name}: {error}",
   "Could not run {program}: {error}": "Pudeva minga eseguir {program}: {error}",
   "Could not save the renewed sign-in.": "Pudeva minga salvà l'access rinnovà.",

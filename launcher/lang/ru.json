@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Не удалось прочитать журнал сборки: {error}",
   "Could not read the saved sign-in.": "Не удалось прочитать сохранённый вход.",
   "Could not read the saved sign-in. Sign in again.": "Не удалось прочитать сохранённый вход. Войдите снова.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Не удалось прочитать {name}: {error}",
   "Could not run {program}: {error}": "Could not run {program}: {error}",
   "Could not save the renewed sign-in.": "Не удалось сохранить обновлённый вход.",

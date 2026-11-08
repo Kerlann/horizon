@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Ko le ka akọọlẹ kikọ: {error}",
   "Could not read the saved sign-in.": "Ko le ka iwọle ti o fipamọ.",
   "Could not read the saved sign-in. Sign in again.": "Ko le ka iwọle ti o fipamọ. Wọle lẹẹkansi.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Ko le ka {name}: {error}",
   "Could not run {program}: {error}": "Ko le ṣiṣe {program}: {error}",
   "Could not save the renewed sign-in.": "Ko le ṣafipamọ iwọle ti a tunṣe.",

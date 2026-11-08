@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "बिल्ड लॉग पढ़ा नहीं जा सका: {error}",
   "Could not read the saved sign-in.": "सहेजे गए साइन-इन को पढ़ा नहीं जा सका।",
   "Could not read the saved sign-in. Sign in again.": "सहेजे गए साइन-इन को पढ़ा नहीं जा सका। फिर से साइन इन करें।",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "{name} को पढ़ा नहीं जा सका: {error}",
   "Could not run {program}: {error}": "{program} नहीं चलाया जा सका: {error}",
   "Could not save the renewed sign-in.": "नवीनीकृत साइन-इन को सहेजा नहीं जा सका।",
