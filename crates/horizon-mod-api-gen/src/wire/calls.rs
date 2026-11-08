@@ -804,13 +804,15 @@ fn borrowed(
         writeln!(read, "let {m}{local}: {} = input.take()?;", lent.owned).unwrap();
         build.push(format!("{}: {}", f.rust, lent.expr));
     }
+    let mut retain = String::new();
     for leaf in writeback_fields(types, def, name, mutable)? {
         if leaf.append {
             write!(back, "out.put({name}.__wire_changes());").unwrap();
         } else if leaf.optional {
             write!(back, "out.put_opt({}.as_deref());", leaf.path).unwrap();
         } else if leaf.view {
-            write!(back, "let cache_start=out.bytes().len(); {}.__wire_put_snapshot(out); if out.error().is_none() {{ crate::wire::guest::cache_probe::retain({}_held, {}_cache_key, &out.bytes()[cache_start..]); }}", leaf.path, leaf.local, leaf.local).unwrap();
+            write!(back, "let cache_start_{}=out.bytes().len(); {}.__wire_put_snapshot(out); let cache_end_{}=out.bytes().len();", leaf.local, leaf.path, leaf.local).unwrap();
+            write!(retain, "if out.error().is_none() {{ crate::wire::guest::cache_probe::retain({0}_held, {0}_cache_key, &out.bytes()[cache_start_{0}..cache_end_{0}]); }}", leaf.local).unwrap();
         } else {
             write!(
                 back,
@@ -842,6 +844,7 @@ fn borrowed(
             build.join(", ")
         ));
     }
+    back.push_str(&retain);
     Some((read, format!("{name}"), back))
 }
 
