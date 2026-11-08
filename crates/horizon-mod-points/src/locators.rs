@@ -76,6 +76,21 @@ impl Locators {
         Ok(id)
     }
 
+    /// Number of interned source-local nodes.
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    /// Whether the source has no interned nodes.
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+
+    /// Look up existing metadata without creating a new native destination.
+    pub fn find(&self, parent: Option<u32>, step: Step) -> Option<u32> {
+        self.ids.get(&(parent, step)).copied()
+    }
+
     /// Return the parent and final step of a known source-local node.
     pub fn entry(&self, id: u32) -> Result<(Option<u32>, Step), RowError> {
         let entry = self.entries.get(id as usize).ok_or(RowError::Bounds)?;

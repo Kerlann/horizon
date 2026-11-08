@@ -3,6 +3,46 @@ fn main() {
         std::path::PathBuf::from(std::env::var_os("CARGO_MANIFEST_DIR").unwrap()).join("../..");
     let out_dir = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
     horizon_mod_api_gen::generate_points(&root, &out_dir).expect("generating the points");
+    // Exercise the actual catalog signature and Rust body, not a handwritten nominal DTO.
+    let source = root.join("crates/horizon-client/src/game/network/server_links.rs");
+    println!("cargo:rerun-if-changed={}", source.display());
+    let parsed = syn::parse_file(&std::fs::read_to_string(source).unwrap()).unwrap();
+    let mut function = parsed
+        .items
+        .iter()
+        .find_map(|item| match item {
+            syn::Item::Fn(function) if function.sig.ident == "link_buttons" => {
+                Some(function.clone())
+            }
+            _ => None,
+        })
+        .unwrap();
+    let attribute = quote::quote!(name = "game_server_links_link_buttons", raw, free);
+    let shape = point_shape::shape(attribute.clone(), &function.sig).unwrap();
+    let rule = horizon_mod_api_gen::crossing::Rule::new(&[]);
+    let plan = horizon_mod_api_gen::native_raw::generate(
+        &rule,
+        "horizon_client::game::server_links",
+        &function.sig,
+        &shape,
+    )
+    .unwrap()
+    .attribute();
+    let raw_types = shape.raw_items(&function.sig, None, None);
+    function.attrs.clear();
+    let constants = parsed.items.iter().filter(|item| matches!(item, syn::Item::Const(item) if ["LINK_WIDTH", "ROW", "SCROLL_RESERVE"].iter().any(|name| item.ident == *name)));
+    std::fs::write(
+        out_dir.join("native_raw_link_buttons.rs"),
+        quote::quote! {
+            #(#constants)*
+            #raw_types
+            #[horizon_mod_api_macros::point(#attribute)]
+            #plan
+            #function
+        }
+        .to_string(),
+    )
+    .unwrap();
     let fixture = horizon_mod_api_gen::internals::Internal {
         path: "horizon_client::Choice".into(),
         kind: "enum",

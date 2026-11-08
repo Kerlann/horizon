@@ -6,6 +6,36 @@ use syn::{
     punctuated::Punctuated,
 };
 
+struct RawFramePlan {
+    roots: usize,
+    read: syn::Block,
+    apply: syn::Block,
+}
+struct RawPlan {
+    head: RawFramePlan,
+    tail: Option<RawFramePlan>,
+}
+impl syn::parse::Parse for RawPlan {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        fn frame(input: syn::parse::ParseStream<'_>) -> syn::Result<RawFramePlan> {
+            let roots = input.parse::<syn::LitInt>()?.base10_parse()?;
+            input.parse::<Token![,]>()?;
+            let read = input.parse()?;
+            input.parse::<Token![,]>()?;
+            let apply = input.parse()?;
+            Ok(RawFramePlan { roots, read, apply })
+        }
+        let head = frame(input)?;
+        let tail = if input.is_empty() {
+            None
+        } else {
+            input.parse::<Token![,]>()?;
+            Some(frame(input)?)
+        };
+        Ok(Self { head, tail })
+    }
+}
+
 /// The staged call site's typed boundary. Only generated source invokes this macro.
 #[proc_macro]
 pub fn site(input: TokenStream) -> TokenStream {
@@ -269,6 +299,17 @@ pub fn horizon_part(_attribute: TokenStream, input: TokenStream) -> TokenStream 
 #[proc_macro_attribute]
 pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
     let mut function = parse_macro_input!(input as ImplItemFn);
+    let raw_plan = match function
+        .attrs
+        .iter()
+        .position(|attr| attr.path().is_ident("horizon_raw_plan"))
+    {
+        Some(index) => match function.attrs.remove(index).parse_args::<RawPlan>() {
+            Ok(plan) => Some(plan),
+            Err(error) => return error.to_compile_error().into(),
+        },
+        None => None,
+    };
     if let Some(inline) = function.attrs.iter().find(|attr| {
         attr.path().is_ident("inline")
             && attr
@@ -431,6 +472,79 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
         quote!(#ty { #(#fields,)* #outcome })
     };
     let snapshot = |at_return: bool| {
+        if let Some(plan) = raw_plan.as_ref().and_then(|plan| {
+            if at_return {
+                plan.tail.as_ref()
+            } else {
+                Some(&plan.head)
+            }
+        }) {
+            let roots = plan.roots;
+            let read = &plan.read;
+            let apply = &plan.apply;
+            let mut inputs = Vec::new();
+            if !at_return {
+                for field in point_shape::raw_fields(&function.sig) {
+                    let place = &places[&field.input];
+                    inputs.push(quote!(&mut #place,));
+                }
+            }
+            match (&outcome, at_return) {
+                (point_shape::RawOutcome::Cancel, false) => inputs.push(quote!(&mut #cancel,)),
+                (point_shape::RawOutcome::Result(_), false) => {
+                    inputs.push(quote!(&mut #result_place,))
+                }
+                (point_shape::RawOutcome::Result(_), true) => inputs.push(quote!(&mut __result,)),
+                _ => {}
+            }
+            if inputs.len() != roots {
+                return syn::Error::new_spanned(
+                    &function.sig,
+                    "staged raw frame does not match the native root tuple",
+                )
+                .to_compile_error();
+            }
+            let rows = (roots + 1) as u32;
+            return quote! {
+                let __raw_state = (
+                    ::std::cell::RefCell::new((#(#inputs)*)),
+                    ::std::cell::RefCell::new(mod_points::locators::Locators::default()),
+                );
+                __raw_state.1.borrow_mut().intern(None, mod_points::locators::Step::Root(0))
+                    .expect("the first raw root fits the locator arena");
+                mod_points::snapshot::with_root(&__raw_state, |__root| {
+                    let mut __projection = mod_api::wire::Projected::new(
+                        |__out: &mut mod_api::wire::Writer| {
+                            // SAFETY: creation runs inside the real marked call's encoder, while
+                            // the private value lease belongs to this enclosing callback frame.
+                            // The generated reader resolves paths afresh and returns bounded rows.
+                            let __pages = match unsafe {
+                                mod_points::snapshot::PageSource::new(&__root, |__raw_state, __raw_window| #read)
+                            } {
+                                Ok(__pages) => __pages,
+                                Err(_) => {
+                                    __out.fail(mod_api::wire::WireError::Invalid("raw native root is unavailable"));
+                                    return;
+                                }
+                            };
+                            match __pages.window(mod_api::RowWindow { node: 0, start: 0, rows: #rows, depth: 1 }) {
+                                Ok(__rows) => {
+                                    __out.put(&__rows);
+                                    __out.put(&Some(__pages.clone()));
+                                    __out.put(&mod_api::wire::RecordPatch::default());
+                                }
+                                Err(_) => __out.fail(mod_api::wire::WireError::Invalid("raw native projection refused")),
+                            }
+                        },
+                        |__raw_bytes: &[u8]| -> Result<(), mod_api::wire::WireError> {
+                            __root.close();
+                            #apply
+                        },
+                    );
+                    __endpoint.forward(__index, &mut __projection);
+                });
+            };
+        }
         if !shape.snapshot_able(&function.sig) {
             return quote!();
         }
@@ -479,8 +593,12 @@ pub fn point(attribute: TokenStream, input: TokenStream) -> TokenStream {
             let ty = quote!(#ty).to_string();
             quote!(__snapshot.value(Some(__root), #index, const { mod_points::snapshot::key(#ty) }, &*__state.#position)?;)
         });
-        let writable_control = contract.outcome_record_mutable == Some(true)
-            && (!at_return || matches!(&shape.returns, point_shape::Returns::Value(_)));
+        let writable_control = if at_return {
+            contract.return_record_mutable
+                && matches!(&shape.returns, point_shape::Returns::Value(_))
+        } else {
+            contract.outcome_record_mutable == Some(true)
+        };
         let fields = if writable_control {
             quote!((mod_api::wire::PatchCell::new(#control_id, &mut **__snapshot_control), ()))
         } else {

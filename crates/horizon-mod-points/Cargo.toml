@@ -17,6 +17,7 @@ horizon-mod-api = { path = "../horizon-mod-api" }
 
 [build-dependencies]
 horizon-mod-api-gen = { path = "../horizon-mod-api-gen" }
+horizon-mod-point-shape = { path = "../horizon-mod-point-shape" }
 syn = "2"
 quote = "1"
 

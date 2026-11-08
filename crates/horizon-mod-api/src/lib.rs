@@ -9,6 +9,9 @@
 #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
 extern crate self as mod_api;
 
+mod row_view;
+pub use row_view::RowView;
+
 /// A saved fluid name retained for the lifetime of the process.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: only trusted engine boundaries create handles

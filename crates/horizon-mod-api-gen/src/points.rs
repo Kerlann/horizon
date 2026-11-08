@@ -643,6 +643,7 @@ pub fn game_points(root: &Path) -> Result<Vec<GamePoint>, String> {
         .map(|point| plain_path(&point.target))
         .collect::<std::collections::BTreeSet<_>>();
     let (scanned, list) = scan(root)?;
+    let rule = crate::crossing::Rule::new(&crate::internals::catalog(root)?);
     let mut points = Vec::new();
     for (_, found) in all_points(&scanned, &list)? {
         let target = found.target();
@@ -660,7 +661,10 @@ pub fn game_points(root: &Path) -> Result<Vec<GamePoint>, String> {
             ],
             at_return: shape.has_return(),
             raw: shape.raw,
-            snapshot: shape.snapshot_able(found.sig),
+            snapshot: shape.snapshot_able(found.sig)
+                || (shape.raw
+                    && crate::native_raw::generate(&rule, &found.module, found.sig, &shape)
+                        .is_ok()),
             raw_shape: shape
                 .raw
                 .then(|| point_shape::raw_shape(&shape, found.sig, found.owner.map(|(ty, _)| ty))),
@@ -728,6 +732,7 @@ pub(crate) fn offset(source: &str, lines: &[usize], at: proc_macro2::LineColumn)
 /// on a working tree: the source tree carries no `#[point]`.
 pub fn stage(root: &Path) -> Result<Staged, String> {
     let (scanned, list) = scan(root)?;
+    let rule = crate::crossing::Rule::new(&crate::internals::catalog(root)?);
     let points = all_points(&scanned, &list)?;
     let mut staged = Staged::default();
     let mut packages = std::collections::BTreeSet::new();
@@ -771,7 +776,22 @@ pub fn stage(root: &Path) -> Result<Staged, String> {
             };
             edits.push((
                 offset(source, &lines, start),
-                format!("#[horizon_mod_api_macros::point({})] ", found.attribute()),
+                format!(
+                    "#[horizon_mod_api_macros::point({})]{} ",
+                    found.attribute(),
+                    if found.shape()?.raw && !found.shape()?.snapshot_able(found.sig) {
+                        crate::native_raw::generate(
+                            &rule,
+                            &found.module,
+                            found.sig,
+                            &found.shape()?,
+                        )
+                        .map(|plan| format!(" {}", plan.attribute()))
+                        .unwrap_or_default()
+                    } else {
+                        String::new()
+                    },
+                ),
             ));
             let shape = found.shape()?;
             staged.points += 1;
@@ -1070,7 +1090,8 @@ pub(crate) fn records_selected(
             #raw_listeners
         }
         #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
-        fn guest_dispatch(id: u32, input: &mut ::mod_api::wire::Reader<'_>, out: &mut ::mod_api::wire::Writer) -> Result<(), ::mod_api::wire::WireError> {
+        #[doc(hidden)]
+        pub fn guest_dispatch(id: u32, input: &mut ::mod_api::wire::Reader<'_>, out: &mut ::mod_api::wire::Writer) -> Result<(), ::mod_api::wire::WireError> {
             if id == 0xBFFF_FFFF { out.put(&crate::guest::subscriptions()); return Ok(()); }
             let raw = id & 0xC000_0000 == 0xC000_0000;
             let index = (id & 0x3FFF_FFFF) as usize;
@@ -1241,10 +1262,32 @@ mod tests {
         let points = game_points(&root).unwrap();
         let sources = source::read(&root).unwrap();
         let full = serde_json::to_vec_pretty(&points).unwrap();
+        if let Ok(path) = std::env::var("RETURN_MUTABILITY_FULL") {
+            fs::write(path, &full).unwrap();
+        }
+        let serialized: serde_json::Value = serde_json::from_slice(&full).unwrap();
+        assert_eq!(serialized, serde_json::to_value(&points).unwrap());
+        for point in serialized.as_array().unwrap() {
+            if let Some(raw) = point.get("raw_shape") {
+                assert!(raw["return_record_mutable"].is_boolean());
+                if raw["return_ty"] != "()" {
+                    assert_eq!(raw["return_record_mutable"], true);
+                }
+            }
+        }
+        let text = std::str::from_utf8(&full).unwrap();
+        for raw in text.split("\"raw_shape\":").skip(1) {
+            assert!(
+                raw.find("\"return_record_mutable\"").unwrap() < raw.find("\"return_ty\"").unwrap()
+            );
+            assert!(raw.find("\"return_ty\"").unwrap() < raw.find("\"return_class\"").unwrap());
+        }
         let mut existing = serde_json::to_value(&points).unwrap();
         let mut added = 0;
         for point in existing.as_array_mut().unwrap() {
             if let Some(raw) = point.get_mut("raw_shape") {
+                assert!(raw.get("return_record_mutable").is_some());
+                raw.as_object_mut().unwrap().remove("return_record_mutable");
                 for arg in raw["args"].as_array_mut().unwrap() {
                     assert_eq!(arg["record_mutable"].as_bool(), Some(true));
                     added += usize::from(
@@ -1457,6 +1500,13 @@ mod tests {
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(path, text).unwrap();
         };
+        put("crates/horizon-mod-api-gen/internals.txt", "");
+        put(
+            "crates/horizon-client/Cargo.toml",
+            "[package]\nname = 'horizon-client'\n",
+        );
+        put("crates/horizon-client/src/lib.rs", "mod game; mod entry;\n");
+        put("crates/horizon-client/src/entry.rs", "");
         put(
             "crates/horizon-client/src/game.rs",
             "mod remote;\nmod nested { mod leaf; }\n#[path = \"elsewhere\"]\nmod moved { mod deep; }\n#[cfg(test)]\nmod probes;\nimpl Game<'_> {\n    fn tick(&mut self) {}\n    pub(super) fn slot(&mut self) -> &mut u8 { todo!() }\n    fn native_tick(&mut self) {}\n    fn new() -> Self { todo!() }\n}\n",

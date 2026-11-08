@@ -101,11 +101,63 @@ thread_local! {
     static HANDLERS: Handlers = RefCell::new(Slots::default());
 }
 
+/// Words in the group's shared state: the std member exports this array as `horizon_group_state`,
+/// zeroed, for every mod of the group to read (one memory, one std, one state). A new word is taken
+/// from the end of this list; the array's length is part of the ABI.
+const GROUP_WORDS: usize = 8;
+const WORD_HANDLERS: usize = 0;
+const WORD_BUDGET: usize = 1;
+
+/// What the mods of one group may hold at once in caches the host asked them to keep, in bytes.
+pub const GROUP_BUDGET_BYTES: usize = 256 << 20;
+
 #[cfg(target_arch = "wasm32")]
 unsafe extern "C" {
-    /// One word in the group's shared std member that points at the group's handler table.
-    #[link_name = "horizon_handler_table"]
-    static HANDLER_TABLE: std::sync::atomic::AtomicUsize;
+    /// The group's shared state, defined by the std member.
+    #[link_name = "horizon_group_state"]
+    static GROUP_STATE: [std::sync::atomic::AtomicUsize; GROUP_WORDS];
+}
+
+#[cfg(not(target_arch = "wasm32"))]
+static GROUP_STATE: [std::sync::atomic::AtomicUsize; GROUP_WORDS] =
+    [const { std::sync::atomic::AtomicUsize::new(0) }; GROUP_WORDS];
+
+/// Takes `bytes` from the group's budget, or answers `false` and takes nothing when that would pass
+/// [`GROUP_BUDGET_BYTES`]. Every member counts against the same budget.
+pub fn group_budget_try_reserve(bytes: usize) -> bool {
+    reserve(group_state(), bytes, GROUP_BUDGET_BYTES)
+}
+
+/// Gives `bytes` back to the group's budget; never below zero.
+pub fn group_budget_release(bytes: usize) {
+    release_budget(group_state(), bytes)
+}
+
+fn group_state() -> &'static [std::sync::atomic::AtomicUsize; GROUP_WORDS] {
+    // SAFETY: the std member defines the array; atomics need no exclusive access.
+    #[cfg(target_arch = "wasm32")]
+    return unsafe { &GROUP_STATE };
+    #[cfg(not(target_arch = "wasm32"))]
+    &GROUP_STATE
+}
+
+fn reserve(
+    state: &[std::sync::atomic::AtomicUsize; GROUP_WORDS],
+    bytes: usize,
+    limit: usize,
+) -> bool {
+    use std::sync::atomic::Ordering::Relaxed;
+    state[WORD_BUDGET]
+        .fetch_update(Relaxed, Relaxed, |used| {
+            used.checked_add(bytes).filter(|total| *total <= limit)
+        })
+        .is_ok()
+}
+
+fn release_budget(state: &[std::sync::atomic::AtomicUsize; GROUP_WORDS], bytes: usize) {
+    use std::sync::atomic::Ordering::Relaxed;
+    let _ =
+        state[WORD_BUDGET].fetch_update(Relaxed, Relaxed, |used| Some(used.saturating_sub(bytes)));
 }
 
 /// Runs `f` on the handlers the game holds for this mod's group. Members of a group share one
@@ -120,9 +172,8 @@ fn with_handlers<R>(f: impl FnOnce(&Handlers) -> R) -> R {
     #[cfg(target_arch = "wasm32")]
     {
         use std::sync::atomic::Ordering::Relaxed;
-        // SAFETY: the std member defines the word, zero until a member makes the table, and a
-        // wasm group runs on one thread.
-        let word = unsafe { &HANDLER_TABLE };
+        // The handler word is zero until a member makes the table; a wasm group runs on one thread.
+        let word = &group_state()[WORD_HANDLERS];
         let mut table = word.load(Relaxed) as *const Handlers;
         if table.is_null() {
             table = Box::into_raw(Box::new(Handlers::default()));
@@ -533,6 +584,33 @@ mod tests {
         fn answer(&self) -> u32 {
             7
         }
+    }
+
+    #[test]
+    fn group_budget_is_one_counter_for_every_member_and_never_overdraws() {
+        use std::sync::atomic::AtomicUsize;
+        let state = [const { AtomicUsize::new(0) }; GROUP_WORDS];
+        // Two members reach the same words, so their reservations add up.
+        assert!(reserve(&state, 60, 100));
+        assert!(reserve(&state, 40, 100));
+        assert!(!reserve(&state, 1, 100), "the limit is exact");
+        assert!(!reserve(&state, usize::MAX, 100), "overflow takes nothing");
+        release_budget(&state, 40);
+        assert!(
+            reserve(&state, 40, 100),
+            "released bytes are available again"
+        );
+        release_budget(&state, 1000);
+        assert_eq!(
+            state[WORD_BUDGET].load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+        assert_eq!(
+            state[WORD_HANDLERS].load(std::sync::atomic::Ordering::Relaxed),
+            0
+        );
+        assert!(group_budget_try_reserve(1));
+        group_budget_release(1);
     }
 
     #[test]

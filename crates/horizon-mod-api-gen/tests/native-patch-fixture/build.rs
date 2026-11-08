@@ -10,6 +10,12 @@ fn main() {
         ("plan_readonly", "Data", false),
         ("plan_shared", "&u32", true),
         ("plan_ref", "&mut u32", true),
+        ("plan_ref_data", "&mut Data", true),
+        (
+            "plan_complex",
+            "(Box<Option<[u32; 2]>>, std::collections::VecDeque<u32>)",
+            true,
+        ),
     ] {
         let name = quote::format_ident!("{name}");
         let ty: syn::Type = syn::parse_str(ty).unwrap();
@@ -27,6 +33,7 @@ fn main() {
         .unwrap();
         let native_ty = match name.to_string().as_str() {
             "plan_data" | "plan_readonly" => quote!(model::Data),
+            "plan_ref_data" => quote!(&mut model::Data),
             _ => quote!(#ty),
         };
         funcs.push(quote!(fn #name<'a>(value: &'a mut #native_ty, tree: &mod_points::native_patch::PatchTree<'_>, plan: &mut mod_api::wire::PatchPlan<'a>) -> Result<(), mod_api::wire::WireError> { #body Ok(()) }));

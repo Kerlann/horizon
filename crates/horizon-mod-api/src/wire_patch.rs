@@ -15,6 +15,27 @@ pub struct RecordPatch {
     bytes: usize,
 }
 impl RecordPatch {
+    /// Add a pre-encoded ordinary Wire value, preserving the patch if its limits are exceeded.
+    /// The receiving schema validates its type, field id and write permission.
+    pub fn set_encoded(&mut self, field: u32, value: &[u8]) -> Result<(), WireError> {
+        let position = self.cells.binary_search_by_key(&field, |cell| cell.0);
+        if position.is_err() && self.cells.len() == MAX_CELLS {
+            return Err(WireError::Length);
+        }
+        let previous = position.as_ref().ok().map_or(0, |&i| self.cells[i].1.len());
+        let remaining = MAX_VALUES - (self.bytes - previous);
+        if value.len() > remaining {
+            return Err(WireError::Length);
+        }
+        let value = value.to_vec();
+        self.bytes = self.bytes - previous + value.len();
+        match position {
+            Ok(i) => self.cells[i].1 = value,
+            Err(i) => self.cells.insert(i, (field, value)),
+        }
+        Ok(())
+    }
+
     /// Iterate over source-local node identifiers and their ordinary Wire values.
     pub fn iter(&self) -> impl Iterator<Item = (u32, &[u8])> {
         self.cells.iter().map(|(id, bytes)| (*id, bytes.as_slice()))

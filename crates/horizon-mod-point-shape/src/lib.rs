@@ -768,10 +768,11 @@ impl Shape {
         } else {
             receiver
         };
+        let return_mut = return_mutability(&sig.output);
         let value = match &sig.output {
             syn::ReturnType::Type(_, ty) => {
                 let ty = concrete(ty);
-                quote!(&'r mut #ty)
+                quote!(&'r #return_mut #ty)
             }
             syn::ReturnType::Default => quote!(),
         };
@@ -796,6 +797,15 @@ pub enum RawOutcome {
 // and the outcome. Keep the emitted reference and the catalog flag on this one policy.
 fn record_mutability() -> Option<syn::token::Mut> {
     Some(Default::default())
+}
+
+// Return listeners receive a mutable slot for every explicit return type. Unlike the head
+// outcome (absent for borrowed returns), this includes reference-valued slots.
+fn return_mutability(output: &syn::ReturnType) -> Option<syn::token::Mut> {
+    match output {
+        syn::ReturnType::Type(..) => Some(Default::default()),
+        syn::ReturnType::Default => None,
+    }
 }
 
 /// One field of a raw record: a parameter, by its binding, or `arg<i>` for a pattern.
@@ -836,6 +846,9 @@ pub struct RawShape {
     /// Mutability of the record's cancel/result field, absent when there is no outcome field.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub outcome_record_mutable: Option<bool>,
+    /// Whether the native return listener receives a mutable outcome slot.
+    /// Consumers must still forbid reference retargeting and writes through shared pointees.
+    pub return_record_mutable: bool,
     pub return_ty: String,
     pub return_class: &'static str,
 }
@@ -858,6 +871,7 @@ pub struct RawArg {
     pub class: &'static str,
 }
 
+/// `return_record_mutable` describes the return alias slot, separately from the head outcome.
 /// Describe the raw listener contract, not the API-filtered arguments. Call only for raw-able
 /// signatures. Mutable references permit pointee write-back; moving a value does not.
 /// Callable syntax is a callback, including FnOnce: syntax alone cannot prove a continuation.
@@ -929,6 +943,7 @@ pub fn raw_shape(shape: &Shape, sig: &syn::Signature, owner: Option<&Type>) -> R
         },
         outcome_record_mutable: (!matches!(shape.raw_outcome(sig), RawOutcome::None))
             .then(|| record_mutability().is_some()),
+        return_record_mutable: return_mutability(&sig.output).is_some(),
         return_ty: match &sig.output {
             syn::ReturnType::Default => "()".into(),
             syn::ReturnType::Type(_, ty) => spelling(ty),
@@ -944,6 +959,44 @@ pub fn raw_shape(shape: &Shape, sig: &syn::Signature, owner: Option<&Type>) -> R
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn return_mutability_matches_native_alias() {
+        for (sig, head, expected) in [
+            (syn::parse_quote!(fn f() -> u32), Some(true), true),
+            (syn::parse_quote!(fn f() -> &u32), None, true),
+            (syn::parse_quote!(fn f() -> &mut u32), None, true),
+            (syn::parse_quote!(fn f()), Some(true), false),
+            (syn::parse_quote!(fn f() -> Result<(), E>), Some(true), true),
+        ] {
+            let shape = shape(quote!(raw), &sig).unwrap();
+            let metadata = raw_shape(&shape, &sig, None);
+            assert_eq!(metadata.return_record_mutable, expected);
+            assert_eq!(metadata.outcome_record_mutable, head);
+            let file: syn::File = syn::parse2(shape.raw_items(&sig, None, None)).unwrap();
+            let alias = file
+                .items
+                .iter()
+                .find_map(|item| match item {
+                    syn::Item::Type(alias) if alias.ident == shape.raw_return_listener() => {
+                        Some(alias)
+                    }
+                    _ => None,
+                })
+                .unwrap();
+            let Type::BareFn(listener) = &*alias.ty else {
+                panic!("not a listener")
+            };
+            assert_eq!(listener.inputs.len(), usize::from(expected));
+            let mutable = listener.inputs.first().is_some_and(|arg| {
+                let Type::Reference(reference) = &arg.ty else {
+                    panic!("not a slot")
+                };
+                reference.mutability.is_some()
+            });
+            assert_eq!(mutable, metadata.return_record_mutable);
+        }
+    }
 
     #[test]
     fn record_mutability_matches_native_record() {

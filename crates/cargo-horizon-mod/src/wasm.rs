@@ -200,7 +200,7 @@ fn std_member(target_dir: &Path, toolchain: &Toolchain) -> Result<Vec<u8>, Strin
     .map_err(|e| e.to_string())?;
     std::fs::write(
         dir.join("src/lib.rs"),
-        "// The group's one std: linked whole and exported. The word is the group's one handler\n// table, which the mods of the group make on first use (`horizon_mod_api::wire::guest`).\n#[unsafe(no_mangle)]\npub static horizon_handler_table: core::sync::atomic::AtomicUsize =\n    core::sync::atomic::AtomicUsize::new(0);\n",
+        "// The group's one std: linked whole and exported. The array is the group's shared state: word 0\n// points at its handler table, word 1 counts its cache budget (`horizon_mod_api::wire::guest`).\n#[unsafe(no_mangle)]\npub static horizon_group_state: [core::sync::atomic::AtomicUsize; 8] =\n    [const { core::sync::atomic::AtomicUsize::new(0) }; 8];\n",
     )
     .map_err(|e| e.to_string())?;
     let mut command = cargo_command("rustc", "std", &dir, target_dir, toolchain)?;
