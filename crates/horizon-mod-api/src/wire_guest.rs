@@ -25,10 +25,41 @@ fn hooks() -> &'static dyn crate::Hooks {
     &**HOOKS.get_or_init(__horizon_mod_hooks)
 }
 
+#[derive(Clone, Copy)]
+struct MemoKey {
+    import: u32,
+    len: usize,
+    args: [u8; 64],
+}
+impl PartialEq for MemoKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.import == other.import && self.args[..self.len] == other.args[..other.len]
+    }
+}
+struct Memo {
+    key: MemoKey,
+    len: usize,
+    reply: [u8; 512],
+}
+fn memo_key(import: u32, args: &[u8]) -> Option<MemoKey> {
+    if args.len() > 64 {
+        return None;
+    }
+    let mut key = MemoKey {
+        import,
+        len: args.len(),
+        args: [0; 64],
+    };
+    key.args[..args.len()].copy_from_slice(args);
+    Some(key)
+}
+
 /// What one call of the mod needs: where its borrowed returns live, until it returns.
 #[derive(Default)]
 struct Keep {
     held: Vec<(*mut u8, unsafe fn(*mut u8))>,
+    // None for the native harness's unscoped borrow keeper: only run() starts a memo scope.
+    memo: Option<Vec<Memo>>,
 }
 
 impl Keep {
@@ -153,9 +184,27 @@ struct Runtime {
     #[cfg(feature = "wire-pool-profile")]
     pool_counts: [u64; 5], // kept, dropped (full), dropped (large), reply drops, exports
     strings: StaticStrings,
+    memo_spare: Vec<Vec<Memo>>,
 }
 
 impl Runtime {
+    fn start_keep(&mut self) {
+        let memo = self.memo_spare.pop().unwrap_or_default();
+        self.keeps.push(Keep {
+            memo: Some(memo),
+            held: Vec::new(),
+        });
+    }
+    fn finish_keep(&mut self) -> Option<Keep> {
+        let mut keep = self.keeps.pop();
+        if let Some(mut memo) = keep.as_mut().and_then(|keep| keep.memo.take()) {
+            memo.clear();
+            if self.memo_spare.len() < 64 {
+                self.memo_spare.push(memo);
+            }
+        }
+        keep
+    }
     fn recycle(&mut self, buffer: Vec<u8>) {
         // Retain buffers for bounded call nesting, not the history of all calls. Large
         // arguments remain allowed, but their storage must not stay pinned in the pool.
@@ -396,6 +445,19 @@ pub fn diagnostic_phase(id: u32, phase: u32) {
 
 /// Calls the game's import `id` with `args` and returns its answer.
 pub fn host(id: u32, args: Writer) -> Reply {
+    // Unknown imports may mutate context even through &self (settings do).
+    RUNTIME.with(|rt| {
+        for keep in &mut rt.borrow_mut().keeps {
+            if let Some(memo) = &mut keep.memo {
+                memo.clear();
+            }
+        }
+    });
+    host_preserving(id, args)
+}
+
+// Only generated imports whose contract preserves the current dimension use this path.
+fn host_preserving(id: u32, args: Writer) -> Reply {
     let mut out = RUNTIME
         .with(|rt| rt.borrow_mut().spare.pop())
         .unwrap_or_default();
@@ -404,6 +466,60 @@ pub fn host(id: u32, args: Writer) -> Reply {
     transport::call(id, args.bytes(), &mut out);
     RUNTIME.with(|rt| rt.borrow_mut().recycle(args.into_bytes()));
     Reply(out)
+}
+
+// Memoize checked reply bytes, never an unvalidated result or a borrow into a pooled buffer.
+// Bounded keys/results merely miss; spare vectors retain capacity, not values across root calls.
+fn memoized<T>(
+    id: u32,
+    key: Option<MemoKey>,
+    args: Writer,
+    decode: impl FnOnce(&Reply) -> Result<T, WireError>,
+) -> Result<T, WireError> {
+    let key = key.filter(|_| args.error().is_none());
+    let mut args = Some(args);
+    let cached = key.and_then(|key| {
+        RUNTIME.with(|rt| {
+            let rt = rt.borrow();
+            let entry = rt
+                .keeps
+                .last()?
+                .memo
+                .as_ref()?
+                .iter()
+                .find(|entry| entry.key == key)?;
+            let mut bytes = args
+                .take()
+                .expect("memo hit owns the argument buffer")
+                .into_bytes();
+            bytes.clear();
+            bytes.extend_from_slice(&entry.reply[..entry.len]);
+            Some(Reply(bytes))
+        })
+    });
+    if let Some(reply) = cached {
+        return decode(&reply);
+    }
+    let reply = host_preserving(id, args.expect("memo miss retains its argument buffer"));
+    let value = decode(&reply)?;
+    if let Some(key) = key.filter(|_| reply.0.len() <= 512) {
+        RUNTIME.with(|rt| {
+            let mut rt = rt.borrow_mut();
+            let Some(memo) = rt.keeps.last_mut().and_then(|keep| keep.memo.as_mut()) else {
+                return;
+            };
+            if memo.len() < 4 {
+                let mut entry = Memo {
+                    key,
+                    len: reply.0.len(),
+                    reply: [0; 512],
+                };
+                entry.reply[..entry.len].copy_from_slice(&reply.0);
+                memo.push(entry);
+            }
+        });
+    }
+    Ok(value)
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -615,7 +731,7 @@ pub fn run(id: u32) -> (*const u8, u32) {
     let (input, depth, mut reply) = RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         let depth = rt.keeps.len();
-        rt.keeps.push(Keep::default());
+        rt.start_keep();
         if rt.replies.len() <= depth {
             rt.replies.push(Writer::new());
         }
@@ -648,7 +764,7 @@ pub fn run(id: u32) -> (*const u8, u32) {
     RUNTIME.with(|rt| {
         let mut rt = rt.borrow_mut();
         // The borrows of this call end with it, newest first, outside the runtime's borrow.
-        let keep = rt.keeps.pop();
+        let keep = rt.finish_keep();
         rt.replies[depth] = reply;
         rt.recycle(input);
         drop(rt);
@@ -721,6 +837,146 @@ mod tests {
         fn answer(&self) -> u32 {
             7
         }
+    }
+
+    fn open_memo_scope() {
+        RUNTIME.with(|rt| rt.borrow_mut().start_keep());
+    }
+    fn close_memo_scope() {
+        drop(RUNTIME.with(|rt| rt.borrow_mut().finish_keep()));
+    }
+    fn memo_request(id: u32, bytes: &[u8]) -> Result<u32, WireError> {
+        let mut args = begin();
+        args.put_bytes(bytes);
+        memoized(id, memo_key(id, bytes), args, Reply::take::<u32>)
+    }
+
+    #[test]
+    fn memo_scopes_key_arguments_and_invalidate_ancestors_without_crossing_roots() {
+        let calls = std::rc::Rc::new(std::cell::Cell::new(0u32));
+        let count = calls.clone();
+        set_transport(Some(std::rc::Rc::new(move |_, _| {
+            count.set(count.get() + 1);
+            count.get().to_le_bytes().to_vec()
+        })));
+        open_memo_scope();
+        assert_eq!(memo_request(7, &[1]).unwrap(), 1);
+        assert_eq!(memo_request(7, &[1]).unwrap(), 1);
+        assert_eq!(memo_request(8, &[1]).unwrap(), 2);
+        assert_eq!(memo_request(7, &[2]).unwrap(), 3);
+        open_memo_scope();
+        assert_eq!(memo_request(7, &[1]).unwrap(), 4);
+        drop(host(999, begin())); // Unknown import may mutate the outer context too.
+        assert_eq!(memo_request(7, &[1]).unwrap(), 6);
+        close_memo_scope();
+        assert_eq!(memo_request(7, &[1]).unwrap(), 7);
+        close_memo_scope();
+        open_memo_scope(); // Reuses the vector, never its old replies.
+        assert_eq!(memo_request(7, &[1]).unwrap(), 8);
+        close_memo_scope();
+        // A native harness borrow keeper is not a root scope.
+        unsafe {
+            assert_eq!(*kept(3u32), 3);
+        }
+        assert_eq!(memo_request(7, &[1]).unwrap(), 9);
+        assert_eq!(memo_request(7, &[1]).unwrap(), 10);
+        set_transport(None);
+    }
+
+    #[test]
+    fn memo_capacity_and_invalid_reply_are_misses_not_transport_failures() {
+        let calls = std::rc::Rc::new(std::cell::Cell::new(0u32));
+        let count = calls.clone();
+        let bad = std::rc::Rc::new(std::cell::Cell::new(true));
+        set_transport(Some(std::rc::Rc::new(move |id, _| {
+            count.set(count.get() + 1);
+            if id == 88 && bad.replace(false) {
+                return vec![0];
+            }
+            if id == 77 {
+                let mut out = Writer::new();
+                out.put(&vec![4u8; 512]);
+                return out.into_bytes();
+            }
+            count.get().to_le_bytes().to_vec()
+        })));
+        open_memo_scope();
+        for id in 0..4 {
+            memo_request(id, &[]).unwrap();
+        }
+        assert_eq!(memo_request(4, &[]).unwrap(), 5);
+        assert_eq!(memo_request(4, &[]).unwrap(), 6);
+        close_memo_scope();
+        open_memo_scope();
+        assert_eq!(memo_request(7, &[1; 65]).unwrap(), 7);
+        assert_eq!(memo_request(7, &[1; 65]).unwrap(), 8);
+        for _ in 0..2 {
+            let value = memoized(77, memo_key(77, &[]), begin(), Reply::take::<Vec<u8>>).unwrap();
+            assert_eq!(value, vec![4; 512]);
+        }
+        assert_eq!(calls.get(), 10);
+        assert!(memo_request(88, &[]).is_err());
+        assert_eq!(memo_request(88, &[]).unwrap(), 12);
+        assert_eq!(memo_request(88, &[]).unwrap(), 12);
+        assert_eq!(calls.get(), 12);
+        close_memo_scope();
+        set_transport(None);
+    }
+
+    #[test]
+    fn dimension_memo_preserves_volatile_getters_but_invalidates_on_settings() {
+        use crate::host::{config::ConfigHost, items::ItemsHost};
+        let dims = std::rc::Rc::new(std::cell::Cell::new(0));
+        let maxes = std::rc::Rc::new(std::cell::Cell::new(0u32));
+        let d = dims.clone();
+        let m = maxes.clone();
+        let dimension_id = std::cell::Cell::new(None);
+        let changed = std::cell::Cell::new(false);
+        set_transport(Some(std::rc::Rc::new(move |id, bytes| {
+            let dim_id = dimension_id.get().unwrap_or_else(|| {
+                dimension_id.set(Some(id));
+                id
+            });
+            let mut out = Writer::new();
+            if id == dim_id {
+                d.set(d.get() + 1);
+                out.put(&1u8);
+                out.put(&u32::from(changed.get()));
+                out.put_str(if changed.get() {
+                    "memo:after"
+                } else {
+                    "memo:before"
+                });
+            } else if bytes.len() == 4 {
+                m.set(m.get() + 1);
+                out.put(&Some(m.get()));
+            } else {
+                changed.set(true);
+            }
+            out.into_bytes()
+        })));
+        let guest = Guest;
+        open_memo_scope();
+        assert_eq!(guest.dimension(), "memo:before");
+        assert_eq!(guest.dimension(), "memo:before"); // Even though the acknowledgement changed.
+        assert_eq!(dims.get(), 1);
+        assert_eq!(guest.max_stack_size(crate::ItemKey(7)), Some(1));
+        assert_eq!(guest.max_stack_size(crate::ItemKey(7)), Some(2));
+        assert_eq!(guest.dimension(), "memo:before");
+        assert_eq!(dims.get(), 1);
+        guest.set_setting("memo", "dimension", "after"); // &self is not purity.
+        assert_eq!(guest.dimension(), "memo:after");
+        assert_eq!(guest.dimension(), "memo:after");
+        assert_eq!(dims.get(), 2);
+        close_memo_scope();
+        open_memo_scope();
+        assert_eq!(guest.dimension(), "memo:after");
+        assert_eq!(dims.get(), 3);
+        close_memo_scope();
+        assert_eq!(guest.dimension(), "memo:after"); // Outside a root, never cache.
+        assert_eq!(guest.dimension(), "memo:after");
+        assert_eq!(dims.get(), 5);
+        set_transport(None);
     }
 
     #[test]
