@@ -14,7 +14,7 @@ fn selected(fixture: &Fixture, id: &str, code: bool, side: &str) -> SelectedPack
         b"\0\x0f\x08dylink.0\x01\x04\0\0\0\0",
         b"\x01\x04\x01\x60\0\0",
         b"\x03\x04\x03\0\0\0",
-        b"\x07\x2e\x03\x0ehorizon_layout\0\0\x0ahorizon_in\0\x01\x0chorizon_hook\0\x02",
+        b"\x07\x31\x03\x0ehorizon_layout\0\0\x0dhorizon_arena\0\x01\x0chorizon_hook\0\x02",
         b"\x0a\x0a\x03\x02\0\x0b\x02\0\x0b\x02\0\x0b",
     ]
     .concat();

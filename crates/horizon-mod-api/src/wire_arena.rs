@@ -13,6 +13,7 @@ pub struct ArenaWriter<'a> {
     sink: &'a mut dyn FnMut(ArenaOp<'_>) -> Result<(), WireError>,
     len: usize,
     error: Option<WireError>,
+    limit: Option<usize>,
 }
 impl<'a> ArenaWriter<'a> {
     pub fn new(sink: &'a mut dyn FnMut(ArenaOp<'_>) -> Result<(), WireError>) -> Self {
@@ -20,6 +21,7 @@ impl<'a> ArenaWriter<'a> {
             sink,
             len: 0,
             error: None,
+            limit: None,
         }
     }
     pub fn put<T: Put + ?Sized>(&mut self, value: &T) {
@@ -39,7 +41,7 @@ impl<'a> ArenaWriter<'a> {
         let Some(end) = self
             .len
             .checked_add(bytes.len())
-            .filter(|n| *n <= u32::MAX as usize)
+            .filter(|n| *n <= self.limit.unwrap_or(u32::MAX as usize))
         else {
             self.fail(WireError::Length);
             return;
@@ -90,7 +92,11 @@ impl<'a> ArenaWriter<'a> {
         if let Err(error) = (self.sink)(ArenaOp::Read(self.len, &mut writer)) {
             self.fail(error);
         } else {
+            if let Some(limit) = self.limit {
+                writer.limit(limit);
+            }
             encode(&mut writer);
+            self.limit = writer.limit;
             match writer.error() {
                 Some(error) => self.fail(error),
                 None => {

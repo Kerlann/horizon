@@ -18,6 +18,7 @@ impl Wire for ObservesBuffer {
         out.put(&(out.bytes().len() as u32));
         let prefix = std::mem::take(out).into_bytes();
         out.put_bytes(&prefix);
+        out.limit(12);
     }
     fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
         input.take_bytes(8)?;
@@ -42,6 +43,8 @@ fn custom_buffer_observation_and_writer_auto_traits_are_unchanged() {
     arena.put(&(9u32, ObservesBuffer));
     assert_eq!(arena.len(), 12);
     assert_eq!(arena.error(), None);
+    arena.put(&1u8);
+    assert_eq!(arena.error(), Some(WireError::Length));
     drop(arena);
     drop(sink);
     assert_eq!(bytes, [9, 0, 0, 0, 42, 0, 0, 0, 8, 0, 0, 0]);

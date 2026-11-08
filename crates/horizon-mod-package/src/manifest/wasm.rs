@@ -200,7 +200,7 @@ impl Wasm {
                     for export in section {
                         let export = export.map_err(|_| WasmError::InvalidMember)?;
                         if export.kind == wasmparser::ExternalKind::Func {
-                            for (index, name) in ["horizon_layout", "horizon_in", "horizon_hook"]
+                            for (index, name) in ["horizon_layout", "horizon_arena", "horizon_hook"]
                                 .iter()
                                 .enumerate()
                             {
@@ -252,7 +252,7 @@ mod tests {
             wat::parse_str(format!("(module {dylink} {imports} {exports})")).unwrap()
         };
         let dylink = r#"(@custom "dylink.0" "\01\04\00\00\00\00")"#;
-        let exports = r#"(func (export "horizon_layout")) (func (export "horizon_in")) (func (export "horizon_hook"))"#;
+        let exports = r#"(func (export "horizon_layout")) (func (export "horizon_arena")) (func (export "horizon_hook"))"#;
         let imports = r#"(import "horizon" "host" (func)) (import "env" "memory" (memory 1))"#;
         let good = module(imports, exports, dylink);
         assert_eq!(section(&good).check(&good), Ok(()));
