@@ -233,6 +233,7 @@ pub(crate) fn retained(file: fs::File) -> io::Result<fs::File> {
     Ok(file)
 }
 
+pub mod cleanup;
 mod filesystem;
 #[cfg(test)]
 mod tests;
