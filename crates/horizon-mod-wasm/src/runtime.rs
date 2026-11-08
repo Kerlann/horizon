@@ -436,6 +436,7 @@ impl WasmMod {
         if self.running.poisoned.load(Ordering::Relaxed) {
             return None;
         }
+        crate::profile::mark(1);
         let key = Arc::as_ptr(&self.running) as usize;
         // A synchronous import can call any provider/handler, not just a named
         // callback trait. Such reentry shares the enclosing call's remaining budget.
@@ -468,6 +469,7 @@ impl WasmMod {
         if self.running.poisoned.load(Ordering::Relaxed) {
             return None;
         }
+        crate::profile::mark(2);
         let mut store = match resumed.as_mut() {
             Some(resumed) => resumed.context(),
             None => {
@@ -480,6 +482,7 @@ impl WasmMod {
                 store.as_context_mut()
             }
         };
+        crate::profile::mark(3);
         let depth = store.data().depth + 1;
         if depth > 64 {
             self.running.poisoned.store(true, Ordering::Relaxed);
@@ -501,7 +504,9 @@ impl WasmMod {
         };
         // SAFETY: FrameScope keeps the active module installed and the group
         // remains exclusively locked/lent until this resource scope is dropped.
+        crate::profile::mark(4);
         let resources = unsafe { crate::boundary::resource_scope(&mut *store.data_mut().cx) };
+        crate::profile::mark(5);
         let mut w = std::mem::take(&mut store.data_mut().inputs[depth]);
         let mut output = std::mem::take(&mut store.data_mut().outputs[depth]);
         let result = (|| -> wasmtime::Result<R> {
@@ -516,11 +521,13 @@ impl WasmMod {
                 }
             }
             w.clear();
+            crate::profile::mark(6);
             if let Some(handler) = handler {
                 w.put(&handler);
             }
             args(&mut w);
             self.invoke(&mut store, id, &w, &mut output)?;
+            crate::profile::mark(12);
             let mut r = Reader::new(&output);
             let value = reply(&mut r)?;
             if !r.rest().is_empty() {
@@ -528,10 +535,17 @@ impl WasmMod {
             }
             Ok(value)
         })();
+        crate::profile::mark(13);
         store.data_mut().inputs[depth] = w;
         store.data_mut().outputs[depth] = output;
+        crate::profile::mark(14);
         drop(resources);
         drop(scope);
+        crate::profile::mark(15);
+        drop(store);
+        drop(resumed);
+        drop(locked);
+        crate::profile::mark(0);
         match result {
             Ok(value) => Some(value),
             Err(e) => {
@@ -548,17 +562,22 @@ impl WasmMod {
         input: &Writer,
         output: &mut Vec<u8>,
     ) -> wasmtime::Result<()> {
+        crate::profile::mark(7);
         if let Some(error) = input.error() {
             return Err(error.into());
         }
         let len = u32::try_from(input.bytes().len())?;
+        crate::profile::mark(8);
         let ptr = self.input.call(&mut *store, len)?;
+        crate::profile::mark(9);
         let memory = store
             .data()
             .memory
             .ok_or_else(|| wasmtime::Error::msg("no memory"))?;
         memory.write(&mut *store, ptr as usize, input.bytes())?;
+        crate::profile::mark(10);
         let result = self.hook.call(&mut *store, id)?;
+        crate::profile::mark(11);
         let ptr = (result >> 32) as usize;
         let len = result as u32;
         if len == u32::MAX {

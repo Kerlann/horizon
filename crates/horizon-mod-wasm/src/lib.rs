@@ -4,6 +4,8 @@
 //! Mods page.
 pub mod link;
 mod points;
+/// Temporary profiling only.
+pub mod profile;
 mod runtime;
 #[allow(
     dead_code,
