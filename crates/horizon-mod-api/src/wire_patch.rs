@@ -15,6 +15,11 @@ pub struct RecordPatch {
     bytes: usize,
 }
 impl RecordPatch {
+    /// Iterate over source-local node identifiers and their ordinary Wire values.
+    pub fn iter(&self) -> impl Iterator<Item = (u32, &[u8])> {
+        self.cells.iter().map(|(id, bytes)| (*id, bytes.as_slice()))
+    }
+
     /// Add or replace a field's encoded value, retaining the previous patch on refusal.
     /// The receiver, not the sender, owns the field id and write permission checks.
     pub fn set<T: Wire>(&mut self, field: u32, value: &T) -> Result<(), WireError> {
@@ -65,6 +70,58 @@ impl Wire for RecordPatch {
                 bytes: MAX_VALUES - remaining,
             })
         })
+    }
+}
+
+/// Prepared, typed assignments for one immediate apply transaction.
+///
+/// Planning allocates one closure per changed destination. Drop the plan on any error;
+/// `commit` must only be called after every root has been validated and planned.
+#[derive(Default)]
+pub struct PatchPlan<'a> {
+    commits: Vec<Box<dyn FnOnce() + 'a>>,
+    error: Option<WireError>,
+}
+impl<'a> PatchPlan<'a> {
+    /// Decode a complete value and retain its assignment without modifying the destination.
+    pub fn prepare<T: 'a>(
+        &mut self,
+        destination: &'a mut T,
+        bytes: &[u8],
+        decode: impl FnOnce(&mut Reader<'_>) -> Result<T, WireError>,
+    ) -> Result<(), WireError> {
+        if let Some(error) = self.error {
+            return Err(error);
+        }
+        let mut reader = Reader::new(bytes);
+        let value = decode(&mut reader).and_then(|value| {
+            if reader.rest().is_empty() {
+                Ok(value)
+            } else {
+                Err(WireError::Trailing)
+            }
+        });
+        match value {
+            Ok(value) => {
+                self.commits.push(Box::new(move || *destination = value));
+                Ok(())
+            }
+            Err(error) => {
+                self.error = Some(error);
+                Err(error)
+            }
+        }
+    }
+
+    /// Apply all prepared assignments, unless any preparation failed.
+    pub fn commit(self) -> Result<(), WireError> {
+        if let Some(error) = self.error {
+            return Err(error);
+        }
+        for commit in self.commits {
+            commit();
+        }
+        Ok(())
     }
 }
 

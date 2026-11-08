@@ -180,7 +180,8 @@ mod tests {
     fn invented_ids_are_stale() {
         let mut slots: Slots<u8> = Slots::default();
         slots.insert_long(0);
-        for raw in [u64::MAX, 1 << 32, 7, 1 << 40 | 1] {
+        // The first slot's live id is generation 1, slot 0 (`1 << 32`); generation 0 is reserved.
+        for raw in [u64::MAX, 0, 2 << 32, 7, 1 << 40 | 1] {
             assert_eq!(slots.get(Id(raw)), Err(Stale));
             assert_eq!(slots.get_mut(Id(raw)), Err(Stale));
         }

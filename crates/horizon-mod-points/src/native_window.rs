@@ -3,27 +3,23 @@ use crate::{
     locators::{Locators, Step},
     snapshot::{Builder, Window},
 };
-use mod_api::{Row, RowError, RowWindow, wire::Put};
+use mod_api::{Row, RowError, wire::Put};
 
 /// A source-local locator table and the common owned-output builder for one window.
 pub struct WindowBuilder<'a> {
     locators: &'a mut Locators,
-    request: RowWindow,
+    window: Window,
     builder: Builder,
     used: usize,
 }
 impl<'a> WindowBuilder<'a> {
-    /// Validate resource limits and resolve the requested locator.
-    pub fn new(
-        locators: &'a mut Locators,
-        request: RowWindow,
-    ) -> Result<(Self, Vec<Step>), RowError> {
-        let window = Window::try_from(request)?;
-        let path = locators.path(request.node)?;
+    /// Resolve the requested locator.
+    pub fn new(locators: &'a mut Locators, window: Window) -> Result<(Self, Vec<Step>), RowError> {
+        let path = locators.path(window.node())?;
         Ok((
             Self {
                 locators,
-                request,
+                window,
                 builder: window.builder(),
                 used: 0,
             },
@@ -32,11 +28,11 @@ impl<'a> WindowBuilder<'a> {
     }
     /// Return the requested node's source-local parent and final step.
     pub fn root_entry(&self) -> Result<(Option<u32>, Step), RowError> {
-        self.locators.entry(self.request.node)
+        self.locators.entry(self.window.node())
     }
     /// Number of rows still available in this window.
     pub fn remaining(&self) -> usize {
-        self.request.rows as usize - self.used
+        self.window.rows() - self.used
     }
     /// Append the requested node.
     pub fn root(
@@ -48,7 +44,7 @@ impl<'a> WindowBuilder<'a> {
     ) -> Result<u32, RowError> {
         let id = self
             .builder
-            .external(self.request.node, parent, field, ty, 0, value)?;
+            .external(self.window.node(), parent, field, ty, 0, value)?;
         self.used += 1;
         Ok(id)
     }

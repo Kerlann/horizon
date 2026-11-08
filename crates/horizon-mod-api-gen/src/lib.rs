@@ -604,9 +604,10 @@ pub mod crossing;
 mod dispatch;
 mod host_param;
 mod index;
-pub mod native_value;
+pub mod native_patch;
 /// Canonical identities for native row layouts.
 pub mod native_schema;
+pub mod native_value;
 /// Generated lazy native row projections.
 pub mod native_window;
 mod wire;

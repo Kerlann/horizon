@@ -22,7 +22,9 @@ pub use resources::{
 };
 #[path = "wire_patch.rs"]
 mod patch;
-pub use patch::{DecodedPatchCell, PatchCell, PatchFields, PatchInput, PatchSet, RecordPatch};
+pub use patch::{
+    DecodedPatchCell, PatchCell, PatchFields, PatchInput, PatchPlan, PatchSet, RecordPatch,
+};
 
 /// The guest's start-up call: its input is the package list.
 pub const INIT: u32 = 0xFFFF_FF00;

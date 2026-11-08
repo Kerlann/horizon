@@ -1233,6 +1233,18 @@ pub fn discover(root: &Path) -> Result<Widened, String> {
     stage(root, true)
 }
 
+/// Read the same original signatures and reachable layouts as staging, without changing files.
+/// Visibility edits are collected but never emitted, so build-time consumers can safely build
+/// a crossing rule over the catalog in a normal source checkout.
+pub fn catalog(root: &Path) -> Result<Vec<Internal>, String> {
+    let path = root.join("crates/horizon-mod-api-gen/internals.txt");
+    let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(collect(root, &[("internals.txt", text)], false)?
+        .entries
+        .into_values()
+        .collect())
+}
+
 fn stage(root: &Path, discovery: bool) -> Result<Widened, String> {
     let path = root.join("crates/horizon-mod-api-gen/internals.txt");
     let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -1246,6 +1258,10 @@ fn widen_with(root: &Path, lists: &[(&str, String)]) -> Result<Widened, String> 
 }
 
 fn widen_mode(root: &Path, lists: &[(&str, String)], discovery: bool) -> Result<Widened, String> {
+    collect(root, lists, discovery)?.finish()
+}
+
+fn collect(root: &Path, lists: &[(&str, String)], discovery: bool) -> Result<Pass, String> {
     let mut pass = Pass {
         discovery,
         ..Pass::default()
@@ -1313,7 +1329,7 @@ fn widen_mode(root: &Path, lists: &[(&str, String)], discovery: bool) -> Result<
                 .or_insert_with(|| (start, "#![allow(deprecated)]\n".into()));
         }
     }
-    pass.finish()
+    Ok(pass)
 }
 
 #[cfg(test)]
@@ -1368,6 +1384,51 @@ mod tests {
         fn drop(&mut self) {
             fs::remove_dir_all(&self.0).unwrap();
         }
+    }
+
+    #[test]
+    fn catalog_is_read_only_and_staging_output_keeps_its_goldens() {
+        fn files(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+            let mut result = BTreeMap::new();
+            for entry in fs::read_dir(root).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    result.extend(files(&path));
+                } else {
+                    let bytes = fs::read(&path).unwrap();
+                    result.insert(path, bytes);
+                }
+            }
+            result
+        }
+        let plain = Fixture::new("fn f() {}\n");
+        plain.put("crates/horizon-mod-api-gen/internals.txt", "");
+        let before = files(&plain.0);
+        let original = catalog(&plain.0).unwrap();
+        assert_eq!(files(&plain.0), before);
+        let widened = widen(&plain.0).unwrap();
+        assert_eq!(plain.game(), "pub fn f() {}\n");
+        assert_eq!(
+            serde_json::to_value(original).unwrap(),
+            serde_json::to_value(widened.entries).unwrap()
+        );
+
+        let diagnostic = Fixture::new("fn f() {}\n");
+        diagnostic.put("crates/horizon-mod-api-gen/internals.txt", "");
+        let original = catalog(&diagnostic.0).unwrap();
+        let discovered = discover(&diagnostic.0).unwrap();
+        assert_eq!(
+            diagnostic.game(),
+            "#[deprecated(note = \"horizon-internal:fn:horizon_client::game::f\")]\npub fn f() {}\n"
+        );
+        assert_eq!(
+            fs::read_to_string(diagnostic.0.join("crates/horizon-client/src/lib.rs")).unwrap(),
+            "#![allow(deprecated)]\nmod game; mod entry;\n"
+        );
+        assert_eq!(
+            serde_json::to_value(original).unwrap(),
+            serde_json::to_value(discovered.entries).unwrap()
+        );
     }
 
     #[test]

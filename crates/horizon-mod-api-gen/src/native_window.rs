@@ -28,7 +28,7 @@ pub fn generate(
             return Err("unimplemented: recursive native projection".into());
         }
         let identity = native_schema::identity(rule, shape, exposure)?;
-        let key = quote!(mod_points::snapshot::key(#identity));
+        let key = quote!(const { mod_points::snapshot::key(#identity) });
         Ok(match shape {
             Shape::Scalar(Scalar::String | Scalar::Str) => {
                 let unit = native_schema::identity(
@@ -36,7 +36,7 @@ pub fn generate(
                     &Shape::Scalar(Scalar::Unsigned("u16")),
                     exposure,
                 )?;
-                quote!(mod_points::native_nodes::Text((#place).as_ref(), #key, mod_points::snapshot::key(#unit)))
+                quote!(mod_points::native_nodes::Text((#place).as_ref(), #key, const { mod_points::snapshot::key(#unit) }))
             }
             Shape::Scalar(Scalar::Signed("isize")) => {
                 return Err("unimplemented: isize has no Wire encoding".into());
@@ -46,7 +46,7 @@ pub fn generate(
             }
             Shape::Ref { to, .. }
             | Shape::Wrapped(Wrapper::Box | Wrapper::Arc | Wrapper::Rc, to) => {
-                return emit(rule, to, quote!(**(#place)), exposure, depth + 1);
+                return emit(rule, to, quote!(*(#place)), exposure, depth + 1);
             }
             Shape::Wrapped(Wrapper::Cow, to) => {
                 return emit(rule, to, quote!(*(#place).as_ref()), exposure, depth + 1);
@@ -77,7 +77,7 @@ pub fn generate(
                         let pair = format!("{identity};pair");
                         quote! {
                             let (__horizon_first, __horizon_second) = (#place).iter().nth(usize::try_from(__horizon_index).map_err(|_| mod_api::RowError::Bounds)?).ok_or(mod_api::RowError::Bounds)?;
-                            __horizon_visit(mod_points::locators::Step::Index(0), 0, &mod_points::native_nodes::Record { key: mod_points::snapshot::key(#pair), count: 2, visit: |__horizon_index, __horizon_visit: &mut mod_points::native_nodes::Visitor<'_>| match __horizon_index {
+                            __horizon_visit(mod_points::locators::Step::Index(0), 0, &mod_points::native_nodes::Record { key: const { mod_points::snapshot::key(#pair) }, count: 2, visit: |__horizon_index, __horizon_visit: &mut mod_points::native_nodes::Visitor<'_>| match __horizon_index {
                                 0 => __horizon_visit(mod_points::locators::Step::Field(0), 0, &#key_child),
                                 1 => __horizon_visit(mod_points::locators::Step::Field(1), 1, &#value_child),
                                 _ => Err(mod_api::RowError::Bounds),
@@ -96,8 +96,8 @@ pub fn generate(
                     let __horizon_tag: u32 = u32::from((#place).is_some());
                     mod_points::native_nodes::Variant { key: #key, tag: __horizon_tag, visit: |__horizon_visit: &mut mod_points::native_nodes::Visitor<'_>| {
                         match &(#place) {
-                            Some(__horizon_some) => __horizon_visit(mod_points::locators::Step::Variant(1), 1, &mod_points::native_nodes::Record { key: mod_points::snapshot::key(#some), count: 1, visit: |__horizon_index, __horizon_visit: &mut mod_points::native_nodes::Visitor<'_>| match __horizon_index { 0 => __horizon_visit(mod_points::locators::Step::Field(0), 0, &#child), _ => Err(mod_api::RowError::Bounds) } }),
-                            None => __horizon_visit(mod_points::locators::Step::Variant(0), 0, &mod_points::native_nodes::Record { key: mod_points::snapshot::key(#none), count: 0, visit: |_, _: &mut mod_points::native_nodes::Visitor<'_>| Err(mod_api::RowError::Bounds) }),
+                            Some(__horizon_some) => __horizon_visit(mod_points::locators::Step::Variant(1), 1, &mod_points::native_nodes::Record { key: const { mod_points::snapshot::key(#some) }, count: 1, visit: |__horizon_index, __horizon_visit: &mut mod_points::native_nodes::Visitor<'_>| match __horizon_index { 0 => __horizon_visit(mod_points::locators::Step::Field(0), 0, &#child), _ => Err(mod_api::RowError::Bounds) } }),
+                            None => __horizon_visit(mod_points::locators::Step::Variant(0), 0, &mod_points::native_nodes::Record { key: const { mod_points::snapshot::key(#none) }, count: 0, visit: |_, _: &mut mod_points::native_nodes::Visitor<'_>| Err(mod_api::RowError::Bounds) }),
                         }
                     } }
                 })
@@ -112,7 +112,7 @@ pub fn generate(
                     arms.push(quote!(#ordinal => __horizon_visit(mod_points::locators::Step::Field(#field), #field, &#child),));
                 }
                 let count = parts.len() as u64;
-                quote!(mod_points::native_nodes::Record { key: #key, count: #count, visit: |__horizon_index, __horizon_visit: &mut mod_points::native_nodes::Visitor<'_>| match __horizon_index { #(#arms)* _ => Err(mod_api::RowError::Bounds) } })
+                quote!(mod_points::native_nodes::Record { key: #key, count: #count, visit: |__horizon_index, __horizon_visit: &mut mod_points::native_nodes::Visitor<'_>| match __horizon_index { #(#arms)* _ if __horizon_index < #count => Ok(()), _ => Err(mod_api::RowError::Bounds) } })
             }
             Shape::Named(path, _) => {
                 let named = rule
@@ -130,6 +130,7 @@ pub fn generate(
                         let name = &variant.ident;
                         let mut bindings = Vec::new();
                         let mut arms = Vec::new();
+                        let mut local = 0u64;
                         for (index, field) in fields
                             .iter()
                             .enumerate()
@@ -138,19 +139,20 @@ pub fn generate(
                             let member = &field.member;
                             let bind = quote::format_ident!("__horizon_field_{index}");
                             bindings.push(quote!(#member: #bind));
+                            let ordinal = local;
+                            local += 1;
                             if !exposure.field(&name_path, Some(tag), index as u32) {
                                 continue;
                             }
                             let child_shape = rule.shape(&named.module, None, field.ty);
                             let child =
                                 emit(rule, &child_shape, quote!(*#bind), exposure, depth + 1)?;
-                            let field_id = index as u32;
-                            let ordinal = arms.len() as u64;
+                            let field_id = ordinal as u32;
                             arms.push(quote!(#ordinal => __horizon_visit(mod_points::locators::Step::Field(#field_id), #field_id, &#child),));
                         }
-                        let count = arms.len() as u64;
+                        let count = local;
                         let variant_key = format!("{identity};variant({tag})");
-                        variants.push(quote!(#path::#name { #(#bindings,)* .. } => __horizon_visit(mod_points::locators::Step::Variant(#tag), #tag, &mod_points::native_nodes::Record { key: mod_points::snapshot::key(#variant_key), count: #count, visit: |__horizon_index, __horizon_visit: &mut mod_points::native_nodes::Visitor<'_>| match __horizon_index { #(#arms)* _ => Err(mod_api::RowError::Bounds) } }),));
+                        variants.push(quote!(#path::#name { #(#bindings,)* .. } => __horizon_visit(mod_points::locators::Step::Variant(#tag), #tag, &mod_points::native_nodes::Record { key: const { mod_points::snapshot::key(#variant_key) }, count: #count, visit: |__horizon_index, __horizon_visit: &mut mod_points::native_nodes::Visitor<'_>| match __horizon_index { #(#arms)* _ if __horizon_index < #count => Ok(()), _ => Err(mod_api::RowError::Bounds) } }),));
                     }
                     let tags = item.variants.iter().enumerate().map(|(i, v)| {
                         let name = &v.ident;
@@ -162,6 +164,7 @@ pub fn generate(
                     );
                 }
                 let mut arms = Vec::new();
+                let declared = rule.fields(path).len() as u64;
                 for (index, field) in rule.fields(path).iter().enumerate() {
                     if !exposure.field(path, None, index as u32) {
                         continue;
@@ -170,11 +173,11 @@ pub fn generate(
                     let shape = rule.shape(&named.module, Some(path), field.ty);
                     let child = emit(rule, &shape, quote!((#place).#member), exposure, depth + 1)?;
                     let field_id = index as u32;
-                    let ordinal = arms.len() as u64;
+                    let ordinal = index as u64;
                     arms.push(quote!(#ordinal => __horizon_visit(mod_points::locators::Step::Field(#field_id), #field_id, &#child),));
                 }
-                let count = arms.len() as u64;
-                quote!(mod_points::native_nodes::Record { key: #key, count: #count, visit: |__horizon_index, __horizon_visit: &mut mod_points::native_nodes::Visitor<'_>| match __horizon_index { #(#arms)* _ => Err(mod_api::RowError::Bounds) } })
+                let count = declared;
+                quote!(mod_points::native_nodes::Record { key: #key, count: #count, visit: |__horizon_index, __horizon_visit: &mut mod_points::native_nodes::Visitor<'_>| match __horizon_index { #(#arms)* _ if __horizon_index < #count => Ok(()), _ => Err(mod_api::RowError::Bounds) } })
             }
             _ => {
                 return Err(format!(
