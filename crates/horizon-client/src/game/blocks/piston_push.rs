@@ -561,16 +561,14 @@ impl Game<'_> {
                 self.mobs[i].on_ground = limited.y < 0.0 && limited.y != resolved.y;
             }
         }
-        // `Entity.move(MoverType.PISTON, …)` restitution, which runs whether or
-        // not the step is applied: so a primed TNT in a chunk that does not tick
-        // entities still loses its velocity into walls and ceilings and
-        // bounces on slime (#12022).
-        self.restitute_piston(target, limited, resolved);
         if resolved.length_squared() > 1.0e-7
             || limited.length_squared() - resolved.length_squared() < 1.0e-7
         {
             self.apply_push(target, resolved);
         }
+        // Restitution reads the block below the final position, as Entity.move
+        // does. Run it even when the collision prevented any position update.
+        self.restitute_piston(target, limited, resolved);
         if let Some((i, from, ..)) = tnt {
             self.finish_tnt_piston_move(i, from, resolved);
         }
