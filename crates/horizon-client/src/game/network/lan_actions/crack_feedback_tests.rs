@@ -208,12 +208,10 @@ fn crack_packets_follow_start_clock_and_strict_observer_radius() {
     game.lan_guest_packet(1, action(0));
     assert_eq!(cracks(&receivers[1]), [(1, pos, 0)]);
     let start = game.lan.as_ref().unwrap().play[&1].dig_start;
-    game.lan
-        .as_mut()
-        .unwrap()
-        .hub
-        .guests
-        .update(0, |g| g.game_mode = 2);
+    game.lan.as_mut().unwrap().hub.guests.update(0, |g| {
+        g.game_mode = 2;
+        g.abilities.update_for_mode(2);
+    });
     let other = [1, 100, 0];
     game.world.set(other[0], other[1], other[2], stone).unwrap();
     game.lan_guest_packet(
@@ -237,20 +235,16 @@ fn crack_packets_follow_start_clock_and_strict_observer_radius() {
     assert_eq!(cracks(&receivers[1]), [(1, pos, 255)]);
     game.lan_guest_packet(1, action(0));
     assert!(cracks(&receivers[1]).is_empty(), "fresh restricted START");
-    game.lan
-        .as_mut()
-        .unwrap()
-        .hub
-        .guests
-        .update(0, |g| g.game_mode = 1);
+    game.lan.as_mut().unwrap().hub.guests.update(0, |g| {
+        g.game_mode = 1;
+        g.abilities.update_for_mode(1);
+    });
     game.lan_guest_packet(1, action(0));
     assert!(cracks(&receivers[1]).is_empty(), "creative START");
-    game.lan
-        .as_mut()
-        .unwrap()
-        .hub
-        .guests
-        .update(0, |g| g.game_mode = 0);
+    game.lan.as_mut().unwrap().hub.guests.update(0, |g| {
+        g.game_mode = 0;
+        g.abilities.update_for_mode(0);
+    });
     let torch = BlockStateId(
         game.res
             .facts()
