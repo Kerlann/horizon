@@ -4,7 +4,7 @@
 //! each file's removal. A late Cargo either blocks deletion or starts after it has completed.
 //! Only snapshotted files are selected. Same-user swaps inside caches are not a security boundary.
 pub use crate::native_cache::Error;
-use crate::native_cache::{locked, Locked};
+use crate::native_cache::{locked, LockMode, Locked};
 use cap_fs_ext::{DirExt, FollowSymlinks, OpenOptionsFollowExt};
 use cap_std::fs::{Dir, OpenOptions};
 use std::path::{Path, PathBuf};
@@ -53,7 +53,10 @@ fn guard(directory: &Dir, relative: &Path) -> Result<Vec<Locked>, Error> {
         (LOCKS[2], packages),
     ] {
         if needed {
-            locks.push(locked(directory.open_with(name, &options)?.into_std())?);
+            locks.push(locked(
+                directory.open_with(name, &options)?.into_std(),
+                LockMode::Exclusive,
+            )?);
         }
     }
     Ok(locks)
