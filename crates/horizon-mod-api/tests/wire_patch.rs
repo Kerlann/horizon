@@ -108,7 +108,6 @@ fn native_decoder_plans_before_commit_and_rejects_trailing_data() {
         3,
     );
     assert!(fields.apply(&bytes(&patch)).is_err());
-    drop(fields);
     assert_eq!((first, &native), (7, &Native(8, false)));
     patch.set(2, &(42u32, true, 0u8)).unwrap();
     let mut fields = PatchFields::new(
@@ -119,7 +118,6 @@ fn native_decoder_plans_before_commit_and_rejects_trailing_data() {
         3,
     );
     assert_eq!(fields.apply(&bytes(&patch)), Err(WireError::Trailing));
-    drop(fields);
     assert_eq!((first, &native), (7, &Native(8, false)));
     patch.set(2, &(42u32, true)).unwrap();
     PatchFields::new(
