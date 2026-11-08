@@ -1168,3 +1168,57 @@ fn guest_damage_unwind_restores_and_next_same_connection_hit_lands() {
         })
     });
 }
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn guest_message_capture_repro_after_real_native_panic() {
+    let calls = Arc::new(AtomicUsize::new(0));
+    let mods: mod_api::Mods = vec![mod_api::ModEntry::new(
+        "capture_repro",
+        Box::new(PanicOnce(calls.clone())),
+    )]
+    .into();
+    mod_api::testing::with_mods(mods, || {
+        with_guests(|game| {
+            for conn in [12, 13] {
+                game.lan
+                    .as_mut()
+                    .unwrap()
+                    .hub
+                    .update_guest(conn, |guest| {
+                        guest.loaded = true;
+                        guest.load_timeout = 0;
+                    })
+                    .unwrap();
+                game.as_guest(conn, |g| {
+                    use horizon_client::command::args::GameMode;
+                    g.set_game_mode(GameMode::Creative);
+                    g.set_game_mode(GameMode::Survival);
+                })
+                .unwrap();
+            }
+            assert!(game.chat_capture.is_none());
+            let outer = game.lan_acting;
+            let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                game.as_guest_messaged(13, |g| {
+                    g.pvp_land(
+                        super::lan_pvp::Victim::Guest(12),
+                        &super::lan_pvp::Strike::test_blow(13),
+                    )
+                })
+            }))
+            .unwrap_err();
+            assert_eq!(panic.downcast_ref::<u32>(), Some(&73129));
+            assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+            assert!(
+                game.lan_guest_swaps.is_empty(),
+                "guest swap fix must have run"
+            );
+            assert_eq!(game.lan_acting, outer);
+            assert!(
+                game.chat_capture.is_none(),
+                "real native panic leaked the guest message capture"
+            );
+        });
+    });
+}
