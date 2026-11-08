@@ -13,6 +13,7 @@ mod generated {
     use super::super::*;
     include!(concat!(env!("OUT_DIR"), "/wire_guest_generated.rs"));
 }
+// hidden: integration tests resolve generated dispatch IDs without hardcoded numbers
 #[cfg(feature = "testing")]
 #[doc(hidden)]
 pub use generated::export_id as testing_export_id;
@@ -168,6 +169,7 @@ impl Drop for DecodedCache {
     }
 }
 
+// hidden: generated argument lifetime plumbing, not a mod-facing lease API
 /// Exclusive decoded argument storage. A nested call cannot lease the same allocation.
 #[doc(hidden)]
 pub struct Decoded<T: Wire + 'static>(Option<DecodeStorage<T>>);
@@ -229,6 +231,7 @@ impl<T: Wire + 'static> Drop for Decoded<T> {
     }
 }
 
+// hidden: generated guest dispatch owns this pooled decoding boundary
 /// Decode completely before handing the lease to a listener. Failed partial updates stay private.
 #[doc(hidden)]
 pub fn decode<T: Wire + 'static>(input: &mut Reader<'_>) -> Result<Decoded<T>, WireError> {

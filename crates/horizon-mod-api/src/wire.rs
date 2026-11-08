@@ -564,14 +564,17 @@ pub trait Wire: Sized {
         self.put(out);
     }
     fn take(input: &mut Reader<'_>) -> Result<Self, WireError>;
+    // hidden: internal cache accounting, not a mod-facing value contract
     /// Whether all storage is inline; unknown codecs use the conservative default.
     #[doc(hidden)]
     const INLINE_ONLY: bool = false;
+    // hidden: internal cache admission and budget accounting
     /// Retained heap storage, including this value; unknown implementations are not cached.
     #[doc(hidden)]
     fn retained_bytes(&self) -> Option<usize> {
         None
     }
+    // hidden: generated guest arguments use this exclusive-storage decoding path
     /// Decode into exclusive owned storage. On failure the value must not be exposed.
     #[doc(hidden)]
     fn take_into(&mut self, input: &mut Reader<'_>) -> Result<(), WireError> {
