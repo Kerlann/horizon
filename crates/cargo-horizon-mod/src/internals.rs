@@ -8,7 +8,9 @@ use horizon_mod_package::{
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
+    io::Write,
     path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
 };
 use toml_edit::{DocumentMut, Item, Value};
 
@@ -220,23 +222,68 @@ fn sync(dir: &Path, repo: Option<&Path>) -> Result<(), String> {
     Ok(())
 }
 
+/// Manifest edits follow a user-managed symlink; slot publishing replaces its output link.
+pub(crate) fn atomic_write_manifest(path: &Path, contents: String) -> Result<(), String> {
+    let referent = fs::canonicalize(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    atomic_write(&referent, contents)
+}
+
+/// Attempts at an unused temporary name before `atomic_write` gives up.
+const TEMPORARY_ATTEMPTS: u64 = 16;
+
+/// Replaces `path` with `contents` through a temporary file in the same directory.
+///
+/// The temporary file is created with `create_new`, so a file or symlink planted at its name
+/// makes that name be skipped instead of followed. The rename replaces `path` itself, even
+/// when `path` is a symlink, and the existing file's permissions carry over.
 pub(crate) fn atomic_write(path: &Path, contents: String) -> Result<(), String> {
+    static NEXT_TEMPORARY: AtomicU64 = AtomicU64::new(0);
     let permissions = match fs::metadata(path) {
         Ok(metadata) => Some(metadata.permissions()),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
         Err(e) => return Err(format!("{}: {e}", path.display())),
     };
-    let temporary = path.with_extension("toml.sync");
-    fs::write(&temporary, contents)
+    let first = NEXT_TEMPORARY.fetch_add(TEMPORARY_ATTEMPTS, Ordering::Relaxed);
+    let (temporary, mut file) =
+        create_temporary(path, first).map_err(|e| format!("{}: {e}", path.display()))?;
+    let written = file
+        .write_all(contents.as_bytes())
         .and_then(|()| match permissions {
-            Some(permissions) => fs::set_permissions(&temporary, permissions),
+            Some(permissions) => file.set_permissions(permissions),
             None => Ok(()),
-        })
+        });
+    drop(file);
+    written
         .and_then(|()| fs::rename(&temporary, path))
         .map_err(|e| {
             let _ = fs::remove_file(&temporary);
             format!("{}: {e}", path.display())
         })
+}
+
+/// The `number`th candidate temporary name for `path`, in the same directory.
+fn temporary_path(path: &Path, number: u64) -> PathBuf {
+    let name = path.file_name().unwrap_or_default().to_string_lossy();
+    path.with_file_name(format!(".{name}.{}.{number}.tmp", std::process::id()))
+}
+
+/// Creates the first unused temporary file among `TEMPORARY_ATTEMPTS` names counted from `first`.
+fn create_temporary(path: &Path, first: u64) -> std::io::Result<(PathBuf, fs::File)> {
+    for number in first..first + TEMPORARY_ATTEMPTS {
+        let temporary = temporary_path(path, number);
+        match fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+        {
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => {}
+            created => return created.map(|file| (temporary, file)),
+        }
+    }
+    Err(std::io::Error::new(
+        std::io::ErrorKind::AlreadyExists,
+        "no unused temporary file name",
+    ))
 }
 
 fn replace(text: &str, entries: &[ListedInternal]) -> Result<(String, String), String> {
@@ -460,6 +507,123 @@ pub fn load(dir: &Path, revision: &str) -> Result<Vec<ListedInternal>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A fresh directory under the system temp dir, removed on drop (also when a test panics).
+    struct Scratch(PathBuf);
+
+    impl Scratch {
+        fn new(name: &str) -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let unique = format!(
+                "horizon-mod-atomic-{name}-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            );
+            let dir = std::env::temp_dir().join(unique);
+            // `create_dir` fails on an existing path, a symlink included.
+            fs::create_dir(&dir).unwrap();
+            Self(dir)
+        }
+    }
+
+    impl std::ops::Deref for Scratch {
+        type Target = Path;
+
+        fn deref(&self) -> &Path {
+            &self.0
+        }
+    }
+
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn atomic_write_replaces_contents_and_leaves_no_temporary_file() {
+        let dir = Scratch::new("replace");
+        let path = dir.join("horizon-mod.toml");
+        atomic_write(&path, "first".into()).unwrap();
+        atomic_write(&path, "second".into()).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "second");
+        assert_eq!(fs::read_dir(&*dir).unwrap().count(), 1);
+    }
+
+    #[test]
+    fn atomic_write_ignores_files_planted_at_the_old_temporary_name() {
+        let dir = Scratch::new("planted");
+        let path = dir.join("horizon-mod.toml");
+        let planted = dir.join("horizon-mod.toml.sync");
+        fs::write(&planted, "planted").unwrap();
+        atomic_write(&path, "written".into()).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "written");
+        assert_eq!(fs::read_to_string(&planted).unwrap(), "planted");
+    }
+
+    #[test]
+    fn create_temporary_skips_names_that_already_exist() {
+        let dir = Scratch::new("skip");
+        let path = dir.join("horizon-mod.toml");
+        fs::write(temporary_path(&path, 7), "taken").unwrap();
+        let (temporary, file) = create_temporary(&path, 7).unwrap();
+        drop(file);
+        assert_eq!(temporary, temporary_path(&path, 8));
+        assert_eq!(
+            fs::read_to_string(temporary_path(&path, 7)).unwrap(),
+            "taken"
+        );
+    }
+
+    #[test]
+    fn create_temporary_gives_up_when_every_name_is_taken() {
+        let dir = Scratch::new("exhausted");
+        let path = dir.join("horizon-mod.toml");
+        for number in 0..TEMPORARY_ATTEMPTS {
+            fs::write(temporary_path(&path, number), "taken").unwrap();
+        }
+        let error = create_temporary(&path, 0).unwrap_err();
+        assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+    }
+
+    #[test]
+    fn atomic_write_removes_its_temporary_file_when_the_rename_fails() {
+        let dir = Scratch::new("rename-fails");
+        let path = dir.join("horizon-mod.toml");
+        // A non-empty directory at `path` cannot be replaced by a file.
+        fs::create_dir(&path).unwrap();
+        fs::write(path.join("keep"), "keep").unwrap();
+        assert!(atomic_write(&path, "x".into()).is_err());
+        assert!(fs::read_dir(&*dir).unwrap().all(|entry| {
+            !entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".tmp")
+        }));
+        assert_eq!(fs::read_to_string(path.join("keep")).unwrap(), "keep");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn atomic_write_does_not_follow_symlinks_at_temporary_names() {
+        let dir = Scratch::new("symlink");
+        let path = dir.join("horizon-mod.toml");
+        let referent = dir.join("referent");
+        let dangling = dir.join("dangling");
+        fs::write(&referent, "keep").unwrap();
+        // The old fixed name, and a name `create_temporary` tries first.
+        std::os::unix::fs::symlink(&referent, dir.join("horizon-mod.toml.sync")).unwrap();
+        std::os::unix::fs::symlink(&referent, temporary_path(&path, 3)).unwrap();
+        std::os::unix::fs::symlink(&dangling, temporary_path(&path, 4)).unwrap();
+        let (temporary, file) = create_temporary(&path, 3).unwrap();
+        drop(file);
+        assert_eq!(temporary, temporary_path(&path, 5));
+        atomic_write(&path, "written".into()).unwrap();
+        assert_eq!(fs::read_to_string(&path).unwrap(), "written");
+        assert_eq!(fs::read_to_string(&referent).unwrap(), "keep");
+        assert!(!dangling.exists());
+    }
 
     #[test]
     fn sync_replaces_declarations_and_preserves_retained_formatting_for_both_array_forms() {

@@ -55,6 +55,7 @@ impl Game<'_> {
                 Some(at),
                 "minecraft:mob_attack",
                 Some(Some(id)),
+                false,
             ) {
                 continue;
             }

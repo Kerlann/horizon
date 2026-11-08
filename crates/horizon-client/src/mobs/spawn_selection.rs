@@ -1418,7 +1418,7 @@ fn valid_position_for_type<L: NaturalLevel, R: RandomSource>(
     if hooked && !in_list() {
         return false;
     }
-    if !spawn_rules::is_spawn_position_ok(species, l, x, y, z) {
+    if !spawn_rules::is_spawn_position_ok(&entry.entity, species, l, x, y, z) {
         return false;
     }
     if !hooked && !listed && !in_list() {
@@ -1491,7 +1491,14 @@ pub fn spawn_mobs_for_chunk_generation<L: NaturalLevel, R: RandomSource, Q: Rand
                 };
                 let pos = top_non_colliding(l, &entry.entity, x, z);
                 trace(GenEvent::Column(x, z));
-                if spawn_rules::is_spawn_position_ok(species, l, pos[0], pos[1], pos[2]) {
+                if spawn_rules::is_spawn_position_ok(
+                    &entry.entity,
+                    species,
+                    l,
+                    pos[0],
+                    pos[1],
+                    pos[2],
+                ) {
                     let fx = f64::from(x).clamp(
                         f64::from(xo) + f64::from(width),
                         f64::from(xo) + 16.0 - f64::from(width),

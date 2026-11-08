@@ -343,6 +343,107 @@ fn bob(p: &mut Poses, n: &str, age: f32, scale: f32) {
     q[3] += scale * ((age * 0.067).msin() * 0.05);
 }
 pub use horizon_core::arm_pose::ArmPose;
+/// Whether this renderer extracts `HumanoidRenderState` arm poses.
+pub fn extracts_humanoid(m: &Mob) -> bool {
+    matches!(
+        m.kind.anim,
+        Anim::Zombie
+            | Anim::Drowned
+            | Anim::ZombieVillager
+            | Anim::ZombifiedPiglin
+            | Anim::Skeleton
+            | Anim::Piglin
+            | Anim::Humanoid { .. }
+    )
+}
+
+/// Select the main/off-hand poses without dispatching hooks or allocating.
+/// `declared` contains item declarations or the gameplay hook's replacements.
+pub fn humanoid_arm_poses(m: &Mob, declared: [Option<ArmPose>; 2], swing: f32) -> [ArmPose; 2] {
+    let player = matches!(m.kind.anim, Anim::Humanoid { zombie_arms: false });
+    if !player {
+        let default = if m.kind.anim == Anim::Skeleton
+            && m.extra.main_hand_id() == Some("minecraft:bow")
+            && m.ai.aggressive
+        {
+            ArmPose::Bow
+        } else if m.kind.anim == Anim::Drowned
+            && m.ai.aggressive
+            && m.extra.main_hand_id() == Some("minecraft:trident")
+        {
+            ArmPose::ThrowTrident
+        } else if m.kind.anim != Anim::Skeleton
+            && m.extra
+                .main_hand_id()
+                .and_then(crate::spear::Kinetic::of)
+                .is_some()
+        {
+            ArmPose::Spear
+        } else {
+            ArmPose::Empty
+        };
+        let main = m.extra.main_hand_id().and(declared[0]).unwrap_or(default);
+        let off = if main.affects_offhand() {
+            ArmPose::Empty
+        } else {
+            m.extra
+                .off_hand_id()
+                .and(declared[1])
+                .unwrap_or(ArmPose::Empty)
+        };
+        return [main, off];
+    }
+    let using_main = m.extra.using_item > 0 && !m.extra.using_off_hand;
+    let using_off = m.extra.using_item > 0 && m.extra.using_off_hand;
+    // AvatarRenderer.getArmPose: an arm holding a spear (at rest too).
+    let spear_in = |hand: Option<&str>| hand.and_then(crate::spear::Kinetic::of);
+    let (main_spear, off_spear) = (
+        spear_in(m.extra.main_hand_id()),
+        spear_in(m.extra.off_hand_id()),
+    );
+    // AvatarRenderer.getArmPose: a loaded crossbow is held up, an item in
+    // use poses its arm by its use animation, a spear is held out.
+    let hand_pose = |held: Option<&str>, declared: Option<ArmPose>, using: bool, spear: bool| match (
+        held, declared,
+    ) {
+        (None, _) => ArmPose::Empty,
+        // A mod item's `arm_pose` replaces what the item would do.
+        (Some(_), Some(declared)) => declared,
+        (Some("minecraft:crossbow"), None) if m.extra.charged && swing == 0.0 => {
+            ArmPose::CrossbowHold
+        }
+        (Some(_), None) => match using.then_some(m.extra.use_animation) {
+            Some(UseAnimation::Block) => ArmPose::Block,
+            Some(UseAnimation::Bow) => ArmPose::Bow,
+            Some(UseAnimation::Trident) => ArmPose::ThrowTrident,
+            Some(UseAnimation::Crossbow) => ArmPose::CrossbowCharge,
+            Some(UseAnimation::Spyglass) => ArmPose::Spyglass,
+            Some(UseAnimation::TootHorn) => ArmPose::TootHorn,
+            Some(UseAnimation::Brush) => ArmPose::Brush,
+            Some(UseAnimation::Spear) => ArmPose::Spear,
+            _ if spear => ArmPose::Spear,
+            _ => ArmPose::Item,
+        },
+    };
+    let pose = hand_pose(
+        m.extra.main_hand_id(),
+        declared[0],
+        using_main,
+        main_spear.is_some(),
+    );
+    let off = if !pose.affects_offhand() {
+        hand_pose(
+            m.extra.off_hand_id(),
+            declared[1],
+            using_off,
+            off_spear.is_some(),
+        )
+    } else {
+        ArmPose::Empty
+    };
+    [pose, off]
+}
+
 /// HumanoidModel.setupAnim with empty hands (endermen).
 /// Passes `isPassenger` so a seated enderman keeps the humanoid riding pose
 /// (vanilla EndermanModel.setupAnim calls super first, then halves/clamps xRot).
@@ -427,6 +528,21 @@ impl Hum {
         }
     }
 }
+/// Kinetic data belongs to the physical arm holding the item, including a mob's off hand.
+pub(super) fn humanoid_spears(m: &Mob, h: &mut Hum, partial: f32) {
+    let main_side = usize::from(m.main_arm_left());
+    h.spear[main_side] = m.extra.main_hand_id().and_then(crate::spear::Kinetic::of);
+    h.spear[1 - main_side] = m.extra.off_hand_id().and_then(crate::spear::Kinetic::of);
+    if m.extra.using_item > 0 {
+        let using_side = if m.extra.using_off_hand {
+            1 - main_side
+        } else {
+            main_side
+        };
+        h.spear_ticks[using_side] = m.extra.using_item as f32 + partial;
+    }
+}
+
 /// `AnimationUtils.animateCrossbowHold`.
 pub(super) fn crossbow_hold(p: &mut Poses, hx: f32, hy: f32, in_right: bool) {
     let (hold, shoot) = if in_right {
@@ -816,33 +932,15 @@ pub fn setup(
         | Anim::ZombieVillager
         | Anim::ZombifiedPiglin
         | Anim::Humanoid { zombie_arms: true } => {
-            // DrownedRenderer.getArmPose: an aggressive drowned raises the
-            // trident in its main arm.
-            let throwing = m.kind.anim == Anim::Drowned
-                && m.ai.aggressive
-                && m.extra.main_hand_id() == Some("minecraft:trident");
-            // HumanoidMobRenderer.getArmPose: the arm holding a spear (at rest too).
-            let spear = m.extra.main_hand_id().and_then(crate::spear::Kinetic::of);
-            let main = if throwing {
-                ArmPose::ThrowTrident
-            } else if spear.is_some() {
-                ArmPose::Spear
-            } else {
-                ArmPose::Empty
-            };
+            let [main, off] = humanoid_arm_poses(m, m.extra.held_arm_pose, s.swing);
             let mut h = if m.main_arm_left() {
-                Hum::new(ArmPose::Empty, main)
+                Hum::new(off, main)
             } else {
-                Hum::new(main, ArmPose::Empty)
+                Hum::new(main, off)
             };
             h.left_main = m.main_arm_left();
-            let main_side = usize::from(m.main_arm_left());
-            if main == ArmPose::Spear {
-                h.spear[main_side] = spear;
-                if m.extra.using_item > 0 && !m.extra.using_off_hand {
-                    h.spear_ticks[main_side] = m.extra.using_item as f32 + s.partial;
-                }
-            }
+            humanoid_spears(m, &mut h, s.partial);
+            h.charge = (m.extra.ints[5].max(1) as f32, m.extra.using_item as f32);
             h.zombie = Some(m.ai.aggressive);
             h.holding = m.extra.main_hand_id().is_some();
             h.crouching = m.extra.crouching;
@@ -858,67 +956,7 @@ pub fn setup(
         Anim::Skeleton | Anim::Humanoid { zombie_arms: false } => {
             let bow = m.extra.main_hand_id() == Some("minecraft:bow");
             let player = matches!(m.kind.anim, Anim::Humanoid { .. });
-            let right = if bow && m.ai.aggressive {
-                ArmPose::Bow
-            } else if player && m.extra.main_hand_id().is_some() {
-                ArmPose::Item
-            } else {
-                ArmPose::Empty
-            };
-            let using_main = m.extra.using_item > 0 && !m.extra.using_off_hand;
-            let using_off = m.extra.using_item > 0 && m.extra.using_off_hand;
-            // AvatarRenderer.getArmPose: an arm holding a spear (at rest too).
-            let spear_in =
-                |hand: Option<&str>| hand.filter(|_| player).and_then(crate::spear::Kinetic::of);
-            let (main_spear, off_spear) = (
-                spear_in(m.extra.main_hand_id()),
-                spear_in(m.extra.off_hand_id()),
-            );
-            // AvatarRenderer.getArmPose: a loaded crossbow is held up, an item in
-            // use poses its arm by its use animation, a spear is held out.
-            let hand_pose = |held: Option<&str>,
-                             declared: Option<ArmPose>,
-                             using: bool,
-                             spear: bool| match (held, declared) {
-                (None, _) => ArmPose::Empty,
-                // A mod item's `arm_pose` replaces what the item would do.
-                (Some(_), Some(declared)) => declared,
-                (Some("minecraft:crossbow"), None) if m.extra.charged && s.swing == 0.0 => {
-                    ArmPose::CrossbowHold
-                }
-                (Some(_), None) => match using.then_some(m.extra.use_animation) {
-                    Some(UseAnimation::Block) => ArmPose::Block,
-                    Some(UseAnimation::Bow) => ArmPose::Bow,
-                    Some(UseAnimation::Trident) => ArmPose::ThrowTrident,
-                    Some(UseAnimation::Crossbow) => ArmPose::CrossbowCharge,
-                    Some(UseAnimation::Spyglass) => ArmPose::Spyglass,
-                    Some(UseAnimation::TootHorn) => ArmPose::TootHorn,
-                    Some(UseAnimation::Brush) => ArmPose::Brush,
-                    Some(UseAnimation::Spear) => ArmPose::Spear,
-                    _ if spear => ArmPose::Spear,
-                    _ => ArmPose::Item,
-                },
-            };
-            let pose = if player {
-                hand_pose(
-                    m.extra.main_hand_id(),
-                    m.extra.held_arm_pose[0],
-                    using_main,
-                    main_spear.is_some(),
-                )
-            } else {
-                right
-            };
-            let off = if player && !pose.affects_offhand() {
-                hand_pose(
-                    m.extra.off_hand_id(),
-                    m.extra.held_arm_pose[1],
-                    using_off,
-                    off_spear.is_some(),
-                )
-            } else {
-                ArmPose::Empty
-            };
+            let [pose, off] = humanoid_arm_poses(m, m.extra.held_arm_pose, s.swing);
             let mut h = if m.main_arm_left() {
                 Hum::new(off, pose)
             } else {
@@ -938,17 +976,7 @@ pub fn setup(
             h.swing_right_arm = m.extra.swing_right_arm;
             h.stab = m.extra.swing_stab;
             h.left_main = m.main_arm_left();
-            let main_side = usize::from(m.main_arm_left());
-            h.spear[main_side] = main_spear;
-            h.spear[1 - main_side] = off_spear;
-            if m.extra.using_item > 0 {
-                let using_side = if m.extra.using_off_hand {
-                    1 - main_side
-                } else {
-                    main_side
-                };
-                h.spear_ticks[using_side] = m.extra.using_item as f32 + s.partial;
-            }
+            humanoid_spears(m, &mut h, s.partial);
             humanoid(p, s, &h);
             if player {
                 player_model_visibility(p, m.extra.hidden_model_parts, m.extra.spectator);
@@ -1579,6 +1607,102 @@ mod flight_pose_tests {
         setup(&m, &state, &mut p, &HashMap::new());
         assert!((p.get("left_arm")[3] + PI / 5.0).abs() < 1e-6);
         assert!((p.get("right_arm")[3] + PI / 10.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn humanoid_mob_item_poses_reach_both_arms_and_ignore_empty_hands() {
+        let state = State {
+            pos: 0.0,
+            speed: 0.0,
+            age: 0.0,
+            y_rot: 0.0,
+            x_rot: 0.0,
+            swing: 0.0,
+            baby: false,
+            partial: 0.0,
+        };
+        for (anim, pose, expected) in [
+            (Anim::Zombie, ArmPose::ThrowTrident, -PI),
+            (Anim::Drowned, ArmPose::ThrowTrident, -PI),
+            (Anim::ZombieVillager, ArmPose::ThrowTrident, -PI),
+            (Anim::ZombifiedPiglin, ArmPose::ThrowTrident, -PI),
+            (Anim::Skeleton, ArmPose::Brush, -PI / 5.0),
+            (Anim::Piglin, ArmPose::Brush, -PI / 5.0),
+        ] {
+            let mut m = player();
+            Arc::make_mut(&mut m.kind).anim = anim;
+            m.extra.set_main_hand(Some("minecraft:stick".into()));
+            m.extra.held_arm_pose = [Some(pose), None];
+            for left in [false, true] {
+                m.extra.main_hand_left = left;
+                let mut p = Poses::default();
+                // The test model only needs these parts; no prepared assets or GPU.
+                for part in [
+                    "head",
+                    "body",
+                    "right_arm",
+                    "left_arm",
+                    "right_leg",
+                    "left_leg",
+                ] {
+                    p.map.insert(key(part), [0.0; 9]);
+                }
+                setup(&m, &state, &mut p, &HashMap::new());
+                let arm = if left { "left_arm" } else { "right_arm" };
+                assert!((p.get(arm)[3] - expected).abs() < 1e-6, "{anim:?} {left}");
+            }
+            m.extra.set_main_hand(None);
+            assert_eq!(
+                humanoid_arm_poses(&m, m.extra.held_arm_pose, 0.0),
+                [ArmPose::Empty; 2]
+            );
+        }
+    }
+
+    #[test]
+    fn a_humanoid_mobs_two_handed_item_pose_keeps_vanillas_other_arm() {
+        let mut m = player();
+        Arc::make_mut(&mut m.kind).anim = Anim::Skeleton;
+        m.extra.set_main_hand(Some("minecraft:stick".into()));
+        m.extra.set_slot_id(
+            horizon_items::equipment::OFFHAND,
+            Some("minecraft:stick".into()),
+        );
+        m.extra.held_arm_pose = [Some(ArmPose::Bow), Some(ArmPose::Brush)];
+        assert_eq!(
+            humanoid_arm_poses(&m, m.extra.held_arm_pose, 0.0),
+            [ArmPose::Bow, ArmPose::Empty]
+        );
+        for left in [false, true] {
+            m.extra.main_hand_left = left;
+            let mut p = Poses::default();
+            for part in [
+                "head",
+                "body",
+                "right_arm",
+                "left_arm",
+                "right_leg",
+                "left_leg",
+            ] {
+                p.map.insert(key(part), [0.0; 9]);
+            }
+            let state = State {
+                pos: 0.0,
+                speed: 0.0,
+                age: 0.0,
+                y_rot: 0.0,
+                x_rot: 0.0,
+                swing: 0.0,
+                baby: false,
+                partial: 0.0,
+            };
+            setup(&m, &state, &mut p, &HashMap::new());
+            for arm in ["right_arm", "left_arm"] {
+                assert!((p.get(arm)[3] + PI / 2.0).abs() < 1e-6);
+            }
+            assert!((p.get("right_arm")[4] - if left { -0.5 } else { -0.1 }).abs() < 1e-6);
+            assert!((p.get("left_arm")[4] - if left { 0.1 } else { 0.5 }).abs() < 1e-6);
+        }
     }
 
     /// ModelPart.createPartLookup fills the name map with putIfAbsent, so of two

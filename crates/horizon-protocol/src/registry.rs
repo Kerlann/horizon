@@ -166,6 +166,15 @@ impl Dynamic {
     pub fn is_empty(&self) -> bool {
         self.registries.is_empty()
     }
+    /// The synchronized dimension type `id` as the JSON a data pack writes it, with its name:
+    /// what `DimensionFacts::patched` reads. None without data. A byte is a flag (every one the
+    /// type has is), and a number with no fraction is an integer, as Horizon's server sends a
+    /// pack's JSON numbers as doubles.
+    pub fn dimension_json(&self, id: i32) -> Option<(String, serde_json::Value)> {
+        let name = self.name("minecraft:dimension_type", id)?.to_owned();
+        let tag = self.data("minecraft:dimension_type", id)?;
+        Some((name, tag_json(tag)))
+    }
     /// The dimension type's vertical range and sky light, from its
     /// synchronized data or the vanilla defaults for known names.
     pub fn dimension(&self, id: i32) -> DimensionType {
@@ -223,6 +232,37 @@ impl Dynamic {
         d
     }
 }
+/// A dimension type's tag as JSON (see `Dynamic::dimension_json`).
+fn tag_json(tag: &Tag) -> serde_json::Value {
+    use serde_json::{Number, Value};
+    let number = |v: f64| {
+        if v.fract() == 0.0 && v.abs() < 9e15 {
+            Value::from(v as i64)
+        } else {
+            Number::from_f64(v).map_or(Value::Null, Value::Number)
+        }
+    };
+    match tag {
+        Tag::End => Value::Null,
+        Tag::Byte(v) => Value::Bool(*v != 0),
+        Tag::Short(v) => Value::from(*v),
+        Tag::Int(v) => Value::from(*v),
+        Tag::Long(v) => Value::from(*v),
+        Tag::Float(v) => number(f64::from(f32::from_bits(*v))),
+        Tag::Double(v) => number(f64::from_bits(*v)),
+        Tag::String(s) => Value::String(s.to_string_lossy()),
+        Tag::List(items) => Value::Array(items.iter().map(tag_json).collect()),
+        Tag::Compound(map) => Value::Object(
+            map.iter()
+                .map(|(k, v)| (k.to_string_lossy(), tag_json(v)))
+                .collect(),
+        ),
+        Tag::ByteArray(v) => Value::Array(v.iter().map(|b| Value::from(*b)).collect()),
+        Tag::IntArray(v) => Value::Array(v.iter().map(|n| Value::from(*n)).collect()),
+        Tag::LongArray(v) => Value::Array(v.iter().map(|n| Value::from(*n)).collect()),
+    }
+}
+
 /// The parts of a DimensionType the client needs for chunk layout.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DimensionType {
@@ -434,6 +474,48 @@ mod tests {
         let dim = d.dimension(0);
         assert_eq!(dim.name, "pack:custom");
         assert_eq!(dim.default_clock.as_deref(), Some("minecraft:overworld"));
+    }
+
+    /// The server's dimension type reaches the game's facts through its JSON: a flag byte is a
+    /// bool, a whole double an integer, and the attributes keep their keys.
+    #[test]
+    fn a_synchronized_type_becomes_the_games_facts() {
+        use horizon_world::dimension_type::DimensionFacts;
+        let mut d = Dynamic::default();
+        d.add(RegistryData {
+            registry: "minecraft:dimension_type".into(),
+            entries: vec![RegistryEntry {
+                id: "mymod:pocket".into(),
+                data: Some(Tag::compound([
+                    ("min_y", Tag::Int(0)),
+                    ("height", Tag::Int(128)),
+                    ("logical_height", Tag::Int(128)),
+                    ("has_fixed_time", Tag::Byte(1)),
+                    ("coordinate_scale", Tag::Double(2.0f64.to_bits())),
+                    (
+                        "attributes",
+                        Tag::compound([
+                            ("minecraft:gameplay/fast_lava", Tag::Byte(1)),
+                            (
+                                "minecraft:gameplay/sky_light_level",
+                                Tag::Float(4.0f32.to_bits()),
+                            ),
+                        ]),
+                    ),
+                ])),
+            }],
+        });
+        let (name, json) = d.dimension_json(0).unwrap();
+        assert_eq!(name, "mymod:pocket");
+        assert_eq!(json["has_fixed_time"], true);
+        assert_eq!(json["coordinate_scale"], 2);
+        let facts =
+            DimensionFacts::patched(DimensionFacts::base_for_type(&name), &name, &json).unwrap();
+        assert_eq!(facts.coordinate_scale, 2.0);
+        assert!(facts.has_fixed_time && facts.fast_lava);
+        assert_eq!(facts.sky_light_level, 4.0);
+        assert_eq!(facts.height.height, 128);
+        assert!(Dynamic::default().dimension_json(0).is_none());
     }
 
     #[test]

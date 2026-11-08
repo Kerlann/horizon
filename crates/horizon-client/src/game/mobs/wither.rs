@@ -175,6 +175,7 @@ impl Game<'_> {
                         skull.from,
                         super::creatures::damage_type(kind, false),
                         Some(owner),
+                        false,
                     );
                     if hit && wither_ticks > 0 {
                         self.give_player_effect("minecraft:wither", wither_ticks, 1);

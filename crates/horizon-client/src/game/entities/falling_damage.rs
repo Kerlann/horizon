@@ -215,6 +215,7 @@ impl Game<'_> {
                 None,
                 false,
                 0,
+                false,
                 &horizon_client::health::NO_ATTACK,
             )
             .unwrap_or_default();

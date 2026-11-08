@@ -785,6 +785,29 @@ impl Game<'_> {
         }
     }
 
+    /// The level changes the level in place's tickets made since the last
+    /// call (`ChunkTickets::take_changes`), told to the mods in order as
+    /// `chunk_ticket_level_updated`, with no player's state swapped in. The
+    /// tickets keep them only while a mod listens (`update_chunk_tickets`).
+    pub(in crate::game) fn run_chunk_ticket_level_updates(&mut self) {
+        use horizon_client::ticket_levels::UNLOADED;
+        let changes = self.tickets.take_changes();
+        if changes.is_empty() {
+            return;
+        }
+        let Some(level) = self.level(self.dim.id()) else {
+            return;
+        };
+        let told = |level| match level {
+            UNLOADED => mod_api::ChunkTicketLevel::Unloaded,
+            level => mod_api::ChunkTicketLevel::Loaded(level),
+        };
+        for change in changes {
+            let chunk = mod_api::ChunkRef::new(level, [change.chunk.0, change.chunk.1]);
+            self.native_chunk_ticket_level_updated(chunk, told(change.old), told(change.new));
+        }
+    }
+
     fn player_lookup(&self, uuid: u128) -> Option<(PlayerRead<'_>, u32)> {
         if self.lan_acting_uuid == Some(uuid) && !self.lan_acting_fake {
             return Some((

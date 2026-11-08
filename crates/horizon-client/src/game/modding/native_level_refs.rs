@@ -660,6 +660,16 @@ impl Game<'_> {
             .and_then(|map| map.paint(colors))
             .unwrap_or(false)
     }
+    /// Queue the level to be saved at the start of the next server tick. False for a stale
+    /// handle and on a client.
+    pub(super) fn level_request_save(&mut self, level: LevelRef) -> bool {
+        if self.native_level_world(level).is_none() {
+            return false;
+        }
+        self.levels
+            .request_save(super::Dim::from_id(level.dimension_id()));
+        true
+    }
     /// The due tick path for the block at `pos` now (`Behaviours::due_block_tick`). False for
     /// a refused write, a stale or parked handle, a client and an unloaded or out-of-height
     /// position.

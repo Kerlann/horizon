@@ -222,9 +222,16 @@ pub fn is_valid_empty_spawn<L: SpawnLevel>(s: Species, l: &L, x: i32, y: i32, z:
         && f.fluid == Fluid::None
         && !l.block_tag("minecraft:prevent_mob_spawning_inside", block)
 }
-/// `SpawnPlacements.isSpawnPositionOk`.
-pub fn is_spawn_position_ok<L: SpawnLevel>(s: Species, l: &L, x: i32, y: i32, z: i32) -> bool {
-    let placement = l.mob_data().species_placement(s);
+/// `SpawnPlacements.isSpawnPositionOk` for the entity type `entity`, of species `s`.
+pub fn is_spawn_position_ok<L: SpawnLevel>(
+    entity: &str,
+    s: Species,
+    l: &L,
+    x: i32,
+    y: i32,
+    z: i32,
+) -> bool {
+    let placement = l.mob_data().entity_placement(entity, s);
     if placement != data::Placement::NoRestrictions && !l.within_world_border(x, z) {
         return false;
     }
@@ -312,8 +319,36 @@ pub fn check_spawn_rules<L: SpawnLevel>(
         return false;
     }
     let [x, y, z] = at;
-    let vanilla = placement_predicate(s, l, reason, random, x, y, z);
+    let vanilla = match l.mob_data().mod_spawns.get(entity) {
+        Some(rule) => mod_predicate(rule, l, reason, random, x, y, z),
+        None => placement_predicate(s, l, reason, random, x, y, z),
+    };
     l.placement_check(entity, reason, at, vanilla)
+}
+/// A mod type's spawn predicate (`SpawnPlacements.Data.predicate`): the ground
+/// tag, the biome tag, then the light, which draws last as vanilla's do.
+fn mod_predicate<L: SpawnLevel>(
+    rule: &mod_api::SpawnPlacementRule,
+    l: &L,
+    reason: Reason,
+    random: &mut impl RandomSource,
+    x: i32,
+    y: i32,
+    z: i32,
+) -> bool {
+    use mod_api::NativeSpawnLight as Light;
+    rule.spawnable_on
+        .as_deref()
+        .is_none_or(|on| tag(l, on, x, y - 1, z))
+        && rule
+            .biome_tag
+            .as_deref()
+            .is_none_or(|biome| l.biome_tag(biome, x, y, z))
+        && match rule.light {
+            Light::Dark => ignores_light(reason) || is_dark_enough(l, random, x, y, z),
+            Light::Bright => ignores_light(reason) || bright(l, x, y, z),
+            _ => true,
+        }
 }
 /// The type's spawn predicate (`SpawnPlacements.Data.predicate`).
 fn placement_predicate<L: SpawnLevel>(
@@ -759,6 +794,281 @@ mod light_draw_tests {
                     );
                 }
             },
+        );
+    }
+}
+
+/// A mod type's spawn rule (`RegisterSpawnPlacementsEvent`) answers the
+/// type's placement and spawn predicate in place of its template species'.
+#[cfg(test)]
+mod mod_spawn_rule_tests {
+    use super::*;
+    use crate::blocks::{RenderShape, Sounds, StateFacts};
+    use horizon_core::random::LegacyRandom;
+    use mod_api::{
+        NativeHeightmap, NativeSpawnLight, NativeSpawnPlacementType, SpawnPlacementRule,
+    };
+    use std::{cell::RefCell, sync::Arc};
+
+    const AIR: BlockStateId = BlockStateId(0);
+    const GRASS: BlockStateId = BlockStateId(1);
+    const STONE: BlockStateId = BlockStateId(2);
+
+    fn state(name: &str, full: bool) -> StateFacts {
+        let sound: Arc<str> = Arc::from("");
+        StateFacts {
+            name: Arc::from(name),
+            emission: 0,
+            dampening: 0,
+            skylight_down: true,
+            shape_occlusion: false,
+            can_occlude: full,
+            solid_render: full,
+            hardness: 1.0,
+            requires_tool: false,
+            replaceable: !full,
+            random_ticks: false,
+            block_entity: false,
+            render_shape: RenderShape::Model,
+            destroy_overlay: true,
+            full_collision: full,
+            friction: 0.6,
+            explosion_resistance: 1.0,
+            item: Arc::from(name),
+            sounds: Sounds {
+                volume: 1.0,
+                pitch: 1.0,
+                break_sound: sound.clone(),
+                step: sound.clone(),
+                place: sound.clone(),
+                hit: sound.clone(),
+                fall: sound,
+            },
+            fluid: Fluid::None,
+            fluid_level: 0,
+            fluid_falling: false,
+            waterlogged: false,
+            random_offset: false,
+            outline_offset: false,
+            legacy_solid: full,
+            sturdy_full: 0,
+            classes: Arc::from([]),
+            outline: Arc::from([]),
+            outline_edges: Arc::from([]),
+            map_color: 0,
+        }
+    }
+
+    /// A flat world: grass at y 0, stone at x 5 up to y 1, air above. Light,
+    /// the biome and the answer the hook gives are the test's to set.
+    struct Flat {
+        facts: BlockFacts,
+        data: data::MobData,
+        sky: i32,
+        block: i32,
+        /// The biome tags the spot's biome is in.
+        biome_tags: Vec<&'static str>,
+        /// What the hook is told the rule answered, and what it answers.
+        heard: RefCell<Vec<bool>>,
+        hook: Option<bool>,
+    }
+    impl Flat {
+        fn new(rules: &[(&str, SpawnPlacementRule)]) -> Self {
+            let facts = BlockFacts {
+                states: vec![
+                    state("minecraft:air", false),
+                    state("minecraft:grass_block", true),
+                    state("minecraft:stone", true),
+                ],
+                air: AIR,
+                woods: Default::default(),
+                sign_texts: Default::default(),
+            };
+            let mut data = data::MobData::fallback(&facts);
+            for (id, rule) in rules {
+                data.register_mod_spawn(id, rule);
+            }
+            Self {
+                facts,
+                data,
+                sky: 15,
+                block: 0,
+                biome_tags: vec!["test:haunted"],
+                heard: RefCell::default(),
+                hook: None,
+            }
+        }
+        /// `SpawnPlacements.checkSpawnRules` for a type of the zombie species.
+        fn check(&self, entity: &str, reason: Reason, at: [i32; 3]) -> bool {
+            check_spawn_rules(
+                entity,
+                Species::Zombie,
+                self,
+                reason,
+                &mut LegacyRandom::new(7),
+                at,
+            )
+        }
+    }
+    impl SpawnLevel for Flat {
+        fn state(&self, x: i32, y: i32, _: i32) -> BlockStateId {
+            match (x, y) {
+                (5, ..=1) => STONE,
+                (_, 0) => GRASS,
+                _ => AIR,
+            }
+        }
+        fn facts(&self) -> &BlockFacts {
+            &self.facts
+        }
+        fn mob_data(&self) -> &data::MobData {
+            &self.data
+        }
+        fn block_tag(&self, tag: &str, block: &str) -> bool {
+            tag == "test:ghoul_ground" && block == "minecraft:grass_block"
+        }
+        fn biome_tag(&self, tag: &str, _: i32, _: i32, _: i32) -> bool {
+            self.biome_tags.contains(&tag)
+        }
+        fn sky_light(&self, _: i32, _: i32, _: i32) -> i32 {
+            self.sky
+        }
+        fn block_light(&self, _: i32, _: i32, _: i32) -> i32 {
+            self.block
+        }
+        fn sky_darken(&self) -> i32 {
+            0
+        }
+        fn thundering(&self) -> bool {
+            false
+        }
+        fn sea_level(&self) -> i32 {
+            63
+        }
+        fn world_surface(&self, _: i32, _: i32) -> i32 {
+            1
+        }
+        fn peaceful(&self) -> bool {
+            false
+        }
+        fn dimension_type(&self) -> &DimensionFacts {
+            DimensionFacts::vanilla("minecraft:overworld").unwrap()
+        }
+        fn surface_slime_chance(&self, _: i32, _: i32, _: i32) -> f32 {
+            0.0
+        }
+        fn world_seed(&self) -> i64 {
+            0
+        }
+        fn player_near(&self, _: f64, _: f64, _: f64, _: f64) -> bool {
+            false
+        }
+        fn placement_check(&self, _: &str, _: Reason, _: [i32; 3], vanilla: bool) -> bool {
+            self.heard.borrow_mut().push(vanilla);
+            self.hook.unwrap_or(vanilla)
+        }
+    }
+
+    fn rule(light: NativeSpawnLight) -> SpawnPlacementRule {
+        SpawnPlacementRule {
+            placement: NativeSpawnPlacementType::OnGround,
+            heightmap: NativeHeightmap::OceanFloor,
+            spawnable_on: Some("test:ghoul_ground".to_owned()),
+            light,
+            biome_tag: Some("test:haunted".to_owned()),
+        }
+    }
+
+    /// Ground, biome and light each refuse on their own, and the rule's
+    /// light replaces the template's: a zombie needs the dark, the ghoul
+    /// that declared `Bright` spawns in daylight on the same spot.
+    #[test]
+    fn the_rule_checks_ground_biome_and_light_in_place_of_the_templates_predicate() {
+        let mut level = Flat::new(&[("ruby:ghoul", rule(NativeSpawnLight::Bright))]);
+        let on_grass = [0, 1, 0];
+        assert!(level.check("ruby:ghoul", Reason::Natural, on_grass));
+        assert!(
+            !level.check("minecraft:zombie", Reason::Natural, on_grass),
+            "the vanilla zombie still needs the dark"
+        );
+        // The block below, stone, is not in the ground tag.
+        assert!(!level.check("ruby:ghoul", Reason::Natural, [5, 2, 0]));
+        // The biome is not in the tag.
+        level.biome_tags.clear();
+        assert!(!level.check("ruby:ghoul", Reason::Natural, on_grass));
+        level.biome_tags.push("test:haunted");
+        // Light 8 is not above 8; a trial spawner ignores light.
+        level.sky = 8;
+        assert!(!level.check("ruby:ghoul", Reason::Natural, on_grass));
+        assert!(level.check("ruby:ghoul", Reason::TrialSpawner, on_grass));
+        level.sky = 9;
+        assert!(level.check("ruby:ghoul", Reason::Natural, on_grass));
+    }
+
+    #[test]
+    fn a_dark_rule_needs_the_dark_a_monster_needs() {
+        let mut level = Flat::new(&[("ruby:ghoul", rule(NativeSpawnLight::Dark))]);
+        let on_grass = [0, 1, 0];
+        level.sky = 0;
+        assert!(level.check("ruby:ghoul", Reason::Natural, on_grass));
+        level.block = 15;
+        assert!(!level.check("ruby:ghoul", Reason::Natural, on_grass));
+        level.sky = 15;
+        level.block = 0;
+        assert!(!level.check("ruby:ghoul", Reason::Natural, on_grass));
+    }
+
+    /// `mob_spawn_placement_check` still runs after the rule and is told its
+    /// answer as `default_result`; it may overturn it either way.
+    #[test]
+    fn the_per_check_hook_hears_the_rules_answer() {
+        let mut level = Flat::new(&[("ruby:ghoul", rule(NativeSpawnLight::Bright))]);
+        level.hook = Some(true);
+        assert!(level.check("ruby:ghoul", Reason::Natural, [5, 2, 0]));
+        level.hook = Some(false);
+        assert!(!level.check("ruby:ghoul", Reason::Natural, [0, 1, 0]));
+        assert_eq!(*level.heard.borrow(), [false, true]);
+    }
+
+    #[test]
+    fn a_declared_placement_type_and_heightmap_replace_the_species_ones() {
+        let anywhere = SpawnPlacementRule {
+            placement: NativeSpawnPlacementType::NoRestrictions,
+            spawnable_on: None,
+            biome_tag: None,
+            ..rule(NativeSpawnLight::Any)
+        };
+        let level = Flat::new(&[("ruby:floater", anywhere)]);
+        // Mid-air with nothing below: no restrictions allows it, a zombie's
+        // `ON_GROUND` does not, and the same type on grass is fine.
+        assert!(is_spawn_position_ok(
+            "ruby:floater",
+            Species::Zombie,
+            &level,
+            3,
+            10,
+            0
+        ));
+        assert!(!is_spawn_position_ok(
+            "ruby:undeclared",
+            Species::Zombie,
+            &level,
+            3,
+            10,
+            0
+        ));
+        assert!(is_spawn_position_ok(
+            "ruby:undeclared",
+            Species::Zombie,
+            &level,
+            0,
+            1,
+            0
+        ));
+        assert_eq!(level.data.heightmap("ruby:floater"), "OCEAN_FLOOR");
+        assert_eq!(
+            level.data.heightmap("ruby:undeclared"),
+            "MOTION_BLOCKING_NO_LEAVES"
         );
     }
 }

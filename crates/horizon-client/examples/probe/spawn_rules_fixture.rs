@@ -322,7 +322,7 @@ pub fn main() -> horizon_client::Result<()> {
         }
         let mut random = LegacyRandom::new(get("seed", "0").parse()?);
         let s = kind.species;
-        let ok = spawn_rules::is_spawn_position_ok(s, &level, x0, y, z0);
+        let ok = spawn_rules::is_spawn_position_ok(c["type"], s, &level, x0, y, z0);
         let rules = spawn_rules::check_spawn_rules(
             c["type"],
             s,

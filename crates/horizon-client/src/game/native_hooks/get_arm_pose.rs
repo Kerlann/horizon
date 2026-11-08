@@ -8,9 +8,10 @@ impl Game<'_> {
         &self,
         entity_id: u32,
         hand: Hand,
-        stack: &ItemStack,
+        stack: &mod_api::ItemStack,
+        humanoid: &mod_api::HumanoidRenderState<'_>,
         pose: &mut Option<mod_api::ArmPose>,
     ) {
-        self.fire_get_arm_pose(entity_id, hand, stack, pose);
+        self.fire_get_arm_pose(entity_id, hand, stack, humanoid, pose);
     }
 }

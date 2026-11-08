@@ -1347,7 +1347,7 @@ pub struct Extra {
     /// a player model's arm pose and `isBlocking` follow it.
     pub use_animation: horizon_core::use_animation::UseAnimation,
     /// The `arm_pose` the items in the main and off hand declare, if any: the pose
-    /// a player model's arm takes holding it, in place of vanilla's.
+    /// a humanoid model's arm takes holding it, in place of vanilla's.
     pub held_arm_pose: [Option<horizon_core::arm_pose::ArmPose>; 2],
     pub fall_flying: bool,
     pub fall_fly_ticks: i32,
@@ -1746,7 +1746,13 @@ pub struct Mob {
     pub gear_knockback_resistance: Option<f64>,
     pub health: f32,
     pub hurt_time: i32,
+    /// `LivingEntity.damageCooldownTime`: 20 after a hit, counting down;
+    /// while it is above 10 a weaker hit does only the difference.
     pub invulnerable: i32,
+    /// `Entity.invulnerableTime` (#916): the entity-level invulnerability
+    /// window, its own field — never the damage cooldown beside it
+    /// (`Entity.isTemporarilyInvulnerable`), decremented by the base tick.
+    pub invulnerable_time: i32,
     pub death_time: i32,
     pub age: u32,
     pub limb_position: f32,
@@ -2800,8 +2806,9 @@ pub struct Seen {
     pub bounds: Aabb,
     pub eye_y: f64,
     pub alive: bool,
-    /// `invulnerable_flag`, which `asValidTarget` refuses a target by
-    /// (#1175): a valid-target rule the tick's view asks.
+    /// `Entity.isInvulnerable` (the ability flag or the temporary window,
+    /// #916), which `asValidTarget` refuses a target by (#1175): a
+    /// valid-target rule the tick's view asks.
     pub invulnerable: bool,
     pub baby: bool,
     pub in_love: bool,
@@ -3054,7 +3061,7 @@ impl Mob {
             hitbox: m.hitbox(),
             eye_y: m.eye_y(),
             alive: m.alive(),
-            invulnerable: m.invulnerable_flag,
+            invulnerable: m.is_invulnerable(),
             baby: m.is_baby(),
             // A villager is "in love" when it is willing to breed (`canBreed`).
             in_love: if villager {
@@ -3377,8 +3384,9 @@ pub struct PlayerView {
     pub bounds: Aabb,
     pub eye: [f64; 3],
     pub alive: bool,
-    /// The `invulnerable` ability, which `asValidTarget` refuses a target
-    /// by (#1175): a valid-target rule a goal tick's view asks.
+    /// The `invulnerable` ability, the `Invulnerable` flag or its window,
+    /// which `asValidTarget` refuses a target by (#1175, #916): a
+    /// valid-target rule a goal tick's view asks.
     pub invulnerable: bool,
     pub creative: bool,
     pub sneaking: bool,
@@ -3749,6 +3757,7 @@ impl Mob {
             gear_knockback_resistance: None,
             hurt_time: 0,
             invulnerable: 0,
+            invulnerable_time: 0,
             death_time: 0,
             age: 0,
             limb_position: 0.0,
@@ -3919,6 +3928,13 @@ impl Mob {
     pub fn alive(&self) -> bool {
         self.health > 0.0
     }
+    /// `Entity.isInvulnerable` (#916): the permanent `Invulnerable` flag or
+    /// the temporary window `invulnerableTime > 0` — what damage refusal
+    /// (`isInvulnerableToBase`) and enemy targeting (`canBeSeenAsEnemy`)
+    /// both read.
+    pub fn is_invulnerable(&self) -> bool {
+        self.invulnerable_flag || self.invulnerable_time > 0
+    }
     pub fn hostile(&self) -> bool {
         self.kind.category == "monster"
     }
@@ -4002,10 +4018,11 @@ impl Mob {
     pub fn refuses_damage(&self, source: &Damage) -> bool {
         !self.alive()
             || self.removed
-            || (self.invulnerable_flag && !source.kind.bypasses_invulnerability())
+            || (self.is_invulnerable() && !source.kind.bypasses_invulnerability())
             || (source.is_fire() && self.kind.flags.fire_immune && !self.reflected_fireball(source))
     }
-    /// `Ghast.isReflectedFireball`: its fire immunity does not refuse a player's return hit.
+    /// `Ghast.isReflectedFireball`: its fire immunity does not refuse a
+    /// player's return hit.
     fn reflected_fireball(&self, source: &Damage) -> bool {
         &*self.kind.id == "minecraft:ghast"
             && source.kind == DamageKind::Fireball

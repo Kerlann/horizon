@@ -228,10 +228,10 @@ pub trait LivingBackend {
     /// `isSleeping` half; a parity fix: the client's portal entry used to
     /// skip it), a guest's the same rule over their body and vehicle, a
     /// mob's walk gate (`mob_can_use_portal`, #1275's read: not a boss that
-    /// never travels, not a creaking bound to its heart, riding nothing,
-    /// carrying no one this side holds back). None for a stale handle, an
-    /// armor stand or the dragon: the portal walk carries neither as its
-    /// own traveller. #943.
+    /// never travels, not a creaking bound to its heart, not asleep in its
+    /// bed, riding nothing, carrying no one this side holds back). None for
+    /// a stale handle, an armor stand or the dragon: the portal walk
+    /// carries neither as its own traveller. #943.
     #[access(WorldOnly)]
     fn living_can_use_portal(&self, living: LivingRef) -> Option<bool>;
     /// Side: server.
@@ -240,7 +240,10 @@ pub trait LivingBackend {
     /// an active item's attack range for a mob (a spear's reach) — whether
     /// this living entity's next melee strike reaches `target`. The check is
     /// a mob's; a player's attack reach is another rule (the interaction
-    /// range attribute), so a player answers None. #943.
+    /// range attribute), so a player answers None — as does every living
+    /// entity that is no mob (a guest, an armor stand, the dragon), a
+    /// stale `living` handle, a mob already removed, or a `target` with no
+    /// box here (a stale or unavailable handle). #943.
     #[access(WorldOnly)]
     fn living_in_melee_range(&self, living: LivingRef, target: EntityRef) -> Option<bool>;
     /// Side: server.
@@ -252,10 +255,14 @@ pub trait LivingBackend {
     #[access(WorldOnly)]
     fn living_can_freeze(&self, living: LivingRef) -> Option<bool>;
     /// Side: server.
-    /// `LivingEntity.canBreatheUnderwater`: the air tick's gate, the
-    /// species' own `breathes_water` (a squid's true, a dolphin's false). A
-    /// player drowns: false, their air ticks down. None for a stale handle,
-    /// an armor stand or the dragon. #943.
+    /// `LivingEntity.canBreatheUnderwater`: the species' own breath —
+    /// `is(#can_breathe_under_water)` in vanilla, `breathes_water` here (a
+    /// squid's true, a dolphin's false); a player answers false (no player
+    /// kind is in the tag). This is the tag read only, not the whole drown
+    /// decision: the air tick itself also keeps the air up behind Water
+    /// Breathing, the conduit's power and a player's invulnerability,
+    /// which this read does not carry. None for a stale handle, an armor
+    /// stand or the dragon. #943.
     #[access(WorldOnly)]
     fn living_can_breathe_underwater(&self, living: LivingRef) -> Option<bool>;
     /// Side: server.

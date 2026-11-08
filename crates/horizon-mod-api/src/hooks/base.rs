@@ -4367,17 +4367,6 @@ requires a farmer at work and `mob_griefing` enabled."#]
         neoforge = "none (NeoForge has no such event)"
     )]
     fn player_pickup_arrow();
-    /// A server player is about to travel through a Nether portal, End portal or End gateway. `cause`
-    /// is `nether_portal`, `end_portal` or `end_gateway`. The player's state is not swapped in. Set
-    /// `cancel` to keep them in their current place. Server-side.
-    #[hook(
-        side = "server",
-        contract = "cancel",
-        out = "cancel",
-        neoforge = "EntityTravelToDimensionEvent",
-        cancellable = true
-    )]
-    fn player_portal();
     /// A server player released a drawn bow with `arrow` selected, by the use-item
     /// key or a mod's `LivingRef::release_using_item`. The player's state is swapped in.
     #[hook(

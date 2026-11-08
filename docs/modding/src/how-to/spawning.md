@@ -9,6 +9,24 @@ Four hooks stand in for the checks and setup around a mob. All run on the server
 | Just before `finalizeSpawn` | `finalize_spawn` | `Flow::Cancel`, `spawn_cancelled`, a new `difficulty`, edits to `mob`, a new `group` |
 | Each tick, before a mob's `checkDespawn` | `mob_despawn` | `NativeDespawn::{Default, Allow, Deny}` |
 
+## Saying where a mod mob spawns
+
+`Registrar::declare_spawn_placement(path, rule)` is NeoForge's `RegisterSpawnPlacementsEvent`: during registration a mod gives its entity type a `SpawnPlacementRule`, and the game's own spawn checks answer from it for that type, wherever they run (natural spawning, chunk generation, spawners, patrols, sieges, reinforcements).
+
+```rust,ignore
+r.declare_spawn_placement("ghoul", mod_api::SpawnPlacementRule {
+    placement: mod_api::NativeSpawnPlacementType::OnGround,
+    heightmap: mod_api::NativeHeightmap::MotionBlockingNoLeaves,
+    spawnable_on: Some("mymod:ghoul_ground".to_owned()), // a block tag the block below is in
+    light: mod_api::NativeSpawnLight::Dark,              // Any, Dark (a monster's) or Bright (an animal's)
+    biome_tag: Some("mymod:haunted".to_owned()),         // a biome tag the spot's biome is in
+}).unwrap();
+```
+
+The placement type is `SpawnPlacements.isSpawnPositionOk`'s first check, and the rule stands in for the type's spawn predicate: every field that is set must hold, and a trial spawner ignores `light`. A type with no declaration keeps its template's rules. The game resolves the declarations once at load, so a check reads one table and never walks the mods. A tag is a namespaced name written without `#`; an id outside the mod's namespace, a bad tag or a second declaration of the same type refuses the mods at startup, and a type no content file defines refuses the resource load.
+
+`mob_spawn_placement_check` is the separate per-check moment: it runs after the rule and is told its answer as `default_result`, so a listener can still overturn it for one position.
+
 ## Stopping a spawn or leaving a mob plain
 
 `finalize_spawn` has two cancels, as in NeoForge. Returning `Flow::Cancel` skips finalization: the mob still spawns, but with no equipment, attributes or class setup. Setting `event.spawn_cancelled = true` adds no mob at all.

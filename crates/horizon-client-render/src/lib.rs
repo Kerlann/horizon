@@ -62,6 +62,7 @@ pub mod java_text;
 pub mod jigsaw_block;
 pub mod terrain_model;
 pub use horizon_world::json_folder;
+pub mod dimension_transition;
 pub mod fluid_models;
 pub mod level_loading;
 pub mod light;

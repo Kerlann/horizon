@@ -122,6 +122,16 @@ pub mod component {
     pub const SIGN_TEXT_BACK: i32 = 119;
 }
 
+/// `EquipmentSlotGroup`'s serialized names by network id (`EquipmentSlotGroup.BY_ID`): the slot
+/// group an [`component::ATTRIBUTE_MODIFIERS`] entry applies in.
+pub const EQUIPMENT_SLOT_GROUPS: [&str; 11] = [
+    "any", "mainhand", "offhand", "hand", "feet", "legs", "chest", "head", "armor", "body",
+    "saddle",
+];
+/// `AttributeModifier.Operation`'s serialized names by network id (`Operation.BY_ID`).
+pub const ATTRIBUTE_OPERATIONS: [&str; 3] =
+    ["add_value", "add_multiplied_base", "add_multiplied_total"];
+
 /// A written book's content (`WrittenBookContent.STREAM_CODEC`). The raw title
 /// and pages are what a book shows; the filtered variants (`Filterable.filtered`,
 /// which a server sends when chat filtering is on) are kept only so that the

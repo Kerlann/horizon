@@ -69,7 +69,13 @@ fn request(args: &[String]) -> Result<Request<'_>, String> {
     })
 }
 
+#[path = "inject_update.rs"]
+mod update;
+
 pub fn run(args: &[String]) -> Result<(), String> {
+    if args.first().is_some_and(|command| command == "update") {
+        return update::run(Path::new("."), &args[1..]);
+    }
     if args.first().is_some_and(|command| command == "sync") {
         return crate::inject_sync::run(&args[1..]);
     }
@@ -96,7 +102,7 @@ fn add(dir: &Path, args: &[String]) -> Result<(), String> {
     )
     .map_err(|e| format!("{}: {e}", points.display()))?;
     let candidate = append(&original, &manifest, &request, &internals, &catalog)?;
-    crate::internals::atomic_write(&path, candidate)
+    crate::internals::atomic_write_manifest(&path, candidate)
 }
 
 fn append(
@@ -219,7 +225,7 @@ fn append(
 #[cfg(test)]
 mod tests {
     use super::*;
-    const TEXT: &str = "# keep this comment\nid = 'example'\nname = 'Example'\nversion = '1.0.0'\napi = '0.2'\ncapabilities = ['registries']\n\n[native]\ngame = '26.3'\nmixins = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'\nhorizon = '0123456789012345678901234567890123456789'\n";
+    pub(super) const TEXT: &str = "# keep this comment\nid = 'example'\nname = 'Example'\nversion = '1.0.0'\napi = '0.2'\ncapabilities = ['registries']\n\n[native]\ngame = '26.3'\nmixins = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'\nhorizon = '0123456789012345678901234567890123456789'\n";
     fn read(path: impl AsRef<Path>) -> String {
         fs::read_to_string(path).unwrap()
     }
@@ -232,10 +238,10 @@ mod tests {
     fn invoke(dir: &Path, command: &str) -> Result<(), String> {
         add(dir, &args(command))
     }
-    fn fixture() -> (Vec<ListedInternal>, Catalog) {
+    pub(super) fn fixture() -> (Vec<ListedInternal>, Catalog) {
         (serde_json::from_str(r#"[{"path":"game::tick","kind":"method","signature":"fn tick(&mut self)","hash":"signature-fixture"}]"#).unwrap(), serde_json::from_str(r#"{"sites":[{"target":"game::tick","call":"game::first","ordinal":0,"ctx":"context-zero"},{"target":"game::tick","call":"game::first","ordinal":2,"ctx":"context-two"},{"target":"game::tick","call":"game::other","ordinal":0,"ctx":"other-context"}]}"#).unwrap())
     }
-    fn edit(text: &str, args: &str) -> Result<String, String> {
+    pub(super) fn edit(text: &str, args: &str) -> Result<String, String> {
         let args = self::args(args);
         let manifest = Manifest::parse(text)?;
         let (internals, catalog) = fixture();
@@ -357,7 +363,7 @@ mod tests {
         assert!(append(TEXT, &manifest, &request, &internals, &catalog).is_err());
     }
 
-    fn reviewer_directory(label: &str) -> std::path::PathBuf {
+    pub(super) fn reviewer_directory(label: &str) -> std::path::PathBuf {
         let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
             "../../target/reviewer-{label}-{}",
             std::process::id()
@@ -380,7 +386,13 @@ mod tests {
         invoke(&dir, "add game::tick --kind head").unwrap();
         let old = read(previous);
         let parsed = Manifest::parse(&read(&path)).unwrap();
-        let leftovers = fs::symlink_metadata(path.with_extension("toml.sync")).is_ok();
+        let leftovers = fs::read_dir(&dir).unwrap().any(|entry| {
+            entry
+                .unwrap()
+                .file_name()
+                .to_string_lossy()
+                .ends_with(".tmp")
+        });
         fs::remove_dir_all(&dir).unwrap();
         assert_eq!(
             old, TEXT,
@@ -433,11 +445,6 @@ mod tests {
         let dir = reviewer_directory("failure");
         let path = dir.join(MANIFEST);
         let command = "add game::tick --kind head";
-        let temp = path.with_extension("toml.sync");
-        fs::create_dir(&temp).unwrap();
-        assert!(invoke(&dir, command).is_err());
-        assert_eq!(read(&path), TEXT);
-        fs::remove_dir(&temp).unwrap();
         let points = dir.join(
             "target/horizon-mod/prebuilt/0123456789012345678901234567890123456789/points.json",
         );
@@ -455,15 +462,20 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    fn reviewer_symlink_manifest_does_not_overwrite_referent() {
+    fn reviewer_symlink_manifest_writes_referent() {
         let dir = reviewer_directory("symlink");
         let path = dir.join(MANIFEST);
         let referent = dir.join("referent.toml");
         fs::rename(&path, &referent).unwrap();
         std::os::unix::fs::symlink(&referent, &path).unwrap();
         invoke(&dir, "add game::tick --kind head").unwrap();
-        assert!(fs::symlink_metadata(&path).unwrap().is_file());
-        assert_eq!(read(&referent), TEXT);
+        assert!(
+            fs::symlink_metadata(&path)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(parse_manifest(&read(&referent)).inject.len(), 1);
         assert_eq!(parse_manifest(&read(path)).inject.len(), 1);
         fs::remove_dir_all(dir).unwrap();
     }

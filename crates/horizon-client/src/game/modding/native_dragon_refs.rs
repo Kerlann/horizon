@@ -228,7 +228,9 @@ mod tests {
     fn the_phase_is_read_set_synced_and_saved() {
         with_game(|game| {
             let (entity, dragon) = dragon_in(game);
-            assert_eq!(dragon.phase(game), Some(NativeDragonPhase::HoldingPattern));
+            // A constructed dragon (as with /summon) hovers; only the fight's
+            // create_new_dragon switches it to the holding pattern.
+            assert_eq!(dragon.phase(game), Some(NativeDragonPhase::Hover));
             for (i, phase) in [
                 NativeDragonPhase::HoldingPattern,
                 NativeDragonPhase::StrafePlayer,
@@ -353,6 +355,167 @@ mod tests {
             game.player.as_mut().unwrap().invulnerable = true;
             assert_eq!(mob.target(game), None);
             assert!(!mob.set_target(game, Some(living)));
+        });
+    }
+
+    /// Part `i` of the test dragon: a position nothing else shares and, from
+    /// vanilla's `EnderDragon` constructor, the part's width and height.
+    fn part_fixture(i: usize) -> ([f64; 3], [f64; 2]) {
+        const SIZES: [[f64; 2]; 8] = [
+            [1.0, 1.0],
+            [3.0, 3.0],
+            [5.0, 3.0],
+            [2.0, 2.0],
+            [2.0, 2.0],
+            [2.0, 2.0],
+            [4.0, 2.0],
+            [4.0, 2.0],
+        ];
+        let i_f = i as f64;
+        (
+            [100.0 + 10.0 * i_f, 70.0 + i_f, -20.0 + 0.5 * i_f],
+            SIZES[i],
+        )
+    }
+
+    fn place_parts(game: &mut Game<'_>) {
+        for i in 0..8 {
+            let [x, y, z] = part_fixture(i).0;
+            game.dragon.as_mut().unwrap().parts[i].0 = Vec3::new(x, y, z);
+        }
+    }
+
+    fn assert_parts_are_the_dragons_own(game: &Game<'_>, dragon: EntityRef) {
+        let parts = game.entity_parts(dragon).unwrap();
+        let ids: Vec<u32> = parts.iter().map(|part| part.id()).collect();
+        assert_eq!(ids, (dragon.id() + 1..=dragon.id() + 8).collect::<Vec<_>>());
+        assert_eq!(game.entity_is_multipart(dragon), Some(true));
+        for (i, part) in parts.iter().enumerate() {
+            let ([x, y, z], [width, height]) = part_fixture(i);
+            // The handle `entity` gives is the one `parts` listed.
+            assert_eq!(game.entity(part.id()), Some(*part));
+            assert_ne!(*part, dragon);
+            assert_eq!(game.entity_position(*part), Some([x, y, z]));
+            assert_eq!(
+                game.entity_bounding_box(*part),
+                Some([
+                    [x - width / 2.0, y, z - width / 2.0],
+                    [x + width / 2.0, y + height, z + width / 2.0]
+                ])
+            );
+            assert_eq!(
+                game.entity_kind(*part).as_deref(),
+                Some("minecraft:ender_dragon")
+            );
+            assert_eq!(game.entity_rotation(*part), Some([0.0, 0.0]));
+            assert_eq!(game.entity_velocity(*part), Some([0.0; 3]));
+            assert_eq!(game.entity_level(*part), game.entity_level(dragon));
+            assert_eq!(game.entity_is_multipart(*part), Some(false));
+            assert_eq!(game.entity_parts(*part), Some(Vec::new()));
+            // Its rotation is none, so what is up for it is up.
+            assert!(game.entity_up_vector(*part).unwrap()[1] > 0.999_999);
+            // No living entity, mob or dragon behind it.
+            assert!(game.living(*part).is_none());
+            assert!(game.mob(*part).is_none());
+            assert!(game.dragon(*part).is_none());
+        }
+        // The parent keeps its own place and has no box.
+        assert_eq!(game.entity_position(dragon), Some([0.0; 3]));
+        assert_eq!(game.entity_bounding_box(dragon), None);
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn the_dragons_parts_resolve_as_entities_of_their_own() {
+        with_game(|game| {
+            let (entity, _) = dragon_in(game);
+            place_parts(game);
+            assert_parts_are_the_dragons_own(game, entity);
+            let parts = game.entity_parts(entity).unwrap();
+            // Only the eight ids after the dragon's are its parts.
+            assert!(game.entity(entity.id() - 1).is_none());
+            assert!(game.entity(entity.id() + 9).is_none());
+            // A part cannot leave alone.
+            assert!(!game.entity_discard(parts[0]));
+            assert!(
+                !game.entity_remove(parts[7], mod_api::NativeRemovalReason::Killed)
+                    && game.entity(parts[7].id()).is_some()
+            );
+            // A handle of an earlier open names nothing.
+            let stale = EntityRef::new(
+                NativeWorldEpoch::new(entity.epoch().get() + 1),
+                parts[0].id(),
+            );
+            assert_eq!(game.entity_position(stale), None);
+            assert_eq!(game.entity_bounding_box(stale), None);
+            assert_eq!(game.entity_is_multipart(stale), None);
+            let stale_dragon = EntityRef::new(stale.epoch(), entity.id());
+            assert_eq!(game.entity_parts(stale_dragon), None);
+            // Parts cannot move independently of their parent, even without rotation.
+            let before = game.entity_position(parts[2]);
+            assert!(!game.entity_teleport_to(parts[2], [10.0, 80.0, 10.0], None));
+            assert_eq!(game.entity_position(parts[2]), before);
+            // A dragon that is dying still has its parts.
+            game.dragon.as_mut().unwrap().health = 0.0;
+            assert_eq!(game.entity_position(parts[2]), Some(part_fixture(2).0));
+            // A dragon a mod removed takes its parts with it, before the sweep.
+            assert!(game.entity_discard(entity));
+            for part in &parts {
+                assert_eq!(game.entity_position(*part), None);
+                assert!(game.entity(part.id()).is_none());
+            }
+            assert_eq!(game.entity_parts(entity), None);
+            game.native_removals_flush();
+            assert!(game.dragon.is_none());
+            for part in &parts {
+                assert_eq!(game.entity_bounding_box(*part), None);
+            }
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_dragon_that_has_no_id_yet_has_no_parts() {
+        with_game(|game| {
+            game.dragon.replace(Dragon::new(Vec3::ZERO, 0.0, 0));
+            // The ids after 0 are the player's and its neighbours', not parts.
+            for id in 1..=8 {
+                assert!(game.level_dragon_part(id).is_none());
+            }
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_clients_dragon_parts_resolve_through_its_own_copy() {
+        use super::super::execution_role::ExecutionRole;
+        use horizon_protocol::connection::Pipe;
+        with_game(|game| {
+            game.options.execution_role = ExecutionRole::Client;
+            game.options.dedicated = None;
+            let (client, _server) = Pipe::pair();
+            game.connect_local(client, "PartReadTest").unwrap();
+            let remote = game.remote.as_mut().unwrap();
+            remote.logged_in = true;
+            remote.entity_id = 7;
+            remote.profile = 42;
+            game.player =
+                Some(horizon_client::motion::PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
+            game.spawn_entity(15, "minecraft:ender_dragon", [0.0; 3], [0.0; 3]);
+            place_parts(game);
+            // The server tells this client of the dragon alone; the parts are its copies of it.
+            let dragon = game.entity(15).unwrap();
+            assert_parts_are_the_dragons_own(game, dragon);
+            let parts = game.entity_parts(dragon).unwrap();
+            // The window's own player is not one, and a stale handle is none.
+            assert_eq!(game.entity(7).map(|e| e.id()), Some(7));
+            let stale = EntityRef::new(
+                NativeWorldEpoch::new(dragon.epoch().get() + 1),
+                parts[3].id(),
+            );
+            assert_eq!(game.entity_position(stale), None);
+            game.remote.as_mut().unwrap().logged_in = false;
+            assert_eq!(game.entity_position(parts[3]), None);
         });
     }
 }

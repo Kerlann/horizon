@@ -2225,20 +2225,6 @@ impl Game<'_> {
     ) {
         self.fire_player_recipe_discovered(player, name, recipe, cancel);
     }
-    /// A server player is about to travel through a Nether portal, End portal or End gateway. `cause`
-    /// is `nether_portal`, `end_portal` or `end_gateway`. The player's state is not swapped in. Set
-    /// `cancel` to keep them in their current place. Server-side.
-    pub(in crate::game) fn native_player_portal(
-        &mut self,
-        player: u128,
-        name: &str,
-        from_dimension: &str,
-        to_dimension: &str,
-        cause: &str,
-        cancel: &mut bool,
-    ) {
-        self.fire_player_portal(player, name, from_dimension, to_dimension, cause, cancel);
-    }
     /// A server player launched with a riptide trident, after the velocity,
     /// spin attack and grounded lift have been applied. The player's state is
     /// swapped in. No reply is needed.

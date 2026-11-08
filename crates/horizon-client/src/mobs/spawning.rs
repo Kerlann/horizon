@@ -27,9 +27,9 @@ pub struct BiomeFacts {
     /// `spawns_coral_variant_zombie_nautilus` (the warm ocean).
     pub coral_nautilus: bool,
 }
-/// `SpawnPlacements.isSpawnPositionOk` for the species.
-pub fn placement_ok(species: Species, w: &MobWorld, x: i32, y: i32, z: i32) -> bool {
-    super::spawn_rules::is_spawn_position_ok(species, w, x, y, z)
+/// `SpawnPlacements.isSpawnPositionOk` for the entity type `entity`, of species `species`.
+pub fn placement_ok(entity: &str, species: Species, w: &MobWorld, x: i32, y: i32, z: i32) -> bool {
+    super::spawn_rules::is_spawn_position_ok(entity, species, w, x, y, z)
 }
 /// Mob.finalizeSpawn for natural, chunk-generation and summoned mobs.
 /// `DifficultyInstance`: the local difficulty at a position.

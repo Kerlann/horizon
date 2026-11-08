@@ -28,6 +28,7 @@ fn vanilla_models_and_animations_stay_inside_the_precheck_envelope() {
         entity_tags: Default::default(),
         pois: Default::default(),
         species_placements: Default::default(),
+        mod_spawns: Default::default(),
     };
     let camera = glam::DVec3::new(3.0, 62.0, -4.0);
     let mut checked = 0;

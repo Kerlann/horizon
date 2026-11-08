@@ -1226,6 +1226,107 @@ mod attribute_boundary_tests {
             ));
         });
     }
+
+    /// A chestplate a server sent with modifiers of its own, worn for the first
+    /// time: the first equipment pass (`collectEquipmentChanges` with nothing
+    /// worn before) asks the mods about the decoded list, so the map's first
+    /// values are the mod's answer.
+    #[test]
+    fn a_servers_stack_takes_the_mods_answer_on_first_equip() {
+        use horizon_client::living_attributes::LivingAttributes;
+        use horizon_items::equipment::{CHEST, Equipment};
+        use horizon_protocol::buf::{Codec, Reader, Writer};
+        use horizon_protocol::item::{Slot, component};
+        use horizon_protocol::registry::{Builtin, Dynamic, Ids};
+        use horizon_world::{attribute_map::ValueKind, attributes::entity::Catalog};
+        use std::sync::Arc;
+        super::prepare_stack_boundary_tests();
+        let attributes = [
+            "minecraft:armor",
+            "minecraft:armor_toughness",
+            "minecraft:knockback_resistance",
+        ];
+        let names = |n: &[&str]| n.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let mut components = vec![String::new(); 17];
+        components[component::ATTRIBUTE_MODIFIERS as usize] =
+            "minecraft:attribute_modifiers".into();
+        let builtin = Builtin {
+            registries: [
+                (
+                    "minecraft:item".to_owned(),
+                    Ids::from_names(names(&["minecraft:air", "minecraft:netherite_chestplate"])),
+                ),
+                (
+                    "minecraft:data_component_type".to_owned(),
+                    Ids::from_names(components),
+                ),
+                (
+                    "minecraft:attribute".to_owned(),
+                    Ids::from_names(names(&attributes)),
+                ),
+            ]
+            .into(),
+        };
+        // The server's patch: 10 armor and 4 toughness in the chest slot group (6).
+        let mut wire = Writer::new();
+        for v in [1, 1, 1, 0, component::ATTRIBUTE_MODIFIERS, 2] {
+            wire.varint(v);
+        }
+        for (attribute, amount) in [(0, 10.0), (1, 4.0)] {
+            wire.varint(attribute);
+            wire.string("test:forged");
+            wire.f64(amount);
+            for v in [0, 6, 0] {
+                wire.varint(v);
+            }
+        }
+        let sent = Slot::read(&mut Reader::new(&wire.data)).unwrap().unwrap();
+        let chestplate =
+            horizon_client::item_sync::from_network(&sent, &builtin, &Dynamic::default());
+        let bits = |n: f64| format!("{:016x}", n.to_bits());
+        let catalog = Arc::new(
+            Catalog::from_json(&serde_json::json!({
+                "data_version": horizon_world::DATA_VERSION,
+                "attributes": attributes.map(|id| serde_json::json!({
+                    "id": id, "default": bits(0.0), "min": bits(0.0), "max": bits(30.0),
+                    "syncable": true
+                })),
+                "entities": {
+                    "minecraft:armor_stand": serde_json::Map::from_iter(
+                        attributes.map(|id| (id.to_owned(), serde_json::json!(bits(0.0))))
+                    )
+                }
+            }))
+            .unwrap(),
+        );
+        let items = super::stack_limit_tests::catalog();
+        let mut equipment = Equipment::default();
+        equipment.set(CHEST, Some(chestplate));
+        with_mods(vec![ModEntry::new("heavy", Box::new(Heavy))].into(), || {
+            let mut live = LivingAttributes::default();
+            live.collect_equipment_changes(
+                &catalog,
+                "minecraft:armor_stand",
+                &equipment,
+                &items,
+                Vec::new,
+            )
+            .unwrap();
+            let value = |name| {
+                live.read(
+                    &catalog,
+                    "minecraft:armor_stand",
+                    name,
+                    ValueKind::Computed,
+                    Vec::new,
+                )
+            };
+            // The server's armor, the mod's knockback resistance, no toughness.
+            assert_eq!(value("minecraft:armor"), Some(10.0));
+            assert_eq!(value("minecraft:knockback_resistance"), Some(0.4));
+            assert_eq!(value("minecraft:armor_toughness"), Some(0.0));
+        });
+    }
 }
 
 #[cfg(test)]

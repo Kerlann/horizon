@@ -743,7 +743,7 @@ pub trait LevelAccess {
     }
     /// The level's dimension type.
     fn dimension_type(&self) -> &DimensionFacts {
-        DimensionFacts::of_builtin_level(self.level_key())
+        DimensionFacts::of_level(self.level_key())
     }
     fn game_rules(&self) -> GameRules {
         GameRules::default()

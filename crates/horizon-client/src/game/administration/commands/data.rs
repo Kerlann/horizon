@@ -104,7 +104,9 @@ impl Game<'_> {
         let player_uuid = self.saved_player_uuid();
         Some(match t {
             // `FishingHook.shouldBeSaved` is false, and it keeps no compound here.
-            Target::Hook(_) => return None,
+            // Neither is saved: `FishingHook.shouldBeSaved` and
+            // `EnderDragonPart.shouldBeSaved` are false.
+            Target::Hook(_) | Target::DragonPart(_) => return None,
             Target::Guest(_) => {
                 return self
                     .for_player(t, |g| g.command_target_nbt(Target::Player))

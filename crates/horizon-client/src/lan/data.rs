@@ -200,8 +200,18 @@ fn mod_dimension_types(
             .clone()
             .unwrap_or_else(|| Value::Object(<_>::default()));
         let fields = serde_json::from_str::<Value>(&dimension.dimension_type);
-        if let (Some(value), Ok(Value::Object(fields))) = (value.as_object_mut(), fields) {
+        if let (Some(value), Ok(Value::Object(mut fields))) = (value.as_object_mut(), fields) {
+            // The mod's attributes go over the Overworld's one by one, not in place of its sky
+            // and fog attributes.
+            let own = fields.remove("attributes");
             value.extend(fields);
+            match (value.get_mut("attributes"), own) {
+                (Some(Value::Object(base)), Some(Value::Object(own))) => base.extend(own),
+                (_, Some(own)) => {
+                    value.insert("attributes".into(), own);
+                }
+                _ => {}
+            }
         }
         entries.push(((ns.to_owned(), path.to_owned()), value, true));
     }
@@ -1248,7 +1258,10 @@ mod tests {
     #[test]
     fn a_mods_dimension_type_is_the_overworlds_under_the_packs() {
         use horizon_world::{loot::PackOverlay, worldgen::overrides::ModDimension};
-        let overworld = serde_json::json!({"min_y":-64,"height":384,"ambient_light":0.0});
+        let overworld = serde_json::json!({
+            "min_y":-64,"height":384,"ambient_light":0.0,
+            "attributes":{"minecraft:visual/sky_color":"#78a7ff","minecraft:gameplay/fast_lava":false}
+        });
         let mut entries = vec![(
             ("minecraft".to_owned(), "overworld".to_owned()),
             overworld,
@@ -1257,7 +1270,9 @@ mod tests {
         let dimension = |id: &str| ModDimension {
             id: id.into(),
             stem: String::new(),
-            dimension_type: r#"{"min_y":-128,"height":448}"#.into(),
+            dimension_type:
+                r#"{"min_y":-128,"height":448,"attributes":{"minecraft:gameplay/fast_lava":true}}"#
+                    .into(),
         };
         mod_dimension_types(
             &[dimension("test:pocket"), dimension("test:packed")],
@@ -1274,7 +1289,10 @@ mod tests {
         assert!(*sent, "no client knows a mod's type");
         assert_eq!(
             *pocket,
-            serde_json::json!({"min_y":-128,"height":448,"ambient_light":0.0})
+            serde_json::json!({
+                "min_y":-128,"height":448,"ambient_light":0.0,
+                "attributes":{"minecraft:visual/sky_color":"#78a7ff","minecraft:gameplay/fast_lava":true}
+            })
         );
         assert_eq!(
             entry("packed").1,

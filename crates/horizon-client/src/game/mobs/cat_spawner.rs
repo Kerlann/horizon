@@ -60,6 +60,7 @@ impl Game<'_> {
             return;
         }
         let ok = spawn_rules::is_spawn_position_ok(
+            "minecraft:cat",
             Species::Cat,
             &self.mob_world_base(&[]),
             pos[0],

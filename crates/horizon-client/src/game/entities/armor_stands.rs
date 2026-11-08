@@ -805,6 +805,17 @@ impl Game<'_> {
         let time = self.world.game_time;
         let at = self.armor_stands[i].position;
         let at = [at.x, at.y, at.z];
+        // `Entity.isInvulnerableTo` before ArmorStand's own branches (#916):
+        // the saved flag or window refuses the hit — past only for
+        // #bypasses_invulnerability damage and a creative player's hit
+        // (`DamageSource.isCreativePlayer`).
+        if self.saved_refuses_damage(
+            self.armor_stands[i].id,
+            "minecraft:player_attack",
+            self.creative,
+        ) {
+            return false;
+        }
         if self.creative {
             let (width, height) = stand_box(&self.armor_stands[i]);
             self.armor_stands.remove(i);
@@ -865,6 +876,9 @@ impl Game<'_> {
                 continue;
             }
             self.armor_stands[i].first_tick = false;
+            // Entity.baseTick: the saved invulnerability window counts down
+            // (#916).
+            self.tick_saved_invulnerable_time(self.armor_stands[i].id);
             self.armor_stand_location_effects(i, false);
             let a = &mut self.armor_stands[i];
             a.previous = a.position;

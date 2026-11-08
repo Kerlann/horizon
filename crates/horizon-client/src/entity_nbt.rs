@@ -759,9 +759,11 @@ pub fn mob_to_nbt(
         "Invulnerable".into(),
         Tag::Byte(i8::from(m.invulnerable_flag)),
     );
-    // Entity.saveWithoutId: the hurt immunity left, only while there is some.
-    if m.invulnerable > 0 {
-        map.insert("invulnerable_time".into(), Tag::Int(m.invulnerable));
+    // Entity.saveWithoutId: `invulnerable_time` — the entity-level window
+    // (#916), not the hurt cooldown (LivingEntity saves none) — only while
+    // it runs.
+    if m.invulnerable_time > 0 {
+        map.insert("invulnerable_time".into(), Tag::Int(m.invulnerable_time));
     } else {
         map.remove(&horizon_core::nbt::JavaString::from("invulnerable_time"));
     }
@@ -2085,8 +2087,12 @@ pub fn mob_from_nbt(
     }
     m.silent = flag(tag, "Silent");
     m.invulnerable_flag = flag(tag, "Invulnerable");
-    // Entity.load: `getIntOr("invulnerable_time", 0)`.
-    m.invulnerable = number(tag.get("invulnerable_time")).unwrap_or(0) as i32;
+    // Entity.load: `getIntOr("invulnerable_time", 0)` — the entity-level
+    // window (#916); the hurt cooldown never loads.
+    m.invulnerable_time = match tag.get("invulnerable_time") {
+        Some(Tag::Int(ticks)) => *ticks,
+        _ => 0,
+    };
     if m.species() == crate::mobs::Species::Bat {
         // Bat.readAdditionalSaveData: BatFlags bit 0, resting.
         m.extra.flag = number(tag.get("BatFlags")).unwrap_or(0) & 1 != 0;

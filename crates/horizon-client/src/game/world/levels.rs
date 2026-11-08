@@ -137,13 +137,25 @@ pub(super) struct Levels {
     /// The levels whose open the mods heard (`native_level_load`), each to
     /// be told closed once.
     heard_open: Vec<Dim>,
+    /// The levels a mod asked to have saved (`level_request_save`), each once, saved at the start
+    /// of the next server tick.
+    requested_saves: Vec<Dim>,
 }
 
 impl Levels {
+    /// Queue `dim` to be saved at the start of the next server tick; a level already queued is
+    /// not queued twice.
+    pub(in crate::game) fn request_save(&mut self, dim: Dim) {
+        if !self.requested_saves.contains(&dim) {
+            self.requested_saves.push(dim);
+        }
+    }
+
     /// Clear every parked level and dimensions recorded as heard open.
     pub(super) fn clear(&mut self) {
         self.parked.clear();
         self.heard_open.clear();
+        self.requested_saves.clear();
     }
 
     /// A parked level, without opening or loading it.
@@ -655,6 +667,9 @@ impl Game<'_> {
             None
         };
         let server = self.serving.is_some() || self.options.dedicated.is_some();
+        if server {
+            self.run_requested_saves();
+        }
         // A config edited while the server is paused (empty) still reloads.
         // The parts outside every level get spans of their own, so that a slow
         // tick's line and `horizon-report` say when a mod's tick hook took it.
@@ -993,6 +1008,29 @@ impl Game<'_> {
         }
     }
 
+    /// Save the levels mods asked for since the last tick, each as an autosave does but with its
+    /// chunks on disk when it ends: `level_save` fires for each that was written, and one that
+    /// could not be is logged. A level not open any more is opened to be saved, like a parked one.
+    /// The level in place is put back.
+    pub(super) fn run_requested_saves(&mut self) {
+        let requested = std::mem::take(&mut self.levels.requested_saves);
+        if requested.is_empty() || self.remote.is_some() {
+            return;
+        }
+        let back = self.dim;
+        for dim in requested {
+            if let Err(e) = self.enter_level(dim).and_then(|()| self.save_level(true)) {
+                log::error!("saving {} on a mod's request failed: {e}", dim.id());
+            }
+        }
+        if let Err(e) = self.enter_level(back) {
+            log::error!(
+                "returning to {} after a requested save failed: {e}",
+                back.id()
+            );
+        }
+    }
+
     /// Save every parked level (`MinecraftServer.saveAllChunks`); the level
     /// in place is the caller's to save.
     pub(super) fn save_parked_levels(&mut self, wait: bool) -> Result<()> {
@@ -1277,5 +1315,22 @@ mod tests {
             }
         }
         assert!(failures.is_empty(), "reopened borders: {failures:#?}");
+    }
+}
+
+#[cfg(test)]
+mod request_save_tests {
+    use super::{Dim, Levels};
+
+    /// A level asked for twice is queued once, and clearing the levels drops the queue.
+    #[test]
+    fn a_level_asked_for_twice_is_saved_once() {
+        let mut levels = Levels::default();
+        levels.request_save(Dim::Nether);
+        levels.request_save(Dim::Nether);
+        levels.request_save(Dim::End);
+        assert_eq!(levels.requested_saves, [Dim::Nether, Dim::End]);
+        levels.clear();
+        assert!(levels.requested_saves.is_empty());
     }
 }

@@ -24,6 +24,7 @@ use horizon_world::{
     registry::BlockStateId,
     world_ray::{RayBlockMode, RayFluidMode, RayWorld, clip_world},
 };
+use mod_api::Hand;
 use std::{
     io,
     path::{Path, PathBuf},
@@ -501,10 +502,6 @@ impl Game<'_> {
             .using
             .and_then(|(slot, _)| self.stack_in(slot))
             .map_or_else(Default::default, |stack| self.item_use_animation(stack));
-        let held_arm_pose = self.held_arm_poses(
-            self.own_entity_id() as u32,
-            [self.selected, super::shield::OFFHAND_SLOT].map(|slot| self.stack_in(slot)),
-        );
         let charged = self.inventory[self.selected]
             .as_ref()
             .is_some_and(|s| s.data().is_some_and(|d| !d.charged.is_empty()));
@@ -647,7 +644,7 @@ impl Game<'_> {
         m.extra.using_item = using;
         m.extra.using_off_hand = using_off_hand;
         m.extra.use_animation = use_animation;
-        m.extra.held_arm_pose = held_arm_pose;
+        m.extra.held_arm_pose = [None; 2];
         m.extra.charged = charged;
         m.extra.ints[5] = charge_duration;
         m.extra.elytra.tick(fall_flying, crouching, velocity);
@@ -662,6 +659,12 @@ impl Game<'_> {
         m.extra.swing_right_arm = swing_right_arm;
         m.extra.swing_stab = self.swing.current.is_some_and(|c| c.animation.kind == 2);
         m.hurt_time = hurt;
+        let poses = self.held_arm_poses_with_stacks(
+            self.own_entity_id() as u32,
+            self.player_model.as_ref().unwrap(),
+            [self.selected, super::shield::OFFHAND_SLOT].map(|slot| self.stack_in(slot)),
+        );
+        self.player_model.as_mut().unwrap().extra.held_arm_pose = poses;
     }
     /// `Entity.turn` for the player, by the mouse, a pad, the arrow keys or an
     /// agent's `turn`.
@@ -1212,26 +1215,70 @@ impl Game<'_> {
             out,
         );
     }
-    /// `IClientItemExtensions.getArmPose` for each hand's stack, else the item's declared
-    /// `arm_pose`: the pose that replaces the one `AvatarRenderer.getArmPose` derives. An
-    /// empty hand keeps vanilla's.
+    /// Decide in the render layer, fire with a ClientHost, then stage the answer
+    /// on this tick's model. Stack snapshots are converted only with subscribers.
     pub(super) fn held_arm_poses(
         &self,
         entity_id: u32,
+        m: &Mob,
+    ) -> [Option<horizon_core::arm_pose::ArmPose>; 2] {
+        self.held_arm_poses_with_stacks(
+            entity_id,
+            m,
+            [
+                horizon_items::equipment::MAINHAND,
+                horizon_items::equipment::OFFHAND,
+            ]
+            .map(|slot| m.extra.slot_stack(slot)),
+        )
+    }
+
+    fn held_arm_poses_with_stacks(
+        &self,
+        entity_id: u32,
+        m: &Mob,
         stacks: [Option<&horizon_client::items::ItemStack>; 2],
     ) -> [Option<horizon_core::arm_pose::ArmPose>; 2] {
-        let mut poses = [None; 2];
+        use super::api_values::TryIntoApi;
+        use horizon_client::mobs::anim::humanoid_arm_poses;
+        let stacks =
+            stacks.map(|stack| stack.filter(|s| s.count > 0 && &*s.item != "minecraft:air"));
+        let mut poses = stacks.map(|stack| {
+            stack
+                .and_then(|s| self.items().get(&s.item))
+                .and_then(|info| info.arm_pose)
+        });
+        if !mod_api::__private::listened(mod_api::HookId::GetArmPose) {
+            return poses;
+        }
+        let [main_arm_pose, off_arm_pose] = humanoid_arm_poses(m, poses, m.anim.attack_anim);
+        let api_stacks = stacks.map(|stack| stack.and_then(|stack| stack.try_into_api().ok()));
+        let humanoid = mod_api::HumanoidRenderState {
+            main_hand: api_stacks[0].as_ref(),
+            off_hand: api_stacks[1].as_ref(),
+            main_arm_left: m.main_arm_left(),
+            use_hand: (m.extra.using_item > 0).then_some(if m.extra.using_off_hand {
+                Hand::Off
+            } else {
+                Hand::Main
+            }),
+            ticks_using_item: m.extra.using_item,
+            use_animation: m.extra.use_animation,
+            main_arm_pose,
+            off_arm_pose,
+        };
         for ((pose, stack), hand) in poses
             .iter_mut()
-            .zip(stacks)
-            .zip(mod_api::first_person::Hand::BOTH)
+            .zip(api_stacks.iter().map(Option::as_ref))
+            .zip(Hand::BOTH)
         {
-            let Some(stack) = stack.filter(|s| s.count > 0 && &*s.item != "minecraft:air") else {
+            let Some(stack) = stack else {
                 continue;
             };
-            self.native_get_arm_pose(entity_id, hand, stack, pose);
-            if pose.is_none() {
-                *pose = self.items().get(&stack.item).and_then(|info| info.arm_pose);
+            let mut answer = None;
+            self.native_get_arm_pose(entity_id, hand, stack, &humanoid, &mut answer);
+            if answer.is_some() {
+                *pose = answer;
             }
         }
         poses
@@ -1771,6 +1818,7 @@ mod preview_tests {
             blinks: Default::default(),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
             pathfindable_overrides: Default::default(),
         };
         let draw = |body: bool| {

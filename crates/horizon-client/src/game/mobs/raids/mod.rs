@@ -132,7 +132,7 @@ impl RaidLevel for Lvl<'_, '_> {
     fn ravager_can_spawn(&self, [x, y, z]: [i32; 3]) -> bool {
         let g = self.game;
         let w = g.mob_world_base(&[]);
-        spawn_rules::is_spawn_position_ok(Species::Ravager, &w, x, y, z)
+        spawn_rules::is_spawn_position_ok("minecraft:ravager", Species::Ravager, &w, x, y, z)
             || w.block_name(x, y - 1, z) == "minecraft:snow"
                 && g.res.facts().is_air(g.world.block(x, y, z))
     }

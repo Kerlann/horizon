@@ -2996,6 +2996,7 @@ mod tests {
             blinks: Default::default(),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
             pathfindable_overrides: Default::default(),
         };
         let atlas = |name: &str| {
@@ -3090,6 +3091,7 @@ mod tests {
             blinks: Default::default(),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
             pathfindable_overrides: Default::default(),
         };
         let atlas = |name: &str| {
@@ -3148,6 +3150,7 @@ mod tests {
             blinks: Default::default(),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
             pathfindable_overrides: Default::default(),
         };
         for left in [false, true] {
@@ -3265,6 +3268,7 @@ mod tests {
             blinks: Default::default(),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
             pathfindable_overrides: Default::default(),
         };
         let atlas = |_: &str| Some([0.0, 0.0, 0.25, 0.25]);
@@ -3572,6 +3576,7 @@ mod scroll_tests {
             blinks: Default::default(),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
             pathfindable_overrides: Default::default(),
         };
         let atlas = |name: &str| {
@@ -3739,6 +3744,7 @@ mod emissive_tests {
             blinks: RwLock::new(blinks),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
             pathfindable_overrides: Default::default(),
         }
     }
@@ -4020,6 +4026,7 @@ mod random_texture_tests {
             entity_tags: Default::default(),
             pois: Default::default(),
             species_placements: Default::default(),
+            mod_spawns: Default::default(),
             pathfindable_overrides: Default::default(),
         }
     }

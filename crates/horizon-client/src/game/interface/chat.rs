@@ -944,6 +944,16 @@ impl Game<'_> {
         if let Some(names) = self.remote_online_names() {
             self.ui.registries.players = names;
         }
+        // ClientPacketListener.levels(): the level keys of the login packet,
+        // data-pack and mod dimensions included.
+        if let Some(levels) = self
+            .remote
+            .as_ref()
+            .map(|r| r.levels.clone())
+            .filter(|l| !l.is_empty())
+        {
+            self.ui.registries.dimensions = levels;
+        }
         self.ui.registries.custom_completions = self.remote_custom_completions();
     }
     /// `ChatComponent.createScreen`: T or / opens the chat with the draft kept

@@ -1227,6 +1227,13 @@ impl Game<'_> {
             return;
         };
         if Dim::from_id(&host.hub.guests[gi].dimension) != dim {
+            if !self.server_player_travel_allowed(
+                own,
+                dim,
+                crate::game::server_travel::TravelCause::Teleport,
+            ) {
+                return;
+            }
             self.level_teleports
                 .push(crate::game::server_travel::LevelTeleport {
                     conn: own,

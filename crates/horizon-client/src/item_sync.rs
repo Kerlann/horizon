@@ -10,6 +10,7 @@ use horizon_protocol::item::{Component, Profile, Stack, Template, component};
 use horizon_protocol::registry::{Builtin, Dynamic};
 use std::sync::Arc;
 
+pub(crate) mod attribute_modifiers;
 pub(crate) mod kinetic;
 
 /// A stack from the wire: its item by the built-in registry's id, its
@@ -302,6 +303,15 @@ fn components_tag(s: &Stack, builtin: &Builtin, synced: &Dynamic) -> Option<Tag>
                 };
                 kinetic
             }
+            // `ItemAttributeModifiers`: what the stack grants where it is worn or
+            // held, which its tooltip and its wearer's attributes read in place
+            // of its item type's (`item_attributes`).
+            Component::Raw(bytes) if *kind == component::ATTRIBUTE_MODIFIERS => {
+                let Some(modifiers) = attribute_modifiers::decode(bytes, builtin) else {
+                    continue;
+                };
+                modifiers
+            }
             // AdventureModePredicate: the blocks an adventure player may break
             // or place on, which this client matches as the server does.
             Component::Raw(bytes) if matches!(*kind, component::CAN_BREAK | CAN_PLACE_ON) => {
@@ -526,8 +536,13 @@ fn components_tag(s: &Stack, builtin: &Builtin, synced: &Dynamic) -> Option<Tag>
     let mut out = Tag::compound(entries);
     if let Tag::Compound(map) = &mut out {
         for id in &s.removed {
-            if matches!(*id, component::MAX_STACK_SIZE | component::KINETIC_WEAPON)
-                && let Some(name) = name(*id)
+            // A removed `attribute_modifiers` grants nothing, not its item type's.
+            if matches!(
+                *id,
+                component::MAX_STACK_SIZE
+                    | component::KINETIC_WEAPON
+                    | component::ATTRIBUTE_MODIFIERS
+            ) && let Some(name) = name(*id)
             {
                 map.insert(
                     format!("!{name}").as_str().into(),
@@ -1516,6 +1531,94 @@ mod tests {
             variant(&from_network(&wire, &builtin, &dynamic)),
             variant(&alban)
         );
+    }
+
+    /// A stack's own `attribute_modifiers` (id 16) cross the wire both ways: a
+    /// server's patch reaches the client's stack as the list its attributes and
+    /// tooltip read in place of the item type's, a patch that removes the
+    /// component leaves it none, and a host sends both on as they came.
+    #[test]
+    fn a_stacks_own_attribute_modifiers_cross_the_wire() {
+        use horizon_items::item_data::ModifierRow;
+        use horizon_protocol::buf::{Codec, Reader, Writer};
+        use horizon_protocol::item::Slot;
+        let names = |n: &[&str]| n.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        let mut components = vec![String::new(); 17];
+        components[component::ATTRIBUTE_MODIFIERS as usize] =
+            "minecraft:attribute_modifiers".into();
+        let builtin = Builtin {
+            registries: [
+                (
+                    "minecraft:item".to_owned(),
+                    Ids::from_names(names(&["minecraft:air", "minecraft:diamond_helmet"])),
+                ),
+                (
+                    "minecraft:data_component_type".to_owned(),
+                    Ids::from_names(components),
+                ),
+                (
+                    "minecraft:attribute".to_owned(),
+                    Ids::from_names(names(&[
+                        "minecraft:armor",
+                        "minecraft:armor_toughness",
+                        "minecraft:luck",
+                    ])),
+                ),
+            ]
+            .into(),
+        };
+        let dynamic = Dynamic::default();
+        let id = |registry: &str, name: &str| builtin.get(registry)?.id(name);
+        let sent_on = |stack: ItemStack| {
+            let wire = crate::lan::guest::stack_to_network(
+                |name| id("minecraft:item", name).unwrap_or(0),
+                id,
+                &Some(stack),
+            );
+            let mut w = Writer::new();
+            Slot::write(&wire, &mut w);
+            w.data
+        };
+        let helmet = [ModifierRow::new(
+            "minecraft:armor",
+            "minecraft:armor.helmet",
+            3.0,
+            "add_value",
+            "head",
+        )];
+        // ItemStack.OPTIONAL_STREAM_CODEC: one diamond helmet, one component
+        // added: one entry, luck (id 2), `test:charm`, 1.5, add_value (0), the
+        // head slot group (7) and the default display (0).
+        let mut vanilla = Writer::new();
+        for v in [1, 1, 1, 0, component::ATTRIBUTE_MODIFIERS, 1, 2] {
+            vanilla.varint(v);
+        }
+        vanilla.string("test:charm");
+        vanilla.f64(1.5);
+        for v in [0, 7, 0] {
+            vanilla.varint(v);
+        }
+        let stack = Slot::read(&mut Reader::new(&vanilla.data))
+            .unwrap()
+            .unwrap();
+        let back = from_network(&stack, &builtin, &dynamic);
+        assert_eq!(
+            &*back.default_attribute_modifiers_or(&helmet),
+            [ModifierRow::new(
+                "minecraft:luck",
+                "test:charm",
+                1.5,
+                "add_value",
+                "head"
+            )]
+        );
+        assert_eq!(sent_on(back), vanilla.data);
+        // The same helmet with the component removed: no modifiers at all.
+        let removed = [1, 1, 0, 1, component::ATTRIBUTE_MODIFIERS as u8];
+        let stack = Slot::read(&mut Reader::new(&removed)).unwrap().unwrap();
+        let back = from_network(&stack, &builtin, &dynamic);
+        assert!(back.default_attribute_modifiers_or(&helmet).is_empty());
+        assert_eq!(sent_on(back), removed);
     }
 
     /// A sign picked with its data (`SignBlockEntity.collectImplicitComponents`)

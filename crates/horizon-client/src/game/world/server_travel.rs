@@ -16,6 +16,37 @@ use horizon_client::{lan::hub::TickCtx, world_spawn::PlayerSpawnFinder};
 use horizon_core::{geometry::Vec3, position::BlockPos};
 use horizon_protocol::packets::play::{self, Clientbound as C};
 
+/// Why an entity changes level (`entity_travel_to_dimension`'s `cause`).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) enum TravelCause {
+    NetherPortal,
+    EndPortal,
+    EndGateway,
+    /// A teleport into another level (`/tp`, a spectator's teleport).
+    Teleport,
+}
+
+impl TravelCause {
+    /// The name a mod is told.
+    pub(super) fn id(self) -> &'static str {
+        match self {
+            Self::NetherPortal => "nether_portal",
+            Self::EndPortal => "end_portal",
+            Self::EndGateway => "end_gateway",
+            Self::Teleport => "teleport",
+        }
+    }
+
+    /// The portal a plan goes through.
+    pub(super) fn of_plan(plan: &Plan) -> Self {
+        if plan.end {
+            Self::EndPortal
+        } else {
+            Self::NetherPortal
+        }
+    }
+}
+
 /// A trip under way: the player is in the destination's level, whose
 /// chunks are loading around `target`.
 pub(super) struct Trip {
@@ -328,7 +359,10 @@ impl Game<'_> {
                         });
                         return true;
                     }
-                    self.start_server_trip(conn, plan.dim, Some(plan), false);
+                    if self.server_player_travel_allowed(conn, plan.dim, TravelCause::NetherPortal)
+                    {
+                        self.start_server_trip(conn, plan.dim, Some(plan), false);
+                    }
                 }
             }
             "end_portal" => {
@@ -336,10 +370,16 @@ impl Game<'_> {
                 // Entity.canTeleport: out of the End only after the credits.
                 if !from_end || seen_credits {
                     let target = if from_end { Dim::Overworld } else { Dim::End };
-                    self.start_server_trip(conn, target, None, false);
+                    if self.server_player_travel_allowed(conn, target, TravelCause::EndPortal) {
+                        self.start_server_trip(conn, target, None, false);
+                    }
                 }
             }
-            _ => self.start_gateway_trip(conn, pos),
+            _ => {
+                if self.server_player_travel_allowed(conn, self.dim, TravelCause::EndGateway) {
+                    self.start_gateway_trip(conn, pos);
+                }
+            }
         }
         true
     }
@@ -358,15 +398,40 @@ impl Game<'_> {
         exists
     }
 
-    /// Whether this guest's dimension change may start (`native_player_portal`).
-    fn server_player_portal_allowed(&mut self, conn: u32, target: Dim, cause: &str) -> bool {
+    /// Whether this guest's dimension change may start
+    /// (`entity_may_travel`).
+    pub(super) fn server_player_travel_allowed(
+        &mut self,
+        conn: u32,
+        target: Dim,
+        cause: TravelCause,
+    ) -> bool {
         let Some(g) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
             return false;
         };
-        let (player, name) = (g.uuid, g.name.clone());
-        let (from, to) = (self.dim.id(), target.id());
+        let entity = g.entity_id;
+        self.entity_may_travel(entity as u32, target, cause)
+    }
+
+    /// `EntityTravelToDimensionEvent`: whether the entity `id` (the network
+    /// id its handle names) may travel to the level `to`, asked before
+    /// anything of it moves. Only a server asks, and only when a mod listens.
+    pub(super) fn entity_may_travel(&mut self, id: u32, to: Dim, cause: TravelCause) -> bool {
+        if !self.native_authoritative()
+            || !mod_api::__private::listened(mod_api::HookId::EntityTravelToDimension)
+        {
+            return true;
+        }
+        let Some(epoch) = self.native_lifecycle.epoch() else {
+            return true;
+        };
         let mut cancel = false;
-        self.native_player_portal(player, &name, from, to, cause, &mut cancel);
+        self.native_entity_travel_to_dimension(
+            mod_api::EntityRef::new(epoch, id),
+            to.id(),
+            cause.id(),
+            &mut cancel,
+        );
         !cancel
     }
 
@@ -406,7 +471,8 @@ impl Game<'_> {
                 .get(&conn)
                 .is_some_and(|play| play.respawn_requested)
             {
-                if !self.server_player_portal_allowed(conn, Dim::Overworld, "end_portal") {
+                if !self.server_player_travel_allowed(conn, Dim::Overworld, TravelCause::EndPortal)
+                {
                     return;
                 }
                 let Some(host) = self.lan.as_mut() else {
@@ -455,7 +521,7 @@ impl Game<'_> {
                 } else {
                     Dim::End
                 };
-                if !self.server_player_portal_allowed(conn, target, "end_portal") {
+                if !self.server_player_travel_allowed(conn, target, TravelCause::EndPortal) {
                     return;
                 }
                 self.start_server_trip(conn, target, None, false);
@@ -481,7 +547,7 @@ impl Game<'_> {
                 if cancel {
                     return;
                 }
-                if !self.server_player_portal_allowed(conn, self.dim, "end_gateway") {
+                if !self.server_player_travel_allowed(conn, self.dim, TravelCause::EndGateway) {
                     return;
                 }
             }
@@ -511,7 +577,7 @@ impl Game<'_> {
         if !self.may_enter(plan.dim) {
             return;
         }
-        if !self.server_player_portal_allowed(conn, plan.dim, "nether_portal") {
+        if !self.server_player_travel_allowed(conn, plan.dim, TravelCause::NetherPortal) {
             // The processor already reached its threshold. Forget this attempt
             // so a canceled trip must complete a fresh portal wait before retrying.
             self.portals.player.process = None;
@@ -549,6 +615,15 @@ impl Game<'_> {
                 && riders
                     .iter()
                     .any(|c| !host.hub.guest(*c).is_some_and(|g| g.seen_credits))
+            {
+                continue;
+            }
+            // The vehicle and each rider are asked; one cancel keeps them all.
+            let cause = TravelCause::of_plan(&plan);
+            if !self.entity_may_travel(vehicle, plan.dim, cause)
+                || !riders
+                    .iter()
+                    .all(|&conn| self.server_player_travel_allowed(conn, plan.dim, cause))
             {
                 continue;
             }

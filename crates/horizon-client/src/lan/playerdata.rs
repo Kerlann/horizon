@@ -280,6 +280,12 @@ pub fn apply(guest: &mut Guest, level: &Level) {
         food_exhaustion: level.food_exhaustion,
         food_tick_timer: level.food_tick_timer,
         ticks_frozen: short("TicksFrozen", 0),
+        // The `Invulnerable` flag and its window, as the host's own load
+        // reads them (#916).
+        invulnerable: extra
+            .and_then(|t| crate::save::number(t.get("Invulnerable")))
+            .is_some_and(|v| v != 0),
+        invulnerable_time: short("invulnerable_time", 0),
     });
     guest.saved_vehicle = level.root_vehicle;
     guest.recipe_book = level.recipe_book.clone();
@@ -590,6 +596,20 @@ pub fn store(guest: &Guest, level: &mut Level, vehicle: Option<Tag>) {
                 );
             } else {
                 map.remove(&"TicksFrozen".into());
+            }
+            // The `Invulnerable` flag always, its `invulnerable_time` window
+            // only while open, as the host's own save keeps them (#916).
+            map.insert(
+                "Invulnerable".into(),
+                horizon_core::nbt::Tag::Byte(i8::from(body.invulnerable)),
+            );
+            if body.invulnerable_time > 0 {
+                map.insert(
+                    "invulnerable_time".into(),
+                    horizon_core::nbt::Tag::Int(body.invulnerable_time),
+                );
+            } else {
+                map.remove(&"invulnerable_time".into());
             }
         }
     }
@@ -1162,6 +1182,8 @@ mod tests {
             food_exhaustion: 0.0,
             food_tick_timer: 0,
             ticks_frozen: 0,
+            invulnerable: false,
+            invulnerable_time: 0,
         });
         let mut level = Level::default();
         store(&g, &mut level, None);
@@ -1171,6 +1193,37 @@ mod tests {
         read.player_extra = Some(tag);
         let mut back = guest();
         apply(&mut back, &read);
+        assert_eq!(back.loaded_body, g.loaded_body);
+    }
+
+    /// #916, coderabbit: a guest's `Invulnerable` flag and its window ride
+    /// the file as the host's own do — saved with the body, read back for
+    /// the next one; a window closed since goes.
+    #[test]
+    fn a_saved_flag_and_window_come_back() {
+        let mut g = guest();
+        g.loaded_body = Some(SavedBody {
+            fire_ticks: -20,
+            air: 300,
+            fall_distance: 0.0,
+            velocity: [0.0; 3],
+            food_exhaustion: 0.0,
+            food_tick_timer: 0,
+            ticks_frozen: 0,
+            invulnerable: true,
+            invulnerable_time: 41,
+        });
+        let (tag, back) = round_trip(&g);
+        assert_eq!(tag.get("Invulnerable"), Some(&Tag::Byte(1)));
+        assert_eq!(tag.get("invulnerable_time"), Some(&Tag::Int(41)));
+        assert_eq!(back.loaded_body, g.loaded_body);
+        // Closed since the file was written: the window's key goes, the
+        // flag stays.
+        let mut g = back;
+        g.loaded_body.as_mut().unwrap().invulnerable_time = 0;
+        let (tag, back) = round_trip(&g);
+        assert_eq!(tag.get("invulnerable_time"), None);
+        assert_eq!(tag.get("Invulnerable"), Some(&Tag::Byte(1)));
         assert_eq!(back.loaded_body, g.loaded_body);
     }
 
@@ -1229,6 +1282,8 @@ mod tests {
             food_exhaustion: 0.0,
             food_tick_timer: 0,
             ticks_frozen: 0,
+            invulnerable: false,
+            invulnerable_time: 0,
         });
         let (tag, back) = round_trip(&g);
         let mut read = Level::default();
@@ -1253,6 +1308,8 @@ mod tests {
             food_exhaustion: 2.75,
             food_tick_timer: 37,
             ticks_frozen: 0,
+            invulnerable: false,
+            invulnerable_time: 0,
         });
         let (tag, back) = round_trip(&g);
         assert_eq!(
@@ -1297,6 +1354,8 @@ mod tests {
             food_exhaustion: 0.0,
             food_tick_timer: 0,
             ticks_frozen: ticks,
+            invulnerable: false,
+            invulnerable_time: 0,
         };
         let mut g = guest();
         g.loaded_body = Some(frozen(120));

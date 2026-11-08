@@ -67,6 +67,10 @@ pub(super) enum Target {
     Crystal(u32),
     /// The Ender Dragon, by its entity id (`minecraft:ender_dragon`).
     Dragon(u32),
+    /// One of the dragon's eight `EnderDragonPart`s, by its own entity id (the
+    /// eight after the dragon's). Only a mod's handle names one: a part is no
+    /// selector's, command's or save's entity.
+    DragonPart(u32),
     /// A primed TNT, by its entity id (`minecraft:tnt`).
     Tnt(u32),
     /// A cushion, by its entity id (`minecraft:cushion`).
@@ -190,6 +194,7 @@ fn non_player_entity_id(t: Target) -> Option<i32> {
     | Target::Fangs(id)
     | Target::Crystal(id)
     | Target::Dragon(id)
+    | Target::DragonPart(id)
     | Target::Tnt(id)
     | Target::Cushion(id)
     | Target::Falling(id)
@@ -611,6 +616,10 @@ impl Game<'_> {
                 .iter()
                 .find(|c| c.id == id)
                 .map(|c| [c.position.x, c.position.y, c.position.z]),
+            Target::DragonPart(id) => self.resident_dragon_part(id).map(|(d, i)| {
+                let p = d.parts[i].0;
+                [p.x, p.y, p.z]
+            }),
             Target::Tnt(id) => self
                 .tnts
                 .iter()
@@ -687,7 +696,8 @@ impl Game<'_> {
                 .find(|o| o.id == id)
                 .map_or_else(String::new, |o| o.kind.clone()),
             Target::Crystal(_) => "minecraft:end_crystal".into(),
-            Target::Dragon(_) => "minecraft:ender_dragon".into(),
+            // `EnderDragonPart` takes its parent's type.
+            Target::Dragon(_) | Target::DragonPart(_) => "minecraft:ender_dragon".into(),
             Target::Tnt(_) => "minecraft:tnt".into(),
             Target::Cushion(_) => "minecraft:cushion".into(),
             Target::Falling(_) => "minecraft:falling_block".into(),
@@ -1071,6 +1081,13 @@ impl Game<'_> {
         .into_iter()
         .find(|t| self.level_holds(*t))
     }
+    /// `ServerLevel.getEntityOrPart` for a part: the `EnderDragonPart` of the
+    /// level in place with this network id. `level_entity` does not find it,
+    /// as `Level.getEntity` does not: no selector or command reaches a part.
+    pub(in crate::game) fn level_dragon_part(&self, id: u32) -> Option<Target> {
+        let part = Target::DragonPart(id);
+        self.level_holds(part).then_some(part)
+    }
     /// `ServerLevel.getEntity`: whether the level in place still holds the
     /// entity a target names. Discard removes mobs from lookup immediately.
     fn level_holds(&self, t: Target) -> bool {
@@ -1094,6 +1111,10 @@ impl Game<'_> {
             Target::Fangs(id) => self.fangs.list.iter().any(|f| f.id == id),
             Target::Crystal(id) => self.crystals.iter().any(|c| c.id == id),
             Target::Dragon(id) => self.dragon.as_ref().is_some_and(|d| d.id == id),
+            // A part is an entity for as long as its parent is, a removal included.
+            Target::DragonPart(id) => self
+                .resident_dragon_part(id)
+                .is_some_and(|(d, _)| !self.persist.removals.contains(&Target::Dragon(d.id))),
             Target::Tnt(id) => self.tnts.iter().any(|t| t.id == id),
             Target::Cushion(id) => self.cushions.iter().any(|c| c.id == id),
             Target::Falling(id) => self.falling.iter().any(|f| f.id == id),
@@ -1909,8 +1930,9 @@ impl Game<'_> {
                     });
                 }
             }
-            // Wall-mounted entities do not move; a hook follows its own tick.
-            Target::Frame(_) | Target::Painting(_) | Target::Hook(_) => {}
+            // Wall-mounted entities do not move; a hook follows its own tick and a
+            // dragon part its dragon's.
+            Target::Frame(_) | Target::Painting(_) | Target::Hook(_) | Target::DragonPart(_) => {}
         }
         // Entity.teleportSameDimension: the riders go with their vehicle at
         // once, by the offset it took and the turn it was given.
@@ -1931,6 +1953,25 @@ impl Game<'_> {
         }
     }
 
+    /// A mod sends `t` to `pos` in `level` (`Entity.teleportTo(ServerLevel, ..)`):
+    /// as `/tp` into another level does, or in its own level when that is
+    /// `level`. False for a kind that only moves within its level (items,
+    /// orbs, projectiles, ...), a player who is not a server guest, or a
+    /// transfer the game could not make. A fake player stays, and the call is true.
+    pub(in crate::game) fn teleport_to_level(
+        &mut self,
+        t: Target,
+        level: super::Dim,
+        pos: [f64; 3],
+        rotation: Option<[f32; 2]>,
+    ) -> bool {
+        if self.target_level(t) == level {
+            self.teleport_to(t, pos, rotation, true);
+            return true;
+        }
+        self.teleport_across(t, level, pos, rotation, true)
+            .unwrap_or(false)
+    }
     /// A server's player teleported into another level than theirs
     /// (ServerPlayer.teleport): queued to move after the command. False
     /// when `t` is not a player in another level.
@@ -1962,6 +2003,14 @@ impl Game<'_> {
         // A fake player stays in its level. True: the teleport is taken, so no
         // same-level teleport stands in for it.
         if Some(conn) == self.lan_acting && self.fake_blocks(mod_api::FakeEffect::ChangeDimension) {
+            return Ok(true);
+        }
+        // A canceled travel keeps the player where they are.
+        if !self.server_player_travel_allowed(
+            conn,
+            level,
+            super::server_travel::TravelCause::Teleport,
+        ) {
             return Ok(true);
         }
         self.level_teleports
@@ -2589,6 +2638,8 @@ impl Game<'_> {
             Target::Spawner(id) => self.ominous_spawners.retain(|s| s.id != id),
             Target::Cloud(id) => self.breath_clouds.retain(|c| c.id != id),
             Target::Hook(id) => self.remove_fishing_hook(id),
+            // No command names a part, and `kill` on one would not stop its dragon.
+            Target::DragonPart(_) => {}
         }
         // The orbs marked for removal are gone (Entity.kill removes them).
         self.orbs.retain(|o| o.age < u32::MAX / 2);
@@ -5110,6 +5161,39 @@ mod fake_travel_tests {
             // A real player's goes on the queue as before.
             assert!(matches!(to_nether(game, real), Some(Ok(true))));
             assert_eq!(game.level_teleports.len(), 1);
+        });
+    }
+
+    /// A mod's `teleport_to_level`: a player to another level goes on the queue; to their own
+    /// level, nothing is queued; what cannot change level is refused.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_mod_sends_a_player_to_another_level_and_not_an_item() {
+        super::super::native_entity_refs::tests::with_game(|game| {
+            super::super::bossbars::audience_tests::add_real_and_fake(game);
+            let conn = game
+                .lan
+                .as_ref()
+                .unwrap()
+                .hub
+                .guests
+                .iter()
+                .find(|g| g.uuid == 1)
+                .unwrap()
+                .conn;
+            let sent = |game: &mut super::super::Game<'_>, level| {
+                game.as_guest(conn, |g| {
+                    g.teleport_to_level(Target::Player, level, [0.0, 64.0, 0.0], None)
+                })
+            };
+            assert_eq!(sent(game, Dim::Nether), Some(true));
+            assert_eq!(game.level_teleports.len(), 1);
+            // Their own level: the same-level teleport, nothing queued.
+            let home = game.target_level(Target::Guest(conn));
+            assert_eq!(sent(game, home), Some(true));
+            assert_eq!(game.level_teleports.len(), 1);
+            // An item only moves within its level.
+            assert!(!game.teleport_to_level(Target::Item(9_999), Dim::Nether, [0.0; 3], None));
         });
     }
 }

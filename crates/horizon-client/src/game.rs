@@ -3705,15 +3705,32 @@ impl Game<'_> {
     fn level_key(&self) -> horizon_core::LevelKey {
         horizon_core::LevelKey::builtin_or_overworld(self.dim.id())
     }
+    /// The level's dimension type: a mod's or a data pack's own when it has one, else the
+    /// built-in level's.
     fn dimension_type(&self) -> &'static horizon_world::dimension_type::DimensionFacts {
-        horizon_world::dimension_type::DimensionFacts::of_builtin_level(self.level_key())
+        // A client of a server has the facts its server sent for the level, which are its own,
+        // not the table the server's levels (in this process, for an integrated server) read.
+        if let Some(facts) = self.remote.as_ref().and_then(|r| r.level_facts) {
+            return facts;
+        }
+        // Else the level the server named, whether or not the client has the mod that
+        // registered it (`self.dim` is then the Overworld).
+        let level = self
+            .remote
+            .as_ref()
+            .map(|r| r.level.as_str())
+            .filter(|level| !level.is_empty())
+            .unwrap_or_else(|| self.dim.id());
+        horizon_world::dimension_type::DimensionFacts::of_level(
+            horizon_core::LevelKey::parse(level).unwrap_or(horizon_core::LevelKey::OVERWORLD),
+        )
     }
     fn dimension_type_of(
         &self,
         dim: Dim,
     ) -> &'static horizon_world::dimension_type::DimensionFacts {
-        horizon_world::dimension_type::DimensionFacts::of_builtin_level(
-            horizon_core::LevelKey::builtin_or_overworld(dim.id()),
+        horizon_world::dimension_type::DimensionFacts::of_level(
+            horizon_core::LevelKey::parse(dim.id()).unwrap_or(horizon_core::LevelKey::OVERWORLD),
         )
     }
     /// `Level.isDarkOutside`.
@@ -4767,19 +4784,23 @@ impl Game<'_> {
                 round.not_ticked(items[i].id);
                 continue;
             }
-            let item = &mut items[i];
             // `addFreshEntity` during the entity pass: the item ticks from the
             // next tick on (`EntityTickList`).
-            if merging && self.joined_during_entity_pass(item.id) {
+            if merging && self.joined_during_entity_pass(items[i].id) {
                 continue;
             }
             if !ticking(
-                item.position.x.floor() as i32,
-                item.position.z.floor() as i32,
-            ) || round.canceled(item.id)
+                items[i].position.x.floor() as i32,
+                items[i].position.z.floor() as i32,
+            ) || round.canceled(items[i].id)
             {
                 continue;
             }
+            // Entity.baseTick: the entity-level invulnerability window of
+            // the saved data counts down (#916) — only for an item that
+            // really ticks in this pass.
+            self.tick_saved_invulnerable_time(items[i].id);
+            let item = &mut items[i];
             // ItemEntity.tick's noPhysics (servers only): out of a block
             // placed on it, towards the closest open side (#1252).
             let no_physics = merging && item.inside_block(&self.world, self.collision);
@@ -5447,7 +5468,14 @@ impl Game<'_> {
                 simulation_distance: self.settings.simulation_distance.max(2),
             }
         });
+        // The levels' changes are kept only for a listener, so that a tick
+        // with none looks at no chunk.
+        self.tickets.record_changes(
+            self.is_logical_server()
+                && mod_api::__private::listened(mod_api::HookId::ChunkTicketLevelUpdated),
+        );
         self.tickets.update(sources);
+        self.run_chunk_ticket_level_updates();
     }
     /// `ServerLevel.startTickingChunk`: a loaded chunk's saved ticks are
     /// scheduled from the game time at which it becomes a ticking chunk
@@ -12169,6 +12197,7 @@ impl Game<'_> {
         }
     }
     /// Run equipment continuations with the acting player installed on the real host.
+    #[allow(clippy::too_many_arguments)]
     fn hurt_player_equipment(
         &mut self,
         source: horizon_world::damage_source::DamageTypeId,
@@ -12176,6 +12205,7 @@ impl Game<'_> {
         blocking: Option<horizon_client::health::Blocking>,
         living_cause: bool,
         causing: i32,
+        creative_source: bool,
         attack: &horizon_client::health::Attack,
     ) -> horizon_client::Result<horizon_client::health::BlockOutcome> {
         let rules = self.world.health_rules;
@@ -12195,6 +12225,7 @@ impl Game<'_> {
                 blocking,
                 living_cause,
                 causing,
+                creative_source,
                 helmet,
             )?;
         if let Some(damage) = hit.helmet_damage() {
@@ -14668,6 +14699,21 @@ impl Game<'_> {
                     ),
                 );
                 map.insert("Air".into(), horizon_core::nbt::Tag::Short(p.air as i16));
+                // Entity.saveWithoutId: the `Invulnerable` flag always, its
+                // `invulnerable_time` window only while open, like a mob's
+                // save (#916).
+                map.insert(
+                    "Invulnerable".into(),
+                    horizon_core::nbt::Tag::Byte(i8::from(p.health.permanently_invulnerable)),
+                );
+                if p.health.invulnerable_time > 0 {
+                    map.insert(
+                        "invulnerable_time".into(),
+                        horizon_core::nbt::Tag::Int(p.health.invulnerable_time),
+                    );
+                } else {
+                    map.remove(&"invulnerable_time".into());
+                }
                 // LivingEntity.addAdditionalSaveData: AttributeMap.pack.
                 map.insert("attributes".into(), p.saved_attributes());
             }
@@ -17259,6 +17305,19 @@ fn load_world_rest(
             .map(|(k, v)| (k, Arc::new(v)))
             .collect();
         let mut mob_data = horizon_client::mobs::MobData::load(resource_root, facts);
+        // #847: the mods' spawn rules (`RegisterSpawnPlacementsEvent`) take
+        // their types' placement, heightmap and predicate here, once, so a
+        // spawn check reads one table with no pass over the mods.
+        for declaration in mod_api::__private::spawn_placement_declarations() {
+            if !mob_types.contains_key(&declaration.id) {
+                return Err(format!(
+                    "mod spawn placement of {} names no loaded entity type",
+                    declaration.id
+                )
+                .into());
+            }
+            mob_data.register_mod_spawn(&declaration.id, &declaration.rule);
+        }
         mob_data.cem = std::sync::RwLock::new(Arc::new(if draws {
             horizon_client::mobs::cem::CemModels::load(resource_root.source(), &mob_types)
         } else {
@@ -17554,6 +17613,7 @@ pub fn run_with(
     mods::register_range_select_item_model_properties(options.execution_role);
     mods::register_select_item_model_properties(options.execution_role);
     mods::register_item_tint_sources(options.execution_role);
+    mods::register_dimension_transition_screens(options.execution_role);
     mods::register_block_tint_sources(options.execution_role);
     mods::freeze_declarations();
     mod_phase.advance(mod_api::__private::ModPhase::Setup)?;

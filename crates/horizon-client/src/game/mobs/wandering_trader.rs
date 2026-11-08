@@ -223,7 +223,14 @@ impl Game<'_> {
             }
             let y = self.motion_top(x, z);
             let w = self.mob_world_base(&[]);
-            if spawning::placement_ok(Species::WanderingTrader, &w, x, y, z) {
+            if spawning::placement_ok(
+                "minecraft:wandering_trader",
+                Species::WanderingTrader,
+                &w,
+                x,
+                y,
+                z,
+            ) {
                 return Some([x, y, z]);
             }
         }

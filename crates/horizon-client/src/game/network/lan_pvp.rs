@@ -47,6 +47,9 @@ impl Victim {
 pub(super) struct Strike {
     /// The attacking guest, kept after their turn through `as_guest` ends.
     attacker: Option<u32>,
+    /// The attacker's creative mode: their hit passes the victim's
+    /// invulnerability (`DamageSource.isCreativePlayer`, #916).
+    creative: bool,
     amount: f32,
     scale: f32,
     crit: bool,
@@ -86,6 +89,7 @@ impl Strike {
     pub(super) fn test_blow(attacker: u32) -> Self {
         Self {
             attacker: Some(attacker),
+            creative: false,
             amount: 1.0,
             scale: 1.0,
             crit: false,
@@ -108,6 +112,9 @@ impl Strike {
 pub(super) struct Sweep {
     /// The attacking guest (none: the host).
     attacker: Option<u32>,
+    /// The attacker's creative mode: their hit passes the victim's
+    /// invulnerability (`DamageSource.isCreativePlayer`, #916).
+    creative: bool,
     from: [f64; 3],
     /// The damage after the enchantments and the attack strength.
     damage: f32,
@@ -188,6 +195,7 @@ impl Game<'_> {
         let ignite = self.weapon_ignite_seconds();
         Some(Strike {
             attacker: self.lan_acting,
+            creative: self.creative,
             amount,
             scale,
             crit,
@@ -369,7 +377,8 @@ impl Game<'_> {
                         s.item.clone(),
                     );
                 }
-                let hurt = g.mob_hits_player(s.amount, s.from, "minecraft:player_attack");
+                let hurt =
+                    g.mob_hits_player_from(s.amount, s.from, "minecraft:player_attack", s.creative);
                 g.combat.player_attacker = None;
                 let (strength, xd, zd) = s.knockback;
                 if hurt && strength > 0.0 {
@@ -522,6 +531,7 @@ impl Game<'_> {
         let damage = self.enchanted_damage("minecraft:player", base) * scale;
         Sweep {
             attacker: self.lan_acting,
+            creative: self.creative,
             from,
             damage,
             knockback: self.extra_knockback_direction(),
@@ -585,7 +595,12 @@ impl Game<'_> {
                 if let Some((id, name)) = &attacker {
                     g.note_named_attacker("minecraft:player_attack", *id, name.clone());
                 }
-                if g.mob_hits_player(sweep.damage, sweep.from, "minecraft:player_attack") {
+                if g.mob_hits_player_from(
+                    sweep.damage,
+                    sweep.from,
+                    "minecraft:player_attack",
+                    sweep.creative,
+                ) {
                     g.knock_back_player(0.4, xd, zd, PVP_SOURCE, &attack);
                     if sweep.ignite > 0.0
                         && let Some(p) = g.player.as_mut()

@@ -65,6 +65,10 @@ pub struct SavedBody {
     pub food_tick_timer: i32,
     /// `TicksFrozen`: the time spent in powder snow.
     pub ticks_frozen: i32,
+    /// `Invulnerable` and its `invulnerableTime` window (#916), the same
+    /// tags the host's own save keeps.
+    pub invulnerable: bool,
+    pub invulnerable_time: i32,
 }
 
 impl SavedBody {
@@ -79,6 +83,8 @@ impl SavedBody {
             food_exhaustion: motion.health.food.exhaustion,
             food_tick_timer: motion.health.food.timer,
             ticks_frozen: motion.ticks_frozen,
+            invulnerable: motion.health.permanently_invulnerable,
+            invulnerable_time: motion.health.invulnerable_time,
         }
     }
     /// Put it on a new body.
@@ -91,6 +97,8 @@ impl SavedBody {
         motion.health.food.exhaustion = self.food_exhaustion;
         motion.health.food.timer = self.food_tick_timer;
         motion.ticks_frozen = self.ticks_frozen;
+        motion.health.permanently_invulnerable = self.invulnerable;
+        motion.health.invulnerable_time = self.invulnerable_time;
     }
 }
 
@@ -1066,8 +1074,9 @@ pub fn stack_to_network(
 ) -> Option<Stack> {
     network_stack(&item_id, &synced_id, s)
 }
-/// `ProvidesTrimMaterial.STREAM_CODEC`, `ProvidesBannerPatterns.STREAM_CODEC` and
-/// `AdventureModePredicate.STREAM_CODEC`: encode supported typed saved forms.
+/// `ProvidesTrimMaterial.STREAM_CODEC`, `ProvidesBannerPatterns.STREAM_CODEC`,
+/// `AdventureModePredicate.STREAM_CODEC` and `ItemAttributeModifiers.STREAM_CODEC`:
+/// encode supported typed saved forms.
 /// A failed child discards this entire local buffer, including its prefix.
 fn builtin_component(
     name: &str,
@@ -1078,6 +1087,9 @@ fn builtin_component(
     use horizon_protocol::buf::Writer;
     let mut w = Writer::new();
     match name {
+        "minecraft:attribute_modifiers" => {
+            return crate::item_sync::attribute_modifiers::encode(value, ids);
+        }
         "minecraft:provides_trim_material" => match value {
             Tag::String(name) => {
                 let name = name.to_string().ok()?;
@@ -1467,6 +1479,10 @@ fn network_stack(
             (
                 "minecraft:can_break",
                 horizon_protocol::item::component::CAN_BREAK,
+            ),
+            (
+                "minecraft:attribute_modifiers",
+                horizon_protocol::item::component::ATTRIBUTE_MODIFIERS,
             ),
         ] {
             if d.other(&format!("!{name}")).is_some() {

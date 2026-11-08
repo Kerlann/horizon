@@ -271,6 +271,9 @@ impl Game<'_> {
                     Some(Target::Mob(i)) => Some(Some(i)),
                     _ => Some(None),
                 };
+                // `DamageSource.isCreativePlayer`: a creative player's hit
+                // passes the victim's invulnerability (#916).
+                let creative_source = self.creative_source_of(cause.or(by));
                 // resolvePlayerResponsibleForDamage: remember the causing player's UUID.
                 let by_player = match cause.or(by) {
                     Some(Target::Player) => self.lan_acting,
@@ -289,7 +292,7 @@ impl Game<'_> {
                         if let Some(name) = named {
                             g.note_direct_entity(ty, name);
                         }
-                        let hurt = g.hurt_player_from(amount, from, ty, attacker);
+                        let hurt = g.hurt_player_from(amount, from, ty, attacker, creative_source);
                         if hurt && let Some(credit) = by_player {
                             g.combat.note_hurt_by_player(credit, now);
                         }
@@ -372,11 +375,7 @@ impl Game<'_> {
         let Some(kind) = registry.id(damage_type) else {
             return false;
         };
-        let creative = match causing {
-            Some(Target::Player) => self.creative,
-            Some(Target::Guest(conn)) => self.command_guest(conn).is_some_and(|g| g.creative()),
-            _ => false,
-        };
+        let creative = self.creative_source_of(causing);
         let id = match target {
             Target::Boat(id) | Target::Cart(id) => id,
             _ => return false,
@@ -422,17 +421,8 @@ impl Game<'_> {
         let Some(kind) = registry.id(damage_type) else {
             return false;
         };
-        let creative = match causing {
-            Some(Target::Player) => self.creative,
-            Some(Target::Guest(conn)) => self.command_guest(conn).is_some_and(|g| g.creative()),
-            _ => false,
-        };
-        let invulnerable = self
-            .persist
-            .raw
-            .get(&id)
-            .is_some_and(|tag| horizon_client::entity_nbt::flag(tag, "Invulnerable"));
-        if invulnerable && !creative && !registry.in_tag(kind, "minecraft:bypasses_invulnerability")
+        let creative = self.creative_source_of(causing);
+        if self.saved_refuses_damage(id, damage_type, creative)
             || !self
                 .ui
                 .rules

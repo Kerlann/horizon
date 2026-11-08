@@ -92,7 +92,7 @@ fn falling_impacts_wear_the_helmet_before_normal_armor_and_reduction() {
             } else {
                 // This is the authoritative player path used by /damage. A
                 // position avoids unrelated random-direction knockback draws.
-                game.hurt_player_from(8.0, Some([5.5, 100.0, 4.5]), &source, Some(None));
+                game.hurt_player_from(8.0, Some([5.5, 100.0, 4.5]), &source, Some(None), false);
             }
             // Flush the same equipment events as the server-player tick. This
             // also makes the baseline regression observe completed legacy wear.

@@ -23,7 +23,7 @@ Wasm supports compiled function slots, not source rebuilding or call-site inject
 
 Run `cargo horizon-mod inject add <at> --kind <kind> --with <listener>` in a native mod's folder.
 The tool appends `[[inject]]`, preserving comments, formatting and permissions. A symlinked
-manifest is replaced, not its referent. Checked `[native].horizon` metadata supplies `hash`.
+manifest is preserved; edits atomically replace its referent. Checked `[native].horizon` metadata supplies `hash`.
 `--with` supplies both listener and unique inject id (default `on_inject`); implement it separately.
 Access defaults to `api`; edit it to `internals` when needed. The launcher validates route support.
 Call kinds copy canonical `call`, `nth` and `ctx` from the pinned `points.json`. Use
@@ -31,6 +31,21 @@ Call kinds copy canonical `call`, `nth` and `ctx` from the pinned `points.json`.
 at that ordinal. Ambiguous identities and unlisted source calls are refused; no discovery runs.
 Unknown places return `E_INJECT_MISSING` naming the target. Invalid kinds, callbacks,
 duplicate ids, or call flags on function kinds leave the manifest untouched.
+
+## Refreshing pinned declarations
+
+`cargo horizon-mod inject update` checks every declaration against the current game's catalogs;
+it does not change `[native].horizon` (use top-level `update` to change that pin).
+A unique call context that moved reports `E_INJECT_MOVED` and updates only `nth`.
+Missing targets, missing contexts and ambiguous contexts are never retargeted.
+
+Signature changes report `E_INJECT_CHANGED` with old and new hashes and signatures,
+including parameters, return type and flags. Older cached catalogs supply the old signature;
+when unavailable, the report explicitly says so. No hash changes without explicit consent:
+run `cargo horizon-mod inject update --accept <id>` to accept that declaration's new signature.
+Repeat `--accept` for multiple ids. Acceptance cannot override missing or lost targets.
+Any refused entry prevents all writes. Successful edits preserve unrelated fields and comments,
+use atomic replacement, and an exact no-op leaves the file and its modification time untouched.
 
 ## Publishing slots to a game checkout
 

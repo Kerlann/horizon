@@ -8,7 +8,9 @@ use horizon_client::world::World;
 use horizon_core::position::BlockPos;
 use horizon_core::random::LegacyRandom;
 use horizon_world::registry::BlockStateId;
-use mod_api::{BoolGameRuleKey, FeatureFlags, GameRuleValue, LevelDimensionShape, LevelRef};
+use mod_api::{
+    BoolGameRuleKey, FeatureFlags, GameRuleValue, LevelDimensionShape, LevelDimensionType, LevelRef,
+};
 use std::sync::Arc;
 use {horizon_core::dimension::Dimension as LevelDimension, horizon_world::level::LevelAccess};
 
@@ -89,7 +91,11 @@ impl Game<'_> {
     /// `Level.getSkyDarken`: the same dimension, time and weather calculation used by gameplay.
     pub(super) fn sky_darken_in(&self, world: &World, dimension: Dim) -> i32 {
         let environment = match dimension {
-            Dim::Overworld | Dim::Extra(_) => self.res.environment(),
+            Dim::Overworld => self.res.environment(),
+            Dim::Extra(_) => horizon_client::environment::Environment::for_level(
+                dimension.id(),
+                self.res.environment(),
+            ),
             Dim::Nether => self.res.nether_environment(),
             Dim::End => self.res.end_environment(),
         };
@@ -127,6 +133,51 @@ impl Game<'_> {
             shape.sky_light,
             shape.has_ceiling,
         ))
+    }
+
+    /// The level's dimension type with its gameplay attributes, from the facts the game uses.
+    pub(super) fn level_dimension_type(&self, level: LevelRef) -> Option<LevelDimensionType> {
+        use horizon_world::dimension_type::{CardinalLight, DimensionFacts, Skybox};
+        use horizon_world::worldgen::value_provider::IntProvider;
+        self.native_level_read_world(level)?;
+        let key = horizon_core::LevelKey::parse(level.dimension_id()).ok()?;
+        let facts = DimensionFacts::of_level(key);
+        Some(LevelDimensionType {
+            id: facts.id.clone(),
+            min_y: facts.height.min_y,
+            height: facts.height.height,
+            logical_height: facts.height.logical_height,
+            has_skylight: facts.height.has_skylight,
+            has_ceiling: facts.height.has_ceiling,
+            has_fixed_time: facts.has_fixed_time,
+            has_ender_dragon_fight: facts.has_ender_dragon_fight,
+            coordinate_scale: facts.coordinate_scale,
+            ambient_light: facts.ambient_light,
+            infiniburn: facts.infiniburn.clone(),
+            monster_spawn_light_level: match facts.monster_spawn_light_level {
+                IntProvider::Constant(n) => Some((n, n)),
+                IntProvider::Uniform { min, max } => Some((min, max)),
+                _ => None,
+            },
+            monster_spawn_block_light_limit: facts.monster_spawn_block_light_limit,
+            skybox: match facts.skybox {
+                Skybox::None => "none".to_owned(),
+                Skybox::Overworld => "overworld".to_owned(),
+                Skybox::End => "end".to_owned(),
+            },
+            cardinal_light: match facts.cardinal_light {
+                CardinalLight::Default => "default".to_owned(),
+                CardinalLight::Nether => "nether".to_owned(),
+            },
+            water_evaporates: facts.water_evaporates,
+            fast_lava: facts.fast_lava,
+            respawn_anchor_works: facts.respawn_anchor_works,
+            nether_portal_spawns_piglin: facts.nether_portal_spawns_piglin,
+            piglins_zombify: facts.piglins_zombify,
+            snow_golem_melts: facts.snow_golem_melts,
+            can_start_raid: facts.can_start_raid,
+            sky_light_level: facts.sky_light_level,
+        })
     }
 
     /// The world's seed (`WorldOptions.seed`), as `/seed` shows it.

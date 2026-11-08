@@ -75,6 +75,16 @@ pub trait ClientViewClientHost {
         heightmap: NativeHeightmap,
     ) -> Result<Vec<Option<i32>>, String>;
     /// Side: client.
+    /// Points the view at `entity` (`Minecraft.setCameraEntity`), as a server's camera packet
+    /// does; the local player's own ref puts it back. True when the view now follows it; false,
+    /// with nothing changed, for a stale ref, an entity this window is not shown, or one the
+    /// camera cannot follow (only the local player and mobs). While the view is off the player,
+    /// the player sends no moves (`LocalPlayer.isControlledCamera`). When the camera entity is
+    /// removed, the view returns to the local player. A mod can also release the view by calling
+    /// this with the player's ref; this client-only selection does not notify the server.
+    #[access(WorldOnly)]
+    fn set_camera_entity(&mut self, entity: EntityRef) -> bool;
+    /// Side: client.
     /// The ordinary block-or-entity pick (Minecraft.hitResult), using the
     /// game's targeting ray, reach and occlusion. None without a client world
     /// or on a miss. Entity hits carry this client level's epoch. Unlike

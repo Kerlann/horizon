@@ -42,3 +42,6 @@ horizon-client-render gfx::pack_post::destination_tests::clear_budget_tests::ful
 horizon-client-render gfx::pack_post::destination_tests::clear_budget_tests::fullsize_hdr_clear_respects_byte_budget horizon-rust/horizon#9303 flaky
 horizon-client-render gfx::pack_post::destination_tests::clear_budget_tests::sized_hdr_clear_respects_attachment_count horizon-rust/horizon#9303 flaky
 horizon-client-render gfx::pack_post::destination_tests::clear_budget_tests::sized_hdr_clear_respects_byte_budget horizon-rust/horizon#9303 flaky
+
+# Deterministic CPU work at or over its 30 s deadline in the unoptimized shard (no deadlock); see the issue.
+horizon-client-lib vanillagen::lod::tests::decorated_lod_refines_real_seed_canopies_and_all_dimensions #2132 flaky

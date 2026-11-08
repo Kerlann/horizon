@@ -1398,6 +1398,11 @@ fn base_tick(
     if m.invulnerable > 0 {
         m.invulnerable -= 1;
     }
+    // Entity.baseTick: the entity-level invulnerability window counts down
+    // too, its own timer (#916), never the damage cooldown above.
+    if m.invulnerable_time > 0 {
+        m.invulnerable_time -= 1;
+    }
     // LivingEntity.baseTick runs tickEffects after the timers count down.
     tick_effects(m, w.loop_context, level, w.mod_effects);
     // Entity.applyEffectsFromBlocks runs in LivingEntity.aiStep, after
@@ -2039,6 +2044,245 @@ fn sun_burn_tick(m: &mut Mob, w: &MobWorld) -> bool {
     let wet = m.fluids.in_water || in_rain(m, w);
     br > 0.5 && m.random.next_float() * 30.0 < (br - 0.4) * 2.0 && !wet && w.can_see_sky(x, y, z)
 }
+// Keep the actual selectors (including partially updated goal state) attached to
+// their mob even when a goal callback unwinds. Drop does not invoke goal code.
+struct BorrowedGoalSelectors<'a> {
+    mob: &'a mut Mob,
+    targets: GoalSelector,
+    goals: GoalSelector,
+}
+
+impl<'a> BorrowedGoalSelectors<'a> {
+    fn new(mob: &'a mut Mob) -> Self {
+        Self {
+            targets: std::mem::take(&mut mob.ai.targets),
+            goals: std::mem::take(&mut mob.ai.goals),
+            mob,
+        }
+    }
+}
+
+impl Drop for BorrowedGoalSelectors<'_> {
+    fn drop(&mut self) {
+        self.mob.ai.targets = std::mem::take(&mut self.targets);
+        self.mob.ai.goals = std::mem::take(&mut self.goals);
+    }
+}
+
+#[cfg(test)]
+mod selector_restore_tests {
+    use super::super::goals::Goal;
+    use super::*;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
+    #[derive(Debug)]
+    struct TrackedGoal {
+        progress: i32,
+        drops: Arc<AtomicUsize>,
+    }
+    impl Drop for TrackedGoal {
+        fn drop(&mut self) {
+            self.drops.fetch_add(1, Ordering::SeqCst);
+        }
+    }
+    impl Goal for TrackedGoal {
+        fn flags(&self) -> u8 {
+            0
+        }
+        fn can_use(&mut self, _: &mut Mob, _: &mut Cx) -> bool {
+            false
+        }
+        fn box_clone(&self) -> Box<dyn Goal> {
+            panic!("selectors must not clone goals")
+        }
+        fn set_start_delay(&mut self, ticks: i32) {
+            self.progress = ticks;
+        }
+        fn name(&self) -> &'static str {
+            if self.progress == 7 {
+                "progress"
+            } else {
+                "initial"
+            }
+        }
+    }
+
+    // Exercise the production acquisition site, not just the restoration helper.
+    // This is an engine Goal callback, not native Game integration coverage.
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn server_ai_step_restores_live_selectors_after_goal_unwind() {
+        use crate::mobs::world::with_resource_test_world;
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+        use std::sync::{Mutex, atomic::AtomicBool};
+        #[derive(Debug)]
+        struct Probe {
+            calls: Arc<Mutex<Vec<(usize, u32)>>>,
+            panic: Arc<AtomicBool>,
+            ticks: u32,
+        }
+        impl Goal for Probe {
+            fn flags(&self) -> u8 {
+                0
+            }
+            fn can_use(&mut self, _: &mut Mob, _: &mut Cx) -> bool {
+                true
+            }
+            fn every_tick(&self) -> bool {
+                true
+            }
+            fn box_clone(&self) -> Box<dyn Goal> {
+                panic!("live goals must not clone")
+            }
+            fn tick(&mut self, _: &mut Mob, _: &mut Cx) {
+                self.ticks += 1;
+                self.calls
+                    .lock()
+                    .unwrap()
+                    .push((self as *const Self as usize, self.ticks));
+                if self.panic.load(Ordering::SeqCst) {
+                    std::panic::resume_unwind(Box::new(73_u32));
+                }
+            }
+        }
+        let root = std::path::PathBuf::from(
+            std::env::var_os("HORIZON_TEST_RESOURCES").expect("set HORIZON_TEST_RESOURCES"),
+        );
+        assert!(
+            with_resource_test_world(
+                &root,
+                &[],
+                true,
+                true,
+                |_, _| {},
+                |world, _| {
+                    for panic_at in [None, Some(0), Some(1)] {
+                        // Full selector tick and the alternate running-only production path.
+                        for age in [0, 2] {
+                            let kind = crate::mobs::sensor_scan_tests::kind();
+                            let mut mob = Mob::new(1, kind, Vec3::ZERO, 0.0);
+                            mob.age = 0;
+                            mob.ai.targets.clear();
+                            mob.ai.goals.clear();
+                            let calls = [
+                                Arc::new(Mutex::new(Vec::new())),
+                                Arc::new(Mutex::new(Vec::new())),
+                            ];
+                            let panics = [
+                                Arc::new(AtomicBool::new(false)),
+                                Arc::new(AtomicBool::new(false)),
+                            ];
+                            let mut identities = [0; 2];
+                            for (i, selector) in [&mut mob.ai.targets, &mut mob.ai.goals]
+                                .into_iter()
+                                .enumerate()
+                            {
+                                let goal = Box::new(Probe {
+                                    calls: calls[i].clone(),
+                                    panic: panics[i].clone(),
+                                    ticks: 0,
+                                });
+                                identities[i] = &*goal as *const Probe as usize;
+                                selector.add_boxed(1, goal);
+                            }
+                            let mut level = crate::health::TestLevel::new(0);
+                            let mut events = Vec::new();
+                            // Start both live goals before testing either production branch.
+                            server_ai_step(&mut mob, world, &mut level.level(), &mut events);
+                            mob.age = age;
+                            if let Some(i) = panic_at {
+                                panics[i].store(true, Ordering::SeqCst);
+                            }
+                            let result = catch_unwind(AssertUnwindSafe(|| {
+                                server_ai_step(&mut mob, world, &mut level.level(), &mut events);
+                            }));
+                            if panic_at.is_some() {
+                                assert_eq!(*result.unwrap_err().downcast::<u32>().unwrap(), 73);
+                            } else {
+                                assert!(result.is_ok());
+                            }
+                            assert_eq!(
+                                mob.ai.targets.entries().count(),
+                                1,
+                                "actual target selector lost"
+                            );
+                            assert_eq!(
+                                mob.ai.goals.entries().count(),
+                                1,
+                                "actual action selector lost"
+                            );
+                            for panic in &panics {
+                                panic.store(false, Ordering::SeqCst);
+                            }
+                            server_ai_step(&mut mob, world, &mut level.level(), &mut events);
+                            for i in 0..2 {
+                                let expected_ticks =
+                                    if panic_at == Some(0) && i == 1 { 2 } else { 3 };
+                                let expected: Vec<_> = (1..=expected_ticks)
+                                    .map(|tick| (identities[i], tick))
+                                    .collect();
+                                assert_eq!(
+                                    *calls[i].lock().unwrap(),
+                                    expected,
+                                    "live goal identity/progress {i}"
+                                );
+                            }
+                        }
+                    }
+                }
+            ),
+            "production-site proof requires prepared resources"
+        );
+    }
+
+    // Lower-layer ownership test, not a native callback integration test.
+    #[test]
+    fn selector_ownership_survives_normal_return_and_unwind() {
+        for unwind in [false, true] {
+            let mut mob = Mob::new(1, crate::mobs::sensor_scan_tests::kind(), Vec3::ZERO, 0.0);
+            mob.ai.targets.clear();
+            mob.ai.goals.clear();
+            let drops = Arc::new(AtomicUsize::new(0));
+            for selector in [&mut mob.ai.targets, &mut mob.ai.goals] {
+                selector.add(
+                    1,
+                    TrackedGoal {
+                        progress: 0,
+                        drops: drops.clone(),
+                    },
+                );
+            }
+            let payload = Arc::new(17);
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let mut borrowed = BorrowedGoalSelectors::new(&mut mob);
+                borrowed.targets.set_start_delay("initial", 7);
+                borrowed.goals.set_start_delay("initial", 7);
+                borrowed.targets.disabled = 3;
+                borrowed.goals.disabled = 5;
+                if unwind {
+                    std::panic::resume_unwind(Box::new(payload.clone()));
+                }
+            }));
+            if unwind {
+                let caught = result.unwrap_err().downcast::<Arc<i32>>().unwrap();
+                assert!(Arc::ptr_eq(&caught, &payload));
+            } else {
+                assert!(result.is_ok());
+            }
+            assert!(mob.ai.targets.has("progress"));
+            assert!(mob.ai.goals.has("progress"));
+            assert_eq!(mob.ai.targets.disabled, 3);
+            assert_eq!(mob.ai.goals.disabled, 5);
+            assert_eq!(drops.load(Ordering::SeqCst), 0);
+            drop(mob);
+            assert_eq!(drops.load(Ordering::SeqCst), 2);
+        }
+    }
+}
+
 /// Mob.serverAiStep
 fn server_ai_step(
     m: &mut Mob,
@@ -2060,20 +2304,21 @@ fn server_ai_step(
     super::riders::drive(m, w);
     let tick_count = m.age as i64;
     let id_based = tick_count + i64::from(m.id);
-    let mut targets = std::mem::take(&mut m.ai.targets);
-    let mut goals = std::mem::take(&mut m.ai.goals);
     {
+        let BorrowedGoalSelectors {
+            mob,
+            targets,
+            goals,
+        } = &mut BorrowedGoalSelectors::new(m);
         let mut cx = Cx { w, level, events };
         if id_based % 2 != 0 && tick_count > 1 {
-            targets.tick_running(m, &mut cx, false);
-            goals.tick_running(m, &mut cx, false);
+            targets.tick_running(mob, &mut cx, false);
+            goals.tick_running(mob, &mut cx, false);
         } else {
-            targets.tick(m, &mut cx);
-            goals.tick(m, &mut cx);
+            targets.tick(mob, &mut cx);
+            goals.tick(mob, &mut cx);
         }
     }
-    m.ai.targets = targets;
-    m.ai.goals = goals;
     // A creaking looked at stands still: its navigation, move, look and jump
     // controls wait (CreakingPathNavigation and the Creaking*Control).
     let frozen = super::creaking::is_creaking(m) && !super::creaking::can_move(m);

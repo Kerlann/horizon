@@ -430,9 +430,10 @@ impl Game<'_> {
     /// `player_can_use_portal`, the one gate the client's portal entry, the
     /// guest trip and this read answer), a mob's walk gate
     /// (`mob_can_use_portal`, #1275's read: not a boss that never travels,
-    /// not a creaking bound to its heart, riding nothing, carrying no one
-    /// this side holds back). None for a stale handle, an armor stand or the
-    /// dragon: the portal walk carries neither as its own traveller.
+    /// not a creaking bound to its heart, not asleep in its bed, riding
+    /// nothing, carrying no one this side holds back). None for a stale
+    /// handle, an armor stand or the dragon: the portal walk carries
+    /// neither as its own traveller.
     pub(super) fn living_can_use_portal(&self, living: LivingRef) -> Option<bool> {
         match self.native_living_read_target(living)? {
             // The engine's own gate, the one the client's portal entry runs
@@ -491,10 +492,14 @@ impl Game<'_> {
         }
     }
 
-    /// `LivingEntity.canBreatheUnderwater`: the species' own — the air tick's
-    /// gate — a fish's, an axolotl's, a construct's (`breathes_water`). A
-    /// player drowns: false, their air ticks down. None for a stale handle,
-    /// an armor stand or the dragon.
+    /// `LivingEntity.canBreatheUnderwater`: the species' own breath — a
+    /// fish's, an axolotl's, a construct's (`breathes_water`, the
+    /// `#can_breathe_under_water` tag); a player answers false (no player
+    /// kind is in the tag). The tag read only, not the whole drown
+    /// decision: the air tick itself also keeps the air up behind Water
+    /// Breathing, the conduit's power and a player's invulnerability,
+    /// which this read does not carry. None for a stale handle, an armor
+    /// stand or the dragon.
     pub(super) fn living_can_breathe_underwater(&self, living: LivingRef) -> Option<bool> {
         match self.native_living_read_target(living)? {
             Target::Mob(id) => Some(
@@ -1826,7 +1831,8 @@ mod tests {
                             4.0,
                             None,
                             true,
-                            15
+                            15,
+                            false
                         )
                         .unwrap()
                         .hurt
@@ -2562,6 +2568,28 @@ mod tests {
             }
             game.mobs[0].health = 20.0;
 
+            // `LivingEntity.canUsePortal`'s sleep half: a villager asleep in
+            // its bed does not travel, awake again it does.
+            let villager = game
+                .res
+                .mob_types()
+                .get("minecraft:villager")
+                .unwrap()
+                .clone();
+            game.mobs
+                .push(Mob::new(35, villager, Vec3::new(11.5, 64.0, 0.5), 0.0));
+            let sleeper = game.living(game.entity(35).unwrap()).unwrap();
+            game.mobs.last_mut().unwrap().extra.ints[1] = 1;
+            {
+                let host: &dyn Host = game;
+                assert_eq!(sleeper.can_use_portal(host), Some(false));
+            }
+            game.mobs.last_mut().unwrap().extra.ints[1] = 0;
+            {
+                let host: &dyn Host = game;
+                assert_eq!(sleeper.can_use_portal(host), Some(true));
+            }
+
             // The melee goal's own reach: beside it, yes; a stride away, no.
             // The freeze tick's decision, and a freeze-immune wearable on it.
             // The air tick's gate: a zombie drowns.
@@ -2768,6 +2796,20 @@ mod tests {
                 .unwrap()
                 .hub
                 .update_guest(12, |g| g.sleeping = true);
+            let host: &dyn Host = game;
+            assert_eq!(living.can_use_portal(host), Some(false));
+            // A passenger crosses with its vehicle, not as its own
+            // traveller: the rule's riding half answers false.
+            game.lan
+                .as_mut()
+                .unwrap()
+                .hub
+                .update_guest(12, |g| g.sleeping = false);
+            game.lan
+                .as_mut()
+                .unwrap()
+                .hub
+                .update_guest(12, |g| g.vehicle = Some(60));
             let host: &dyn Host = game;
             assert_eq!(living.can_use_portal(host), Some(false));
         });

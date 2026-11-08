@@ -542,6 +542,10 @@ impl BlockEntityDraw {
     pub(super) fn vertices_mut(&mut self) -> &mut Vec<Vertex> {
         &mut self.vertices
     }
+    /// The light the helpers draw with (`native_draw_light`).
+    pub(super) fn light(&self) -> u32 {
+        self.light
+    }
     /// A quad of `corners` (blocks, under the pose) with unit UVs, shaded as
     /// vanilla's block entity models are (`Lighting`'s two lights).
     fn quad(&mut self, corners: [[f32; 3]; 4], uv: [[f32; 2]; 4], sprite: Rect, tint: u32) {

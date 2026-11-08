@@ -947,6 +947,23 @@ mod tests {
     }
 
     #[test]
+    fn dimension_transition_screens_have_generated_wasm_bindings() {
+        with_interface("hooks", |hooks, unbound| {
+            for name in [
+                "register-dimension-transition-screen",
+                "dimension-transition-screen-draw",
+            ] {
+                assert!(hooks.functions.contains_key(name));
+            }
+            assert!(
+                !unbound
+                    .iter()
+                    .any(|name| name.contains("dimension_transition_screen"))
+            );
+        });
+    }
+
+    #[test]
     fn client_gui_state_has_generated_wasm_bindings() {
         with_interface("client-host", |client, unbound| {
             for method in ["window-focused", "observed-screen-id"] {

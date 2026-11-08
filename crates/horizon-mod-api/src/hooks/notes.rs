@@ -106,9 +106,12 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
   respawn point is about to be set, at each `ServerPlayer.setRespawnPosition` call: every sleep in a bed, a new respawn
   anchor point, `/spawnpoint`, and the copy to a respawned player (`pos` none for a player with no point). Set
   `cancel` to keep the old point.
-- **`native_player_portal(player, name, from_dimension, to_dimension, cause, cancel)`**: a server player is about
-  to travel through a Nether portal, End portal or End gateway; `cause` is `nether_portal`, `end_portal` or
-  `end_gateway`. Set `cancel` to leave the player where they are. The player's state is not swapped in.
+- **`native_entity_travel_to_dimension(entity, dimension, cause, cancel)`**: a server entity is about to travel to
+  the level `dimension`, before it moves (NeoForge's `EntityTravelToDimensionEvent`); `cause` is `nether_portal`,
+  `end_portal`, `end_gateway` or `teleport` (a `/tp` or spectator teleport into another level). Set `cancel` to
+  keep it where it is. Players and every other entity that crosses a portal or a command's teleport are asked;
+  a ridden vehicle and its server players are asked together and one cancel keeps them all. The player's state
+  is not swapped in.
 - **`native_block_damage_abort(player, name, pos)`**: a server player stopped digging `pos` before it broke. It is
   heard after the server clears the dig and sends the block state back to the client. The player's state is not
   swapped in.
@@ -819,6 +822,15 @@ handle, an entity the client doesn't track and a level it doesn't show:
 - `entity.velocity(host)` (a player's is the move its client last reported), `set_velocity(host, v)` (not for players,
   whose client moves them), `on_ground`, `bounding_box` (lowest and highest corner), `eye_height`, `eye_position`,
   `view_vector` and `distance_to_sqr(host, pos)` read and move it.
+- `entity.up_vector(host)` is `Entity.getUpVector`, the view vector turned toward the zenith. `on_block(host)` is
+  `Entity.getOnPos`: the supporting block of an entity on the ground (the solid block under its box nearest it),
+  else the block under its feet. `pick(host, distance)` clips `Entity.pick`'s ray from the eyes along the view
+  against block outlines, no fluids, and returns the `NativeClipHit` (its `miss` set for a miss); entities are
+  `ray_trace_entities`' job. `is_multipart(host)` and `parts(host)` are `Entity.isMultipartEntity` and `getParts`:
+  the ender dragon's eight `EnderDragonPart`s (not the Parts of this API), head, neck, body, three tail segments and
+  two wings, each an `EntityRef` of its own entity id, resolved as any handle is. A part's `kind` is the dragon's, its position, rotation (none: zero), velocity (zero)
+  and `bounding_box` are its own, `level` is the dragon's, and it is no living entity, mob or dragon handle; it
+  stops resolving when its dragon does, and removing one is refused.
 - `entity.nbt(host)` and `merge_nbt(host, compound)` read and change its data as `/data get` and `/data merge entity`
   do (merging works on mobs, dropped items, armor stands and item frames; never on players, as in vanilla);
   `tags`, `add_tag`, `remove_tag` work as `/tag` does, and `name` is its name as plain text.
@@ -1649,6 +1661,13 @@ one, where vanilla gives the `by` one.
   picks a chunk only as it sends it, so the watch comes just before the send. The hub records them only while a mod listens and
   the game tells them after the hub's network step for that level, so a handler sees the state after that step; the order per
   player and chunk is vanilla's. The far ring's columns past the view distance aren't told, and the server stopping doesn't unwatch.
+- A chunk's ticket level changing, on the server: `native_chunk_ticket_level_updated(chunk, old, new)` (NeoForge's
+  `ChunkTicketLevelUpdatedEvent`). The level is the chunk's loading level from its tickets (a player, a forced chunk, a portal
+  ticket, the dragon fight's arena), on `ChunkLevel`'s scale: 31 and lower entity ticking, 32 block ticking, 33 loaded without
+  ticking, and `ChunkTicketLevel::Unloaded` past it, so a non-ticking or unloaded chunk is never clamped to the ticking range.
+  Horizon keeps no level for a chunk partway through generating, and no chunk holder to hand over. The level's tickets keep each
+  change, in the order they were made, only while a mod listens: with no listener an update of the tickets looks at no chunk
+  and allocates nothing, so the tick costs what it did. A level is told in its own tick, after the tickets were updated for its players.
 
 - [the renderer's hook points](#render-hook-points): `world_drawn`, called once the world is drawn with its colour, depth, matrices and entity geometry, and
   `render_needs`, where a mod asks for the entity runs and the world's depth without a shader pack.
@@ -1839,7 +1858,7 @@ still go on each event or registrar.
 
 - `native_vanilla_game_event(dimension, event, pos, cause, affected_state, cancel)` (NeoForge's `VanillaGameEvent`) fires on the server for every vanilla game event before the sculk sensors, wardens and allays hear it; canceling keeps them from hearing it. `cause` is the network id of the entity that caused it (`GameEvent.Context.sourceEntity`, None for none) and `affected_state` is the block state the event touched (`GameEvent.Context.affectedState`): the block a player broke or placed, the block a mob stepped on, and None where vanilla passes none (`Context.of(entity)`). Contract version `2`: version `1` had no `affected_state`. With no listener the cost is one `listened` branch per event. Diverges from upstream.
 
-- `native_get_arm_pose(entity_id, hand, stack, pose)` (NeoForge's `IClientItemExtensions.getArmPose`) sets the pose of the arm that holds `stack` in `hand`, as a humanoid player model draws it (`AvatarRenderer.getArmPose`): the window's own player model and other players'. It replaces what the item would give, whatever the use animation, a loaded crossbow or an `arm_pose` declared on the item say (a content mod's data key, see the content-mods how-to, is the answer when no mod listens or none sets one). Return one of vanilla's `ArmPose` values (`empty`, `item`, `block`, `bow_and_arrow`, `crossbow_hold`, `crossbow_charge`, `throw_trident`, `toot_horn`, `spyglass`, `spear`, `brush`); the first mod to answer wins. It is asked once a tick for each player model and non-empty hand, only while a mod listens, and a two-handed pose still moves the other hand as vanilla's does. NeoForge's custom poses made by extending the `ArmPose` enum have no counterpart; mobs' own poses (`getArmPose` on a mob renderer) are not asked. Client-side, with the `ClientHost`. Diverges from upstream: new hook.
+- `native_get_arm_pose(entity_id, hand, stack, humanoid, pose)` (NeoForge's `IClientItemExtensions.getArmPose`) sets the pose of the arm that holds `stack` in `hand`, as a humanoid model draws it: the window's own player, remote players and humanoid mobs. `humanoid` is a borrowed `HumanoidRenderState` exposing both held stacks, the main arm, use hand, use ticks, use animation and the selected main/off-hand poses before listeners answer (including item declarations). It replaces what the item would give, whatever the use animation, a loaded crossbow or an `arm_pose` declared on the item say (a content mod's data key, see the content-mods how-to, is the answer when no mod listens or none sets one). Return one of vanilla's `ArmPose` values (`empty`, `item`, `block`, `bow_and_arrow`, `crossbow_hold`, `crossbow_charge`, `throw_trident`, `toot_horn`, `spyglass`, `spear`, `brush`); the first mod to answer wins. It is asked once a tick for each humanoid model and non-empty hand, only while a mod listens, and a two-handed pose still moves the other hand as vanilla's does. NeoForge's custom poses made by extending the `ArmPose` enum have no counterpart; mob-specific animations run after the humanoid base pose, as in vanilla. API stack snapshots are converted only with subscribers; there is no allocation when no mod listens. Client-side, with the `ClientHost`. Diverges from upstream: new hook.
 
 - `native_item_decorations(stack, x, y, batch)` appends custom GUI drawing after the default bar, cooldown shade and count have been painted for an item icon. The stack is the displayed stack, x/y are its icon's top-left in GUI units, the units the batch takes (no item-local translation remains active). Existing GUI helpers can draw badges, text and overlays. The shared path covers the hotbar, carried stacks, menu slots, recipe book and item tooltip icons, and the item icons of the advancement, beacon, stats and trading screens. `native_item_bar` still controls the bar separately; this hook does not suppress vanilla decorations.
 
@@ -2550,7 +2569,7 @@ registration path.
 
 - A server player picked up an arrow after it was removed and its pickup was applied: `native_player_pickup_arrow(player, name, entity_id, item)` gives the pickup item id.
 
-- A server player about to travel through a Nether portal, End portal or End gateway: `native_player_portal(player, name, from_dimension, to_dimension, cause, cancel)` supplies the source and target dimension ids; `cause` is `nether_portal`, `end_portal` or `end_gateway`. Set `cancel` to leave the player where they are. The player's state is not swapped in.
+- A server entity about to travel to another level, a player or not: `native_entity_travel_to_dimension(entity, dimension, cause, cancel)` (NeoForge's `EntityTravelToDimensionEvent`) names the target level; `cause` is `nether_portal`, `end_portal`, `end_gateway` or `teleport`. Set `cancel` to keep the entity where it is. The player's state is not swapped in.
 
 - A server player requests a known recipe be placed in their crafting grid through the recipe book (`native_player_recipe_book_click(player, name, recipe, all)`).
 

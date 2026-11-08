@@ -144,10 +144,21 @@ pub trait EntitiesBackend {
     /// Side: server.
     /// `Entity.isPermanentlyInvulnerable`: the `Invulnerable` flag, which
     /// only damage that bypasses invulnerability (the void, `/kill`) or a
-    /// creative player gets past. Mobs keep it; Horizon keeps no such flag
-    /// for players or other kinds yet, so they read None.
+    /// creative player gets past. Mobs keep it on themselves (saved with
+    /// them), players on their body (#916, not saved: Horizon's player save
+    /// keeps no such field yet), the other kinds in the saved `Invulnerable`
+    /// tag of their entity data (#916) — the tag the item damage path
+    /// already refuses by.
     #[access(WorldOnly)]
     fn entity_permanently_invulnerable(&self, entity: EntityRef) -> Option<bool>;
+    /// Side: server.
+    /// `Entity.invulnerableTime` (#916): the entity-level invulnerability
+    /// window, its own field on a mob and a player — never the living damage
+    /// cooldown — and the saved `invulnerable_time` tag for the other kinds.
+    /// Counted down by the base tick; `isTemporarilyInvulnerable` is it above
+    /// zero. None for a stale handle or a kind that keeps none.
+    #[access(WorldOnly)]
+    fn entity_invulnerable_time(&self, entity: EntityRef) -> Option<i32>;
     /// Side: server.
     /// `LivingEntity.damageCooldownTime`: 20 after a hit, counting down;
     /// while it is above 10 a hit does only what it deals beyond the last
@@ -200,7 +211,7 @@ pub trait EntitiesBackend {
     /// Side: server.
     /// The entity's box (`Entity.getBoundingBox`): its lowest and highest
     /// corner. None for the kinds whose box Horizon doesn't keep (displays,
-    /// markers, End crystals, the dragon). API 379.
+    /// markers, End crystals, the dragon); a dragon part's is its own. API 379.
     #[access(WorldOnly)]
     fn entity_bounding_box(&self, entity: EntityRef) -> Option<[[f64; 3]; 2]>;
     /// Side: server.
@@ -218,6 +229,48 @@ pub trait EntitiesBackend {
     /// its pitch and yaw). API 379.
     #[access(WorldOnly)]
     fn entity_view_vector(&self, entity: EntityRef) -> Option<[f64; 3]>;
+    /// Side: both.
+    /// The unit vector that points up out of the entity's head
+    /// (`Entity.getUpVector`): its view vector turned a quarter of a turn
+    /// toward the zenith, so a level look gives straight up and a look down
+    /// leans it forward. From the entity's pitch and yaw.
+    #[access(WorldOnly)]
+    fn entity_up_vector(&self, entity: EntityRef) -> Option<[f64; 3]>;
+    /// Side: server.
+    /// The block the entity stands on (`Entity.getOnPos`): the supporting block
+    /// of an entity on the ground (`Entity.mainSupportingBlockPos`, the solid
+    /// block under its box nearest its position), else the block just under
+    /// its feet. A dragon part, which never stands, has the block under its
+    /// feet. None for a stale handle.
+    #[access(WorldOnly)]
+    fn entity_on_block(&self, entity: EntityRef) -> Option<[i32; 3]>;
+    /// Side: server.
+    /// A ray from the entity's eyes along its view vector, `distance` blocks
+    /// long, against block outlines with an empty collision context and no
+    /// fluids (`Entity.pick(distance, 1.0F, false)`): what it looks at. A
+    /// miss is the hit with `miss` set. Entities are not clipped: that is
+    /// `LevelRef::ray_trace_entities`. None for a stale handle, a
+    /// `distance` that is negative or not finite, and where `LevelRef::clip`
+    /// is None.
+    #[access(WorldOnly)]
+    fn entity_pick(&self, entity: EntityRef, distance: f64) -> Option<NativeClipHit>;
+    /// Side: both.
+    /// Whether the entity is made of parts that are entities of their own
+    /// (`Entity.isMultipartEntity`): the ender dragon. Its parts are not the
+    /// mod API's behaviour Parts. A part is not itself multipart. None for a
+    /// stale handle.
+    #[access(WorldOnly)]
+    fn entity_is_multipart(&self, entity: EntityRef) -> Option<bool>;
+    /// Side: both.
+    /// The entities a multipart entity is made of (`Entity.getParts`), in
+    /// `getSubEntities` order: for the dragon its head, neck, body, three
+    /// tail segments and two wings. Each is a handle of the part's own entity
+    /// id, the eight after the dragon's, with the dragon's type, its own
+    /// position, rotation, velocity and box, and no living state; the
+    /// handle stops resolving with the dragon. Empty for an entity that is not
+    /// multipart, None for a stale handle.
+    #[access(WorldOnly)]
+    fn entity_parts(&self, entity: EntityRef) -> Option<Vec<EntityRef>>;
     /// Side: server.
     /// The square of the distance from the entity's feet to `pos`
     /// (`Entity.distanceToSqr`). API 379.
@@ -483,6 +536,11 @@ pub trait EntitiesBackendMut {
     #[access(WorldOnly)]
     fn entity_set_damage_cooldown_time(&mut self, entity: EntityRef, ticks: i32) -> bool;
     /// Side: server.
+    /// `Entity.setInvulnerableTime` (#916): the write side of
+    /// `entity_invulnerable_time`. False where the entity is gone or keeps
+    /// no such field.
+    #[access(WorldOnly)]
+    fn entity_set_invulnerable_time(&mut self, entity: EntityRef, ticks: i32) -> bool;
     /// `Entity.hurtServer(level, source, amount)` of `amount` from a source
     /// of `damage_type` (`minecraft:generic`'s shape), `direct` the entity
     /// that dealt it (a shot arrow) and `causing` the one responsible for it
@@ -514,12 +572,33 @@ pub trait EntitiesBackendMut {
     /// Moves the entity to `pos` in its level (`Entity.teleportTo`), as
     /// `/tp` does: a player is placed there and told, a rider gets off. With
     /// `rotation` (yaw, pitch in degrees) it also turns. False for a position
-    /// outside the world's bounds, for wall-mounted entities, or when the
+    /// outside the world's bounds, for wall-mounted entities or dragon parts, or when the
     /// requested rotation cannot be stored.
     #[access(WorldOnly)]
     fn entity_teleport_to(
         &mut self,
         entity: EntityRef,
+        pos: [f64; 3],
+        rotation: Option<[f32; 2]>,
+    ) -> bool;
+    /// Side: server.
+    /// Sends the entity to `pos` in the level `dimension` (`minecraft:the_nether`,
+    /// or a level a mod registered), as `/execute in <dimension> run tp` does
+    /// (`Entity.teleportTo(ServerLevel, ..)`): `pos` is in that level's own
+    /// coordinates (nothing scales it by `coordinate_scale`), a level nobody has
+    /// entered opens first, and a vehicle takes its passengers along. A player
+    /// arrives after the current tick, and `player_teleported` and
+    /// `player_changed_dimension` report the move. In the entity's own level
+    /// it is `entity_teleport_to`. False for what `entity_teleport_to` refuses,
+    /// a dimension that isn't registered, and kinds that cannot change level
+    /// (all but a player, a mob, a boat or a minecart). A fake player stays
+    /// where it is, and the call is still true. Nothing builds ground at the
+    /// destination.
+    #[access(WorldOnly)]
+    fn entity_teleport_to_level(
+        &mut self,
+        entity: EntityRef,
+        dimension: &str,
         pos: [f64; 3],
         rotation: Option<[f32; 2]>,
     ) -> bool;
@@ -545,16 +624,16 @@ pub trait EntitiesBackendMut {
     /// Side: server.
     /// Removes the entity with no death and no loot (`Entity.discard`): a
     /// chest boat or a minecart with a chest still drops what it holds, and
-    /// a boat its lead, as vanilla's `remove` does. False for a player, or a
-    /// stale handle.
+    /// a boat its lead, as vanilla's `remove` does. False for a player, a dragon
+    /// part (it leaves with its dragon), or a stale handle.
     #[access(WorldOnly)]
     fn entity_discard(&mut self, entity: EntityRef) -> bool;
     /// Side: server.
     /// Removes the entity for `reason` (`Entity.remove`): `Discarded`, as
     /// `discard`, or `Killed`, which also runs a mob's effects that act on
     /// removal (Oozing's slimes, Weaving's cobwebs, Wind Charged's burst),
-    /// still with no death and no loot. False for a player, or a stale
-    /// handle.
+    /// still with no death and no loot. False for a player, a dragon part (it
+    /// leaves with its dragon), or a stale handle.
     #[access(WorldOnly)]
     fn entity_remove(&mut self, entity: EntityRef, reason: NativeRemovalReason) -> bool;
     /// Side: server.

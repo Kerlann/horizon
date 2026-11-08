@@ -373,10 +373,35 @@ fn delayed_tasks_take_a_server_host(
     (host.schedule_task(20, 7), host.cancel_task(TaskId(1)))
 }
 
+/// Compile-only: a mod reads a level's dimension type, and registers a dimension with its own.
+#[allow(dead_code)]
+fn dimension_types_take_a_host(
+    host: &dyn Host,
+    level: LevelRef,
+) -> Option<(f64, bool, DimensionSettings)> {
+    let ty = level.dimension_type(host)?;
+    let nether_like = DimensionSettings {
+        coordinate_scale: 8.0,
+        has_fixed_time: true,
+        fast_lava: true,
+        ..Default::default()
+    };
+    Some((ty.coordinate_scale, ty.fast_lava, nether_like))
+}
+
 /// Compile-only: a client mod reads column heights of the world its window shows.
 #[allow(dead_code)]
 fn client_heights_take_a_client_host(host: &dyn ClientHost) -> Result<Vec<Option<i32>>, String> {
     host.client_surface_heights(&[(0, 0), (16, -16)], NativeHeightmap::MotionBlocking)
+}
+
+/// Compile-only: a client mod moves the view onto an entity and back through the `&mut dyn ClientHost`
+/// its hooks get.
+#[allow(dead_code)]
+fn camera_entity_takes_a_client_host(host: &mut dyn ClientHost, mob: EntityRef) -> bool {
+    let moved = host.set_camera_entity(mob);
+    let own = host.camera_entity();
+    moved && own.is_some()
 }
 
 /// Compile-only: a client mod reads the open inventory screen's slot boxes through its menu handle.
@@ -423,6 +448,35 @@ fn level_queries_take_their_hosts(
         level.ray_trace_entities(read, [0.0; 3], [8.0, 0.0, 0.0], 0.3, Some(shooter));
     let _: Result<Option<Vec<ItemStack>>, StackWriteError> =
         level.block_drops(server, [0, 64, 0], Some(tool), Some(shooter));
+}
+
+/// Compile-only: the entity queries for contact, picking and multipart parts as a mod calls
+/// them, all reads on a shared host.
+#[allow(dead_code)]
+fn entity_queries_take_a_shared_host(read: &dyn Host, entity: EntityRef) {
+    let _: Option<[f64; 3]> = entity.up_vector(read);
+    let _: Option<[i32; 3]> = entity.on_block(read);
+    let _: Option<NativeClipHit> = entity.pick(read, 4.5);
+    let _: Option<bool> = entity.is_multipart(read);
+    let _: Option<Vec<EntityRef>> = entity.parts(read);
+}
+
+/// Compile-only: an entity is sent to another dimension from a server host.
+#[allow(dead_code)]
+fn entity_travel_takes_a_server_host(server: &mut dyn ServerHost, entity: EntityRef) {
+    let _: bool = entity.teleport_to_level(server, "mymod:pocket", [8.5, 100.0, 8.5], None);
+    let _: bool = entity.teleport_to_level(
+        server,
+        "minecraft:the_nether",
+        [0.0, 64.0, 0.0],
+        Some([90.0, 0.0]),
+    );
+}
+
+/// Compile-only: a level is asked to be saved from a server host.
+#[allow(dead_code)]
+fn level_save_takes_a_server_host(server: &mut dyn ServerHost, level: LevelRef) -> bool {
+    level.request_save(server)
 }
 
 /// Compile-only: the player rule reads on any host, and the writes on a server host.

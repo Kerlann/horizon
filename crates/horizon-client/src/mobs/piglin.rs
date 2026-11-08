@@ -2027,14 +2027,14 @@ pub fn piglin_anim(m: &Mob, s: &State, p: &mut Poses) {
     } else {
         PiglinPose::Default
     };
-    piglin_pose_holding(
+    piglin_pose_humanoid(
         p,
         s,
         pose,
         (25.0, m.extra.using_item as f32),
-        m.main_arm_left(),
-        m.extra.passenger,
+        (m.main_arm_left(), m.extra.passenger),
         spear,
+        Some(m),
     );
 }
 /// `PiglinArmPose`.
@@ -2071,6 +2071,26 @@ pub fn piglin_pose_holding(
     passenger: bool,
     spear: Option<(crate::spear::Kinetic, f32)>,
 ) {
+    piglin_pose_humanoid(
+        p,
+        s,
+        pose,
+        (max_charge, ticks),
+        (left, passenger),
+        spear,
+        None,
+    );
+}
+
+fn piglin_pose_humanoid(
+    p: &mut Poses,
+    s: &State,
+    pose: PiglinPose,
+    (max_charge, ticks): (f32, f32),
+    (left, passenger): (bool, bool),
+    spear: Option<(crate::spear::Kinetic, f32)>,
+    selected: Option<&Mob>,
+) {
     use super::anim::{ArmPose, Hum, crossbow_charge, crossbow_hold, humanoid};
     let mut h = Hum::new(ArmPose::Empty, ArmPose::Empty);
     if let Some((kinetic, ticks_using)) = spear {
@@ -2082,6 +2102,14 @@ pub fn piglin_pose_holding(
         }
         h.spear[side] = Some(kinetic);
         h.spear_ticks[side] = ticks_using;
+    }
+    if let Some(m) = selected {
+        let [main, off] = super::anim::humanoid_arm_poses(m, m.extra.held_arm_pose, s.swing);
+        (h.right, h.left) = if left { (off, main) } else { (main, off) };
+        let main_ticks = h.spear_ticks[usize::from(left)];
+        super::anim::humanoid_spears(m, &mut h, s.partial);
+        // An admired off-hand item leaves the main-hand spear at rest.
+        h.spear_ticks[usize::from(left)] = main_ticks;
     }
     h.weapon_swing = pose == PiglinPose::MeleeWeapon;
     h.left_main = left;

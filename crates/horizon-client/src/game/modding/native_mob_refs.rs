@@ -12,7 +12,8 @@ pub(super) struct PlayerFacts {
 }
 
 impl Game<'_> {
-    /// A player target's game mode, liveness, invulnerability ability and uuid.
+    /// A player target's game mode, liveness, invulnerability (the ability,
+    /// the `Invulnerable` flag or its window) and uuid.
     pub(super) fn native_player_facts(&self, target: Target) -> Option<PlayerFacts> {
         match target {
             Target::Guest(conn) => {
@@ -23,7 +24,11 @@ impl Game<'_> {
                 Some(PlayerFacts {
                     mode: g.game_mode,
                     alive: !g.dead && g.health > 0.0,
-                    invulnerable: g.motion.as_ref().is_some_and(|p| p.invulnerable),
+                    invulnerable: g.motion.as_ref().is_some_and(|p| {
+                        p.invulnerable
+                            || p.health.permanently_invulnerable
+                            || p.health.invulnerable_time > 0
+                    }),
                     uuid: horizon_client::lan::playerdata::uuid_ints(g.uuid),
                 })
             }
@@ -35,7 +40,9 @@ impl Game<'_> {
                 Some(PlayerFacts {
                     mode: self.mode_id(),
                     alive: !player.health.dead_or_dying(),
-                    invulnerable: player.invulnerable,
+                    invulnerable: player.invulnerable
+                        || player.health.permanently_invulnerable
+                        || player.health.invulnerable_time > 0,
                     uuid: self
                         .lan_acting_uuid
                         .map(horizon_client::lan::playerdata::uuid_ints)
@@ -58,7 +65,7 @@ impl Game<'_> {
     /// `Mob.asValidTarget` and the modeled `canAttack` overrides: the game's
     /// own state as the target's facts, through the one rule set
     /// [`Mob::valid_target`] (#1175) a goal tick's view shares.
-    fn native_mob_valid_target(&self, mob: &Mob, target: Target) -> bool {
+    pub(super) fn native_mob_valid_target(&self, mob: &Mob, target: Target) -> bool {
         if mob.species() == Species::Warden {
             return self.native_warden_valid_target(mob, target);
         }

@@ -259,7 +259,7 @@ impl RaidLevel for World<'_> {
         self.loaded(c.0, c.1) && !self.no_ticking.contains(&c)
     }
     fn ravager_can_spawn(&self, [x, y, z]: [i32; 3]) -> bool {
-        spawn_rules::is_spawn_position_ok(Species::Ravager, self, x, y, z)
+        spawn_rules::is_spawn_position_ok("minecraft:ravager", Species::Ravager, self, x, y, z)
             || self.s.facts.get(self.state(x, y - 1, z)).name.as_ref() == "minecraft:snow"
                 && self.s.facts.is_air(self.state(x, y, z))
     }

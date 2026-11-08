@@ -2269,7 +2269,11 @@ impl Game<'_> {
     }
     /// `Entity.checkSupportingBlock`: the block under this box closest to the
     /// entity. Everything but the player works it out when it asks.
-    fn supporting_block(&self, position: Vec3, bounds: Aabb) -> Option<BlockPos> {
+    pub(in crate::game) fn supporting_block(
+        &self,
+        position: Vec3,
+        bounds: Aabb,
+    ) -> Option<BlockPos> {
         let (min, max) = (bounds.min_position(), bounds.max_position());
         let foot = Aabb::new(
             Vec3::new(min.x, min.y - 1.0e-6, min.z),

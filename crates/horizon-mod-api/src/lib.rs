@@ -583,6 +583,29 @@ pub struct ClientAudioOptions {
     pub master_volume: f32,
 }
 
+/// Borrowed humanoid inputs at arm-pose extraction, shared by players and mobs.
+/// Poses are in main/off-hand order, before listeners answer; item declarations
+/// are already included. Model-specific animation may subsequently adjust the arms.
+// exhaustive: the engine builds this read-only view
+pub struct HumanoidRenderState<'a> {
+    /// Stack held in the main hand; empty stacks are absent.
+    pub main_hand: Option<&'a ItemStack>,
+    /// Stack held in the off hand; empty stacks are absent.
+    pub off_hand: Option<&'a ItemStack>,
+    /// Whether the entity's main arm is its left arm.
+    pub main_arm_left: bool,
+    /// Hand currently using an item, absent when no item is in use.
+    pub use_hand: Option<Hand>,
+    /// Elapsed item-use ticks at extraction.
+    pub ticks_using_item: i32,
+    /// Animation of the item currently being used.
+    pub use_animation: UseAnimation,
+    /// Selected main-hand pose before any hook answers.
+    pub main_arm_pose: ArmPose,
+    /// Selected off-hand pose before any hook answers.
+    pub off_arm_pose: ArmPose,
+}
+
 /// Context and adjustable pose for a first-person hand render.
 ///
 /// Translation is in blocks and rotation is in degrees (pitch, yaw, roll).
@@ -2715,6 +2738,31 @@ pub enum ChunkStatus {
     Full,
 }
 
+/// A chunk's ticket level (`ChunkLevel`), as the server holds it: how much of
+/// the level the chunk is kept alive for. Lower is more active. Horizon keeps
+/// no level for a chunk partway through generating, so past `FULL` a chunk is
+/// `Unloaded`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[non_exhaustive]
+pub enum ChunkTicketLevel {
+    /// A level `ChunkLevel` knows, `FULL_CHUNK_LEVEL` (33) or lower: 31 and
+    /// lower is entity ticking (`ENTITY_TICKING_LEVEL`), 32 is block ticking
+    /// (`BLOCK_TICKING_LEVEL`) and 33 is loaded without ticking.
+    Loaded(u8),
+    /// No ticket keeps the chunk loaded.
+    Unloaded,
+}
+
+impl ChunkTicketLevel {
+    /// The `ChunkLevel` number, or `None` for an unloaded chunk.
+    pub fn level(self) -> Option<u8> {
+        match self {
+            Self::Loaded(level) => Some(level),
+            Self::Unloaded => None,
+        }
+    }
+}
+
 /// A kind of light (`LightLayer`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: a closed set the game matches without a wildcard
@@ -3076,6 +3124,68 @@ pub enum NativeSpawnCheck {
     Default,
     /// `FAIL`: the check fails.
     Fail,
+}
+
+/// Where a mod entity type stands to spawn (`SpawnPlacementType`):
+/// `SpawnPlacements.isSpawnPositionOk`'s first check.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum NativeSpawnPlacementType {
+    /// `ON_GROUND`: a block that is valid to spawn on below, free room at the feet and the head.
+    OnGround,
+    /// `IN_WATER`: a water block, with no redstone conductor above.
+    InWater,
+    /// `IN_LAVA`: a lava block.
+    InLava,
+    /// `NO_RESTRICTIONS`: anywhere.
+    NoRestrictions,
+}
+
+/// How bright a spot a mod entity type needs to spawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum NativeSpawnLight {
+    /// Any light level.
+    Any,
+    /// Dark enough for a monster (`Monster.isDarkEnoughToSpawn`: sky light, block light
+    /// and the dimension's monster light test, which draw from the level's random).
+    Dark,
+    /// Bright enough for an animal (`Animal.isBrightEnoughToSpawn`: light above 8).
+    Bright,
+}
+
+/// A mod entity type's spawn rule, declared with
+/// [`Registrar::declare_spawn_placement`](SpawnPlacementsRegistrar::declare_spawn_placement):
+/// the arguments of NeoForge's `RegisterSpawnPlacementsEvent.register` as data, so one
+/// rule serves native and wasm mods. Every field must hold for a spawn to pass; a trial
+/// spawner ignores `light`, as for vanilla types.
+#[derive(Clone, Debug, PartialEq)]
+// exhaustive: a mod builds it with a literal; the game reads it
+pub struct SpawnPlacementRule {
+    /// Where the type stands (`SpawnPlacementType`).
+    pub placement: NativeSpawnPlacementType,
+    /// The heightmap natural spawning and chunk generation find the surface with.
+    pub heightmap: NativeHeightmap,
+    /// A block tag (`minecraft:animals_spawnable_on`, no `#`) the block below must be in.
+    pub spawnable_on: Option<String>,
+    /// How bright the spot must be.
+    pub light: NativeSpawnLight,
+    /// A biome tag (no `#`) the spot's biome must be in.
+    pub biome_tag: Option<String>,
+}
+
+/// Why a spawn placement declaration was refused
+/// ([`Registrar::declare_spawn_placement`](SpawnPlacementsRegistrar::declare_spawn_placement)).
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum SpawnPlacementError {
+    /// The entity type's id is invalid, empty, or in a namespace the declaring
+    /// mod does not own.
+    InvalidId,
+    /// A tag is not a namespaced tag name (write it without `#`).
+    InvalidTag,
+    /// Another declaration already covers the entity type.
+    Duplicate,
 }
 
 /// What a mod answers a despawn check (`MobDespawnEvent.Result`).
