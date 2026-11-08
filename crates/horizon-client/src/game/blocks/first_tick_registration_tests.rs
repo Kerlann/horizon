@@ -65,7 +65,8 @@ fn fluid_ticks(game: &Game<'_>, key: (i32, i32)) -> Option<usize> {
 fn water_placed_before_the_first_world_tick_keeps_its_flow_tick() {
     let mut game = game();
     let key = (80, 80);
-    assert!(game.run_command("forceload add 1280 1280"));
+    // Queue the ticket without a load barrier: the test supplies the worker result below.
+    assert!(game.streaming.set_forced(key.0, key.1, true));
     // The streaming worker's chunk, made resident as `streaming.update` does.
     game.world
         .chunks
@@ -105,7 +106,8 @@ fn early_registration_keeps_saved_ticks_and_ticks_nothing() {
     use horizon_core::ticks::{SavedTick, TickPriority, TickTypeId};
     let mut game = game();
     let key = (80, 80);
-    assert!(game.run_command("forceload add 1280 1280"));
+    // Queue the ticket without a load barrier: the test supplies the worker result below.
+    assert!(game.streaming.set_forced(key.0, key.1, true));
     let saved = SavedTick {
         kind: TickTypeId(horizon_world::fluid::FluidKind::Water.tick_id()),
         pos: horizon_core::position::BlockPos::new(1285, 101, 1285),
@@ -157,7 +159,8 @@ fn saved_block_and_fluid_ticks_unpack_when_the_chunk_starts_ticking() {
     use horizon_core::ticks::{SavedTick, TickPriority, TickTypeId};
     let mut game = game();
     let key = (80, 80);
-    assert!(game.run_command("forceload add 1280 1280"));
+    // Queue the ticket without a load barrier: the test supplies the worker result below.
+    assert!(game.streaming.set_forced(key.0, key.1, true));
     let at = |y| horizon_core::position::BlockPos::new(1285, y, 1285);
     let block = SavedTick {
         kind: TickTypeId(1),
@@ -235,7 +238,8 @@ fn an_unloaded_chunk_saves_its_ticks_and_a_reloaded_one_gets_them_back() {
     let mut game = game();
     let key = (80, 80);
     let pos = ChunkPos::new(key.0, key.1);
-    assert!(game.run_command("forceload add 1280 1280"));
+    // Queue the ticket without a load barrier: the test supplies the worker result below.
+    assert!(game.streaming.set_forced(key.0, key.1, true));
     game.world
         .chunks
         .insert(key, Arc::new(Chunk::empty(key.0, key.1)));

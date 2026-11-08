@@ -12922,6 +12922,11 @@ mod loaded_mob_arrow_permission_tests {
             game.block_ticks
                 .add_empty_chunk(BlockPos::new(0, 0, 0).chunk())
                 .unwrap();
+            // Supply the synthetic chunk before forceload's synchronous load barrier.
+            game.world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+            );
             assert!(game.run_command("forceload add 0 0"));
             assert!(game.run_command("fill 0 199 0 15 199 15 stone"));
             assert!(game.world.loaded(3, 1));

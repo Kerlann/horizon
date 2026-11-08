@@ -1374,6 +1374,11 @@ mod tests {
             game.options.dedicated = None;
             game.player = Some(PlayerMotion::new(game.motion, Vec3::new(4.5, 202.0, 4.5)).unwrap());
             game.creative = true;
+            // Supply the synthetic chunk before forceload's synchronous load barrier.
+            game.world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+            );
             game.world_root = std::env::current_dir().unwrap().join("h155-causal-world");
             let pack = game.world_root.join("datapacks/h155_causal");
             let dir = pack.join("data/h155c/function");
@@ -1673,6 +1678,11 @@ mod tests {
             game.options.dedicated = None;
             game.player = Some(PlayerMotion::new(game.motion, Vec3::new(4.5, 202.0, 4.5)).unwrap());
             game.creative = true;
+            // Supply the synthetic chunk before forceload's synchronous load barrier.
+            game.world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+            );
             game.world_root = std::env::current_dir().unwrap().join("h155-world");
             let pack = game.world_root.join("datapacks/h155_unit");
             let dir = pack.join("data/h155/function");

@@ -5931,6 +5931,11 @@ mod effective_presence_tests {
                     .iter()
                     .any(|k| k == key)
             );
+            // Supply the synthetic chunk before forceload's synchronous load barrier.
+            game.world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+            );
             assert!(game.run_command("forceload add 0 0 15 15"));
             assert!(game.world.loaded(4, 4));
             assert!(game.run_command("setblock 4 199 4 stone"));

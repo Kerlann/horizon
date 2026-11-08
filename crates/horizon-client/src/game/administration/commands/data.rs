@@ -1844,6 +1844,11 @@ mod boat_passenger_tree_tests {
         with_game(|game| {
             game.build_registries();
             game.set_allow_commands(true);
+            // Supply the synthetic chunk before forceload's synchronous load barrier.
+            game.world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+            );
             assert!(game.run_command("forceload add 0 0 15 15"));
             assert!(game.world.loaded(8, 8));
             assert!(game.run_command("setblock 8 199 8 stone"));
