@@ -67,6 +67,8 @@ pub(crate) struct State {
     profile: Option<BoundaryProfile>,
     #[cfg(feature = "boundary-profile")]
     epochs_left: u64,
+    #[cfg(feature = "boundary-profile")]
+    host_stats: std::collections::BTreeMap<u32, (u64, u128, u64, u64)>,
     group: usize,
     lending: Arc<AtomicUsize>,
 }
@@ -95,6 +97,8 @@ impl Default for State {
             profile: None,
             #[cfg(feature = "boundary-profile")]
             epochs_left: 0,
+            #[cfg(feature = "boundary-profile")]
+            host_stats: Default::default(),
             group: 0,
             lending: Arc::default(),
         }
@@ -332,6 +336,8 @@ fn host(
     out: u32,
     cap: u32,
 ) -> wasmtime::Result<u32> {
+    #[cfg(feature = "boundary-profile")]
+    let started = Instant::now();
     let memory = caller
         .data()
         .memory
@@ -407,6 +413,15 @@ fn host(
         memory.write(&mut caller, out as usize, reply.bytes())?;
     }
     caller.data_mut().replies[depth] = reply;
+    #[cfg(feature = "boundary-profile")]
+    {
+        let elapsed = started.elapsed().as_nanos();
+        let stats = caller.data_mut().host_stats.entry(id).or_default();
+        stats.0 += 1;
+        stats.1 += elapsed;
+        stats.2 += u64::from(len);
+        stats.3 += u64::from(size);
+    }
     Ok(size)
 }
 fn host_reply(mut caller: Caller<'_, State>, ptr: u32) -> wasmtime::Result<()> {
@@ -506,10 +521,15 @@ impl WasmMod {
                         }
                         // A game retains loaded modules until process exit. Finish explicitly
                         // rather than relying on their destructor to run at shutdown.
-                        if profile.calls == 200_000 {
+                        if profile.calls == 400_000 {
                             let profiler = profile.profiler.take().unwrap();
                             let file = std::fs::File::create(&profile.path)?;
                             profiler.finish(file)?;
+                            eprintln!(
+                                "boundary host cumulative at {} guest export returns: {:?}",
+                                profile.calls,
+                                store.data().host_stats
+                            );
                         }
                     }
                     store.data_mut().profile = Some(profile);
