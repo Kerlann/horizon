@@ -83,6 +83,8 @@ pub(crate) struct State {
     epochs_left: u64,
     #[cfg(feature = "boundary-profile")]
     host_stats: std::collections::BTreeMap<u32, (u64, u128, u64, u64)>,
+    #[cfg(feature = "boundary-profile")]
+    export_stats: std::collections::BTreeMap<u32, (u64, u64, u64, u64, u64)>,
     group: usize,
     lending: Arc<AtomicUsize>,
 }
@@ -115,6 +117,8 @@ impl Default for State {
             epochs_left: 0,
             #[cfg(feature = "boundary-profile")]
             host_stats: Default::default(),
+            #[cfg(feature = "boundary-profile")]
+            export_stats: Default::default(),
             group: 0,
             lending: Arc::default(),
         }
@@ -557,6 +561,7 @@ impl WasmMod {
                                         eprintln!("boundary profile: {error}");
                                     }
                                 }));
+                            eprintln!("boundary export byte stats (calls, input, output, differing bytes after 8-byte handler prefix, identical): {:?}", store.data().export_stats);
                             eprintln!(
                                 "boundary host cumulative at {} guest export returns: {:?}",
                                 profile.calls,
@@ -854,6 +859,25 @@ impl WasmMod {
                 .get(ptr..end)
                 .ok_or_else(|| wasmtime::Error::msg("reply outside memory"))?,
         );
+        #[cfg(feature = "boundary-profile")]
+        {
+            // Raw wire comparison only. A Part's handler prefix is eight bytes;
+            // interpret this as a changed-value count only for unit-return calls
+            // whose reply writes back the same argument sequence.
+            let before = input.bytes().get(8..).unwrap_or_default();
+            let different = before
+                .iter()
+                .zip(output.iter())
+                .filter(|(a, b)| a != b)
+                .count()
+                + before.len().abs_diff(output.len());
+            let stats = store.data_mut().export_stats.entry(id).or_default();
+            stats.0 += 1;
+            stats.1 += input.bytes().len() as u64;
+            stats.2 += output.len() as u64;
+            stats.3 += different as u64;
+            stats.4 += u64::from(before == output.as_slice());
+        }
         Ok(())
     }
 }
