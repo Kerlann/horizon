@@ -502,8 +502,11 @@ mod nested_spawn_tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn lifted_heart_callback_keeps_nested_spawns_until_the_next_pass() {
-        crate::game::native_entity_refs::tests::with_game(|game| {
+        crate::game::entity::taken_pass_tests::in_both_dimensions(|game| {
             let mut heart = CreakingHeart::default();
+            let kind = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+            game.mobs
+                .push(Mob::new(70, kind, Vec3::new(0.5, 80.0, 0.5), 0.0));
             crate::game::entity::taken_pass_tests::assert_mob_spawn_survives(game, |game| {
                 game.with_heart((0, 80, 0), &mut heart, false, |_, _, _, _, _| {})
                     .unwrap();

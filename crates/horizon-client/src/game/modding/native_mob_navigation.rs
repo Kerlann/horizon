@@ -152,7 +152,7 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources"]
     fn navigation_starts_a_real_path_and_refuses_stale_handles() {
-        with_game(|game| {
+        crate::game::entity::taken_pass_tests::in_both_dimensions(|game| {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));

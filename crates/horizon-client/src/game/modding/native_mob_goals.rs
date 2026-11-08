@@ -762,7 +762,7 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources"]
     fn goals_read_add_remove_and_refuse_what_the_mob_does_not_hold() {
-        with_game(|game| {
+        crate::game::entity::taken_pass_tests::in_both_dimensions(|game| {
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(Chunk::empty(0, 0)));

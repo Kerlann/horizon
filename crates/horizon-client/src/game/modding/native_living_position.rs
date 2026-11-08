@@ -356,7 +356,7 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn random_teleport_drops_to_the_ground_and_honours_the_avoid_tag() {
-        with_game(|game| {
+        crate::game::entity::taken_pass_tests::in_both_dimensions(|game| {
             floor_and_zombies(game);
             let zombie = game.living(game.entity(12).unwrap()).unwrap();
             let at = |game: &Game<'_>| game.mobs.iter().find(|m| m.id == 12).unwrap().position;

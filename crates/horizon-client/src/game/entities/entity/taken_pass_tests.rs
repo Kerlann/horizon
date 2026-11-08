@@ -303,6 +303,66 @@ fn lifecycle_fixture_walks_other_owners() {
     .run();
 }
 
+/// Run each fixture's complete setup and actual action in both dimensions.
+pub(in crate::game) fn in_both_dimensions(mut test: impl FnMut(&mut Game<'_>)) {
+    for dimension in [crate::game::Dim::Overworld, crate::game::Dim::Nether] {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            game.enter_level(dimension).unwrap();
+            test(game);
+            assert_eq!(
+                game.dim, dimension,
+                "fixture changed the selected dimension"
+            );
+        });
+    }
+}
+
+struct PassBalance {
+    journal: horizon_client::join_seq::residency::Journal,
+    owner: horizon_client::join_seq::residency::Owner,
+}
+impl PassBalance {
+    fn bind<T: horizon_client::join_seq::Joined, const DIRECT: bool>(
+        list: &mut JoinList<T, DIRECT>,
+        owner: horizon_client::join_seq::residency::Owner,
+        identity: fn(&T) -> (u32, horizon_client::join_seq::JoinSeq),
+    ) -> Self {
+        let journal = horizon_client::join_seq::residency::Journal::default();
+        list.bind_residency(&journal, owner, identity);
+        Self { journal, owner }
+    }
+    fn assert_closed(&self) {
+        use horizon_client::join_seq::residency::Change;
+        let mut events = Vec::new();
+        self.journal.drain_into(&mut events);
+        let mut depth = 0usize;
+        let mut lifts = 0;
+        for event in events {
+            assert_eq!(event.owner, self.owner);
+            match event.change {
+                Change::Lifted => {
+                    depth += 1;
+                    lifts += 1;
+                }
+                Change::Restored => depth = depth.checked_sub(1).expect("restore without lift"),
+                _ => {}
+            }
+        }
+        assert!(lifts > 0, "actual caller did not emit its lift");
+        assert_eq!(depth, 0, "actual caller abandoned a lifted pass");
+    }
+    fn assert_parked(&self, game: &mut Game<'_>) {
+        let home = game.dim;
+        let away = match home {
+            crate::game::Dim::Overworld => crate::game::Dim::Nether,
+            _ => crate::game::Dim::Overworld,
+        };
+        game.enter_level(away).unwrap();
+        self.assert_closed();
+        game.enter_level(home).unwrap();
+    }
+}
+
 /// Inject a nested spawn into an actual lifted mob operation, then exercise the
 /// next real entity pass with just that new owner so the caller's other state
 /// remains available for its own assertions.
@@ -322,7 +382,18 @@ pub(in crate::game) fn assert_mob_spawn_survives(
         mob.no_ai = true;
         game.mobs.push(mob);
     }
+    use horizon_client::join_seq::residency::{Kind, Owner};
+    let balance = PassBalance::bind(
+        &mut game.mobs,
+        Owner {
+            dimension: game.dim.key(),
+            kind: Kind::Mob,
+        },
+        |mob| (mob.id, mob.join),
+    );
+    let mut expected: Vec<_> = game.mobs.iter().map(|mob| (mob.id, mob.join)).collect();
     with_spawn(spawn, || action(game));
+    balance.assert_closed();
     let index = game
         .mobs
         .iter()
@@ -330,6 +401,15 @@ pub(in crate::game) fn assert_mob_spawn_survives(
         .expect("nested spawn was dropped");
     assert_eq!(game.mobs[index].age, 0, "spawn ticked in the current pass");
     let join = game.mobs[index].join;
+    expected.push((SPAWNED, join));
+    assert_eq!(
+        game.mobs
+            .iter()
+            .map(|mob| (mob.id, mob.join))
+            .collect::<Vec<_>>(),
+        expected,
+        "caller changed survivor identity or spawn admission order"
+    );
     let mut original = game.mobs.lift();
     let spawned = original.extract(join).unwrap();
     game.mobs.push(spawned);
@@ -348,6 +428,7 @@ pub(in crate::game) fn assert_mob_spawn_survives(
         original,
         horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
     );
+    balance.assert_parked(game);
 }
 
 /// Check a real player/guest projectile pickup pass and the next server flight pass.

@@ -1155,7 +1155,7 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn living_flags_villager_sleep_rejects_invalid_beds_without_mutation() {
-        with_game(|game| {
+        crate::game::entity::taken_pass_tests::in_both_dimensions(|game| {
             guest_server(game, true, false);
             let kind = game
                 .res
