@@ -99,6 +99,13 @@ impl mod_api::EntityPart for GoalPart {
 struct Hooks(Arc<Probe>);
 #[mod_api::__subscriptions]
 impl mod_api::Hooks for Hooks {
+    fn entity_tick_listened(
+        &self,
+        _: &mut dyn mod_api::ServerHost,
+        event: &mut mod_api::EntityTickListenedEvent,
+    ) {
+        event.listened = true;
+    }
     fn entity_tick_post(
         &self,
         _: &mut dyn mod_api::ServerHost,
@@ -261,6 +268,9 @@ fn run(family: Family) {
                         let mut mob =
                             Mob::new(id, kind, Vec3::new(f64::from(id - 70), 80.0, 0.5), 0.0);
                         mob.no_ai = true;
+                        if id == 71 {
+                            mob.ai.last_hurt_by_player = 5;
+                        }
                         if id == 72 {
                             mob.air = 100;
                             if family == Family::Knockback {
@@ -301,6 +311,8 @@ fn run(family: Family) {
                         }
                         game.mobs.push(mob);
                     }
+                    game.last_hurt_by_player
+                        .insert(71, super::super::combat::PlayerCredit(99));
                     let rows: Vec<_> = game.mobs.iter().map(|m| (m.id, m.join)).collect();
                     VALUE
                         .set(&mut game.world.attachments, Holder::Level, 42)
@@ -375,6 +387,7 @@ fn run(family: Family) {
                             .unwrap(),
                         Some(42)
                     );
+                    assert_eq!(game.last_hurt_by_player.get(&71).map(|c| c.0), Some(99));
                     assert_eq!(game.world.attachment_syncs, syncs);
                     assert_eq!(game.world.path_writes, writes);
                     assert_eq!(game.world.random.clone().next_long(), draw);
