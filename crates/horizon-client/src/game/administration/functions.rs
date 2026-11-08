@@ -1353,461 +1353,474 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources and scratch homes/cwd"]
     fn prepared_function_calls_keep_causality_and_fallback_boundaries() {
-        use crate::game::native_machines::tests::server_game;
+        use crate::game::native_entity_refs::tests::with_game;
         use horizon_client::motion::PlayerMotion;
         use horizon_core::geometry::Vec3;
-        let mut game = server_game();
-        game.options.dedicated = None;
-        game.player = Some(PlayerMotion::new(game.motion, Vec3::new(4.5, 202.0, 4.5)).unwrap());
-        game.creative = true;
-        game.world_root = std::env::current_dir().unwrap().join("h155-causal-world");
-        let pack = game.world_root.join("datapacks/h155_causal");
-        let dir = pack.join("data/h155c/function");
-        std::fs::create_dir_all(&dir).unwrap();
-        let f = horizon_core::version::DATA_PACK_FORMAT;
-        std::fs::write(pack.join("pack.mcmeta"), serde_json::json!({"pack":{"description":"H155 causal controls","pack_format":f.0,"min_format":[f.0,f.1],"max_format":[f.0,f.1]}}).to_string()).unwrap();
-        let body = "execute if score @s h155c_id matches 1 run scoreboard players operation #seen_a h155c = #r h155c\nexecute if score @s h155c_id matches 2 run scoreboard players operation #seen_b h155c = #r h155c\nscoreboard players add #calls h155c 1\nscoreboard players operation #trace h155c *= #ten h155c\nscoreboard players operation #trace h155c += @s h155c_id\n";
-        for (name, tail) in [
-            ("zero", "return 0\n"),
-            ("five", "return 5\n"),
-            ("fail", "return fail\n"),
-            ("none", ""),
-        ] {
-            std::fs::write(
-                dir.join(format!("{name}.mcfunction")),
-                format!("{body}{tail}"),
-            )
-            .unwrap();
-        }
-        for (name, text) in [
-            (
-                "early",
-                "scoreboard players add #early h155c 1\nreturn 0\nscoreboard players add #late h155c 1\n",
-            ),
-            ("inner", "scoreboard players add #inner h155c 1\nreturn 0\n"),
-            (
-                "outer",
-                "function h155c:inner\nscoreboard players add #outer h155c 1\nreturn 5\n",
-            ),
-            (
-                "nested",
-                "execute as @e[type=pig,tag=h155c,sort=nearest,limit=2] run function h155c:inner\nreturn 0\n",
-            ),
-            (
-                "macro",
-                "$scoreboard players add #macro h155c $(amount)\nreturn 0\n",
-            ),
-        ] {
-            std::fs::write(dir.join(format!("{name}.mcfunction")), text).unwrap();
-        }
-        std::fs::create_dir_all(pack.join("data/h155c/tags/function")).unwrap();
-        std::fs::write(
-            pack.join("data/h155c/tags/function/pair.json"),
-            r#"{"values":["h155c:zero","h155c:five"]}"#,
-        )
-        .unwrap();
-        game.reload_datapacks(false);
-        game.build_registries();
-        game.set_allow_commands(true);
-        assert_eq!(game.fns.store.tag_functions("h155c:pair").len(), 2);
-        assert!(
-            game.fns
-                .store
-                .functions
-                .get("h155c:macro")
-                .unwrap()
-                .is_macro()
-        );
-        assert!(game.run_command("forceload add 0 0 15 15"));
-        assert!(game.world.loaded(4, 4));
-        assert!(game.run_command("fill 0 199 0 15 199 15 stone"));
-        for (n, x) in [(1, 4.5), (2, 8.5)] {
-            assert!(game.run_command(&format!("summon pig {x} 200 4.5 {{UUID:[I;155,2,0,{n}],Tags:[\"h155c\"],NoAI:1b,NoGravity:1b,Health:10f}}")));
-            assert!(game.run_command(&format!("execute if entity @e[type=pig,nbt={{UUID:[I;155,2,0,{n}],Health:10f,NoAI:1b,NoGravity:1b,Pos:[{x}d,200d,4.5d]}}]")));
-        }
-        assert!(game.run_command("scoreboard objectives add h155c dummy"));
-        assert!(game.run_command("scoreboard objectives add h155c_id dummy"));
-        for (holder, id) in [
-            ("@s".to_owned(), 3),
-            ("@e[nbt={UUID:[I;155,2,0,1]},limit=1]".to_owned(), 1),
-            ("@e[nbt={UUID:[I;155,2,0,2]},limit=1]".to_owned(), 2),
-        ] {
-            assert!(game.run_command(&format!("scoreboard players set {holder} h155c_id {id}")));
-        }
-        assert!(game.run_command("scoreboard players set #ten h155c 10"));
-        fn score(g: &Game<'_>, h: &str) -> i32 {
-            g.score.board.score(h, "h155c").unwrap().value
-        }
-        fn reset(g: &mut Game<'_>) {
-            for h in [
-                "#calls", "#trace", "#seen_a", "#seen_b", "#early", "#late", "#inner", "#outer",
-                "#macro",
+        with_game(|game| {
+            game.options.dedicated = None;
+            game.player = Some(PlayerMotion::new(game.motion, Vec3::new(4.5, 202.0, 4.5)).unwrap());
+            game.creative = true;
+            game.world_root = std::env::current_dir().unwrap().join("h155-causal-world");
+            let pack = game.world_root.join("datapacks/h155_causal");
+            let dir = pack.join("data/h155c/function");
+            std::fs::create_dir_all(&dir).unwrap();
+            let f = horizon_core::version::DATA_PACK_FORMAT;
+            std::fs::write(pack.join("pack.mcmeta"), serde_json::json!({"pack":{"description":"H155 causal controls","pack_format":f.0,"min_format":[f.0,f.1],"max_format":[f.0,f.1]}}).to_string()).unwrap();
+            let body = "execute if score @s h155c_id matches 1 run scoreboard players operation #seen_a h155c = #r h155c\nexecute if score @s h155c_id matches 2 run scoreboard players operation #seen_b h155c = #r h155c\nscoreboard players add #calls h155c 1\nscoreboard players operation #trace h155c *= #ten h155c\nscoreboard players operation #trace h155c += @s h155c_id\n";
+            for (name, tail) in [
+                ("zero", "return 0\n"),
+                ("five", "return 5\n"),
+                ("fail", "return fail\n"),
+                ("none", ""),
             ] {
-                assert!(g.run_command(&format!("scoreboard players set {h} h155c 0")));
+                std::fs::write(
+                    dir.join(format!("{name}.mcfunction")),
+                    format!("{body}{tail}"),
+                )
+                .unwrap();
             }
-            assert!(g.run_command("scoreboard players set #r h155c 91"));
-            assert!(g.run_command("scoreboard players set #s h155c 17"));
-        }
-        fn capture(g: &mut Game<'_>, line: &str) -> (Vec<String>, Vec<(bool, i32)>) {
-            g.chat_capture = Some(Vec::new());
-            g.cmds.results = Some(Vec::new());
-            assert!(g.run_command(line));
-            let texts = g.chat_capture.take().unwrap();
-            let callbacks = g.cmds.results.take().unwrap();
-            println!("causal raw {line}: {texts:?} callbacks={callbacks:?}");
-            assert!(
-                g.exec.prepared_function.is_none(),
-                "no prepared call after command/error/return"
-            );
-            (
-                texts
-                    .iter()
-                    .map(|m| m.translation_key().unwrap_or("literal").to_owned())
-                    .collect(),
-                callbacks,
-            )
-        }
-        let start = "commands.function.scheduled.single".to_owned();
-        let result = "commands.function.result".to_owned();
-        let prefix = "execute store result score #r h155c store success score #s h155c as @e[type=pig,tag=h155c,sort=nearest,limit=2] run ";
-        let clock = game.world.game_time;
-        let chunks = game.world.chunks.len();
-        for (name, value, success) in [
-            ("zero", Some(0), true),
-            ("five", Some(5), true),
-            ("fail", Some(0), false),
-            ("none", None, false),
-        ] {
-            reset(&mut game);
-            let (keys, callbacks) = capture(&mut game, &format!("{prefix}function h155c:{name}"));
-            let mut expected = vec![start.clone(); 2];
-            if value.is_some() {
-                expected.extend(vec![result.clone(); 2]);
+            for (name, text) in [
+                (
+                    "early",
+                    "scoreboard players add #early h155c 1\nreturn 0\nscoreboard players add #late h155c 1\n",
+                ),
+                ("inner", "scoreboard players add #inner h155c 1\nreturn 0\n"),
+                (
+                    "outer",
+                    "function h155c:inner\nscoreboard players add #outer h155c 1\nreturn 5\n",
+                ),
+                (
+                    "nested",
+                    "execute as @e[type=pig,tag=h155c,sort=nearest,limit=2] run function h155c:inner\nreturn 0\n",
+                ),
+                (
+                    "macro",
+                    "$scoreboard players add #macro h155c $(amount)\nreturn 0\n",
+                ),
+            ] {
+                std::fs::write(dir.join(format!("{name}.mcfunction")), text).unwrap();
             }
-            assert_eq!(keys, expected);
-            assert_eq!(
-                callbacks,
-                value.map_or_else(Vec::new, |v| vec![(success, v); 2])
-            );
-            assert_eq!((score(&game, "#calls"), score(&game, "#trace")), (2, 12));
-            assert_eq!(score(&game, "#seen_a"), 91);
-            assert_eq!(
-                score(&game, "#seen_b"),
-                value.unwrap_or(91),
-                "first source callback/store precedes second body"
-            );
-            assert_eq!(score(&game, "#r"), value.unwrap_or(91));
-            assert_eq!(
-                score(&game, "#s"),
-                if value.is_some() {
-                    i32::from(success)
-                } else {
-                    17
-                }
-            );
-        }
-        // Each actual actor owns its leaf store; shared ancestors still deliver oldest first.
-        reset(&mut game);
-        for n in [1, 2] {
-            assert!(game.run_command(&format!(
-                "scoreboard players set @e[nbt={{UUID:[I;155,2,0,{n}]}},limit=1] h155c 91"
-            )));
-        }
-        let (keys, callbacks) = capture(
-            &mut game,
-            "execute store result score #chain h155c as @e[type=pig,tag=h155c,sort=nearest,limit=2] store success score #chain h155c store result score @s h155c run function h155c:five",
-        );
-        assert_eq!(
-            keys,
-            vec![start.clone(), start.clone(), result.clone(), result.clone()]
-        );
-        assert_eq!(callbacks, vec![(true, 5); 2]);
-        assert_eq!(
-            score(&game, "#chain"),
-            1,
-            "ancestor result then child success"
-        );
-        assert_eq!((score(&game, "#calls"), score(&game, "#trace")), (2, 12));
-        for n in [1, 2] {
-            let (_, callbacks) = capture(
-                &mut game,
-                &format!("scoreboard players get @e[nbt={{UUID:[I;155,2,0,{n}]}},limit=1] h155c"),
-            );
-            assert_eq!(
-                callbacks,
-                vec![(true, 5)],
-                "actual actor's own result store"
-            );
-        }
-        // These ineligible variants preserve the legacy path, not a Java-order parity claim.
-        for line in [
-            "execute as @e[type=pig,tag=h155c,sort=nearest,limit=2] if entity @s run function h155c:zero",
-            "execute run execute as @e[type=pig,tag=h155c,sort=nearest,limit=2] run function h155c:zero",
-            "execute as @e[type=pig,tag=h155c,sort=nearest,limit=2] run function h155c:macro {amount:1}",
-        ] {
-            reset(&mut game);
-            let (keys, callbacks) = capture(&mut game, line);
-            assert_eq!(
-                keys,
-                vec![start.clone(), result.clone(), start.clone(), result.clone()],
-                "unchanged ineligible path"
-            );
-            assert_eq!(callbacks, vec![(true, 0); 2]);
-        }
-        reset(&mut game);
-        let (keys, callbacks) = capture(
-            &mut game,
-            "execute as @e[type=pig,tag=h155c,sort=nearest,limit=2] run function #h155c:pair",
-        );
-        assert_eq!(
-            keys,
-            vec![
-                "commands.function.scheduled.multiple".to_owned(),
-                result.clone(),
-                result.clone(),
-                "commands.function.scheduled.multiple".to_owned(),
-                result.clone(),
-                result.clone()
-            ]
-        );
-        assert_eq!(callbacks, vec![(true, 5); 2]);
-        assert_eq!(score(&game, "#calls"), 4);
-        reset(&mut game);
-        let source = Source {
-            silent: true,
-            ..game.player_source()
-        };
-        let (keys, callbacks) = game.with_source(source, |g| {
-            capture(g, &format!("{prefix}function h155c:zero"))
-        });
-        assert!(keys.is_empty());
-        assert_eq!(callbacks, vec![(true, 0); 2]);
-        assert_eq!(score(&game, "#trace"), 12);
-        reset(&mut game);
-        let (keys, callbacks) = capture(&mut game, &format!("{prefix}function h155c:missing"));
-        assert!(keys.is_empty());
-        assert_eq!(callbacks, vec![(false, 0); 2]);
-        assert_eq!(score(&game, "#calls"), 0);
-        for line in [
-            "function h155c:five",
-            "execute as @e[type=pig,tag=h155c,sort=nearest,limit=1] run function h155c:five",
-        ] {
-            reset(&mut game);
-            let (keys, callbacks) = capture(&mut game, line);
-            assert_eq!(keys, vec![start.clone(), result.clone()]);
-            assert_eq!(callbacks, vec![(true, 5)]);
-        }
-        reset(&mut game);
-        let (keys, callbacks) = capture(&mut game, &format!("{prefix}function h155c:outer"));
-        assert_eq!(
-            keys,
-            vec![start.clone(), start.clone(), result.clone(), result.clone()]
-        );
-        assert_eq!(callbacks, vec![(true, 5); 2]);
-        assert_eq!((score(&game, "#inner"), score(&game, "#outer")), (2, 2));
-        reset(&mut game);
-        let (keys, callbacks) = capture(&mut game, "function h155c:nested");
-        assert_eq!(keys, vec![start.clone(), result.clone()]);
-        assert_eq!(callbacks, vec![(true, 0)]);
-        assert_eq!(score(&game, "#inner"), 2);
-        reset(&mut game);
-        let (_, callbacks) = capture(&mut game, &format!("{prefix}function h155c:early"));
-        assert_eq!(callbacks, vec![(true, 0); 2]);
-        assert_eq!((score(&game, "#early"), score(&game, "#late")), (2, 0));
-        // These are preservation/cleanup controls, not a Java limit-parity claim.
-        for budget in [1, 4] {
-            reset(&mut game);
-            assert!(game.run_command(&format!("gamerule max_command_sequence_length {budget}")));
-            let (keys, callbacks) = capture(&mut game, &format!("{prefix}function h155c:early"));
-            if budget == 1 {
-                assert!(keys.is_empty() && callbacks.is_empty());
-                assert_eq!(score(&game, "#early"), 0);
-            } else {
-                assert_eq!(callbacks, vec![(true, 0)]);
-                assert_eq!((score(&game, "#early"), score(&game, "#late")), (1, 0));
-                assert_eq!(keys.iter().filter(|k| **k == start).count(), 2);
-            }
-            assert!(game.run_command("gamerule max_command_sequence_length 65536"));
-            reset(&mut game);
-            let (keys, callbacks) = capture(&mut game, &format!("{prefix}function h155c:five"));
-            assert_eq!(
-                keys,
-                vec![start.clone(), start.clone(), result.clone(), result.clone()]
-            );
-            assert_eq!(callbacks, vec![(true, 5); 2]);
-            assert_eq!(score(&game, "#seen_b"), 5);
-        }
-        assert_eq!(game.world.game_time, clock);
-        assert_eq!(game.world.chunks.len(), chunks);
-    }
-
-    #[test]
-    #[ignore = "needs prepared resources and scratch homes/cwd"]
-    fn forked_function_replies_keep_task_order_and_actual_callbacks() {
-        use crate::game::native_machines::tests::server_game;
-        use horizon_client::motion::PlayerMotion;
-        use horizon_core::geometry::Vec3;
-        let mut game = server_game();
-        game.options.dedicated = None;
-        game.player = Some(PlayerMotion::new(game.motion, Vec3::new(4.5, 202.0, 4.5)).unwrap());
-        game.creative = true;
-        game.world_root = std::env::current_dir().unwrap().join("h155-world");
-        let pack = game.world_root.join("datapacks/h155_unit");
-        let dir = pack.join("data/h155/function");
-        std::fs::create_dir_all(&dir).unwrap();
-        let format = horizon_core::version::DATA_PACK_FORMAT;
-        std::fs::write(
-            pack.join("pack.mcmeta"),
-            serde_json::json!({"pack": {
-                "description":"H155 actual Game regression", "pack_format":format.0,
-                "min_format":[format.0,format.1], "max_format":[format.0,format.1]
-            }})
-            .to_string(),
-        )
-        .unwrap();
-        let body = "scoreboard players add #calls h155 1\nscoreboard players add @s h155 1\nscoreboard players operation #trace h155 *= #ten h155\nscoreboard players operation #trace h155 += @s h155_id\n";
-        for (name, tail) in [
-            ("zero", "return 0\n"),
-            ("five", "return 5\n"),
-            ("fail", "return fail\n"),
-            ("fallthrough", ""),
-        ] {
+            std::fs::create_dir_all(pack.join("data/h155c/tags/function")).unwrap();
             std::fs::write(
-                dir.join(format!("{name}.mcfunction")),
-                format!("{body}{tail}"),
+                pack.join("data/h155c/tags/function/pair.json"),
+                r#"{"values":["h155c:zero","h155c:five"]}"#,
             )
             .unwrap();
-        }
-        std::fs::write(
-            dir.join("admit.mcfunction"),
-            "scoreboard players add #pack h155 1\nreturn 1\n",
-        )
-        .unwrap();
-        game.reload_datapacks(false);
-        game.build_registries();
-        game.set_allow_commands(true);
-        for name in ["zero", "five", "fail", "fallthrough", "admit"] {
+            game.reload_datapacks(false);
+            game.build_registries();
+            game.set_allow_commands(true);
+            assert_eq!(game.fns.store.tag_functions("h155c:pair").len(), 2);
             assert!(
                 game.fns
                     .store
                     .functions
-                    .contains_key(&format!("h155:{name}"))
+                    .get("h155c:macro")
+                    .unwrap()
+                    .is_macro()
             );
-            assert!(
-                game.ui
-                    .registries
-                    .functions
-                    .contains(&format!("h155:{name}"))
-            );
-        }
-        assert!(game.run_command("forceload add 0 0 15 15"));
-        assert!(game.world.loaded(4, 4));
-        assert!(game.run_command("fill 0 199 0 15 199 15 stone"));
-        for (n, x) in [(1, 4.5), (2, 8.5)] {
-            assert!(game.run_command(&format!("summon pig {x} 200 4.5 {{UUID:[I;155,1,0,{n}],Tags:[\"h155u\"],NoAI:1b,NoGravity:1b,Silent:1b,PersistenceRequired:1b,Health:10f}}")));
-            assert!(game.run_command(&format!("execute if entity @e[type=pig,nbt={{UUID:[I;155,1,0,{n}],Health:10f,NoAI:1b,NoGravity:1b,Pos:[{x}d,200d,4.5d]}}]")));
-        }
-        assert!(game.run_command("scoreboard objectives add h155 dummy"));
-        assert!(game.run_command("scoreboard objectives add h155_id dummy"));
-        assert!(game.run_command("scoreboard players set #ten h155 10"));
-        assert!(game.run_command("scoreboard players set @s h155_id 3"));
-        let actor = |n| format!("@e[nbt={{UUID:[I;155,1,0,{n}]}},limit=1]");
-        for n in [1, 2] {
-            assert!(game.run_command(&format!("scoreboard players set {} h155_id {n}", actor(n))));
-        }
-        assert!(game.run_command("scoreboard players set #pack h155 0"));
-        assert!(game.run_command("function h155:admit"));
-        assert_eq!(game.score.board.score("#pack", "h155").unwrap().value, 1);
-        let clock = game.world.game_time;
-        let chunks = game.world.chunks.len();
-        let mut mismatches = Vec::new();
-        for (name, value, success) in [
-            ("zero", Some(0), true),
-            ("five", Some(5), true),
-            ("fail", Some(0), false),
-            ("fallthrough", None, false),
-        ] {
-            for route in ["direct", "one", "two", "nonfork"] {
-                for holder in [
-                    "#calls".to_owned(),
-                    "#trace".to_owned(),
-                    "@s".to_owned(),
-                    actor(1),
-                    actor(2),
+            assert!(game.run_command("forceload add 0 0 15 15"));
+            assert!(game.world.loaded(4, 4));
+            assert!(game.run_command("fill 0 199 0 15 199 15 stone"));
+            for (n, x) in [(1, 4.5), (2, 8.5)] {
+                assert!(game.run_command(&format!("summon pig {x} 200 4.5 {{UUID:[I;155,2,0,{n}],Tags:[\"h155c\"],NoAI:1b,NoGravity:1b,Health:10f}}")));
+                assert!(game.run_command(&format!("execute if entity @e[type=pig,nbt={{UUID:[I;155,2,0,{n}],Health:10f,NoAI:1b,NoGravity:1b,Pos:[{x}d,200d,4.5d]}}]")));
+            }
+            assert!(game.run_command("scoreboard objectives add h155c dummy"));
+            assert!(game.run_command("scoreboard objectives add h155c_id dummy"));
+            for (holder, id) in [
+                ("@s".to_owned(), 3),
+                ("@e[nbt={UUID:[I;155,2,0,1]},limit=1]".to_owned(), 1),
+                ("@e[nbt={UUID:[I;155,2,0,2]},limit=1]".to_owned(), 2),
+            ] {
+                assert!(
+                    game.run_command(&format!("scoreboard players set {holder} h155c_id {id}"))
+                );
+            }
+            assert!(game.run_command("scoreboard players set #ten h155c 10"));
+            fn score(g: &Game<'_>, h: &str) -> i32 {
+                g.score.board.score(h, "h155c").unwrap().value
+            }
+            fn reset(g: &mut Game<'_>) {
+                for h in [
+                    "#calls", "#trace", "#seen_a", "#seen_b", "#early", "#late", "#inner",
+                    "#outer", "#macro",
                 ] {
-                    assert!(game.run_command(&format!("scoreboard players set {holder} h155 0")));
+                    assert!(g.run_command(&format!("scoreboard players set {h} h155c 0")));
                 }
-                assert!(game.run_command("scoreboard players set #r h155 91"));
-                assert!(game.run_command("scoreboard players set #s h155 17"));
-                let middle = match route {
-                    "one" => "as @e[type=pig,tag=h155u,sort=nearest,limit=1] ",
-                    "two" => "as @e[type=pig,tag=h155u,sort=nearest,limit=2] ",
-                    "nonfork" => "positioned 4.5 202 4.5 ",
-                    _ => "",
-                };
-                game.chat_capture = Some(Vec::new());
-                game.cmds.results = Some(Vec::new());
-                let accepted = game.run_command(&format!("execute store result score #r h155 store success score #s h155 {middle}run function h155:{name}"));
-                let messages = game.chat_capture.take().unwrap();
-                let callbacks = game.cmds.results.take().unwrap();
-                assert!(accepted, "actual registered function command");
-                let count = if route == "two" { 2 } else { 1 };
-                assert_eq!(
-                    game.score.board.score("#calls", "h155").unwrap().value,
-                    count
+                assert!(g.run_command("scoreboard players set #r h155c 91"));
+                assert!(g.run_command("scoreboard players set #s h155c 17"));
+            }
+            fn capture(g: &mut Game<'_>, line: &str) -> (Vec<String>, Vec<(bool, i32)>) {
+                g.chat_capture = Some(Vec::new());
+                g.cmds.results = Some(Vec::new());
+                assert!(g.run_command(line));
+                let texts = g.chat_capture.take().unwrap();
+                let callbacks = g.cmds.results.take().unwrap();
+                println!("causal raw {line}: {texts:?} callbacks={callbacks:?}");
+                assert!(
+                    g.exec.prepared_function.is_none(),
+                    "no prepared call after command/error/return"
                 );
-                assert_eq!(
-                    game.score.board.score("#trace", "h155").unwrap().value,
-                    match route {
-                        "two" => 12,
-                        "one" => 1,
-                        _ => 3,
-                    }
-                );
+                (
+                    texts
+                        .iter()
+                        .map(|m| m.translation_key().unwrap_or("literal").to_owned())
+                        .collect(),
+                    callbacks,
+                )
+            }
+            let start = "commands.function.scheduled.single".to_owned();
+            let result = "commands.function.result".to_owned();
+            let prefix = "execute store result score #r h155c store success score #s h155c as @e[type=pig,tag=h155c,sort=nearest,limit=2] run ";
+            let clock = game.world.game_time;
+            let chunks = game.world.chunks.len();
+            for (name, value, success) in [
+                ("zero", Some(0), true),
+                ("five", Some(5), true),
+                ("fail", Some(0), false),
+                ("none", None, false),
+            ] {
+                reset(game);
+                let (keys, callbacks) = capture(game, &format!("{prefix}function h155c:{name}"));
+                let mut expected = vec![start.clone(); 2];
+                if value.is_some() {
+                    expected.extend(vec![result.clone(); 2]);
+                }
+                assert_eq!(keys, expected);
                 assert_eq!(
                     callbacks,
-                    value.map_or_else(Vec::new, |v| vec![(success, v); count as usize])
+                    value.map_or_else(Vec::new, |v| vec![(success, v); 2])
                 );
+                assert_eq!((score(game, "#calls"), score(game, "#trace")), (2, 12));
+                assert_eq!(score(game, "#seen_a"), 91);
                 assert_eq!(
-                    game.score.board.score("#r", "h155").unwrap().value,
-                    value.unwrap_or(91)
+                    score(game, "#seen_b"),
+                    value.unwrap_or(91),
+                    "first source callback/store precedes second body"
                 );
+                assert_eq!(score(game, "#r"), value.unwrap_or(91));
                 assert_eq!(
-                    game.score.board.score("#s", "h155").unwrap().value,
+                    score(game, "#s"),
                     if value.is_some() {
                         i32::from(success)
                     } else {
                         17
                     }
                 );
-                let keys: Vec<_> = messages
-                    .iter()
-                    .map(|m| m.translation_key().unwrap_or("literal").to_owned())
-                    .collect();
-                let mut expected =
-                    vec!["commands.function.scheduled.single".to_owned(); count as usize];
-                if value.is_some() {
-                    expected.extend(vec!["commands.function.result".to_owned(); count as usize]);
+            }
+            // Each actual actor owns its leaf store; shared ancestors still deliver oldest first.
+            reset(game);
+            for n in [1, 2] {
+                assert!(game.run_command(&format!(
+                    "scoreboard players set @e[nbt={{UUID:[I;155,2,0,{n}]}},limit=1] h155c 91"
+                )));
+            }
+            let (keys, callbacks) = capture(
+                game,
+                "execute store result score #chain h155c as @e[type=pig,tag=h155c,sort=nearest,limit=2] store success score #chain h155c store result score @s h155c run function h155c:five",
+            );
+            assert_eq!(
+                keys,
+                vec![start.clone(), start.clone(), result.clone(), result.clone()]
+            );
+            assert_eq!(callbacks, vec![(true, 5); 2]);
+            assert_eq!(
+                score(game, "#chain"),
+                1,
+                "ancestor result then child success"
+            );
+            assert_eq!((score(game, "#calls"), score(game, "#trace")), (2, 12));
+            for n in [1, 2] {
+                let (_, callbacks) = capture(
+                    game,
+                    &format!(
+                        "scoreboard players get @e[nbt={{UUID:[I;155,2,0,{n}]}},limit=1] h155c"
+                    ),
+                );
+                assert_eq!(
+                    callbacks,
+                    vec![(true, 5)],
+                    "actual actor's own result store"
+                );
+            }
+            // These ineligible variants preserve the legacy path, not a Java-order parity claim.
+            for line in [
+                "execute as @e[type=pig,tag=h155c,sort=nearest,limit=2] if entity @s run function h155c:zero",
+                "execute run execute as @e[type=pig,tag=h155c,sort=nearest,limit=2] run function h155c:zero",
+                "execute as @e[type=pig,tag=h155c,sort=nearest,limit=2] run function h155c:macro {amount:1}",
+            ] {
+                reset(game);
+                let (keys, callbacks) = capture(game, line);
+                assert_eq!(
+                    keys,
+                    vec![start.clone(), result.clone(), start.clone(), result.clone()],
+                    "unchanged ineligible path"
+                );
+                assert_eq!(callbacks, vec![(true, 0); 2]);
+            }
+            reset(game);
+            let (keys, callbacks) = capture(
+                game,
+                "execute as @e[type=pig,tag=h155c,sort=nearest,limit=2] run function #h155c:pair",
+            );
+            assert_eq!(
+                keys,
+                vec![
+                    "commands.function.scheduled.multiple".to_owned(),
+                    result.clone(),
+                    result.clone(),
+                    "commands.function.scheduled.multiple".to_owned(),
+                    result.clone(),
+                    result.clone()
+                ]
+            );
+            assert_eq!(callbacks, vec![(true, 5); 2]);
+            assert_eq!(score(game, "#calls"), 4);
+            reset(game);
+            let source = Source {
+                silent: true,
+                ..game.player_source()
+            };
+            let (keys, callbacks) = game.with_source(source, |g| {
+                capture(g, &format!("{prefix}function h155c:zero"))
+            });
+            assert!(keys.is_empty());
+            assert_eq!(callbacks, vec![(true, 0); 2]);
+            assert_eq!(score(game, "#trace"), 12);
+            reset(game);
+            let (keys, callbacks) = capture(game, &format!("{prefix}function h155c:missing"));
+            assert!(keys.is_empty());
+            assert_eq!(callbacks, vec![(false, 0); 2]);
+            assert_eq!(score(game, "#calls"), 0);
+            for line in [
+                "function h155c:five",
+                "execute as @e[type=pig,tag=h155c,sort=nearest,limit=1] run function h155c:five",
+            ] {
+                reset(game);
+                let (keys, callbacks) = capture(game, line);
+                assert_eq!(keys, vec![start.clone(), result.clone()]);
+                assert_eq!(callbacks, vec![(true, 5)]);
+            }
+            reset(game);
+            let (keys, callbacks) = capture(game, &format!("{prefix}function h155c:outer"));
+            assert_eq!(
+                keys,
+                vec![start.clone(), start.clone(), result.clone(), result.clone()]
+            );
+            assert_eq!(callbacks, vec![(true, 5); 2]);
+            assert_eq!((score(game, "#inner"), score(game, "#outer")), (2, 2));
+            reset(game);
+            let (keys, callbacks) = capture(game, "function h155c:nested");
+            assert_eq!(keys, vec![start.clone(), result.clone()]);
+            assert_eq!(callbacks, vec![(true, 0)]);
+            assert_eq!(score(game, "#inner"), 2);
+            reset(game);
+            let (_, callbacks) = capture(game, &format!("{prefix}function h155c:early"));
+            assert_eq!(callbacks, vec![(true, 0); 2]);
+            assert_eq!((score(game, "#early"), score(game, "#late")), (2, 0));
+            // These are preservation/cleanup controls, not a Java limit-parity claim.
+            for budget in [1, 4] {
+                reset(game);
+                assert!(
+                    game.run_command(&format!("gamerule max_command_sequence_length {budget}"))
+                );
+                let (keys, callbacks) = capture(game, &format!("{prefix}function h155c:early"));
+                if budget == 1 {
+                    assert!(keys.is_empty() && callbacks.is_empty());
+                    assert_eq!(score(game, "#early"), 0);
+                } else {
+                    assert_eq!(callbacks, vec![(true, 0)]);
+                    assert_eq!((score(game, "#early"), score(game, "#late")), (1, 0));
+                    assert_eq!(keys.iter().filter(|k| **k == start).count(), 2);
                 }
-                if keys != expected {
-                    mismatches.push((name, route, keys, expected));
+                assert!(game.run_command("gamerule max_command_sequence_length 65536"));
+                reset(game);
+                let (keys, callbacks) = capture(game, &format!("{prefix}function h155c:five"));
+                assert_eq!(
+                    keys,
+                    vec![start.clone(), start.clone(), result.clone(), result.clone()]
+                );
+                assert_eq!(callbacks, vec![(true, 5); 2]);
+                assert_eq!(score(game, "#seen_b"), 5);
+            }
+            assert_eq!(game.world.game_time, clock);
+            assert_eq!(game.world.chunks.len(), chunks);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources and scratch homes/cwd"]
+    fn forked_function_replies_keep_task_order_and_actual_callbacks() {
+        use crate::game::native_entity_refs::tests::with_game;
+        use horizon_client::motion::PlayerMotion;
+        use horizon_core::geometry::Vec3;
+        with_game(|game| {
+            game.options.dedicated = None;
+            game.player = Some(PlayerMotion::new(game.motion, Vec3::new(4.5, 202.0, 4.5)).unwrap());
+            game.creative = true;
+            game.world_root = std::env::current_dir().unwrap().join("h155-world");
+            let pack = game.world_root.join("datapacks/h155_unit");
+            let dir = pack.join("data/h155/function");
+            std::fs::create_dir_all(&dir).unwrap();
+            let format = horizon_core::version::DATA_PACK_FORMAT;
+            std::fs::write(
+                pack.join("pack.mcmeta"),
+                serde_json::json!({"pack": {
+                    "description":"H155 actual Game regression", "pack_format":format.0,
+                    "min_format":[format.0,format.1], "max_format":[format.0,format.1]
+                }})
+                .to_string(),
+            )
+            .unwrap();
+            let body = "scoreboard players add #calls h155 1\nscoreboard players add @s h155 1\nscoreboard players operation #trace h155 *= #ten h155\nscoreboard players operation #trace h155 += @s h155_id\n";
+            for (name, tail) in [
+                ("zero", "return 0\n"),
+                ("five", "return 5\n"),
+                ("fail", "return fail\n"),
+                ("fallthrough", ""),
+            ] {
+                std::fs::write(
+                    dir.join(format!("{name}.mcfunction")),
+                    format!("{body}{tail}"),
+                )
+                .unwrap();
+            }
+            std::fs::write(
+                dir.join("admit.mcfunction"),
+                "scoreboard players add #pack h155 1\nreturn 1\n",
+            )
+            .unwrap();
+            game.reload_datapacks(false);
+            game.build_registries();
+            game.set_allow_commands(true);
+            for name in ["zero", "five", "fail", "fallthrough", "admit"] {
+                assert!(
+                    game.fns
+                        .store
+                        .functions
+                        .contains_key(&format!("h155:{name}"))
+                );
+                assert!(
+                    game.ui
+                        .registries
+                        .functions
+                        .contains(&format!("h155:{name}"))
+                );
+            }
+            assert!(game.run_command("forceload add 0 0 15 15"));
+            assert!(game.world.loaded(4, 4));
+            assert!(game.run_command("fill 0 199 0 15 199 15 stone"));
+            for (n, x) in [(1, 4.5), (2, 8.5)] {
+                assert!(game.run_command(&format!("summon pig {x} 200 4.5 {{UUID:[I;155,1,0,{n}],Tags:[\"h155u\"],NoAI:1b,NoGravity:1b,Silent:1b,PersistenceRequired:1b,Health:10f}}")));
+                assert!(game.run_command(&format!("execute if entity @e[type=pig,nbt={{UUID:[I;155,1,0,{n}],Health:10f,NoAI:1b,NoGravity:1b,Pos:[{x}d,200d,4.5d]}}]")));
+            }
+            assert!(game.run_command("scoreboard objectives add h155 dummy"));
+            assert!(game.run_command("scoreboard objectives add h155_id dummy"));
+            assert!(game.run_command("scoreboard players set #ten h155 10"));
+            assert!(game.run_command("scoreboard players set @s h155_id 3"));
+            let actor = |n| format!("@e[nbt={{UUID:[I;155,1,0,{n}]}},limit=1]");
+            for n in [1, 2] {
+                assert!(
+                    game.run_command(&format!("scoreboard players set {} h155_id {n}", actor(n)))
+                );
+            }
+            assert!(game.run_command("scoreboard players set #pack h155 0"));
+            assert!(game.run_command("function h155:admit"));
+            assert_eq!(game.score.board.score("#pack", "h155").unwrap().value, 1);
+            let clock = game.world.game_time;
+            let chunks = game.world.chunks.len();
+            let mut mismatches = Vec::new();
+            for (name, value, success) in [
+                ("zero", Some(0), true),
+                ("five", Some(5), true),
+                ("fail", Some(0), false),
+                ("fallthrough", None, false),
+            ] {
+                for route in ["direct", "one", "two", "nonfork"] {
+                    for holder in [
+                        "#calls".to_owned(),
+                        "#trace".to_owned(),
+                        "@s".to_owned(),
+                        actor(1),
+                        actor(2),
+                    ] {
+                        assert!(
+                            game.run_command(&format!("scoreboard players set {holder} h155 0"))
+                        );
+                    }
+                    assert!(game.run_command("scoreboard players set #r h155 91"));
+                    assert!(game.run_command("scoreboard players set #s h155 17"));
+                    let middle = match route {
+                        "one" => "as @e[type=pig,tag=h155u,sort=nearest,limit=1] ",
+                        "two" => "as @e[type=pig,tag=h155u,sort=nearest,limit=2] ",
+                        "nonfork" => "positioned 4.5 202 4.5 ",
+                        _ => "",
+                    };
+                    game.chat_capture = Some(Vec::new());
+                    game.cmds.results = Some(Vec::new());
+                    let accepted = game.run_command(&format!("execute store result score #r h155 store success score #s h155 {middle}run function h155:{name}"));
+                    let messages = game.chat_capture.take().unwrap();
+                    let callbacks = game.cmds.results.take().unwrap();
+                    assert!(accepted, "actual registered function command");
+                    let count = if route == "two" { 2 } else { 1 };
+                    assert_eq!(
+                        game.score.board.score("#calls", "h155").unwrap().value,
+                        count
+                    );
+                    assert_eq!(
+                        game.score.board.score("#trace", "h155").unwrap().value,
+                        match route {
+                            "two" => 12,
+                            "one" => 1,
+                            _ => 3,
+                        }
+                    );
+                    assert_eq!(
+                        callbacks,
+                        value.map_or_else(Vec::new, |v| vec![(success, v); count as usize])
+                    );
+                    assert_eq!(
+                        game.score.board.score("#r", "h155").unwrap().value,
+                        value.unwrap_or(91)
+                    );
+                    assert_eq!(
+                        game.score.board.score("#s", "h155").unwrap().value,
+                        if value.is_some() {
+                            i32::from(success)
+                        } else {
+                            17
+                        }
+                    );
+                    let keys: Vec<_> = messages
+                        .iter()
+                        .map(|m| m.translation_key().unwrap_or("literal").to_owned())
+                        .collect();
+                    let mut expected =
+                        vec!["commands.function.scheduled.single".to_owned(); count as usize];
+                    if value.is_some() {
+                        expected
+                            .extend(vec!["commands.function.result".to_owned(); count as usize]);
+                    }
+                    if keys != expected {
+                        mismatches.push((name, route, keys, expected));
+                    }
                 }
             }
-        }
-        assert!(game.run_command("scoreboard players set #plain h155 0"));
-        game.cmds.results = Some(Vec::new());
-        assert!(game.run_command("execute as @e[type=pig,tag=h155u,sort=nearest,limit=2] run scoreboard players add #plain h155 1"));
-        assert_eq!(
-            game.cmds.results.take().unwrap(),
-            vec![(true, 1), (true, 2)]
-        );
-        assert_eq!(game.score.board.score("#plain", "h155").unwrap().value, 2);
-        assert_eq!(game.world.game_time, clock);
-        assert_eq!(game.world.chunks.len(), chunks);
-        assert!(
-            mismatches.is_empty(),
-            "actual fork function feedback order mismatches: {mismatches:?}"
-        );
+            assert!(game.run_command("scoreboard players set #plain h155 0"));
+            game.cmds.results = Some(Vec::new());
+            assert!(game.run_command("execute as @e[type=pig,tag=h155u,sort=nearest,limit=2] run scoreboard players add #plain h155 1"));
+            assert_eq!(
+                game.cmds.results.take().unwrap(),
+                vec![(true, 1), (true, 2)]
+            );
+            assert_eq!(game.score.board.score("#plain", "h155").unwrap().value, 2);
+            assert_eq!(game.world.game_time, clock);
+            assert_eq!(game.world.chunks.len(), chunks);
+            assert!(
+                mismatches.is_empty(),
+                "actual fork function feedback order mismatches: {mismatches:?}"
+            );
+        });
     }
 
     #[test]

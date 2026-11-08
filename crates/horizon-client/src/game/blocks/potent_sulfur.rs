@@ -576,47 +576,48 @@ mod pass_tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn the_pass_grid_finds_what_a_scan_finds() {
-        let mut game = super::super::native_machines::tests::server_game();
-        let kinds = ["minecraft:zombie", "minecraft:chicken", "minecraft:ravager"];
-        let kinds: Vec<_> = kinds
-            .iter()
-            .map(|k| game.res.mob_types().get(*k).cloned().unwrap())
-            .collect();
-        let mut rng = LegacyRandom::new(8645);
-        let place = |rng: &mut LegacyRandom| {
-            let mut at = || f64::from(rng.next_int_bound(4000).unwrap()) / 100.0 - 20.0;
-            Vec3::new(at(), 64.0 + at() / 8.0, at())
-        };
-        for id in 0..60u32 {
-            let kind = kinds[id as usize % kinds.len()].clone();
-            game.mobs.push(Mob::new(id + 1, kind, place(&mut rng), 0.0));
-        }
-        let areas: Vec<Aabb> = (0..40)
-            .map(|i| {
-                let c = place(&mut rng);
-                // Geyser columns one block wide, and wider gas boxes.
-                let (w, h) = if i % 2 == 0 { (1.0, 6.0) } else { (5.0, 9.0) };
-                Aabb::new(c, Vec3::new(c.x + w, c.y + h, c.z + w))
-            })
-            .collect();
-        game.pass_mobs = Some(PassMobs::default());
-        let check = |game: &mut Game<'_>, what: &str| {
-            for &area in &areas {
-                assert_eq!(from_grid(game, area), scan(game, area), "{what}");
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            let kinds = ["minecraft:zombie", "minecraft:chicken", "minecraft:ravager"];
+            let kinds: Vec<_> = kinds
+                .iter()
+                .map(|k| game.res.mob_types().get(*k).cloned().unwrap())
+                .collect();
+            let mut rng = LegacyRandom::new(8645);
+            let place = |rng: &mut LegacyRandom| {
+                let mut at = || f64::from(rng.next_int_bound(4000).unwrap()) / 100.0 - 20.0;
+                Vec3::new(at(), 64.0 + at() / 8.0, at())
+            };
+            for id in 0..60u32 {
+                let kind = kinds[id as usize % kinds.len()].clone();
+                game.mobs.push(Mob::new(id + 1, kind, place(&mut rng), 0.0));
             }
-        };
-        check(&mut game, "as built");
-        game.mobs[7].position = areas[0].center();
-        check(&mut game, "a mob moved into a geyser");
-        let kind = kinds[2].clone();
-        game.mobs
-            .insert(0, Mob::new(100, kind, areas[1].center(), 0.0));
-        check(&mut game, "a mob added in front");
-        game.mobs.retain(|m| m.id % 5 != 0);
-        check(&mut game, "some removed");
-        // A geyser's own write leaves the boxes as they were.
-        game.mobs[3].velocity.y += 0.2;
-        game.pass_mobs.as_mut().unwrap().wrote(&game.mobs);
-        check(&mut game, "a push");
+            let areas: Vec<Aabb> = (0..40)
+                .map(|i| {
+                    let c = place(&mut rng);
+                    // Geyser columns one block wide, and wider gas boxes.
+                    let (w, h) = if i % 2 == 0 { (1.0, 6.0) } else { (5.0, 9.0) };
+                    Aabb::new(c, Vec3::new(c.x + w, c.y + h, c.z + w))
+                })
+                .collect();
+            game.pass_mobs = Some(PassMobs::default());
+            let check = |game: &mut Game<'_>, what: &str| {
+                for &area in &areas {
+                    assert_eq!(from_grid(game, area), scan(game, area), "{what}");
+                }
+            };
+            check(game, "as built");
+            game.mobs[7].position = areas[0].center();
+            check(game, "a mob moved into a geyser");
+            let kind = kinds[2].clone();
+            game.mobs
+                .insert(0, Mob::new(100, kind, areas[1].center(), 0.0));
+            check(game, "a mob added in front");
+            game.mobs.retain(|m| m.id % 5 != 0);
+            check(game, "some removed");
+            // A geyser's own write leaves the boxes as they were.
+            game.mobs[3].velocity.y += 0.2;
+            game.pass_mobs.as_mut().unwrap().wrote(&game.mobs);
+            check(game, "a push");
+        });
     }
 }

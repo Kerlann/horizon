@@ -986,39 +986,40 @@ mod guest_hit_tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn an_effect_hit_on_a_guest_credits_the_mob_that_swung() {
-        let mut game = super::super::native_machines::tests::server_game();
-        game.player = Some(PlayerMotion::new(game.motion, Vec3::new(0.5, 100.0, 0.5)).unwrap());
-        for (id, kind, y) in [
-            (4, "minecraft:zombie", 90.0),
-            (5, "minecraft:cave_spider", 100.0),
-        ] {
-            let kind = game.res.mob_types().get(kind).cloned().unwrap();
-            game.mobs
-                .push(Mob::new(id, kind, Vec3::new(1.5, y, 0.5), 0.0));
-        }
-        let from = [1.5, 100.0, 0.5];
-        let hits = [
-            MobEvent::AttackPlayerWithEffect {
-                amount: 2.0,
-                from,
-                effect: "minecraft:poison",
-                ticks: 140,
-                amplifier: 0,
-            },
-            MobEvent::StingPlayer {
-                amount: 2.0,
-                from,
-                poison_ticks: 200,
-            },
-        ];
-        for hit in hits {
-            game.combat.pending.clear();
-            game.guest_mob_event(5, hit);
-            let noted: Vec<u32> = (game.combat.pending.iter())
-                .map(|(_, (id, _), _)| *id)
-                .collect();
-            assert_eq!(noted, [5]);
-            assert_eq!(game.combat.melee_mob, None, "the hit used it up");
-        }
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            game.player = Some(PlayerMotion::new(game.motion, Vec3::new(0.5, 100.0, 0.5)).unwrap());
+            for (id, kind, y) in [
+                (4, "minecraft:zombie", 90.0),
+                (5, "minecraft:cave_spider", 100.0),
+            ] {
+                let kind = game.res.mob_types().get(kind).cloned().unwrap();
+                game.mobs
+                    .push(Mob::new(id, kind, Vec3::new(1.5, y, 0.5), 0.0));
+            }
+            let from = [1.5, 100.0, 0.5];
+            let hits = [
+                MobEvent::AttackPlayerWithEffect {
+                    amount: 2.0,
+                    from,
+                    effect: "minecraft:poison",
+                    ticks: 140,
+                    amplifier: 0,
+                },
+                MobEvent::StingPlayer {
+                    amount: 2.0,
+                    from,
+                    poison_ticks: 200,
+                },
+            ];
+            for hit in hits {
+                game.combat.pending.clear();
+                game.guest_mob_event(5, hit);
+                let noted: Vec<u32> = (game.combat.pending.iter())
+                    .map(|(_, (id, _), _)| *id)
+                    .collect();
+                assert_eq!(noted, [5]);
+                assert_eq!(game.combat.melee_mob, None, "the hit used it up");
+            }
+        });
     }
 }

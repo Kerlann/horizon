@@ -3423,56 +3423,57 @@ mod tests {
     fn cart_index_finds_the_mobs_a_scan_finds() {
         use super::{CartIndex, CartKind, Minecart};
         use horizon_client::mobs::Mob;
-        let mut game = super::super::native_machines::tests::server_game();
-        let kinds: Vec<_> = ["minecraft:zombie", "minecraft:chicken", "minecraft:ravager"]
-            .iter()
-            .map(|k| game.res.mob_types().get(*k).cloned().unwrap())
-            .collect();
-        let mut seed = 0x2545_F491_4F6C_DD1Du64;
-        let mut next = |m: f64| {
-            seed ^= seed << 13;
-            seed ^= seed >> 7;
-            seed ^= seed << 17;
-            (seed % 1_000_000) as f64 / 1_000_000.0 * m
-        };
-        for id in 0..200u32 {
-            let at = Vec3::new(next(40.0), 64.0, next(40.0));
-            let kind = kinds[id as usize % kinds.len()].clone();
-            game.mobs.push(Mob::new(id + 1, kind, at, 0.0));
-        }
-        let carts: Vec<Minecart> = (0..60)
-            .map(|id| {
-                Minecart::new(
-                    1000 + id,
-                    CartKind::Rideable,
-                    Vec3::new(next(40.0), 64.0, next(40.0)),
-                )
-            })
-            .collect();
-        let mut index = CartIndex::default();
-        let mut near = Vec::new();
-        let mut check = |game: &Game<'_>, what: &str| {
-            for c in &carts {
-                let area = c.bounds().inflate(Vec3::new(0.2, 0.0, 0.2));
-                let scan: Vec<u32> = (0..game.mobs.len() as u32)
-                    .filter(|&j| area.intersects(game.mobs[j as usize].bounds()))
-                    .collect();
-                let ridden = game.mobs.iter().any(|m| m.extra.mount == Some(c.id));
-                let mounted = index.mobs_near(&game.mobs, c.id, area, &mut near);
-                assert_eq!(mounted, Some(ridden), "{what}: cart {}", c.id);
-                near.retain(|&j| area.intersects(game.mobs[j as usize].bounds()));
-                assert_eq!(near, scan, "{what}: cart {}", c.id);
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            let kinds: Vec<_> = ["minecraft:zombie", "minecraft:chicken", "minecraft:ravager"]
+                .iter()
+                .map(|k| game.res.mob_types().get(*k).cloned().unwrap())
+                .collect();
+            let mut seed = 0x2545_F491_4F6C_DD1Du64;
+            let mut next = |m: f64| {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                (seed % 1_000_000) as f64 / 1_000_000.0 * m
+            };
+            for id in 0..200u32 {
+                let at = Vec3::new(next(40.0), 64.0, next(40.0));
+                let kind = kinds[id as usize % kinds.len()].clone();
+                game.mobs.push(Mob::new(id + 1, kind, at, 0.0));
             }
-        };
-        check(&game, "as placed");
-        game.mobs[10].position = carts[3].position;
-        game.mobs[11].extra.mount = Some(carts[4].id);
-        check(&game, "one moved, one boarded");
-        let kind = kinds[0].clone();
-        game.mobs
-            .insert(0, Mob::new(500, kind, carts[5].position, 0.0));
-        game.mobs.retain(|m| m.id % 7 != 0);
-        check(&game, "added and removed");
+            let carts: Vec<Minecart> = (0..60)
+                .map(|id| {
+                    Minecart::new(
+                        1000 + id,
+                        CartKind::Rideable,
+                        Vec3::new(next(40.0), 64.0, next(40.0)),
+                    )
+                })
+                .collect();
+            let mut index = CartIndex::default();
+            let mut near = Vec::new();
+            let mut check = |game: &Game<'_>, what: &str| {
+                for c in &carts {
+                    let area = c.bounds().inflate(Vec3::new(0.2, 0.0, 0.2));
+                    let scan: Vec<u32> = (0..game.mobs.len() as u32)
+                        .filter(|&j| area.intersects(game.mobs[j as usize].bounds()))
+                        .collect();
+                    let ridden = game.mobs.iter().any(|m| m.extra.mount == Some(c.id));
+                    let mounted = index.mobs_near(&game.mobs, c.id, area, &mut near);
+                    assert_eq!(mounted, Some(ridden), "{what}: cart {}", c.id);
+                    near.retain(|&j| area.intersects(game.mobs[j as usize].bounds()));
+                    assert_eq!(near, scan, "{what}: cart {}", c.id);
+                }
+            };
+            check(game, "as placed");
+            game.mobs[10].position = carts[3].position;
+            game.mobs[11].extra.mount = Some(carts[4].id);
+            check(game, "one moved, one boarded");
+            let kind = kinds[0].clone();
+            game.mobs
+                .insert(0, Mob::new(500, kind, carts[5].position, 0.0));
+            game.mobs.retain(|m| m.id % 7 != 0);
+            check(game, "added and removed");
+        });
     }
     #[test]
     fn mob_walking_into_a_cart_pushes_it_by_a_twentieth() {
