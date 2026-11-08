@@ -13,6 +13,9 @@ mod generated {
     use super::super::*;
     include!(concat!(env!("OUT_DIR"), "/wire_guest_generated.rs"));
 }
+#[cfg(feature = "testing")]
+#[doc(hidden)]
+pub use generated::export_id as testing_export_id;
 pub use generated::{Guest, hook, hook_name};
 
 unsafe extern "Rust" {
@@ -816,6 +819,45 @@ fn release(ids: Vec<Id>) {
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn decoded_cache_bounds_retention_and_excludes_active_values() {
+        let mut bytes = Writer::new();
+        bytes.put_str(&"x".repeat(1024 * 1024));
+        drop(decode::<String>(&mut Reader::new(bytes.bytes())).unwrap());
+        RUNTIME.with(|rt| {
+            assert!(
+                rt.borrow().decoded.is_empty(),
+                "large values are not retained"
+            )
+        });
+        bytes.clear();
+        bytes.put_str("small");
+        let held: Vec<_> = (0..65)
+            .map(|_| decode::<String>(&mut Reader::new(bytes.bytes())).unwrap())
+            .collect();
+        RUNTIME.with(|rt| {
+            assert!(
+                rt.borrow().decoded.is_empty(),
+                "active values are not cached"
+            )
+        });
+        drop(held);
+        RUNTIME.with(|rt| {
+            let rt = rt.borrow();
+            assert_eq!(rt.decoded.len(), 64);
+            let charge: usize = rt.decoded.iter().map(|entry| entry.charge).sum();
+            assert!(charge > 0);
+            assert!(
+                group_state()[WORD_BUDGET].load(std::sync::atomic::Ordering::Relaxed) >= charge
+            );
+        });
+        let held: Vec<_> = (0..64)
+            .map(|_| decode::<String>(&mut Reader::new(bytes.bytes())).unwrap())
+            .collect();
+        RUNTIME.with(|rt| assert!(rt.borrow().decoded.is_empty()));
+        assert!(held.iter().all(|value| &***value == "small"));
+    }
 
     trait Probe {
         fn answer(&self) -> u32;

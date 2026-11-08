@@ -898,6 +898,20 @@ impl Wire for crate::containers::ModRevision {
 }
 impl Wire for crate::ModBlockEntity {
     const MIN: usize = 32;
+    fn retained_bytes(&self) -> Option<usize> {
+        std::mem::size_of::<Self>()
+            .checked_add(self.id.retained_bytes()?)?
+            .checked_add(self.fields.retained_bytes()?)?
+            .checked_add(self.client_update_fields.retained_bytes()?)
+    }
+    fn take_into(&mut self, input: &mut Reader<'_>) -> Result<(), WireError> {
+        self.id.take_into(input)?;
+        self.fields.nbt.take_into(input)?;
+        self.fields.items.take_into(input)?;
+        self.fields.data.take_into(input)?;
+        self.revision = crate::containers::ModRevision::from_snapshot(input.take()?, input.take()?);
+        self.client_update_fields.take_into(input)
+    }
     fn put(&self, out: &mut Writer) {
         out.put(&self.id);
         out.put(&self.fields.nbt);
