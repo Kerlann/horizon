@@ -18,6 +18,7 @@ enum Family {
     Movement,
     Breathing,
     Goal,
+    MountedGoal,
     Knockback,
     Landing,
 }
@@ -61,6 +62,15 @@ impl mod_api::Goal for NativeGoal {
         true
     }
     fn tick(&mut self, cx: &mut mod_api::GoalContext<'_>) {
+        if self.probe.family == Family::MountedGoal {
+            if !self.target {
+                assert!(cx.move_to([3.0, 80.0, 0.5], 1.25));
+                eprintln!("BORROWED_MOUNTED_MOVE_SUCCEEDED");
+                self.probe
+                    .hear(Family::MountedGoal, cx.mob().entity().id() == 72);
+            }
+            return;
+        }
         assert_eq!(
             cx.mob().entity().position(cx.host()),
             Some([2.0, 80.0, 0.5])
@@ -114,7 +124,7 @@ impl mod_api::Hooks for Hooks {
         self.0.posts.fetch_add(1, Ordering::SeqCst);
     }
     fn register(&self, r: &mut dyn mod_api::Registrar, _: &mod_api::RegistrationContext) {
-        if self.0.family == Family::Goal {
+        if matches!(self.0.family, Family::Goal | Family::MountedGoal) {
             r.entity_part("minecraft:zombie", GoalPart(self.0.clone()));
         }
         if self.0.family == Family::Landing {
@@ -268,6 +278,18 @@ fn run(family: Family) {
                         let mut mob =
                             Mob::new(id, kind, Vec3::new(f64::from(id - 70), 80.0, 0.5), 0.0);
                         mob.no_ai = true;
+                        if family == Family::MountedGoal {
+                            mob.no_ai = false;
+                            mob.on_ground = true;
+                            // Collision on the vehicle's first tick must keep it grounded.
+                            mob.velocity.y = -0.08;
+                            mob.ai.nav.speed_modifier = if id == 72 { 3.75 } else { 9.25 };
+                            if id == 72 {
+                                mob.extra.mount = Some(71);
+                            } else {
+                                mob.extra.rider = Some(72);
+                            }
+                        }
                         if id == 71 {
                             mob.ai.last_hurt_by_player = 5;
                         }
@@ -292,7 +314,7 @@ fn run(family: Family) {
                             if matches!(family, Family::Damage | Family::Shield | Family::Totem) {
                                 mob.fire_ticks = 20;
                             }
-                            if family == Family::Goal {
+                            if matches!(family, Family::Goal | Family::MountedGoal) {
                                 mob.no_ai = false;
                                 assert!(mob.ai.goals.has("BorrowedProbe"));
                             }
@@ -329,6 +351,13 @@ fn run(family: Family) {
                     game.world.set(4, 80, 4, stone).unwrap();
                     if matches!(family, Family::Movement | Family::Landing) {
                         game.world.set(2, 79, 0, stone).unwrap();
+                    }
+                    if family == Family::MountedGoal {
+                        for x in 0..=4 {
+                            for z in 0..=2 {
+                                game.world.set(x, 79, z, stone).unwrap();
+                            }
+                        }
                     }
                     let writes = game.world.path_writes.clone();
                     game.world.random = LegacyRandom::new(0x5eed);
@@ -405,7 +434,7 @@ fn run(family: Family) {
                         );
                     }
                     table.end_tick().unwrap();
-                    if family == Family::Goal {
+                    if matches!(family, Family::Goal | Family::MountedGoal) {
                         assert!(
                             game.mobs[1].ai.targets.is_running("BorrowedTarget"),
                             "actual native target selector was lost"
@@ -415,12 +444,33 @@ fn run(family: Family) {
                             "actual native goal selector was lost"
                         );
                     }
+                    if family == Family::MountedGoal {
+                        assert_eq!(
+                            game.mobs[1].ai.nav.speed_modifier, 3.75,
+                            "private rider navigation not restored"
+                        );
+                        assert_eq!(
+                            game.mobs[0].ai.nav.speed_modifier, 1.25,
+                            "vehicle navigation lost requested progress (or routing never loaned)"
+                        );
+                        assert!(
+                            game.mobs[0].ai.nav.path.is_some(),
+                            "vehicle lost successful native path"
+                        );
+                        eprintln!(
+                            "BORROWED_MOUNTED_RESTORED:{dim:?}:rider=3.75:vehicle=1.25:path=Some"
+                        );
+                    }
                     game.tick_creature_entities().unwrap();
                     assert!(
                         probe.posts.load(Ordering::SeqCst) > 0,
                         "real post listener never ran on retry"
                     );
                     table.end_tick().unwrap();
+                    if family == Family::MountedGoal {
+                        assert_eq!(probe.calls.load(Ordering::SeqCst), 2);
+                        eprintln!("BORROWED_MOUNTED_RETRY_OK:{dim:?}");
+                    }
                 })
             },
         );
@@ -433,4 +483,4 @@ macro_rules! cases {
         fn $name() { run(Family::$family); }
     )*};
 }
-cases!(damage => Damage, shield => Shield, totem => Totem, movement => Movement, breathing => Breathing, goal => Goal, knockback => Knockback, landing => Landing);
+cases!(damage => Damage, shield => Shield, totem => Totem, movement => Movement, breathing => Breathing, goal => Goal, mounted_goal => MountedGoal, knockback => Knockback, landing => Landing);
