@@ -73,7 +73,7 @@ def run(package, skip):
         process = subprocess.run(
             [
                 "cargo", "test", "-p", package, "--lib", *(["--bins", "--tests"] if package in INTEGRATION_TESTS else []),
-                "--", "--include-ignored", "--exact", "--test-threads=4", *skips,
+                "--", "--include-ignored", "--exact", "--test-threads=4", "--nocapture", *skips,
             ],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", env=env,
         )
