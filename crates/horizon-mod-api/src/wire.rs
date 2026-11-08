@@ -564,6 +564,9 @@ pub trait Wire: Sized {
         self.put(out);
     }
     fn take(input: &mut Reader<'_>) -> Result<Self, WireError>;
+    /// Whether all storage is inline; unknown codecs use the conservative default.
+    #[doc(hidden)]
+    const INLINE_ONLY: bool = false;
     /// Retained heap storage, including this value; unknown implementations are not cached.
     #[doc(hidden)]
     fn retained_bytes(&self) -> Option<usize> {
@@ -580,6 +583,7 @@ pub trait Wire: Sized {
 macro_rules! numbers {
     ($($ty:ty),*) => {$(
         impl Wire for $ty {
+            const INLINE_ONLY: bool = true;
             fn retained_bytes(&self) -> Option<usize> { Some(std::mem::size_of::<Self>()) }
             const MIN: usize = std::mem::size_of::<$ty>();
             fn put(&self, out: &mut Writer) {
@@ -829,8 +833,10 @@ impl<T: Wire> Wire for Vec<T> {
     fn retained_bytes(&self) -> Option<usize> {
         let mut bytes = std::mem::size_of::<Self>()
             .checked_add(self.capacity().checked_mul(std::mem::size_of::<T>())?)?;
-        for value in self {
-            bytes = bytes.checked_add(value.retained_bytes()?)?;
+        if !T::INLINE_ONLY {
+            for value in self {
+                bytes = bytes.checked_add(value.retained_bytes()?)?;
+            }
         }
         Some(bytes)
     }

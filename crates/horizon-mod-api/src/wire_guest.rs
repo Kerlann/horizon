@@ -832,6 +832,17 @@ mod tests {
             )
         });
         bytes.clear();
+        bytes.put(&vec![1u16; 350_000]);
+        drop(decode::<Vec<u16>>(&mut Reader::new(bytes.bytes())).unwrap());
+        RUNTIME.with(|rt| {
+            assert_eq!(
+                rt.borrow().decoded.len(),
+                1,
+                "numeric storage is charged once, not per element twice"
+            );
+            rt.borrow_mut().decoded.clear();
+        });
+        bytes.clear();
         bytes.put_str("small");
         let held: Vec<_> = (0..65)
             .map(|_| decode::<String>(&mut Reader::new(bytes.bytes())).unwrap())
