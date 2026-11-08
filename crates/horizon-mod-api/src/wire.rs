@@ -15,6 +15,10 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 pub use crate::wire_slots::{Id, Slots, Stale};
+#[path = "wire_arena.rs"]
+mod arena;
+#[doc(hidden)]
+pub use arena::{ArenaOp, ArenaWriter};
 #[path = "wire_resources.rs"]
 mod resources;
 pub use resources::{
@@ -401,21 +405,34 @@ impl<T> Append<T> {
 pub trait Put {
     /// Writes it.
     fn put_to(&self, out: &mut Writer);
+    #[doc(hidden)]
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.buffered(|w| self.put_to(w));
+    }
 }
 
 impl<T: Wire> Put for T {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        Wire::put_arena(self, out);
+    }
     fn put_to(&self, out: &mut Writer) {
         self.put(out);
     }
 }
 
 impl Put for str {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put_str(self);
+    }
     fn put_to(&self, out: &mut Writer) {
         out.put_str(self);
     }
 }
 
 impl Wire for &str {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put_str(self);
+    }
     const MIN: usize = 4;
     fn put(&self, out: &mut Writer) {
         out.put_str(self);
@@ -426,6 +443,12 @@ impl Wire for &str {
 }
 
 impl<T: Put> Put for [T] {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put_len(self.len());
+        for item in self {
+            out.put(item);
+        }
+    }
     fn put_to(&self, out: &mut Writer) {
         out.put_len(self.len());
         for item in self {
@@ -540,6 +563,14 @@ impl<'a> Reader<'a> {
 
 /// A type with a wire form.
 pub trait Wire: Sized {
+    #[doc(hidden)]
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.buffered(|w| self.put(w));
+    }
+    #[doc(hidden)]
+    fn put_owned_arena(self, out: &mut ArenaWriter<'_>) {
+        out.buffered(|w| self.put_owned(w));
+    }
     /// The fewest bytes a value takes, so a length can be checked before anything is allocated.
     const MIN: usize;
     fn put(&self, out: &mut Writer);
@@ -553,6 +584,8 @@ pub trait Wire: Sized {
 macro_rules! numbers {
     ($($ty:ty),*) => {$(
         impl Wire for $ty {
+            fn put_arena(&self, out: &mut ArenaWriter<'_>) { out.put_bytes(&self.to_le_bytes()); }
+            fn put_owned_arena(self, out: &mut ArenaWriter<'_>) { Wire::put_arena(&self, out); }
             const MIN: usize = std::mem::size_of::<$ty>();
             fn put(&self, out: &mut Writer) {
                 out.put_bytes(&self.to_le_bytes());
@@ -578,6 +611,9 @@ impl Wire for usize {
 }
 
 impl Wire for bool {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put(&u8::from(*self));
+    }
     const MIN: usize = 1;
     fn put(&self, out: &mut Writer) {
         out.put(&u8::from(*self));
@@ -610,6 +646,9 @@ impl Wire for () {
 }
 
 impl Wire for String {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put_str(self);
+    }
     const MIN: usize = 4;
     fn put(&self, out: &mut Writer) {
         out.put_str(self);
@@ -655,6 +694,9 @@ impl Wire for Arc<str> {
 }
 
 impl<T: Wire> Wire for Option<T> {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put_opt(self.as_ref());
+    }
     const MIN: usize = 1;
     fn put(&self, out: &mut Writer) {
         match self {
@@ -768,6 +810,18 @@ impl<T: Wire> Wire for Arc<T> {
 }
 
 impl<T: Wire> Wire for Vec<T> {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        out.put_len(self.len());
+        for v in self {
+            out.put(v);
+        }
+    }
+    fn put_owned_arena(self, out: &mut ArenaWriter<'_>) {
+        out.put_len(self.len());
+        for v in self {
+            out.put_owned(v);
+        }
+    }
     const MIN: usize = 4;
     fn put(&self, out: &mut Writer) {
         out.put_len(self.len());
@@ -806,6 +860,11 @@ impl<T: Wire> Wire for VecDeque<T> {
 }
 
 impl<T: Wire, const N: usize> Wire for [T; N] {
+    fn put_arena(&self, out: &mut ArenaWriter<'_>) {
+        for v in self {
+            out.put(v);
+        }
+    }
     const MIN: usize = T::MIN * N;
     fn put(&self, out: &mut Writer) {
         for item in self {
@@ -856,6 +915,7 @@ sets!(BTreeSet[Ord], HashSet[Eq + Hash]);
 macro_rules! maps {
     ($($ty:ident [$($bound:tt)+]),*) => {$(
         impl<K: Wire + $($bound)+, V: Wire> Wire for $ty<K, V> {
+            fn put_arena(&self, out: &mut ArenaWriter<'_>) { out.put_len(self.len()); for (k,v) in self { out.put(k); out.put(v); } }
             const MIN: usize = 4;
             fn put(&self, out: &mut Writer) {
                 out.put_len(self.len());
@@ -883,6 +943,7 @@ macro_rules! tuples {
     ($(($($name:ident),+)),*) => {$(
         #[allow(non_snake_case)]
         impl<$($name: Wire),+> Wire for ($($name,)+) {
+            fn put_arena(&self, out: &mut ArenaWriter<'_>) { let ($($name,)+)=self; $(out.put($name);)+ }
             const MIN: usize = 0 $(+ $name::MIN)+;
             fn put(&self, out: &mut Writer) {
                 let ($($name,)+) = self;

@@ -26,7 +26,7 @@ const PROFILE: &str = "horizon-wasm";
 const FLAGS: &str = "-Crelocation-model=pic -Zshare-generics=n -Zdefault-visibility=hidden --cfg=horizon_shared_artifacts_v2";
 
 /// Guest boundary exports, kept even though they originate in an rlib dependency.
-const GUEST_EXPORTS: &[&str] = &["horizon_layout", "horizon_in", "horizon_hook"];
+const GUEST_EXPORTS: &[&str] = &["horizon_layout", "horizon_arena", "horizon_hook"];
 
 /// The pinned toolchain's version line, its sysroot's linker, installing it first if needed.
 struct Toolchain {
@@ -551,5 +551,6 @@ mod export_tests {
         let upstream = "_RNvMs2_NtNtCscdi4KFDYmTw_7mod_api5parts14block_entitiesDNtB7_9RegistrarEL_17block_entity_type";
         assert!(!group_export(upstream, "wasm_test_observer"));
         assert!(group_export("horizon_hook", "wasm_test_observer"));
+        assert!(group_export("horizon_arena", "wasm_test_observer"));
     }
 }

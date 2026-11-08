@@ -189,6 +189,9 @@ mod tests {
 }
 
 impl crate::wire::Wire for Id {
+    fn put_arena(&self, out: &mut crate::wire::ArenaWriter<'_>) {
+        out.put(&self.0);
+    }
     const MIN: usize = 8;
     fn put(&self, out: &mut crate::wire::Writer) {
         out.put(&self.0);

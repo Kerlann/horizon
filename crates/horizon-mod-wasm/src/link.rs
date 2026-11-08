@@ -365,7 +365,7 @@ impl<T: 'static> Group<T> {
                     || name.starts_with("__wasm_")
                     || matches!(
                         name.as_str(),
-                        "horizon_layout" | "horizon_layout_ext" | "horizon_in" | "horizon_hook"
+                        "horizon_layout" | "horizon_layout_ext" | "horizon_arena" | "horizon_hook"
                     )
                     || name == "memory"
                     || !matches!(extern_, Extern::Func(_) | Extern::Global(_))

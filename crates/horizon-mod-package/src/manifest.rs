@@ -1348,7 +1348,7 @@ issues = \"http://example.org/issues\"
         // A minimal valid shared member: a `dylink.0` section and the three guest exports.
         let module = wat::parse_str(
             r#"(module (@custom "dylink.0" "\01\04\00\00\00\00")
-                (func (export "horizon_layout")) (func (export "horizon_in")) (func (export "horizon_hook")))"#,
+                (func (export "horizon_layout")) (func (export "horizon_arena")) (func (export "horizon_hook")))"#,
         )
         .unwrap();
         let text = format!(

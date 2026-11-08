@@ -67,6 +67,9 @@ impl<F: FnMut() -> i64> mod_api::StructureRandom for Random<F> {
 }
 
 fn guest(layout: u64, body: &str) -> Vec<u8> {
+    guest_arena(layout, body, "i32.const 512")
+}
+fn guest_arena(layout: u64, body: &str, arena: &str) -> Vec<u8> {
     wat::parse_str(format!(
         r#"(module
       (@custom "dylink.0" "\01\04\00\00\00\00")
@@ -75,10 +78,9 @@ fn guest(layout: u64, body: &str) -> Vec<u8> {
       (import "horizon" "host" (func $host (param i32 i32 i32 i32 i32) (result i32)))
       (import "horizon" "host_reply" (func $reply (param i32)))
       (func (export "horizon_layout") (result i64) i64.const {layout})
-      (global $in_len (mut i32) (i32.const 0))
-      (func (export "horizon_in") (param i32) (result i32) local.get 0 global.set $in_len i32.const 512)
-      (func (export "horizon_hook") (param i32) (result i64) (local i32 i32)
-        i32.const 512 local.set 1 global.get $in_len local.set 2 {body})
+      (func (export "horizon_arena") (param i32 i32) (result i32) {arena})
+      (func (export "horizon_hook") (param i32 i32) (result i64) (local i32)
+        local.get 1 local.set 2 i32.const 512 local.set 1 {body})
     )"#
     ))
     .unwrap()
@@ -107,8 +109,86 @@ fn call(module: &WasmMod) -> Option<u32> {
     )
 }
 #[test]
+fn malformed_arena_pointer_refuses_without_panicking() {
+    for arena in [
+        "i32.const -1",
+        "memory.size i32.const 16 i32.shl i32.const 1 i32.sub",
+        "local.get 0 if (result i32) i32.const -1 else i32.const 512 end",
+    ] {
+        let engine = engine().unwrap();
+        let bytes = guest_arena(mod_api::wire::LAYOUT, "i64.const 2199023255556", arena);
+        let module = WasmMod::instantiate(
+            &engine,
+            &[Member {
+                name: "test",
+                module: &bytes,
+            }],
+        )
+        .unwrap()
+        .remove(0);
+        assert_eq!(
+            module.call_arena(
+                CallClass::Hook,
+                Frame::default(),
+                0,
+                None,
+                |w| w.put(&vec![7u8; 300]),
+                |r| r.take::<u32>()
+            ),
+            None
+        );
+        assert!(module.running.poisoned.load(Ordering::Relaxed));
+    }
+}
+
+#[test]
+fn encoding_reacquires_memory_after_arena_growth() {
+    let engine = engine().unwrap();
+    let bytes = guest_arena(
+        mod_api::wire::LAYOUT,
+        "i64.const 2199023255556",
+        "i32.const 1 memory.grow drop i32.const 512",
+    );
+    let module = WasmMod::instantiate(
+        &engine,
+        &[Member {
+            name: "test",
+            module: &bytes,
+        }],
+    )
+    .unwrap()
+    .remove(0);
+    let result = module.call_arena(
+        CallClass::Hook,
+        Frame::default(),
+        0,
+        None,
+        |w| w.put(&vec![7u8; 300]),
+        |r| r.take::<u32>(),
+    );
+    assert_eq!(result, Some(300));
+}
+
+#[test]
+fn custom_buffered_encoder_can_replace_its_writer() {
+    let module = module("i64.const 2199023255556");
+    let result = module.call(
+        CallClass::Hook,
+        Frame::default(),
+        0,
+        None,
+        |w| {
+            *w = Writer::new();
+            w.put(&81u32);
+        },
+        |r| r.take::<u32>(),
+    );
+    assert_eq!(result, Some(81));
+}
+
+#[test]
 fn hook_round_trip_and_malformed_reply_poison() {
-    // Echo the four-byte input from horizon_in.
+    // Echo the four-byte input written directly to the guest arena.
     let module = module("i64.const 2199023255556"); // 512 << 32 | 4
     assert_eq!(call(&module), Some(42));
     assert!(!module.running.poisoned.load(Ordering::Relaxed));
@@ -120,6 +200,7 @@ fn hook_round_trip_and_malformed_reply_poison() {
 #[test]
 fn encoding_failure_refuses_partial_arguments() {
     let module = module("i64.const 2199023255556");
+    let dropped = hold_stop_probe(&module);
     assert_eq!(
         module.call(
             CallClass::Hook,
@@ -135,6 +216,7 @@ fn encoding_failure_refuses_partial_arguments() {
         None
     );
     assert!(module.is_stopped());
+    assert!(dropped.load(Ordering::Relaxed));
 }
 
 #[test]
@@ -343,9 +425,9 @@ fn guest_input_pool_stays_flat_for_100k_no_import_calls() {
     group.store.set_epoch_deadline(30_000);
     fn step(module: &WasmMod, store: &mut Store<State>, id: u32) {
         let memory = store.data().memory.unwrap();
-        let input = module.input.call(&mut *store, 1).unwrap();
+        let input = module.input.call(&mut *store, (0, 1)).unwrap();
         memory.write(&mut *store, input as usize, &[0]).unwrap();
-        let reply = module.hook.call(&mut *store, id).unwrap();
+        let reply = module.hook.call(&mut *store, (id, 1)).unwrap();
         assert_eq!(reply as u32, 1);
         let mut bytes = [0xff];
         memory
@@ -617,8 +699,8 @@ fn point_record_layout_mismatch_is_refused() {
         r#"(module (@custom "dylink.0" "\01\04\00\00\00\00")
         (func (export "horizon_layout") (result i64) i64.const {})
         (func (export "horizon_layout_ext") (result i64) i64.const {})
-        (func (export "horizon_in") (param i32) (result i32) i32.const 0)
-        (func (export "horizon_hook") (param i32) (result i64) i64.const 0))"#,
+        (func (export "horizon_arena") (param i32 i32) (result i32) i32.const 0)
+        (func (export "horizon_hook") (param i32 i32) (result i64) i64.const 0))"#,
         mod_api::wire::LAYOUT,
         mod_points::POINT_LAYOUT ^ 1
     ))
