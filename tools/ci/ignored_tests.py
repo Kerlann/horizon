@@ -73,7 +73,7 @@ def run(package, skip):
         process = subprocess.run(
             [
                 "cargo", "test", "-p", package, "--lib", *(["--bins", "--tests"] if package in INTEGRATION_TESTS else []),
-                "--", "--include-ignored", "--exact", "--test-threads=4", "--nocapture", *skips,
+                "--", "--include-ignored", "--exact", "--test-threads=1", "--nocapture", *skips,
             ],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", env=env,
         )
@@ -110,10 +110,16 @@ def run(package, skip):
             # Emit only the numeric status, never adjacent test output.
             print(f"{package}: {status[0]})")
     for line in process.stdout.splitlines():
+        if begun := re.match(r"^test ([A-Za-z0-9_:]+) \.\.\.", line):
+            last_started = begun[1]
+        for marker in ("stack overflow", "overflowed its stack", "panic in a destructor", "cannot unwind", "double free", "corrupted", "fatal runtime error"):
+            if marker in line:
+                print(f"abort marker: {marker}")
         if found := re.search(r"thread '([A-Za-z0-9_:]+)' has overflowed its stack", line):
             print(f"stack overflow test: {found[1]}")
         if "panic in a destructor during cleanup" in line:
             print("panic in a destructor during cleanup")
+    print(f"last started: {locals().get('last_started', 'unknown')}")
     for name in list(results)[-20:]:
         if re.fullmatch(r"[A-Za-z0-9_:]+", name):
             print(f"last completed: {name}")
