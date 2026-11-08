@@ -61,6 +61,8 @@ struct Runtime {
     keeps: Vec<Keep>,
     /// Buffers for arguments and answers, reused so a steady state allocates nothing.
     spare: Vec<Vec<u8>>,
+    #[cfg(feature = "wire-pool-profile")]
+    pool_counts: [u64; 5], // kept, dropped (full), dropped (large), reply drops, exports
 }
 
 impl Runtime {
@@ -70,7 +72,20 @@ impl Runtime {
         const MAX_SPARE_BUFFERS: usize = 64;
         const MAX_SPARE_CAPACITY: usize = 1024 * 1024;
         if self.spare.len() < MAX_SPARE_BUFFERS && buffer.capacity() <= MAX_SPARE_CAPACITY {
+            #[cfg(feature = "wire-pool-profile")]
+            {
+                self.pool_counts[0] += 1;
+            }
             self.spare.push(buffer);
+        } else {
+            #[cfg(feature = "wire-pool-profile")]
+            {
+                self.pool_counts[if self.spare.len() >= MAX_SPARE_BUFFERS {
+                    1
+                } else {
+                    2
+                }] += 1;
+            }
         }
     }
 }
@@ -107,7 +122,14 @@ impl Reply {
 impl Drop for Reply {
     fn drop(&mut self) {
         let buffer = std::mem::take(&mut self.0);
-        RUNTIME.with(|rt| rt.borrow_mut().recycle(buffer));
+        RUNTIME.with(|rt| {
+            let mut rt = rt.borrow_mut();
+            #[cfg(feature = "wire-pool-profile")]
+            {
+                rt.pool_counts[3] += 1;
+            }
+            rt.recycle(buffer);
+        });
     }
 }
 
@@ -371,6 +393,21 @@ pub fn run(id: u32) -> (*const u8, u32) {
         drop(rt);
         drop(keep);
     });
+    #[cfg(feature = "wire-pool-profile")]
+    {
+        let counts = RUNTIME.with(|rt| {
+            let mut rt = rt.borrow_mut();
+            rt.pool_counts[4] += 1;
+            (rt.pool_counts[4] == 200_000).then_some((rt.pool_counts, rt.spare.len()))
+        });
+        if let Some(counts) = counts {
+            let mut args = Writer::new();
+            args.put_str(&format!(
+                "diagnostic guest pool (kept, full, large, reply drops, exports), spare: {counts:?}"
+            ));
+            transport::try_call(crate::wire::HOST_LOG, args.bytes(), &mut Vec::new());
+        }
+    }
     (pointer, outcome)
 }
 
