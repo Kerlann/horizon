@@ -34,6 +34,14 @@ fn direct_exports() {
     assert!(loaded.refused.is_empty(), "{:?}", loaded.refused);
     loaded.initialize(&[info]).unwrap();
     let module = loaded.modules[0].clone();
+    assert!(
+        module
+            .subscribed
+            .iter()
+            .flatten()
+            .any(|hook| *hook == mod_api::HookId::ServerStopped),
+        "fixture must register the normal empty-body server_stopped hook"
+    );
     // Capture the actual registered handler and encoded arguments via the normal API.
     mod_api::testing::with_mods(std::mem::take(&mut loaded.mods).into(), || {
         mod_api::__private::install_parts(
@@ -65,7 +73,7 @@ fn direct_exports() {
     let counter_id = crate::boundary::export_id("BlockEntityPart", "block_entity_tick").unwrap();
     // One group lock outside every timing. No native host imports occur in these hooks.
     let mut group = module.running.group.lock().unwrap();
-    let config = group.store.engine().config();
+    let config = group.store.engine();
     println!(
         "engine debug={} signals={} reservation={} guard={} growth={} parallel={} opt={:?} regalloc={:?}",
         config.get_debug_info(),
