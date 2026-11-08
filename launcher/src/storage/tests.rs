@@ -28,6 +28,21 @@ impl Drop for Home {
 }
 
 #[test]
+fn build_tools_remain_clearable_without_claiming_game_absence() {
+    let home = Home::new();
+    let storage = Storage::at(&home.0).unwrap();
+    for (cache, directory) in [
+        (BuildCache::Rust, "rust"),
+        (BuildCache::Cargo, "cargo"),
+        (BuildCache::Scratch, "tmp"),
+    ] {
+        let output = home.seed(&format!("{directory}/output"));
+        assert!(storage.clear(cache).unwrap() > 0);
+        assert!(!output.exists());
+    }
+}
+
+#[test]
 fn hard_links_count_once() {
     let home = Home::new();
     let file = home.seed("rust/a");

@@ -2470,8 +2470,13 @@ pub fn build_server(
                 (e.file_name().to_string_lossy().into_owned(), at)
             })
             .collect();
-        for old in stale(builds, &built.version, &[]) {
-            let _ = fs::remove_dir_all(cached.join(old));
+        if crate::cache_cleanup::Access::UninstrumentedGame
+            .check()
+            .is_ok()
+        {
+            for old in stale(builds, &built.version, &[]) {
+                let _ = fs::remove_dir_all(cached.join(old));
+            }
         }
         if built.plan != Plan::UpToDate {
             progress(Step::Done {
