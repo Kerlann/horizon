@@ -193,7 +193,12 @@ impl Writer {
         self.put_len(items.len());
         let start = self.bytes.len();
         self.bytes.resize(start + items.len() * 2, 0);
-        for (to, item) in self.bytes[start..].chunks_exact_mut(2).zip(items) {
+        for (to, item) in self.bytes[start..]
+            .as_chunks_mut::<2>()
+            .0
+            .iter_mut()
+            .zip(items)
+        {
             to.copy_from_slice(&item.to_le_bytes());
         }
     }
@@ -499,8 +504,10 @@ impl<'a> Reader<'a> {
         let len = self.take_len(2)?;
         let bytes = self.take_bytes(len * 2)?;
         Ok(bytes
-            .chunks_exact(2)
-            .map(|pair| u16::from_le_bytes([pair[0], pair[1]]))
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u16::from_le_bytes(*pair))
             .collect())
     }
     /// A normal Wire list, with its element cap checked before allocating storage. `read`

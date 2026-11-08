@@ -154,7 +154,8 @@ pub(super) fn put(ty: &Ty, expr: &str) -> String {
                     | Ty::List(_, super::ty::List::Slice)
             ) =>
         {
-            format!("w.put_opt({expr}.as_deref());")
+            // Already a borrow: `Option<&T>` is passed as it is.
+            format!("w.put_opt({expr});")
         }
         _ => format!("w.put(&{expr});"),
     }
@@ -434,13 +435,12 @@ impl Cx {
             }
             writeln!(
                 body,
-                "let {mutable}p{i}: {} = {};",
+                "let {mutable}p{i}: {} = input.take()?;",
                 if resource(ty) {
                     rust_ty(types, ty, false)
                 } else {
                     held(types, ty).unwrap()
                 },
-                "input.take()?",
                 mutable = if mutable_scalar(ty) { "mut " } else { "" }
             )
             .unwrap();
@@ -506,10 +506,10 @@ impl Cx {
             .chain(&surface.dropped)
             .filter(|m| m.owner == *owner)
         {
-            if let Some(via) = &m.via {
-                if !groups.contains(via) {
-                    groups.push(via.clone());
-                }
+            if let Some(via) = &m.via
+                && !groups.contains(via)
+            {
+                groups.push(via.clone());
             }
         }
         for group in groups {
