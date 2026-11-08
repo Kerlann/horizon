@@ -734,8 +734,14 @@ fn borrowed(
     }
     if let Some(view) = &d.view {
         let pointee = rust_ty(types, &view.pointee, false);
+        // Diagnostic-only revision experiment, not a production per-type rule.
+        let repair = if pointee == "mod_api::ModBlockEntity" {
+            "Some(|value, changes| value.revision = mod_api::containers::ModRevision::from_snapshot(value.revision.identity(), changes))"
+        } else {
+            "None"
+        };
         let read = format!(
-            "let (mut {name}_held, {name}_cache_key): ({pointee},_) = crate::wire::guest::cache_probe::take(input)?; let mut {name} = {}::new(&{}{name}_held);",
+            "let (mut {name}_held, {name}_cache_key): ({pointee},_) = crate::wire::guest::cache_probe::take(input,{repair})?; let mut {name} = {}::new(&{}{name}_held);",
             d.rust,
             if view.mutable { "mut " } else { "" }
         );
