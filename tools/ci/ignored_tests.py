@@ -75,6 +75,7 @@ def run(package, skip):
             ],
             stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, errors="replace", env=env,
         )
+    print(f"{package}: cargo exit {process.returncode}")
     results = {}
     summaries = []
     for line in process.stdout.splitlines():
@@ -86,6 +87,9 @@ def run(package, skip):
             print(line)
         elif SUMMARY.match(line):
             summaries.append(line)
+            print(f"{package}: {line}")
+        elif re.match(r"^running \d+ tests?$", line) or re.match(r"^\s+Running (unittests|tests/)", line):
+            print(line)
     if not summaries:
         # A build failure: the compiler's output quotes only this repository's code.
         print(process.stdout[-20000:])
