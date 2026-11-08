@@ -108,6 +108,8 @@ impl Default for State {
 pub(crate) fn engine() -> wasmtime::Result<Engine> {
     let mut config = wasmtime::Config::new();
     config.epoch_interruption(true);
+    #[cfg(feature = "boundary-fuel")]
+    config.consume_fuel(true);
     let engine = Engine::new(&config)?;
     let weak = engine.weak();
     std::thread::Builder::new()
@@ -479,6 +481,10 @@ impl WasmMod {
         members: &[Member<'_>],
     ) -> Result<Vec<Self>, Refusal> {
         let mut store = Store::new(engine, State::default());
+        #[cfg(feature = "boundary-fuel")]
+        store
+            .set_fuel(u64::MAX)
+            .map_err(|e| Refusal::Runtime(e.to_string()))?;
         store.limiter(|state| &mut state.limits);
         store.set_epoch_deadline(30_000);
         let mut armed = false;
@@ -525,6 +531,8 @@ impl WasmMod {
                             let profiler = profile.profiler.take().unwrap();
                             let file = std::fs::File::create(&profile.path)?;
                             profiler.finish(file)?;
+                            #[cfg(feature = "boundary-fuel")]
+                            eprintln!("boundary guest fuel: {}", u64::MAX - store.get_fuel()?);
                             eprintln!(
                                 "boundary host cumulative at {} guest export returns: {:?}",
                                 profile.calls,
