@@ -2142,7 +2142,6 @@ mod block_entity_snapshot_tests {
 
     #[test]
     fn a_callbacks_client_update_fields_reach_the_queue_only_from_a_valid_snapshot() {
-        use mod_api::__private::game::ModBlockEntityViewNew;
         let items = Items::for_tests(Default::default());
         let mut entity =
             crate::containers::ModBlockEntity::new("test:machine".into(), Default::default());
