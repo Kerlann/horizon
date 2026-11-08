@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Бүтээлийн бүртгэлийг уншиж чадсангүй: {error}",
   "Could not read the saved sign-in.": "Хадгалсан нэвтрэлтийг уншиж чадсангүй.",
   "Could not read the saved sign-in. Sign in again.": "Хадгалсан нэвтрэлтийг уншиж чадсангүй. Дахин нэвтэрнэ үү.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Уншиж чадсангүй {name}: {error}",
   "Could not run {program}: {error}": "{program} ажиллуулж чадсангүй: {error}",
   "Could not save the renewed sign-in.": "Шинэчилсэн нэвтрэлтийг хадгалж чадсангүй.",

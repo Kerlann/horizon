@@ -167,7 +167,7 @@ fn a_shader_pack_lights_the_faces_itself() {
         ))
         .unwrap();
     let visibility = crate::models::load_visibility(&root, assets.registry).unwrap();
-    let tables = MeshTables::new(&assets, &render, &facts, visibility.clone()).unwrap();
+    let tables = MeshTables::new(&assets, &render, &facts, visibility.clone(), None).unwrap();
     let stone = assets.registry.default_state("minecraft:stone").unwrap().0;
     let mut chunk = Chunk::empty(0, 0);
     chunk.set(8, MIN_Y + 8, 8, stone);
@@ -231,7 +231,7 @@ fn a_shader_pack_lights_every_nether_face_like_an_up_face() {
         ))
         .unwrap();
     let visibility = crate::models::load_visibility(&root, assets.registry).unwrap();
-    let tables = MeshTables::new(&assets, &render, &facts, visibility.clone()).unwrap();
+    let tables = MeshTables::new(&assets, &render, &facts, visibility.clone(), None).unwrap();
     let state = |name| assets.registry.default_state(name).unwrap().0;
     let mut chunk = Chunk::empty(0, 0);
     chunk.set(4, MIN_Y + 8, 4, state("minecraft:netherrack"));
@@ -292,7 +292,7 @@ fn separate_ao_passes_ao_in_alpha_without_darkening_rgb() {
         ))
         .unwrap();
     let visibility = crate::models::load_visibility(&root, assets.registry).unwrap();
-    let tables = MeshTables::new(&assets, &render, &facts, visibility.clone()).unwrap();
+    let tables = MeshTables::new(&assets, &render, &facts, visibility.clone(), None).unwrap();
     let stone = assets.registry.default_state("minecraft:stone").unwrap().0;
     let mut chunk = Chunk::empty(0, 0);
     // Place stone with neighbouring blocks to create AO variations.
@@ -383,7 +383,7 @@ fn reused_mesh_matches_fresh_geometry_across_sections_and_resource_reload() {
             ))
             .unwrap();
         let visibility = crate::models::load_visibility(&root, assets.registry).unwrap();
-        let tables = MeshTables::new(&assets, &render, &facts, visibility.clone()).unwrap();
+        let tables = MeshTables::new(&assets, &render, &facts, visibility.clone(), None).unwrap();
         let mut mesher = Mesher {
             nether_shading: false,
             shader_pack_lighting: false,
@@ -529,7 +529,7 @@ fn a_shader_pack_s_still_water_top_starts_at_its_south_west_corner() {
         ))
         .unwrap();
     let visibility = crate::models::load_visibility(&root, assets.registry).unwrap();
-    let tables = MeshTables::new(&assets, &render, &facts, visibility.clone()).unwrap();
+    let tables = MeshTables::new(&assets, &render, &facts, visibility.clone(), None).unwrap();
     let state = |name| assets.registry.default_state(name).unwrap().0;
     let mut chunk = Chunk::empty(0, 0);
     for x in 7..=9 {

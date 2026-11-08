@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Rakennuslokia ei voitu lukea: {error}",
   "Could not read the saved sign-in.": "Tallennettua kirjautumista ei voitu lukea.",
   "Could not read the saved sign-in. Sign in again.": "Tallennettua kirjautumista ei voitu lukea. Kirjaudu uudelleen sisään.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Ei voitu lukea {name}: {error}",
   "Could not run {program}: {error}": "Ei voitu suorittaa {program}: {error}",
   "Could not save the renewed sign-in.": "Uusittua kirjautumista ei voitu tallentaa.",

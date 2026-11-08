@@ -52,7 +52,7 @@ pub trait MinecartsBackend {
     /// `AbstractMinecart.customDisplayBlockState`: the block the cart shows in
     /// place of its kind's default, None (inner) when it has none.
     #[access(WorldOnly)]
-    fn minecart_custom_display_block(&self, cart: MinecartRef) -> Option<Option<BlockStateId>>;
+    fn minecart_custom_display_block(&self, cart: MinecartRef) -> Option<Option<BlockState>>;
     /// Side: server.
     /// `AbstractMinecart.getDisplayOffset`, in sixteenths of a block: the set
     /// offset, else the kind's default.
@@ -109,7 +109,7 @@ pub trait MinecartsBackendMut {
     fn minecart_set_custom_display_block(
         &mut self,
         cart: MinecartRef,
-        state: Option<BlockStateId>,
+        state: Option<BlockState>,
     ) -> bool;
     /// Side: server.
     /// `AbstractMinecart.setDisplayOffset`, in sixteenths of a block: saved as

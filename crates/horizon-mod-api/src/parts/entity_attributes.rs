@@ -263,7 +263,7 @@ impl EntityAttributesRegistrar for PartRegistrar {
             } else {
                 format!("minecraft:{entity}")
             };
-            if !horizon_mod_package::content::namespaced_id(&id) {
+            if crate::Identifier::parse_namespaced(&id).is_none() {
                 return Err(crate::EntityAttributeError::InvalidId);
             }
             check_attribute_set(&attributes, |base| *base)?;

@@ -3368,7 +3368,7 @@ impl Hub {
         if let Some(name) = &options.mod_particle {
             return Some(Particle {
                 id: horizon_protocol::entity_data::MOD_PARTICLE_ID,
-                data: Some(ParticleData::Mod(name.clone())),
+                data: Some(ParticleData::Mod(name.to_string())),
             });
         }
         let name = format!("minecraft:{}", options.ty.name());

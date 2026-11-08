@@ -235,18 +235,17 @@ pub mod tests {
                 ModEntry::new("owner", Box::new(Declare(keys.clone()))),
             ],
             &crate::parts::tests::rule_schema(),
+            |_| false,
         )
         .unwrap();
-        let types = |names: &[&str]| {
-            horizon_client_core::block_entity_types::BlockEntityTypes::new(
-                Default::default(),
-                names.iter().map(|s| (*s).to_owned()).collect(),
-            )
-        };
+        let types = |names: &[&str]| names.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
         assert_eq!(
             {
                 let types = &types(&["minecraft:chest"]);
-                crate::registry_keys::resolve_block_entity_types(types.names(), |id| types.key(id))
+                crate::registry_keys::resolve_block_entity_types(
+                    types.iter().map(String::as_str),
+                    |id| types.iter().position(|name| name == id),
+                )
             }
             .unwrap_err(),
             [
@@ -256,7 +255,10 @@ pub mod tests {
         );
         {
             let types = &types(&["minecraft:chest", "owner:press", "minecraft:furnace"]);
-            crate::registry_keys::resolve_block_entity_types(types.names(), |id| types.key(id))
+            crate::registry_keys::resolve_block_entity_types(
+                types.iter().map(String::as_str),
+                |id| types.iter().position(|name| name == id),
+            )
         }
         .unwrap();
         let keys = keys.lock().unwrap();
@@ -307,6 +309,7 @@ pub mod tests {
         let errors = install_parts(
             &[ModEntry::new("test", Box::new(Invalid))],
             &crate::parts::tests::rule_schema(),
+            |_| false,
         )
         .unwrap_err();
         assert_eq!(errors.len(), 4);
@@ -368,13 +371,11 @@ pub mod tests {
         ) {
             if event.entity.data == [1] {
                 let level = host.level("minecraft:overworld").unwrap();
-                let state = host.block_state_default(self.0).unwrap();
-                assert!(level.set_block(
-                    host,
-                    event.pos,
-                    state,
-                    NativeBlockUpdateFlags::KNOWN_SHAPE
-                ));
+                let state = BlockState::of(&host.block_states(), self.0, &[]).unwrap();
+                assert_eq!(
+                    level.set_block(host, event.pos, state, NativeBlockUpdateFlags::KNOWN_SHAPE),
+                    Ok(true)
+                );
             }
         }
         fn pre_remove_side_effects(

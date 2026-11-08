@@ -975,7 +975,9 @@ impl Chat {
     /// The hover text under a GUI-space cursor while chat is focused
     /// (ChatScreen.render's `renderComponentHoverEffect`).
     pub fn hover_at(&self, font: &crate::font::Font, height: i32, x: f64, y: f64) -> Option<Text> {
-        self.style_at(font, height, x, y)?.hover.map(|h| *h)
+        self.style_at(font, height, x, y)?
+            .hover
+            .map(std::sync::Arc::unwrap_or_clone)
     }
     /// The wrapped line under a GUI-space cursor while chat is focused, and
     /// the cursor's x within it (the text starts at 0).

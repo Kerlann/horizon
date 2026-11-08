@@ -7,7 +7,7 @@ impl Game<'_> {
     /// A canceled overlay is asked too. Set `replace_vanilla` to leave vanilla's overlay out.
     pub(in crate::game) fn native_block_screen_effect_draw(
         &self,
-        call: mod_api::__private::BlockScreenEffectDrawCall<'_>,
+        call: super::fire::BlockScreenEffectDrawCall<'_>,
     ) {
         self.fire_block_screen_effect_draw(call);
     }

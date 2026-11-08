@@ -184,7 +184,7 @@ impl Game<'_> {
     /// `Block.defaultBlockState`, the one a block takes when nothing else
     /// says. None for an unknown block.
     pub(super) fn block_state_default(&self, block: BlockKey) -> Option<BlockStateId> {
-        Some(mod_api::__private::resolved_block(block)?.default)
+        super::api_values::default_state(block)
     }
     /// `BlockState.canBeReplaced()`: whether placing a block where this state stands
     /// replaces it (air, grass, water, snow layers). None for an unknown state.
@@ -223,16 +223,15 @@ impl Game<'_> {
         self.pack.assets.registry.state(state)?;
         Some(self.res.facts().get(state).map_color)
     }
-    /// The states of `block` (`StateDefinition.getPossibleStates`), as the consecutive ids the
-    /// registry numbers them with. None for an unknown block.
+    /// The immutable local ordinals of `block`, independent of current world ID order.
     pub(super) fn block_states_of(&self, block: BlockKey) -> Option<BlockStateRange> {
-        Some(mod_api::__private::resolved_block(block)?.states)
+        mod_api::__private::block_state_range(block).ok()
     }
 
     /// The properties of a resolved block, copied for the mod as plain data.
     pub(super) fn block_state_definition(&self, block: BlockKey) -> Option<Vec<StateProperty>> {
-        let resolved = mod_api::__private::resolved_block(block)?;
-        let state = self.pack.assets.registry.state(resolved.default)?;
+        let default = super::api_values::default_state(block)?;
+        let state = self.pack.assets.registry.state(default)?;
         let properties = self.pack.block_registries.blocks.get(&state.name)?;
         Some(
             properties
@@ -249,9 +248,9 @@ impl Game<'_> {
         block: BlockKey,
         constraints: &[StateConstraint],
     ) -> Option<Result<bool, StateMatchError>> {
-        let resolved = mod_api::__private::resolved_block(block)?;
+        let default = super::api_values::default_state(block)?;
         let registry = self.pack.assets.registry;
-        let target = registry.state(resolved.default)?;
+        let target = registry.state(default)?;
         let state = registry.state(state)?;
         let definition = self.pack.block_registries.blocks.get(&target.name)?;
         Some(match_state_properties(
@@ -277,10 +276,10 @@ impl Game<'_> {
 
     /// `Block.asItem`: the block's item name, including air for a block with
     /// no item; None if the block name is unknown.
-    pub(super) fn block_item(&self, block: BlockKey) -> Option<String> {
+    pub(super) fn block_item(&self, block: BlockKey) -> Option<mod_api::ItemKey> {
         let behaviours = self.res.behaviours();
-        let id = mod_api::__private::resolved_block(block)?.block;
-        Some(behaviours.block_data(id).item.to_string())
+        let id = super::api_values::behavior_block(block, behaviours)?;
+        mod_api::__private::item_key(&behaviours.block_data(id).item)
     }
 }
 
@@ -408,12 +407,12 @@ mod tests {
             );
             assert_eq!(
                 host.block_item(mod_api::__private::part_tests::block_key("minecraft:stone"))
-                    .as_deref(),
+                    .and_then(mod_api::__private::item_key_id),
                 Some("minecraft:stone")
             );
             assert_eq!(
                 host.block_item(mod_api::__private::part_tests::block_key("minecraft:water"))
-                    .as_deref(),
+                    .and_then(mod_api::__private::item_key_id),
                 Some("minecraft:air")
             );
         });
@@ -504,10 +503,9 @@ mod tests {
             // service: start from the engine's state and overwrite them.
             let state = |id: &str, amount, falling, source| {
                 let kind = FluidKind::from_name(id).unwrap_or(FluidKind::Water);
-                let mut state = mod_api::__private::engine_fluid_state(
-                    host.fluid_key(id).unwrap(),
-                    EngineFluidState::new(kind, 1, falling),
-                );
+                let _ = EngineFluidState::new(kind, 1, falling);
+                let mut state =
+                    mod_api::__private::fluid_state(host.fluid_key(id).unwrap(), 1, falling, false);
                 (state.amount, state.source) = (amount, source);
                 state
             };
@@ -749,39 +747,28 @@ mod tests {
 
     #[test]
     fn a_block_key_resolves_its_default_state() {
-        use mod_api::__private::{ResolvedBlock, part_tests, resolve_blocks, resolved_block};
+        use mod_api::__private::part_tests;
         let (_, registry) = blocks();
         mod_api::__private::install(Default::default());
         crate::game::api_values::register_game_keys([
             "minecraft:oak_stairs".to_owned(),
             "minecraft:wheat".to_owned(),
         ]);
-        resolve_blocks(|id| {
-            let default = registry.default_state(id)?;
-            Some(ResolvedBlock {
-                default,
-                states: BlockStateRange::new(default, 1),
-                block: horizon_world::level::states::BlockId(0),
-            })
-        })
-        .unwrap();
+        crate::game::api_values::resolve_block_definitions(registry).unwrap();
         assert_eq!(
-            resolved_block(part_tests::block_key("oak_stairs"))
-                .unwrap()
-                .default,
+            crate::game::api_values::default_state(part_tests::block_key("oak_stairs")).unwrap(),
             BlockStateId(1)
         );
         assert_eq!(
-            resolved_block(part_tests::block_key("minecraft:wheat"))
-                .unwrap()
-                .default,
+            crate::game::api_values::default_state(part_tests::block_key("minecraft:wheat"))
+                .unwrap(),
             BlockStateId(5)
         );
         // A valid key has no mapping on a different owning thread. Raw unknown slots are
         // refused by the generated host boundary, not revalidated by typed operations.
         let key = part_tests::block_key("minecraft:wheat");
         assert!(
-            std::thread::spawn(move || resolved_block(key))
+            std::thread::spawn(move || crate::game::api_values::default_state(key))
                 .join()
                 .unwrap()
                 .is_none()
@@ -791,13 +778,22 @@ mod tests {
 
 #[cfg(test)]
 mod facts_tests {
-    use mod_api::{BlockStateId, HostBlockStates};
+    use crate::game::api_values::TryIntoApi;
+    use mod_api::{BlockStateRecord, HostBlockStates};
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn block_state_facts_read_vanillas_tables_through_the_host() {
         super::super::native_entity_refs::tests::with_game(|game| {
-            let state = |name: &str| game.pack.assets.registry.default_state(name).unwrap();
+            let state = |name: &str| {
+                game.pack
+                    .assets
+                    .registry
+                    .default_state(name)
+                    .unwrap()
+                    .try_into_api()
+                    .unwrap()
+            };
             let (stone, obsidian, bedrock) = (
                 state("minecraft:stone"),
                 state("minecraft:obsidian"),
@@ -836,19 +832,25 @@ mod facts_tests {
                 .unwrap();
             assert_eq!(range.len(), 80);
             assert!(range.contains(stairs));
-            assert!(range.iter().all(
-                |s| game.pack.assets.registry.state(s).unwrap().name == "minecraft:oak_stairs"
-            ));
+            let key = mod_api::__private::part_tests::block_key("minecraft:oak_stairs");
+            assert!(range.iter().all(|state| state.block() == key));
+            assert_eq!(
+                range
+                    .iter()
+                    .map(mod_api::BlockState::ordinal)
+                    .collect::<Vec<_>>(),
+                (0..80).collect::<Vec<u16>>()
+            );
             assert_eq!(
                 facts
                     .states_of(mod_api::__private::part_tests::block_key("minecraft:stone"))
                     .map(|r| (r.first(), r.len())),
                 Some((stone, 1))
             );
-            // Unknown state ids: None.
-
-            assert_eq!(facts.destroy_speed(BlockStateId(u32::MAX)), None);
-            assert_eq!(facts.sound(BlockStateId(u32::MAX)), None);
+            // A forged local ordinal refuses at the generated Game crossing.
+            let invalid = BlockStateRecord::new(stone.block(), u16::MAX).into();
+            assert_eq!(facts.destroy_speed(invalid), None);
+            assert_eq!(facts.sound(invalid), None);
         });
     }
 }

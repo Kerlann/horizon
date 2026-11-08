@@ -25,3 +25,19 @@ impl Default for WorldFluid {
         }
     }
 }
+
+impl WorldFluid {
+    /// Refuses values the simulation cannot run: no step, no spread, or an unbounded search.
+    pub fn check(&self) -> Result<(), String> {
+        if self.tick_delay < 1 {
+            return Err("tick_delay is 1 or more".into());
+        }
+        if !(1..=7).contains(&self.drop_off) {
+            return Err("drop_off is 1 to 7".into());
+        }
+        if !(1..=4).contains(&self.slope_find_distance) {
+            return Err("slope_find_distance is 1 to 4".into());
+        }
+        Ok(())
+    }
+}

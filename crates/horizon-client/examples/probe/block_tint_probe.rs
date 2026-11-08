@@ -24,6 +24,7 @@ pub fn main() -> Result<(), Box<dyn std::error::Error>> {
         &render,
         &facts,
         models::load_visibility(root, assets.registry)?,
+        None,
     )?;
     let item_data = crate::test_resources::item_data(
         root,

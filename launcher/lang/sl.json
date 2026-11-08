@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Ni bilo mogoče prebrati dnevnika gradnje: {error}",
   "Could not read the saved sign-in.": "Ni bilo mogoče prebrati shranjene prijave.",
   "Could not read the saved sign-in. Sign in again.": "Ni bilo mogoče prebrati shranjene prijave. Ponovno se prijavite.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Ni bilo mogoče prebrati {name}: {error}",
   "Could not run {program}: {error}": "Ni bilo mogoče zagnati {program}: {error}",
   "Could not save the renewed sign-in.": "Ponovne prijave ni bilo mogoče shraniti.",

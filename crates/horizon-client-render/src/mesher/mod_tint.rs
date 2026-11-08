@@ -26,6 +26,18 @@ pub(super) fn registered() -> Option<&'static BTreeMap<String, Arc<[TintLayer]>>
     REGISTERED.get()
 }
 
+/// Whether game-prepared values are needed for a mod's own tint callback.
+pub fn has_custom_block_tint_sources() -> bool {
+    REGISTERED.get().is_some_and(has_custom_sources)
+}
+
+fn has_custom_sources(blocks: &BTreeMap<String, Arc<[TintLayer]>>) -> bool {
+    blocks
+        .values()
+        .flat_map(|layers| layers.iter())
+        .any(|layer| matches!(layer, TintLayer::Source(_)))
+}
+
 /// One tint layer of one state.
 #[derive(Clone)]
 pub(super) enum ModLayer {
@@ -74,7 +86,22 @@ impl ModLayer {
 #[derive(Default)]
 pub(super) struct ModTints {
     pub(super) layers: Vec<Box<[ModLayer]>>,
-    pub(super) states: Box<[mod_api::BlockState]>,
+    pub(super) values: Option<ModTintValues>,
+}
+
+/// API values prepared by the owning game before mesh tables are built.
+pub struct ModTintValues {
+    /// One value for each engine state slot; conversion belongs to the game boundary.
+    pub states: Box<[mod_api::BlockState]>,
+    /// The immutable definition resource shared by all meshing workers.
+    pub metadata: &'static (dyn mod_api::BlockMetadata + Send + Sync),
+}
+impl ModTints {
+    pub(super) fn values(&self) -> &ModTintValues {
+        self.values
+            .as_ref()
+            .expect("source metadata was checked when layers were installed")
+    }
 }
 
 impl MeshTables {
@@ -84,8 +111,18 @@ impl MeshTables {
         &mut self,
         registry: &BlockRegistry,
         by_block: &BTreeMap<String, Arc<[TintLayer]>>,
-    ) {
-        let mut mod_tints = ModTints::default();
+        values: Option<ModTintValues>,
+    ) -> crate::Result<()> {
+        let sources = has_custom_sources(by_block);
+        let values = if sources {
+            Some(values.ok_or("a block tint source needs game-prepared metadata")?)
+        } else {
+            None
+        };
+        let mut mod_tints = ModTints {
+            values,
+            ..Default::default()
+        };
         let mut found = std::collections::BTreeSet::new();
         for (id, info) in self.info.iter_mut().enumerate() {
             let Some(state) = registry.state(horizon_world::registry::BlockStateId(id as u32))
@@ -107,35 +144,8 @@ impl MeshTables {
         for block in by_block.keys().filter(|b| !found.contains(b.as_str())) {
             log::warn!("Horizon: a block tint source names {block}, which no block is");
         }
-        let sources = mod_tints
-            .layers
-            .iter()
-            .flatten()
-            .any(|l| matches!(l, ModLayer::Source(_)));
-        if sources {
-            // One shared string per name, key and value: a state holds its id and its list of
-            // pairs, and cloning one for a mod copies no text.
-            let mut strings = std::collections::HashMap::new();
-            mod_tints.states = (0..registry.len() as u32)
-                .map(|id| {
-                    let id = horizon_world::registry::BlockStateId(id);
-                    let state = registry.state(id);
-                    mod_api::BlockState {
-                        id,
-                        block: share(&mut strings, state.map_or("", |s| s.name.as_str())),
-                        properties: state
-                            .map(|s| {
-                                s.properties
-                                    .iter()
-                                    .map(|(k, v)| (share(&mut strings, k), share(&mut strings, v)))
-                                    .collect()
-                            })
-                            .unwrap_or_default(),
-                    }
-                })
-                .collect();
-        }
         self.mod_tints = mod_tints;
+        Ok(())
     }
 }
 
@@ -160,7 +170,8 @@ pub(super) fn ask(
     }
     let [cx, cz, base_y] = tints.origin;
     let world = [cx * 16 + x, base_y + y, cz * 16 + z];
-    let state = &tables.mod_tints.states[id as usize];
+    let values = tables.mod_tints.values();
+    let state = &values.states[id as usize];
     let color = {
         let region = Region {
             tables,
@@ -168,9 +179,9 @@ pub(super) fn ask(
             nether,
         };
         if particle {
-            source.color_as_terrain_particle(state, &region, world)
+            source.color_as_terrain_particle(state, values.metadata, &region, world)
         } else {
-            source.color_in_world(state, &region, world)
+            source.color_in_world(state, values.metadata, &region, world)
         }
     } & 0xFF_FFFF;
     if !particle {
@@ -181,14 +192,6 @@ pub(super) fn ask(
         tints.asked_colors.push((index, color));
     }
     color
-}
-
-/// `text` as one shared string per distinct text.
-fn share<'a>(
-    strings: &mut std::collections::HashMap<&'a str, Arc<str>>,
-    text: &'a str,
-) -> Arc<str> {
-    strings.entry(text).or_insert_with(|| text.into()).clone()
 }
 
 /// Vanilla's `BlockAndTintGetter` over the region a section is meshed from: the chunk of
@@ -224,11 +227,10 @@ impl Region<'_, '_, '_> {
 
 impl BlockAndTintGetter for Region<'_, '_, '_> {
     fn block_state(&self, pos: [i32; 3]) -> mod_api::BlockState {
-        let states = &self.tables.mod_tints.states;
-        states
+        let states = &self.tables.mod_tints.values().states;
+        *states
             .get(self.state_id(pos) as usize)
             .unwrap_or(&states[0])
-            .clone()
     }
     fn fluid_state(&self, pos: [i32; 3]) -> Option<mod_api::FluidState> {
         let id = self
@@ -239,8 +241,16 @@ impl BlockAndTintGetter for Region<'_, '_, '_> {
             .info
             .get(id as usize)
             .map_or(FluidState::EMPTY, |i| i.fluid);
-        let key = mod_api::__private::world_fluid_key(state.kind())?;
-        Some(mod_api::__private::engine_fluid_state(key, state))
+        let key = match state.kind().vanilla_index() {
+            Some(index) => mod_api::__private::world_fluid_key(usize::from(index))?,
+            None => mod_api::__private::fluid_key(state.kind().name())?,
+        };
+        Some(mod_api::__private::fluid_state(
+            key,
+            state.amount(),
+            state.falling(),
+            state.is_source(),
+        ))
     }
     fn brightness(&self, layer: LightLayer, pos: [i32; 3]) -> i32 {
         let light = self.light(pos);

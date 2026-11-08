@@ -205,8 +205,12 @@ fn an_anvil_update_is_changed_in_turn_and_cancel_stops_later_mods() {
     ]
     .into();
     mod_api::testing::with_mods(mods, || {
-        mod_api::__private::install_parts(&[], &mod_api::__private::part_tests::rule_schema())
-            .unwrap();
+        mod_api::__private::install_parts(
+            &[],
+            &mod_api::__private::part_tests::rule_schema(),
+            |_| false,
+        )
+        .unwrap();
         mod_api::__private::resolve_items([
             "minecraft:iron_sword",
             "minecraft:iron_ingot",

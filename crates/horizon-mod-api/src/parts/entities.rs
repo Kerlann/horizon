@@ -193,6 +193,7 @@ pub mod tests {
         let errors = install_parts(
             &[ModEntry::new("test", Box::new(Invalid))],
             &crate::parts::tests::rule_schema(),
+            |_| false,
         )
         .unwrap_err();
         assert_eq!(errors.len(), 2, "{errors:?}");

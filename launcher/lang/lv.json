@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Nevarēja nolasīt būvēšanas žurnālu: {error}",
   "Could not read the saved sign-in.": "Nevarēja nolasīt saglabāto pierakstīšanos.",
   "Could not read the saved sign-in. Sign in again.": "Nevarēja nolasīt saglabāto pierakstīšanos. Pierakstieties vēlreiz.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Nevarēja izlasīt {name}: {error}",
   "Could not run {program}: {error}": "Nevarēja palaist {program}: {error}",
   "Could not save the renewed sign-in.": "Nevarēja saglabāt atjaunoto pierakstīšanos.",

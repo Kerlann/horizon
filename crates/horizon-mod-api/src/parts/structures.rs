@@ -43,9 +43,11 @@ pub mod tests {
             }
             fn load_piece(
                 &self,
+                _: &dyn mod_api::BlockMetadata,
                 _: &mod_api::Compound,
-            ) -> Option<std::sync::Arc<dyn mod_api::StructurePiece>> {
-                None
+            ) -> Result<std::sync::Arc<dyn mod_api::StructurePiece>, mod_api::StructureError>
+            {
+                Err(mod_api::StructureError("fixture has no pieces".into()))
             }
         }
         struct Valid;
@@ -57,8 +59,8 @@ pub mod tests {
         }
         crate::parts::tests::install_parts_fixture(&[ModEntry::new("test", Box::new(Valid))])
             .unwrap();
-        let types = crate::__private::installed_structure_types();
-        assert!(types.contains_key("test:tower"));
+        let types = crate::__private::structure_type_declarations();
+        assert!(types.iter().any(|(id, _)| id == "test:tower"));
         assert_eq!(types.len(), 1);
 
         struct Invalid;
@@ -74,6 +76,7 @@ pub mod tests {
         let errors = install_parts(
             &[ModEntry::new("test", Box::new(Invalid))],
             &crate::parts::tests::rule_schema(),
+            |_| false,
         )
         .unwrap_err();
         assert_eq!(errors.len(), 3);
@@ -87,6 +90,8 @@ pub mod tests {
 pub trait StructuresRegistrar {
     /// Register structure type `name` with `ty`; mods reach it through
     /// `register_structure_type`.
+    ///
+    /// On WebAssembly, worker calls run under the linked group's store lock and call budget.
     fn add_structure_type(&mut self, name: &str, ty: Arc<dyn crate::StructureType>);
 }
 
@@ -114,11 +119,7 @@ impl StructuresRegistrar for PartRegistrar {
             self.refused.push(refusal);
             return;
         }
-        let engine_type = crate::structure_type::Adapter::new(&id, ty).into_engine_type();
         self.structure_types
-            .push(crate::structure_type::StructureTypeInfo {
-                id: id.into(),
-                ty: engine_type,
-            });
+            .push(crate::structure_type::StructureTypeInfo { id: id.into(), ty });
     }
 }

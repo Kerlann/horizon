@@ -1,5 +1,6 @@
 //! Shared exception: dispatch infrastructure and cross-area fixture types/tests; no new hooks.
 use horizon_core::game_mode::GameMode;
+use mod_api::mod_api::hud_layout::GuiDraw;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -21,6 +22,13 @@ impl ItemStack {
     }
 }
 mod registry_keys {
+    pub(super) fn block_key(name: &str) -> Option<super::BlockKey> {
+        match name {
+            "test:block" => Some(super::BlockKey::Test),
+            "test:other" => Some(super::BlockKey::Other),
+            _ => None,
+        }
+    }
     pub(super) fn item_id(key: super::ItemKey<'_>) -> Option<&str> {
         Some(key.0)
     }
@@ -90,24 +98,21 @@ impl ServerHost for TestHost {}
 impl ClientHost for TestHost {}
 #[allow(dead_code)]
 mod generated {
-    mod horizon_mod_package {
-        pub mod content {
-            pub struct Block;
-            pub struct Item;
-        }
-    }
     pub(super) mod mod_api {
+        pub struct Block;
+        pub struct Item;
         pub(super) use super::super::ItemStack;
         pub struct FluidModel;
         include!(concat!(env!("OUT_DIR"), "/dispatch_fixtures_api.rs"));
     }
     include!(concat!(env!("OUT_DIR"), "/mod_api_generated.rs"));
+    pub(super) use self::mod_api::{BlockKey, BlockState};
     pub use horizon_mod_api_macros::__subscriptions;
 }
 use generated::*;
 struct Installed {
     mods: Arc<[ModEntry]>,
-    subscribers: horizon_client_core::subscribers::Subscribers,
+    subscribers: horizon_mod_runtime::subscribers::Subscribers,
 }
 thread_local! {
     /// The hooks each dispatch entered, a mod at a time.
@@ -124,7 +129,7 @@ fn install(mods: Arc<[ModEntry]>) {
             .map(move |hook| (index, *hook as usize))
     });
     let subscribers =
-        horizon_client_core::subscribers::Subscribers::new(HOOK_COUNT, mods.len(), subscriptions);
+        horizon_mod_runtime::subscribers::Subscribers::new(HOOK_COUNT, mods.len(), subscriptions);
     // Test dispatch needs the same static lifetime as the real installation.
     MODS.set(Some(Box::leak(Box::new(Installed { mods, subscribers }))));
 }
@@ -166,10 +171,11 @@ trait Registrar {}
 struct GoalRegistrar<'a> {
     _lifetime: std::marker::PhantomData<&'a ()>,
 }
-/// The parts every thing in a scope has, whatever its key: a test's own, or none.
+/// Scope fixtures install their own Parts. Block attachments retain their API keys;
+/// other scopes keep their existing single-target fixture tables.
 #[derive(Default)]
 struct Parts {
-    blocks: Vec<&'static dyn BlockPart>,
+    blocks: Vec<(BlockKey, Vec<&'static dyn BlockPart>)>,
     block_entities: Vec<&'static dyn BlockEntityPart>,
     items: Vec<&'static dyn ItemPart>,
     menus: Vec<&'static dyn MenuPart>,
@@ -193,7 +199,13 @@ fn leak<T>(part: T) -> &'static T {
     Box::leak(Box::new(part))
 }
 fn has_part_hook(_: HookId) -> bool {
-    true
+    // Manual fixture Parts override methods without emitting subscription bits.
+    // Their scope tables still refuse an empty installation and unrelated block keys.
+    let parts = PARTS.get();
+    !parts.blocks.is_empty()
+        || !parts.block_entities.is_empty()
+        || !parts.items.is_empty()
+        || !parts.menus.is_empty()
 }
 fn parts(_: HookId, _: &'static str) -> &'static Parts {
     PARTS.get()
@@ -202,8 +214,16 @@ impl Parts {
     fn for_hook(&self, _: HookId) -> Option<&Self> {
         Some(self)
     }
-    fn block_state(&self, _: BlockStateId) -> &[&'static dyn BlockPart] {
-        &self.blocks
+    fn block_value(&self, state: BlockState) -> &[&'static dyn BlockPart] {
+        // Both fixture block definitions have two local state ordinals, 0 and 1.
+        if state.ordinal() > 1 {
+            return &[];
+        }
+        self.block_key(Some(state.block()))
+    }
+    fn block_key(&self, key: Option<BlockKey>) -> &[&'static dyn BlockPart] {
+        key.and_then(|key| self.blocks.iter().find(|(block, _)| *block == key))
+            .map_or(&[], |(_, parts)| parts.as_slice())
     }
     fn block_entity<'k>(
         &self,
@@ -487,7 +507,7 @@ mod stubs {
         pub(super) position: [f64; 3],
         pub(super) view: [f64; 3],
     }
-    pub(super) struct DamageContainer(pub(super) f32);
+    pub(super) use crate::tests::mod_api::mod_api::DamageContainer;
     #[derive(Default)]
     pub(super) struct ModBlockEntity {
         id: String,
@@ -520,7 +540,7 @@ mod stubs {
         }
     }
     pub(super) struct LootStack;
-    pub(super) struct NativeLootContext<'a>(pub &'a ());
+    pub(super) struct NativeLootContext;
     pub(super) struct NativeReloadListener;
     pub(super) struct RecipePropertyAddition;
     pub(super) struct AdvancementProgress {
@@ -569,6 +589,29 @@ mod stubs {
 }
 
 mod api {
+    // API values are deliberately distinct from the engine BlockStateId stub.
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub enum BlockKey {
+        Test,
+        Other,
+    }
+    #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+    pub struct BlockState {
+        block: BlockKey,
+        ordinal: u16,
+    }
+    impl BlockState {
+        pub fn new(block: BlockKey, ordinal: u16) -> Self {
+            Self { block, ordinal }
+        }
+        pub fn block(self) -> BlockKey {
+            self.block
+        }
+        pub fn ordinal(self) -> u16 {
+            self.ordinal
+        }
+    }
+    pub struct DamageContainer(pub f32);
     pub mod camera {
         pub struct CameraEntity;
         pub struct FovPlayer;

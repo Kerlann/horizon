@@ -1,5 +1,5 @@
 //! The game's side of the `services` area (`horizon-mod-api/src/host/services.rs`).
-use crate::game::Game;
+use crate::game::{Game, api_values::TryIntoEngine};
 use mod_api::{prelude::*, *};
 
 impl ClientSession for Game<'_> {
@@ -33,9 +33,10 @@ impl Commands for Game<'_> {
         );
         self.native_refresh_commands()
     }
-    fn feedback(&mut self, line: Text) {
+    fn feedback(&mut self, line: Text) -> Result<(), mod_api::text::TextFormError> {
         mod_api::__private::check_access("feedback", mod_api::__private::LoadAccess::WorldOnly);
-        self.native_feedback(line)
+        self.native_feedback(line.try_into_engine(&())?);
+        Ok(())
     }
     fn run_command(&mut self, line: &str) -> bool {
         mod_api::__private::check_access("run_command", mod_api::__private::LoadAccess::WorldOnly);
@@ -53,9 +54,10 @@ impl Messages for Game<'_> {
         mod_api::__private::check_access("text_allowed", mod_api::__private::LoadAccess::WorldOnly);
         self.native_text_allowed(text)
     }
-    fn broadcast(&self, line: Text) {
+    fn broadcast(&self, line: Text) -> Result<(), mod_api::text::TextFormError> {
         mod_api::__private::check_access("broadcast", mod_api::__private::LoadAccess::WorldOnly);
-        self.native_broadcast(line)
+        self.native_broadcast(line.try_into_engine(&())?);
+        Ok(())
     }
 }
 impl Players for Game<'_> {

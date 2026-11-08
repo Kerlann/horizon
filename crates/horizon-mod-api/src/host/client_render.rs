@@ -60,17 +60,17 @@ pub trait ClientRenderClientHost {
     /// kept with `BlockEntityDraw::keep`. The face culled against that side comes first, else the first facing it;
     /// None when the model has no face that way or isn't baked. API @API:block_face_sprite@.
     #[access(PublishedResources)]
-    fn block_face_sprite(&self, state: BlockStateId, side: Direction) -> Option<BlockFaceTexture>;
+    fn block_face_sprite(&self, state: BlockState, side: Direction) -> Option<BlockFaceTexture>;
     /// Side: client.
     /// Published asset/data read: available in Setup, Reloading and World.
-    /// For a client mod: what each block (`minecraft:grass_block`, `oak_log[axis=x]`; properties left out take the
-    /// block's default) draws on each of its six sides, as the mesher bakes its model: each face's sprite (array and
+    /// For a client mod: what each resolved block state draws on its six sides, preserving
+    /// its properties without reparsing names. Resolve states once at load. Each face's sprite (array and
     /// layer, as `WorldDrawn::block_sprites` cuts them), where it lies on the side, how its texture runs across it,
     /// its tint source and whether it is cut out, translucent or animated; its particle sprite; whether it is a plain
     /// cube. None for a block the game does not know. The model is the state's first random variant. API
     /// 380.
     #[access(PublishedResources)]
-    fn block_sprites(&self, blocks: &[&str]) -> Vec<Option<BlockSprites>>;
+    fn block_sprites(&self, blocks: &[BlockState]) -> Vec<Option<BlockSprites>>;
     /// Side: client.
     /// Published asset/data read: available in Setup, Reloading and World.
     /// For a client mod: each texture's sprite by name (`minecraft:block/stone`, `block/stone`), none for one no

@@ -20,7 +20,7 @@ pub fn main() -> horizon_client::Result<()> {
     let input = fs::read_to_string(args.get(2).ok_or("missing INPUT")?)?;
     let defaults = horizon_world::item_defaults::read(root)?;
     let items = Items::tags_only(root, &PackOverlay::NONE, &defaults)?;
-    let e = Enchantments::load(root, &defaults);
+    let e = Enchantments::load(root, &defaults)?;
     let mut out = String::new();
     for line in input.lines() {
         let f: Vec<&str> = line.split(' ').collect();

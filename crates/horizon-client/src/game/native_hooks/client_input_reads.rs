@@ -1,4 +1,5 @@
 use super::*;
+use crate::game::api_values::TryIntoApi;
 
 /// Helpers for native mods, kept as stable as the hook points.
 // Native mods use these; nothing in Horizon does.
@@ -24,15 +25,20 @@ impl Game<'_> {
     /// A vanilla mapping (`key.forward`, `key.jump`, `key.attack`…): whether
     /// it is held (`KeyMapping.isDown`), and its key's name as Controls shows
     /// it. None for a mapping it doesn't answer for.
-    pub(in crate::game) fn mapping(&self, name: &str) -> Option<NativeKeyMapping> {
-        let &(_, key) = MAPPINGS.iter().find(|m| m.0 == name)?;
+    pub(in crate::game) fn mapping(
+        &self,
+        name: &str,
+    ) -> Result<Option<NativeKeyMapping>, mod_api::TextFormError> {
+        let Some(&(_, key)) = MAPPINGS.iter().find(|m| m.0 == name) else {
+            return Ok(None);
+        };
         let down = match key {
             Some(k) => self.movement_key_held(k),
             None => self.mouse_held()[usize::from(name == "key.use")],
         };
-        Some(NativeKeyMapping {
+        Ok(Some(NativeKeyMapping {
             down,
-            label: keybinds::display_name(self.settings.keys.get(name)),
-        })
+            label: keybinds::display_name(self.settings.keys.get(name)).try_into_api()?,
+        }))
     }
 }

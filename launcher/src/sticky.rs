@@ -7,7 +7,7 @@
 //! from the layout) by how far the page has scrolled past the row's top, never past the row's
 //! end. GPUI Fast draws a scrolled page from its layer without rendering it again, so the page's
 //! scroll asks [`Sticky::moved`] on the next frame whether the panel must be drawn elsewhere.
-use gpui::{canvas, prelude::*, ScrollHandle};
+use gpui::{ScrollHandle, canvas, prelude::*};
 use std::cell::Cell;
 use std::rc::Rc;
 

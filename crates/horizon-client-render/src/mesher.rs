@@ -31,7 +31,7 @@ use horizon_world::{
     registry::BlockStateId,
 };
 use mod_tint::ModLayer;
-pub use mod_tint::register_block_tint_sources;
+pub use mod_tint::{ModTintValues, has_custom_block_tint_sources, register_block_tint_sources};
 #[cfg(test)]
 pub(crate) use sides::sort_tinted;
 pub use sides::{Part, Sides, group_parts};
@@ -759,6 +759,7 @@ impl MeshTables {
         render: &RenderAssets,
         facts: &BlockFacts,
         visibility: FaceVisibility,
+        mod_tint_values: Option<ModTintValues>,
     ) -> crate::Result<Self> {
         // Terrain vertices keep the sprite layer below `OPAQUE_LAYER`.
         let layers = render.sprite_layers.values().max().map_or(0, |l| l + 1);
@@ -935,7 +936,7 @@ impl MeshTables {
             mod_tints: mod_tint::ModTints::default(),
         };
         if let Some(registered) = mod_tint::registered() {
-            tables.apply_tint_layers(assets.registry, registered);
+            tables.apply_tint_layers(assets.registry, registered, mod_tint_values)?;
         }
         Ok(tables)
     }
@@ -987,9 +988,12 @@ impl MeshTables {
             ModLayer::Tint(tint) => default_color(*tint, grass),
             ModLayer::Split { hand, .. } => Some(*hand),
             ModLayer::WaterParticles => None,
-            ModLayer::Source(source) => {
-                Some(source.color(&self.mod_tints.states[state.0 as usize]) & 0xFF_FFFF)
-            }
+            ModLayer::Source(source) => Some(
+                source.color(
+                    &self.mod_tints.values().states[state.0 as usize],
+                    self.mod_tints.values().metadata,
+                ) & 0xFF_FFFF,
+            ),
         }
     }
     /// What tint source `index` (a face's `tintindex`) of `state` colours a face with in the
@@ -1010,7 +1014,10 @@ impl MeshTables {
             ModLayer::Split { world, .. } => Some(TintSource::Fixed(*world)),
             ModLayer::WaterParticles => None,
             ModLayer::Source(source) => Some(TintSource::Fixed(
-                source.color(&self.mod_tints.states[state.0 as usize]) & 0xFF_FFFF,
+                source.color(
+                    &self.mod_tints.values().states[state.0 as usize],
+                    self.mod_tints.values().metadata,
+                ) & 0xFF_FFFF,
             )),
         }
     }

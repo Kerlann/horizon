@@ -1,5 +1,6 @@
 //! Shared level input for the canonical signal evaluator and its block Parts.
 use super::Game;
+use super::api_values::{TryIntoApi, TryIntoEngine};
 use horizon_client::{items::Items, world::World};
 use horizon_core::{geometry::Direction, position::BlockPos};
 use horizon_world::{level::signal_access::SignalAccess, registry::BlockStateId};
@@ -57,6 +58,13 @@ impl SignalAccess for ReadLevel<'_, '_> {
             .map(|s| s.status == horizon_client::block_entity_anim::ShulkerStatus::Closed)
     }
     fn adjust_signal_source(&self, state: BlockStateId, vanilla: bool) -> bool {
+        if !super::api_values::block_state::block_listens(mod_api::HookId::IsSignalSource, state) {
+            return vanilla;
+        }
+        use super::api_values::TryIntoApi;
+        let Ok(state) = state.try_into_api() else {
+            return vanilla;
+        };
         let mut source = vanilla;
         mod_api::dispatch_is_signal_source(self, state, &mut source);
         source
@@ -71,6 +79,16 @@ impl SignalAccess for ReadLevel<'_, '_> {
         direction: Direction,
         vanilla: bool,
     ) -> bool {
+        if !super::api_values::block_state::block_listens(
+            mod_api::HookId::ShouldCheckWeakPower,
+            state,
+        ) {
+            return vanilla;
+        }
+        use super::api_values::TryIntoApi;
+        let Ok(state) = state.try_into_api() else {
+            return vanilla;
+        };
         let mut check = vanilla;
         mod_api::dispatch_should_check_weak_power(
             self,
@@ -92,6 +110,16 @@ impl SignalAccess for ReadLevel<'_, '_> {
         direction: Option<Direction>,
         vanilla: bool,
     ) -> bool {
+        if !super::api_values::block_state::block_listens(
+            mod_api::HookId::ShouldRedstoneWireConnectTo,
+            state,
+        ) {
+            return vanilla;
+        }
+        use super::api_values::TryIntoApi;
+        let Ok(state) = state.try_into_api() else {
+            return vanilla;
+        };
         let mut connected = vanilla;
         mod_api::dispatch_should_redstone_wire_connect_to(
             self,
@@ -111,6 +139,13 @@ impl SignalAccess for ReadLevel<'_, '_> {
         direct: bool,
         vanilla: i32,
     ) -> i32 {
+        if !super::api_values::block_state::block_listens(mod_api::HookId::BlockSignal, state) {
+            return vanilla;
+        }
+        use super::api_values::TryIntoApi;
+        let Ok(state) = state.try_into_api() else {
+            return vanilla;
+        };
         adjust_signal(direction, vanilla, |face, signal| {
             mod_api::dispatch_block_signal(
                 self,
@@ -134,25 +169,26 @@ impl SignalAccess for ReadLevel<'_, '_> {
 }
 
 impl LevelHost for ReadLevel<'_, '_> {
-    fn block_state(&self, [x, y, z]: [i32; 3]) -> BlockStateId {
-        self.game.world.block(x, y, z)
+    fn block_state(&self, [x, y, z]: [i32; 3]) -> Option<mod_api::BlockState> {
+        self.game.world.block(x, y, z).try_into_api().ok()
     }
-    fn state_block(&self, state: BlockStateId) -> Option<&str> {
+    fn state_block(&self, state: mod_api::BlockState) -> Option<&str> {
         self.game
             .pack
             .assets
             .registry
-            .state(state)
+            .state(state.try_into_engine(&()).ok()?)
             .map(|s| &*s.name)
     }
-    fn block_state_id(&self, name: &str) -> Option<BlockStateId> {
-        self.game.block_state_id(name)
+    fn block_state_id(&self, name: &str) -> Option<mod_api::BlockState> {
+        self.game.block_state_id(name)?.try_into_api().ok()
     }
-    fn block_state_default(&self, block: mod_api::BlockKey) -> Option<BlockStateId> {
-        self.game.block_state_default(block)
+    fn block_state_default(&self, block: mod_api::BlockKey) -> Option<mod_api::BlockState> {
+        self.game.block_state_default(block)?.try_into_api().ok()
     }
-    fn state_string(&self, state: BlockStateId) -> Option<String> {
-        self.game.block_state_string(state)
+    fn state_string(&self, state: mod_api::BlockState) -> Option<String> {
+        self.game
+            .block_state_string(state.try_into_engine(&()).ok()?)
     }
     fn min_y(&self) -> i32 {
         self.game.world.shape.min_y
@@ -171,10 +207,11 @@ impl LevelHost for ReadLevel<'_, '_> {
             .world
             .is_loaded_at(x, y, z)
             .then(|| self.game.world.block(x, y, z))
-            .and_then(|state| self.state_fluid_state(state))
+            .and_then(|state| self.game.state_fluid_state(state))
     }
-    fn state_fluid_state(&self, state: BlockStateId) -> Option<mod_api::FluidState> {
-        self.game.state_fluid_state(state)
+    fn state_fluid_state(&self, state: mod_api::BlockState) -> Option<mod_api::FluidState> {
+        self.game
+            .state_fluid_state(state.try_into_engine(&()).ok()?)
     }
     fn fluid_in_tag(&self, fluid: &str, tag: &str) -> Option<bool> {
         Some(super::native_world_read::fluid_in_tag(
@@ -185,11 +222,18 @@ impl LevelHost for ReadLevel<'_, '_> {
     }
     fn state_with_property(
         &self,
-        state: BlockStateId,
+        state: mod_api::BlockState,
         key: &str,
         value: &str,
-    ) -> Option<BlockStateId> {
-        super::native_hooks::with_property(self.game.pack.assets.registry, state, key, value)
+    ) -> Option<mod_api::BlockState> {
+        super::native_hooks::with_property(
+            self.game.pack.assets.registry,
+            state.try_into_engine(&()).ok()?,
+            key,
+            value,
+        )?
+        .try_into_api()
+        .ok()
     }
     fn brightness(&self, layer: mod_api::LightLayer, pos: [i32; 3]) -> i32 {
         super::native_level_refs::world_brightness(&self.game.world, layer, pos)

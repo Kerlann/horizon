@@ -767,17 +767,16 @@ pub fn shared_data(
     shared_data_with(dir, &WorldgenOverrides::default(), registry)
 }
 /// `shared_data` with a world's data packs over the bundle: loaded once for
-/// each set of packs' entries, the most recent few kept.
+/// each registry lifetime and set of packs' entries, the most recent few kept.
 pub fn shared_data_with(
     dir: &Path,
     overrides: &WorldgenOverrides,
     registry: &'static BlockRegistry,
 ) -> crate::Result<Arc<GeneratorData>> {
     let mut cache = SHARED_DATA.lock().unwrap_or_else(|e| e.into_inner());
-    if let Some((_, _, data)) = cache
-        .iter()
-        .find(|(path, o, _)| path == dir && o == overrides)
-    {
+    if let Some((_, _, data)) = cache.iter().find(|(path, o, data)| {
+        path == dir && o == overrides && std::ptr::eq(data.registry(), registry)
+    }) {
         return Ok(data.clone());
     }
     let started = std::time::Instant::now();

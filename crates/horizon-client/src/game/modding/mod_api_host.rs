@@ -1,4 +1,5 @@
-use super::{BlockStateId, Game};
+use super::Game;
+use super::api_values::{TryIntoApi, TryIntoEngine};
 use mod_api::{AttachmentAccess, BlockPos, Direction};
 use {
     horizon_mod_runtime::attachments::{ATTACHMENTS_KEY, attachment_compound},
@@ -225,21 +226,25 @@ pub(super) fn level_side<'a>(level: &'a super::GameLevel<'_>) -> mod_api::LevelS
 }
 
 impl mod_api::LevelHost for super::GameLevel<'_> {
-    fn block_state_id(&self, name: &str) -> Option<BlockStateId> {
-        super::native_block_states::parse(self.block_registries, self.registry, name)
+    fn block_state_id(&self, name: &str) -> Option<mod_api::BlockState> {
+        super::native_block_states::parse(self.block_registries, self.registry, name)?
+            .try_into_api()
+            .ok()
     }
-    fn block_state_default(&self, block: mod_api::BlockKey) -> Option<BlockStateId> {
-        Some(mod_api::__private::resolved_block(block)?.default)
+    fn block_state_default(&self, block: mod_api::BlockKey) -> Option<mod_api::BlockState> {
+        super::api_values::default_state(block)?.try_into_api().ok()
     }
-    fn block_state(&self, pos: [i32; 3]) -> BlockStateId {
+    fn block_state(&self, pos: [i32; 3]) -> Option<mod_api::BlockState> {
         horizon_world::level::LevelAccess::block_state(self, BlockPos::new(pos[0], pos[1], pos[2]))
+            .try_into_api()
+            .ok()
     }
-    fn state_block(&self, state: BlockStateId) -> Option<&str> {
-        self.native_state_block(state)
+    fn state_block(&self, state: mod_api::BlockState) -> Option<&str> {
+        self.native_state_block(state.try_into_engine(&()).ok()?)
     }
-    fn state_string(&self, state: BlockStateId) -> Option<String> {
+    fn state_string(&self, state: mod_api::BlockState) -> Option<String> {
         self.registry
-            .state(state)
+            .state(state.try_into_engine(&()).ok()?)
             .map(super::native_block_states::serialize)
     }
     fn min_y(&self) -> i32 {
@@ -262,10 +267,18 @@ impl mod_api::LevelHost for super::GameLevel<'_> {
         if !(self.world.shape.contains_y(y) && self.world.loaded(x, z)) {
             return None;
         }
-        self.state_fluid_state(self.world.block(x, y, z))
+        super::native_world_read::state_fluid(
+            self.behaviours,
+            self.registry,
+            self.world.block(x, y, z),
+        )
     }
-    fn state_fluid_state(&self, state: BlockStateId) -> Option<mod_api::FluidState> {
-        super::native_world_read::state_fluid(self.behaviours, self.registry, state)
+    fn state_fluid_state(&self, state: mod_api::BlockState) -> Option<mod_api::FluidState> {
+        super::native_world_read::state_fluid(
+            self.behaviours,
+            self.registry,
+            state.try_into_engine(&()).ok()?,
+        )
     }
     fn fluid_in_tag(&self, fluid: &str, tag: &str) -> Option<bool> {
         self.native_authoritative
@@ -273,11 +286,13 @@ impl mod_api::LevelHost for super::GameLevel<'_> {
     }
     fn state_with_property(
         &self,
-        state: BlockStateId,
+        state: mod_api::BlockState,
         key: &str,
         value: &str,
-    ) -> Option<BlockStateId> {
-        self.native_state_with_property(state, key, value)
+    ) -> Option<mod_api::BlockState> {
+        self.native_state_with_property(state.try_into_engine(&()).ok()?, key, value)?
+            .try_into_api()
+            .ok()
     }
     fn brightness(&self, layer: mod_api::LightLayer, pos: [i32; 3]) -> i32 {
         super::native_level_refs::world_brightness(self.world, layer, pos)
@@ -340,12 +355,14 @@ impl mod_api::LevelRandomHost for super::GameLevel<'_> {
 }
 
 impl mod_api::LevelHost for super::native_hooks::HitLevel<'_> {
-    fn block_state_id(&self, name: &str) -> Option<BlockStateId> {
-        super::native_block_states::parse(self.0.block_registries()?, self.0.registry(), name)
+    fn block_state_id(&self, name: &str) -> Option<mod_api::BlockState> {
+        super::native_block_states::parse(self.0.block_registries()?, self.0.registry(), name)?
+            .try_into_api()
+            .ok()
     }
-    fn block_state_default(&self, block: mod_api::BlockKey) -> Option<BlockStateId> {
+    fn block_state_default(&self, block: mod_api::BlockKey) -> Option<mod_api::BlockState> {
         self.0.block_registries()?;
-        Some(mod_api::__private::resolved_block(block)?.default)
+        super::api_values::default_state(block)?.try_into_api().ok()
     }
     fn block_in_tag(&self, block: mod_api::BlockKey, tag: &str) -> Option<bool> {
         self.0.tags()?;
@@ -361,16 +378,19 @@ impl mod_api::LevelHost for super::native_hooks::HitLevel<'_> {
             tag,
         ))
     }
-    fn block_state(&self, pos: [i32; 3]) -> BlockStateId {
-        self.0.block(pos)
+    fn block_state(&self, pos: [i32; 3]) -> Option<mod_api::BlockState> {
+        self.0.block(pos).try_into_api().ok()
     }
-    fn state_block(&self, state: BlockStateId) -> Option<&str> {
-        self.0.registry().state(state).map(|s| &*s.name)
-    }
-    fn state_string(&self, state: BlockStateId) -> Option<String> {
+    fn state_block(&self, state: mod_api::BlockState) -> Option<&str> {
         self.0
             .registry()
-            .state(state)
+            .state(state.try_into_engine(&()).ok()?)
+            .map(|s| &*s.name)
+    }
+    fn state_string(&self, state: mod_api::BlockState) -> Option<String> {
+        self.0
+            .registry()
+            .state(state.try_into_engine(&()).ok()?)
             .map(super::native_block_states::serialize)
     }
     fn min_y(&self) -> i32 {
@@ -381,11 +401,18 @@ impl mod_api::LevelHost for super::native_hooks::HitLevel<'_> {
     }
     fn state_with_property(
         &self,
-        state: BlockStateId,
+        state: mod_api::BlockState,
         key: &str,
         value: &str,
-    ) -> Option<BlockStateId> {
-        super::native_hooks::with_property(self.0.registry(), state, key, value)
+    ) -> Option<mod_api::BlockState> {
+        super::native_hooks::with_property(
+            self.0.registry(),
+            state.try_into_engine(&()).ok()?,
+            key,
+            value,
+        )?
+        .try_into_api()
+        .ok()
     }
 }
 
@@ -421,19 +448,19 @@ pub(super) struct LevelTicks<'a, L> {
 impl<'a: 'b, 'b, L: std::ops::Deref<Target = super::GameLevel<'a>>> mod_api::LevelHost
     for LevelTicks<'b, L>
 {
-    fn block_state_id(&self, name: &str) -> Option<BlockStateId> {
+    fn block_state_id(&self, name: &str) -> Option<mod_api::BlockState> {
         mod_api::LevelHost::block_state_id(&*self.level, name)
     }
-    fn block_state_default(&self, block: mod_api::BlockKey) -> Option<BlockStateId> {
+    fn block_state_default(&self, block: mod_api::BlockKey) -> Option<mod_api::BlockState> {
         mod_api::LevelHost::block_state_default(&*self.level, block)
     }
-    fn block_state(&self, pos: [i32; 3]) -> BlockStateId {
+    fn block_state(&self, pos: [i32; 3]) -> Option<mod_api::BlockState> {
         mod_api::LevelHost::block_state(&*self.level, pos)
     }
-    fn state_block(&self, state: BlockStateId) -> Option<&str> {
-        self.level.registry.state(state).map(|s| &*s.name)
+    fn state_block(&self, state: mod_api::BlockState) -> Option<&str> {
+        mod_api::LevelHost::state_block(&*self.level, state)
     }
-    fn state_string(&self, state: BlockStateId) -> Option<String> {
+    fn state_string(&self, state: mod_api::BlockState) -> Option<String> {
         mod_api::LevelHost::state_string(&*self.level, state)
     }
     fn min_y(&self) -> i32 {
@@ -451,7 +478,7 @@ impl<'a: 'b, 'b, L: std::ops::Deref<Target = super::GameLevel<'a>>> mod_api::Lev
     fn fluid_state(&self, pos: [i32; 3]) -> Option<mod_api::FluidState> {
         mod_api::LevelHost::fluid_state(&*self.level, pos)
     }
-    fn state_fluid_state(&self, state: BlockStateId) -> Option<mod_api::FluidState> {
+    fn state_fluid_state(&self, state: mod_api::BlockState) -> Option<mod_api::FluidState> {
         mod_api::LevelHost::state_fluid_state(&*self.level, state)
     }
     fn fluid_in_tag(&self, fluid: &str, tag: &str) -> Option<bool> {
@@ -459,10 +486,10 @@ impl<'a: 'b, 'b, L: std::ops::Deref<Target = super::GameLevel<'a>>> mod_api::Lev
     }
     fn state_with_property(
         &self,
-        state: BlockStateId,
+        state: mod_api::BlockState,
         key: &str,
         value: &str,
-    ) -> Option<BlockStateId> {
+    ) -> Option<mod_api::BlockState> {
         mod_api::LevelHost::state_with_property(&*self.level, state, key, value)
     }
     fn brightness(&self, layer: mod_api::LightLayer, pos: [i32; 3]) -> i32 {
@@ -539,9 +566,12 @@ impl<'a: 'b, 'b> mod_api::LevelWriteHost for LevelTicks<'b, &mut super::GameLeve
     fn set_block(
         &mut self,
         pos: [i32; 3],
-        state: BlockStateId,
+        state: mod_api::BlockState,
         flags: mod_api::NativeBlockUpdateFlags,
     ) -> bool {
+        let Ok(state) = state.try_into_engine(&()) else {
+            return false;
+        };
         self.level
             .native_set_block(self.ticks, pos, state, flags.bits())
     }
@@ -570,14 +600,20 @@ impl<'a: 'b, 'b> mod_api::LevelWriteHost for LevelTicks<'b, &mut super::GameLeve
     fn send_particles(
         &mut self,
         options: &mod_api::ParticleOptions,
-        state: Option<BlockStateId>,
+        state: Option<mod_api::BlockState>,
         at: [f64; 3],
         spread: [f64; 3],
         speed: f64,
         count: i32,
     ) -> bool {
+        let Ok(state) = state.try_into_engine(&()) else {
+            return false;
+        };
+        let Ok(options) = options.try_into_engine(&()) else {
+            return false;
+        };
         self.level
-            .native_send_particles(options, state, at, spread, speed, count)
+            .native_send_particles(&options, state, at, spread, speed, count)
     }
 
     fn level_event(&mut self, id: i32, pos: [i32; 3], data: i32) -> bool {

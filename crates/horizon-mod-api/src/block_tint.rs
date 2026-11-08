@@ -6,33 +6,8 @@
 //! its own blocks. A mod's source is its own [`BlockTintSource`], held by the game and asked on the
 //! meshing workers: like a structure type on the worldgen workers, it gets no `Host` and keeps no
 //! mutable state, since two workers can mesh neighbouring sections at once.
-use super::{BlockStateId, Direction, FluidState, LightLayer};
+use super::{BlockMetadata, BlockState, Direction, FluidState, LightLayer};
 use std::sync::Arc;
-
-/// A block state as a tint source reads it, vanilla's `BlockState`: its id, its block and its
-/// property values. The game keeps one per state while a mod's source is registered and hands out
-/// shared copies, so reading one allocates nothing.
-#[derive(Clone, Debug, PartialEq, Eq)]
-// exhaustive: the game builds it; mods only read it
-pub struct BlockState {
-    /// Its id in the game's block-state registry.
-    pub id: BlockStateId,
-    /// Its block (`BlockState.getBlock()`): `mymod:cable`, `minecraft:oak_leaves`.
-    pub block: Arc<str>,
-    /// Its property values (`BlockState.getValues()`), by name: `("color", "red")`.
-    pub properties: Arc<[(Arc<str>, Arc<str>)]>,
-}
-
-impl BlockState {
-    /// `BlockState.getValue`: the value of `property`, as its string; None where the block has no
-    /// such property.
-    pub fn value(&self, property: &str) -> Option<&str> {
-        self.properties
-            .iter()
-            .find(|(name, _)| &**name == property)
-            .map(|(_, value)| &**value)
-    }
-}
 
 /// The colour calculations block tints blend over the biomes around a block (vanilla's
 /// `BiomeColors` resolvers, `ColorResolver`).
@@ -84,27 +59,29 @@ pub trait BlockAndTintGetter {
 pub trait BlockTintSource: Send + Sync + 'static {
     /// `color(state)`: the colour without a world, where the block is drawn away from a level (a
     /// block in a minecart, a mod's drawn block). Also the default of the two below.
-    fn color(&self, state: &BlockState) -> u32;
+    fn color(&self, state: &BlockState, metadata: &dyn BlockMetadata) -> u32;
     /// `colorInWorld(state, level, pos)`: the colour of the block at `pos`, as the chunk mesher
     /// draws it. The mesher asks once per block and tint index each time it meshes the section.
     fn color_in_world(
         &self,
         state: &BlockState,
+        metadata: &dyn BlockMetadata,
         level: &dyn BlockAndTintGetter,
         pos: [i32; 3],
     ) -> u32 {
         let _ = (level, pos);
-        self.color(state)
+        self.color(state, metadata)
     }
     /// `colorAsTerrainParticle(state, level, pos)`: the colour of the bits the block breaks into
     /// and of falling dust.
     fn color_as_terrain_particle(
         &self,
         state: &BlockState,
+        metadata: &dyn BlockMetadata,
         level: &dyn BlockAndTintGetter,
         pos: [i32; 3],
     ) -> u32 {
-        self.color_in_world(state, level, pos)
+        self.color_in_world(state, metadata, level, pos)
     }
     /// `relevantProperties()`: the property names the colour depends on. Vanilla groups states
     /// for shared baked models by them (`ModelGroupCollector`); Horizon bakes every state, so the
@@ -223,7 +200,7 @@ mod tests {
 
     struct Fixed(u32);
     impl BlockTintSource for Fixed {
-        fn color(&self, _: &BlockState) -> u32 {
+        fn color(&self, _: &BlockState, _: &dyn BlockMetadata) -> u32 {
             self.0
         }
     }

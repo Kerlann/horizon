@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Não foi possível ler o registro de build: {error}",
   "Could not read the saved sign-in.": "Não foi possível ler o login salvo.",
   "Could not read the saved sign-in. Sign in again.": "Não foi possível ler o login salvo. Entre novamente.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Não foi possível ler {name}: {error}",
   "Could not run {program}: {error}": "Não foi possível executar {program}: {error}",
   "Could not save the renewed sign-in.": "Não foi possível salvar o login renovado.",

@@ -23,7 +23,7 @@ impl Game<'_> {
     ) {
         if let Some(r) = self.remote.as_mut() {
             r.menu.set(Some((container, menu)));
-            r.menu_title = Some(title);
+            r.set_menu_title(Some(title));
         }
         self.craft_size = 2;
         self.container = None;

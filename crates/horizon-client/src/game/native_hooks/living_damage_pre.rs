@@ -17,7 +17,7 @@ impl HitLevel<'_> {
         entity: i32,
         kind: &str,
         source: &HurtSource<'_>,
-        container: &mut DamageContainer,
+        container: &mut mod_api::DamageContainer,
     ) {
         self.fire_living_damage_pre(entity, kind, source, container);
     }

@@ -36,6 +36,17 @@ use std::{
 fn main() -> ExitCode {
     // Cargo runs `cargo-horizon-mod horizon-mod <args>`.
     let mut args: Vec<String> = std::env::args().skip(1).collect();
+    if std::env::var_os("HORIZON_GROUP_WRAPPER").is_some()
+        && args.first().is_some_and(|a| a.ends_with("rustc"))
+    {
+        return match wasm::rustc(args) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(e) => {
+                eprintln!("error: {e}");
+                ExitCode::FAILURE
+            }
+        };
+    }
     // Cargo runs this tool as the linker of a `build --wasm`.
     if let Ok(role) = std::env::var(wasm::LINK_ENV) {
         return match wasm::link(&role, args) {
@@ -51,7 +62,7 @@ fn main() -> ExitCode {
     }
     let result = match args.first().map(String::as_str) {
         Some("new") => new(&args[1..]),
-        Some("build") if args.get(1).is_some_and(|a| a == "--wasm") => wasm::build(Path::new("."))
+        Some("build") if args.get(1).is_some_and(|a| a == "--wasm") => wasm::build(Path::new("."), flag(&args[2..], "--catalog").map(Path::new), &args[2..].windows(2).filter(|a| a[0] == "--with").map(|a| PathBuf::from(&a[1])).collect::<Vec<_>>())
             .and_then(|()| build())
             .map(|p| println!("Built {}", p.display())),
         Some("wasm-std") => wasm::wasm_std(&args[1..]),
@@ -312,10 +323,13 @@ fn build() -> Result<PathBuf, String> {
 }
 
 fn build_in(root: &Path) -> Result<PathBuf, String> {
+    pack_into(root, &root.join("target/horizon-mod"))
+}
+
+fn pack_into(root: &Path, dir: &Path) -> Result<PathBuf, String> {
     let package = Package::read(root)?;
     let bytes = Package::pack_directory(root)?;
-    let dir = root.join("target/horizon-mod");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let path = dir.join(format!("{}.hmod", package.manifest.id));
     // Write then rename, so a running game never reads half a file.
     let partial = path.with_extension("hmod.partial");

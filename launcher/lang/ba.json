@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Төҙөү журналын уҡый алманым: {error}",
   "Could not read the saved sign-in.": "Һаҡланған логинды уҡый алманы.",
   "Could not read the saved sign-in. Sign in again.": "Һаҡланған логинды уҡый алманы. Яңынан инергә.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "{name} уҡый алманым: {error}",
   "Could not run {program}: {error}": "Йүгерә алманы {program}: {error}",
   "Could not save the renewed sign-in.": "Яңыртылған инеүҙе һаҡлай алманыҡ.",

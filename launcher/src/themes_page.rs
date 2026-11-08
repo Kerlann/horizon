@@ -3,8 +3,8 @@ use super::*;
 use crate::glass_ui as ui;
 use crate::servers_page::Field;
 use gpui::{
-    canvas, fill, point, size, Bounds, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    Pixels, Point,
+    Bounds, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, canvas, fill,
+    point, size,
 };
 use horizon_launcher::themes::{self, Accent};
 use std::path::PathBuf;

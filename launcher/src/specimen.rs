@@ -3,9 +3,9 @@
 //! page players reach).
 use crate::blocks::icon;
 use crate::plate::{alpha, cut, plate};
-use crate::theme::{self, night, Theme};
-use gpui::{div, prelude::*, px, rgb, Div, FontWeight, Hsla, Rgba};
-use horizon_theme::{contrast, MICRO};
+use crate::theme::{self, Theme, night};
+use gpui::{Div, FontWeight, Hsla, Rgba, div, prelude::*, px, rgb};
+use horizon_theme::{MICRO, contrast};
 use std::sync::LazyLock;
 
 /// Whether the launcher was opened on the specimen.

@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Строительство журналне вулаймарӑмӑр: {error}",
   "Could not read the saved sign-in.": "Упранса юлнӑ ҫырӑва вулаймарӑмӑр.",
   "Could not read the saved sign-in. Sign in again.": "Упранса юлнӑ ҫырӑва вулаймарӑмӑр. Каллех кӗрӗр.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Вулаймарӑм {name}: {error}",
   "Could not run {program}: {error}": "Чупма май килмерӗ {program}: {error}",
   "Could not save the renewed sign-in.": "Ҫӗнӗрен кӗнине упраса хӑвараймарӑмӑр.",

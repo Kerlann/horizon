@@ -98,7 +98,9 @@ impl Game<'_> {
         living: LivingRef,
         effect: &NativeActiveEffect,
     ) -> bool {
-        let Some(def) = mod_api::__private::resolved_effect(effect.id) else {
+        let Some(def) = mod_api::__private::effect_index(effect.id)
+            .and_then(horizon_client_core::potions::effect_by_index)
+        else {
             return false;
         };
         if effect.duration < -1 {
@@ -150,7 +152,8 @@ impl Game<'_> {
         living: LivingRef,
         effect: EffectKey,
     ) -> Option<NativeActiveEffect> {
-        let def = mod_api::__private::resolved_effect(effect)?;
+        let def = mod_api::__private::effect_index(effect)
+            .and_then(horizon_client_core::potions::effect_by_index)?;
         match self.native_living_read_target(living)? {
             t @ (Target::Player | Target::Guest(_)) => self
                 .native_living_player_effects(t)?
@@ -191,7 +194,9 @@ impl Game<'_> {
     /// on a client, for any entity but the local player, whose copy of what the server
     /// sent it is read.
     pub(super) fn living_potion_affected(&self, living: LivingRef, effect: EffectKey) -> bool {
-        let Some(def) = mod_api::__private::resolved_effect(effect) else {
+        let Some(def) = mod_api::__private::effect_index(effect)
+            .and_then(horizon_client_core::potions::effect_by_index)
+        else {
             return false;
         };
         match self.native_living_read_target(living) {
@@ -230,7 +235,8 @@ impl Game<'_> {
         effect: EffectKey,
         partial: f32,
     ) -> Option<f32> {
-        let def = mod_api::__private::resolved_effect(effect)?;
+        let def = mod_api::__private::effect_index(effect)
+            .and_then(horizon_client_core::potions::effect_by_index)?;
         let Target::Player = self.native_living_read_target(living)? else {
             return None;
         };
@@ -258,7 +264,9 @@ impl Game<'_> {
     /// changes) when the entity has the effect not, before effect resolution, or for
     /// an armor stand, the dragon, a stale handle or a client.
     pub(super) fn living_remove_effect(&mut self, living: LivingRef, effect: EffectKey) -> bool {
-        let Some(def) = mod_api::__private::resolved_effect(effect) else {
+        let Some(def) = mod_api::__private::effect_index(effect)
+            .and_then(horizon_client_core::potions::effect_by_index)
+        else {
             return false;
         };
         match self.native_living_target(living) {

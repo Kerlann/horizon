@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "ʻAʻole hiki ke heluhelu i ka moʻolelo kūkulu: {error}",
   "Could not read the saved sign-in.": "ʻAʻole hiki ke heluhelu i ke kau inoa i mālama ʻia.",
   "Could not read the saved sign-in. Sign in again.": "ʻAʻole hiki ke heluhelu i ke kau inoa i mālama ʻia. E komo hou.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "ʻAʻole hiki ke heluhelu {name}: {error}",
   "Could not run {program}: {error}": "ʻAʻole hiki ke holo {program}: {error}",
   "Could not save the renewed sign-in.": "ʻAʻole hiki ke mālama i ke kau inoa hou ʻana.",

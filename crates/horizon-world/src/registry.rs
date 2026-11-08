@@ -24,6 +24,9 @@ use {
 pub struct BlockStateId(pub u32);
 
 pub struct BlockRegistry {
+    /// Game-owned, immutable mod worker metadata for this numeric registry snapshot.
+    /// Filled at resource resolution before any worker can use it; never shared across registries.
+    pub mod_worker_resource: std::sync::OnceLock<std::sync::Arc<dyn std::any::Any + Send + Sync>>,
     states: Vec<BlockState>,
     /// Ids by a hash of their state, checked against `states`: 12 bytes per
     /// state instead of a second copy of every name and property map (about
@@ -158,6 +161,7 @@ impl BlockRegistry {
             return Err(invalid("invalid registry size"));
         }
         let mut result = Self {
+            mod_worker_resource: std::sync::OnceLock::new(),
             states: Vec::with_capacity(states.len()),
             ids: HashMap::with_capacity(states.len()),
             collided: BTreeMap::new(),

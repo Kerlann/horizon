@@ -123,7 +123,6 @@ pub enum InstanceError {
 /// Frequent group pose changes rebuild the live cache and can cost more than transient copies.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: only the engine creates handles
-#[horizon_mod_api_macros::wasm(host_constructor = from_parts)]
 pub struct InstanceGroupRef(pub(crate) u64, pub(crate) u32);
 
 impl InstanceGroupRef {

@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Құрастыру журналын оқу мүмкін болмады: {error}",
   "Could not read the saved sign-in.": "Сақталған кіруді оқу мүмкін емес.",
   "Could not read the saved sign-in. Sign in again.": "Сақталған кіруді оқу мүмкін емес. Жүйеге қайта кіріңіз.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "{name} оқу мүмкін емес: {error}",
   "Could not run {program}: {error}": "{program} іске қосылмады: {error}",
   "Could not save the renewed sign-in.": "Жаңартылған кіруді сақтау мүмкін болмады.",

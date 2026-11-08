@@ -17,7 +17,7 @@ pub use mod_points::PointId;
 
 /// Start with named mods and their function slots in installed dependency order.
 pub fn main_with(
-    mut mods: Vec<mod_api::ModEntry>,
+    mods: Vec<mod_api::ModEntry>,
     slots: &[NativeSlot],
     built: &'static [horizon_mod_package::runtime::BuiltMod],
 ) {
@@ -53,41 +53,15 @@ pub fn main_with(
             std::process::exit(game::exit_code::USAGE);
         }
     };
-    // Load wasm code from the same selection as content, then resolve one native/wasm
-    // dispatch order before anything below (logging, the crash
-    // handler) that a trait injection may call into.
-    let mut wasm_listening = Vec::new();
-    let mut wasm_manifests = Vec::new();
-    if let Ok(exe) = &exe {
-        let switch = |name: &str| {
-            launch
-                .rest
-                .iter()
-                .any(|arg| matches!(arg, Argument::Switch(s) if s == name))
-        };
-        let mut budgets = mod_api::__private::wasm_host::Budgets::default();
-        if switch("--wasm-fuel") {
-            budgets.fuel = Some(Default::default());
-        }
-        let config = horizon_mod_wasm::RuntimeConfig {
-            pulley: switch("--wasm-interpreter"),
-            cache: Some(launch.context.home.join("wasm-cache")),
-            budgets,
-        };
-        let game_dir = &launch.context.game_dir;
-        horizon_mod_wasm::set_internals(&crate::__internals::TABLE);
-        let loaded =
-            horizon_mod_wasm::load_installed(exe, game_dir, &launch.context.dev_mods, &config);
-        mods.extend(loaded.mods);
-        wasm_listening = loaded.listening;
-        wasm_manifests = loaded.manifests;
-    }
+    let wasm = horizon_mod_wasm::load_installed(&launch.context.game_dir, &launch.context.dev_mods);
+    let mut mods = mods;
+    mods.extend(wasm.mods);
     // One installed dispatch order for both targets; ties retain bundle order.
     let manifests: Vec<_> = native
         .packages()
         .iter()
         .map(|p| &p.manifest)
-        .chain(wasm_manifests.iter())
+        .chain(wasm.manifests.iter())
         .filter(|m| mods.iter().any(|entry| entry.fields().id == m.id))
         .collect();
     assert_eq!(
@@ -122,10 +96,6 @@ pub fn main_with(
         .collect();
     let ids: Vec<_> = mods.iter().map(|entry| entry.fields().id).collect();
     mod_api::__private::install(mods.into());
-    let mut wasm: std::collections::BTreeMap<_, _> = wasm_listening
-        .into_iter()
-        .map(|listeners| (listeners.id(), listeners))
-        .collect();
     for id in ids {
         for slot in slots.iter().filter(|slot| slot.id() == id) {
             if let Err(error) = mod_points::register(slot) {
@@ -133,14 +103,7 @@ pub fn main_with(
                 std::process::exit(game::exit_code::ERROR);
             }
         }
-        if let Some(listeners) = wasm.remove(id)
-            && let Err(error) = listeners.register()
-        {
-            eprintln!("Horizon: {id}: {error}");
-            std::process::exit(game::exit_code::ERROR);
-        }
     }
-    mod_points::__private::seal();
     let help = launch.is_information_request();
     logging::set_game_home(launch.context.home.clone());
     // The dedicated server logs in its own folder, as vanilla's does; the game in its home.
@@ -172,18 +135,29 @@ pub fn main_with(
     if horizon_world::native_load_hooks::install(
         horizon_world::native_load_hooks::NativeLoadHooks {
             loot_table_load: |context, id, table| {
-                let context = mod_api::OwningLoad::new(context);
+                if !mod_api::__private::listened(mod_api::HookId::LootTableLoad) {
+                    return;
+                }
+                let reader = horizon_client_render::api_context::LoadReader(context);
+                let context = mod_api::OwningLoad::new(
+                    horizon_client_render::api_context::load_origin(context.origin()),
+                    &reader,
+                );
                 mod_api::dispatch_loot_table_load(&context, id, table);
             },
             modify_default_components: |context, item, components| {
-                let context = mod_api::OwningLoad::new(context);
+                if !mod_api::__private::listened(mod_api::HookId::ModifyDefaultComponents) {
+                    return;
+                }
+                let reader = horizon_client_render::api_context::LoadReader(context);
+                let context = reader.context();
                 mod_api::dispatch_modify_default_components(&context, item, components);
             },
             loot_function: |kind, data, ctx, stack| {
-                mod_api::dispatch_loot_function(kind, data, ctx, stack);
+                crate::game::api_values::dispatch_loot_function(kind, data, ctx, stack);
             },
             loot_condition: |kind, data, ctx, holds| {
-                mod_api::dispatch_loot_condition(kind, data, ctx, holds);
+                crate::game::api_values::dispatch_loot_condition(kind, data, ctx, holds);
             },
         },
     )
@@ -242,28 +216,59 @@ pub(crate) fn install_client_hooks() {
             game::api_values::stacked_on_other(context, event, canceled);
         },
         living_heal: |context, entity, amount, cancel| {
-            let context = mod_api::OwningLoop::new(context);
+            if !mod_api::__private::listened(mod_api::HookId::LivingHeal) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
             mod_api::dispatch_living_heal(&context, entity, amount, cancel);
         },
         living_breathe: |context, entity, kind, can_breathe, consume, refill| {
-            let context = mod_api::OwningLoop::new(context);
+            if !mod_api::__private::listened(mod_api::HookId::LivingBreathe) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
             mod_api::dispatch_living_breathe(&context, entity, kind, can_breathe, consume, refill);
         },
         farmland_trample: |context, entity, pos, state, distance, cancel| {
-            let context = mod_api::OwningLoop::new(context);
+            if !mod_api::__private::listened(mod_api::HookId::FarmlandTrample) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
             mod_api::dispatch_farmland_trample(&context, entity, pos, state, distance, cancel);
         },
         has_mods: || !mod_api::__private::mods().is_empty(),
         player_name_format: |context, username, displayname| {
-            let context = mod_api::OwningLoop::new(context);
-            mod_api::dispatch_player_name_format(&context, username, displayname);
+            use game::api_values::{TryIntoApi, TryIntoEngine};
+            if !mod_api::__private::listened(mod_api::HookId::PlayerNameFormat) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
+            let username = username.try_into_api().unwrap();
+            let mut converted = displayname.try_into_api().unwrap();
+            mod_api::dispatch_player_name_format(&context, &username, &mut converted);
+            *displayname = converted.try_into_engine(&()).unwrap();
         },
         player_tab_list_name_format: |context, player, name, display_name| {
-            let context = mod_api::OwningLoop::new(context);
-            mod_api::dispatch_player_tab_list_name_format(&context, player, name, display_name);
+            use game::api_values::{TryIntoApi, TryIntoEngine};
+            if !mod_api::__private::listened(mod_api::HookId::PlayerTabListNameFormat) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
+            let mut converted = display_name.try_into_api().unwrap();
+            mod_api::dispatch_player_tab_list_name_format(&context, player, name, &mut converted);
+            *display_name = converted.try_into_engine(&()).unwrap();
         },
         living_drown: |context, entity, kind, is_drowning, damage_amount, bubble_count, cancel| {
-            let context = mod_api::OwningLoop::new(context);
+            if !mod_api::__private::listened(mod_api::HookId::LivingDrown) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
             mod_api::dispatch_living_drown(
                 &context,
                 entity,
@@ -275,43 +280,73 @@ pub(crate) fn install_client_hooks() {
             );
         },
         living_fall: |context, entity, kind, distance, multiplier, cancel| {
-            let context = mod_api::OwningLoop::new(context);
+            if !mod_api::__private::listened(mod_api::HookId::LivingFall) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
             mod_api::dispatch_living_fall(&context, entity, kind, distance, multiplier, cancel);
         },
         living_jump: |context, entity, kind| {
-            let context = mod_api::OwningLoop::new(context);
+            if !mod_api::__private::listened(mod_api::HookId::LivingJump) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
             mod_api::dispatch_living_jump(&context, entity, kind);
         },
         living_jump_power: |context, entity, kind, power| {
-            let context = mod_api::OwningLoop::new(context);
+            if !mod_api::__private::listened(mod_api::HookId::LivingJumpPower) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
             mod_api::dispatch_living_jump_power(&context, entity, kind, power);
         },
         living_speed: |context, entity, kind, speed| {
-            let context = mod_api::OwningLoop::new(context);
+            if !mod_api::__private::listened(mod_api::HookId::LivingSpeed) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
             mod_api::dispatch_living_speed(&context, entity, kind, speed);
         },
         living_flying_speed: |context, entity, kind, speed| {
-            let context = mod_api::OwningLoop::new(context);
+            if !mod_api::__private::listened(mod_api::HookId::LivingFlyingSpeed) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
             mod_api::dispatch_living_flying_speed(&context, entity, kind, speed);
         },
         block_jump_factor: |context, state, factor| {
-            let context = mod_api::OwningLoop::new(context);
-            mod_api::dispatch_block_jump_factor(&context, state, factor);
+            crate::game::block_jump_factor(context, state, factor);
         },
         block_speed_factor: |context, state, factor| {
-            let context = mod_api::OwningLoop::new(context);
-            mod_api::dispatch_block_speed_factor(&context, state, factor);
+            crate::game::block_speed_factor(context, state, factor);
         },
         player_stays_on_ground_surface: |context, entity, staying| {
-            let context = mod_api::OwningLoop::new(context);
+            if !mod_api::__private::listened(mod_api::HookId::PlayerStaysOnGroundSurface) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
             mod_api::dispatch_player_stays_on_ground_surface(&context, entity, staying);
         },
         ender_entity_teleport: |context, entity, kind, from, target, cancel| {
-            let context = mod_api::OwningLoop::new(context);
+            if !mod_api::__private::listened(mod_api::HookId::EnderEntityTeleport) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
             mod_api::dispatch_ender_entity_teleport(&context, entity, kind, from, target, cancel);
         },
         fluid_flow: |context, fluid, pos, flow| {
-            let context = mod_api::OwningLoop::new(context);
+            if !mod_api::__private::listened(mod_api::HookId::FluidFlow) {
+                return;
+            }
+            let reader = horizon_client_render::api_context::LoopReader(context);
+            let context = reader.context();
             mod_api::dispatch_fluid_flow(&context, fluid, pos, flow);
         },
     }) {

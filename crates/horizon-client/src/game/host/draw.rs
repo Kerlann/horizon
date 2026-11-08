@@ -11,7 +11,10 @@ impl DrawContext for GameDrawContext<'_, '_> {
     fn size(&self) -> [f32; 2] {
         self.game.native_size(&*self.surface)
     }
-    fn item_model(&mut self, item: &str, model: &str, at: [f32; 2], size: f32) -> bool {
+    fn item_model(&mut self, item: ItemKey, model: &str, at: [f32; 2], size: f32) -> bool {
+        let Some(item) = mod_api::__private::item_key_id(item) else {
+            return false;
+        };
         self.game
             .native_item_model(&mut *self.surface, item, model, at, size)
     }
@@ -25,7 +28,10 @@ impl DrawContext for GameDrawContext<'_, '_> {
         self.game
             .native_sprite(&mut *self.surface, name, src, dst, tint)
     }
-    fn item(&mut self, item: &str, at: [f32; 2], size: f32) -> bool {
+    fn item(&mut self, item: ItemKey, at: [f32; 2], size: f32) -> bool {
+        let Some(item) = mod_api::__private::item_key_id(item) else {
+            return false;
+        };
         self.game.native_item(&mut *self.surface, item, at, size)
     }
     fn text(&mut self, text: &str, at: [f32; 2], argb: u32, shadow: bool) {
@@ -39,15 +45,23 @@ impl DrawContext for GameDrawContext<'_, '_> {
         self.game
             .native_item_stack(&mut *self.surface, &stack, at, size)
     }
-    fn gui_paint(&mut self, draws: &[GuiDraw]) {
-        self.game.native_gui_paint(&mut *self.surface, draws)
+    fn gui_paint(&mut self, draws: &[GuiDraw]) -> Result<(), mod_api::text::TextFormError> {
+        let draws = draws.try_into_engine(&())?;
+        self.game.native_gui_paint(&mut *self.surface, &draws);
+        Ok(())
     }
     fn gui_nine_slice(&mut self, sprite: &str, rect: [f32; 4], color: u32) {
         self.game
             .native_gui_nine_slice(&mut *self.surface, sprite, rect, color)
     }
-    fn gui_tooltip(&mut self, lines: &[Text], at: [f32; 2]) {
-        self.game.native_gui_tooltip(&mut *self.surface, lines, at)
+    fn gui_tooltip(
+        &mut self,
+        lines: &[Text],
+        at: [f32; 2],
+    ) -> Result<(), mod_api::text::TextFormError> {
+        let lines = lines.try_into_engine(&())?;
+        self.game.native_gui_tooltip(&mut *self.surface, &lines, at);
+        Ok(())
     }
     fn text_width(&self, text: &str) -> f32 {
         self.game.native_text_width(&*self.surface, text)
@@ -56,8 +70,13 @@ impl DrawContext for GameDrawContext<'_, '_> {
         self.game.native_fluid(&mut *self.surface, fluid, at, size)
     }
     fn draw_scene(&mut self, rect: [f32; 4], blocks: &[NativeSceneBlock], view: NativeSceneView) {
+        let Ok(blocks) =
+            crate::game::api_values::aggregates::SourceScene(blocks).try_into_engine(&())
+        else {
+            return;
+        };
         self.game
-            .native_draw_scene(&mut *self.surface, rect, blocks, view)
+            .native_draw_scene(&mut *self.surface, rect, &blocks, view)
     }
     fn draw_menu_background(&mut self, rect: [f32; 4], in_world: bool) {
         self.game
@@ -74,9 +93,17 @@ impl DrawContext for GameDrawContext<'_, '_> {
         self.game
             .native_gui_draw_item_with(&mut *self.surface, &stack, at, text)
     }
-    fn widget_button(&mut self, rect: [f32; 4], label: &Text, active: bool, highlighted: bool) {
+    fn widget_button(
+        &mut self,
+        rect: [f32; 4],
+        label: &Text,
+        active: bool,
+        highlighted: bool,
+    ) -> Result<(), mod_api::text::TextFormError> {
+        let label = label.try_into_engine(&())?;
         self.game
-            .native_widget_button(&mut *self.surface, rect, label, active, highlighted)
+            .native_widget_button(&mut *self.surface, rect, &label, active, highlighted);
+        Ok(())
     }
     fn widget_text_field(&mut self, field: &TextFieldView) -> TextFieldLayout {
         self.game
@@ -134,7 +161,10 @@ impl BlockEntityDrawContext for GameBlockEntityDrawContext<'_, '_> {
         self.game
             .native_draw_cube(&mut *self.surface, from, to, faces, tint)
     }
-    fn block(&mut self, block: &str, properties: &[(&str, &str)]) -> bool {
+    fn block(&mut self, block: BlockKey, properties: &[(&str, &str)]) -> bool {
+        let Some(block) = mod_api::__private::block_key_id(block) else {
+            return false;
+        };
         self.game
             .native_draw_block(&mut *self.surface, block, properties)
     }
@@ -164,6 +194,19 @@ impl BlockEntityDrawContext for GameBlockEntityDrawContext<'_, '_> {
     fn model(&mut self, model: ModelRef, tint: u32) -> Result<(), ModelError> {
         self.game.native_draw_model(&mut *self.surface, model, tint)
     }
+    fn text(
+        &mut self,
+        text: &Text,
+        at: [f32; 2],
+        color: u32,
+        glowing: bool,
+        outline: u32,
+    ) -> Result<f32, mod_api::text::TextFormError> {
+        let text = text.try_into_engine(&())?;
+        Ok(self
+            .game
+            .native_draw_text(&mut *self.surface, &text, at, color, glowing, outline))
+    }
     fn terrain_model(
         &mut self,
         model: ModelRef,
@@ -171,10 +214,6 @@ impl BlockEntityDrawContext for GameBlockEntityDrawContext<'_, '_> {
     ) -> Result<(), TerrainModelError> {
         self.game
             .native_draw_terrain_model(&mut *self.surface, model, options)
-    }
-    fn text(&mut self, text: &Text, at: [f32; 2], color: u32, glowing: bool, outline: u32) -> f32 {
-        self.game
-            .native_draw_text(&mut *self.surface, text, at, color, glowing, outline)
     }
     fn text_width(&self, text: &str) -> f32 {
         self.game.native_draw_text_width(&*self.surface, text)

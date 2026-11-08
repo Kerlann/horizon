@@ -1,6 +1,6 @@
 //! One membership implementation for full-game and in-write tag services.
 use horizon_items::items::Items;
-use mod_api::{FluidKey, ItemKey, TagKey};
+use mod_api::{BlockKey, FluidKey, ItemKey, TagKey};
 
 pub(super) fn is_in_tag(items: Option<&Items>, item: ItemKey, tag: TagKey) -> Option<bool> {
     let items = items?;
@@ -43,6 +43,21 @@ pub(super) fn fluids(items: Option<&Items>, tag: TagKey) -> Option<Vec<FluidKey>
     })
 }
 
+pub(super) fn blocks(items: Option<&Items>, tag: TagKey) -> Option<Vec<BlockKey>> {
+    let items = items?;
+    mod_api::__private::with_tag_name(tag, |name| {
+        items.block_tag_order.get(name?).map_or_else(
+            || Some(Vec::new()),
+            |members| {
+                members
+                    .iter()
+                    .map(|id| mod_api::__private::block_key(id))
+                    .collect()
+            },
+        )
+    })
+}
+
 // A restricted host supplies the same authoritative item tables but cannot borrow Game.
 // Only that choice differs; key resolution, ordered reads and membership stay above.
 macro_rules! impl_tags {
@@ -63,6 +78,10 @@ macro_rules! impl_tags {
                 let $this = self;
                 $crate::game::native_tags::fluids($items, tag)
             }
+            fn blocks(&self, tag: mod_api::TagKey) -> Option<Vec<mod_api::BlockKey>> {
+                let $this = self;
+                $crate::game::native_tags::blocks($items, tag)
+            }
         }
     };
 }
@@ -72,6 +91,56 @@ impl_tags!(super::Game<'_>, game, game.native_tag_items());
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn block_members_preserve_authoritative_order_reload_and_atomic_refusal() {
+        crate::game::api_values::install_parts(&[]).unwrap();
+        mod_api::__private::resolve_block_keys(
+            ["minecraft:air", "minecraft:stone", "minecraft:birch_log"],
+            |_| {
+                let properties = std::collections::BTreeMap::new();
+                horizon_mod_runtime::block_definitions::BlockDefinition::new(&[&properties], 0)
+                    .map_err(|error| format!("{error:?}"))
+            },
+        )
+        .unwrap();
+        let stone = mod_api::__private::block_key("minecraft:stone").unwrap();
+        let birch = mod_api::__private::block_key("minecraft:birch_log").unwrap();
+        let tag = mod_api::__private::tag_key(&mod_api::Identifier::parse("test:blocks").unwrap())
+            .unwrap();
+        let missing =
+            mod_api::__private::tag_key(&mod_api::Identifier::parse("test:empty").unwrap())
+                .unwrap();
+        let mut table = Items::for_tests(Default::default());
+        table.block_tag_order.insert(
+            "test:blocks".into(),
+            vec!["minecraft:stone".into(), "minecraft:birch_log".into()],
+        );
+        struct TagView<'a>(Option<&'a Items>);
+        impl_tags!(TagView<'_>, view, view.0);
+        assert_eq!(
+            mod_api::Tags::blocks(&TagView(Some(&table)), tag),
+            Some(vec![stone, birch])
+        );
+        assert_eq!(
+            mod_api::Tags::blocks(&TagView(Some(&table)), missing),
+            Some(vec![])
+        );
+        assert_eq!(mod_api::Tags::blocks(&TagView(None), tag), None);
+        table
+            .block_tag_order
+            .insert("test:blocks".into(), vec!["minecraft:birch_log".into()]);
+        assert_eq!(blocks(Some(&table), tag), Some(vec![birch]));
+        table.block_tag_order.insert(
+            "test:blocks".into(),
+            vec!["minecraft:stone".into(), "test:unloaded".into()],
+        );
+        assert_eq!(
+            blocks(Some(&table), tag),
+            None,
+            "no partial member list on unresolved block mapping"
+        );
+    }
+
     #[test]
     fn empty_stacks_refuse_before_membership_and_air_is_an_explicit_key() {
         use crate::game::api_values::{StackReadError, TryIntoApi};

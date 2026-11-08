@@ -3,8 +3,8 @@
 use super::servers_page::Field;
 use super::*;
 use gpui::{
-    canvas, relative, Bounds, FontWeight, MouseButton, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, Pixels, Point,
+    Bounds, FontWeight, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
+    canvas, relative,
 };
 use horizon_launcher::launch;
 

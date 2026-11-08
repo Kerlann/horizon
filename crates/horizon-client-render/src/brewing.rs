@@ -517,7 +517,12 @@ mod tests {
         let mut fuel = ItemStack::new("minecraft:stone", 2);
         fuel.data_mut().set_loot_component(
             "minecraft:brewing_fuel",
-            &serde_json::json!({"uses": 7, "speed_multiplier": 2.5}),
+            &Some(
+                horizon_core::json_nbt::json_to_tag(
+                    &serde_json::json!({"uses": 7, "speed_multiplier": 2.5}),
+                )
+                .unwrap(),
+            ),
         );
         let mut stand = BrewingStand::new();
         stand.items[0] = Some(ItemStack::new("minecraft:potion", 1).with_potion("minecraft:water"));

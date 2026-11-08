@@ -71,7 +71,8 @@ pub trait DisplaysBackend {
     /// Side: server.
     /// `TextDisplay.getText`; None for another kind of display.
     #[access(WorldOnly)]
-    fn display_text(&self, display: DisplayRef) -> Option<Text>;
+    /// Refuses text deeper than 512 component nodes before applying any changes.
+    fn display_text(&self, display: DisplayRef) -> Result<Option<Text>, TextFormError>;
     /// Side: server.
     /// `TextDisplay.getLineWidth`.
     #[access(WorldOnly)]
@@ -103,7 +104,7 @@ pub trait DisplaysBackend {
     /// Side: server.
     /// `BlockDisplay.getBlockState`; None for another kind of display.
     #[access(WorldOnly)]
-    fn display_block_state(&self, display: DisplayRef) -> Option<BlockStateId>;
+    fn display_block_state(&self, display: DisplayRef) -> Option<BlockState>;
     /// Side: server.
     /// `ItemDisplay.getItemStack`; None for another kind of display or an empty stack.
     #[access(WorldOnly)]
@@ -180,7 +181,8 @@ pub trait DisplaysBackendMut {
     /// Side: server.
     /// `TextDisplay.setText`; false for another kind of display.
     #[access(WorldOnly)]
-    fn display_set_text(&mut self, display: DisplayRef, text: Text) -> bool;
+    /// Refuses text deeper than 512 component nodes before applying any changes.
+    fn display_set_text(&mut self, display: DisplayRef, text: Text) -> Result<bool, TextFormError>;
     /// Side: server.
     /// `TextDisplay.setLineWidth`; false for another kind of display.
     #[access(WorldOnly)]
@@ -216,7 +218,7 @@ pub trait DisplaysBackendMut {
     /// Side: server.
     /// `BlockDisplay.setBlockState`; false for another kind of display or an unknown state.
     #[access(WorldOnly)]
-    fn display_set_block_state(&mut self, display: DisplayRef, state: BlockStateId) -> bool;
+    fn display_set_block_state(&mut self, display: DisplayRef, state: BlockState) -> bool;
     /// Side: server.
     /// `ItemDisplay.setItemStack`; None empties it. False for another kind of display.
     #[access(WorldOnly)]

@@ -12,9 +12,9 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 semver = { version = "1", features = ["serde"] }
 toml = "1.1.6"
-zip = { version = "9.1.3", default-features = false, features = ["deflate"] }
 log = "0.4"
 png = "0.18"
+wasmparser = "0.261"
 # `[wasm]` and `[[jar]]` hashes (SHA-512), and the registry index's SHA-256.
 sha2 = "0.10"
 # The registry index's minisign signatures (feature `index`; no dependencies of its own).
@@ -26,6 +26,12 @@ horizon-shader-api = { path = "../horizon-shader-api", optional = true }
 cap-std = { version = "3.4.6", optional = true }
 flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs", "runtime_detection"], optional = true }
 tar = { version = "0.4", default-features = false, optional = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+zip = { version = "9.1.3", default-features = false, features = ["deflate"] }
+
+[dev-dependencies]
+wat = "1"
 
 [features]
 prebuilt = ["dep:cap-std", "dep:flate2", "dep:tar"]

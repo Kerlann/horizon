@@ -116,6 +116,32 @@ impl<'ast> Visit<'ast> for TypeUses {
         syn::visit::visit_type_path(self, ty);
     }
 
+    // A `dyn Trait` names a listed trait: the object crosses as its method table. A bound of
+    // a generic does not.
+    fn visit_type_trait_object(&mut self, object: &'ast syn::TypeTraitObject) {
+        for bound in &object.bounds {
+            if let syn::TypeParamBound::Trait(bound) = bound
+                && bound.path.leading_colon.is_none()
+                && bound
+                    .path
+                    .segments
+                    .iter()
+                    .all(|s| matches!(s.arguments, syn::PathArguments::None))
+            {
+                self.paths.insert(
+                    bound
+                        .path
+                        .segments
+                        .iter()
+                        .map(|s| s.ident.to_string())
+                        .collect::<Vec<_>>()
+                        .join("::"),
+                );
+            }
+        }
+        syn::visit::visit_type_trait_object(self, object);
+    }
+
     fn visit_type_param(&mut self, param: &'ast syn::TypeParam) {
         self.parameters.insert(param.ident.to_string());
         syn::visit::visit_type_param(self, param);
@@ -213,8 +239,29 @@ fn clean_fields(fields: &Fields) -> Fields {
     fields
 }
 
+/// A trait's signature: its items without docs, defaults or visibility, which are not contract.
+fn trait_signature(value: &syn::ItemTrait) -> syn::ItemTrait {
+    let mut signature = value.clone();
+    signature.attrs.clear();
+    signature.vis = Visibility::Inherited;
+    for member in &mut signature.items {
+        match member {
+            syn::TraitItem::Fn(method) => {
+                method.attrs.retain(|attr| !attr.path().is_ident("doc"));
+                method.default = None;
+                method.semi_token = Some(Default::default());
+            }
+            syn::TraitItem::Const(value) => value.attrs.retain(|attr| !attr.path().is_ident("doc")),
+            syn::TraitItem::Type(value) => value.attrs.retain(|attr| !attr.path().is_ident("doc")),
+            _ => {}
+        }
+    }
+    signature
+}
+
 pub(crate) fn shape_signature(item: &Item) -> Option<Item> {
     match item {
+        Item::Trait(value) => Some(Item::Trait(trait_signature(value))),
         Item::Struct(value) => {
             let mut value = value.clone();
             value
@@ -437,7 +484,10 @@ impl Shapes {
                     let cfg: Vec<_> = cfg.iter().cloned().chain(conditions(attrs)).collect();
                     self.items(&path, &cfg, inner);
                 }
-            } else if matches!(item, Item::Struct(_) | Item::Enum(_) | Item::Type(_)) {
+            } else if matches!(
+                item,
+                Item::Struct(_) | Item::Enum(_) | Item::Type(_) | Item::Trait(_)
+            ) {
                 self.definitions.entry(path).or_default().push(Definition {
                     module: module.to_owned(),
                     cfg: cfg.to_vec(),
@@ -888,27 +938,7 @@ impl Pass {
                 expose!(value, "type", value.type_token.span(), signature);
             }
             Item::Trait(value) => {
-                let mut signature = value.clone();
-                signature.attrs.clear();
-                signature.vis = Visibility::Inherited;
-                // Trait method defaults are implementations, and docs aren't contract: neither is
-                // part of the signature.
-                for member in &mut signature.items {
-                    match member {
-                        syn::TraitItem::Fn(method) => {
-                            method.attrs.retain(|attr| !attr.path().is_ident("doc"));
-                            method.default = None;
-                            method.semi_token = Some(Default::default());
-                        }
-                        syn::TraitItem::Const(value) => {
-                            value.attrs.retain(|attr| !attr.path().is_ident("doc"))
-                        }
-                        syn::TraitItem::Type(value) => {
-                            value.attrs.retain(|attr| !attr.path().is_ident("doc"))
-                        }
-                        _ => {}
-                    }
-                }
+                let signature = trait_signature(value);
                 expose!(value, "trait", value.trait_token.span(), signature);
             }
             Item::Mod(value) => {
@@ -1106,6 +1136,7 @@ impl Pass {
                             Item::Struct(value) => ("struct", &value.attrs),
                             Item::Enum(value) => ("enum", &value.attrs),
                             Item::Type(value) => ("type", &value.attrs),
+                            Item::Trait(value) => ("trait", &value.attrs),
                             _ => unreachable!("type definition"),
                         };
                         let cfg = configuration(&definition.cfg, attrs);
@@ -1233,6 +1264,26 @@ pub fn discover(root: &Path) -> Result<Widened, String> {
     stage(root, true)
 }
 
+/// Read the same original signatures and reachable layouts as staging, without changing files.
+/// Visibility edits are collected but never emitted, so build-time consumers can safely build
+/// a crossing rule over the catalog in a normal source checkout.
+pub fn catalog(root: &Path) -> Result<Vec<Internal>, String> {
+    let path = root.join("crates/horizon-mod-api-gen/internals.txt");
+    let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
+    Ok(collect(root, &[("internals.txt", text)], false)?
+        .entries
+        .into_values()
+        .collect())
+}
+
+/// [`catalog`] with the listed foreign layouts (`winit::event_loop::ControlFlow`...), as
+/// `internals.json` has them: what a crossing rule over the game reads.
+pub fn rule_catalog(root: &Path) -> Result<Vec<Internal>, String> {
+    let mut entries = catalog(root)?;
+    entries.extend(crate::crossing::foreign_internals());
+    Ok(entries)
+}
+
 fn stage(root: &Path, discovery: bool) -> Result<Widened, String> {
     let path = root.join("crates/horizon-mod-api-gen/internals.txt");
     let text = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
@@ -1246,6 +1297,10 @@ fn widen_with(root: &Path, lists: &[(&str, String)]) -> Result<Widened, String> 
 }
 
 fn widen_mode(root: &Path, lists: &[(&str, String)], discovery: bool) -> Result<Widened, String> {
+    collect(root, lists, discovery)?.finish()
+}
+
+fn collect(root: &Path, lists: &[(&str, String)], discovery: bool) -> Result<Pass, String> {
     let mut pass = Pass {
         discovery,
         ..Pass::default()
@@ -1313,7 +1368,7 @@ fn widen_mode(root: &Path, lists: &[(&str, String)], discovery: bool) -> Result<
                 .or_insert_with(|| (start, "#![allow(deprecated)]\n".into()));
         }
     }
-    pass.finish()
+    Ok(pass)
 }
 
 #[cfg(test)]
@@ -1368,6 +1423,51 @@ mod tests {
         fn drop(&mut self) {
             fs::remove_dir_all(&self.0).unwrap();
         }
+    }
+
+    #[test]
+    fn catalog_is_read_only_and_staging_output_keeps_its_goldens() {
+        fn files(root: &Path) -> BTreeMap<PathBuf, Vec<u8>> {
+            let mut result = BTreeMap::new();
+            for entry in fs::read_dir(root).unwrap() {
+                let path = entry.unwrap().path();
+                if path.is_dir() {
+                    result.extend(files(&path));
+                } else {
+                    let bytes = fs::read(&path).unwrap();
+                    result.insert(path, bytes);
+                }
+            }
+            result
+        }
+        let plain = Fixture::new("fn f() {}\n");
+        plain.put("crates/horizon-mod-api-gen/internals.txt", "");
+        let before = files(&plain.0);
+        let original = catalog(&plain.0).unwrap();
+        assert_eq!(files(&plain.0), before);
+        let widened = widen(&plain.0).unwrap();
+        assert_eq!(plain.game(), "pub fn f() {}\n");
+        assert_eq!(
+            serde_json::to_value(original).unwrap(),
+            serde_json::to_value(widened.entries).unwrap()
+        );
+
+        let diagnostic = Fixture::new("fn f() {}\n");
+        diagnostic.put("crates/horizon-mod-api-gen/internals.txt", "");
+        let original = catalog(&diagnostic.0).unwrap();
+        let discovered = discover(&diagnostic.0).unwrap();
+        assert_eq!(
+            diagnostic.game(),
+            "#[deprecated(note = \"horizon-internal:fn:horizon_client::game::f\")]\npub fn f() {}\n"
+        );
+        assert_eq!(
+            fs::read_to_string(diagnostic.0.join("crates/horizon-client/src/lib.rs")).unwrap(),
+            "#![allow(deprecated)]\nmod game; mod entry;\n"
+        );
+        assert_eq!(
+            serde_json::to_value(original).unwrap(),
+            serde_json::to_value(discovered.entries).unwrap()
+        );
     }
 
     #[test]
@@ -1878,7 +1978,7 @@ union Value { #[cfg(windows)] windows: u32, #[cfg(test)] test_field: u32 }
     }
 
     #[test]
-    fn explicitly_listed_lower_layouts_are_widened_and_walked() {
+    fn explicitly_listed_lower_layouts_are_widened() {
         let fixture = shapes_fixture("struct Game {}\n");
         fixture.put(
             "crates/horizon-items/src/item_stack.rs",
@@ -1906,9 +2006,6 @@ union Value { #[cfg(windows)] windows: u32, #[cfg(test)] test_field: u32 }
             text.contains("pub struct ItemStack { pub count: u8 }"),
             "{text}"
         );
-        let (code, counts) = crate::internals_table::table(&result.entries, &[path.into()]);
-        assert_eq!(counts.types, 1, "{code}");
-        assert_eq!(counts.skipped, 0);
     }
 
     #[test]
@@ -1931,18 +2028,6 @@ union Value { #[cfg(windows)] windows: u32, #[cfg(test)] test_field: u32 }
             assert_eq!(
                 stack.opaque_reason,
                 Some("not an unconditional game dependency")
-            );
-            let (_, counts) = crate::internals_table::table(
-                &widened.entries,
-                &widened
-                    .entries
-                    .iter()
-                    .map(|i| i.path.clone())
-                    .collect::<Vec<_>>(),
-            );
-            assert_eq!(
-                counts.skipped_types["not an unconditional game dependency"],
-                1
             );
             let source =
                 fs::read_to_string(fixture.0.join("crates/horizon-items/src/item_stack.rs"))
@@ -1974,16 +2059,6 @@ union Value { #[cfg(windows)] windows: u32, #[cfg(test)] test_field: u32 }
             widened.entries[0].opaque_reason,
             Some("shape module walk failed")
         );
-        let (_, counts) = crate::internals_table::table(
-            &widened.entries,
-            &widened
-                .entries
-                .iter()
-                .map(|i| i.path.clone())
-                .collect::<Vec<_>>(),
-        );
-        assert_eq!(counts.types, 0);
-        assert_eq!(counts.skipped_types["shape module walk failed"], 1);
     }
 
     #[test]
@@ -2156,16 +2231,28 @@ pub struct ItemStack { a: First, b: Second, c: second::Kind }
             "struct Guarded { #[cfg(feature = \"audio\")] sound: u8 }\nenum Cases { #[cfg_attr(feature = \"audio\", cfg(unix))] Audio, Normal }\n",
         );
         let widened = widen_with(&fixture.0, &[]).unwrap();
-        let (_, counts) = crate::internals_table::table(
-            &widened.entries,
-            &widened
+        // Opacity is decided by the crossing rule, not the source collector. Check
+        // the staged signatures too: widening must not discard conditional members.
+        for entries in [
+            widened.entries,
+            collect(&fixture.0, &[], false)
+                .unwrap()
                 .entries
-                .iter()
-                .map(|i| i.path.clone())
-                .collect::<Vec<_>>(),
-        );
-        assert_eq!(counts.types, 0);
-        assert_eq!(counts.skipped_types["opaque type"], 2);
+                .into_values()
+                .collect(),
+        ] {
+            let rule = crate::crossing::Rule::new(&entries);
+            for name in ["Guarded", "Cases"] {
+                let ty = syn::parse_str(name).unwrap();
+                let shape = rule.shape("horizon_client::game", None, &ty);
+                assert!(matches!(shape, crate::crossing::Shape::Named(..)));
+                assert_eq!(
+                    rule.crossing_of(&shape),
+                    crate::crossing::Crossing::Opaque,
+                    "{name}"
+                );
+            }
+        }
     }
 
     #[test]
@@ -2318,63 +2405,6 @@ const LABEL: &str = "é"; struct AfterUnicode;
                     .contains("pub fn run")
             );
         }
-    }
-
-    #[test]
-    fn guarded_game_keeps_slots_thunks_and_wasm_handles() {
-        use crate::crossing::{Crossing, Rule, Shape};
-        let fixture = Fixture::new(
-            "struct Game<'a> { large: [u64; 32], marker: &'a str, #[cfg(feature = \"x\")] extra: u8 }\nimpl Game<'_> { fn next_autosave_interval(&self) -> i64 { 42 } }\n",
-        );
-        let method = "horizon_client::game::Game<'_>::next_autosave_interval";
-        let field = "horizon_client::game::Game<'_>::large";
-        fixture.put(
-            "crates/horizon-mod-api-gen/slots/test.txt",
-            "horizon_client::game::Game::next_autosave_interval\n",
-        );
-        let result = widen_with(&fixture.0, &[]).unwrap();
-        let entries = &result.entries;
-        let method_entry = entries.iter().find(|i| i.path == method).unwrap();
-        // Discovered from 0af894a3a0^, before #1762 added Game's cfg field.
-        assert_eq!(method_entry.hash, "5829bc5b9f60aaca");
-        let rule = Rule::new(entries);
-        let shape = Shape::Named("horizon_client::game::Game".into(), 1);
-        assert_eq!(rule.crossing_of(&shape), Crossing::Handle);
-        let (code, counts) = crate::internals_table::table(entries, &[method.into(), field.into()]);
-        assert_eq!(counts.thunks, 1);
-        assert_eq!(counts.refused[field], "conditional field or variant");
-        crate::internals_table::tests::run_fixture(
-            &code,
-            "mod game { pub struct Game<'a> { pub large: [u64; 32], pub marker: &'a str } impl Game<'_> { pub fn next_autosave_interval(&self) -> i64 { 42 } } }",
-            "let _ = (std::mem::size_of::<Op>(), std::mem::size_of::<Reply>(), std::mem::size_of::<Value>()); let game = game::Game { large: [0; 32], marker: \"\" }; assert_eq!(game.large[0], 0); assert_eq!(game.marker, \"\");",
-        );
-        let declaration = |i: &Internal| crate::internals_view::Declaration {
-            path: i.path.clone(),
-            hash: i.hash.clone(),
-            kind: Some(i.kind.into()),
-        };
-        let owner = entries
-            .iter()
-            .find(|i| i.kind == "struct" && i.path == "horizon_client::game::Game")
-            .unwrap();
-        let view = crate::internals_view::generate(
-            entries,
-            &[declaration(method_entry), declaration(owner)],
-            &[],
-            &[],
-        )
-        .unwrap();
-        let parsed = syn::parse_file(&view).unwrap();
-        let syn::Item::Mod(module) = &parsed.items[0] else {
-            panic!("view module")
-        };
-        let items = &module.content.as_ref().unwrap().1;
-        assert!(items.iter().any(|i| matches!(i, syn::Item::Struct(s) if s.ident.to_string().ends_with("Game") && matches!(s.fields, syn::Fields::Unnamed(_)))));
-        assert!(!view.contains("fn large"));
-        let field_entry = entries.iter().find(|i| i.path == field).unwrap();
-        let error = crate::internals_view::generate(entries, &[declaration(field_entry)], &[], &[])
-            .unwrap_err();
-        assert!(error.contains("conditional field or variant"), "{error}");
     }
 
     #[test]

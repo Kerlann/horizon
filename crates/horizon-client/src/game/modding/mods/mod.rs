@@ -225,6 +225,7 @@ pub(super) fn freeze_declarations() {
 }
 
 struct NativeDeclared {
+    errors: Vec<String>,
     blocks: Vec<horizon_mod_package::content::Block>,
     items: Vec<horizon_mod_package::content::Item>,
     types: Vec<horizon_mod_package::content::BlockEntityType>,
@@ -239,10 +240,42 @@ fn native_declared() -> &'static NativeDeclared {
         Game::native_blocks(&RegistrationContext::new(), &mut blocks);
         Game::native_items(&RegistrationContext::new(), &mut items);
         let types = super::api_values::block_entity_declarations();
-        let fluids = mod_api::__private::declared_world_fluids().to_vec();
+        use super::api_values::TryIntoEngine;
+        let mut errors = Vec::new();
+        let mut blocks: Vec<horizon_mod_package::content::Block> = blocks
+            .iter()
+            .filter_map(|v| {
+                v.try_into_engine(&())
+                    .map_err(|e| {
+                        errors.push(format!(
+                            "native blocks and items of {}: {e}",
+                            v.id.split(':').next().unwrap_or("")
+                        ))
+                    })
+                    .ok()
+            })
+            .collect();
+        let mut items: Vec<horizon_mod_package::content::Item> = items
+            .iter()
+            .filter_map(|v| {
+                v.try_into_engine(&())
+                    .map_err(|e| {
+                        errors.push(format!(
+                            "native blocks and items of {}: {e}",
+                            v.id.split(':').next().unwrap_or("")
+                        ))
+                    })
+                    .ok()
+            })
+            .collect();
+        let fluids: Vec<_> = mod_api::__private::declared_world_fluids()
+            .iter()
+            .map(|draft| draft.try_into_engine(&()).unwrap())
+            .collect();
         blocks.extend(fluids.iter().filter_map(|f| f.world_block()));
         items.extend(fluids.iter().filter_map(|f| f.world_bucket()));
         NativeDeclared {
+            errors,
             blocks,
             items,
             types,
@@ -555,11 +588,15 @@ pub(super) fn content_overlay(
         }
     }
     let NativeDeclared {
+        errors,
         blocks,
         items,
         types,
         fluids,
     } = native_declared();
+    if !errors.is_empty() {
+        return Err(errors.join("\n").into());
+    }
     if !blocks.is_empty() || !items.is_empty() || !types.is_empty() {
         let known = match &mut known {
             Some(types) => types,
@@ -606,6 +643,88 @@ pub(super) fn content_overlay(
     })
 }
 
+fn resolve_particle_providers(
+    source: &horizon_assets::resource_source::ResourceSource,
+) -> Result<(), String> {
+    if mod_api::__private::particles_resolved() {
+        return Ok(());
+    }
+    // Resolve all particle providers once, alongside the other load-owned registries.
+    let mut particles: Vec<String> = horizon_client::particles::ParticleType::ALL
+        .iter()
+        .map(|ty| format!("minecraft:{}", ty.name()))
+        .collect();
+    particles.extend(
+        source
+            .list_under("assets", &["particles"])
+            .into_iter()
+            .filter_map(|path| {
+                let path = path.strip_prefix("assets/")?;
+                let (namespace, path) = path.split_once("/particles/")?;
+                let path = path.strip_suffix(".json")?;
+                let id = format!("{namespace}:{path}");
+                mod_api::Identifier::parse_namespaced(&id)?;
+                // A vanilla-namespace file the game has no particle for is a leftover of an
+                // older resource extraction, not a mod's declaration: skip it, never refuse startup.
+                if namespace == "minecraft"
+                    && horizon_client::particles::ParticleType::from_name(&id).is_none()
+                {
+                    log::warn!("Horizon: ignoring {id}: no such vanilla particle in this version");
+                    return None;
+                }
+                Some(id)
+            }),
+    );
+    mod_api::__private::resolve_particles(particles.iter().map(String::as_str), |id| {
+        horizon_client::particles::ParticleType::from_name(id)
+            .map(|ty| mod_api::__private::ParticleKind::Vanilla(ty as u32))
+            .or_else(|| {
+                (!id.starts_with("minecraft:")).then_some(mod_api::__private::ParticleKind::Custom)
+            })
+    })
+    .map_err(|errors| errors.join("\n"))?;
+    Ok(())
+}
+#[cfg(test)]
+mod particle_registry_reload_tests {
+    #[test]
+    fn an_unlisted_vanilla_provider_file_does_not_refuse_startup() {
+        mod_api::__private::part_tests::install_parts_fixture(&[]).unwrap();
+        let source = horizon_assets::resource_source::ResourceSource::indexed(
+            [(
+                "assets/minecraft/particles/ambient_entity_effect.json".into(),
+                horizon_assets::resource_source::Resource::bytes(Vec::new()),
+            )]
+            .into(),
+        );
+        super::resolve_particle_providers(&source).unwrap();
+    }
+
+    #[test]
+    fn repeated_particle_content_load_keeps_the_published_keys() {
+        mod_api::__private::part_tests::install_parts_fixture(&[]).unwrap();
+        let source = horizon_assets::resource_source::ResourceSource::indexed(
+            [(
+                "assets/invalid namespace/particles/bad name.json".into(),
+                horizon_assets::resource_source::Resource::bytes(Vec::new()),
+            )]
+            .into(),
+        );
+        super::resolve_particle_providers(&source).unwrap();
+        let first = mod_api::__private::particle_vanilla_key(
+            horizon_client::particles::ParticleType::Smoke as u32,
+        )
+        .unwrap();
+        super::resolve_particle_providers(&source).unwrap();
+        assert_eq!(
+            mod_api::__private::particle_vanilla_key(
+                horizon_client::particles::ParticleType::Smoke as u32
+            ),
+            Some(first)
+        );
+    }
+}
+
 /// The content root with everything the mods declare registered against the
 /// process: block entities, mob effects, entity and menu types, fluid looks,
 /// and the protocol's local mod list, each set once.
@@ -628,6 +747,7 @@ pub(super) fn content_root(
         );
     }
     register_mob_effects(&overlay.mods);
+    resolve_particle_providers(overlay.root.source())?;
     mod_api::__private::resolve_effects(
         horizon_client_core::potions::all_effects()
             .map(|def| horizon_client_core::potions::namespaced(def.id)),
@@ -644,7 +764,11 @@ pub(super) fn content_root(
         .map(|value| value.as_str().ok_or("invalid fluid registry entry"))
         .collect::<Result<Vec<_>, _>>()?;
     fluids.extend(world_fluids.iter().map(String::as_str));
-    mod_api::__private::resolve_fluids(&fluids).map_err(|errors| {
+    mod_api::__private::resolve_fluids(
+        &fluids,
+        &horizon_world::fluid::FluidKind::ALL.map(|kind| kind.name()),
+    )
+    .map_err(|errors| {
         errors
             .into_iter()
             .map(|error| error.to_string())
@@ -1067,9 +1191,7 @@ impl Game<'_> {
                     }
                 };
                 let m = &package.manifest;
-                let refused = horizon_mod_wasm::refused()
-                    .iter()
-                    .find(|(id, _)| *id == m.id);
+                let refused = horizon_mod_wasm::refusal(&m.id);
                 live_switch_of(path, &package, &mut content_ids, &mut live_ids);
                 info.insert(
                     m.id.clone(),
@@ -1079,7 +1201,7 @@ impl Game<'_> {
                     id: m.id.clone(),
                     title: format!("{} {}", m.name, m.version),
                     description: m.description.clone(),
-                    problem: refused.map(|(_, why)| format!("Not loaded: {why}")),
+                    problem: refused.map(|why| format!("Not loaded: {why}")),
                     dev: self.mods.dev.contains(path),
                     native: None,
                 }
@@ -1130,6 +1252,7 @@ impl Game<'_> {
         // worldgen keeps the state it loaded with until a restart.
         let content = &self.mods.content_ids;
         let mut next = wanted.clone();
+
         let mut waiting = Vec::new();
         for id in applied.symmetric_difference(&wanted) {
             if !content.contains(id) || self.mods.live_ids.contains(id) {

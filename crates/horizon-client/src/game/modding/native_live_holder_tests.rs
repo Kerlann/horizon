@@ -255,11 +255,9 @@ impl Hooks for TickPaths {
     }
     fn blocks(&self, _: &mod_api::RegistrationContext, event: &mut BlocksEvent<'_>) {
         for id in [BOTH_BLOCK, BARE_BLOCK] {
-            event.blocks.push(horizon_mod_package::content::Block {
-                id: id.into(),
-                template: "minecraft:stone".into(),
-                ..Default::default()
-            });
+            event
+                .blocks
+                .push(mod_api::Block::new(id, "minecraft:stone"));
         }
     }
 }

@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Qurilish jurnalini o‘qib bo‘lmadi: {error}",
   "Could not read the saved sign-in.": "Saqlangan tizimga kirishni oʻqib boʻlmadi.",
   "Could not read the saved sign-in. Sign in again.": "Saqlangan tizimga kirishni oʻqib boʻlmadi. Qaytadan kiring.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "{name}: {error}ni o‘qib bo‘lmadi",
   "Could not run {program}: {error}": "{program} ishga tushirilmadi: {error}",
   "Could not save the renewed sign-in.": "Yangilangan tizimga kirishni saqlab bo‘lmadi.",

@@ -144,8 +144,8 @@ pub fn dimension_dir(world: &Path, dimension: &str) -> PathBuf {
     let dimensions = world.join("dimensions");
     match id.split_once(':') {
         Some((namespace, path))
-            if horizon_world::worldgen::overrides::valid_level_namespace(namespace)
-                && horizon_world::worldgen::overrides::valid_level_path(path) =>
+            if horizon_core::level_id::valid_level_namespace(namespace)
+                && horizon_core::level_id::valid_level_path(path) =>
         {
             dimensions.join(namespace).join(path)
         }

@@ -10,6 +10,8 @@ pub trait Hooks {
     /// the log shows it. Set `cancel` and nobody sees it, and it doesn't
     /// count toward the chat spam limit. Commands (`/say`, `/msg`...) are
     /// not chat here. Server-side, with no player's state swapped in.
+    /// A component deeper than 512 nodes refuses capture or the whole writeback;
+    /// no event field is applied if any Text field fails conversion.
     #[hook(
         side = "server",
         contract = "cancel",

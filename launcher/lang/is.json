@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Gat ekki lesið byggingarskrána: {error}",
   "Could not read the saved sign-in.": "Gat ekki lesið vistaða innskráningu.",
   "Could not read the saved sign-in. Sign in again.": "Gat ekki lesið vistaða innskráningu. Skráðu þig inn aftur.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Gat ekki lesið {name}: {error}",
   "Could not run {program}: {error}": "Gat ekki keyrt {program}: {error}",
   "Could not save the renewed sign-in.": "Ekki tókst að vista endurnýjaða innskráningu.",

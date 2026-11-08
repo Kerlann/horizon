@@ -1,28 +1,8 @@
 //! Moved here from the game so mods can name it.
 #[allow(unused_imports)]
 use crate::*;
-use horizon_items::items::Items;
-use horizon_world::native_load_context::LoadContext;
 use serde_json::Value;
 use std::collections::HashSet;
-/// A recipe ingredient of a mod's own kind: the entry named a type in a
-/// namespace outside `minecraft:`, and the loader kept it for this call.
-/// The kind and the JSON the file wrote are here; fill `items` with the
-/// item ids the ingredient matches (item ids only: components are not
-/// checked here; a match-time hook follows separately). Duplicates are
-/// removed keeping first-seen order. The load calls it once per occurrence
-/// (nested ones included), before any table parses the recipes; the
-/// answer must be the same every time. An unclaimed kind leaves the list
-/// empty and the recipe fails, as an unknown kind does.
-#[inline(never)]
-pub fn native_ingredient(
-    context: &LoadContext,
-    kind: &str,
-    data: &serde_json::Map<String, Value>,
-    items: &mut Vec<String>,
-) {
-    crate::dispatch_ingredient(&crate::OwningLoad::new(context), kind, data, items);
-}
 /// Items a mod adds to one of the recipe property sets: the items a furnace,
 /// blast furnace, smoker, campfire, smithing table slot or brewing stand slot
 /// accepts (`RecipeManager.RECIPE_PROPERTY_SETS`).
@@ -43,245 +23,9 @@ impl RecipePropertyAddition {
         }
     }
 }
-/// Items a mod's own recipe type takes in a station slot, added to the
-/// recipe property sets (`RecipeManager.RECIPE_PROPERTY_SETS`): what a
-/// furnace, blast furnace, smoker, campfire, smithing table slot or brewing
-/// stand slot accepts, and what a client predicts it accepts. Push one
-/// `RecipePropertyAddition` per set to add to; the vanilla recipes' own
-/// items stay in. Called once per load, after the recipes are resolved, with
-/// the `DataLoadContext` of the load that owns them (`origin()`
-/// `ServerDataLoad` on a server, `ClientPreload` on a client's own load),
-/// and again after `/reload`. An unknown set key, an item that is air or
-/// not a registered item is logged and skipped. The answer must be the same
-/// every time.
-#[inline(never)]
-pub fn native_recipe_property_sets(
-    context: &LoadContext,
-    additions: &mut Vec<RecipePropertyAddition>,
-) {
-    crate::dispatch_recipe_property_sets(&crate::OwningLoad::new(context), additions);
-}
-/// A mod's own ingredient kind, matching a concrete stack at craft time:
-/// the ingredient's `test` calls here with the kind, its JSON and the
-/// stack being matched, `accept` already true (the load-time list named
-/// the item). Set `accept` to false to refuse the stack — its components
-/// are the usual reason. The hook may be called many times a craft; the
-/// answer must be the same for the same stack.
-#[inline(never)]
-pub fn native_ingredient_test(
-    context: &horizon_world::native_load_context::LoopContext,
-    kind: &str,
-    data: &serde_json::Map<String, Value>,
-    stack: &ItemStack,
-    accept: &mut bool,
-) {
-    crate::dispatch_ingredient_test(&crate::OwningLoop::new(context), kind, data, stack, accept);
-}
-/// Where `Ingredient::resolve` leaves the hook's answer inside the occurrence
-/// it resolved. Written and read only here; the loads that own the sources
-/// never send or save it.
-const RESOLVED_ITEMS: &str = "horizon:resolved_items";
-
-/// The kind an ingredient object names: `neoforge:ingredient_type` in
-/// current NeoForge, `type` in older packs.
-fn ingredient_kind(o: &serde_json::Map<String, Value>) -> Option<&str> {
-    o.get("neoforge:ingredient_type")
-        .or_else(|| o.get("type"))?
-        .as_str()
-}
-
-/// A mod's own kind: a namespaced type that is not minecraft's.
-fn is_custom(kind: &str) -> bool {
-    kind.contains(':') && !kind.starts_with("minecraft:")
-}
-
-/// Takes the answer `resolve` left out of `data`.
-fn resolved_items(data: &mut serde_json::Map<String, Value>) -> Option<Vec<String>> {
-    let answer = data.remove(RESOLVED_ITEMS)?;
-    answer
-        .as_array()?
-        .iter()
-        .map(|i| i.as_str().map(str::to_owned))
-        .collect()
-}
-/// Keep first-seen order, drop the rest.
-// hidden: a game-side helper, not part of the mod surface
-#[doc(hidden)]
-pub fn dedup_keep_order(items: &mut Vec<String>) {
-    let mut seen = std::collections::HashSet::new();
-    items.retain(|i| seen.insert(i.clone()));
-}
-/// The walk both ingredient kinds share: a string (an id or `#tag`, as
-/// `tags` resolves it), a list of them, or NeoForge's three shapes with
-/// their children walked the same way, each answered by the flat list of
-/// ids it matches in the order the sources named them. A kind outside the
-/// shapes is answered by the wrapper's `custom` as the walk meets it, so a
-/// shape sees its ids like any child's: the item ingredient gives the list
-/// its hook left at load, a fluid one none, which fails the file. An empty
-/// result is no ingredient, as an empty list or an unloaded tag is.
-#[derive(Clone, Debug)]
-// hidden: shared parser output for the game-owned ingredient adapter, not a mod-facing recipe.
-#[doc(hidden)]
-#[non_exhaustive]
-pub struct WalkedIngredient {
-    /// The ids it accepts, however the source shape named them.
-    pub set: HashSet<String>,
-    /// The same ids in the sources' order (`HolderSet`).
-    pub order: Vec<String>,
-    /// NeoForge's shapes, with their children walked.
-    pub children: Option<(Shape, Vec<Self>)>,
-    /// A kind outside the standard shapes: the kind and its JSON, as the
-    /// file wrote it, without the wrapper's answer.
-    pub custom: Option<(String, serde_json::Map<String, Value>)>,
-}
-/// The wrapper's answer for a kind outside the standard shapes: the ids it
-/// matches, taken out of its JSON, or none to fail the file.
-// hidden: the game-owned ingredient adapter supplies custom ids while walking JSON.
-#[doc(hidden)]
-pub type CustomIds<'a> = &'a dyn Fn(&mut serde_json::Map<String, Value>) -> Option<Vec<String>>;
-impl WalkedIngredient {
-    /// The walk of `v`: the shapes' flat lists in the sources' order, their
-    /// children kept for matching a concrete stack.
-    pub fn walk(
-        v: &Value,
-        tags: &std::collections::HashMap<String, Vec<String>>,
-        custom: CustomIds<'_>,
-    ) -> Option<Self> {
-        Self::walk_resolved(v, tags, custom, &|id| Some(id.to_owned()))
-    }
-
-    // hidden: the game-owned adapter resolves ids using its own load-time registry.
-    #[doc(hidden)]
-    pub fn walk_resolved(
-        v: &Value,
-        tags: &std::collections::HashMap<String, Vec<String>>,
-        custom: CustomIds<'_>,
-        resolve: &dyn Fn(&str) -> Option<String>,
-    ) -> Option<Self> {
-        let mut list: Vec<String> = Vec::new();
-        let mut valid = true;
-        let mut add = |s: &str| {
-            let more: Vec<String> = match s.strip_prefix('#') {
-                Some(tag) => tags.get(tag).cloned().unwrap_or_default(),
-                None => vec![s.to_owned()],
-            };
-            for i in more {
-                match resolve(&i) {
-                    Some(i) if !list.contains(&i) => list.push(i),
-                    Some(_) => {}
-                    None => valid = false,
-                }
-            }
-        };
-        match v {
-            Value::String(s) => add(s),
-            Value::Array(a) => a.iter().filter_map(Value::as_str).for_each(&mut add),
-            Value::Object(o) => return Self::walk_object(o, tags, custom, resolve),
-            _ => return None,
-        }
-        valid.then(|| Self::flat(list)).flatten()
-    }
-    /// A plain list's answer: its ids in order, no shapes.
-    fn flat(list: Vec<String>) -> Option<Self> {
-        (!list.is_empty()).then(|| Self {
-            set: list.iter().cloned().collect(),
-            order: list,
-            children: None,
-            custom: None,
-        })
-    }
-    /// NeoForge's ingredient types (`NeoForgeRegistries.Keys.INGREDIENT_TYPES`),
-    /// the standard shapes mods' recipes carry, each answered by the flat id
-    /// list it matches, with the children kept for matching a concrete
-    /// stack. A kind outside these is the wrapper's `custom`; one of
-    /// `minecraft:`'s the wrapper does not know still fails the file.
-    fn walk_object(
-        o: &serde_json::Map<String, Value>,
-        tags: &std::collections::HashMap<String, Vec<String>>,
-        custom: CustomIds<'_>,
-        resolve: &dyn Fn(&str) -> Option<String>,
-    ) -> Option<Self> {
-        // Current NeoForge marks a custom ingredient with
-        // `neoforge:ingredient_type`; `type` is the older packs' key.
-        let kind = ingredient_kind(o)?;
-        let children = || {
-            o.get("children")
-                .or_else(|| o.get("ingredients"))
-                .and_then(Value::as_array)
-        };
-        // The shapes' walked children, for matching at craft time: every
-        // arm either fills it or returns.
-        let nested;
-        let kept = match kind {
-            // `CompoundIngredient`: any of its children matching the stack
-            // is enough — the union of their ids.
-            "neoforge:compound" => {
-                let subs: Vec<Self> = children()?
-                    .iter()
-                    .map(|s| Self::walk_resolved(s, tags, custom, resolve))
-                    .collect::<Option<_>>()?;
-                let mut seen = Vec::new();
-                for sub in &subs {
-                    for id in &sub.order {
-                        if !seen.contains(id) {
-                            seen.push(id.clone());
-                        }
-                    }
-                }
-                nested = Some((Shape::Compound, subs));
-                seen
-            }
-            // `IntersectionIngredient`: every child must match the same
-            // stack — the ids all of them name.
-            "neoforge:intersection" => {
-                let subs: Vec<Self> = children()?
-                    .iter()
-                    .map(|s| Self::walk_resolved(s, tags, custom, resolve))
-                    .collect::<Option<_>>()?;
-                nested = Some((Shape::Intersection, subs.clone()));
-                subs.first()?
-                    .order
-                    .iter()
-                    .filter(|i| subs[1..].iter().all(|s| s.set.contains(*i)))
-                    .cloned()
-                    .collect()
-            }
-            // The base's ids without the subtracted's.
-            "neoforge:difference" => {
-                let base = Self::walk_resolved(o.get("base")?, tags, custom, resolve)?;
-                let gone = Self::walk_resolved(o.get("subtracted")?, tags, custom, resolve)?;
-                nested = Some((Shape::Difference, vec![base.clone(), gone.clone()]));
-                base.order
-                    .iter()
-                    .filter(|i| !gone.set.contains(*i))
-                    .cloned()
-                    .collect()
-            }
-            // A kind outside these shapes: the wrapper answers it — the
-            // item ingredient asks its hook, a fluid one fails the file.
-            k if is_custom(k) => {
-                let mut data = o.clone();
-                let list = custom(&mut data)?;
-                return (!list.is_empty()).then(|| Self {
-                    set: list.iter().cloned().collect(),
-                    order: list,
-                    children: None,
-                    custom: Some((k.to_owned(), data)),
-                });
-            }
-            _ => return None,
-        };
-        (!kept.is_empty()).then(|| Self {
-            set: kept.iter().cloned().collect(),
-            order: kept,
-            children: nested,
-            custom: None,
-        })
-    }
-}
 /// A set of accepted items (expanded from an item, list or tag), and the
 /// items in its `HolderSet` order (`Ingredient.display`'s `TagSlotDisplay`).
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Clone, Debug)]
 // exhaustive: the game builds it with a literal; mods only read it
 pub struct Ingredient {
     /// The items it accepts, however the source shape named them.
@@ -289,8 +33,8 @@ pub struct Ingredient {
     /// The same items in `HolderSet` order (`display`).
     pub order: Vec<String>,
     /// A mod's own kind, for matching at craft time: the kind and its
-    /// JSON, as the load-time hook saw them (`native_ingredient_test`).
-    pub custom: Option<(String, serde_json::Map<String, Value>)>,
+    /// NBT compound, as the load-time hook saw them (`ingredient_test`).
+    pub custom: Option<(String, horizon_core::nbt::Compound)>,
     /// NeoForge's shapes, with their children parsed: matching a concrete
     /// stack asks each child its own `test` (a mod's kind among them),
     /// as on NeoForge — the flat list above only names items.
@@ -307,7 +51,33 @@ pub enum Shape {
     /// The first child must, and the second must not.
     Difference,
 }
+/// Why an ingredient cannot be retained as an exact, component-independent key set.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum IngredientKeysError {
+    /// A custom predicate may inspect components or context at match time.
+    NotEnumerable,
+    /// An ingredient name cannot be resolved in the completed item registry.
+    UnknownItem,
+}
+impl crate::NoBackend for IngredientKeysError {
+    fn no_backend() -> Self {
+        Self::UnknownItem
+    }
+}
 impl Ingredient {
+    /// Resolve exact membership once per load/reload for local matching in mod memory.
+    /// Plain item lists, expanded tags and standard shapes with no custom descendants
+    /// are component-independent. A custom/component predicate anywhere in the tree
+    /// returns `NotEnumerable`: the display item list is not an exact predicate (and
+    /// for differences containing custom predicates is not even necessarily a superset).
+    /// Such predicates remain mod-owned; this method never invokes a match-time hook.
+    /// One host call per ingredient at publication; never call this per tick or candidate.
+    pub fn item_keys(&self, host: &dyn Host) -> Result<Arc<[crate::ItemKey]>, IngredientKeysError> {
+        backend_of(host)
+            .ok_or(IngredientKeysError::UnknownItem)?
+            .recipe_ingredient_item_keys(self)
+    }
     /// The items of a list, in order.
     pub fn of(items: Vec<String>) -> Self {
         Self {
@@ -316,39 +86,6 @@ impl Ingredient {
             custom: None,
             children: None,
         }
-    }
-    pub fn parse(v: &Value, items: &Items) -> Option<Self> {
-        // A mod's own kind: `resolve` asked the hook once at load and left
-        // the item list it matches with the occurrence; one no load
-        // resolved fails the file.
-        Self::of_walked(WalkedIngredient::walk(
-            v,
-            &items.item_tag_order,
-            &resolved_items,
-        )?)
-    }
-    /// The walk of an item ingredient's answer: NeoForge's standard shapes
-    /// keep their children, and a mod's own kind keeps its kind and JSON,
-    /// since the load-time list only names items and matching a concrete
-    /// stack (its components) is the match-time hook's.
-    fn of_walked(walked: WalkedIngredient) -> Option<Self> {
-        // The shapes' children walk the same way; a child no wrapper
-        // answers fails the file.
-        let children = match walked.children {
-            Some((shape, kids)) => Some((
-                shape,
-                kids.into_iter()
-                    .map(Self::of_walked)
-                    .collect::<Option<_>>()?,
-            )),
-            None => None,
-        };
-        (!walked.order.is_empty()).then(|| Self {
-            items: walked.set,
-            order: walked.order,
-            custom: walked.custom,
-            children,
-        })
     }
     /// `Ingredient.test`: whether `stack` fits: a stack the list names, and
     /// for a mod's own kind one the match-time hook accepts
@@ -360,7 +97,8 @@ impl Ingredient {
 }
 /// A recipe in force (`RecipeManager.getAllRecipesFor`), whatever its type
 /// (vanilla's or a mod's own): its typed parts, and its file for whatever a
-/// mod's own type keeps there. Plain data.
+/// mod's own type keeps there. `json` is the data-pack file's JSON, read by a
+/// mod at reload; host parsing helpers accept JSON text. Plain data.
 ///
 /// A recipe the game could not parse (an ingredient it cannot read, no
 /// result) is not in force and is not listed.
@@ -416,20 +154,66 @@ impl Recipe {
     }
 }
 
-/// What a crafting grid makes (`CraftingRecipe.assemble` and `getRemainingItems`), as
-/// [`LevelRef::craft`] answers it.
+/// Typed input to the engine's matched recipe lookup. Slot order is significant.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
-pub struct CraftResult {
-    /// The stack the recipe makes.
-    pub output: ItemStack,
-    /// What each slot of the grid keeps once the craft takes one item from it, row by row as
-    /// the grid was given: an empty bucket for a milk bucket, `None` for most.
-    pub remainders: Vec<Option<ItemStack>>,
+pub enum RecipeInput {
+    Crafting {
+        width: u32,
+        height: u32,
+        slots: Vec<Option<ItemStack>>,
+    },
+    Single(ItemStack),
+    Smithing {
+        template: Option<ItemStack>,
+        base: Option<ItemStack>,
+        addition: Option<ItemStack>,
+    },
 }
-impl CraftResult {
-    /// New.
-    pub fn new(output: ItemStack, remainders: Vec<Option<ItemStack>>) -> Self {
-        Self { output, remainders }
+/// A refusal distinct from a valid input with no matching recipe.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum RecipeLookupError {
+    InvalidInput,
+    InvalidItem,
+    InvalidRecipe,
+    UnavailableLevel,
+    /// The engine has no matcher for this type. Cache its recipes once per load/reload
+    /// through Host::recipes_of_type and match in mod memory, without per-tick crossings.
+    NotMatchable,
+}
+impl crate::NoBackend for RecipeLookupError {
+    fn no_backend() -> Self {
+        Self::UnavailableLevel
+    }
+}
+/// What the matched recipe assembles; lookup never consumes the input.
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub struct RecipeMatch {
+    pub recipe: crate::Identifier,
+    pub output: ItemStack,
+    /// Remaining items in input slot order after consuming one item per occupied slot.
+    pub remainders: Vec<Option<ItemStack>>,
+    pub experience: f32,
+    /// Recipe-file cooking time; station-specific speed adjustments are not applied here.
+    pub processing_time: u32,
+}
+impl RecipeMatch {
+    /// Build the result of an engine match.
+    pub fn new(
+        recipe: crate::Identifier,
+        output: ItemStack,
+        remainders: Vec<Option<ItemStack>>,
+        experience: f32,
+        processing_time: u32,
+    ) -> Self {
+        Self {
+            recipe,
+            output,
+            remainders,
+            experience,
+            processing_time,
+        }
     }
 }

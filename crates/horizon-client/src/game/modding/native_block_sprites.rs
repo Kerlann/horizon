@@ -14,9 +14,18 @@ impl Game<'_> {
     /// its tint source and whether it is cut out, translucent or animated; its particle sprite; whether it is a plain
     /// cube. None for a block the game does not know. The model is the state's first random variant. API
     /// 380.
-    pub(super) fn block_sprites(&self, blocks: &[&str]) -> Vec<Option<BlockSprites>> {
+    pub(super) fn block_sprites(
+        &self,
+        blocks: &[horizon_world::registry::BlockStateId],
+    ) -> Vec<Option<BlockSprites>> {
         let lookup = self.native_sprite_lookup();
-        blocks.iter().map(|block| lookup.block(block)).collect()
+        blocks
+            .iter()
+            .map(|state| {
+                self.pack.context.assets.registry.state(*state)?;
+                Some(lookup.state(*state))
+            })
+            .collect()
     }
     /// For a client mod: each texture's sprite by name (`minecraft:block/stone`, `block/stone`), none for one no
     /// model uses. API 380.

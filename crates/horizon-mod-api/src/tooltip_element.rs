@@ -1,9 +1,9 @@
-use crate::ItemStack;
-use horizon_client_core::text::Text;
+use crate::{ItemStack, Text};
 
 /// One element of an item's tooltip as `render_tooltip_gather_components`
 /// hands it over, before any wrapping
-/// (`Either<FormattedText, TooltipComponent>`).
+/// (`Either<FormattedText, TooltipComponent>`). Text deeper than 512 nodes
+/// refuses tooltip conversion before any changed element is drawn.
 #[derive(Clone, PartialEq)]
 // exhaustive: a closed set the game matches without a wildcard
 pub enum TooltipElement {

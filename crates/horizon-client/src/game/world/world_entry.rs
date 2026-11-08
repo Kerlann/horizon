@@ -470,37 +470,13 @@ impl Game<'_> {
 
     pub(super) fn prepare_parts(&self, items: &Items) -> Result<PreparedParts> {
         let registry = self.pack.assets.registry;
-        let blocks = mod_api::__private::prepare_blocks(|id| {
-            let default = registry.default_state(id)?;
-            let of_block = |state| {
-                registry
-                    .state(BlockStateId(state))
-                    .is_some_and(|s| s.name == id)
-            };
-            let mut first = default.0;
-            while first > 0 && of_block(first - 1) {
-                first -= 1;
-            }
-            let mut last = default.0;
-            while of_block(last + 1) {
-                last += 1;
-            }
-            Some(mod_api::__private::ResolvedBlock {
-                default,
-                states: mod_api::BlockStateRange::new(BlockStateId(first), last - first + 1),
-                block: self.res.behaviours().block(default),
-            })
-        })
-        .map_err(|refused| format!("Mod block keys refused:\n{}", refused.join("\n")))?;
-        let tags = self.block_tag_sets(items);
+        let tags = native_world_read::prepare_block_tags(items);
         let parts = mod_api::__private::prepare_parts(
             &items.block_tags,
             &items.item_tags,
             mod_api::__private::KnownIds {
                 block: &|id| registry.default_state(id).is_some(),
                 item: &|id| items.items.contains_key(id),
-                state_count: registry.len(),
-                state_block: &|state| &registry.state(BlockStateId(state as u32)).unwrap().name,
             },
         )
         .map_err(|refused| match refused {
@@ -517,8 +493,9 @@ impl Game<'_> {
             }
             _ => "Mod parts refused".to_owned(),
         })?;
+        let block_states = api_values::prepare_block_states(registry)?;
         Ok(PreparedParts {
-            blocks,
+            block_states,
             tags,
             parts,
         })
@@ -576,7 +553,7 @@ impl Game<'_> {
     /// Ask the parts of each block `isPathfindable` once per state and type: the answer depends
     /// on nothing else, so path finding and spawning read it with no dispatch.
     pub(super) fn install_parts(&self, prepared: PreparedParts) {
-        mod_api::__private::install_blocks(prepared.blocks);
+        api_values::install_block_states(prepared.block_states);
         native_world_read::install_block_tags(prepared.tags);
         mod_api::__private::install_resolved_parts(prepared.parts);
         self.resolve_pathfindable();

@@ -4,6 +4,177 @@
 use horizon_core::nbt::{Compound, JavaString, Tag};
 use horizon_items::items::{ItemStack as EngineStack, Items};
 use mod_api::item_stack::{ItemStack as ApiStack, StackWriteError};
+#[path = "api_values/aggregates.rs"]
+pub(in crate::game) mod aggregates;
+#[path = "api_values/block_edit.rs"]
+pub(in crate::game) mod block_edit;
+#[path = "api_values/block_state.rs"]
+pub(in crate::game) mod block_state;
+
+pub(crate) fn block_jump_factor(
+    context: &horizon_world::native_load_context::LoopContext,
+    state: horizon_world::registry::BlockStateId,
+    factor: &mut f32,
+) {
+    if !block_state::block_listens(mod_api::HookId::BlockJumpFactor, state) {
+        return;
+    }
+    let Ok(state) = state.try_into_api() else {
+        return;
+    };
+    mod_api::dispatch_block_jump_factor(
+        &horizon_client_render::api_context::LoopReader(context).context(),
+        state,
+        factor,
+    );
+}
+pub(crate) fn block_speed_factor(
+    context: &horizon_world::native_load_context::LoopContext,
+    state: horizon_world::registry::BlockStateId,
+    factor: &mut f32,
+) {
+    if !block_state::block_listens(mod_api::HookId::BlockSpeedFactor, state) {
+        return;
+    }
+    let Ok(state) = state.try_into_api() else {
+        return;
+    };
+    mod_api::dispatch_block_speed_factor(
+        &horizon_client_render::api_context::LoopReader(context).context(),
+        state,
+        factor,
+    );
+}
+
+/// Resolve the metadata default through the sole numeric reverse index, without allocation.
+pub(crate) fn default_state(
+    block: mod_api::BlockKey,
+) -> Option<horizon_world::registry::BlockStateId> {
+    use mod_api::BlockMetadata;
+    let metadata = mod_api::__private::block_definitions()?;
+    let value = mod_api::BlockState::from(metadata.of(block, &[]).ok()?);
+    block_state::current().ok()?.to_engine(value).ok()
+}
+
+pub(crate) fn behavior_block(
+    block: mod_api::BlockKey,
+    behaviours: &horizon_world::level::Behaviours,
+) -> Option<horizon_world::level::states::BlockId> {
+    Some(behaviours.block(default_state(block)?))
+}
+pub(in crate::game) use super::native_worldgen::prepare as prepare_block_states;
+pub(in crate::game) use block_state::install as install_block_states;
+#[path = "api_values/landing_write.rs"]
+mod landing_write;
+#[path = "api_values/recipe_inputs.rs"]
+pub(in crate::game) mod recipe_inputs;
+
+/// Publish immutable metadata with completed keys before any mesh tables or callbacks use it.
+/// Registry definitions do not change on pack reload; world-number mappings are separate.
+pub(in crate::game) fn resolve_block_definitions(
+    registry: &horizon_world::registry::BlockRegistry,
+) -> Result<(), String> {
+    block_state::clear();
+    if mod_api::__private::block_definitions().is_some() {
+        return bind_worker_blocks(registry);
+    }
+    let mut blocks = std::collections::BTreeMap::<_, Vec<_>>::new();
+    for index in 0..registry.len() {
+        let state = registry
+            .state(horizon_world::registry::BlockStateId(index as u32))
+            .expect("registry index is in bounds");
+        blocks
+            .entry(state.name.as_str())
+            .or_default()
+            .push((index, &state.properties));
+    }
+    mod_api::__private::resolve_block_keys(blocks.keys().copied(), |name| {
+        let states = &blocks[name];
+        let default = registry
+            .default_state(name)
+            .expect("registry owns block defaults");
+        let ordinal = states
+            .iter()
+            .position(|(index, _)| *index == default.0 as usize)
+            .expect("default belongs to block");
+        let states: Vec<std::collections::BTreeMap<_, _>> = states
+            .iter()
+            .map(|(_, properties)| {
+                properties
+                    .iter()
+                    .map(|(name, value)| (name.clone(), value.clone()))
+                    .collect()
+            })
+            .collect();
+        let states: Vec<_> = states.iter().collect();
+        horizon_mod_runtime::block_definitions::BlockDefinition::new(&states, ordinal as u16)
+            .map_err(|error| format!("block {name}: {error:?}"))
+    })
+    .map_err(|errors| errors.join("\n"))?;
+    bind_worker_blocks(registry)
+}
+
+fn bind_worker_blocks(registry: &horizon_world::registry::BlockRegistry) -> Result<(), String> {
+    block_state::bind(registry)?;
+    let index = block_state::current().map_err(|error| format!("worker index: {error:?}"))?;
+    let retained = super::native_worldgen::retain(registry, index).map_err(|error| {
+        block_state::clear();
+        error
+    })?;
+    block_state::install(retained);
+    Ok(())
+}
+
+#[cfg(test)]
+#[test]
+fn block_definition_import_preserves_defaults_and_is_immutable_after_load() {
+    let facts = r#"{"defaults":{"minecraft:air":0,"minecraft:stairs":2},"states":[
+        ["air",true,false,"","minecraft:air"],
+        ["s",false,false,"",{"id":"minecraft:stairs","properties":{"facing":"north"}}],
+        ["s",false,false,"",{"id":"minecraft:stairs","properties":{"facing":"east"}}]
+    ]}"#;
+    mod_api::__private::part_tests::install_parts_fixture(&[]).unwrap();
+    let registry =
+        horizon_world::registry::BlockRegistry::from_facts_json(facts.as_bytes()).unwrap();
+    resolve_block_definitions(&registry).unwrap();
+    let blocks = mod_api::__private::block_definitions().unwrap();
+    let key = blocks.names.slots["minecraft:stairs"] as usize;
+    assert_eq!(blocks.definitions[key].of(&[]), Ok(1));
+    assert_eq!(
+        blocks.definitions[key].property(0, "facing"),
+        Ok(Some("north"))
+    );
+    assert_eq!(
+        blocks.definitions[key].property(1, "facing"),
+        Ok(Some("east"))
+    );
+    let changed = facts.replace("east", "south");
+    let registry =
+        horizon_world::registry::BlockRegistry::from_facts_json(changed.as_bytes()).unwrap();
+    assert!(resolve_block_definitions(&registry).is_err());
+    assert_eq!(
+        mod_api::__private::block_definitions().unwrap().definitions[key].property(1, "facing"),
+        Ok(Some("east"))
+    );
+}
+
+impl TryIntoApi for horizon_client::boss_overlay::ModBar {
+    type Api = mod_api::ClientBossBar;
+    type Error = mod_api::text::TextFormError;
+
+    fn try_into_api(&self) -> Result<Self::Api, Self::Error> {
+        Ok(mod_api::ClientBossBar {
+            uuid: self.uuid,
+            name: self.name.try_into_api()?,
+            progress: self.progress,
+            color: self.color,
+            overlay: self.overlay,
+            darken_screen: self.darken_screen,
+            play_boss_music: self.play_boss_music,
+            create_world_fog: self.create_world_fog,
+        })
+    }
+}
 
 /// Registry access for generated stack write-back in full and narrowed hook hosts.
 pub(in crate::game) trait ItemBoundary {
@@ -22,6 +193,108 @@ impl ItemBoundary for super::GameLevel<'_> {
 impl ItemBoundary for super::native_hooks::HitLevel<'_> {
     fn boundary_items(&self) -> Option<&Items> {
         self.0.tags()
+    }
+}
+
+impl TryIntoApi for horizon_world::chunk::BlockState {
+    type Api = mod_api::BlockState;
+    type Error = mod_api::BlockStateError;
+    fn try_into_api(&self) -> Result<Self::Api, Self::Error> {
+        let block = mod_api::__private::block_key(&self.name)
+            .ok_or(mod_api::BlockStateError::UnknownBlock)?;
+        let properties: Vec<_> = self
+            .properties
+            .iter()
+            .map(|(name, value)| mod_api::StateConstraint::new(name.clone(), value.clone()))
+            .collect();
+        mod_api::BlockState::of(block_metadata_table()?, block, &properties)
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn block_values_keep_frozen_ordinals_when_world_state_ids_reorder() {
+    use horizon_world::registry::{BlockRegistry, BlockStateId};
+    mod_api::__private::part_tests::install_parts_fixture(&[]).unwrap();
+    let first = r#"{"defaults":{"minecraft:air":0,"minecraft:stairs":2},"states":[["air",true,false,"","minecraft:air"],["s",false,false,"",{"id":"minecraft:stairs","properties":{"facing":"north"}}],["s",false,false,"",{"id":"minecraft:stairs","properties":{"facing":"east"}}]]}"#;
+    let first = BlockRegistry::from_facts_json(first.as_bytes()).unwrap();
+    resolve_block_definitions(&first).unwrap();
+    let reordered = r#"{"defaults":{"minecraft:air":0,"minecraft:stairs":1},"states":[["air",true,false,"","minecraft:air"],["s",false,false,"",{"id":"minecraft:stairs","properties":{"facing":"east"}}],["s",false,false,"",{"id":"minecraft:stairs","properties":{"facing":"north"}}]]}"#;
+    let reordered = BlockRegistry::from_facts_json(reordered.as_bytes()).unwrap();
+    resolve_block_definitions(&reordered).unwrap();
+    let east = reordered
+        .state(BlockStateId(1))
+        .unwrap()
+        .try_into_api()
+        .unwrap();
+    let north = reordered
+        .state(BlockStateId(2))
+        .unwrap()
+        .try_into_api()
+        .unwrap();
+    let metadata = block_metadata_table().unwrap();
+    assert_eq!(east.ordinal(), 1);
+    assert_eq!(north.ordinal(), 0);
+    assert_eq!(east.property(metadata, "facing"), Ok(Some("east")));
+    assert_eq!(north.property(metadata, "facing"), Ok(Some("north")));
+    let mut invalid = reordered.state(BlockStateId(1)).unwrap().clone();
+    invalid.properties.insert("facing".into(), "south".into());
+    assert_eq!(
+        invalid.try_into_api(),
+        Err(mod_api::BlockStateError::InvalidValue(0))
+    );
+    invalid.name = "missing:block".into();
+    assert_eq!(
+        invalid.try_into_api(),
+        Err(mod_api::BlockStateError::UnknownBlock)
+    );
+}
+
+/// Prepare callback data before mesh construction; workers never convert engine records.
+pub(in crate::game) fn mod_tint_values(
+    _registry: &horizon_world::registry::BlockRegistry,
+) -> Result<Option<crate::mesher::ModTintValues>, String> {
+    if !crate::mesher::has_custom_block_tint_sources() {
+        return Ok(None);
+    }
+    let metadata =
+        block_metadata_table().map_err(|error| format!("block tint metadata: {error:?}"))?;
+    let states = block_state::snapshot().map_err(|error| format!("block tint state: {error:?}"))?;
+    Ok(Some(crate::mesher::ModTintValues { states, metadata }))
+}
+
+fn block_metadata_table()
+-> Result<&'static horizon_mod_runtime::block_definitions::Blocks, mod_api::BlockStateError> {
+    mod_api::__private::block_definitions().ok_or(mod_api::BlockStateError::Unavailable)
+}
+impl super::Game<'_> {
+    pub(in crate::game) fn block_metadata_name(
+        &self,
+        block: mod_api::BlockKey,
+    ) -> Result<&str, mod_api::BlockStateError> {
+        mod_api::BlockMetadata::name(block_metadata_table()?, block)
+    }
+    pub(in crate::game) fn block_metadata_property(
+        &self,
+        state: mod_api::BlockStateRecord,
+        name: &str,
+    ) -> Result<Option<&str>, mod_api::BlockStateError> {
+        mod_api::BlockMetadata::property(block_metadata_table()?, state, name)
+    }
+    pub(in crate::game) fn block_metadata_with(
+        &self,
+        state: mod_api::BlockStateRecord,
+        name: &str,
+        value: &str,
+    ) -> Result<mod_api::BlockStateRecord, mod_api::BlockStateError> {
+        mod_api::BlockMetadata::with(block_metadata_table()?, state, name, value)
+    }
+    pub(in crate::game) fn block_metadata_of(
+        &self,
+        block: mod_api::BlockKey,
+        properties: &[mod_api::StateConstraint],
+    ) -> Result<mod_api::BlockStateRecord, mod_api::BlockStateError> {
+        mod_api::BlockMetadata::of(block_metadata_table()?, block, properties)
     }
 }
 
@@ -58,7 +331,7 @@ macro_rules! write_answers {
 write_answers!(bool, u32, ());
 
 /// Convert an engine value into an owned API value after resolving registry identities.
-pub(in crate::game) trait TryIntoApi {
+pub(crate) trait TryIntoApi {
     type Api;
     type Error;
     fn try_into_api(&self) -> Result<Self::Api, Self::Error>;
@@ -76,14 +349,17 @@ where
 }
 
 /// Validate a mod value against the game's registry before admitting it to engine state.
-pub(in crate::game) trait TryIntoEngine<Context: ?Sized = Items> {
+#[path = "api_values/content_declarations.rs"]
+mod content_declarations;
+
+pub(crate) trait TryIntoEngine<Context: ?Sized = Items> {
     type Engine;
     type Error;
     fn try_into_engine(&self, context: &Context) -> Result<Self::Engine, Self::Error>;
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(in crate::game) enum StackReadError {
+pub(crate) enum StackReadError {
     UnknownItem,
     Empty,
     InvalidComponents(mod_api::StackError),
@@ -136,6 +412,14 @@ macro_rules! scalar_values {
 }
 scalar_values!(u32, i32, bool, ());
 
+impl TryIntoApi for String {
+    type Api = Self;
+    type Error = StackReadError;
+    fn try_into_api(&self) -> Result<Self, Self::Error> {
+        Ok(self.clone())
+    }
+}
+
 impl<T: TryIntoApi + ?Sized> TryIntoApi for &T {
     type Api = T::Api;
     type Error = T::Error;
@@ -143,11 +427,11 @@ impl<T: TryIntoApi + ?Sized> TryIntoApi for &T {
         (*self).try_into_api()
     }
 }
-impl<T: TryIntoEngine + ?Sized> TryIntoEngine for &T {
+impl<C: ?Sized, T: TryIntoEngine<C> + ?Sized> TryIntoEngine<C> for &T {
     type Engine = T::Engine;
     type Error = T::Error;
-    fn try_into_engine(&self, items: &Items) -> Result<Self::Engine, Self::Error> {
-        (*self).try_into_engine(items)
+    fn try_into_engine(&self, context: &C) -> Result<Self::Engine, Self::Error> {
+        (*self).try_into_engine(context)
     }
 }
 
@@ -158,12 +442,12 @@ impl<T: TryIntoApi> TryIntoApi for Option<T> {
         self.as_ref().map(TryIntoApi::try_into_api).transpose()
     }
 }
-impl<T: TryIntoEngine> TryIntoEngine for Option<T> {
+impl<C: ?Sized, T: TryIntoEngine<C>> TryIntoEngine<C> for Option<T> {
     type Engine = Option<T::Engine>;
     type Error = T::Error;
-    fn try_into_engine(&self, items: &Items) -> Result<Self::Engine, Self::Error> {
+    fn try_into_engine(&self, context: &C) -> Result<Self::Engine, Self::Error> {
         self.as_ref()
-            .map(|value| value.try_into_engine(items))
+            .map(|value| value.try_into_engine(context))
             .transpose()
     }
 }
@@ -189,13 +473,13 @@ impl<T: TryIntoApi, const N: usize> TryIntoApi for [T; N] {
         Ok(output.map(|value| value.expect("every array element converted")))
     }
 }
-impl<T: TryIntoEngine, const N: usize> TryIntoEngine for [T; N] {
+impl<C: ?Sized, T: TryIntoEngine<C>, const N: usize> TryIntoEngine<C> for [T; N] {
     type Engine = [T::Engine; N];
     type Error = T::Error;
-    fn try_into_engine(&self, items: &Items) -> Result<Self::Engine, Self::Error> {
+    fn try_into_engine(&self, context: &C) -> Result<Self::Engine, Self::Error> {
         let mut output: [Option<T::Engine>; N] = std::array::from_fn(|_| None);
         for (target, source) in output.iter_mut().zip(self) {
-            *target = Some(source.try_into_engine(items)?);
+            *target = Some(source.try_into_engine(context)?);
         }
         Ok(output.map(|value| value.expect("every array element converted")))
     }
@@ -221,22 +505,37 @@ impl<T: TryIntoApi> TryIntoApi for Vec<T> {
         self.iter().map(TryIntoApi::try_into_api).collect()
     }
 }
-impl<T: TryIntoEngine> TryIntoEngine for Vec<T> {
+impl<C: ?Sized, T: TryIntoEngine<C>> TryIntoEngine<C> for Vec<T> {
     type Engine = Vec<T::Engine>;
     type Error = T::Error;
-    fn try_into_engine(&self, items: &Items) -> Result<Self::Engine, Self::Error> {
-        self.as_slice().try_into_engine(items)
+    fn try_into_engine(&self, context: &C) -> Result<Self::Engine, Self::Error> {
+        self.as_slice().try_into_engine(context)
     }
 }
-impl<T: TryIntoEngine> TryIntoEngine for [T] {
+impl<C: ?Sized, T: TryIntoEngine<C>> TryIntoEngine<C> for [T] {
     type Engine = Vec<T::Engine>;
     type Error = T::Error;
-    fn try_into_engine(&self, items: &Items) -> Result<Self::Engine, Self::Error> {
+    fn try_into_engine(&self, context: &C) -> Result<Self::Engine, Self::Error> {
         self.iter()
-            .map(|value| value.try_into_engine(items))
+            .map(|value| value.try_into_engine(context))
             .collect()
     }
 }
+impl TryIntoApi for (horizon_client::text::Text, u32) {
+    type Api = (mod_api::Text, u32);
+    type Error = mod_api::text::TextFormError;
+    fn try_into_api(&self) -> Result<Self::Api, Self::Error> {
+        Ok((self.0.try_into_api()?, self.1))
+    }
+}
+impl<C: ?Sized> TryIntoEngine<C> for (mod_api::Text, u32) {
+    type Engine = (horizon_client::text::Text, u32);
+    type Error = mod_api::text::TextFormError;
+    fn try_into_engine(&self, context: &C) -> Result<Self::Engine, Self::Error> {
+        Ok((self.0.try_into_engine(context)?, self.1))
+    }
+}
+
 impl<A: TryIntoApi, B: TryIntoApi<Error = A::Error>> TryIntoApi for (A, B) {
     type Api = (A::Api, B::Api);
     type Error = A::Error;
@@ -244,13 +543,13 @@ impl<A: TryIntoApi, B: TryIntoApi<Error = A::Error>> TryIntoApi for (A, B) {
         Ok((self.0.try_into_api()?, self.1.try_into_api()?))
     }
 }
-impl<A: TryIntoEngine, B: TryIntoEngine<Error = A::Error>> TryIntoEngine for (A, B) {
-    type Engine = (A::Engine, B::Engine);
-    type Error = A::Error;
-    fn try_into_engine(&self, items: &Items) -> Result<Self::Engine, Self::Error> {
+impl<C: ?Sized> TryIntoEngine<C> for (mod_api::Text, mod_api::Text) {
+    type Engine = (horizon_client::text::Text, horizon_client::text::Text);
+    type Error = mod_api::text::TextFormError;
+    fn try_into_engine(&self, context: &C) -> Result<Self::Engine, Self::Error> {
         Ok((
-            self.0.try_into_engine(items)?,
-            self.1.try_into_engine(items)?,
+            self.0.try_into_engine(context)?,
+            self.1.try_into_engine(context)?,
         ))
     }
 }
@@ -420,10 +719,13 @@ impl TryIntoEngine for mod_api::ItemResource {
 /// The write conversion below adds authoritative registry-dependent validation.
 pub(in crate::game) fn stack_value(value: &ApiStack) -> Result<EngineStack, StackWriteError> {
     let id = mod_api::__private::item_key_id(value.item()).ok_or(StackWriteError::UnknownItem)?;
-    Ok(encode_stack(value, id.into()))
+    encode_stack(value, id.into())
 }
 
-fn encode_stack(value: &ApiStack, item: std::sync::Arc<str>) -> EngineStack {
+fn encode_stack(
+    value: &ApiStack,
+    item: std::sync::Arc<str>,
+) -> Result<EngineStack, StackWriteError> {
     let mut patch = value.components().map(|patch| patch.as_nbt().clone());
     // Let the existing component codec preserve explicit zero versus prototype inheritance.
     if value.damage_component() == Some(0) {
@@ -433,12 +735,14 @@ fn encode_stack(value: &ApiStack, item: std::sync::Arc<str>) -> EngineStack {
     }
     let patch = patch.map(Tag::Compound);
     let (_, extra) = horizon_items::item_data::decode_components(patch.as_ref());
-    EngineStack {
+    let stack = EngineStack {
         item,
         count: value.count(),
         damage: value.damage(),
         extra,
-    }
+    };
+    content_declarations::validate_decoded_effects(patch.as_ref(), &stack)?;
+    Ok(stack)
 }
 
 impl TryIntoEngine for ApiStack {
@@ -452,7 +756,7 @@ impl TryIntoEngine for ApiStack {
             .items
             .get_key_value(id)
             .ok_or(StackWriteError::UnknownItem)?;
-        let stack = encode_stack(self, id.clone());
+        let stack = encode_stack(self, id.clone())?;
         let effective = |name: &str, default: u32| -> Result<u32, StackWriteError> {
             match stack.data().and_then(|data| data.other(name)) {
                 Some(Tag::Int(value)) => {
@@ -686,7 +990,7 @@ impl TryIntoEngine for mod_api::Ingredient {
                 .children
                 .as_ref()
                 .map(|(shape, kids)| {
-                    Ok((
+                    Ok::<_, StackWriteError>((
                         shape.clone(),
                         kids.iter()
                             .map(|k| k.try_into_engine(_items))
@@ -731,7 +1035,7 @@ impl TryIntoApi for crate::crafting::FireworkShapeIngredient {
     type Error = StackReadError;
     fn try_into_api(&self) -> Result<Self::Api, Self::Error> {
         Ok(mod_api::FireworkShapeIngredient::new(
-            self.shape,
+            self.shape.try_into_api().unwrap(),
             self.ingredient.try_into_api()?,
         ))
     }
@@ -760,7 +1064,9 @@ pub(crate) fn install_stack_hooks() {
                 return;
             }
             if let Ok(stack) = stack.try_into_api() {
-                mod_api::crafting::native_ingredient_test(context, kind, data, &stack, accept);
+                horizon_client::crafting::native_hooks::native_ingredient_test(
+                    context, kind, data, &stack, accept,
+                );
             }
         },
         enchantments: |stack, target, value| {
@@ -846,7 +1152,8 @@ pub(crate) fn menu_slot_rules(
     let Ok(stack) = stack.try_into_api() else {
         return;
     };
-    let context = mod_api::OwningLoop::new(context);
+    let reader = horizon_client_render::api_context::LoopReader(context);
+    let context = reader.context();
     mod_api::dispatch_menu_slot_rules(&context, menu, slot, &stack, may_place, max_stack);
 }
 
@@ -881,7 +1188,7 @@ pub(crate) fn stacked_on_other(
             cancellation_result,
         };
         mod_api::dispatch_item_stacked_on_other(
-            &mod_api::OwningLoop::new(context),
+            &horizon_client_render::api_context::LoopReader(context).context(),
             &mut api,
             &mut candidate_canceled,
         );
@@ -1519,6 +1826,47 @@ fn apply_block_entity_snapshot(
     Ok(())
 }
 
+// Validation runs after all listeners return; dispatch does not retain per-mod provenance.
+// Bound diagnostics even when mods register many entity types.
+fn finish_block_entity_writeback<T>(
+    entity: &mut crate::containers::ModBlockEntity,
+    snapshot: &mod_api::ModBlockEntity,
+    before: mod_api::containers::ModRevision,
+    items: &Items,
+    hook: &'static str,
+    output: Result<T, BlockEntitySnapshotError>,
+) -> Result<T, BlockEntitySnapshotError> {
+    let result = output.and_then(|output| {
+        apply_block_entity_snapshot(entity, snapshot, before, items)?;
+        Ok(output)
+    });
+    if let Err(reason) = &result {
+        let changes = entity
+            .revision()
+            .changes()
+            .max(snapshot.revision().changes())
+            .saturating_add(1);
+        entity.apply_snapshot((**entity).clone(), changes);
+        static REPORTED: std::sync::Mutex<Vec<(String, &'static str)>> =
+            std::sync::Mutex::new(Vec::new());
+        let mut reported = REPORTED.lock().unwrap_or_else(|poison| poison.into_inner());
+        if reported.len() < 1024
+            && !reported
+                .iter()
+                .any(|(id, name)| id == entity.id() && *name == hook)
+        {
+            reported.push((entity.id().to_owned(), hook));
+            log::warn!(
+                "Rejected block entity writeback: entity type {}, hook {}, reason {:?}",
+                entity.id(),
+                hook,
+                reason
+            );
+        }
+    }
+    result
+}
+
 impl super::Game<'_> {
     pub(in crate::game) fn api_block_entity_tick(
         &mut self,
@@ -1538,7 +1886,14 @@ impl super::Game<'_> {
         };
         let revision = api.revision();
         self.native_block_entity_tick(pos, &mut api);
-        let _ = apply_block_entity_snapshot(entity, &api, revision, self.items());
+        let _ = finish_block_entity_writeback(
+            entity,
+            &api,
+            revision,
+            self.items(),
+            "block_entity_tick",
+            Ok(()),
+        );
     }
     pub(in crate::game) fn api_block_entity_update_tag(
         pos: [i32; 3],
@@ -1620,9 +1975,17 @@ impl super::Game<'_> {
         };
         let revision = api.revision();
         self.native_menu_button(context, &mut api, &mut cursor);
-        if let Ok(cursor) = cursor.try_into_engine(self.items())
-            && apply_block_entity_snapshot(entity, &api, revision, self.items()).is_ok()
-        {
+        let cursor = cursor
+            .try_into_engine(self.items())
+            .map_err(|_| BlockEntitySnapshotError::InvalidStack);
+        if let Ok(cursor) = finish_block_entity_writeback(
+            entity,
+            &api,
+            revision,
+            self.items(),
+            "menu_button",
+            cursor,
+        ) {
             *carried = cursor;
         }
     }
@@ -1651,9 +2014,17 @@ impl super::Game<'_> {
             &mut held,
             &mut candidate_handled,
         );
-        if let Ok(held) = held.try_into_engine(self.items())
-            && apply_block_entity_snapshot(entity, &api, revision, self.items()).is_ok()
-        {
+        let held = held
+            .try_into_engine(self.items())
+            .map_err(|_| BlockEntitySnapshotError::InvalidStack);
+        if let Ok(held) = finish_block_entity_writeback(
+            entity,
+            &api,
+            revision,
+            self.items(),
+            "menu_quick_move",
+            held,
+        ) {
             *stack = held;
             *handled = candidate_handled;
         }
@@ -1686,6 +2057,48 @@ mod stacked_slot_tests;
 #[cfg(test)]
 mod block_entity_snapshot_tests {
     use super::*;
+    #[test]
+    fn rejected_writebacks_invalidate_tick() {
+        assert_rejected_writeback("block_entity_tick");
+    }
+    #[test]
+    fn rejected_writebacks_invalidate_menu_button() {
+        assert_rejected_writeback("menu_button");
+    }
+    #[test]
+    fn rejected_writebacks_invalidate_menu_quick_move() {
+        assert_rejected_writeback("menu_quick_move");
+    }
+    fn assert_rejected_writeback(hook: &'static str) {
+        let items = Items::for_tests(Default::default());
+        let mut entity =
+            crate::containers::ModBlockEntity::new("test:rejected".into(), Default::default());
+        let mut snapshot = entity.try_into_api().unwrap();
+        let before = snapshot.revision();
+        snapshot.data.push(42);
+        let claimed = snapshot.revision().changes();
+        // Tick rejection: wrong identity. Menu rejection: invalid cursor/held output.
+        let output = if hook == "block_entity_tick" {
+            snapshot = mod_api::ModBlockEntity::new("other:type".into(), Default::default());
+            Ok(())
+        } else {
+            Err(BlockEntitySnapshotError::InvalidStack)
+        };
+        assert!(
+            finish_block_entity_writeback(&mut entity, &snapshot, before, &items, hook, output)
+                .is_err()
+        );
+        assert!(entity.data.is_empty());
+        assert_eq!(
+            entity.revision().changes(),
+            if hook == "block_entity_tick" {
+                1
+            } else {
+                claimed + 1
+            }
+        );
+    }
+
     #[test]
     fn unchanged_snapshots_keep_revision_and_callback_writes_advance_it() {
         let mut entity =
@@ -2391,6 +2804,332 @@ mod declaration_snapshot_tests {
     }
 }
 
+macro_rules! gui_draw_value {
+    ($draw:expr, $from:ident, $to:ident, $convert:ident($($args:expr),*)) => {
+        match $draw {
+            $from::Sprite {
+                sprite,
+                x,
+                y,
+                w,
+                h,
+                region,
+                color,
+                blend,
+            } => $to::Sprite {
+                sprite: sprite.clone(),
+                x: *x,
+                y: *y,
+                w: *w,
+                h: *h,
+                region: *region,
+                color: *color,
+                blend: *blend,
+            },
+            $from::AtlasSprite {
+                sprite,
+                x,
+                y,
+                w,
+                h,
+                color,
+            } => $to::AtlasSprite {
+                sprite: sprite.clone(),
+                x: *x,
+                y: *y,
+                w: *w,
+                h: *h,
+                color: *color,
+            },
+            $from::Blit {
+                texture,
+                blend,
+                x,
+                y,
+                w,
+                h,
+                uv,
+                src,
+                tex,
+                color,
+            } => $to::Blit {
+                texture: texture.clone(),
+                blend: *blend,
+                x: *x,
+                y: *y,
+                w: *w,
+                h: *h,
+                uv: *uv,
+                src: *src,
+                tex: *tex,
+                color: *color,
+            },
+            $from::Fill {
+                x0,
+                y0,
+                x1,
+                y1,
+                color,
+            } => $to::Fill {
+                x0: *x0,
+                y0: *y0,
+                x1: *x1,
+                y1: *y1,
+                color: *color,
+            },
+            $from::Text {
+                text,
+                x,
+                y,
+                color,
+                shadow,
+            } => $to::Text {
+                text: text.$convert($($args),*)?,
+                x: *x,
+                y: *y,
+                color: *color,
+                shadow: *shadow,
+            },
+            $from::Item {
+                slot,
+                x,
+                y,
+                seed,
+                scale,
+                pivot,
+            } => $to::Item {
+                slot: *slot,
+                x: *x,
+                y: *y,
+                seed: *seed,
+                scale: *scale,
+                pivot: *pivot,
+            },
+            $from::Push(ops) => $to::Push(ops.clone()),
+            $from::Pop => $to::Pop,
+        }
+    };
+}
+
+impl TryIntoApi for horizon_client::hud_layout::GuiDraw {
+    type Api = mod_api::hud_layout::GuiDraw;
+    type Error = mod_api::text::TextFormError;
+    fn try_into_api(&self) -> Result<Self::Api, Self::Error> {
+        use horizon_client::hud_layout::GuiDraw as Engine;
+        use mod_api::hud_layout::GuiDraw as Api;
+        Ok(gui_draw_value!(self, Engine, Api, try_into_api()))
+    }
+}
+impl<C: ?Sized> TryIntoEngine<C> for mod_api::hud_layout::GuiDraw {
+    type Engine = horizon_client::hud_layout::GuiDraw;
+    type Error = mod_api::text::TextFormError;
+    fn try_into_engine(&self, _: &C) -> Result<Self::Engine, Self::Error> {
+        use horizon_client::hud_layout::GuiDraw as Engine;
+        use mod_api::hud_layout::GuiDraw as Api;
+        Ok(gui_draw_value!(self, Api, Engine, try_into_engine(&())))
+    }
+}
+
+#[path = "api_values/text_boundary.rs"]
+mod text_boundary;
+#[cfg(test)]
+mod gui_draw_boundary_tests {
+    use super::{TryIntoApi, TryIntoEngine};
+    use horizon_client::{
+        hud_layout::{Blend, GuiDraw as D, PoseOp},
+        text::Text,
+    };
+    use serde_json::json;
+
+    #[test]
+    fn gui_commands_keep_every_variant_field_order_and_text_source() {
+        let text = Text::from(
+            json!({"translate":"test.hud", "fallback":"%s", "with":[{"text":"name"}], "bold":false, "test:meta":{"n":null}}),
+        );
+        let commands = vec![
+            D::Sprite {
+                sprite: String::from("test:sprite").into(),
+                x: -1,
+                y: 2,
+                w: 3,
+                h: 4,
+                region: Some([5, 6, 7, 8]),
+                color: 0x12345678,
+                blend: Blend::Crosshair,
+            },
+            D::AtlasSprite {
+                sprite: "test:atlas".into(),
+                x: 11,
+                y: 12,
+                w: 13,
+                h: 14,
+                color: 15,
+            },
+            D::Blit {
+                texture: "test:texture".into(),
+                blend: Blend::Nausea,
+                x: 21,
+                y: 22,
+                w: 23,
+                h: 24,
+                uv: [0.25, 0.5],
+                src: [26, 27],
+                tex: [28, 29],
+                color: 30,
+            },
+            D::Fill {
+                x0: -31,
+                y0: 32,
+                x1: 33,
+                y1: 34,
+                color: 35,
+            },
+            D::Text {
+                text: text.clone(),
+                x: 41,
+                y: 42,
+                color: 43,
+                shadow: false,
+            },
+            D::Item {
+                slot: 40,
+                x: 51,
+                y: 52,
+                seed: -53,
+                scale: [0.5, 1.5],
+                pivot: [55., 56.],
+            },
+            D::Push(vec![PoseOp::Translate(61., 62.), PoseOp::Scale(0.5, 1.5)]),
+            D::Pop,
+        ];
+        let api = commands.try_into_api().unwrap();
+        let actual: Result<Vec<D>, mod_api::text::TextFormError> = api.try_into_engine(&());
+        let actual = actual.unwrap();
+        assert_eq!(actual, commands);
+        let D::Text { text: actual, .. } = &actual[4] else {
+            panic!("text command")
+        };
+        assert_eq!(actual.component(), text.component());
+    }
+
+    #[test]
+    fn tooltip_pairs_round_trip_without_an_item_registry() {
+        let lines = vec![(horizon_client::text::Text::literal("tip"), 0xff00ff00)];
+        let snapshot: Result<Vec<(mod_api::Text, u32)>, mod_api::text::TextFormError> =
+            lines.try_into_api();
+        let snapshot = snapshot.unwrap();
+        assert_eq!(snapshot[0], (mod_api::Text::literal("tip"), 0xff00ff00));
+        let restored: Result<Vec<(horizon_client::text::Text, u32)>, mod_api::text::TextFormError> =
+            snapshot.try_into_engine(&());
+        let restored = restored.unwrap();
+        assert_eq!(restored[0].0.component(), lines[0].0.component());
+        assert_eq!(restored[0].0.spans, lines[0].0.spans);
+        assert_eq!(restored[0].1, lines[0].1);
+    }
+
+    #[test]
+    fn nested_text_containers_need_no_item_registry_or_stack_error() {
+        let pair = (
+            mod_api::text::Text::literal("a"),
+            mod_api::text::Text::literal("b"),
+        );
+        let values = Some(vec![[pair.clone(), pair]]);
+        let reference = &values;
+        let actual: Result<_, mod_api::text::TextFormError> = reference.try_into_engine(&());
+        let actual = actual.unwrap().unwrap();
+        assert_eq!(actual[0][1].0.plain(), "a");
+        assert_eq!(actual[0][1].1.plain(), "b");
+    }
+}
+
+impl TryIntoApi for horizon_world::level::PlacementContext {
+    type Api = mod_api::PlacementContext;
+    type Error = StackReadError;
+    fn try_into_api(&self) -> Result<Self::Api, Self::Error> {
+        let item = if self.item.is_empty() {
+            None
+        } else {
+            Some(mod_api::__private::item_key(&self.item).ok_or(StackReadError::UnknownItem)?)
+        };
+        let mut snapshot = mod_api::PlacementContext::new(self.pos, self.face, item);
+        snapshot.hit_pos = self.hit_pos;
+        snapshot.hit = [self.hit.x, self.hit.y, self.hit.z];
+        snapshot.inside = self.inside;
+        snapshot.yaw = self.yaw;
+        snapshot.pitch = self.pitch;
+        snapshot.sneaking = self.sneaking;
+        snapshot.replace_clicked = self.replace_clicked;
+        Ok(snapshot)
+    }
+}
+
+#[cfg(test)]
+mod placement_snapshot_tests {
+    use super::*;
+    #[test]
+    fn placement_keeps_click_view_flags_and_empty_hand_without_fallback() {
+        install_parts(&[]).unwrap();
+        mod_api::__private::resolve_items(["minecraft:stone"]).unwrap();
+        let mut engine = horizon_world::level::PlacementContext {
+            pos: horizon_core::position::BlockPos::new(1, 2, 3),
+            hit_pos: horizon_core::position::BlockPos::new(4, 5, 6),
+            face: horizon_core::geometry::Direction::Up,
+            hit: horizon_core::geometry::Vec3::new(4.25, 5.5, 6.75),
+            inside: true,
+            yaw: -45.0,
+            pitch: 90.0,
+            sneaking: true,
+            item: "minecraft:stone".into(),
+            replace_clicked: true,
+        };
+        let snapshot = engine.try_into_api().unwrap();
+        assert_eq!(snapshot.pos, horizon_core::position::BlockPos::new(1, 2, 3));
+        assert_eq!(
+            snapshot.hit_pos,
+            horizon_core::position::BlockPos::new(4, 5, 6)
+        );
+        assert_eq!(snapshot.face, horizon_core::geometry::Direction::Up);
+        assert_eq!(snapshot.hit, [4.25, 5.5, 6.75]);
+        assert!(snapshot.inside);
+        assert_eq!(snapshot.yaw, -45.0);
+        assert_eq!(snapshot.pitch, 90.0);
+        assert!(snapshot.sneaking && snapshot.replace_clicked);
+        assert_eq!(
+            snapshot.item,
+            mod_api::__private::item_key("minecraft:stone")
+        );
+        engine.item.clear();
+        let mut empty = snapshot;
+        empty.item = None;
+        assert_eq!(engine.try_into_api(), Ok(empty));
+        engine.item = "missing:item".into();
+        assert_eq!(engine.try_into_api(), Err(StackReadError::UnknownItem));
+    }
+}
+
+impl TryIntoApi for horizon_client_core::gamerules::Value {
+    type Api = mod_api::GameRuleValue;
+    type Error = StackReadError;
+    fn try_into_api(&self) -> Result<Self::Api, Self::Error> {
+        Ok(match *self {
+            Self::Bool(value) => mod_api::GameRuleValue::Bool(value),
+            Self::Int(value) => mod_api::GameRuleValue::Int(value),
+        })
+    }
+}
+
+#[test]
+fn game_rule_int_snapshot_preserves_full_range() {
+    for value in [i32::MIN, -1, 0, 256, i32::MAX] {
+        assert_eq!(
+            horizon_client_core::gamerules::Value::Int(value)
+                .try_into_api()
+                .unwrap(),
+            mod_api::GameRuleValue::Int(value)
+        );
+    }
+}
+
 fn with_rule_schema<T>(f: impl FnOnce(&mod_api::__private::RuleSchema<'_>) -> T) -> T {
     let registry = horizon_client_core::gamerules::rule_registry();
     f(&mod_api::__private::RuleSchema {
@@ -2401,11 +3140,28 @@ fn with_rule_schema<T>(f: impl FnOnce(&mod_api::__private::RuleSchema<'_>) -> T)
     })
 }
 pub(in crate::game) fn install_parts(mods: &[mod_api::ModEntry]) -> Result<(), Vec<String>> {
-    with_rule_schema(|schema| mod_api::__private::install_parts(mods, schema))
+    with_rule_schema(|schema| {
+        mod_api::__private::install_parts(mods, schema, super::native_dimensions::valid_shape)
+    })
 }
 #[cfg(test)]
 pub(in crate::game) fn register_game_keys(ids: impl IntoIterator<Item = String>) {
-    with_rule_schema(|schema| mod_api::__private::part_tests::register_game_keys(ids, schema));
+    with_rule_schema(|schema| {
+        mod_api::__private::part_tests::register_game_keys(
+            ids,
+            schema,
+            super::native_dimensions::valid_shape,
+        )
+    });
+    mod_api::__private::resolve_effects(
+        horizon_client_core::potions::all_effects()
+            .map(|def| horizon_client_core::potions::namespaced(def.id)),
+        |id| horizon_client_core::potions::effect(id).map(|def| def.index),
+    )
+    .unwrap();
+    if let Some(types) = horizon_client_core::block_entity_types::current() {
+        mod_api::__private::resolve_block_entity_types(types.names(), |id| types.key(id)).unwrap();
+    }
 }
 
 pub(in crate::game) fn game_rule_registry() -> horizon_client_core::gamerules::RuleRegistry {
@@ -2419,3 +3175,17 @@ pub(in crate::game) fn game_rule_registry() -> horizon_client_core::gamerules::R
     )
     .expect("validated at registration")
 }
+
+#[path = "api_values/damage.rs"]
+pub(in crate::game) mod damage;
+#[path = "api_values/item_properties.rs"]
+mod item_properties;
+#[path = "api_values/loot_values.rs"]
+mod loot_values;
+#[path = "api_values/particle_values.rs"]
+mod particle_values;
+pub(crate) use loot_values::{dispatch_loot_condition, dispatch_loot_function};
+#[path = "api_values/phase_values.rs"]
+mod phase_values;
+#[path = "api_values/small_values.rs"]
+mod small_values;

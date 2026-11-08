@@ -1,53 +1,18 @@
-//! Owned snapshot data shared by native and generated component boundaries.
+//! Owned snapshot data of attachment queries.
 use crate::*;
 use horizon_mod_runtime::attachments::{self as runtime, index};
-use std::sync::Arc;
 
 /// A SNAPSHOT of membership and value bindings in the host's current dimension.
 /// Later changes require a fresh query. This is a residency view: removed but
 /// unswept entities may appear, and stale writes fail. Native acquisition neither
 /// clones values nor decodes saved payloads; iteration decodes lazily.
+/// Codec-less attachment types are native-only; their rows do not cross to wasm.
 #[derive(Clone)]
 #[non_exhaustive]
-#[horizon_mod_api_macros::wasm(via = Vec<AttachmentRowForm>)]
 pub struct AttachmentBatch(runtime::AttachmentBatch<AttachmentHolder>);
 impl From<runtime::AttachmentBatch<AttachmentHolder>> for AttachmentBatch {
     fn from(batch: runtime::AttachmentBatch<AttachmentHolder>) -> Self {
         Self(batch)
-    }
-}
-impl From<&AttachmentBatch> for Vec<AttachmentRowForm> {
-    fn from(batch: &AttachmentBatch) -> Self {
-        batch
-            .0
-            .rows()
-            .iter()
-            .map(|row| {
-                let form = index::AttachmentRowForm::from(row);
-                AttachmentRowForm {
-                    token: AttachmentOwnerForm {
-                        holder: form.token.holder,
-                        generation: form.token.generation,
-                    },
-                    entry: form.entry,
-                }
-            })
-            .collect()
-    }
-}
-impl From<Vec<AttachmentRowForm>> for AttachmentBatch {
-    fn from(rows: Vec<AttachmentRowForm>) -> Self {
-        if rows.is_empty() {
-            return Self(runtime::AttachmentBatch::empty());
-        }
-        Self(runtime::AttachmentBatch::new(Arc::new(
-            rows.into_iter()
-                .map(|row| {
-                    let token = index::AttachmentOwnerForm::from(row.token);
-                    index::AttachmentRowForm::from_parts(token, row.entry).into()
-                })
-                .collect(),
-        )))
     }
 }
 impl AttachmentBatch {
@@ -57,6 +22,10 @@ impl AttachmentBatch {
         self,
         key: &AttachmentType<T>,
     ) -> Result<AttachmentQuery<'_, T>, AttachmentError> {
+        #[cfg(target_arch = "wasm32")]
+        if key.codec.is_none() {
+            return Err(AttachmentError::Decode);
+        }
         self.0.query(key)
     }
 }
@@ -66,50 +35,11 @@ pub type AttachmentQuery<'key, T> = runtime::AttachmentQuery<'key, AttachmentHol
 /// A private-field scoped residency identity, not an access authorization token.
 #[derive(Clone)]
 #[non_exhaustive]
-#[horizon_mod_api_macros::wasm(via = AttachmentOwnerForm)]
 pub struct AttachmentWriteToken(index::AttachmentOwner<AttachmentHolder>);
 impl From<index::AttachmentOwner<AttachmentHolder>> for AttachmentWriteToken {
     fn from(token: index::AttachmentOwner<AttachmentHolder>) -> Self {
         Self(token)
     }
-}
-impl From<&AttachmentWriteToken> for AttachmentOwnerForm {
-    fn from(token: &AttachmentWriteToken) -> Self {
-        let form = index::AttachmentOwnerForm::from(&token.0);
-        Self {
-            holder: form.holder,
-            generation: form.generation,
-        }
-    }
-}
-impl From<AttachmentOwnerForm> for AttachmentWriteToken {
-    fn from(form: AttachmentOwnerForm) -> Self {
-        Self(index::AttachmentOwnerForm::from(form).into())
-    }
-}
-impl From<AttachmentOwnerForm> for index::AttachmentOwnerForm<AttachmentHolder> {
-    fn from(form: AttachmentOwnerForm) -> Self {
-        Self::from_parts(form.holder, form.generation)
-    }
-}
-
-/// Plain representation of a scoped residency token.
-#[derive(Clone)]
-#[non_exhaustive]
-pub struct AttachmentOwnerForm {
-    /// Captured scoped holder.
-    pub holder: AttachmentHolder,
-    /// Registration generation, checked against the current index before writing.
-    pub generation: u64,
-}
-/// Plain representation of one captured row.
-#[derive(Clone)]
-#[non_exhaustive]
-pub struct AttachmentRowForm {
-    /// Captured residency identity.
-    pub token: AttachmentOwnerForm,
-    /// Shared immutable value binding.
-    pub entry: Arc<AttachmentEntry>,
 }
 impl AttachmentWriteToken {
     /// Check the current dimension's residency before the ordinary write path.
@@ -120,6 +50,99 @@ impl AttachmentWriteToken {
         index: &index::AttachmentIndex<AttachmentHolder>,
     ) -> Result<(), AttachmentRowError> {
         index.validate_owner(&self.0)
+    }
+}
+
+impl crate::wire::Wire for AttachmentHolder {
+    const MIN: usize = 4;
+    fn put(&self, out: &mut crate::wire::Writer) {
+        match self {
+            Self::Entity(v) => {
+                out.put(&0u32);
+                out.put(v);
+            }
+            Self::Player(v) => {
+                out.put(&1u32);
+                out.put(v);
+            }
+            Self::BlockEntity(v) => {
+                out.put(&2u32);
+                out.put(v);
+            }
+            Self::Chunk(v) => {
+                out.put(&3u32);
+                out.put(v);
+            }
+            Self::Level(v) => {
+                out.put(&4u32);
+                out.put(v);
+            }
+        }
+    }
+    fn take(input: &mut crate::wire::Reader<'_>) -> Result<Self, crate::wire::WireError> {
+        match input.take()? {
+            0u32 => Ok(Self::Entity(input.take()?)),
+            1 => Ok(Self::Player(input.take()?)),
+            2 => Ok(Self::BlockEntity(input.take()?)),
+            3 => Ok(Self::Chunk(input.take()?)),
+            4 => Ok(Self::Level(input.take()?)),
+            _ => Err(crate::wire::WireError::Invalid("invalid attachment holder")),
+        }
+    }
+}
+
+impl crate::wire::Wire for AttachmentWriteToken {
+    const MIN: usize = 12;
+    fn put(&self, out: &mut crate::wire::Writer) {
+        let (holder, generation) = self.0.parts();
+        out.put(holder);
+        out.put(&generation);
+    }
+    fn take(input: &mut crate::wire::Reader<'_>) -> Result<Self, crate::wire::WireError> {
+        Ok(Self(index::AttachmentOwner::from_parts(
+            input.take()?,
+            input.take()?,
+        )))
+    }
+}
+
+impl crate::wire::Wire for AttachmentBatch {
+    const MIN: usize = 4;
+    fn put(&self, out: &mut crate::wire::Writer) {
+        use horizon_core::nbt::{self, Limits, Tag};
+        let rows: Vec<_> = self
+            .0
+            .rows()
+            .iter()
+            .filter_map(|row| {
+                let saved = row.entry.saved()?;
+                let bytes = nbt::write_network(&Tag::Compound(saved), Limits::default()).ok()?;
+                Some((AttachmentWriteToken::from(row.write_token()), bytes))
+            })
+            .collect();
+        out.put(&rows);
+    }
+    fn take(input: &mut crate::wire::Reader<'_>) -> Result<Self, crate::wire::WireError> {
+        use crate::wire::WireError;
+        use horizon_core::nbt::{self, Limits, Tag};
+        let rows: Vec<(AttachmentWriteToken, Vec<u8>)> = input.take()?;
+        let mut result = Vec::with_capacity(rows.len());
+        for (token, bytes) in rows {
+            let (tag, consumed) = nbt::read_network(&bytes, Limits::default())
+                .map_err(|_| WireError::Invalid("invalid attachment NBT"))?;
+            let Tag::Compound(saved) = tag else {
+                return Err(WireError::Invalid("invalid attachment envelope"));
+            };
+            if consumed != bytes.len() {
+                return Err(WireError::Invalid("trailing attachment NBT"));
+            }
+            result.push(
+                token
+                    .0
+                    .into_row(Arc::new(runtime::AttachmentEntry::from_saved(saved))),
+            );
+        }
+        Ok(Self(runtime::AttachmentBatch::new(Arc::new(result))))
     }
 }
 
@@ -135,64 +158,90 @@ mod tests {
         sync: false,
     };
     #[test]
-    fn batch_forms_preserve_values_and_stale_residency() {
+    fn wire_attachment_rows_and_stale_tokens() {
+        use crate::wire::{Reader, Writer};
+        use horizon_core::nbt::{Compound, Tag};
+        static CODED: AttachmentType<u32> = AttachmentType {
+            namespace: "test",
+            name: "coded",
+            default: || 0,
+            codec: Some(runtime::AttachmentCodec {
+                encode: |v| Ok([("n".into(), Tag::Int(*v as i32))].into()),
+                decode: |c: &Compound| match c.get(&"n".into()) {
+                    Some(Tag::Int(n)) => Ok(*n as u32),
+                    _ => Err(AttachmentError::Decode),
+                },
+            }),
+            copy_on_death: false,
+            sync: false,
+        };
         let holder = AttachmentHolder::Entity(EntityRef::new(NativeWorldEpoch::new(1), 42));
-        let entry = Arc::new(AttachmentEntry::from(AttachmentEntryForm::Decoded {
-            value: Arc::new(7u32),
-            encoded: None,
-            policy: AttachmentPolicy {
-                copy_on_death: false,
-                sync: false,
-            },
-        }));
-        let key = ("test".into(), "value".into());
-        let mut index = index::AttachmentIndex::default();
-        index.register(holder, [(key, entry.clone())]).into_result();
+        let index = Arc::new(std::sync::Mutex::new(index::AttachmentIndex::default()));
+        let mut values = runtime::Attachments::default();
+        CODED.set(&mut values, runtime::Holder::Level, 73).unwrap();
+        values.bind_index(&index, holder);
         let batch = AttachmentBatch::from(runtime::AttachmentBatch::new(
-            index.snapshot_named("test", "value"),
+            index.lock().unwrap().snapshot_named("test", "coded"),
         ));
-        let forms = Vec::from(&batch);
-        let token = AttachmentWriteToken::from(forms[0].token.clone());
-        assert_eq!(token.validate(&index), Ok(()));
-        let restored = AttachmentBatch::from(forms).query(&KEY).unwrap();
-        let row = restored.iter().next().unwrap().unwrap();
+        let mut out = Writer::new();
+        out.put(&batch);
+        let decoded: AttachmentBatch = Reader::new(out.bytes()).take().unwrap();
+        let query = decoded.query(&CODED).unwrap();
+        let row = query.iter().next().unwrap().unwrap();
+        assert_eq!(row.holder, holder);
+        assert_eq!(*row.value, 73);
+        let token = AttachmentWriteToken::from(row.write_token());
+        assert_eq!(token.validate(&index.lock().unwrap()), Ok(()));
+        index.lock().unwrap().unload(holder).into_result();
+        assert_eq!(
+            token.validate(&index.lock().unwrap()),
+            Err(AttachmentRowError::StaleHolder)
+        );
+        for end in 0..out.bytes().len() {
+            assert!(
+                Reader::new(&out.bytes()[..end])
+                    .take::<AttachmentBatch>()
+                    .is_err()
+            );
+        }
+        assert!(
+            Reader::new(&[255, 255, 255, 255])
+                .take::<AttachmentHolder>()
+                .is_err()
+        );
+    }
+    #[test]
+    fn write_tokens_go_stale_with_their_residency() {
+        let holder = AttachmentHolder::Entity(EntityRef::new(NativeWorldEpoch::new(1), 42));
+        let index = Arc::new(std::sync::Mutex::new(index::AttachmentIndex::default()));
+        let mut values = runtime::Attachments::default();
+        KEY.set(&mut values, runtime::Holder::Level, 7).unwrap();
+        values.bind_index(&index, holder);
+        let batch = AttachmentBatch::from(runtime::AttachmentBatch::new(
+            index.lock().unwrap().snapshot_named("test", "value"),
+        ));
+        let query = batch.query(&KEY).unwrap();
+        let row = query.iter().next().unwrap().unwrap();
         assert_eq!(row.holder, holder);
         assert_eq!(*row.value, 7);
+        let token = AttachmentWriteToken::from(row.write_token());
+        assert_eq!(token.validate(&index.lock().unwrap()), Ok(()));
         assert_eq!(
             token.validate(&index::AttachmentIndex::default()),
             Err(AttachmentRowError::StaleHolder)
         );
-        index.unload(holder).into_result();
-        assert_eq!(token.validate(&index), Err(AttachmentRowError::StaleHolder));
-        index
-            .register(holder, [(("test".into(), "value".into()), entry)])
-            .into_result();
-        assert_eq!(token.validate(&index), Err(AttachmentRowError::StaleHolder));
+        index.lock().unwrap().unload(holder).into_result();
+        assert_eq!(
+            token.validate(&index.lock().unwrap()),
+            Err(AttachmentRowError::StaleHolder)
+        );
+        let mut again = runtime::Attachments::default();
+        KEY.set(&mut again, runtime::Holder::Level, 7).unwrap();
+        again.bind_index(&index, holder);
+        assert_eq!(
+            token.validate(&index.lock().unwrap()),
+            Err(AttachmentRowError::StaleHolder)
+        );
         assert_eq!(*row.value, 7);
-    }
-    #[test]
-    fn entry_forms_preserve_malformed_saved_and_type_errors() {
-        let malformed = AttachmentEntry::from(AttachmentEntryForm::Raw(Compound::new()));
-        let restored = AttachmentEntry::from(AttachmentEntryForm::from(&malformed));
-        assert_eq!(restored.read(&KEY), Err(AttachmentError::Decode));
-        let mismatch = AttachmentEntry::from(AttachmentEntryForm::Decoded {
-            value: Arc::new("other type"),
-            encoded: Some([("payload".into(), Tag::Int(37))].into()),
-            policy: AttachmentPolicy {
-                copy_on_death: true,
-                sync: true,
-            },
-        });
-        let restored = AttachmentEntry::from(AttachmentEntryForm::from(&mismatch));
-        assert_eq!(restored.read(&KEY), Err(AttachmentError::TypeMismatch));
-        let AttachmentEntryForm::Decoded {
-            encoded, policy, ..
-        } = AttachmentEntryForm::from(&restored)
-        else {
-            panic!("decoded entry lost its form");
-        };
-        assert_eq!(encoded, Some([("payload".into(), Tag::Int(37))].into()));
-        assert!(policy.copy_on_death);
-        assert!(policy.sync);
     }
 }

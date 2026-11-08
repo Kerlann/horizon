@@ -73,7 +73,7 @@ pub trait EntitiesServerHost {
     fn spawn_falling_block(
         &mut self,
         dimension: &str,
-        state: BlockStateId,
+        state: BlockState,
         pos: [f64; 3],
         velocity: [f64; 3],
         falling: NativeFalling,
@@ -504,7 +504,12 @@ pub trait EntitiesBackendMut {
     /// dragon and crystals, primed TNT, falling blocks, experience orbs,
     /// ominous item spawners), a stale handle or on a client.
     #[access(WorldOnly)]
-    fn entity_set_custom_name(&mut self, entity: EntityRef, name: Option<Text>) -> bool;
+    /// Refuses text deeper than 512 component nodes before applying any changes.
+    fn entity_set_custom_name(
+        &mut self,
+        entity: EntityRef,
+        name: Option<Text>,
+    ) -> Result<bool, TextFormError>;
     /// Side: server.
     /// Shows the entity's name at any distance, or only when looked at
     /// (`Entity.setCustomNameVisible`): saved, and sent to the players

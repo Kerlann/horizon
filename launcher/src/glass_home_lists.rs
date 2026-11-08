@@ -5,7 +5,7 @@
 //! (clicked twice) under the pointer. Dark appearance only.
 use super::*;
 use crate::glass_ui::{self as ui, white};
-use gpui::{deferred, ExternalPaths};
+use gpui::{ExternalPaths, deferred};
 use horizon_launcher::worlds::World;
 use horizon_theme::glass::{fill, ink, radius};
 use std::path::Path;

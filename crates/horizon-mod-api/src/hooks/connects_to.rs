@@ -32,9 +32,9 @@ pub trait Hooks {
     fn connects_to(
         dimension: LevelDimension,
         pos: BlockPos,
-        state: BlockStateId,
+        state: BlockState,
         kind: ConnectionKind,
-        neighbour: BlockStateId,
+        neighbour: BlockState,
         direction: Direction,
         face_solid: bool,
         connected: &mut bool,

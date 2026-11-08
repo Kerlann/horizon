@@ -181,7 +181,10 @@ mod tests {
                     Arc::new(buffer(1000, 1000, 1000)),
                 )]));
             let pos = [0, 64, 0];
-            assert!(game.level_set_block(level, pos, block, NativeBlockUpdateFlags::NEIGHBORS));
+            assert_eq!(
+                game.level_set_block(level, pos, block, NativeBlockUpdateFlags::NEIGHBORS),
+                Ok(true)
+            );
             let mut fields = ModBlockEntityFields::default();
             fields.nbt.insert("energy".into(), Tag::Int(800));
             game.world.block_entities.insert(
@@ -320,7 +323,7 @@ mod tests {
             let (from, to) = ([0, 64, 0], [2, 64, 0]);
             for (pos, energy) in [(from, 800), (to, 0)] {
                 let flags = NativeBlockUpdateFlags::NEIGHBORS;
-                assert!(game.level_set_block(level, pos, block, flags));
+                assert_eq!(game.level_set_block(level, pos, block, flags), Ok(true));
                 let mut fields = ModBlockEntityFields::default();
                 fields
                     .nbt

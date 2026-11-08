@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "No se pol lèxare el registro deła costrusión: {error}",
   "Could not read the saved sign-in.": "No se pol lèxare el sign-in salvà.",
   "Could not read the saved sign-in. Sign in again.": "No se pol lèxare el sign-in salvà. Entrate ancora.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "No se pol lèxare {name}: {error}",
   "Could not run {program}: {error}": "No se pol far funsionar {program}: {error}",
   "Could not save the renewed sign-in.": "No se pol salvar el login rinnovà.",

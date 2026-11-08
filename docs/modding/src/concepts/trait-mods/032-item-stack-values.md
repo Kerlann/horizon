@@ -44,6 +44,11 @@ records real NBT removal entries for default components; it is not an unknown-va
 
 ## Game boundaries
 
+A consume or death-protection override whose opaque native effect payload cannot be decoded
+refuses the whole stack write with `StackWriteError::InvalidEffectPayload`, before any
+resident state changes. The engine's infallible preserved-component setter remains infallible:
+invalid replacements retain its prior raw component and decoded cache rather than erasing them.
+
 The items host area owns metadata reads such as `max_stack_size(ItemKey)` and
 `max_damage(ItemKey)`. A stack does not take a host just to read a maximum, and an unavailable
 maximum never turns into a fabricated limit of 64.

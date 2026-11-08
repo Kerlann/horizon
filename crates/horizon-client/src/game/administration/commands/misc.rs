@@ -333,7 +333,10 @@ impl Game<'_> {
         };
         let message = self.expand_selectors(&raw);
         let hover = text::Style {
-            hover: Some(Box::new(Text::translate("chat.type.team.hover", &[]))),
+            hover: Some(std::sync::Arc::new(Text::translate(
+                "chat.type.team.hover",
+                &[],
+            ))),
             click: Some(text::ClickEvent::SuggestCommand("/teammsg ".into())),
             ..text::Style::default()
         };

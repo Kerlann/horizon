@@ -184,7 +184,6 @@
   "Could not read the build log: {error}": "Kon het buildlogboek niet lezen: {error}",
   "Could not read the saved sign-in.": "Kan de opgeslagen aanmelding niet lezen.",
   "Could not read the saved sign-in. Sign in again.": "Kan de opgeslagen aanmelding niet lezen. Meld u opnieuw aan.",
-  "Could not read wasm mods in {path}: {error}": "Could not read wasm mods in {path}: {error}",
   "Could not read {name}: {error}": "Kon {name} niet lezen: {error}",
   "Could not run {program}: {error}": "Kon {program} niet uitvoeren: {error}",
   "Could not save the renewed sign-in.": "Kan de vernieuwde aanmelding niet opslaan.",

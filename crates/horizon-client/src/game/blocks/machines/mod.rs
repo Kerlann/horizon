@@ -1895,7 +1895,12 @@ mod brewing_fuel_transfer_tests {
             let mut custom = ItemStack::new("minecraft:stone", 2);
             custom.data_mut().set_loot_component(
                 "minecraft:brewing_fuel",
-                &serde_json::json!({"uses": 7, "speed_multiplier": 2.5}),
+                &Some(
+                    horizon_core::json_nbt::json_to_tag(
+                        &serde_json::json!({"uses": 7, "speed_multiplier": 2.5}),
+                    )
+                    .unwrap(),
+                ),
             );
             let mut removed = default.clone();
             removed.data_mut().set_other(
@@ -2254,19 +2259,25 @@ mod part_front_tests {
                     .collect(),
             };
             let crafter = game.pack.assets.registry.resolve(&state).unwrap();
-            assert!(game.level_set_block(
-                level,
-                [2, 64, 8],
-                crafter,
-                NativeBlockUpdateFlags::NEIGHBORS
-            ));
+            assert_eq!(
+                game.level_set_block(
+                    level,
+                    [2, 64, 8],
+                    crafter,
+                    NativeBlockUpdateFlags::NEIGHBORS
+                ),
+                Ok(true)
+            );
             let pipe = game
                 .pack
                 .assets
                 .registry
                 .default_state("test:pipe")
                 .unwrap();
-            assert!(game.level_set_block(level, [1, 64, 8], pipe, NativeBlockUpdateFlags::NONE));
+            assert_eq!(
+                game.level_set_block(level, [1, 64, 8], pipe, NativeBlockUpdateFlags::NONE),
+                Ok(true)
+            );
             if let Some(BlockEntity::Crafter(c)) = game.world.block_entities.get_mut(&(2, 64, 8)) {
                 c.items[3] = Some(stack("minecraft:oak_planks", 1));
                 c.items[6] = Some(stack("minecraft:oak_planks", 1));
@@ -2312,19 +2323,25 @@ mod part_front_tests {
                 properties: [("facing".into(), "west".into())].into_iter().collect(),
             };
             let dropper = game.pack.assets.registry.resolve(&state).unwrap();
-            assert!(game.level_set_block(
-                level,
-                [2, 64, 8],
-                dropper,
-                NativeBlockUpdateFlags::NEIGHBORS
-            ));
+            assert_eq!(
+                game.level_set_block(
+                    level,
+                    [2, 64, 8],
+                    dropper,
+                    NativeBlockUpdateFlags::NEIGHBORS
+                ),
+                Ok(true)
+            );
             let pipe = game
                 .pack
                 .assets
                 .registry
                 .default_state("test:pipe")
                 .unwrap();
-            assert!(game.level_set_block(level, [1, 64, 8], pipe, NativeBlockUpdateFlags::NONE));
+            assert_eq!(
+                game.level_set_block(level, [1, 64, 8], pipe, NativeBlockUpdateFlags::NONE),
+                Ok(true)
+            );
             if let Some(BlockEntity::Chest(items)) = game.world.block_entities.get_mut(&(2, 64, 8))
             {
                 items[0] = Some(stack("minecraft:stick", 2));
@@ -2391,15 +2408,16 @@ mod part_front_tests {
                 };
             for (z, part, taken) in [(0, "test:pipe", true), (4, "test:greedy", false)] {
                 for (x, block) in [(0, dropper), (2, chest)] {
-                    assert!(game.level_set_block(level, [x, 64, z], block, flags));
+                    assert_eq!(
+                        game.level_set_block(level, [x, 64, z], block, flags),
+                        Ok(true)
+                    );
                 }
                 let state = game.pack.assets.registry.default_state(part).unwrap();
-                assert!(game.level_set_block(
-                    level,
-                    [1, 64, z],
-                    state,
-                    NativeBlockUpdateFlags::NONE
-                ));
+                assert_eq!(
+                    game.level_set_block(level, [1, 64, z], state, NativeBlockUpdateFlags::NONE),
+                    Ok(true)
+                );
                 if let Some(BlockEntity::Chest(items)) =
                     game.world.block_entities.get_mut(&(0, 64, z))
                 {
@@ -2420,15 +2438,16 @@ mod part_front_tests {
                 // Two planks make four sticks.
                 let z = z + 2;
                 for (x, block) in [(0, crafter), (2, chest)] {
-                    assert!(game.level_set_block(level, [x, 64, z], block, flags));
+                    assert_eq!(
+                        game.level_set_block(level, [x, 64, z], block, flags),
+                        Ok(true)
+                    );
                 }
                 let state = game.pack.assets.registry.default_state(part).unwrap();
-                assert!(game.level_set_block(
-                    level,
-                    [1, 64, z],
-                    state,
-                    NativeBlockUpdateFlags::NONE
-                ));
+                assert_eq!(
+                    game.level_set_block(level, [1, 64, z], state, NativeBlockUpdateFlags::NONE),
+                    Ok(true)
+                );
                 if let Some(BlockEntity::Crafter(c)) =
                     game.world.block_entities.get_mut(&(0, 64, z))
                 {

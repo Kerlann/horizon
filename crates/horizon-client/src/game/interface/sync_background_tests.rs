@@ -67,14 +67,14 @@ mod claims {
     impl Hooks for Claims {
         fn entity_change_block_pre(
             &self,
-            _: &mut dyn ServerHost,
+            host: &mut dyn ServerHost,
             event: &mut mod_api::EntityChangeBlockPreEvent<'_>,
         ) -> Flow {
             assert_eq!(event.player, Some(7));
             assert_eq!(event.entity, None);
             assert_eq!(event.kind, "minecraft:player");
-            assert_eq!(event.from, "minecraft:farmland");
-            assert_eq!(event.to, "minecraft:dirt");
+            assert_eq!(Some(event.from), host.block_state_id("minecraft:farmland"));
+            assert_eq!(Some(event.to), host.block_state_id("minecraft:dirt"));
             Flow::Cancel
         }
     }

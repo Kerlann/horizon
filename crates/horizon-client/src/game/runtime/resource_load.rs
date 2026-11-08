@@ -549,8 +549,15 @@ pub(super) fn load_resources(
             &additional_data,
         );
     }
+    api_values::resolve_block_definitions(assets.registry)?;
     let tables = Arc::new(startup::time("pack.mesh_tables", || {
-        MeshTables::new(&assets, &render, &facts, visibility)
+        MeshTables::new(
+            &assets,
+            &render,
+            &facts,
+            visibility,
+            api_values::mod_tint_values(assets.registry)?,
+        )
     })?);
     let pack_step = startup::step("pack.assemble");
     let mut pack = PackResources::assemble(

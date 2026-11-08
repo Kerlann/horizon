@@ -14,7 +14,7 @@ def fragment_scope(path, scope):
     """Read the generator's restricted use/mod fragments at one lexical scope."""
     stack, lines = [], []
     for line in path.read_text().splitlines():
-        module = re.fullmatch(r"\s*mod (\w+) \{", line)
+        module = re.fullmatch(r"\s*(?:pub(?:\([^)]*\))? )?mod (\w+) \{", line)
         if module:
             stack.append(module[1])
         elif line.strip() == "}":
