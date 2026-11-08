@@ -590,6 +590,9 @@ impl Wire for usize {
 }
 
 impl Wire for bool {
+    fn retained_bytes(&self) -> Option<usize> {
+        Some(std::mem::size_of::<Self>())
+    }
     const MIN: usize = 1;
     fn put(&self, out: &mut Writer) {
         out.put(&u8::from(*self));
@@ -677,6 +680,23 @@ impl Wire for Arc<str> {
 }
 
 impl<T: Wire> Wire for Option<T> {
+    fn retained_bytes(&self) -> Option<usize> {
+        std::mem::size_of::<Self>().checked_add(match self {
+            Some(v) => v.retained_bytes()?,
+            None => 0,
+        })
+    }
+    fn take_into(&mut self, input: &mut Reader<'_>) -> Result<(), WireError> {
+        match u8::take(input)? {
+            0 => *self = None,
+            1 => match self {
+                Some(v) => v.take_into(input)?,
+                None => *self = Some(input.take()?),
+            },
+            tag => return Err(WireError::Tag(tag.into())),
+        }
+        Ok(())
+    }
     const MIN: usize = 1;
     fn put(&self, out: &mut Writer) {
         match self {
@@ -896,8 +916,15 @@ macro_rules! sets {
 sets!(BTreeSet[Ord], HashSet[Eq + Hash]);
 
 macro_rules! maps {
-    ($($ty:ident [$($bound:tt)+]),*) => {$(
+    ($($ty:ident [$($bound:tt)+] $capacity:ident),*) => {$(
         impl<K: Wire + $($bound)+, V: Wire> Wire for $ty<K, V> {
+            fn retained_bytes(&self) -> Option<usize> {
+                // Conservative node/bucket capacity, including unused inline key/value slots.
+                let node = std::mem::size_of::<(K,V)>().checked_mul(16)?.checked_add(512)?;
+                let mut bytes = self.$capacity().max(1).checked_mul(node)?;
+                for (k,v) in self { bytes = bytes.checked_add(k.retained_bytes()?)?.checked_add(v.retained_bytes()?)?; }
+                Some(bytes)
+            }
             const MIN: usize = 4;
             fn put(&self, out: &mut Writer) {
                 out.put_len(self.len());
@@ -919,12 +946,23 @@ macro_rules! maps {
         }
     )*};
 }
-maps!(BTreeMap[Ord], HashMap[Eq + Hash]);
+maps!(BTreeMap[Ord] len, HashMap[Eq + Hash] capacity);
 
 macro_rules! tuples {
     ($(($($name:ident),+)),*) => {$(
         #[allow(non_snake_case)]
         impl<$($name: Wire),+> Wire for ($($name,)+) {
+            fn retained_bytes(&self) -> Option<usize> {
+                let ($($name,)+) = self;
+                let bytes = std::mem::size_of::<Self>();
+                $(let bytes = bytes.checked_add($name.retained_bytes()?)?;)+
+                Some(bytes)
+            }
+            fn take_into(&mut self, input: &mut Reader<'_>) -> Result<(), WireError> {
+                let ($($name,)+) = self;
+                $($name.take_into(input)?;)+
+                Ok(())
+            }
             const MIN: usize = 0 $(+ $name::MIN)+;
             fn put(&self, out: &mut Writer) {
                 let ($($name,)+) = self;

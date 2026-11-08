@@ -321,6 +321,12 @@ impl Wire for crate::BlockStateRange {
 
 /// An NBT key: UTF-16 units, in the bytes of a `Vec<u16>` but written and read in one pass.
 impl Wire for horizon_core::nbt::JavaString {
+    fn retained_bytes(&self) -> Option<usize> {
+        self.0.retained_bytes()
+    }
+    fn take_into(&mut self, input: &mut Reader<'_>) -> Result<(), WireError> {
+        input.nested(|input| self.0.take_into(input))
+    }
     const MIN: usize = <Vec<u16> as Wire>::MIN;
     fn put(&self, out: &mut Writer) {
         out.put_u16s(&self.0);
@@ -340,6 +346,12 @@ impl Wire for crate::Components {
     }
 }
 impl Wire for crate::ItemStack {
+    fn retained_bytes(&self) -> Option<usize> {
+        std::mem::size_of::<Self>().checked_add(match self.components() {
+            Some(components) => components.as_nbt().retained_bytes()?,
+            None => 0,
+        })
+    }
     const MIN: usize = 10;
     fn put(&self, out: &mut Writer) {
         out.put(&self.item());

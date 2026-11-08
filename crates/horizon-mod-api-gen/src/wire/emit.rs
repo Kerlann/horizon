@@ -323,18 +323,26 @@ fn enumeration(rust: &str, names: &[String]) -> String {
 fn variants(types: &Types<'_>, rust: &str, cases: &[Case]) -> Option<String> {
     let mut put = String::new();
     let mut take = String::new();
+    let mut retained = String::new();
     for (i, case) in cases.iter().enumerate() {
         let name = &case.rust;
         match &case.payload {
             Payload::None => {
                 writeln!(put, "Self::{name} => out.put(&{i}u32),").unwrap();
                 writeln!(take, "{i} => Self::{name},").unwrap();
+                writeln!(
+                    retained,
+                    "Self::{name} => Some(::std::mem::size_of::<Self>()),"
+                )
+                .unwrap();
             }
             Payload::Tuple(items) => {
                 for item in items {
                     spell(types, item)?;
                 }
                 let binds: Vec<String> = (0..items.len()).map(|j| format!("f{j}")).collect();
+                let sizes: String = binds.iter().map(|b| format!("let bytes = bytes.checked_add(crate::wire::Wire::retained_bytes({b})?)?;")).collect();
+                writeln!(retained, "Self::{name}({}) => {{ let bytes = ::std::mem::size_of::<Self>(); {sizes} Some(bytes) }},", binds.join(",")).unwrap();
                 let puts: String = binds.iter().map(|b| format!("out.put({b});")).collect();
                 writeln!(
                     put,
@@ -348,6 +356,8 @@ fn variants(types: &Types<'_>, rust: &str, cases: &[Case]) -> Option<String> {
             Payload::Record(list) => {
                 fields(types, list)?;
                 let names: Vec<&str> = list.iter().map(|f| f.rust.as_str()).collect();
+                let sizes: String = names.iter().map(|n| format!("let bytes = bytes.checked_add(crate::wire::Wire::retained_bytes({n})?)?;")).collect();
+                writeln!(retained, "Self::{name} {{ {} }} => {{ let bytes = ::std::mem::size_of::<Self>(); {sizes} Some(bytes) }},", names.join(",")).unwrap();
                 let puts: String = names.iter().map(|n| format!("out.put({n});")).collect();
                 writeln!(
                     put,
@@ -363,7 +373,7 @@ fn variants(types: &Types<'_>, rust: &str, cases: &[Case]) -> Option<String> {
             }
         }
     }
-    Some(with_owned(
+    let code = with_owned(
         imp(
             rust,
             "4",
@@ -379,7 +389,8 @@ fn variants(types: &Types<'_>, rust: &str, cases: &[Case]) -> Option<String> {
             put.replace("out.put(&", "out.put_owned(")
                 .replace("out.put(", "out.put_owned(")
         ),
-    ))
+    );
+    Some(code.replacen("fn take(input", &format!("fn retained_bytes(&self)->Option<usize> {{ match self {{ {retained} _ => None }} }}\nfn take(input"), 1))
 }
 
 /// A record field's type for its constructor, a nested borrowing record keeping the constructor's
