@@ -220,7 +220,18 @@ impl AttributeWrite {
     /// `finalize`, which saves its bases and permanent modifiers.
     fn apply_to_mob(self, m: &mut Mob, a: Attr) -> bool {
         let taken = |m: &Mob, id: &str| {
-            finalize::has_modifier(m, a, id) || finalize::has_transient_modifier(m, a, id)
+            finalize::has_modifier(m, a, id)
+                || finalize::has_transient_modifier(m, a, id)
+                || (id == "minecraft:baby" && finalize::transient(m, a).is_some())
+        };
+        let remove = |m: &mut Mob, id: &str| {
+            finalize::remove_modifier(m, a, id);
+            if id == "minecraft:baby" && finalize::transient(m, a).is_some() {
+                m.extra
+                    .attributes
+                    .get_or_insert_with(Box::default)
+                    .baby_speed_removed = true;
+            }
         };
         match self {
             Self::Add {
@@ -233,7 +244,7 @@ impl AttributeWrite {
                     if !replace {
                         return false;
                     }
-                    finalize::remove_modifier(m, a, id);
+                    remove(m, id);
                 }
                 let op = match modifier.operation() {
                     Operation::AddValue => Op::AddValue,
@@ -250,7 +261,7 @@ impl AttributeWrite {
             Self::Remove(id) => {
                 let had = taken(m, &id);
                 if had {
-                    finalize::remove_modifier(m, a, &id);
+                    remove(m, &id);
                 }
                 had
             }
