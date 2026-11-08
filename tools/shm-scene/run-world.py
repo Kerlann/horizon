@@ -1,8 +1,10 @@
 """Bounded fresh dedicated worlds, same sample source native and wasm.
 Run only after the standalone optimized production-feature runner has built. No real user data.
 """
-import os, pathlib, shutil, subprocess, tempfile, time, threading, json
-ROOT = pathlib.Path('/box/work/arismoko/horizon')
+import os, pathlib, shutil, subprocess, sys, tempfile, time, threading, json
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / 'tools'))
+import lab  # noqa: E402
 OUT = pathlib.Path(os.environ.get('BENCH_WORLD_OUTPUT', '/box/shared/wasm-bench'))
 OUT.mkdir(parents=True, exist_ok=True)
 BIN = pathlib.Path(os.environ['BENCH_BINARY'])
@@ -23,8 +25,9 @@ manifest = manifest.replace('b5d6f467dc78deda3b072e700f767adb456cd349', '1975cf5
 shutil.copy(pathlib.Path(os.environ['BENCH_STD']), BIN.parent / 'horizon-wasm-std.wasm')
 
 def run(mode, count):
+    (ROOT / 'target').mkdir(exist_ok=True)
     home = pathlib.Path(tempfile.mkdtemp(prefix='wasm-world-', dir=ROOT / 'target'))
-    env = dict(os.environ, HORIZON_HOME=str(home/'home'), HORIZON_LAUNCHER_HOME=str(home/'launcher'), XDG_DATA_HOME=str(home/'data'), XDG_CONFIG_HOME=str(home/'config'), HORIZON_LAUNCHER_NO_SELF_UPDATE='1', HORIZON_NO_AUDIO='1')
+    env = lab.game_env(HORIZON_HOME=home/'home', HORIZON_LAUNCHER_HOME=home/'launcher', XDG_DATA_HOME=home/'data', XDG_CONFIG_HOME=home/'config')
     if mode == 'native': env['BENCH_NATIVE'] = '1'
     (home/'eula.txt').write_text('eula=true\n')
     (home/'server.properties').write_text('online-mode=false\nserver-ip=127.0.0.1\nserver-port=25578\nlevel-seed=1\nlevel-type=minecraft:flat\ngenerator-settings={"biome":"minecraft:plains","layers":[{"block":"minecraft:bedrock","height":1},{"block":"minecraft:dirt","height":2},{"block":"minecraft:grass_block","height":1}]}\nview-distance=3\nsimulation-distance=3\nspawn-protection=0\npause-when-empty-seconds=-1\n')

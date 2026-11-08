@@ -118,15 +118,13 @@ impl Launcher {
         let confirming = self.game_packs.confirm_remove.as_ref() == Some(&confirm);
         let running = self.client.is_some();
         let hover = self.list_hover_listener(key.clone(), cx);
-        let mut note = vec![
-            match (pack.kind, pack.enabled) {
-                (PackKind::Resource, true) => tr("Resource pack · on"),
-                (PackKind::Resource, false) => tr("Resource pack · off"),
-                (PackKind::Shader, true) => tr("Shader pack · on"),
-                (PackKind::Shader, false) => tr("Shader pack · off"),
-            }
-            .to_string(),
-        ];
+        let mut note = vec![match (pack.kind, pack.enabled) {
+            (PackKind::Resource, true) => tr("Resource pack · on"),
+            (PackKind::Resource, false) => tr("Resource pack · off"),
+            (PackKind::Shader, true) => tr("Shader pack · on"),
+            (PackKind::Shader, false) => tr("Shader pack · off"),
+        }
+        .to_string()];
         if !pack.description.is_empty() {
             note.push(pack.description.clone());
         }

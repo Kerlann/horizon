@@ -59,7 +59,7 @@ mod shape_tests {
 
 /// An `ItemStackTemplate` in a crafting rule, not an assembled result.
 /// The rule decides which input supplies inherited components and, when
-/// `item` is absent, the result item. Use [`crate::LevelRef::craft`] for an
+/// `item` is absent, the result item. Use [`crate::LevelRef::recipe_for`] for an
 /// actual grid's output and remainders.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
@@ -121,7 +121,7 @@ pub enum RecipeTrimPattern {
 /// second recipe implementation. Only `Stonecutting` has a fixed output;
 /// every other variant depends on the grid or smithing inputs (components,
 /// counts, dyes, trim material, damage or map state). Special crafting
-/// results are assembled by [`crate::LevelRef::craft`], not by treating the
+/// results are assembled by [`crate::LevelRef::recipe_for`], not by treating the
 /// template as a fixed stack. A mod-defined recipe type keeps its raw JSON
 /// instead of inventing a vanilla rule.
 #[derive(Clone, Debug)]

@@ -647,7 +647,7 @@ fn structure_bad_config_refuses_at_load_but_unknown_types_do_not_convert() {
     .expect("refused during definition load");
     assert_eq!(
         error.to_string(),
-        "structure probe:tower: probe:kind: JSON-to-NBT does not accept null inside a list or object"
+        "structure probe:tower: probe:kind: JSON-to-NBT does not accept nested null"
     );
     let registry = StructureRegistry::new(
         &definitions,

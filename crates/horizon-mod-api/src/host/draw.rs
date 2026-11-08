@@ -280,7 +280,6 @@ pub trait BlockEntityDrawContext {
     /// shading (independent of light), one sprite drawn as another with moved UVs, a UV
     /// shrink, and a `0xRRGGBB` tint on quads with a tint index. What a machine's belts,
     /// shafts and casings draw with. A refusal draws nothing.
-    /// Not on wasm: the generated record loses the options' borrowed lifetime.
     fn terrain_model(
         &mut self,
         model: ModelRef,

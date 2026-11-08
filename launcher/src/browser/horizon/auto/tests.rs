@@ -476,8 +476,8 @@ fn an_automatic_update_keeps_a_disabled_mod_off() {
 
 #[test]
 fn auto_update_and_manual_mutation_do_not_race_or_lose_entries() {
-    use std::sync::Arc;
     use std::sync::mpsc::channel;
+    use std::sync::Arc;
     use std::time::Duration;
 
     let dir = scratch("auto-race-install");
@@ -566,8 +566,8 @@ fn auto_update_and_manual_mutation_do_not_race_or_lose_entries() {
 
 #[test]
 fn auto_update_does_not_revive_concurrently_removed_mod() {
-    use std::sync::Arc;
     use std::sync::mpsc::channel;
+    use std::sync::Arc;
     use std::time::Duration;
 
     let dir = scratch("auto-race-remove");
@@ -631,11 +631,9 @@ fn auto_update_does_not_revive_concurrently_removed_mod() {
 
     let final_installed = installed::Installed::load(&home);
     assert_eq!(final_installed.entries.len(), 1);
-    assert!(
-        final_installed
-            .find(SourceId::Horizon, "coords_hud")
-            .is_none()
-    );
+    assert!(final_installed
+        .find(SourceId::Horizon, "coords_hud")
+        .is_none());
     let ruby_entry = final_installed
         .find(SourceId::Horizon, "ruby")
         .expect("ruby present");

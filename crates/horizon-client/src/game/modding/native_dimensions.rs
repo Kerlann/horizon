@@ -570,7 +570,13 @@ mod main_dimension_tests {
         };
         assert!(refused(|s| s.coordinate_scale = 0.0).contains("coordinate_scale"));
         assert!(refused(|s| s.coordinate_scale = f64::NAN).contains("coordinate_scale"));
-        assert!(refused(|s| s.ambient_light = 1.5).contains("ambient_light"));
+        // below the codec's 1.0E-5, a ratio with a normal scale is infinite
+        assert!(refused(|s| s.coordinate_scale = f64::from_bits(1)).contains("coordinate_scale"));
+        assert!(refused(|s| s.coordinate_scale = 1.0e-6).contains("coordinate_scale"));
+        assert_eq!(refused(|s| s.coordinate_scale = f64::from(1.0e-5_f32)), "");
+        // the codec sets no range on the ambient light, only that it is a number
+        assert_eq!(refused(|s| s.ambient_light = 1.5), "");
+        assert!(refused(|s| s.ambient_light = f32::NAN).contains("ambient_light"));
         assert!(refused(|s| s.sky_light_level = 16.0).contains("sky_light_level"));
         assert!(
             refused(|s| s.monster_spawn_light_level = (8, 7)).contains("monster_spawn_light_level")

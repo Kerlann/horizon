@@ -1,7 +1,7 @@
 //! Variable-height lists in the page's scroll area. Only nearby rows build elements;
 //! unseen rows use estimated heights and consecutive hidden rows share one spacer.
 use gpui::{
-    Bounds, Div, IntoElement, ParentElement, Pixels, ScrollHandle, Styled, div, point, px, size,
+    div, point, px, size, Bounds, Div, IntoElement, ParentElement, Pixels, ScrollHandle, Styled,
 };
 use std::{cell::RefCell, rc::Rc};
 
@@ -248,7 +248,7 @@ mod tests {
 #[cfg(all(test, target_os = "windows"))]
 mod desktop_tests {
     use super::*;
-    use gpui::{AppContext, Context, Render, Window, WindowBounds, WindowOptions, prelude::*};
+    use gpui::{prelude::*, AppContext, Context, Render, Window, WindowBounds, WindowOptions};
     use std::time::Duration;
 
     struct ListWindow {

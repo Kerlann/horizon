@@ -3,7 +3,8 @@ mod api {
     pub struct BlockEntityTypeKey(pub u32);
 }
 
-use mod_api::mod_api::{BlockEntityTypeKey, BlockKey};
+use mod_api::BlockKey;
+use mod_api::mod_api::BlockEntityTypeKey;
 
 #[test]
 fn block_entity_additions_collect_in_order_and_quiet_dispatch_preserves_input() {

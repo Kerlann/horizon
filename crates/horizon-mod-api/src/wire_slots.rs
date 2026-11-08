@@ -7,10 +7,12 @@
 //! a panic. A value kept for one call is cleared by [`Slots::end_frame`]; one that outlives it
 //! (a provider) is inserted with [`Slots::insert_long`].
 
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// A resource's id: generation in the high half, slot in the low.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Id(pub u64);
 
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// The id names no live value: it was freed, its call ended, or it was never given out.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Stale;
@@ -22,6 +24,7 @@ struct Slot<T> {
     framed: bool,
 }
 
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// A generational slot map. Generation zero is reserved for protocol control values;
 /// exhausted generations retire their slot rather than wrapping and reviving an old id.
 pub struct Slots<T> {

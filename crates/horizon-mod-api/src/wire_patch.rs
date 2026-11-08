@@ -7,6 +7,7 @@ const MAX_CELLS: usize = 65_536;
 const MAX_VALUES: usize = 1_048_576;
 const MAX_PACKET: usize = 4 + MAX_CELLS * <CellBytes as Wire>::MIN + MAX_VALUES;
 
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// A sparse field update record. Entries are unique and sorted by their schema's field ids.
 /// Each value uses its ordinary Wire codec; the receiving schema checks its concrete type.
 #[derive(Default)]
@@ -94,6 +95,7 @@ impl Wire for RecordPatch {
     }
 }
 
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// Prepared, typed assignments for one immediate apply transaction.
 ///
 /// Planning allocates one closure per changed destination. Drop the plan on any error;
@@ -146,6 +148,7 @@ impl<'a> PatchPlan<'a> {
     }
 }
 
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// A native destination paired with its schema's field id. The borrow remains local to the call.
 pub struct PatchCell<'a, T> {
     field: u32,
@@ -158,6 +161,7 @@ impl<'a, T> PatchCell<'a, T> {
     }
 }
 
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// A native destination decoded by generated code without implementing `Wire` on its type.
 /// The decoder must build an owned value and use the supplied reader for all nested input.
 pub struct DecodedPatchCell<'a, T, F> {
@@ -176,6 +180,8 @@ impl<'a, T, F> DecodedPatchCell<'a, T, F> {
     }
 }
 
+// exhaustive: wasm boundary plumbing that generated code builds field by field
+// hidden: wasm boundary plumbing used by generated code, not a mod's API
 /// The checked patch input used by generated field bindings.
 #[doc(hidden)]
 pub struct PatchInput<'a> {
@@ -203,6 +209,7 @@ impl PatchInput<'_> {
     }
 }
 
+// hidden: wasm boundary plumbing used by generated code, not a mod's API
 /// A generated field list's typed plan and commit operations.
 #[doc(hidden)]
 pub trait PatchSet {
@@ -252,6 +259,7 @@ where
     }
 }
 
+// exhaustive: wasm boundary plumbing that generated code builds field by field
 /// A sparse-update hook record backed by typed native fields, without a second set of DTOs.
 /// Decoding and planning finish before any destination changes. Unbound, readonly, malformed
 /// and trailing cells refuse the whole patch. An empty patch leaves every destination untouched.
