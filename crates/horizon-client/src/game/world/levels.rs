@@ -1072,13 +1072,14 @@ mod tests {
         use crate::game::{Audio, Options, Progress, Settings, load_resources};
         let settings = Settings::default();
         let loaded = load_resources(
-            root.to_path_buf(),
+            horizon_assets::resource_source::ResourceRoot::directory(root.to_path_buf()),
+            Vec::new(),
             None,
             root,
             &settings,
             Instant::now(),
             false,
-            true,
+            crate::game::execution_role::ExecutionRole::IntegratedServer,
             &Progress::new(),
             &mut |_, _| unreachable!(),
         )
@@ -1097,7 +1098,9 @@ mod tests {
             loaded.gui.unwrap(),
             options,
             settings,
-            Audio::silent(root),
+            Audio::silent(&horizon_assets::resource_source::ResourceSource::directory(
+                root.to_path_buf(),
+            )),
             None,
         )
         .unwrap();
@@ -1111,6 +1114,7 @@ mod tests {
                 Some(260),
                 true,
                 None,
+                std::sync::Arc::new(crate::game::api_values::game_rule_registry()),
             )
             .unwrap(),
         )

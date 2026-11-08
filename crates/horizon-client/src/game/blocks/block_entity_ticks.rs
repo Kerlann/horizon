@@ -301,13 +301,14 @@ mod jukebox_stop_tests {
         let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES")?);
         let settings = Settings::default();
         let loaded = load_resources(
-            root.clone(),
+            horizon_assets::resource_source::ResourceRoot::directory(root.clone()),
+            Vec::new(),
             None,
             &root,
             &settings,
             std::time::Instant::now(),
             false,
-            true,
+            crate::game::execution_role::ExecutionRole::IntegratedServer,
             &Progress::new(),
             &mut |_, _| unreachable!(),
         )
@@ -321,7 +322,9 @@ mod jukebox_stop_tests {
             loaded.gui.unwrap(),
             options,
             settings,
-            Audio::silent(&root),
+            Audio::silent(&horizon_assets::resource_source::ResourceSource::directory(
+                root.to_path_buf(),
+            )),
             None,
         )
         .unwrap();
@@ -357,9 +360,22 @@ mod jukebox_stop_tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_jukebox_that_stops_tells_the_listeners() {
         let Some(lines) = with_jukebox(|game, disc| {
-            assert!(game.use_jukebox([0, 64, 0], Some(disc)), "the disc goes in");
             assert!(
-                game.use_jukebox([0, 64, 0], None),
+                game.use_jukebox(
+                    [0, 64, 0],
+                    game.world.block(0, 64, 0),
+                    Some(disc),
+                    horizon_world::level::UseBranch::ItemOn,
+                ) == Some(mod_api::NativeInteractionResult::Success),
+                "the disc goes in"
+            );
+            assert!(
+                game.use_jukebox(
+                    [0, 64, 0],
+                    game.world.block(0, 64, 0),
+                    None,
+                    horizon_world::level::UseBranch::WithoutItem,
+                ) == Some(mod_api::NativeInteractionResult::Success),
                 "the empty hand pops it out"
             );
         }) else {
@@ -373,7 +389,15 @@ mod jukebox_stop_tests {
 
         // The end of a song is the same stop: tick until the song is over.
         let Some(lines) = with_jukebox(|game, disc| {
-            assert!(game.use_jukebox([0, 64, 0], Some(disc)), "the disc goes in");
+            assert!(
+                game.use_jukebox(
+                    [0, 64, 0],
+                    game.world.block(0, 64, 0),
+                    Some(disc),
+                    horizon_world::level::UseBranch::ItemOn,
+                ) == Some(mod_api::NativeInteractionResult::Success),
+                "the disc goes in"
+            );
             for _ in 0..40_000 {
                 let playing = matches!(
                     game.world.block_entities.get(&(0, 64, 0)),
@@ -387,7 +411,12 @@ mod jukebox_stop_tests {
             // JukeboxSongPlayer.stop posts only while a song plays: taking
             // the finished disc out is silent.
             assert!(
-                game.use_jukebox([0, 64, 0], None),
+                game.use_jukebox(
+                    [0, 64, 0],
+                    game.world.block(0, 64, 0),
+                    None,
+                    horizon_world::level::UseBranch::WithoutItem,
+                ) == Some(mod_api::NativeInteractionResult::Success),
                 "the empty hand pops it out"
             );
         }) else {
@@ -402,7 +431,15 @@ mod jukebox_stop_tests {
         // A broken jukebox posts it from the world's spill instead, and a
         // jukebox that never held a disc posts nothing at all.
         let Some(lines) = with_jukebox(|game, disc| {
-            assert!(game.use_jukebox([0, 64, 0], Some(disc)), "the disc goes in");
+            assert!(
+                game.use_jukebox(
+                    [0, 64, 0],
+                    game.world.block(0, 64, 0),
+                    Some(disc),
+                    horizon_world::level::UseBranch::ItemOn,
+                ) == Some(mod_api::NativeInteractionResult::Success),
+                "the disc goes in"
+            );
             game.jukebox_removed([0, 64, 0]);
         }) else {
             return;
