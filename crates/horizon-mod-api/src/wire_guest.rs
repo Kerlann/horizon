@@ -25,33 +25,36 @@ fn hooks() -> &'static dyn crate::Hooks {
     &**HOOKS.get_or_init(__horizon_mod_hooks)
 }
 
-#[derive(Clone, Copy)]
+#[derive(PartialEq)]
 struct MemoKey {
     import: u32,
-    len: usize,
-    args: [u8; 64],
-}
-impl PartialEq for MemoKey {
-    fn eq(&self, other: &Self) -> bool {
-        self.import == other.import && self.args[..self.len] == other.args[..other.len]
-    }
+    args: Vec<u8>,
 }
 struct Memo {
     key: MemoKey,
-    len: usize,
-    reply: [u8; 512],
+    reply: Vec<u8>,
+}
+#[derive(Default)]
+struct MemoFrame {
+    entries: Vec<Memo>,
+    active: usize,
+}
+impl MemoFrame {
+    fn clear(&mut self) {
+        self.active = 0;
+    }
 }
 fn memo_key(import: u32, args: &[u8]) -> Option<MemoKey> {
     if args.len() > 64 {
         return None;
     }
-    let mut key = MemoKey {
+    let mut bytes = Vec::new();
+    bytes.try_reserve_exact(args.len()).ok()?;
+    bytes.extend_from_slice(args);
+    Some(MemoKey {
         import,
-        len: args.len(),
-        args: [0; 64],
-    };
-    key.args[..args.len()].copy_from_slice(args);
-    Some(key)
+        args: bytes,
+    })
 }
 
 /// What one call of the mod needs: where its borrowed returns live, until it returns.
@@ -59,7 +62,7 @@ fn memo_key(import: u32, args: &[u8]) -> Option<MemoKey> {
 struct Keep {
     held: Vec<(*mut u8, unsafe fn(*mut u8))>,
     // None for the native harness's unscoped borrow keeper: only run() starts a memo scope.
-    memo: Option<Vec<Memo>>,
+    memo: Option<MemoFrame>,
 }
 
 impl Keep {
@@ -184,7 +187,7 @@ struct Runtime {
     #[cfg(feature = "wire-pool-profile")]
     pool_counts: [u64; 5], // kept, dropped (full), dropped (large), reply drops, exports
     strings: StaticStrings,
-    memo_spare: Vec<Vec<Memo>>,
+    memo_spare: Vec<MemoFrame>,
 }
 
 impl Runtime {
@@ -478,29 +481,26 @@ fn memoized<T>(
 ) -> Result<T, WireError> {
     let key = key.filter(|_| args.error().is_none());
     let mut args = Some(args);
-    let cached = key.and_then(|key| {
+    let cached = key.as_ref().and_then(|key| {
         RUNTIME.with(|rt| {
             let rt = rt.borrow();
-            let entry = rt
-                .keeps
-                .last()?
-                .memo
-                .as_ref()?
+            let memo = rt.keeps.last()?.memo.as_ref()?;
+            let entry = memo.entries[..memo.active]
                 .iter()
-                .find(|entry| entry.key == key)?;
+                .find(|entry| &entry.key == key)?;
             let mut bytes = args
                 .take()
                 .expect("memo hit owns the argument buffer")
                 .into_bytes();
             bytes.clear();
-            bytes.extend_from_slice(&entry.reply[..entry.len]);
+            bytes.extend_from_slice(&entry.reply);
             Some(Reply(bytes))
         })
     });
     if let Some(reply) = cached {
         return decode(&reply);
     }
-    let reply = host_preserving(id, args.expect("memo miss retains its argument buffer"));
+    let mut reply = host_preserving(id, args.expect("memo miss retains its argument buffer"));
     let value = decode(&reply)?;
     if let Some(key) = key.filter(|_| reply.0.len() <= 512) {
         RUNTIME.with(|rt| {
@@ -508,15 +508,31 @@ fn memoized<T>(
             let Some(memo) = rt.keeps.last_mut().and_then(|keep| keep.memo.as_mut()) else {
                 return;
             };
-            if memo.len() < 4 {
-                let mut entry = Memo {
-                    key,
-                    len: reply.0.len(),
-                    reply: [0; 512],
-                };
-                entry.reply[..entry.len].copy_from_slice(&reply.0);
-                memo.push(entry);
+            if memo.active == 4 {
+                return;
             }
+            if memo.active == memo.entries.len() {
+                if memo.entries.try_reserve(1).is_err() {
+                    return;
+                }
+                memo.entries.push(Memo {
+                    key,
+                    reply: Vec::new(),
+                });
+            } else {
+                memo.entries[memo.active].key = key;
+            }
+            let entry = &mut memo.entries[memo.active];
+            if reply.0.capacity() <= 512 {
+                std::mem::swap(&mut entry.reply, &mut reply.0);
+            } else {
+                entry.reply.clear();
+                if entry.reply.try_reserve_exact(reply.0.len()).is_err() {
+                    return;
+                }
+                entry.reply.extend_from_slice(&reply.0);
+            }
+            memo.active += 1;
         });
     }
     Ok(value)
