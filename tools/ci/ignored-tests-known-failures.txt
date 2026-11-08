@@ -89,7 +89,6 @@ horizon-client game::transactions::tests::an_aborted_transaction_puts_back_what_
 horizon-client game::native_hooks::base::screen_open_tests::client_gui_state_matches_screen_init_hook #2184
 horizon-client game::options::resize_state_tests::viewport_resize_notifications_follow_each_player #2184
 horizon-client game::piston_push::order_tests::a_pushed_entity_meets_the_other_moving_blocks_as_they_are_at_its_push #2186
-horizon-client game::piston_push::order_tests::a_pushed_tnt_bounces_on_slime #2186
 horizon-client game::potent_sulfur::pass_tests::nausea_listener_moving_a_mob_invalidates_the_pass_grid #2186
 horizon-client game::potions::tests::lifecycle_cloud_commands_and_parked_owners #2186
 
