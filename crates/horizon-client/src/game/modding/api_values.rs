@@ -1638,7 +1638,6 @@ fn stage0_observe_entity(
     fields.put(&api.nbt);
     fields.put(&api.items);
     fields.put(&api.data);
-    fields.put(&api.client_update_fields().cloned());
     let revision = api.revision();
     let mut state = state.lock().unwrap();
     if let Some((changes, bytes)) = state.0.insert(
