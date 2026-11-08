@@ -820,6 +820,14 @@ mod resize_state_tests {
     #[test]
     #[ignore = "needs prepared resources and an X11 display"]
     fn viewport_resize_notifications_follow_each_player() {
+        // Winit permits only one event loop per process, even after it is dropped.
+        if crate::game::native_entity_refs::tests::run_fresh_cases(
+            "game::options::resize_state_tests::viewport_resize_notifications_follow_each_player",
+            "HORIZON_RESIZE_STATE_CHILD",
+            &["window"],
+        ) {
+            return;
+        }
         use mod_api::{ClientHost, Hooks, ModEntry, WindowResizeEvent, testing::with_mods};
         use std::sync::{Arc, Mutex};
         struct Listener(Arc<Mutex<Vec<(u32, u32, u32, u32)>>>);

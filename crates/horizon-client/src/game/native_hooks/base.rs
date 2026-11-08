@@ -5673,6 +5673,14 @@ mod screen_open_tests {
     #[test]
     #[ignore = "needs prepared resources and an X11 display"]
     fn client_gui_state_matches_screen_init_hook() {
+        // Winit permits only one event loop per process, even after it is dropped.
+        if crate::game::native_entity_refs::tests::run_fresh_cases(
+            "game::native_hooks::base::screen_open_tests::client_gui_state_matches_screen_init_hook",
+            "HORIZON_SCREEN_STATE_CHILD",
+            &["window"],
+        ) {
+            return;
+        }
         use mod_api::ScreenInitPostEvent;
         struct Observe(Arc<Mutex<Vec<(String, Option<String>)>>>);
         #[mod_api::__subscriptions]
