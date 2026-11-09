@@ -47,6 +47,7 @@ pub struct EntityTable<R = ()> {
     pending: Vec<Event>,
     rows: FxHashMap<NonZeroU32, ResidentRow<R>>,
     extracted: FxHashMap<NonZeroU32, Location>,
+    extracted_by_owner: FxHashMap<Owner, usize>,
     lifted: FxHashMap<Owner, usize>,
 }
 impl<R> EntityTable<R> {
@@ -57,6 +58,7 @@ impl<R> EntityTable<R> {
             pending: Vec::new(),
             rows: FxHashMap::default(),
             extracted: FxHashMap::default(),
+            extracted_by_owner: FxHashMap::default(),
             lifted: FxHashMap::default(),
         }
     }
@@ -110,7 +112,12 @@ impl<R> EntityTable<R> {
             return EntityLookup::Taken;
         }
         forget_row(&mut self.rows, id, location);
-        forget(&mut self.extracted, id, location);
+        forget_extraction(
+            &mut self.extracted,
+            &mut self.extracted_by_owner,
+            id,
+            Some(location),
+        );
         EntityLookup::Missing
     }
     /// Validate the source once, then borrow its cached publication. A lifted
@@ -133,6 +140,24 @@ impl<R> EntityTable<R> {
         locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
     ) -> (EntityLookup<T>, Option<&R>) {
         self.read_lookup(None, id, locate)
+    }
+
+    /// Resolve one admitted source and borrow its exact generation's read
+    /// metadata in the same lookup. Unlike a successful-source-only lookup,
+    /// this retains the admitted address when the source is physically taken.
+    /// Family/UUID and pending-dependency checks can then inspect the borrowed
+    /// metadata without resolving the identity or touching its storage again.
+    pub fn server_admitted_read_lookup<T>(
+        &mut self,
+        id: u32,
+        locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
+    ) -> Option<(Location, EntityLookup<T>, Option<&R>)> {
+        let state = self.lookup(None, id, locate);
+        if matches!(state, EntityLookup::Missing) {
+            return None;
+        }
+        let row = self.rows.get(&NonZeroU32::new(id)?)?;
+        Some((row.location, state, row.cached.as_ref()))
     }
 
     fn read_lookup<T>(
@@ -220,6 +245,27 @@ impl<R> EntityTable<R> {
         true
     }
 
+    /// Whether a source collection can be scanned without silently omitting a
+    /// loan. `covered` names an individually extracted source actually supplied
+    /// by the caller's explicit loan, never an arbitrary disjoint live view.
+    /// Whole-owner passes remain unavailable; one source cannot cover a list.
+    /// Journal-derived counts make both checks O(1), without a resident scan.
+    pub fn owner_physically_available(
+        &mut self,
+        owner: Owner,
+        covered: Option<(u32, Location)>,
+    ) -> bool {
+        self.drain();
+        if self.lifted.contains_key(&owner) {
+            return false;
+        }
+        let covered = usize::from(covered.is_some_and(|(id, at)| {
+            at.owner == owner
+                && NonZeroU32::new(id).and_then(|id| self.extracted.get(&id)) == Some(&at)
+        }));
+        self.extracted_by_owner.get(&owner).copied().unwrap_or(0) == covered
+    }
+
     /// Apply pending operations in mutation order, reusing the event buffer.
     pub fn drain(&mut self) {
         self.journal.drain_into(&mut self.pending);
@@ -240,17 +286,36 @@ impl<R> EntityTable<R> {
                         row.location = location;
                         row.cached = None;
                     }
-                    self.extracted.remove(&identity.id);
+                    forget_extraction(
+                        &mut self.extracted,
+                        &mut self.extracted_by_owner,
+                        identity.id,
+                        None,
+                    );
                 }
                 Change::Remove(identity) => {
                     let location = location(identity);
                     forget_row(&mut self.rows, identity.id, location);
-                    forget(&mut self.extracted, identity.id, location);
+                    forget_extraction(
+                        &mut self.extracted,
+                        &mut self.extracted_by_owner,
+                        identity.id,
+                        Some(location),
+                    );
                 }
                 Change::Extract(identity) => {
                     let location = location(identity);
                     if self.rows.get(&identity.id).map(|row| row.location) == Some(location) {
-                        self.extracted.insert(identity.id, location);
+                        if self.extracted.get(&identity.id) != Some(&location) {
+                            forget_extraction(
+                                &mut self.extracted,
+                                &mut self.extracted_by_owner,
+                                identity.id,
+                                None,
+                            );
+                            self.extracted.insert(identity.id, location);
+                            *self.extracted_by_owner.entry(location.owner).or_default() += 1;
+                        }
                     }
                 }
                 Change::Lifted => {
@@ -279,6 +344,7 @@ impl<R> EntityTable<R> {
             lifts: self.lifted.values().sum(),
         });
         self.extracted.clear();
+        self.extracted_by_owner.clear();
         self.lifted.clear();
         if let Some(error) = unfinished {
             log::error!("entity residency operation did not finish: {error:?}");
@@ -297,6 +363,7 @@ impl<R> EntityTable<R> {
         self.pending.clear();
         self.rows.clear();
         self.extracted.clear();
+        self.extracted_by_owner.clear();
         self.lifted.clear();
     }
 }
@@ -309,9 +376,23 @@ fn forget_row<R>(
         map.remove(&id);
     }
 }
-fn forget(map: &mut FxHashMap<NonZeroU32, Location>, id: NonZeroU32, location: Location) {
-    if map.get(&id) == Some(&location) {
-        map.remove(&id);
+fn forget_extraction(
+    map: &mut FxHashMap<NonZeroU32, Location>,
+    by_owner: &mut FxHashMap<Owner, usize>,
+    id: NonZeroU32,
+    expected: Option<Location>,
+) {
+    if expected.is_some_and(|at| map.get(&id) != Some(&at)) {
+        return;
+    }
+    if let Some(at) = map.remove(&id) {
+        let count = by_owner
+            .get_mut(&at.owner)
+            .expect("every extraction has an owner count");
+        *count -= 1;
+        if *count == 0 {
+            by_owner.remove(&at.owner);
+        }
     }
 }
 
@@ -368,6 +449,117 @@ mod tests {
                 self.source.get(&location).copied()
             })
         }
+    }
+
+    #[test]
+    fn collection_availability_counts_partial_loans_without_hiding_live_members() {
+        let mut list = JoinList::default();
+        list.push(Stored(7, JoinSeq::UNJOINED));
+        list.push(Stored(8, JoinSeq::UNJOINED));
+        let mut table = EntityTable::<()>::new(Journal::default());
+        list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
+        let first_at = Location {
+            owner: HOME,
+            join: list[0].1,
+        };
+        let second_at = Location {
+            owner: HOME,
+            join: list[1].1,
+        };
+        assert!(table.owner_physically_available(HOME, None));
+        let first = list.extract(first_at.join).unwrap();
+        assert!(!table.owner_physically_available(HOME, None));
+        assert!(table.owner_physically_available(HOME, Some((7, first_at))));
+        assert!(!table.owner_physically_available(HOME, Some((8, second_at))));
+        assert!(matches!(
+            table.server_entity_lookup(8, |at| locate(&list, at)),
+            EntityLookup::Found { .. }
+        ));
+        let second = list.extract(second_at.join).unwrap();
+        assert!(!table.owner_physically_available(HOME, Some((7, first_at))));
+        list.put_back(0, first);
+        assert!(!table.owner_physically_available(HOME, None));
+        assert!(table.owner_physically_available(HOME, Some((8, second_at))));
+        list.put_back(1, second);
+        assert!(table.owner_physically_available(HOME, None));
+        let held = list.lift();
+        assert!(!table.owner_physically_available(HOME, Some((7, first_at))));
+        assert!(table.owner_physically_available(
+            Owner {
+                dimension: DimensionKey::NETHER,
+                ..HOME
+            },
+            None
+        ));
+        list.restore(held, RestoreOrder::SurvivorsFirst);
+        assert!(table.owner_physically_available(HOME, None));
+        let retired = list.extract(first_at.join).unwrap();
+        list.retire_extracted(retired.0, retired.1);
+        assert!(table.owner_physically_available(HOME, None));
+        let _held = list.extract(second_at.join).unwrap();
+        assert!(!table.owner_physically_available(HOME, None));
+        table.reset();
+        assert!(table.owner_physically_available(HOME, None));
+    }
+
+    #[test]
+    fn admitted_read_returns_taken_address_and_metadata_with_one_resolution() {
+        use std::cell::Cell;
+        let mut list = JoinList::default();
+        list.push(Stored(7, JoinSeq::UNJOINED));
+        let mut table = EntityTable::<u32>::new(Journal::default());
+        list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
+        let address = Location {
+            owner: HOME,
+            join: list[0].1,
+        };
+        assert_eq!(table.publish_rows([(7, address, 19)]), 1);
+        let calls = Cell::new(0);
+        {
+            let (at, state, metadata) = table
+                .server_admitted_read_lookup(7, |at| {
+                    calls.set(calls.get() + 1);
+                    locate(&list, at)
+                })
+                .unwrap();
+            assert_eq!(at, address);
+            assert!(matches!(state, EntityLookup::Found { .. }));
+            assert_eq!(metadata, Some(&19));
+            assert_eq!(calls.get(), 1);
+        }
+        let held = list.lift();
+        calls.set(0);
+        let (at, state, metadata) = table
+            .server_admitted_read_lookup(7, |at| {
+                calls.set(calls.get() + 1);
+                locate(&list, at)
+            })
+            .unwrap();
+        assert_eq!(at, address);
+        assert_eq!(state, EntityLookup::Taken);
+        assert_eq!(metadata, Some(&19));
+        assert_eq!(calls.get(), 1);
+        list.restore(held, RestoreOrder::SurvivorsFirst);
+        assert!(
+            table
+                .server_admitted_read_lookup(7, |_| Some(SourceEntity {
+                    id: 8,
+                    value: 0usize
+                }))
+                .is_none()
+        );
+        assert!(
+            table
+                .server_admitted_read_lookup::<usize>(7, |_| panic!(
+                    "retired identity cannot resolve"
+                ))
+                .is_none()
+        );
+        assert!(
+            table
+                .server_admitted_read_lookup::<usize>(0, |_| panic!("zero cannot resolve"))
+                .is_none()
+        );
     }
 
     #[test]

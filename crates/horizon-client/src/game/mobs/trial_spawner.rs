@@ -260,7 +260,7 @@ impl Game<'_> {
         let mut by_uuid = HashMap::new();
         for (provisional, uuid) in uuids {
             if let Some(id) = ids.get(&provisional) {
-                self.persist.uuids.insert(*id, uuid);
+                self.set_saved_entity_uuid(*id, uuid);
                 by_uuid.insert(uuid, *id);
             }
         }

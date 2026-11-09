@@ -3,6 +3,11 @@
 //! (`game`). None of it is part of the API a mod is written against.
 use crate::*;
 
+/// Borrow the active converted package's validated identity without copying crash text.
+pub fn with_current_converted_package<R>(f: impl FnOnce(Option<&str>) -> R) -> R {
+    crate::crash::with_current_converted_package(f)
+}
+
 /// Deliver a terminal only to its captured issuing mod/package. Generated
 /// dispatch selects this recipient before entering any native/crash scope.
 /// Scope restoration is RAII, including callback panic and nested delivery.

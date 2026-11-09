@@ -607,7 +607,7 @@ fn run_output(family: Family, output: Output) {
                     assert_eq!(game.world.attachment_syncs, syncs);
                     assert_eq!(game.world.path_writes, writes);
                     assert_eq!(game.world.random.clone().next_long(), expected_draw);
-                    let mut table = EntityTable::new(journal);
+                    let mut table = EntityTable::<()>::new(journal);
                     for &(id, join) in &rows {
                         let found = table.entity_lookup(&owner.dimension, id, |at| {
                             let m = &game.mobs[game.mobs.locate(at.join)?];

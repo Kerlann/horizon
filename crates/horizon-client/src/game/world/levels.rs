@@ -121,6 +121,11 @@ impl Parked {
         self.persist.uuids.get(&id).copied()
     }
 
+    /// The Game caller publishes the exact-level identity delta after this borrow ends.
+    pub(super) fn set_saved_entity_uuid(&mut self, id: u32, uuid: [i32; 4]) {
+        self.persist.uuids.insert(id, uuid);
+    }
+
     pub(super) fn saved_entity_uuids(&self) -> impl Iterator<Item = (u32, [i32; 4])> + '_ {
         self.persist.uuids.iter().map(|(&id, &uuid)| (id, uuid))
     }
@@ -755,7 +760,8 @@ impl Game<'_> {
         let raw = p.persist.raw.remove(&id);
         let slots = p.persist.passenger_slots.remove(&id);
         if let Some(u) = uuid {
-            self.persist.uuids.insert(id, u);
+            self.saved_entity_uuid_changed(from.key(), id, Some(u), None);
+            self.set_saved_entity_uuid(id, u);
         }
         if let Some(r) = raw {
             self.persist.raw.insert(id, r);
