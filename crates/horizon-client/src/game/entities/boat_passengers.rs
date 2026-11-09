@@ -419,7 +419,11 @@ impl Game<'_> {
                 continue;
             }
             let players = self.boat_players(id);
-            let count = players + mobs.len();
+            let retained_seats =
+                (!self.persist.off_level.is_empty()).then(|| self.seated_passengers(id));
+            let count = retained_seats
+                .as_ref()
+                .map_or(players + mobs.len(), Vec::len);
             let b = &self.boats[i];
             let full = count == b.max_passengers();
             let delta = b.delta_rotation;
@@ -433,7 +437,10 @@ impl Game<'_> {
                     // Another player's too, on a server's client.
                     // AbstractBoat's box is 1.375 wide.
                     let offset = riders::vehicle_attachment(m, 1.375);
-                    let index = players + n;
+                    let index = retained_seats
+                        .as_ref()
+                        .and_then(|seats| seats.iter().position(|&(_, id, _)| id == m.id))
+                        .unwrap_or(players + n);
                     // calculatePassengerBodyYRot.
                     let turn = match (animal && full, m.id.is_multiple_of(2)) {
                         (false, _) => 0.0,
@@ -561,5 +568,35 @@ mod tests {
         assert!(!boat_pushes(boat, at(64.1), false));
         assert!(boat_pushes(boat, at(64.5), true));
         assert!(!boat_pushes(boat, at(64.5625), true));
+    }
+}
+
+#[cfg(test)]
+mod off_level_tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn retained_boat_passenger_occupies_a_seat_without_being_positioned() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            let pig = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+            let boat = Boat::new(71, "oak".into(), Vec3::new(1.0, 80.0, 0.5), 0.0);
+            let mut ghost = horizon_client::mobs::Mob::new(72, pig.clone(), Vec3::ZERO, 0.0);
+            ghost.extra.mount = Some(71);
+            ghost.extra.vehicle_order = 0;
+            let mut resident = horizon_client::mobs::Mob::new(73, pig, Vec3::ZERO, 0.0);
+            resident.extra.mount = Some(71);
+            resident.extra.vehicle_order = 1;
+            let offset = riders::vehicle_attachment(&resident, 1.375);
+            let expected = boat.seat(1, 2, true, offset, false);
+            game.boats.push(boat);
+            game.mobs.push(resident);
+            game.persist
+                .off_level
+                .insert(72, crate::game::persist::OffLevel::Mob(ghost));
+            game.position_riders();
+            assert_eq!(game.mob_object(73).unwrap().position, expected);
+            assert_eq!(game.mob_object(72).unwrap().position, Vec3::ZERO);
+        });
     }
 }
