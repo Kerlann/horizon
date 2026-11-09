@@ -75,6 +75,33 @@ malus is a finite `Vec<(PathType, f32)>` table; can-eat stores `[bool; 2]` index
 adds no LevelReadRow. Minecart payloads, player/session strings, passengers, block transforms,
 melee range, heavy payload reads and queued-write surfaces remain deferred.
 
+#### Write receipts and completion
+
+`WriteReceipt<R, E>` distinguishes `Applied(actual_result)`, `Pending(CommandId)`
+and `Refused(typed_error)`. Pending is acceptance only: it carries no invented
+boolean, changed count or delivery guarantee. Available validation runs before
+acceptance. `EntityWriteError<E>` keeps authority, epoch, generation, removal and
+work-limit refusals separate from the operation's original `Domain(E)` error.
+
+`CommandCompleted<R, E> { id, outcome: Result<R, E> }` is terminal: Pending cannot
+be represented in it. Each implemented queued domain supplies its concrete typed
+operation variant and the same result to the issuing mod's
+`entity_command_completed` event and `CommandId::query(&dyn Host)`. No placeholder
+operation or unsupported event/query route is introduced by these carrier types.
+The real route lands with its first converted operation, then grows by domain.
+
+Completion is published after authoritative apply/refusal and row refresh. Events
+are the primary path; terminal query results remain through the end of the following
+logical engine tick. Queries do not consume results. Pending records do not silently
+expire. `CommandQueryError::StaleEpoch` is distinct from `UnknownOrExpired`, which
+also covers commands inaccessible to the calling mod without disclosing another
+mod's work. Transactions discard their accepted commands and overlays on rollback.
+
+These declarations do not convert the deferred write methods by themselves. The
+18 RNG/veto/callback/lifecycle methods remain synchronous; 109 deterministic edits
+and 19 heavy-dependent edits require their actual ordered implementations. The
+heavy-dependent group has no speculative heavy payload overlay.
+
 #### Brain behaviors
 
 Native mods only: entity parts do not cross to wasm yet.
