@@ -583,27 +583,83 @@ impl Game<'_> {
         &self,
         living: LivingRef,
         target: EntityRef,
-    ) -> Option<bool> {
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
         self.read_living_in_melee_range(None, living, target)
     }
 
     pub(super) fn read_living_in_melee_range(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         living: LivingRef,
         target: EntityRef,
-    ) -> Option<bool> {
-        let Target::Mob(id) = self.native_living_read_target(living)? else {
-            return None;
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        use super::{
+            native_base_read_rows::{BaseReadGeometry, BaseReadSource},
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
         };
-        let m = self.mobs.iter().find(|m| m.id == id && !m.removed)?;
-        let [min, max] = self.entity_bounding_box(target)?;
-        let bounds = horizon_core::geometry::Aabb::new(
-            horizon_core::geometry::Vec3::new(min[0], min[1], min[2]),
-            horizon_core::geometry::Vec3::new(max[0], max[1], max[2]),
-        );
-        let w = self.mob_world_base(&[]);
-        Some(m.melee_reaches(&w, bounds))
+        let Some(attacker) = self.entity_read_admission(
+            EntityReadSubject::Living(living),
+            &[
+                EntityReadDependency::Geometry,
+                EntityReadDependency::Attributes,
+                EntityReadDependency::Equipment,
+                EntityReadDependency::Riding,
+            ],
+        ) else {
+            return Ok(None);
+        };
+        if !matches!(attacker.target(), Target::Mob(_)) {
+            return Ok(None);
+        }
+        let Some(seen) = self.entity_read_admission(
+            EntityReadSubject::Entity(target),
+            &[
+                EntityReadDependency::Geometry,
+                EntityReadDependency::Attributes,
+            ],
+        ) else {
+            return Ok(None);
+        };
+        let dimension = attacker.location().owner.dimension;
+        self.with_admitted_entity_sources(attacker, seen, provider, |source, target| {
+            let BaseReadSource::Mob(mob) = source.body else {
+                return Ok(None);
+            };
+            let bounds = |geometry: BaseReadGeometry| {
+                let [lo, hi] = geometry.bounding_box;
+                horizon_core::geometry::Aabb::new(
+                    horizon_core::geometry::Vec3::new(lo[0], lo[1], lo[2]),
+                    horizon_core::geometry::Vec3::new(hi[0], hi[1], hi[2]),
+                )
+            };
+            let Some(target) = self.live_source_geometry(target.body) else {
+                return Ok(None);
+            };
+            let target = bounds(target);
+            let Some(vehicle) = mob.extra.mount else {
+                return Ok(Some(mob.melee_reaches_beside(None, target)));
+            };
+            let vehicle = EntityRef::new(living.entity().epoch(), vehicle);
+            let Some(vehicle) = self.entity_read_admission(
+                EntityReadSubject::Entity(vehicle),
+                &[
+                    EntityReadDependency::Geometry,
+                    EntityReadDependency::Attributes,
+                ],
+            ) else {
+                return Ok(None);
+            };
+            if vehicle.location().owner.dimension != dimension {
+                return Ok(None);
+            }
+            self.with_admitted_entity_source(vehicle, provider, |vehicle| {
+                Some(mob.melee_reaches_beside(
+                    Some(bounds(self.live_source_geometry(vehicle.body)?)),
+                    target,
+                ))
+            })
+        })?
     }
 
     /// `LivingEntity.canFreeze`: the decision the freeze tick itself runs — a

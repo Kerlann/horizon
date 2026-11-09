@@ -779,10 +779,20 @@ impl Game<'_> {
     /// Haste and Mining Fatigue modifiers (`ADD_MULTIPLIED_TOTAL`), clamped to
     /// the attribute's range.
     pub(super) fn main_hand_attack_speed(&self) -> f64 {
+        self.attack_speed_for(
+            self.player.as_ref(),
+            self.attack_item.as_deref(),
+            &self.potions.effects,
+        )
+    }
+    pub(super) fn attack_speed_for(
+        &self,
+        player: Option<&horizon_client::motion::PlayerMotion>,
+        item: Option<&str>,
+        effects: &horizon_client::effects::PlayerEffects,
+    ) -> f64 {
         // The base comes from the player's attribute map so `/attribute ... base set` applies.
-        let base = self
-            .player
-            .as_ref()
+        let base = player
             .and_then(|player| {
                 let key = player.attributes.key("minecraft:attack_speed")?;
                 let handle = player.attributes.lookup(Some(&key))?;
@@ -794,11 +804,10 @@ impl Game<'_> {
             })
             .unwrap_or(horizon_client::attack_strength::BASE_ATTACK_SPEED);
         let value = base
-            + self
-                .attack_item_info()
-                .map_or(0.0, |i| f64::from(i.attack_speed));
-        self.potions
-            .effects
+            + item
+                .and_then(|id| self.items().get(id))
+                .map_or(0.0, |info| f64::from(info.attack_speed));
+        effects
             .modifiers()
             .into_iter()
             .filter(|m| m.0 == "minecraft:attack_speed")

@@ -73,56 +73,57 @@ impl Game<'_> {
             _ => None,
         }
     }
-    /// The entity's vehicle as a handle, if it rides one in this level.
-    fn native_vehicle(&self, entity: EntityRef) -> Option<Option<EntityRef>> {
-        let t = self.native_entity_target(entity)?;
-        Some(self.native_vehicle_id(t).and_then(|v| self.entity(v)))
-    }
     /// What the entity rides (`Entity.getVehicle`): `None` when it rides
     /// nothing, or for a stale handle.
-    pub(super) fn entity_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
+    pub(super) fn entity_vehicle(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<EntityRef>, mod_api::EntityReadError> {
         self.read_entity_vehicle(None, entity)
     }
 
     pub(super) fn read_entity_vehicle(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         entity: EntityRef,
-    ) -> Option<EntityRef> {
-        self.native_vehicle(entity).flatten()
+    ) -> Result<Option<EntityRef>, mod_api::EntityReadError> {
+        self.read_vehicle_relation(provider, entity)
+            .map(Option::flatten)
     }
     /// Whether the entity rides another (`Entity.isPassenger`).
-    pub(super) fn entity_is_passenger(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn entity_is_passenger(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
         self.read_entity_is_passenger(None, entity)
     }
 
     pub(super) fn read_entity_is_passenger(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         entity: EntityRef,
-    ) -> Option<bool> {
-        Some(self.native_vehicle(entity)?.is_some())
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        self.read_vehicle_relation(provider, entity)
+            .map(|relation| relation.map(|vehicle| vehicle.is_some()))
     }
     /// The lowest vehicle under the entity (`Entity.getRootVehicle`): the
     /// entity itself when it rides nothing.
-    pub(super) fn entity_root_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
+    pub(super) fn entity_root_vehicle(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<EntityRef>, mod_api::EntityReadError> {
         self.read_entity_root_vehicle(None, entity)
     }
 
     pub(super) fn read_entity_root_vehicle(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         entity: EntityRef,
-    ) -> Option<EntityRef> {
-        let mut root = entity;
-        // A chain of riders is short; the bound only guards against a loop.
-        for _ in 0..64 {
-            match self.native_vehicle(root)? {
-                Some(v) => root = v,
-                None => break,
-            }
-        }
-        Some(root)
+    ) -> Result<Option<EntityRef>, mod_api::EntityReadError> {
+        let Some(first) = self.read_vehicle_relation(provider, entity)? else {
+            return Ok(None);
+        };
+        self.root_vehicle_after_first(provider, entity, first)
     }
     /// The entities riding this one (`Entity.getPassengers`), in `addPassenger`'s order.
     pub(super) fn entity_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
@@ -255,17 +256,52 @@ impl Game<'_> {
         &self,
         entity: EntityRef,
         other: EntityRef,
-    ) -> Option<bool> {
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
         self.read_entity_is_passenger_of_same_vehicle(None, entity, other)
     }
 
     pub(super) fn read_entity_is_passenger_of_same_vehicle(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         entity: EntityRef,
         other: EntityRef,
-    ) -> Option<bool> {
-        Some(self.entity_root_vehicle(entity)? == self.entity_root_vehicle(other)?)
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let dependencies = &[EntityReadDependency::Riding];
+        let Some(first) =
+            self.entity_read_admission(EntityReadSubject::Entity(entity), dependencies)
+        else {
+            return Ok(None);
+        };
+        let Some(second) =
+            self.entity_read_admission(EntityReadSubject::Entity(other), dependencies)
+        else {
+            return Ok(None);
+        };
+        let first_dimension = first.location().owner.dimension;
+        let second_dimension = second.location().owner.dimension;
+        let (first, second) =
+            self.with_admitted_entity_sources(first, second, provider, |first, second| {
+                (
+                    self.source_vehicle_id(first.body)
+                        .and_then(|id| self.admitted_relation_entity(first_dimension, id)),
+                    self.source_vehicle_id(second.body)
+                        .and_then(|id| self.admitted_relation_entity(second_dimension, id)),
+                )
+            })?;
+        let Some(first) = self.root_vehicle_after_first(provider, entity, first)? else {
+            return Ok(None);
+        };
+        let Some(second) = self.root_vehicle_after_first(provider, other, second)? else {
+            return Ok(None);
+        };
+        Ok(Some(first == second))
     }
     /// Where getting off this vehicle puts `passenger` as it stands now, riding it or not. This
     /// is the game's own placement, from the code `stop_riding` runs, so it can differ from

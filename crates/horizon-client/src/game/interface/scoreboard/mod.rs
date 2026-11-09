@@ -295,6 +295,10 @@ impl Game<'_> {
             // A natural knot keeps no saved compound: it has no tags.
             Target::Knot(_) => None,
         };
+        Self::tags_from_raw(raw)
+    }
+
+    pub(super) fn tags_from_raw(raw: Option<&Tag>) -> Vec<String> {
         match raw.and_then(|r| r.get("Tags")) {
             Some(Tag::List(l)) => l
                 .iter()

@@ -1279,49 +1279,25 @@ impl Game<'_> {
 
     pub(super) fn read_player_name(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         player: PlayerRef,
     ) -> Result<Option<String>, mod_api::EntityReadError> {
-        use crate::game::{
-            commands::Target, native_live_entity_reads::EntityReadSubject,
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_live_player_sessions::PlayerSessionField,
             native_read_dependencies::EntityReadDependency,
         };
         if !self.is_logical_server() {
             return Ok(None);
         }
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Session],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
+        ) else {
+            return Ok(None);
         };
-        if matches!(target, Target::Player) && self.lan_acting_permission.is_some() {
-            return Ok(self.lan_acting_name.clone());
-        }
-        Ok(self.raw_player_peer(target).map(|guest| guest.name.clone()))
+        self.read_player_session_string(admitted, provider, PlayerSessionField::Name)
     }
-    /// A connected peer's session record after subject admission. Acting
-    /// body lanes still come from Game rather than this mirrored record.
-    fn raw_player_peer(&self, target: Target) -> Option<&horizon_client::lan::guest::Guest> {
-        let conn = match target {
-            Target::Player => self.lan_acting?,
-            Target::Guest(conn) => conn,
-            _ => return None,
-        };
-        self.lan
-            .as_ref()?
-            .hub
-            .guest(conn)
-            .filter(|guest| guest.participates_online())
-    }
-
     /// The IP address the player connects from, without the port (behind a
     /// Velocity proxy, the address the proxy forwards). Displaced connected
     /// players keep their address; an acting player with no known connection
@@ -1335,36 +1311,24 @@ impl Game<'_> {
 
     pub(super) fn read_player_address(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         player: PlayerRef,
     ) -> Result<Option<String>, mod_api::EntityReadError> {
-        use crate::game::{
-            commands::Target, native_live_entity_reads::EntityReadSubject,
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_live_player_sessions::PlayerSessionField,
             native_read_dependencies::EntityReadDependency,
         };
         if !self.is_logical_server() {
             return Ok(None);
         }
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Session],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
+        ) else {
+            return Ok(None);
         };
-        if let Some(guest) = self.raw_player_peer(target) {
-            return Ok(Some(guest.address.ip().to_string()));
-        }
-        Ok((matches!(target, Target::Player)
-            && self.lan_acting_name.is_some()
-            && self.lan_acting_permission.is_some())
-        .then(String::new))
+        self.read_player_session_string(admitted, provider, PlayerSessionField::Address)
     }
 
     /// The brand the player's client announced when it connected (`ServerPlayer.clientBrand`),
@@ -1379,36 +1343,24 @@ impl Game<'_> {
 
     pub(super) fn read_player_client_brand(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         player: PlayerRef,
     ) -> Result<Option<String>, mod_api::EntityReadError> {
-        use crate::game::{
-            commands::Target, native_live_entity_reads::EntityReadSubject,
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_live_player_sessions::PlayerSessionField,
             native_read_dependencies::EntityReadDependency,
         };
         if !self.is_logical_server() {
             return Ok(None);
         }
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Session],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
+        ) else {
+            return Ok(None);
         };
-        if let Some(guest) = self.raw_player_peer(target) {
-            return Ok(Some(guest.brand.clone()));
-        }
-        Ok((matches!(target, Target::Player)
-            && self.lan_acting_name.is_some()
-            && self.lan_acting_permission.is_some())
-        .then(String::new))
+        self.read_player_session_string(admitted, provider, PlayerSessionField::Brand)
     }
 
     /// Validate identity without requiring a live body: sending to an online

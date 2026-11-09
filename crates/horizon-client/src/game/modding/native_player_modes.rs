@@ -75,44 +75,103 @@ impl Game<'_> {
         pos: [i32; 3],
         face: BlockFace,
         stack: &ItemStack,
-    ) -> Option<bool> {
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
         self.read_player_may_use_item_at(None, player, pos, face, stack)
     }
 
     pub(super) fn read_player_may_use_item_at(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         player: PlayerRef,
         pos: [i32; 3],
         face: BlockFace,
         stack: &ItemStack,
-    ) -> Option<bool> {
-        if let PlayerRead::Guest(guest) = self.player_handle_read(player)?
-            && guest.dimension != self.dim.id()
-        {
-            return None;
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        use super::{
+            native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
         }
-        let may_build = self.player_may_build(player)?;
-        Some(self.may_use_item_at(may_build, pos, block_face_direction(face), stack))
+        let Some(admission) = self.entity_read_admission(
+            EntityReadSubject::Player(player),
+            &[
+                EntityReadDependency::PlayerState,
+                EntityReadDependency::Geometry,
+            ],
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(admission, provider, |source| {
+            let may_build = match source.body {
+                BaseReadSource::Player(_) => self.may_build(),
+                BaseReadSource::Guest(guest) => guest.abilities.may_build,
+                _ => return None,
+            };
+            Some(self.may_use_item_at_in(
+                source.level.world,
+                may_build,
+                pos,
+                block_face_direction(face),
+                stack,
+            ))
+        })
     }
     /// `ServerPlayer.canHarmPlayer(other)`: the `pvp` rule and the two
     /// players' teams, as an attack, an arrow or a trident asks them
     /// (`player_may_harm`). None when either handle is stale or unavailable.
-    pub(super) fn player_can_harm(&self, player: PlayerRef, other: PlayerRef) -> Option<bool> {
+    pub(super) fn player_can_harm(
+        &self,
+        player: PlayerRef,
+        other: PlayerRef,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
         self.read_player_can_harm(None, player, other)
     }
 
     pub(super) fn read_player_can_harm(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         player: PlayerRef,
         other: PlayerRef,
-    ) -> Option<bool> {
-        self.player_handle_read(player)?;
-        self.player_handle_read(other)?;
-        let attacker = self.native_target_team(self.native_entity_target(player.entity())?)?;
-        let victim = self.native_target_team(self.native_entity_target(other.entity())?)?;
-        Some(self.player_may_harm(victim, attacker))
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        use super::{
+            native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let dependencies = &[
+            EntityReadDependency::Teams,
+            EntityReadDependency::PlayerState,
+        ];
+        let Some(attacker) =
+            self.entity_read_admission(EntityReadSubject::Player(player), dependencies)
+        else {
+            return Ok(None);
+        };
+        let Some(victim) =
+            self.entity_read_admission(EntityReadSubject::Player(other), dependencies)
+        else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_sources(attacker, victim, provider, |attacker, victim| {
+            let attacker = match attacker.body {
+                BaseReadSource::Player(_) => self.acting_player_name(),
+                BaseReadSource::Guest(guest) => &guest.name,
+                _ => return None,
+            };
+            let victim = match victim.body {
+                BaseReadSource::Player(_) => self.acting_player_name(),
+                BaseReadSource::Guest(guest) => &guest.name,
+                _ => return None,
+            };
+            Some(self.player_may_harm(
+                self.score.board.players_team(victim),
+                self.score.board.players_team(attacker),
+            ))
+        })
     }
 }
 

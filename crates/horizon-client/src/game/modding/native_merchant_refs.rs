@@ -66,6 +66,17 @@ impl Game<'_> {
         mob: &horizon_client::mobs::Mob,
         read: impl FnOnce(&[MerchantOffer], i32, i32) -> T,
     ) -> T {
+        let session = self
+            .lan_trade_conn(mob.id)
+            .and_then(|conn| self.lan_trade_session(conn));
+        Self::merchant_read_sources(mob, session, read)
+    }
+
+    fn merchant_read_sources<T>(
+        mob: &horizon_client::mobs::Mob,
+        session: Option<&horizon_client::merchant::Session>,
+        read: impl FnOnce(&[MerchantOffer], i32, i32) -> T,
+    ) -> T {
         if mob.species() == Species::Villager && mob.extra.profession.index().is_none() {
             return read(
                 &[],
@@ -73,10 +84,7 @@ impl Game<'_> {
                 mob.extra.villager_level.max(1),
             );
         }
-        if let Some(session) = self
-            .lan_trade_conn(mob.id)
-            .and_then(|conn| self.lan_trade_session(conn))
-        {
+        if let Some(session) = session {
             return read(&session.offers, session.xp, session.level);
         }
         let level = mob.extra.villager_level.max(1);
@@ -158,31 +166,40 @@ impl Game<'_> {
 
     pub(super) fn read_merchant_offers(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         merchant: MerchantRef,
     ) -> Result<Option<Vec<MerchantOffer>>, mod_api::EntityReadError> {
         use super::{
-            native_live_entity_reads::EntityReadSubject,
+            native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
             native_read_dependencies::EntityReadDependency,
         };
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Merchant(merchant),
             &[EntityReadDependency::Offers, EntityReadDependency::Session],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
+        ) else {
+            return Ok(None);
         };
-        Ok((|| {
-            let Target::Mob(id) = target else { return None };
-            let mob = self.mobs.iter().find(|mob| mob.id == id)?;
-            Some(self.merchant_read_lent(mob, |offers, _, _| offers.to_vec()))
-        })())
+        self.with_entity_read_storage(admitted, provider, |source| {
+            let BaseReadSource::Mob(mob) = source.body else {
+                return Ok(None);
+            };
+            let session = self
+                .lan_trade_conn(mob.id)
+                .and_then(|conn| self.lan_trade_session(conn));
+            // An open menu owns the newer offers. A temporarily extracted
+            // session must not fall back to the mob's older saved offers.
+            let jobless =
+                mob.species() == Species::Villager && mob.extra.profession.index().is_none();
+            if !jobless && mob.extra.flag2 && session.is_none() {
+                return Err(mod_api::EntityReadError::Lifted);
+            }
+            admitted.project_actual(|| {
+                Some(Self::merchant_read_sources(mob, session, |offers, _, _| {
+                    offers.to_vec()
+                }))
+            })
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
 
     /// Replaces offer `index` (a player trading with it is sent the new

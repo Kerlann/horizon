@@ -404,34 +404,29 @@ impl Game<'_> {
 
     pub(super) fn read_display_text(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         display: DisplayRef,
     ) -> Result<Option<Text>, mod_api::EntityReadError<mod_api::TextFormError>> {
         use super::{
-            native_live_entity_reads::EntityReadSubject,
+            native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
             native_read_dependencies::EntityReadDependency,
         };
-        let target = match self.entity_read_dependency::<mod_api::TextFormError>(
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::TextDisplay(display),
             &[EntityReadDependency::DisplayText],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
-        };
-        let Target::Other(id) = target else {
+        ) else {
             return Ok(None);
         };
-        let empty = Tag::Compound(Compound::new());
-        let tag = self.persist.raw.get(&id).unwrap_or(&empty);
-        Ok(match entry(DisplayKind::Text, tag, 23) {
-            Some(Value::Text(tag)) => Some(comp_text(&tag_to_json(&tag))),
-            _ => None,
+        self.with_admitted_entity_source(admitted, provider, |source| {
+            let BaseReadSource::Other(display) = source.body else {
+                return None;
+            };
+            let empty = Tag::Compound(Compound::new());
+            let tag = source.level.persist.raw.get(&display.id).unwrap_or(&empty);
+            match entry(DisplayKind::Text, tag, 23) {
+                Some(Value::Text(tag)) => Some(comp_text(&tag_to_json(&tag))),
+                _ => None,
+            }
         })
     }
 
@@ -576,35 +571,31 @@ impl Game<'_> {
 
     pub(super) fn read_display_item(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         display: DisplayRef,
     ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
         use super::{
-            native_live_entity_reads::EntityReadSubject,
+            native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
             native_read_dependencies::EntityReadDependency,
         };
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::ItemDisplay(display),
             &[EntityReadDependency::ItemStack],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
-        };
-        let Target::Other(id) = target else {
+        ) else {
             return Ok(None);
         };
-        Ok(self
-            .persist
-            .raw
-            .get(&id)
-            .and_then(|tag| tag.get("item"))
-            .and_then(item_from_nbt))
+        self.with_admitted_entity_source(admitted, provider, |source| {
+            let BaseReadSource::Other(display) = source.body else {
+                return None;
+            };
+            source
+                .level
+                .persist
+                .raw
+                .get(&display.id)
+                .and_then(|tag| tag.get("item"))
+                .and_then(item_from_nbt)
+        })
     }
 
     /// `ItemDisplay.setItemStack`; None empties it. False for another kind of display.

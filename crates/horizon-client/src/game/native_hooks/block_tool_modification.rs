@@ -1,7 +1,6 @@
 use super::*;
 
-/// The hook points. Each does nothing in Horizon.
-impl Game<'_> {
+impl NativeHookHost<'_> {
     /// A tool is about to transform a block. Cancel or replace the final state;
     /// `None` suppresses the transformation.
     #[inline(never)]

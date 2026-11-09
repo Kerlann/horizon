@@ -304,7 +304,7 @@ impl Game<'_> {
 
     pub(super) fn read_living_effect_blend_factor(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         living: LivingRef,
         effect: EffectKey,
         partial: f32,
@@ -314,20 +314,13 @@ impl Game<'_> {
         else {
             return Ok(None);
         };
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::ActingPlayer(living),
             &[EntityReadDependency::Effects],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
+        ) else {
+            return Ok(None);
         };
-        Ok((|| {
+        self.with_admitted_entity_source(admitted, provider, |_source| {
             let Some(e) = self.potions.effects.get_registered(def.index) else {
                 return Some(0.0);
             };
@@ -341,7 +334,7 @@ impl Game<'_> {
                     previous + partial * (current - previous)
                 }
             })
-        })())
+        })
     }
 
     /// `LivingEntity.removeEffect(effect)` the way its running out goes

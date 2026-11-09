@@ -436,9 +436,10 @@ impl Game<'_> {
     }
     /// Preview a held tool's transformation without changing the block or stack. The existing
     /// block-tool hook fires with `simulated` true; listeners must not mutate the level in a
-    /// simulation. The player must be live in the level in place, and the block must be loaded;
-    /// parked levels cannot provide the hook's level context. A stale handle, invalid face,
-    /// unavailable player or level, or no transformation returns None.
+    /// simulation. The player and loaded block must belong to the requested level,
+    /// including a parked level. The hook receives the same actual read host as
+    /// this preview. A stale handle, invalid face, unavailable level, or no
+    /// transformation returns None; physical and pending refusals stay typed.
     pub(super) fn level_block_transform(
         &self,
         level: LevelRef,
@@ -447,66 +448,92 @@ impl Game<'_> {
         stack: &ItemStack,
         pos: [i32; 3],
         hit: BlockHit,
-    ) -> Option<BlockTransformPreview> {
+    ) -> Result<Option<BlockTransformPreview>, mod_api::EntityReadError> {
         self.read_level_block_transform(None, level, player, hand, stack, pos, hit)
     }
 
     pub(super) fn read_level_block_transform(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         level: LevelRef,
         player: PlayerRef,
         hand: Hand,
         stack: &ItemStack,
         pos: [i32; 3],
         hit: BlockHit,
-    ) -> Option<BlockTransformPreview> {
-        use super::native_server::PlayerRead;
-        let world = self.native_level_read_world(level)?;
-        if level.dimension() != self.dim.key()
-            || !world.is_loaded_at(pos[0], pos[1], pos[2])
+    ) -> Result<Option<BlockTransformPreview>, mod_api::EntityReadError> {
+        use super::{
+            native_base_read_rows::BaseReadSource, native_borrowed_entity_host::BorrowedEntityHost,
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let Some(world) = self.native_level_read_world(level) else {
+            return Ok(None);
+        };
+        if !world.is_loaded_at(pos[0], pos[1], pos[2])
             || !matches!(
                 hit.face,
                 [1, 0, 0] | [-1, 0, 0] | [0, 1, 0] | [0, -1, 0] | [0, 0, 1] | [0, 0, -1]
             )
         {
-            return None;
+            return Ok(None);
         }
-        let (offhand, sneaking) = match self.player_handle_read(player)? {
-            PlayerRead::Acting { .. } if self.dim.key() == level.dimension() => {
-                (self.offhand.as_ref(), self.keys.held(super::Mapping::Sneak))
-            }
-            PlayerRead::Guest(guest) if guest.dimension == level.dimension_id() => {
-                (guest.offhand.as_ref(), guest.sneaking)
-            }
-            _ => return None,
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Player(player),
+            &[
+                EntityReadDependency::Equipment,
+                EntityReadDependency::PlayerState,
+            ],
+        ) else {
+            return Ok(None);
         };
-        let blocking = !sneaking && offhand.is_some_and(|s| self.blocks_attacks(s).is_some());
-        let hit = super::Hit {
-            pos,
-            face: hit.face,
-            point: hit.point,
-            inside: hit.inside,
+        if admitted.location().owner.dimension != level.dimension() {
+            return Ok(None);
+        }
+        let borrowed = provider.map(|provider| BorrowedEntityHost::new(self, provider));
+        let host: &dyn mod_api::Host = match &borrowed {
+            Some(host) => host,
+            None => self,
         };
-        let (state, sound, loot, durability, particle, _) = self.block_transform_in(
-            stack,
-            &hit,
-            super::TransformContext {
-                world,
-                player: Some(player.entity().id()),
-                hand,
-                blocking,
-                simulated: true,
-            },
-        )?;
-        use crate::game::api_values::TryIntoApi;
-        Some(BlockTransformPreview::new(
-            state.try_into_api().ok()?,
-            sound,
-            loot,
-            durability,
-            particle,
-        ))
+        self.with_admitted_entity_source(admitted, provider, |source| {
+            let (offhand, sneaking) = match source.body {
+                BaseReadSource::Player(_) => {
+                    (self.offhand.as_ref(), self.keys.held(super::Mapping::Sneak))
+                }
+                BaseReadSource::Guest(guest) => (guest.offhand.as_ref(), guest.sneaking),
+                _ => return None,
+            };
+            let blocking = !sneaking && offhand.is_some_and(|s| self.blocks_attacks(s).is_some());
+            let hit = super::Hit {
+                pos,
+                face: hit.face,
+                point: hit.point,
+                inside: hit.inside,
+            };
+            let (state, sound, loot, durability, particle, _) = self.block_transform_in(
+                stack,
+                &hit,
+                super::TransformContext {
+                    world: source.level.world,
+                    host,
+                    player: Some(player.entity().id()),
+                    hand,
+                    blocking,
+                    simulated: true,
+                },
+            )?;
+            use crate::game::api_values::TryIntoApi;
+            Some(BlockTransformPreview::new(
+                state.try_into_api().ok()?,
+                sound,
+                loot,
+                durability,
+                particle,
+            ))
+        })
     }
     /// `FluidState.getFlow` at `pos`: the current that pushes an entity there, after the
     /// `fluid_flow` hook, as entities feel it. Zero where no fluid flows. None as for

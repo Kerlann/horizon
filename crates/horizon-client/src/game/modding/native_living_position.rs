@@ -16,33 +16,59 @@ impl Game<'_> {
         &self,
         living: LivingRef,
         target: EntityRef,
-    ) -> Option<bool> {
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
         self.read_living_has_line_of_sight(None, living, target)
     }
 
     pub(super) fn read_living_has_line_of_sight(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         living: LivingRef,
         target: EntityRef,
-    ) -> Option<bool> {
-        let viewer = self.native_living_target(living)?;
-        let seen = self.native_entity_target(target)?;
-        if self.target_level(viewer) != self.dim {
-            return None;
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
         }
-        if self.target_level(seen) != self.dim {
-            return Some(false);
+        let dependencies = &[
+            EntityReadDependency::Geometry,
+            EntityReadDependency::Attributes,
+        ];
+        let Some(viewer) =
+            self.entity_read_admission(EntityReadSubject::Living(living), dependencies)
+        else {
+            return Ok(None);
+        };
+        let Some(seen) =
+            self.entity_read_admission(EntityReadSubject::Entity(target), dependencies)
+        else {
+            return Ok(None);
+        };
+        if viewer.location().owner.dimension != seen.location().owner.dimension {
+            return Ok(Some(false));
         }
-        let feet = self.entity_position(living.entity())?;
-        let from = self.entity_eye_position(living.entity())?;
-        let to = self.entity_eye_position(target)?;
-        let w = self.mob_world_base(&[]);
-        Some(w.line_of_sight_for(
-            Some(feet[1]),
-            Vec3::new(from[0], from[1], from[2]),
-            Vec3::new(to[0], to[1], to[2]),
-        ))
+        self.with_admitted_entity_sources(viewer, seen, provider, |viewer, seen| {
+            let from = self.live_source_geometry(viewer.body)?;
+            let to = self.live_source_geometry(seen.body)?;
+            let mut world = self.mob_world_base(&[]);
+            world.world = viewer.level.world;
+            Some(world.line_of_sight_for(
+                Some(from.position[1]),
+                Vec3::new(
+                    from.position[0],
+                    from.position[1] + from.eye_height,
+                    from.position[2],
+                ),
+                Vec3::new(
+                    to.position[0],
+                    to.position[1] + to.eye_height,
+                    to.position[2],
+                ),
+            ))
+        })
     }
 
     /// `LivingEntity.getDimensions(Pose)`: the box the living entity has in

@@ -70,26 +70,44 @@ impl Game<'_> {
 
     pub(super) fn read_entity_tags(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         entity: EntityRef,
     ) -> Result<Option<Vec<String>>, mod_api::EntityReadError> {
+        use super::native_base_read_rows::BaseReadSource;
         if self.remote.is_some() {
             return Ok(None);
         }
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Entity(entity),
             &[EntityReadDependency::Tags],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
+        ) else {
+            return Ok(None);
         };
-        Ok(Some(self.tags_of(target)))
+        self.with_entity_read_storage(admitted, provider, |source| {
+            let raw = match admitted.target() {
+                Target::Player => self.level.player_extra.as_ref(),
+                target @ Target::Guest(_) => {
+                    let guest = self
+                        .entity_read_guest(source.body, target)
+                        .ok_or(mod_api::EntityReadError::Lifted)?;
+                    guest.saved.as_ref()
+                }
+                Target::DragonPart(_) | Target::Knot(_) => None,
+                Target::Spawner(_) => match source.body {
+                    BaseReadSource::Spawner(spawner) => spawner.raw.as_deref(),
+                    _ => None,
+                },
+                Target::Falling(_) => match source.body {
+                    BaseReadSource::Falling(falling) => {
+                        falling.saved.as_ref().map(|saved| &saved.1)
+                    }
+                    _ => None,
+                },
+                _ => source.level.persist.raw.get(&entity.id()),
+            };
+            admitted.project_actual(|| Some(Self::tags_from_raw(raw)))
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
     /// Adds tag `tag` (`Entity.addTag`): false when it has it already, holds
     /// 1024, its kind can't store tags yet, or the handle is stale. API 386.
@@ -137,43 +155,97 @@ impl Game<'_> {
 
     pub(super) fn read_entity_name(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         entity: EntityRef,
     ) -> Result<Option<String>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        use super::native_base_read_rows::BaseReadSource;
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Entity(entity),
             &[
                 EntityReadDependency::Name,
                 EntityReadDependency::Teams,
+                EntityReadDependency::Ownership,
                 EntityReadDependency::ItemStack,
+                EntityReadDependency::Session,
             ],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
+        ) else {
+            return Ok(None);
         };
-        if let Some(remote) = &self.remote {
-            // The client boundary already admitted an i32 network id.
-            let id = entity.id() as i32;
-            if let Some((_, Some(name))) = remote.level_player(id) {
-                return Ok(Some(name.to_owned()));
+        let level = mod_api::LevelRef::new(entity.epoch(), admitted.location().owner.dimension);
+        self.with_entity_read_storage(admitted, provider, |source| {
+            enum NameSource<'a> {
+                Peer(&'a horizon_client::lan::guest::Guest),
+                Entity(Target),
             }
-            if let Target::Stand(id) = target
-                && let Some(name) = self
-                    .armor_stands
-                    .iter()
-                    .find(|stand| stand.id == id)
-                    .and_then(|stand| stand.custom_name.as_ref())
-            {
-                return Ok(Some(name.plain()));
-            }
-        }
-        Ok(Some(self.target_name(target).plain()))
+            let name_source = match admitted.target() {
+                target @ Target::Guest(_) => NameSource::Peer(
+                    self.entity_read_guest(source.body, target)
+                        .ok_or(mod_api::EntityReadError::Lifted)?,
+                ),
+                target => NameSource::Entity(target),
+            };
+            admitted.project_actual(|| {
+                if let Some(remote) = &self.remote {
+                    // Admission already proved the network ID fits i32.
+                    if let Some((_, Some(name))) = remote.level_player(entity.id() as i32) {
+                        return Ok(Some(name.to_owned()));
+                    }
+                }
+                let custom = source
+                    .level
+                    .persist
+                    .raw
+                    .get(&entity.id())
+                    .and_then(|raw| raw.get("CustomName"));
+                let kind = super::native_base_read_source::base_read_source_kind(
+                    source.body,
+                    &mut self.entity_read_state.borrow_mut().kind_pool,
+                );
+                let name = match name_source {
+                    NameSource::Entity(Target::Player) => {
+                        let name = self.acting_player_name();
+                        if let Some(uuid) = self.lan_acting_uuid {
+                            self.player_text(name, uuid)
+                        } else {
+                            match self.score.board.players_team(name) {
+                                Some(team) => team.formatted_name(Text::literal(name)),
+                                None => Text::literal(name),
+                            }
+                        }
+                    }
+                    NameSource::Peer(guest) => self.player_text(&guest.name, guest.uuid),
+                    _ => match source.body {
+                        BaseReadSource::Mob(mob) => {
+                            match self.native_source_team(source, level, provider)? {
+                                Some(team) => team.formatted_name(mob.command_name()),
+                                None => mob.command_name(),
+                            }
+                        }
+                        BaseReadSource::Item(item) => {
+                            self.item_entity_name(Some(&item.stack), custom)
+                        }
+                        BaseReadSource::Falling(falling) => self.falling_entity_name(
+                            Some(falling.state),
+                            falling
+                                .saved
+                                .as_ref()
+                                .and_then(|saved| saved.1.get("CustomName"))
+                                .or(custom),
+                        ),
+                        BaseReadSource::Stand(stand) => stand
+                            .custom_name
+                            .clone()
+                            .unwrap_or_else(|| self.default_entity_name(&kind, custom)),
+                        BaseReadSource::Frame(frame) => {
+                            self.default_entity_name(&kind, frame.custom_name.as_ref().or(custom))
+                        }
+                        _ => self.default_entity_name(&kind, custom),
+                    },
+                };
+                Ok(Some(name.plain()))
+            })?
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
     /// Names the entity (`Entity.setCustomName`), or takes its name away
     /// with `None`: its name, its saved `CustomName` and, for a mob or an

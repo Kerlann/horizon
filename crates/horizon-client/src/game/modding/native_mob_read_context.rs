@@ -231,26 +231,45 @@ impl Game<'_> {
     /// the primary table. Small writes update affected keys, not this population.
     pub(super) fn current_admitted_saved_id(&self, uuid: [i32; 4]) -> Option<u32> {
         let level = LevelRef::new(self.native_lifecycle.epoch()?, self.dim.key());
+        let (saved, _) = self.relation_identity_candidates_at(level, uuid)?;
+        let id = saved?;
+        (self.read_saved_uuid(id, level)? == uuid).then_some(id)
+    }
+
+    /// Candidates only, for an already admitted level. Consumers still admit
+    /// the selected entity and verify the UUID binding at its owning storage.
+    /// UUID/profile indexing does not require an R payload publication.
+    pub(super) fn relation_identity_candidates_at(
+        &self,
+        level: LevelRef,
+        uuid: [i32; 4],
+    ) -> Option<(Option<u32>, Option<u32>)> {
+        let candidates = |index: &NativeMobRelations| {
+            let saved = index.saved_ids.get(&uuid).copied();
+            let profile = index
+                .players_by_uuid
+                .get(&horizon_client::lan::playerdata::ints_uuid(uuid))
+                .and_then(|conn| index.guest_identities.get(conn))
+                .map(|&(_, id)| id);
+            (saved, profile)
+        };
         let tick = self.native_lifecycle.capture_tick()?;
         let mut pass = {
             let mut state = self.entity_read_state.borrow_mut();
             let pass = state.mob_relations.entry(level).or_default();
             if pass.tick == Some(tick) {
-                let id = *pass.index.saved_ids.get(&uuid)?;
-                drop(state);
-                return (self.read_saved_uuid(id, level)? == uuid).then_some(id);
+                return Some(candidates(&pass.index));
             }
             std::mem::take(pass)
         };
         self.rebuild_mob_read_relations(level, &mut pass.index);
         pass.tick = Some(tick);
-        let id = pass.index.saved_ids.get(&uuid).copied();
+        let candidates = candidates(&pass.index);
         self.entity_read_state
             .borrow_mut()
             .mob_relations
             .insert(level, pass);
-        let id = id?;
-        (self.read_saved_uuid(id, level)? == uuid).then_some(id)
+        Some(candidates)
     }
 
     /// The primary table enumerates candidates only. Resolve each after dropping

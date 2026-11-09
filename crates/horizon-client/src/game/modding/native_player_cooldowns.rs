@@ -19,18 +19,27 @@ impl Game<'_> {
     /// The cooldowns of `player`, where they are kept now: a guest's own
     /// outside their turn, the game's while theirs is swapped in (as
     /// `player` finds the player).
-    fn raw_cooldowns_of(&self, target: super::commands::Target) -> Option<&Cooldowns> {
-        match target {
-            super::commands::Target::Player => Some(&self.cooldowns),
-            super::commands::Target::Guest(conn) => Some(
-                self.lan
-                    .as_ref()?
-                    .play
-                    .get(&conn)
-                    .map_or(&EMPTY, |p| &p.cooldowns),
-            ),
-            _ => None,
-        }
+    fn with_player_cooldown_source<R>(
+        &self,
+        admitted: super::native_live_entity_reads::EntityReadAdmission,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        project: impl FnOnce(&Cooldowns) -> R,
+    ) -> Result<R, mod_api::EntityReadError> {
+        self.with_entity_read_storage(admitted, provider, |_source| {
+            let cooldowns = match admitted.target() {
+                super::commands::Target::Player => Some(&self.cooldowns),
+                super::commands::Target::Guest(conn) => self
+                    .lan
+                    .as_ref()
+                    .map(|host| host.play.get(&conn).map_or(&*EMPTY, |play| &play.cooldowns)),
+                _ => None,
+            };
+            let Some(cooldowns) = cooldowns else {
+                return Err(mod_api::EntityReadError::Lifted);
+            };
+            admitted.project_actual(|| project(cooldowns))
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
 
     /// `ItemCooldowns.getCooldownGroup(stack)`: the group `stack`'s
@@ -54,7 +63,7 @@ impl Game<'_> {
 
     pub(super) fn read_player_item_cooldowns(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         player: PlayerRef,
     ) -> Result<Option<Vec<ItemCooldown>>, mod_api::EntityReadError> {
         use super::{
@@ -64,22 +73,14 @@ impl Game<'_> {
         if !self.is_logical_server() {
             return Ok(None);
         }
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Cooldowns],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
+        ) else {
+            return Ok(None);
         };
-        Ok((|| {
-            let mut out: Vec<ItemCooldown> = self
-                .raw_cooldowns_of(target)?
+        self.with_player_cooldown_source(admitted, provider, |cooldowns| {
+            let mut out: Vec<ItemCooldown> = cooldowns
                 .remaining()
                 .filter(|(_, left)| *left > 0)
                 .map(|(group, left)| ItemCooldown {
@@ -89,7 +90,7 @@ impl Game<'_> {
                 .collect();
             out.sort_by(|a, b| a.group.cmp(&b.group));
             Some(out)
-        })())
+        })
     }
     /// `ItemCooldowns.isOnCooldown`: whether `group` still has time to run.
     pub(super) fn player_has_item_cooldown(
@@ -102,7 +103,7 @@ impl Game<'_> {
 
     pub(super) fn read_player_has_item_cooldown(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         player: PlayerRef,
         group: &str,
     ) -> Result<Option<bool>, mod_api::EntityReadError> {
@@ -113,22 +114,15 @@ impl Game<'_> {
         if !self.is_logical_server() {
             return Ok(None);
         }
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Cooldowns],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
+        ) else {
+            return Ok(None);
         };
-        Ok((|| {
-            Some(self.raw_cooldowns_of(target)?.is_on_cooldown(group))
-        })())
+        self.with_player_cooldown_source(admitted, provider, |cooldowns| {
+            Some(cooldowns.is_on_cooldown(group))
+        })
     }
     /// `ItemCooldowns.getCooldownPercent(group, 0)`: what is left of the
     /// group's cooldown, from 1 (just started) to 0 (none).
@@ -142,7 +136,7 @@ impl Game<'_> {
 
     pub(super) fn read_player_item_cooldown_percent(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         player: PlayerRef,
         group: &str,
     ) -> Result<Option<f32>, mod_api::EntityReadError> {
@@ -153,22 +147,15 @@ impl Game<'_> {
         if !self.is_logical_server() {
             return Ok(None);
         }
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Cooldowns],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
+        ) else {
+            return Ok(None);
         };
-        Ok((|| {
-            Some(self.raw_cooldowns_of(target)?.percent(group, 0.0))
-        })())
+        self.with_player_cooldown_source(admitted, provider, |cooldowns| {
+            Some(cooldowns.percent(group, 0.0))
+        })
     }
     /// `ItemCooldowns.addCooldown(group, ticks)`: starts (or restarts) the
     /// group's cooldown, and the player's client draws it on every item of the

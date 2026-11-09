@@ -1,6 +1,6 @@
 use super::*;
 
-/// The actual read host of a target event, either the game or a scoped mob tick.
+/// The actual host of a read-only hook, either the game or a concrete callback loan.
 pub(in crate::game) struct NativeHookHost<'a> {
     pub(in crate::game) host: &'a dyn mod_api::Host,
 }

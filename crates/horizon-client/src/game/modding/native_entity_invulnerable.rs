@@ -297,22 +297,39 @@ impl Game<'_> {
         &self,
         entity: EntityRef,
         damage_type: &str,
-    ) -> Option<bool> {
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
         self.read_entity_invulnerable_to_damage(None, entity, damage_type)
     }
 
     pub(super) fn read_entity_invulnerable_to_damage(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         entity: EntityRef,
         damage_type: &str,
-    ) -> Option<bool> {
-        let Target::Mob(id) = self.native_entity_target(entity)? else {
-            return None;
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        use super::{
+            native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
         };
-        let m = self.mobs.iter().find(|m| m.id == id)?;
-        let source = Damage::of(Self::damage_kind(&self.motion.health.damage, damage_type));
-        Some(m.refuses_damage(&source))
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Entity(entity),
+            &[
+                EntityReadDependency::Invulnerability,
+                EntityReadDependency::VitalState,
+            ],
+        ) else {
+            return Ok(None);
+        };
+        if !matches!(admitted.target(), Target::Mob(_)) {
+            return Ok(None);
+        }
+        self.with_admitted_entity_source(admitted, provider, |actual| {
+            let BaseReadSource::Mob(mob) = actual.body else {
+                return None;
+            };
+            let source = Damage::of(Self::damage_kind(&self.motion.health.damage, damage_type));
+            Some(mob.refuses_damage(&source))
+        })
     }
 
     /// Whether `source`'s damage may hit `entity` through their teams
@@ -323,19 +340,46 @@ impl Game<'_> {
         &self,
         entity: EntityRef,
         source: EntityRef,
-    ) -> Option<bool> {
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
         self.read_entity_entities_team_damage_allowed(None, entity, source)
     }
 
     pub(super) fn read_entity_entities_team_damage_allowed(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         entity: EntityRef,
         source: EntityRef,
-    ) -> Option<bool> {
-        let own = self.native_target_team(self.native_entity_target(entity)?)?;
-        let their = self.native_target_team(self.native_entity_target(source)?)?;
-        Some(horizon_client::scoreboard::teams_allow_damage(own, their))
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let dependencies = &[
+            EntityReadDependency::Teams,
+            EntityReadDependency::Ownership,
+            EntityReadDependency::Session,
+        ];
+        let Some(own) = self.entity_read_admission(EntityReadSubject::Entity(entity), dependencies)
+        else {
+            return Ok(None);
+        };
+        let Some(their) =
+            self.entity_read_admission(EntityReadSubject::Entity(source), dependencies)
+        else {
+            return Ok(None);
+        };
+        let own_level = mod_api::LevelRef::new(entity.epoch(), own.location().owner.dimension);
+        let their_level = mod_api::LevelRef::new(source.epoch(), their.location().owner.dimension);
+        self.with_admitted_entity_sources(own, their, provider, |own, their| {
+            let own = self.native_source_team(own, own_level, provider)?;
+            let their = self.native_source_team(their, their_level, provider)?;
+            Ok(Some(horizon_client::scoreboard::teams_allow_damage(
+                own, their,
+            )))
+        })?
     }
 
     /// The team an entity is on: a mob's own or its tamed owner's, the

@@ -76,8 +76,25 @@ pub(super) struct EntityReadAdmission {
     read: EntityReadTarget,
     lifted: bool,
     pending: Option<CommandId>,
+    known_uuid: Option<[i32; 4]>,
 }
 impl EntityReadAdmission {
+    /// Choose pending only after the caller selected every actual source part.
+    pub(super) fn project_actual<R, E>(
+        self,
+        project: impl FnOnce() -> R,
+    ) -> Result<R, EntityReadError<E>> {
+        if let Some(id) = self.pending {
+            return Err(EntityReadError::Pending(id));
+        }
+        Ok(project())
+    }
+    pub(super) fn known_uuid(self) -> Option<[i32; 4]> {
+        self.known_uuid
+    }
+    pub(super) fn target(self) -> Target {
+        self.read.target
+    }
     pub(super) fn location(self) -> Location {
         self.read.location
     }
@@ -102,19 +119,53 @@ impl Game<'_> {
         project: impl for<'s> FnOnce(super::native_live_entity_sources::EntityReadSource<'s>) -> R,
     ) -> Result<R, EntityReadError<E>> {
         let finish = |source: super::native_live_entity_sources::EntityReadSource<'_>| {
-            if let Some(id) = admission.pending {
-                return Err(EntityReadError::Pending(id));
-            }
-            Ok(project(source))
+            admission.project_actual(|| project(source))
         };
-        let result = if admission.lifted {
+        self.with_entity_read_storage(admission, provider, finish)
+            .unwrap_or(Err(EntityReadError::Lifted))
+    }
+
+    /// Every input is already admitted, including its relational domain. Both
+    /// actual sources must exist before a pending command can win selection.
+    pub(super) fn with_admitted_entity_sources<R, E>(
+        &self,
+        first: EntityReadAdmission,
+        second: EntityReadAdmission,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        project: impl for<'a, 'b> FnOnce(
+            super::native_live_entity_sources::EntityReadSource<'a>,
+            super::native_live_entity_sources::EntityReadSource<'b>,
+        ) -> R,
+    ) -> Result<R, EntityReadError<E>> {
+        self.with_entity_read_storage(first, provider, |left| {
+            self.with_entity_read_storage(second, provider, |right| {
+                if let Some(id) = first
+                    .pending
+                    .into_iter()
+                    .chain(second.pending)
+                    .max_by_key(|id| id.sequence)
+                {
+                    return Err(EntityReadError::Pending(id));
+                }
+                Ok(project(left, right))
+            })
+        })
+        .flatten()
+        .unwrap_or(Err(EntityReadError::Lifted))
+    }
+
+    pub(super) fn with_entity_read_storage<R>(
+        &self,
+        admission: EntityReadAdmission,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        project: impl for<'s> FnOnce(super::native_live_entity_sources::EntityReadSource<'s>) -> R,
+    ) -> Option<R> {
+        if admission.lifted {
             // Only the exact actual callback loan can supply a Taken body.
-            // A disjoint live peer or a cached publication is not a provider.
-            self.with_borrowed_entity_source(admission.read, provider, finish)
+            self.with_borrowed_entity_source(admission.read, provider, project)
         } else {
-            self.with_live_entity_source(admission.read, provider, finish)
-        };
-        result.unwrap_or(Err(EntityReadError::Lifted))
+            self.with_live_entity_source(admission.read, provider, project)
+        }
     }
 
     pub(super) fn entity_read_dependency<E>(
@@ -193,6 +244,7 @@ impl Game<'_> {
             lifted: (matches!(state, EntityLookup::Taken) || self.held_out.contains(&entity.id()))
                 && !self.entity_read_actor_owns(entity.id(), location),
             pending: cached.and_then(|row| row.pending_dependency(dependencies)),
+            known_uuid: details.known_uuid,
         })
     }
 
