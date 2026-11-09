@@ -348,26 +348,31 @@ pub fn transformation(tag: &Tag) -> Option<([f32; 3], [f32; 4], [f32; 3], [f32; 
     use horizon_assets::math::{
         Mat4, normalize_quaternion, quaternion_from_axis_angle, svd_decompose,
     };
-    let list = |tag: Option<&Tag>| -> Option<Vec<f32>> {
-        match tag? {
-            Tag::List(l) => l.iter().map(|v| float(Some(v)).map(|v| v as f32)).collect(),
-            _ => None,
+    fn list<const N: usize>(tag: Option<&Tag>) -> Option<[f32; N]> {
+        let Tag::List(values) = tag? else {
+            return None;
+        };
+        if values.len() != N {
+            return None;
         }
-    };
-    if let Some(values) = list(Some(tag)) {
-        let values: [f32; 16] = values.try_into().ok()?;
+        let mut out = [0.0; N];
+        for (out, value) in out.iter_mut().zip(values) {
+            *out = float(Some(value))? as f32;
+        }
+        Some(out)
+    }
+    if let Some(values) = list::<16>(Some(tag)) {
         return Some(svd_decompose(&Mat4::from_row_major(values)));
     }
-    let vector = |key: &str| -> Option<[f32; 3]> { list(tag.get(key))?.try_into().ok() };
-    // `ExtraCodecs.QUATERNIONF`: four components (normalized) or an axis and an
-    // angle (`new Quaternionf(AxisAngle4f)`: the angle wrapped, the axis as given).
+    let vector = |key: &str| -> Option<[f32; 3]> { list(tag.get(key)) };
+    // `ExtraCodecs.QUATERNIONF`: normalized components or axis and angle.
     let rotation = |key: &str| -> Option<[f32; 4]> {
         let value = tag.get(key)?;
-        if let Some(q) = list(Some(value)) {
-            return Some(normalize_quaternion(q.try_into().ok()?));
+        if let Some(q) = list::<4>(Some(value)) {
+            return Some(normalize_quaternion(q));
         }
         let angle = float(value.get("angle"))? as f32;
-        let axis: [f32; 3] = list(value.get("axis"))?.try_into().ok()?;
+        let axis = list::<3>(value.get("axis"))?;
         Some(quaternion_from_axis_angle(angle, axis))
     };
     Some((
@@ -736,5 +741,30 @@ mod tests {
         assert_eq!((half.shadow_radius, half.shadow_strength), (1.0, 0.625));
         assert_eq!(shown.blend(&from, 0.0).shadow_radius, 0.0);
         assert_eq!(shown.blend(&from, 1.0).shadow_strength, 0.25);
+    }
+    #[test]
+    fn transformation_preserves_saved_codec_results() {
+        fn list(values: &[f32]) -> Tag {
+            Tag::List(values.iter().map(|v| Tag::Float(v.to_bits())).collect())
+        }
+        let mut compound = Compound::new();
+        compound.insert("translation".into(), list(&[2.0, 3.0, -7.0]));
+        compound.insert("scale".into(), list(&[1.0, 2.0, 4.0]));
+        compound.insert("left_rotation".into(), list(&[0.0, 0.0, 0.0, 2.0]));
+        compound.insert("right_rotation".into(), list(&[0.0, 0.0, 0.0, 1.0]));
+        let saved = Tag::Compound(compound);
+        let result = transformation(&saved).unwrap();
+        assert_eq!(result.0, [2.0, 3.0, -7.0]);
+        assert_eq!(result.1, [0.0, 0.0, 0.0, 1.0]);
+        assert_eq!(result.2, [1.0, 2.0, 4.0]);
+        for malformed in [list(&[1.0; 15]), Tag::Compound(Compound::new())] {
+            assert!(transformation(&malformed).is_none());
+        }
+        let matrix = list(&[
+            1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
+        ]);
+        let (translation, _, scale, _) = transformation(&matrix).unwrap();
+        assert_eq!(translation, [0.0; 3]);
+        assert_eq!(scale, [1.0; 3]);
     }
 }
