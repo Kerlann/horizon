@@ -3167,7 +3167,14 @@ struct Game<'a> {
     /// The native lifecycle bookkeeping.
     native_lifecycle: native_lifecycle::NativeLifecycle,
     /// Journal-fed residency across active and parked server dimensions.
-    entity_residency: Box<RefCell<horizon_client::join_seq::residency::table::EntityTable>>,
+    entity_residency: Box<
+        RefCell<
+            horizon_client::join_seq::residency::table::EntityTable<
+                native_entity_read_cache::NativeReadPublication,
+            >,
+        >,
+    >,
+    entity_read_state: Box<RefCell<native_entity_read_cache::NativeReadState>>,
     /// The mobs lent to the hook calls running now, before they join a level
     /// (game/modding/native_unspawned_mob.rs).
     lent_mobs: RefCell<native_unspawned_mob::LentMobs>,
@@ -17122,6 +17129,7 @@ impl<'a> Game<'a> {
             entity_residency: Box::new(RefCell::new(
                 horizon_client::join_seq::residency::table::EntityTable::new(Default::default()),
             )),
+            entity_read_state: Default::default(),
             lent_mobs: Default::default(),
             held_out: Vec::with_capacity(4),
             native_configs: Default::default(),

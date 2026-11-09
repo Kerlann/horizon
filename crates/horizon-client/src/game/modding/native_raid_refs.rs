@@ -120,13 +120,13 @@ impl Game<'_> {
     }
 
     /// `Raid.isStarted`.
-    pub(super) fn raid_is_started(&self, raid: RaidRef) -> bool {
-        self.native_raid_data(raid).is_some_and(|r| r.started)
+    pub(super) fn raid_is_started(&self, raid: RaidRef) -> Option<bool> {
+        Some(self.native_raid_data(raid)?.started)
     }
 
     /// `Raid.isActive`: false once stopped.
-    pub(super) fn raid_is_active(&self, raid: RaidRef) -> bool {
-        self.native_raid_data(raid).is_some_and(|r| r.active)
+    pub(super) fn raid_is_active(&self, raid: RaidRef) -> Option<bool> {
+        Some(self.native_raid_data(raid)?.active)
     }
 
     /// `Raid.RaidStatus`.
@@ -382,8 +382,8 @@ mod tests {
                 game.raid_num_groups(raid),
                 Some(horizon_client::raid::num_groups(game.difficulty_id()))
             );
-            assert!(!game.raid_is_started(raid));
-            assert!(game.raid_is_active(raid));
+            assert_eq!(game.raid_is_started(raid), Some(false));
+            assert_eq!(game.raid_is_active(raid), Some(true));
             assert_eq!(game.raid_status(raid), Some(NativeRaidStatus::Ongoing));
             assert_eq!(game.raid_total_health(raid), Some(0.0));
             assert_eq!(game.raid_bar_progress(raid), Some(0.0));
@@ -414,7 +414,7 @@ mod tests {
 
             assert!(game.raid_stop(raid));
             assert_eq!(game.raid_status(raid), Some(NativeRaidStatus::Stopped));
-            assert!(!game.raid_is_active(raid));
+            assert_eq!(game.raid_is_active(raid), Some(false));
             assert!(!game.raid_stop(raid));
             assert_eq!(game.level_raid_at(level, [10, 70, 10]), None);
         });
@@ -529,7 +529,7 @@ mod tests {
             );
             let stale = RaidRef::new(later, raid.id());
             assert_eq!(game.raid_center(stale), None);
-            assert!(!game.raid_is_active(stale));
+            assert_eq!(game.raid_is_active(stale), None);
             assert!(!game.raid_stop(stale));
             assert!(!game.raid_set_omen_level(stale, 2));
             assert_eq!(game.level_raids(later), None);

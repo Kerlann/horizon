@@ -119,23 +119,50 @@ impl Parked {
 }
 
 impl Game<'_> {
+    /// Logical retirement is independent of physical lifting. Cached rows of
+    /// a lifted owner still observe removals made before a lifecycle callback.
+    pub(super) fn server_read_target_visible(
+        &self,
+        dimension: DimensionKey,
+        target: Target,
+    ) -> bool {
+        if dimension == self.dim.key() {
+            return !self.persist.removals.contains(&target);
+        }
+        let dim = match dimension {
+            DimensionKey::OVERWORLD => Dim::Overworld,
+            DimensionKey::NETHER => Dim::Nether,
+            DimensionKey::END => Dim::End,
+            key => Dim::Extra(key),
+        };
+        self.levels
+            .parked
+            .get(&dim)
+            .is_some_and(|parked| !parked.persist.removals.contains(&target))
+    }
+
     /// Resolve through the exact owner, never by trying dimension swaps.
+    pub(super) fn locate_server_resident_owner(
+        &self,
+        at: Location,
+    ) -> Option<SourceEntity<(Target, bool)>> {
+        if at.owner.dimension == self.dim.key() {
+            return self.locate_resident_owner(at);
+        }
+        let dim = match at.owner.dimension {
+            DimensionKey::OVERWORLD => Dim::Overworld,
+            DimensionKey::NETHER => Dim::Nether,
+            DimensionKey::END => Dim::End,
+            key => Dim::Extra(key),
+        };
+        self.levels.parked.get(&dim)?.locate_resident_owner(at)
+    }
+
     pub(super) fn server_resident_entity(&self, id: u32) -> EntityLookup<Target> {
         let found = self
             .entity_residency
             .borrow_mut()
-            .server_entity_lookup(id, |at| {
-                if at.owner.dimension == self.dim.key() {
-                    return self.locate_resident_owner(at);
-                }
-                let dim = match at.owner.dimension {
-                    DimensionKey::OVERWORLD => Dim::Overworld,
-                    DimensionKey::NETHER => Dim::Nether,
-                    DimensionKey::END => Dim::End,
-                    key => Dim::Extra(key),
-                };
-                self.levels.parked.get(&dim)?.locate_resident_owner(at)
-            });
+            .server_entity_lookup(id, |at| self.locate_server_resident_owner(at));
         match found {
             EntityLookup::Found {
                 location,
@@ -205,6 +232,7 @@ impl Game<'_> {
 
     /// A new epoch invalidates every old producer before rebinding retained levels.
     pub(super) fn reset_entity_residency(&mut self) {
+        self.entity_read_state.get_mut().reset();
         let table = self.entity_residency.get_mut();
         table.reset();
         let journal = table.producer();
