@@ -212,6 +212,21 @@ impl FlatTerrain {
 /// DimensionType.Y_SIZE: the most layers FlatLevelGeneratorSettings takes.
 const Y_SIZE: i64 = 4064;
 
+/// Check an editor's NBT before `from_settings` expands its flat layers.
+pub(crate) fn valid_layer_heights(settings: &Tag) -> bool {
+    let Some(Tag::List(layers)) = settings.get("layers") else {
+        return false;
+    };
+    layers
+        .iter()
+        .try_fold(0i64, |total, layer| {
+            let height = crate::save::number(layer.get("height"))?;
+            let total = total.checked_add(height)?;
+            (height >= 0 && total <= Y_SIZE).then_some(total)
+        })
+        .is_some()
+}
+
 /// FlatLevelGeneratorSettings.CODEC reading a dedicated server's
 /// `generator-settings` (DedicatedServerProperties.WorldDimensionData for
 /// the `minecraft:flat` preset): the settings as `world_gen_settings` stores

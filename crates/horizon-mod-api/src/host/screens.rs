@@ -4,6 +4,18 @@ use crate::*;
 /// The client host's methods of the `screens` area, implemented by the game and reached through [`crate::ClientHost`].
 #[horizon_mod_api_macros::host_area]
 pub trait ScreensClientHost {
+    /// The world-preset editor currently open over Create World, or none.
+    #[access(ClientSetup)]
+    fn preset_editor(&self) -> Option<PresetEditor>;
+    /// A copy of the open preset editor's working dimension stems.
+    #[access(ClientSetup)]
+    fn preset_editor_dimensions(&self) -> Option<Compound>;
+    /// Replace the open editor's working dimension stems. Requires an overworld,
+    /// valid dimension ids and type/generator declarations. Returns false outside
+    /// the editor or for malformed data; Done commits, Cancel discards the copy.
+    /// Interior screen state permits use from the read-only screen input hooks.
+    #[access(ClientSetup)]
+    fn set_preset_editor_dimensions(&self, dimensions: Compound) -> bool;
     /// Side: client.
     /// The block of the mod screen that is open (`native_screen`), as the
     /// server named it when the block opened its menu type; None when no mod

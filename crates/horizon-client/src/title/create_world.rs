@@ -22,6 +22,14 @@ pub const DIFFICULTIES: [&str; 4] = ["peaceful", "easy", "normal", "hard"];
 /// WorldCreationUiState beyond the name and seed.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WorldOptions {
+    /// Selected data-pack preset; none selects `world_type`.
+    pub custom_preset: Option<String>,
+    /// Committed editor output, saved as the world's dimension stems.
+    pub preset_dimensions: Option<horizon_core::nbt::Tag>,
+    /// Available enabled data-pack presets, refreshed when the pack selection changes.
+    pub presets: std::collections::BTreeMap<String, horizon_core::nbt::Tag>,
+    /// The enabled `minecraft:normal` world-preset tag's selection order.
+    pub preset_order: Vec<String>,
     /// The open tab: Game, World or More.
     pub tab: usize,
     /// Survival locked to Hard, one life (`SelectedGameMode.HARDCORE`).
@@ -52,6 +60,13 @@ pub struct WorldOptions {
 impl Default for WorldOptions {
     fn default() -> Self {
         Self {
+            custom_preset: None,
+            preset_dimensions: None,
+            presets: Default::default(),
+            preset_order: crate::save::WorldPreset::ALL
+                .iter()
+                .map(|p| p.id().into())
+                .collect(),
             tab: 0,
             hardcore: false,
             difficulty: 2,
@@ -181,7 +196,10 @@ impl WorldOptions {
             }
         }
     }
-    fn available_packs(&self, resources: &std::path::Path) -> Vec<crate::datapack::DataPack> {
+    pub(super) fn available_packs(
+        &self,
+        resources: &std::path::Path,
+    ) -> Vec<crate::datapack::DataPack> {
         let mut packs = crate::datapack::feature_packs(resources);
         packs.extend(
             self.additional_data_packs
@@ -259,11 +277,7 @@ impl WorldOptions {
             }
             24 => self.commands = Some(!self.commands(*creative)),
             25 => {
-                self.world_type = if step >= 0 {
-                    self.world_type.next()
-                } else {
-                    self.world_type.prev()
-                };
+                self.cycle_preset(step);
                 if self.world_type == crate::save::WorldPreset::Flat {
                     // setWorldType starts the generator from the flat preset.
                     self.flat_settings = Some(super::flat::FlatSettings::default());
@@ -407,7 +421,13 @@ fn game_mode(creative: bool, hardcore: bool) -> &'static str {
 }
 
 /// The open tab's buttons and the footer's.
-pub(super) fn buttons(w: f32, h: f32, creative: bool, o: &WorldOptions) -> Vec<Button> {
+pub(super) fn buttons(
+    w: f32,
+    h: f32,
+    creative: bool,
+    o: &WorldOptions,
+    editors_ready: bool,
+) -> Vec<Button> {
     let b = |x: f32, y: f32, w: f32, label: String, enabled: bool, id: u8| Button {
         x,
         y,
@@ -458,7 +478,7 @@ pub(super) fn buttons(w: f32, h: f32, creative: bool, o: &WorldOptions) -> Vec<B
                 gx,
                 gy,
                 150.0,
-                labelled("selectWorld.mapType", tr(o.world_type.label())),
+                labelled("selectWorld.mapType", o.preset_label()),
                 true,
                 25,
             ),
@@ -470,10 +490,13 @@ pub(super) fn buttons(w: f32, h: f32, creative: bool, o: &WorldOptions) -> Vec<B
                 gy,
                 150.0,
                 tr("selectWorld.customizeType"),
-                matches!(
-                    o.world_type,
-                    crate::save::WorldPreset::Flat | crate::save::WorldPreset::SingleBiomeSurface
-                ),
+                (editors_ready && super::preset_editors::editor(o.preset_id()).is_some())
+                    || (o.custom_preset.is_none()
+                        && matches!(
+                            o.world_type,
+                            crate::save::WorldPreset::Flat
+                                | crate::save::WorldPreset::SingleBiomeSurface
+                        )),
                 26,
             ),
             // SwitchGrid: 44-wide value-only buttons at the grid's right.
@@ -826,7 +849,10 @@ impl Title {
                 Some(Text::translate("selectWorld.allowCommands.info", &[]))
             }
             // WorldTab: the Amplified preset's help text on the type button.
-            1 if o.world_type == crate::save::WorldPreset::Amplified && over(gx, gy, 150.0) => {
+            1 if o.custom_preset.is_none()
+                && o.world_type == crate::save::WorldPreset::Amplified
+                && over(gx, gy, 150.0) =>
+            {
                 Some(Text::translate("generator.minecraft.amplified.info", &[]))
             }
             1 if over(gx + 266.0, gy + 73.0, 44.0) => {

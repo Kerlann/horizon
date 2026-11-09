@@ -155,6 +155,9 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `ClientHost::panel_items` | crosses | Wire call |
 | `ClientHost::place_recipe` | crosses | Wire call |
 | `ClientHost::transfer_recipe` | crosses | Wire call |
+| `ClientHost::preset_editor` | crosses | Wire call |
+| `ClientHost::preset_editor_dimensions` | crosses | Wire call |
+| `ClientHost::set_preset_editor_dimensions` | crosses | Wire call |
 | `ClientHost::screen_pos` | crosses | Wire call |
 | `ClientHost::screen_exclusion` | crosses | Wire call |
 | `ClientHost::screen_hovered_item` | crosses | Wire call |
@@ -1574,6 +1577,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Hooks::register_gui_layers` | crosses | Wire call |
 | `Hooks::register_item_tint_sources` | crosses | Wire call |
 | `Hooks::register_particle_providers` | crosses | Wire call |
+| `Hooks::register_preset_editors` | crosses | Wire call |
 | `Hooks::register_range_select_item_model_property` | crosses | Wire call |
 | `Hooks::register_runtime_sprites` | crosses | Wire call |
 | `Hooks::register_select_item_model_property` | crosses | Wire call |

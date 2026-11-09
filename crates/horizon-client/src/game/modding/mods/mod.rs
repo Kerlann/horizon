@@ -425,6 +425,15 @@ pub(super) fn register_dimension_transition_screens(role: ExecutionRole) {
     horizon_client_render::dimension_transition::register(screens);
 }
 
+pub(super) fn register_preset_editors(role: ExecutionRole) {
+    if !role.is_client() {
+        return;
+    }
+    let mut editors = Vec::new();
+    Game::native_register_preset_editors(&RegistrationContext::new(), &mut editors);
+    horizon_client::title::preset_editors::register(editors);
+}
+
 /// The native mods' colour resolvers (`native_register_color_resolvers`), kept once at start,
 /// before the block tint sources that read them and before resources load.
 pub(super) fn register_color_resolvers(role: ExecutionRole) {

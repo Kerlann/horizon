@@ -394,7 +394,7 @@ fn dimension_is_vanilla_like(key: &str, dimension: &Tag) -> bool {
 }
 /// A data pack's JSON as the NBT `dimension_is_vanilla_like` reads (what a codec gets from
 /// either one is the same data).
-fn json_tag(value: &serde_json::Value) -> Tag {
+pub(crate) fn json_tag(value: &serde_json::Value) -> Tag {
     use serde_json::Value;
     match value {
         Value::Null => Tag::compound(std::iter::empty::<(&str, Tag)>()),
@@ -3960,21 +3960,74 @@ impl Default for WorldGen {
 }
 /// Writes a new world's `world_gen_settings` (seed, options and dimensions).
 pub fn write_world_gen_settings(dir: &Path, seed: i64, options: WorldGen) -> Result<()> {
-    write_world_gen_settings_with(dir, seed, options, None, None)
+    write_world_gen_settings_with(dir, seed, options, None, None, None)
 }
+/// Structural boundary checks; generator-specific codecs run on world loading.
+pub(crate) fn valid_world_gen_dimensions(dimensions: &Tag) -> bool {
+    use horizon_core::identifier::Identifier;
+    let Tag::Compound(stems) = dimensions else {
+        return false;
+    };
+    dimensions.get("minecraft:overworld").is_some()
+        && stems.iter().all(|(id, stem)| {
+            let Some(generator) = stem.get("generator") else {
+                return false;
+            };
+            let Some(kind) = text(generator.get("type")).and_then(|id| Identifier::parse(&id).ok())
+            else {
+                return false;
+            };
+            horizon_core::level_id::valid_level_id(&id.to_string_lossy())
+                && match stem.get("type") {
+                    Some(Tag::String(id)) => id
+                        .to_string()
+                        .ok()
+                        .is_some_and(|id| Identifier::parse(&id).is_ok()),
+                    Some(Tag::Compound(_)) => true,
+                    _ => false,
+                }
+                && (kind.namespace() != "minecraft"
+                    || kind.path() != "flat"
+                    || generator
+                        .get("settings")
+                        .is_some_and(crate::flatgen::valid_layer_heights))
+        })
+}
+
 /// [`write_world_gen_settings`] with a flat overworld's own generator
 /// settings (FlatLevelGeneratorSettings, as `flatgen::settings_from_json`
 /// reads them) instead of the Superflat preset's classic layers, and with the
 /// biome the single-biome preset fixes (`CreateBuffetWorldScreen`'s choice,
 /// `minecraft:plains` when none was made).
+/// `dimensions` replaces the preset's stems with a validated editor/data-pack result.
 pub fn write_world_gen_settings_with(
     dir: &Path,
     seed: i64,
     options: WorldGen,
     flat_settings: Option<Tag>,
     single_biome: Option<&str>,
+    dimensions: Option<Tag>,
 ) -> Result<()> {
+    let mut settings = new_world_gen_settings(seed, options, flat_settings, single_biome);
+    if let Some(dimensions) = dimensions {
+        if !valid_world_gen_dimensions(&dimensions) {
+            return Err("invalid world preset dimensions".into());
+        }
+        let Tag::Compound(settings) = &mut settings else {
+            unreachable!()
+        };
+        settings.insert("dimensions".into(), dimensions);
+    }
     fs::create_dir_all(dir)?;
+    write_saved_data(dir, "world_gen_settings", settings)
+}
+/// Build the vanilla preset's creation settings without touching disk.
+pub(crate) fn new_world_gen_settings(
+    seed: i64,
+    options: WorldGen,
+    flat_settings: Option<Tag>,
+    single_biome: Option<&str>,
+) -> Tag {
     // worldgen/world_preset/flat.json's overworld: the classic flat layers.
     let layer = |block: &str, height: i32| {
         Tag::compound([("block", string(block)), ("height", Tag::Int(height))])
@@ -4066,40 +4119,36 @@ pub fn write_world_gen_settings_with(
             ),
         ]),
     };
-    write_saved_data(
-        dir,
-        "world_gen_settings",
-        Tag::compound([
-            ("seed", Tag::Long(seed)),
-            (
-                "generate_structures",
-                Tag::Byte(i8::from(options.structures)),
-            ),
-            ("bonus_chest", Tag::Byte(i8::from(options.bonus_chest))),
-            (
-                "dimensions",
-                Tag::compound([
-                    ("minecraft:overworld", overworld),
-                    (
+    Tag::compound([
+        ("seed", Tag::Long(seed)),
+        (
+            "generate_structures",
+            Tag::Byte(i8::from(options.structures)),
+        ),
+        ("bonus_chest", Tag::Byte(i8::from(options.bonus_chest))),
+        (
+            "dimensions",
+            Tag::compound([
+                ("minecraft:overworld", overworld),
+                (
+                    "minecraft:the_nether",
+                    dimension(
                         "minecraft:the_nether",
-                        dimension(
-                            "minecraft:the_nether",
-                            "minecraft:nether",
-                            preset("minecraft:nether"),
-                        ),
+                        "minecraft:nether",
+                        preset("minecraft:nether"),
                     ),
-                    (
+                ),
+                (
+                    "minecraft:the_end",
+                    dimension(
                         "minecraft:the_end",
-                        dimension(
-                            "minecraft:the_end",
-                            "minecraft:end",
-                            Tag::compound([("type", string("minecraft:the_end"))]),
-                        ),
+                        "minecraft:end",
+                        Tag::compound([("type", string("minecraft:the_end"))]),
                     ),
-                ]),
-            ),
-        ]),
-    )
+                ),
+            ]),
+        ),
+    ])
 }
 #[derive(Clone, Debug, Default)]
 pub struct Level {

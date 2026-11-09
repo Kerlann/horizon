@@ -22,6 +22,7 @@ mod create_world;
 mod experiments;
 mod flat;
 mod onboarding;
+pub mod preset_editors;
 #[cfg(test)]
 mod tests;
 pub mod world_management;
@@ -361,6 +362,12 @@ pub enum Mode {
         options: WorldOptions,
         buffet: buffet::State,
     },
+    /// A registered preset editor over an unchanged copy of Create World.
+    CreatePreset {
+        parent: Box<Mode>,
+        editor: mod_api::PresetEditor,
+        dimensions: RefCell<horizon_core::nbt::Tag>,
+    },
     /// AccessibilityOnboardingScreen: the first screen of a first launch.
     Onboarding(Onboarding),
     /// `BanNoticeScreens`: a ConfirmLinkScreen `Gui.addInitialScreens` queued.
@@ -420,6 +427,8 @@ pub struct Title {
     /// The prepared resource root: the flat preset list and block registry.
     resources: PathBuf,
     additional_data_packs: std::sync::Arc<[std::sync::Arc<crate::datapack::DataPack>]>,
+    /// Game supplies this when screen hooks are available, even with no mod data.
+    preset_data: Option<std::sync::Arc<crate::datapack::DataPack>>,
     pub started: std::time::Instant,
     search: String,
     search_focused: bool,
@@ -779,6 +788,7 @@ impl Mode {
             Self::Create { .. } => "world_create",
             Self::CreateFlat { .. } => "world_create_flat",
             Self::CreateBuffet { .. } => "world_create_buffet",
+            Self::CreatePreset { .. } => "world_preset_editor",
             Self::Edit { .. } => "world_edit",
             Self::Backup { .. } => "world_backup",
             Self::BackupBeforeUpgrade { .. } => "world_backup_confirm",
@@ -804,6 +814,7 @@ impl Title {
     pub fn set_mode(&mut self, mut mode: Mode) {
         if let Mode::Create { options, .. } = &mut mode {
             options.set_additional_data_packs(self.additional_data_packs.clone());
+            options.refresh_presets(&self.resources, self.preset_data.as_deref());
         }
         if self.gated && mode.id() != self.mode.id() {
             self.requested = Some(mode);
@@ -825,6 +836,7 @@ impl Title {
                 | Mode::CreateBuffet { options, .. } => {
                     options.rules.rebind_registry(registry.clone())
                 }
+                Mode::CreatePreset { parent, .. } => rebind(parent, registry),
                 Mode::Error { return_to, .. } => rebind(return_to, registry),
                 _ => {}
             }
@@ -871,6 +883,7 @@ impl Title {
             saves,
             resources: resources.to_owned(),
             additional_data_packs: std::sync::Arc::from([]),
+            preset_data: None,
             started: now,
             search: String::new(),
             search_focused: false,
@@ -916,6 +929,7 @@ impl Title {
         self.additional_data_packs = packs.clone();
         if let Mode::Create { options, .. } = &mut self.mode {
             options.set_additional_data_packs(packs);
+            options.refresh_presets(&self.resources, self.preset_data.as_deref());
         }
     }
     /// Vanilla bypasses the selector when there are no saves.
@@ -1126,6 +1140,9 @@ impl Title {
         if !matches!(self.mode, Mode::Create { .. }) {
             self.set_mode(self.new_world());
         }
+        if let Mode::Create { options, .. } = &mut self.mode {
+            options.refresh_presets(&self.resources, self.preset_data.as_deref());
+        }
     }
     /// `PackSelectionScreen.onFilesDrop`: a pack dropped on the window joins
     /// the Create New World screen's data packs (the screen's watcher lists
@@ -1204,6 +1221,7 @@ impl Title {
     pub fn set_data_packs(&mut self, ids: Vec<String>) {
         if let Mode::Create { options, .. } = &mut self.mode {
             options.data_packs = ids;
+            options.refresh_presets(&self.resources, self.preset_data.as_deref());
         }
     }
     fn matches_search(&self, world: &WorldEntry) -> bool {
@@ -1322,7 +1340,8 @@ impl Title {
             && delta != 0.0
         {
             let (w, h) = size;
-            let buttons = create_world::buttons(w, h, *creative, options);
+            let buttons =
+                create_world::buttons(w, h, *creative, options, self.preset_data.is_some());
             if let Some(b) = buttons.iter().find(|b| {
                 b.enabled
                     && cursor.0 >= b.x
@@ -1912,6 +1931,7 @@ impl Title {
             level,
             world_gen: options.world_gen(),
             flat_settings: options.flat_settings(),
+            dimensions: options.dimensions(),
             single_biome: options.single_biome().map(str::to_owned),
             data_packs: (options.data_packs.clone(), disabled),
             pack_dir: options.pack_dir.clone(),
@@ -2109,9 +2129,29 @@ impl Title {
             }
             Mode::Create {
                 creative, options, ..
-            } => create_world::buttons(w, h, *creative, options),
+            } => create_world::buttons(w, h, *creative, options, self.preset_data.is_some()),
             Mode::CreateFlat { flat, .. } => flat::buttons(w, h, flat),
             Mode::CreateBuffet { buffet, .. } => buffet::buttons(w, h, buffet),
+            Mode::CreatePreset { .. } => vec![
+                b(
+                    w / 2.0 - 155.0,
+                    h - 28.0,
+                    150.0,
+                    &lang::get("gui.done"),
+                    true,
+                    94,
+                )
+                .does(crate::widgets::Action::Done),
+                b(
+                    w / 2.0 + 5.0,
+                    h - 28.0,
+                    150.0,
+                    &lang::get("gui.cancel"),
+                    true,
+                    95,
+                )
+                .does(crate::widgets::Action::Back),
+            ],
             Mode::Edit { world, name, .. } => {
                 let x = (w / 2.0).floor() - 100.0;
                 let top = edit_top(h);
@@ -2471,6 +2511,10 @@ impl Title {
             Mode::Create { .. } => ScreenInfo::new(
                 "create_world",
                 get("selectWorld.create", "Create New World"),
+            ),
+            Mode::CreatePreset { .. } => ScreenInfo::new(
+                "world_preset_editor",
+                lang::get("selectWorld.customizeType"),
             ),
             // PresetFlatWorldScreen over CreateFlatWorldScreen.
             Mode::CreateFlat { flat, .. } if flat.page == flat::Page::Presets => ScreenInfo::new(
@@ -3003,6 +3047,9 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             } => self.draw_create(atlas, batch, cursor, name, seed, *focus, options),
             Mode::CreateFlat { flat, .. } => flat::draw(self, atlas, items, batch, cursor, flat),
             Mode::CreateBuffet { buffet, .. } => buffet::draw(self, atlas, batch, cursor, buffet),
+            Mode::CreatePreset { .. } => {
+                crate::ui::menu_background(batch, atlas, 0.0, 0.0, w, h, false);
+            }
             Mode::Edit { name, focused, .. } => {
                 crate::ui::menu_background(batch, atlas, 0.0, 0.0, w, h, false);
                 centered(
@@ -3759,6 +3806,25 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         }
     }
     fn click_action(&mut self, x: f32, y: f32, (w, h): (f32, f32), hit: Option<u8>) -> Action {
+        if matches!(self.mode, Mode::CreatePreset { .. }) {
+            if let Some(94 | 95) = hit {
+                self.close_preset_editor(hit == Some(94));
+            }
+            return Action::None;
+        }
+        if hit == Some(26)
+            && self.preset_data.is_some()
+            && let Mode::Create { options, .. } = &self.mode
+            && let Some(editor) = preset_editors::editor(options.preset_id())
+            && let Some(dimensions) = options.editor_dimensions()
+        {
+            self.set_mode(Mode::CreatePreset {
+                parent: Box::new(self.mode.clone()),
+                editor,
+                dimensions: RefCell::new(dimensions),
+            });
+            return Action::None;
+        }
         match (&mut self.mode, hit) {
             (Mode::Main, Some(1)) => {
                 // The title button is no longer part of the world-select screen.
@@ -5051,6 +5117,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                 }
             }
             Mode::CreateBuffet { .. } => self.close_buffet(false),
+            Mode::CreatePreset { .. } => self.close_preset_editor(false),
             Mode::Create { .. } => self.cancel_create(),
             // Screen.keyPressed: Escape closes the screen, which fades out.
             Mode::Onboarding(_) => self.onboarding_close(),

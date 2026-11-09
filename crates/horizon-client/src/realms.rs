@@ -997,6 +997,8 @@ pub struct CreatedWorld {
     pub level: crate::save::Level,
     pub world_gen: crate::save::WorldGen,
     pub flat_settings: Option<horizon_core::nbt::Tag>,
+    /// Selected data-pack preset or editor output.
+    pub dimensions: Option<horizon_core::nbt::Tag>,
     pub single_biome: Option<String>,
     /// level.dat's `DataPacks`: enabled and disabled ids.
     pub data_packs: (Vec<String>, Vec<String>),
@@ -1567,6 +1569,7 @@ fn create_temporary_world(world: &CreatedWorld) -> std::result::Result<PathBuf, 
             world.world_gen,
             world.flat_settings.clone(),
             world.single_biome.as_deref(),
+            world.dimensions.clone(),
         )
         .map_err(|e| e.to_string())?;
         if let Some(pack_dir) = &world.pack_dir {
@@ -12725,6 +12728,7 @@ mod tests {
             level,
             world_gen: crate::save::WorldGen::default(),
             flat_settings: None,
+            dimensions: None,
             single_biome: None,
             data_packs: (vec!["vanilla".into()], Vec::new()),
             pack_dir: None,

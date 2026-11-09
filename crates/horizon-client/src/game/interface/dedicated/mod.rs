@@ -755,7 +755,7 @@ impl Game<'_> {
             bonus_chest: false,
         };
         horizon_client::save::write_world_gen_settings_with(
-            dir, props.seed, options, settings, None,
+            dir, props.seed, options, settings, None, None,
         )
     }
 }
