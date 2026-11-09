@@ -12,11 +12,11 @@ pub struct DisplayReadRow {
     /// Validated entity identity of this cached row.
     pub entity: EntityRef,
     /// Captured `DisplayRef::kind` value. None means an unsupported subkind or genuinely unknown client data.
-    pub kind: Option<NativeDisplayKind>,
+    pub kind: Option<DisplayKind>,
     /// Captured `DisplayRef::transformation` value. None means an unsupported subkind or genuinely unknown client data.
-    pub transformation: Option<NativeTransformation>,
+    pub transformation: Option<Transformation>,
     /// Captured `DisplayRef::billboard` value. None means an unsupported subkind or genuinely unknown client data.
-    pub billboard: Option<NativeBillboard>,
+    pub billboard: Option<Billboard>,
     /// Captured `DisplayRef::brightness` value. None means no brightness override.
     pub brightness: Option<(u8, u8)>,
     /// Captured `DisplayRef::view_range` value. None means an unsupported subkind or genuinely unknown client data.
@@ -50,11 +50,11 @@ pub struct DisplayReadRow {
     /// Captured `DisplayRef::default_background` value. None means an unsupported subkind or genuinely unknown client data.
     pub default_background: Option<bool>,
     /// Captured `DisplayRef::alignment` value. None means an unsupported subkind or genuinely unknown client data.
-    pub alignment: Option<NativeTextAlignment>,
+    pub alignment: Option<TextAlignment>,
     /// Captured `DisplayRef::block_state` value. None means a non-block display.
     pub block_state: Option<BlockState>,
     /// Captured `DisplayRef::item_context` value. None means a non-item display.
-    pub item_context: Option<NativeItemDisplayContext>,
+    pub item_context: Option<ItemDisplayContext>,
 }
 
 /// Cached DragonRef fields from one publication, potentially stale.
@@ -66,7 +66,7 @@ pub struct DragonReadRow {
     /// Validated entity identity of this cached row.
     pub entity: EntityRef,
     /// Captured `DragonRef::phase` value. None means an unsupported subkind or genuinely unknown client data.
-    pub phase: Option<NativeDragonPhase>,
+    pub phase: Option<DragonPhase>,
     /// Captured `DragonRef::alive_crystals` value. None means an unsupported subkind or genuinely unknown client data.
     pub alive_crystals: Option<i32>,
     /// Captured `DragonRef::previously_killed` value. None means an unsupported subkind or genuinely unknown client data.
@@ -344,7 +344,7 @@ pub struct PlayerReadRow {
     /// Captured `PlayerRef::can_eat` value. Index 0 is always=false; index 1 is always=true.
     pub can_eat: [bool; 2],
     /// Captured `PlayerRef::experience` value. None means an unsupported subkind or genuinely unknown client data.
-    pub experience: Option<NativePlayerExperience>,
+    pub experience: Option<PlayerExperience>,
     /// Captured `PlayerRef::xp_needed_for_next_level` value. None means an unsupported subkind or genuinely unknown client data.
     pub xp_needed_for_next_level: Option<i32>,
     /// Captured `PlayerRef::permission_level` value. None means an unsupported subkind or genuinely unknown client data.
@@ -378,9 +378,9 @@ pub struct PlayerReadRow {
     /// Captured `PlayerRef::may_build` value. None means an unsupported subkind or genuinely unknown client data.
     pub may_build: Option<bool>,
     /// Captured `PlayerRef::food` value. None means an unsupported subkind or genuinely unknown client data.
-    pub food: Option<NativePlayerFood>,
+    pub food: Option<PlayerFood>,
     /// Captured `PlayerRef::abilities` value. None means an unsupported subkind or genuinely unknown client data.
-    pub abilities: Option<NativePlayerAbilities>,
+    pub abilities: Option<PlayerAbilities>,
     /// Captured `PlayerRef::block_breaking` value. None means an unsupported subkind or genuinely unknown client data.
     pub block_breaking: Option<BlockBreakingState>,
     /// Captured `PlayerRef::ambient_mood` value. None means an unsupported subkind or genuinely unknown client data.
@@ -398,7 +398,7 @@ pub struct ProjectileReadRow {
     /// Captured `ProjectileRef::owner` value. None means no owner, unsupported ownership, or unknown client data.
     pub owner: Option<EntityRef>,
     /// Captured `ProjectileRef::pickup` value. None means an unsupported subkind or genuinely unknown client data.
-    pub pickup: Option<NativeArrowPickup>,
+    pub pickup: Option<ArrowPickup>,
     /// Captured `ProjectileRef::pierce_level` value. Preserves only PierceLevelError, never Lifted.
     pub pierce_level: Result<i8, PierceLevelError>,
     /// Captured `ProjectileRef::base_damage` value. None means an unsupported subkind or genuinely unknown client data.
@@ -430,7 +430,7 @@ pub struct RaidReadRow {
     /// Captured `RaidRef::is_active` value. None means an unsupported subkind or genuinely unknown client data.
     pub is_active: Option<bool>,
     /// Captured `RaidRef::status` value. None means an unsupported subkind or genuinely unknown client data.
-    pub status: Option<NativeRaidStatus>,
+    pub status: Option<RaidStatus>,
     /// Captured `RaidRef::total_health` value. None means an unsupported subkind or genuinely unknown client data.
     pub total_health: Option<f32>,
     /// Captured `RaidRef::living_health` value. None means an unsupported subkind or genuinely unknown client data.

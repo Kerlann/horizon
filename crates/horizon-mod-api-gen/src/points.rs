@@ -35,6 +35,9 @@ pub struct GamePoint {
     /// What its listeners may do with the return: `cancel`, `result` (an API-typed value they
     /// may set at the head or change at the return) or `none`.
     pub returns: &'static str,
+    /// The function's return type as written (`()` when it has none). A `cancel` point that
+    /// returns `Result<(), E>` has no `replace` listener, which would have to produce it.
+    pub return_ty: String,
     /// Whether its API listeners run at the return: not when the value returned borrows.
     pub at_return: bool,
     /// Whether it has a raw form: native listeners with the receiver and every parameter by its
@@ -55,6 +58,19 @@ pub struct GamePoint {
     /// ([`point_shape::Shape::api_items`]).
     #[serde(skip)]
     api: [String; 3],
+}
+
+impl GamePoint {
+    /// The return type a `replace` at this point's head can't produce: none when it returns `()`
+    /// (the cancel is forced) or an API value (the listener's). The rule `horizon-mod-point-emit`
+    /// applies when a mod builds, kept for the loader of a module built elsewhere.
+    fn replace_refusal(&self) -> Option<&str> {
+        match self.returns {
+            "result" => None,
+            "cancel" if self.return_ty == "()" => None,
+            _ => Some(&self.return_ty),
+        }
+    }
 }
 
 /// A source file of the game's crates, with its module path and the `cfg`s it is compiled under.
@@ -885,6 +901,10 @@ fn points_with(root: &Path, wire: &WireTypes) -> Result<Vec<GamePoint>, String> 
                 (point_shape::Returns::Value(_), true) => "result",
                 (point_shape::Returns::Opaque, true) => "none",
             },
+            return_ty: match &found.sig.output {
+                syn::ReturnType::Default => "()".to_owned(),
+                syn::ReturnType::Type(_, ty) => point_shape::spelling(ty),
+            },
             name: shape.name,
         });
     }
@@ -1202,7 +1222,12 @@ pub(crate) fn records_selected(
             let variant = quote::format_ident!("{}", point_shape::camel(&name));
             let target = &point.target;
             let at_return = name != point.name;
-            api_places.extend(quote! { (PointId::#variant, #target, #at_return), });
+            let replace_refusal = match point.replace_refusal().filter(|_| !at_return) {
+                Some(ty) => quote!(::std::option::Option::Some(#ty)),
+                None => quote!(::std::option::Option::None),
+            };
+            api_places
+                .extend(quote! { (PointId::#variant, #target, #at_return, #replace_refusal), });
             if selected.is_some_and(|names| !names.contains(&name)) {
                 continue;
             }
@@ -1229,9 +1254,11 @@ pub(crate) fn records_selected(
         /// The generated point export table and record layout, checked separately from the API layout.
         #[doc(hidden)]
         pub const POINT_LAYOUT: u64 = #layout;
-        /// API places as (place, target function, return phase), for manifest validation.
+        /// API places as (place, target function, return phase, the return type a `replace` there
+        /// can't produce), for manifest validation: a head whose return is neither `()` nor an
+        /// API value refuses a replacement when a module loads.
         #[doc(hidden)]
-        pub const API_PLACES: &[(PointId, &str, bool)] = &[#api_places];
+        pub const API_PLACES: &[(PointId, &str, bool, Option<&str>)] = &[#api_places];
         #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
         #[doc(hidden)]
         pub fn guest_dispatch(id: u32, input: &mut ::mod_api::wire::Reader<'_>, out: &mut ::mod_api::wire::Writer) -> Result<(), ::mod_api::wire::WireError> {
@@ -1297,6 +1324,7 @@ mod tests {
                 record: shape.record().to_string(),
                 args: vec![],
                 returns: "cancel",
+                return_ty: "()".into(),
                 at_return: true,
                 raw: false,
                 raw_shape: None,
@@ -1487,13 +1515,13 @@ mod tests {
         }
         for name in [
             "mod_api::ConnectionKind",
-            "mod_api::containers::ModRevision",
-            "mod_api::camera::UseItem",
+            "mod_api::item::containers::ModRevision",
+            "mod_api::client::camera::UseItem",
             "mod_api::wire::Id",
         ] {
             assert!(wire.contains(name), "supported public path {name} was lost");
         }
-        assert!(!wire.contains("mod_api::wire_slots::Id"));
+        assert!(!wire.contains("mod_api::wire::wire_slots::Id"));
     }
 
     fn point(attribute: &str, method: &str) -> Result<point_shape::Shape, String> {

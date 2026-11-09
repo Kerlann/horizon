@@ -30,8 +30,8 @@ pub(crate) fn entered_entity_command_recipient(
     // Indexed native identity and subscription bitset: no all-mod scan and no
     // entry to any unrelated listener's native/crash/package scope.
     struct DispatchScope {
-        package: Option<crate::crash::ConvertedPackageGuard>,
-        native: Option<crate::crash::NativeModGuard>,
+        package: Option<crate::content::crash::ConvertedPackageGuard>,
+        native: Option<crate::content::crash::ModGuard>,
     }
     let mut scope = DispatchScope {
         package: None,
@@ -41,7 +41,7 @@ pub(crate) fn entered_entity_command_recipient(
         drop(scope.package.take());
         drop(scope.native.take());
         let (native, package) = recipient.take()?;
-        let installed = installed()?;
+        let installed = crate::runtime::installed()?;
         let &index = installed.by_id.get(native)?;
         if !subscribed_by(index, Some(hook_id)) {
             return None;
@@ -49,7 +49,9 @@ pub(crate) fn entered_entity_command_recipient(
         let entry = &installed.mods[index];
         scope.native = Some(mark_mod(entry.id, hook));
         if let Some(package) = package {
-            scope.package = Some(crate::crash::enter_entity_command_package(native, package)?);
+            scope.package = Some(crate::content::crash::enter_entity_command_package(
+                native, package,
+            )?);
         }
         Some(&*entry.hooks)
     })

@@ -150,7 +150,7 @@ mod tests {
     use super::super::native_entity_refs::tests::with_game;
     use horizon_client::{chunk::Chunk, mobs::Mob};
     use horizon_core::geometry::Vec3;
-    use mod_api::{EntityRef, MobRef, NativeWorldEpoch};
+    use mod_api::{EntityRef, MobRef, WorldEpoch};
     use std::sync::Arc;
 
     #[test]
@@ -217,7 +217,7 @@ mod tests {
             compare_extreme(game, -2_000_000_000.0, 0.0);
             game.world.shape = horizon_client::chunk::LevelShape::OVERWORLD;
             let stale = MobRef::new(EntityRef::new(
-                NativeWorldEpoch::new(entity.epoch().get() + 1),
+                WorldEpoch::new(entity.epoch().get() + 1),
                 99,
             ));
             assert!(!stale.move_to(game, [5.0, 65.0, 3.0], 1.0));
@@ -285,7 +285,7 @@ mod tests {
             let attribute = game.mobs[0].movement_speed();
             assert_ne!(attribute, 1.25);
             let stale = MobRef::new(EntityRef::new(
-                NativeWorldEpoch::new(entity.epoch().get() + 1),
+                WorldEpoch::new(entity.epoch().get() + 1),
                 99,
             ));
             assert_eq!(stale.navigation_speed(game), None);

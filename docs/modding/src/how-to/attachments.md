@@ -126,3 +126,20 @@ native or wasm type produces `TypeMismatch`; a failed
 decoded downcast does not fall back to saved decoding. Share attachment type
 identity through the normal dependency model rather than redeclaring a different
 type with the same key.
+
+## First-store errors
+
+The first store binds the entity's lifetime registration. Inspection and removal
+do not create one. A store can return `AttachmentError::HolderBusy` while the
+engine has lifted or extracted its physical storage: retry after the current
+pass. The refused store writes no value and creates no registration.
+
+`AttachmentError::UnsupportedHolder(family)` means the physical family cannot
+own attachments; retrying cannot help. The name is bounded static text, not an
+engine type. Family names are stable lowercase identifiers: `mob`, `item`,
+`orb`, `projectile`, `armorstand`, `itemframe`, `painting`, `boat`,
+`minecart`, `other`, `fangs`, `crystal`, `dragon`, `tnt`, `falling`,
+`rocket`, `trident`, `spawner`, `cloud`, `cushion`, and `knot`.
+Retained row writes report the matching `AttachmentRowError::HolderBusy` or
+`AttachmentRowError::UnsupportedHolder`; a missing holder is instead
+`StaleHolder`.

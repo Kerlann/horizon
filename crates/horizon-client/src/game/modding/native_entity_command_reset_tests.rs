@@ -38,8 +38,7 @@ fn silent_world_failure_invalidates_pending_and_terminal_without_old_scope_resur
             "retired pending work has no fabricated completion"
         );
         assert!(!game.mobs.iter().find(|mob| mob.id == 72).unwrap().silent);
-        game.native_lifecycle
-            .begin_open(NativeAuthority::DedicatedServer);
+        game.native_lifecycle.begin_open(Authority::DedicatedServer);
         game.native_lifecycle.world_open_ready().unwrap();
         assert_ne!(game.native_lifecycle.epoch(), Some(other.epoch()));
         assert_eq!(

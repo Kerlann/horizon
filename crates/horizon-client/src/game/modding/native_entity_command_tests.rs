@@ -165,7 +165,7 @@ fn real_silent_fifo_overlay_nested_completion_and_issuer_lifecycle() {
                     .end_tick();
                 assert_eq!(id.query(game), Err(CommandQueryError::UnknownOrExpired));
                 let stale = CommandId {
-                    epoch: NativeWorldEpoch::new(u64::MAX),
+                    epoch: WorldEpoch::new(u64::MAX),
                     sequence: id.sequence,
                 };
                 assert_eq!(stale.query(game), Err(CommandQueryError::StaleEpoch));

@@ -272,6 +272,7 @@ impl Game<'_> {
                         horizon_client::join_seq::residency::write_queue::Target {
                             runtime_id: actor.id,
                             location: horizon_client::join_seq::residency::table::Location {
+                                source: Default::default(),
                                 owner: horizon_client::join_seq::residency::Owner {
                                     dimension: self.dim.key(),
                                     kind: horizon_client::join_seq::residency::Kind::Mob,
@@ -460,7 +461,7 @@ impl Game<'_> {
                                 );
                             }))
                     {
-                        m.despawn = mod_api::NativeDespawn::default();
+                        m.despawn = mod_api::Despawn::default();
                         dispatch_panic = Some(payload);
                         break 'actor;
                     }
@@ -481,7 +482,7 @@ impl Game<'_> {
                             ..base
                         };
                         let kept = horizon_client::mobs::ai::despawn_check(m, &w);
-                        m.despawn = mod_api::NativeDespawn::default();
+                        m.despawn = mod_api::Despawn::default();
                         if !kept {
                             died.remove(&m.id);
                             snapshot[slot].alive = false;
@@ -512,7 +513,7 @@ impl Game<'_> {
                         .flatten();
                     // A mod canceled its tick: it stays as it is.
                     if !resuming && round.canceled(m.id) {
-                        m.despawn = mod_api::NativeDespawn::default();
+                        m.despawn = mod_api::Despawn::default();
                         cursor += 1;
                         break 'actor;
                     }
@@ -654,7 +655,7 @@ impl Game<'_> {
                         match std::panic::catch_unwind(std::panic::AssertUnwindSafe(run_tick)) {
                             Ok(progress) => progress,
                             Err(payload) => {
-                                mobs[i].despawn = mod_api::NativeDespawn::default();
+                                mobs[i].despawn = mod_api::Despawn::default();
                                 if seen_guest.is_none() {
                                     base.player = w.player;
                                 } else if let Some(k) = lent {
@@ -715,7 +716,7 @@ impl Game<'_> {
                             bindings.remove(&m.id);
                         }
                     }
-                    m.despawn = mod_api::NativeDespawn::default();
+                    m.despawn = mod_api::Despawn::default();
                     if credit_expiring && m.ai.last_hurt_by_player == 0 {
                         player_credit.remove(&m.id);
                     }

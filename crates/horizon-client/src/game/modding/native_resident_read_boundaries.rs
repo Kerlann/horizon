@@ -48,6 +48,7 @@ impl Game<'_> {
         self.begin_entity_writer(horizon_client::join_seq::residency::write_queue::Target {
             runtime_id: id,
             location: Location {
+                source: Default::default(),
                 owner: Owner {
                     dimension: self.dim.key(),
                     kind,
@@ -82,7 +83,11 @@ impl Game<'_> {
             }
         };
         self.publish_lent_resident_reads(
-            Location { owner, join },
+            Location {
+                source: Default::default(),
+                owner,
+                join,
+            },
             source,
             EntityReadCapturePhase::PassStart,
         )
