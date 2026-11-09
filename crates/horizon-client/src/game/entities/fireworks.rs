@@ -473,100 +473,100 @@ impl Game<'_> {
                 continue;
             }
             let mut r = self.rockets.remove(i);
-            r.previous = r.position;
-            // Entity.baseTick's setOldRot: where updateRotation eases from.
-            let old_rotation = r.rotation;
-            // Projectile.tick: the first tick posts the shot, with its owner.
-            if !r.has_been_shot {
-                let at = [r.position.x, r.position.y, r.position.z];
-                self.projectile_shoot_event(r.owner, r.guest, at);
-                r.has_been_shot = true;
-            }
-            // Projectile.tick: whether it has left its owner, before it moves.
-            let owner = self.rocket_owner(&r);
-            if !r.left_owner {
-                let h = 0.125;
-                let reach = Aabb::new(
-                    Vec3::new(r.position.x - h, r.position.y, r.position.z - h),
-                    Vec3::new(r.position.x + h, r.position.y + 2.0 * h, r.position.z + h),
-                )
-                .expand_towards(r.velocity)
-                .inflate(Vec3::new(1.0, 1.0, 1.0));
-                r.left_owner = owner.is_none_or(|o| {
-                    !targets
-                        .iter()
-                        .any(|(who, b)| *who == o && b.intersects(reach))
-                });
-            }
-            let skip = owner.filter(|_| !r.left_owner);
-            let mut hit = None;
-            if r.attached
-                && let Some(conn) = r.guest
-            {
-                // A guest's rocket follows them; their own client boosts them.
-                let guest = self
-                    .lan
-                    .as_ref()
-                    .and_then(|host| host.hub.guests.iter().find(|g| g.conn == conn));
-                if let Some(g) = guest {
-                    r.position = Vec3::new(g.position[0], g.position[1], g.position[2]);
-                }
-            } else if r.attached {
-                self.follow_own_player(&mut r);
-                hit = self.rocket_struck(&targets, &r, r.velocity, skip);
-            } else {
-                // getHitResultOnMoveVector before the move.
-                hit = self.rocket_struck(&targets, &r, r.next_motion(), skip);
-                let mut scene = SceneCollisions {
-                    world: &self.world,
-                    binding: self.collision,
-                    subject: None,
-                };
-                r.free_flight(&mut scene);
-            }
-            self.entity_powder_snow_particles(
-                r.previous,
-                r.position,
-                r.bounds(),
-                r.velocity,
-                false,
-            );
-            // hitTargetOrDeflectSelf on an entity: a breeze turns it back
-            // (ProjectileDeflection.REVERSE), anything else sets it off.
-            // onHitBlock: only a rocket with explosions (hasExplosion) goes
-            // off on a block; a plain one flies on to its lifetime.
-            match hit {
-                Some(RocketHit::Entity(Who::Mob(id)))
-                    if self
-                        .mobs
-                        .iter()
-                        .any(|m| m.id == id && m.species() == Species::Breeze) =>
-                {
-                    r.velocity = r.velocity.scale(-0.5);
-                }
-                Some(RocketHit::Entity(_)) => r.life = r.lifetime,
-                Some(RocketHit::Block) if !r.explosions.is_empty() => r.life = r.lifetime,
-                Some(RocketHit::Block) | None => {}
-            }
-            r.update_rotation(old_rotation);
-            let at = [r.position.x, r.position.y, r.position.z];
-            if r.life == 0 && !r.silent {
-                self.audio.play(
-                    "minecraft:entity.firework_rocket.launch",
-                    Some(at),
-                    3.0,
-                    1.0,
-                );
-            }
-            r.life += 1;
-            self.rocket_spark(&r);
-            if r.life > r.lifetime {
-                self.explode_rocket(&r);
+            if !self.tick_rocket_body(&mut r, &targets) {
                 continue;
             }
             self.rockets.insert(i, r);
             i += 1;
         }
+    }
+    fn tick_rocket_body(&mut self, mut r: &mut Rocket, targets: &[(Who, Aabb)]) -> bool {
+        r.previous = r.position;
+        // Entity.baseTick's setOldRot: where updateRotation eases from.
+        let old_rotation = r.rotation;
+        // Projectile.tick: the first tick posts the shot, with its owner.
+        if !r.has_been_shot {
+            let at = [r.position.x, r.position.y, r.position.z];
+            self.projectile_shoot_event(r.owner, r.guest, at);
+            r.has_been_shot = true;
+        }
+        // Projectile.tick: whether it has left its owner, before it moves.
+        let owner = self.rocket_owner(&r);
+        if !r.left_owner {
+            let h = 0.125;
+            let reach = Aabb::new(
+                Vec3::new(r.position.x - h, r.position.y, r.position.z - h),
+                Vec3::new(r.position.x + h, r.position.y + 2.0 * h, r.position.z + h),
+            )
+            .expand_towards(r.velocity)
+            .inflate(Vec3::new(1.0, 1.0, 1.0));
+            r.left_owner = owner.is_none_or(|o| {
+                !targets
+                    .iter()
+                    .any(|(who, b)| *who == o && b.intersects(reach))
+            });
+        }
+        let skip = owner.filter(|_| !r.left_owner);
+        let mut hit = None;
+        if r.attached
+            && let Some(conn) = r.guest
+        {
+            // A guest's rocket follows them; their own client boosts them.
+            let guest = self
+                .lan
+                .as_ref()
+                .and_then(|host| host.hub.guests.iter().find(|g| g.conn == conn));
+            if let Some(g) = guest {
+                r.position = Vec3::new(g.position[0], g.position[1], g.position[2]);
+            }
+        } else if r.attached {
+            self.follow_own_player(&mut r);
+            hit = self.rocket_struck(&targets, &r, r.velocity, skip);
+        } else {
+            // getHitResultOnMoveVector before the move.
+            hit = self.rocket_struck(&targets, &r, r.next_motion(), skip);
+            let mut scene = SceneCollisions {
+                world: &self.world,
+                binding: self.collision,
+                subject: None,
+            };
+            r.free_flight(&mut scene);
+        }
+        self.entity_powder_snow_particles(r.previous, r.position, r.bounds(), r.velocity, false);
+        // hitTargetOrDeflectSelf on an entity: a breeze turns it back
+        // (ProjectileDeflection.REVERSE), anything else sets it off.
+        // onHitBlock: only a rocket with explosions (hasExplosion) goes
+        // off on a block; a plain one flies on to its lifetime.
+        match hit {
+            Some(RocketHit::Entity(Who::Mob(id)))
+                if self
+                    .mobs
+                    .iter()
+                    .any(|m| m.id == id && m.species() == Species::Breeze) =>
+            {
+                r.velocity = r.velocity.scale(-0.5);
+            }
+            Some(RocketHit::Entity(_)) => r.life = r.lifetime,
+            Some(RocketHit::Block) if !r.explosions.is_empty() => r.life = r.lifetime,
+            Some(RocketHit::Block) | None => {}
+        }
+        r.update_rotation(old_rotation);
+        let at = [r.position.x, r.position.y, r.position.z];
+        if r.life == 0 && !r.silent {
+            self.audio.play(
+                "minecraft:entity.firework_rocket.launch",
+                Some(at),
+                3.0,
+                1.0,
+            );
+        }
+        r.life += 1;
+        self.rocket_spark(&r);
+        if r.life > r.lifetime {
+            self.explode_rocket(&r);
+            return false;
+        }
+        true
     }
     /// `FireworkRocketEntity.explode` and `dealExplosionDamage`.
     fn explode_rocket(&mut self, r: &Rocket) {
