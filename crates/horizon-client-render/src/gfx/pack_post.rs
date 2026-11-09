@@ -6403,7 +6403,7 @@ fn test_adapter() -> Option<wgpu::Adapter> {
     let adapter = crate::gfx::test_gpu::adapter()?;
     if !crate::gfx::test_gpu::supports_texture_usage(
         &adapter,
-        T::R32Float,
+        wgpu::TextureFormat::R32Float,
         wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
     ) {
         return None;
