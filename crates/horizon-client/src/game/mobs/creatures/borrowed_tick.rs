@@ -66,8 +66,35 @@ pub(super) struct BorrowedMobTick<'a> {
     pub(super) uuid: Option<[i32; 4]>,
     pub(super) level_id: &'static str,
     pub(super) round: &'a super::super::native_ticks::TickRound,
+    pub(super) publish_reads: bool,
 }
 impl Game<'_> {
+    pub(super) fn begin_mob_read_pass(
+        &self,
+    ) -> Option<horizon_client::join_seq::residency::read_pass::ReadScope> {
+        use horizon_client::join_seq::residency::{Kind, Owner, read_pass::ReadScope};
+        if !mod_api::__private::entity_reads_listened() || !self.is_logical_server() {
+            return None;
+        }
+        let tick = self.native_lifecycle.capture_tick()?;
+        let clock = self.entity_read_state.borrow().passes.clone();
+        match ReadScope::begin(
+            clock,
+            true,
+            Owner {
+                dimension: self.dim.key(),
+                kind: Kind::Mob,
+            },
+            tick,
+        ) {
+            Ok(scope) => scope,
+            Err(error) => {
+                log::error!("cannot open mob owner read pass: {error:?}");
+                None
+            }
+        }
+    }
+
     pub(super) fn tick_borrowed_creatures(
         &mut self,
         state: BorrowedMobTick<'_>,
@@ -218,6 +245,12 @@ impl Game<'_> {
                         && let Some(epoch) = self.native_lifecycle.epoch()
                         && let Err(payload) =
                             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                if state.publish_reads {
+                                    self.publish_mob_read_source(
+                                        m,
+                                        mod_api::EntityReadCapturePhase::BeforeCallback,
+                                    );
+                                }
                                 self.native_mob_despawn(
                                     self.dim.id(),
                                     mod_api::MobRef::new(mod_api::EntityRef::new(epoch, m.id)),
@@ -289,7 +322,13 @@ impl Game<'_> {
                             difficulty
                         }
                     };
-                    horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+                    let applied = horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+                    if applied && state.publish_reads {
+                        self.publish_mob_read_source(
+                            m,
+                            mod_api::EntityReadCapturePhase::AfterAppliedWrite,
+                        );
+                    }
                     horizon_client::mobs::blocks_changed(m, &path_changes);
                     let from = if resuming { resume_from } else { events.len() };
                     // The guest's view is lent to the mob for its tick, not copied:
@@ -518,6 +557,16 @@ impl Game<'_> {
                         &mut events,
                         from,
                     );
+                    if state.publish_reads {
+                        self.publish_mob_read_source(
+                            &mobs[i],
+                            mod_api::EntityReadCapturePhase::AfterEntityTick,
+                        );
+                    }
+                    // Future after-writer drain belongs here: actor state and
+                    // brain effects are stored in this same owned JoinList;
+                    // locate(target.location.join) can validate generation
+                    // without a population scan or stale cached array position.
                     cursor += 1;
                 }
             }
@@ -530,7 +579,13 @@ impl Game<'_> {
             // or replace another actor's velocity. Departed rows must no longer
             // resolve as live handles while the batch is temporarily installed.
             for m in &mut mobs {
-                horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+                let applied = horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+                if applied && state.publish_reads {
+                    self.publish_mob_read_source(
+                        m,
+                        mod_api::EntityReadCapturePhase::AfterAppliedWrite,
+                    );
+                }
             }
             mobs.retain(|m| {
                 index
@@ -627,7 +682,13 @@ impl Game<'_> {
                 });
             }
             for m in &mut mobs {
-                horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+                let applied = horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+                if applied && state.publish_reads {
+                    self.publish_mob_read_source(
+                        m,
+                        mod_api::EntityReadCapturePhase::AfterAppliedWrite,
+                    );
+                }
             }
         }
         *state.mobs = mobs;

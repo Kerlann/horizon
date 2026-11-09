@@ -1472,6 +1472,14 @@ impl Game<'_> {
         let mut events = std::mem::take(&mut self.creatures.event_buf);
         events.clear();
         let primable = self.sulfur_cubes_adopted_explosive();
+        // Capture every source while the canonical owner is still resident. The
+        // metadata guard owns no Game loan and survives consumption continuations.
+        let read_scope = self.begin_mob_read_pass();
+        if read_scope.is_some() {
+            for mob in &self.mobs {
+                self.publish_mob_read_source(mob, mod_api::EntityReadCapturePhase::PassStart);
+            }
+        }
         let mut mobs = self.mobs.lift();
         #[cfg(test)]
         super::entity::taken_pass_tests::after_take(self);
@@ -1533,6 +1541,7 @@ impl Game<'_> {
             uuid,
             level_id,
             round: &round,
+            publish_reads: read_scope.is_some(),
         });
         lent.give_back(&mut self.world);
         self.last_hurt_by_player = player_credit;
@@ -1569,6 +1578,7 @@ impl Game<'_> {
         if let Some(payload) = dispatch_panic {
             std::panic::resume_unwind(payload);
         }
+        drop(read_scope);
         self.native_tick_post_batch(round);
         // ... and entity event 60 goes out as it is: the poof.
         // 🤖 Agent: the split follows the poof, as `LivingEntity.tickDeath`
