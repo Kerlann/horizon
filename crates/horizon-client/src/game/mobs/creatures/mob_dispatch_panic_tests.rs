@@ -309,7 +309,11 @@ struct ObserveRows(Arc<std::sync::Mutex<Vec<mod_api::EntityReadRow>>>);
 #[mod_api::__subscriptions]
 impl mod_api::Hooks for ObserveRows {
     fn mob_despawn(&self, host: &dyn mod_api::Host, event: &mut mod_api::MobDespawnEvent<'_>) {
-        let other = if event.mob.id() == 71 { 72 } else { 71 };
+        let other = if event.mob.entity().id() == 71 {
+            72
+        } else {
+            71
+        };
         let entity = mod_api::EntityRef::new(event.mob.entity().epoch(), other);
         self.0.lock().unwrap().push(
             entity
@@ -389,4 +393,98 @@ fn mob_pass_without_callbacks_does_not_publish_rows() {
             assert!(game.entity_cached_row(entity).is_none());
         });
     });
+}
+
+struct TickOrder {
+    events: Arc<std::sync::Mutex<Vec<(bool, u32)>>>,
+    cancel_first: bool,
+    remove_first: bool,
+}
+#[mod_api::__subscriptions]
+impl mod_api::Hooks for TickOrder {
+    fn entity_tick_listened(
+        &self,
+        _: &mut dyn mod_api::ServerHost,
+        event: &mut mod_api::EntityTickListenedEvent,
+    ) {
+        event.listened = true;
+    }
+    fn entity_tick_pre(
+        &self,
+        host: &mut dyn mod_api::ServerHost,
+        event: &mut mod_api::EntityTickPreEvent<'_>,
+    ) -> mod_api::Flow {
+        self.events.lock().unwrap().push((true, event.entity));
+        let actor = host
+            .entity(event.entity)
+            .expect("actual mutable hook resolves its stored actor");
+        assert!(actor.set_silent(host, true));
+        if self.remove_first && event.entity == 71 {
+            assert!(actor.discard(host));
+        }
+        if self.cancel_first && event.entity == 71 {
+            mod_api::Flow::Cancel
+        } else {
+            mod_api::Flow::Continue
+        }
+    }
+    fn entity_tick_post(
+        &self,
+        _: &mut dyn mod_api::ServerHost,
+        event: &mut mod_api::EntityTickPostEvent<'_>,
+    ) {
+        self.events.lock().unwrap().push((false, event.entity));
+    }
+}
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn mutable_tick_hooks_are_per_actor_and_cancellation_suppresses_post() {
+    for (cancel_first, remove_first) in [(false, false), (true, false), (false, true)] {
+        let events = Arc::new(std::sync::Mutex::new(Vec::new()));
+        mod_api::testing::with_mods(
+            vec![mod_api::ModEntry::new(
+                "tick-order",
+                Box::new(TickOrder {
+                    events: events.clone(),
+                    cancel_first,
+                    remove_first,
+                }),
+            )]
+            .into(),
+            || {
+                crate::game::native_entity_refs::tests::with_game(|game| {
+                    game.options.dedicated = Some(Vec::new());
+                    game.world
+                        .chunks
+                        .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+                    let kind = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+                    for id in [71, 72] {
+                        let mut mob = Mob::new(
+                            id,
+                            kind.clone(),
+                            Vec3::new(f64::from(id - 70), 80.0, 0.5),
+                            0.0,
+                        );
+                        mob.no_ai = true;
+                        game.mobs.push(mob);
+                    }
+                    game.tick_creature_entities().unwrap();
+                    let expected = if cancel_first || remove_first {
+                        vec![(true, 71), (true, 72), (false, 72)]
+                    } else {
+                        vec![(true, 71), (false, 71), (true, 72), (false, 72)]
+                    };
+                    assert_eq!(*events.lock().unwrap(), expected);
+                    if remove_first {
+                        assert_eq!(game.mobs.iter().map(|mob| mob.id).collect::<Vec<_>>(), [72]);
+                        assert_eq!(game.mobs[0].age, 1);
+                    } else {
+                        assert_eq!(game.mobs[0].age, if cancel_first { 0 } else { 1 });
+                        assert_eq!(game.mobs[1].age, 1);
+                    }
+                    assert!(game.mobs.iter().all(|mob| mob.silent));
+                });
+            },
+        );
+    }
 }

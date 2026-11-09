@@ -2574,8 +2574,8 @@ requires a farmer at work and `mob_griefing` enabled."#]
     /// around `Entity.commonTick` and `tick` in `ServerLevel.tickNonPassenger`). Set `canceled`
     /// and it does not tick this tick: a mob has no AI, physics or effects, an item no movement,
     /// ageing or merging, a minecart or boat no motion, and `native_entity_tick_post` is not told.
-    /// Horizon ticks a family of entities together, so mobs and items hear every Pre before the
-    /// first of them ticks; minecarts and boats hear theirs one by one. Told for the mobs, item
+    /// Mobs, minecarts and boats hear Pre and Post around each actor's own tick.
+    /// Items still hear every Pre before the family's first tick. Told for the mobs, item
     /// entities, minecarts and boats that tick: those in an entity-ticking chunk, not a player's
     /// boat or cart (it ticks with the player). Check `kind`; this runs for every ticking entity
     /// each tick, so keep it cheap. Server-side.
@@ -2589,8 +2589,8 @@ requires a farmer at work and `mob_griefing` enabled."#]
     fn entity_tick_pre();
     /// The entity `entity` of type `kind` ticked in the server level `dimension` (NeoForge's
     /// `EntityTickEvent.Post`): for each entity `native_entity_tick_pre` let through, after it
-    /// ticked, also one that died or was removed in its tick. Mobs and items hear their Posts
-    /// once the whole family has ticked; minecarts and boats right after their own tick. Server-side.
+    /// ticked, also one that died or was removed in its tick. Mobs, minecarts and boats hear
+    /// Post right after their own tick; items hear Posts after the family finishes. Server-side.
     #[hook(
         side = "server",
         contract = "listen",
