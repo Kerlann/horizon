@@ -287,6 +287,7 @@ fn evict(state: &[AtomicUsize; GROUP_WORDS]) -> bool {
 // exhaustive: wasm boundary plumbing that generated code builds field by field
 /// The group's allocator: `inner` first, and when it answers null, the group's eviction callbacks
 /// and `inner` once more. The success path is `inner` and one null check.
+// no wire: process-local allocator, not a boundary value.
 pub struct EvictingAlloc<A> {
     inner: A,
     state: fn() -> &'static [AtomicUsize; GROUP_WORDS],
@@ -387,6 +388,7 @@ pub fn begin() -> Writer {
 
 // exhaustive: wasm boundary plumbing that generated code builds field by field
 /// The game's answer to a call, read once; its buffer goes back to the pool when it drops.
+// no wire: owns a transport acknowledgement, released locally.
 pub struct Reply(Vec<u8>);
 
 impl Reply {
@@ -496,6 +498,7 @@ mod transport {
     use std::rc::Rc;
 
     /// Serves import `id` for `input`, returning its answer.
+    // no wire: process-local boundary service, not a value.
     pub type Transport = Rc<dyn Fn(u32, &[u8]) -> Vec<u8>>;
 
     thread_local!(static TRANSPORT: RefCell<Option<Transport>> = const { RefCell::new(None) });
@@ -580,6 +583,7 @@ pub fn unsupported(what: &str) -> ! {
 /// The game's object the mod holds by `id`: each of its methods is a call to the game, and it
 /// is released when the mod drops it.
 #[derive(Debug)]
+// no wire: owns a live resource-table lease.
 pub struct Held(pub Id);
 
 impl Drop for Held {
@@ -604,6 +608,7 @@ pub fn input(len: usize) -> *mut u8 {
 }
 
 /// A generated export table sharing the hook transport and call arena.
+// no wire: borrowed extension call context.
 pub type Extension = fn(u32, &mut Reader<'_>, &mut Writer) -> Result<(), WireError>;
 
 thread_local! {
@@ -955,7 +960,7 @@ mod entry {
     /// The layout of every value that crosses, which the game compares with its own.
     #[unsafe(no_mangle)]
     pub extern "C" fn horizon_layout() -> u64 {
-        crate::wire::LAYOUT
+        *crate::wire::LAYOUT
     }
 
     #[unsafe(no_mangle)]

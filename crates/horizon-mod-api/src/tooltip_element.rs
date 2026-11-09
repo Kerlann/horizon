@@ -6,6 +6,7 @@ use crate::{ItemStack, Text};
 /// refuses tooltip conversion before any changed element is drawn.
 #[derive(Clone, PartialEq)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TooltipElement {
     /// A line (`FormattedText`) with its colour as `rgba` packs it
     /// (`u32::MAX` keeps the text's own).
@@ -19,6 +20,7 @@ pub enum TooltipElement {
 /// An item's own `tooltip_component` part answers the one it starts with.
 #[derive(Clone, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct TooltipImage {
     /// The stack.
     pub stack: ItemStack,
@@ -29,6 +31,7 @@ pub struct TooltipImage {
 /// Where a tooltip hangs from, in GUI pixels: what `render_tooltip_pre` lets a mod move.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: the game builds it with a literal; mods change both fields
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct TooltipPlace {
     /// The point's x, before the positioner's offset and clamp; set it to move the tooltip.
     pub x: i32,

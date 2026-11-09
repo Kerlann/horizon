@@ -6,7 +6,7 @@ use super::{EntityRef, ItemPlace, LevelRef, MenuRef};
 
 /// What a menu slot shows: where [`MenuRef::slot_backing`] says its stack lives.
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, horizon_mod_api_macros::Wire)]
 pub enum MenuSlotBacking {
     /// Index `.0` of the menu's player's [`ENTITY_ITEMS`](super::ENTITY_ITEMS): the inventory
     /// 0..36, the armour 36..40 from feet to head, the off hand 40.

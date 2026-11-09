@@ -63,7 +63,7 @@ use crate::{Host, LivingRef, MobRef, goals::RegistrarMob};
 /// activity its brain has no slot for refuses at registration.
 // exhaustive: a closed set the game matches without a wildcard
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, horizon_mod_api_macros::Wire)]
 pub enum Activity {
     /// `core`: always active.
     Core,
@@ -105,7 +105,7 @@ pub enum Activity {
 /// What a species' brain does not keep answers absent.
 // exhaustive: a closed set the game matches without a wildcard
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, horizon_mod_api_macros::Wire)]
 pub enum BrainMemory {
     /// `WALK_TARGET`: where the mob walks, how fast, how close is there.
     WalkTarget,
@@ -117,7 +117,7 @@ pub enum BrainMemory {
 
 /// `MemoryStatus`: what an entry condition asks of a memory.
 // exhaustive: a closed set the game matches without a wildcard
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, horizon_mod_api_macros::Wire)]
 pub enum MemoryStatus {
     /// `VALUE_PRESENT`.
     Present,
@@ -129,7 +129,7 @@ pub enum MemoryStatus {
 
 /// Why `BehaviorRegistrar::add` refused.
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, horizon_mod_api_macros::Wire)]
 pub enum BehaviorRefusal {
     /// The entity type has no brain (`Behavior` runs nowhere on it).
     NoBrain,
@@ -194,6 +194,7 @@ pub trait Behavior: Send + Sync + 'static {
     }
 }
 
+// no wire: borrowed host or registrar backend; access stays scoped to the owning call.
 /// What the game hands an [`crate::EntityPart`] where the species' brain is
 /// built: the behaviors that join it, as `Brain.addActivity` fills vanilla's.
 // exhaustive: its fields are private, so mods cannot build or destructure it
@@ -259,6 +260,7 @@ impl<'a> BehaviorRegistrar<'a> {
     }
 }
 
+// no wire: registered callback and static mod attribution stay in the process-local behavior table.
 /// One `BehaviorRegistrar::add` crossing into the game.
 // hidden: the game's own transport, not part of the mod surface
 // exhaustive: the game destructures it; mods never see it
@@ -293,7 +295,7 @@ pub trait BehaviorRegistrarBackend {
 
 /// A brain's `WALK_TARGET` memory as a behavior reads it.
 #[non_exhaustive]
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, horizon_mod_api_macros::Wire)]
 pub struct BrainWalkTarget {
     /// Where the mob walks.
     pub at: [f64; 3],
@@ -310,6 +312,7 @@ impl BrainWalkTarget {
     }
 }
 
+// no wire: borrowed host or registrar backend; access stays scoped to the owning call.
 /// What a [`Behavior`] runs with: its mob and the tick's read view — the
 /// same mob-tick view [`crate::GoalContext`] is (the ticking mob itself, the
 /// player the tick sees, the snapshot of the others), with the brain's own

@@ -7,6 +7,7 @@ use super::*;
 /// game resolves the set onto the type's attribute row once, at load.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: only registration builds it; the game reads it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct EntityAttributeDeclaration {
     /// The entity type the set belongs to.
     pub id: String,
@@ -29,6 +30,7 @@ pub fn entity_attribute_declarations() -> &'static [EntityAttributeDeclaration] 
 /// them; live entities are not edited.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: only registration builds it; the game reads it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct EntityAttributeModification {
     /// The entity type whose default set grows.
     pub entity: String,

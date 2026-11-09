@@ -4,6 +4,7 @@
 /// A debug entry a native mod registers: its id and the vanilla group its lines are drawn in.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: a mod builds it with a literal, an id and a group
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct DebugEntry {
     /// `<namespace>:<path>` in a namespace other than vanilla's, like `mymod:tick_cost`.
     pub id: String,
@@ -14,6 +15,7 @@ pub struct DebugEntry {
 /// A world-space debug renderer a native mod pushes at each renderer list refresh.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: a mod builds it with a literal, an id
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct DebugRenderer {
     /// The id of the `DebugGroup::Renderer` entry that switches it, like `mymod:pipe_network`.
     pub id: String,
@@ -22,6 +24,7 @@ pub struct DebugRenderer {
 /// The vanilla groups a debug entry's lines can join (`DebugScreenDisplayer.addToGroup`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: vanilla's debug screen groups and renderer section, matched without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum DebugGroup {
     /// `position`: the player's position, section and speed.
     Position,

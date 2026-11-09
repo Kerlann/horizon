@@ -4,6 +4,7 @@ use crate::*;
 /// A native mod's book category for one custom recipe type.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct RecipeBookCategory {
     /// A namespaced category id outside `minecraft:`.
     pub id: String,

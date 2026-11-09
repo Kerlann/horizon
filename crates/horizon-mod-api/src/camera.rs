@@ -19,6 +19,7 @@ pub fn wrap_degrees(angle: f32) -> f32 {
 /// What `AbstractClientPlayer.getFieldOfViewModifier` reads.
 #[derive(Clone, Copy, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct FovPlayer {
     /// `Abilities.flying`.
     pub flying: bool,
@@ -31,6 +32,7 @@ pub struct FovPlayer {
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum UseItem {
     Bow,
     Spyglass,
@@ -40,6 +42,7 @@ pub enum UseItem {
 /// it first person, third person behind, third person in front.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum CameraType {
     #[default]
     FirstPerson,
@@ -68,6 +71,7 @@ impl CameraType {
 /// death and hurt effects see it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct CameraEntity {
     pub position: [f64; 3],
     /// `xo`, `yo`, `zo`.
@@ -85,6 +89,7 @@ pub struct CameraEntity {
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct LivingCamera {
     pub scale: f32,
     pub camera_distance: f64,

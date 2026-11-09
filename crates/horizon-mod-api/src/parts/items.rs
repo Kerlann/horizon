@@ -6,6 +6,7 @@ pub(crate) struct PlaceProviderPart {
     pub(crate) provider: Arc<dyn PlaceProvider>,
 }
 
+// no wire: process-local registration and dispatch storage contains trait objects and owning-mod identities.
 /// A tooltip appender a mod registered, as the game reads it ([`tooltip_appenders`]).
 #[derive(Clone)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
@@ -71,9 +72,11 @@ where
         self(host, at)
     }
 }
+// no wire: trait-object alias inherits its provider trait policy; callbacks are not serialized.
 /// An item capability provider, as the registrar keeps it.
 pub type ItemProvider<T> = dyn ItemCapabilityProvider<T>;
 
+// no wire: process-local registration diagnostic retains a static hook or mod identity.
 /// An item registration request that the loaded item registry cannot resolve.
 #[derive(Debug, PartialEq, Eq)]
 #[non_exhaustive]

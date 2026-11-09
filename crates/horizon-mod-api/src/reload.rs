@@ -116,6 +116,7 @@ impl Drop for ReloadMark {
     }
 }
 
+// no wire: process-local listener or callback storage; trait objects are invoked through host dispatch, not serialized.
 /// One registered listener of either side, between registration and ordering.
 #[non_exhaustive]
 pub struct RegisteredListener<L: ?Sized> {
@@ -268,6 +269,7 @@ impl<L: ?Sized + 'static> ReloadCore<L> {
 /// form, so the reload paths report listeners alike.
 #[derive(Debug)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum ReloadStageError {
     /// The next resource generation or its enabled-package inventory could not be built.
     DataSource(String),
@@ -306,6 +308,7 @@ impl std::error::Error for ReloadStageError {
     }
 }
 
+// no wire: process-local listener or callback storage; trait objects are invoked through host dispatch, not serialized.
 /// One mod listener's prepared step, between its `prepare` and its `apply`.
 /// The server's vanilla function library rides along as the `Vanilla` step of
 /// its own reload; the client's has none.

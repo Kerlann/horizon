@@ -40,6 +40,7 @@ pub trait GroundLevel {
 /// `AlterGroundEvent.getStateProvider`.
 #[derive(Clone)]
 // exhaustive: the decorator's own or a mod's; a third kind is a contract change
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum GroundProvider {
     /// The decorator's own (`AlterGroundDecorator.provider`).
     Decorator,

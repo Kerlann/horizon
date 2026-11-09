@@ -5,6 +5,7 @@ use horizon_core::nbt::clone_tag;
 /// A component tree, retaining translation keys, styles and ordered children.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct Text {
     /// The component's contents before its children.
     pub content: TextContent,
@@ -19,6 +20,7 @@ pub struct Text {
 /// What supplies the characters or inline object of a component.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: closed serialized component vocabulary; new cases change the link contract
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TextContent {
     /// Literal characters, without interpreting legacy formatting codes.
     Literal(String),
@@ -65,6 +67,7 @@ pub enum TextContent {
 /// The source of an NBT component, not the NBT itself.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: closed serialized component vocabulary; new cases change the link contract
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TextNbtSource {
     /// Block position expression.
     Block(String),
@@ -77,6 +80,7 @@ pub enum TextNbtSource {
 /// An inline object embedded in text.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: closed serialized component vocabulary; new cases change the link contract
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TextObject {
     /// A player head, retaining the profile properties carried by the component.
     Player {
@@ -101,6 +105,7 @@ pub enum TextObject {
 /// Optional style fields inherit; explicit `false` overrides an inherited decoration.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct TextStyle {
     /// Named colour or `#RRGGBB` component colour.
     pub color: Option<String>,
@@ -135,6 +140,7 @@ pub struct TextStyle {
 /// Part of the [per-node origin tracking follow-up](https://github.com/arismoko/horizon/issues/1738).
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: closed serialized component vocabulary; new cases change the link contract
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TextClick {
     /// Open an HTTP or HTTPS URL.
     OpenUrl(String),
@@ -160,6 +166,7 @@ pub enum TextClick {
 /// A text component's hover action.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: closed serialized component vocabulary; new cases change the link contract
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TextHover {
     /// Show another styled component tree.
     Text(Box<Text>),
@@ -237,6 +244,7 @@ impl Text {
 /// A player profile, including ordered signed properties and unknown data.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct TextProfile {
     /// Player name in U+0021..U+007E, at most 16 characters (ExtraCodecs.PLAYER_NAME).
     pub name: Option<String>,
@@ -254,6 +262,7 @@ pub struct TextProfile {
 /// whose UTF-16 limits are 64 units for names, 32767 for values and 1024 for signatures.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct TextProfileProperty {
     /// Property name.
     pub name: String,
@@ -306,6 +315,7 @@ impl Default for TextStyle {
 /// Flat representation of a component tree.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct TextForm {
     /// Nodes in parent-before-child order.
     pub nodes: Vec<TextNode>,
@@ -313,6 +323,7 @@ pub struct TextForm {
 /// One typed shallow component and its position in the tree.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct TextNode {
     /// Parent node index, or None for the root.
     pub parent: Option<u32>,
@@ -340,6 +351,7 @@ impl TextNode {
 /// Shallow content. Recursive values appear only in related rows.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: closed wire vocabulary
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TextNodeContent {
     /// Literal characters.
     Literal(String),
@@ -391,6 +403,7 @@ pub enum TextNodeContent {
 /// Shallow hover event. Text and entity-name values use related rows.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: closed wire vocabulary
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TextNodeHover {
     /// Exactly one HoverText row is required.
     Text,
@@ -414,6 +427,7 @@ pub enum TextNodeHover {
 /// The nonrecursive form of TextStyle, with the same inheritance semantics.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct TextNodeStyle {
     /// Named colour or `#RRGGBB` component colour.
     pub color: Option<String>,
@@ -443,6 +457,7 @@ pub struct TextNodeStyle {
 /// Relation to an earlier row. Unknown discriminants are rejected by bindings.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TextRelation {
     /// Appended component.
     Child,
@@ -463,6 +478,7 @@ pub const MAX_TEXT_DEPTH: usize = 512;
 /// A refused Text crossing. No partially converted fields are written.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TextFormError {
     /// No backend is available.
     Unavailable,

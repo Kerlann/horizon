@@ -3,6 +3,7 @@
 /// Why a mod block entity's menu data slots could not be sized.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum BlockEntityDataError {
     /// The handle no longer identifies a loaded entity in the requested level.
     Stale,

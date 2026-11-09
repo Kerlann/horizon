@@ -1127,9 +1127,22 @@ pub(crate) fn records_selected(
             .expect("generated points")
     };
     let records = points.iter().map(|point| {
-        if enabled(point) { return parse(&point.record_item); }
+        if enabled(point) {
+            return parse(&point.record_item);
+        }
         let mut file: syn::File = syn::parse_str(&point.record_item).expect("point record");
-        file.items.retain(|item| !matches!(item, syn::Item::Impl(imp) if imp.trait_.as_ref().is_some_and(|(_, path, _)| path.segments.last().is_some_and(|segment| segment.ident == "Wire"))));
+        // Keep every record's public shape, but only selected records need a guest codec.
+        for item in &mut file.items {
+            if let syn::Item::Struct(record) = item {
+                record.attrs.retain(|attr| {
+                    !(attr.path().is_ident("cfg_attr")
+                        && attr
+                            .to_token_stream()
+                            .to_string()
+                            .contains("derive (:: mod_api :: Wire)"))
+                });
+            }
+        }
         quote!(#file)
     });
     let listeners = points.iter().map(|point| parse(&point.api[0]));
@@ -1300,7 +1313,7 @@ mod tests {
         };
         assert_eq!(layout(&all), layout(&selected));
         let file = syn::parse_file(&selected).unwrap();
-        let wires = file.items.iter().filter(|item| matches!(item, syn::Item::Impl(imp) if imp.trait_.as_ref().is_some_and(|(_, path, _)| path.segments.last().unwrap().ident == "Wire"))).count();
+        let wires = file.items.iter().filter(|item| matches!(item, syn::Item::Struct(record) if record.attrs.iter().any(|attr| attr.path().is_ident("cfg_attr") && attr.to_token_stream().to_string().contains("derive (:: mod_api :: Wire)")))).count();
         assert_eq!(wires, 1);
         assert!(selected.contains("fn point_first"));
         assert!(!selected.contains("fn point_second"));

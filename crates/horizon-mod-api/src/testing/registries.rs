@@ -2,6 +2,7 @@
 use crate::{ItemStack, Tag};
 use std::collections::{HashMap, HashSet};
 
+// no wire: in-process testing harness state, not a mod boundary payload.
 /// The registries a test reads: each item's default components (its item report), the items
 /// that hold slots of their own, and the mods loaded beside the one under test.
 #[derive(Clone, Debug, Default)]

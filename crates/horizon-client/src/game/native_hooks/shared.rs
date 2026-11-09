@@ -4452,6 +4452,15 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn mod_sign_constructor_prioritizes_templates_over_suffixes() {
+        // This fixture adds blocks that are absent from the shared vanilla
+        // game's frozen process-wide block definitions.
+        if super::super::native_entity_refs::tests::run_fresh_cases(
+            "game::native_hooks::tests::mod_sign_constructor_prioritizes_templates_over_suffixes",
+            "HORIZON_SIGN_CONSTRUCTOR_CHILD",
+            &["signs"],
+        ) {
+            return;
+        }
         use super::super::{Audio, Game, Options, Progress, Settings, load_resources};
         use horizon_client::mod_content::{ContentMod, build};
         use horizon_mod_package::content::{Block, Content};

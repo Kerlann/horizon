@@ -2,6 +2,7 @@
 /// (NeoForge's `RenderBlockScreenEffectEvent.OverlayType`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum BlockScreenEffect {
     /// The player is on fire: the fire sprite over the lower view.
     Fire,

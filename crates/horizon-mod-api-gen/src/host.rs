@@ -342,10 +342,14 @@ pub(super) fn areas_source(root: &Path) -> Result<String, String> {
         prelude.push_str(&format!("pub use super::{}::*;\n", area.stem));
     }
     // One helper per area: it expands its item unless the area is in the skip list.
+    // Rustc rejects public re-exports of non-exported macro_rules macros. Export
+    // hidden __mod_api_* implementations and re-export their caller-facing names
+    // unqualified: absolute paths to include!-expanded macro_export definitions
+    // otherwise trigger macro_expanded_macro_exports_accessed_by_absolute_paths.
     let mut macros = String::new();
     for area in &areas {
         macros.push_str(&format!(
-            "#[doc(hidden)]\n#[macro_export]\nmacro_rules! __skip_{stem} {{ ([] $body:item) => {{ $body }}; ([{stem} $($rest:ident)*] $body:item) => {{}}; ([$other:ident $($rest:ident)*] $body:item) => {{ $crate::__skip_{stem}!([$($rest)*] $body); }}; }}\n",
+            "#[doc(hidden)]\n#[macro_export]\nmacro_rules! __mod_api_skip_{stem} {{ ([] $body:item) => {{ $body }}; ([{stem} $($rest:ident)*] $body:item) => {{}}; ([$other:ident $($rest:ident)*] $body:item) => {{ $crate::__skip_{stem}!([$($rest)*] $body); }}; }}\n#[doc(hidden)]\npub use __mod_api_skip_{stem} as __skip_{stem};\n",
             stem = area.stem
         ));
     }
@@ -390,7 +394,7 @@ pub(super) fn areas_source(root: &Path) -> Result<String, String> {
             })
             .collect();
         macros.push_str(&format!(
-            "/// Implements the area traits of `{union}` for `$host` with their defaults, except the areas listed in `except(...)`, which the caller implements itself. The union trait is left to the caller.\n#[macro_export]\nmacro_rules! {name} {{ ($host:ty $(, except($($skip:ident),*))?) => {{ {impls} }}; }}\n"
+            "/// Implements the area traits of `{union}` for `$host` with their defaults, except the areas listed in `except(...)`, which the caller implements itself. The union trait is left to the caller.\n#[doc(hidden)]\n#[macro_export]\nmacro_rules! __mod_api_{name} {{ ($host:ty $(, except($($skip:ident),*))?) => {{ {impls} }}; }}\n#[doc(hidden)]\npub use __mod_api_{name} as {name};\n"
         ));
     }
     Ok(format!(
@@ -877,7 +881,7 @@ pub(super) fn generate(root: &Path) -> Result<(String, String), String> {
     let imports = standard_imports(&syn::parse_file(&methods).map_err(|e| e.to_string())?);
     let side_enum = |name: &str, server: &str, client: &str| {
         format!(
-            "/// The logical side of a hook's host.\npub enum {name}<'a> {{\n/// The hook fired on the server.\nServer({server}),\n/// The hook fired on the client.\nClient({client}) }}\n"
+            "/// The logical side of a hook's host.\n// no wire: borrows the active host; passed as call context.\npub enum {name}<'a> {{\n/// The hook fired on the server.\nServer({server}),\n/// The hook fired on the client.\nClient({client}) }}\n"
         )
     };
     let sides = format!(

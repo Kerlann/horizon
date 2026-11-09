@@ -1,7 +1,10 @@
 //! `centerDepthSmooth`'s input: `depthtex0` at the centre of the screen. A depth texture can
-//! only be copied whole, so each frame a one-pixel pass loads that texel into a 1x1 `R32Float`
+//! only be copied whole, so each frame a one-pixel pass loads that texel into a 1x1 `R32Uint`
 //! target, copied to one of a few small buffers and read back frames later without waiting for
 //! the GPU (as `timing.rs` reads its timestamps); `FrameUniforms` smooths the latest value.
+//! The target holds the depth's bits, not the float: OpenGL renders to `R32Uint` everywhere
+//! (GLES 3.0 core), while an `R32Float` target needs `EXT_color_buffer_float`, which llvmpipe
+//! and some drivers lack (#2386).
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU8, Ordering};
@@ -23,9 +26,10 @@ const SHADER: &str = "
     let p = vec2<f32>(f32((i << 1u) & 2u), f32(i & 2u));
     return vec4<f32>(p * 2.0 - 1.0, 0.0, 1.0);
 }
-@fragment fn fs() -> @location(0) vec4<f32> {
+// The depth's bits, read back as the f32 they are.
+@fragment fn fs() -> @location(0) vec4<u32> {
     let centre = vec2<i32>(textureDimensions(depth) / 2u);
-    return vec4<f32>(textureLoad(depth, centre, 0).r, 0.0, 0.0, 1.0);
+    return vec4<u32>(bitcast<u32>(textureLoad(depth, centre, 0).r), 0u, 0u, 1u);
 }
 ";
 
@@ -82,7 +86,7 @@ impl CenterDepth {
             bind_group_layouts: &[Some(&layout)],
             immediate_size: 0,
         });
-        let format = wgpu::TextureFormat::R32Float;
+        let format = wgpu::TextureFormat::R32Uint;
         let pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
             label: Some("Shader pack centre depth"),
             layout: Some(&pipeline_layout),

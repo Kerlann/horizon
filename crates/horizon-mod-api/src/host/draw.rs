@@ -61,6 +61,8 @@ pub trait DrawContext {
     fn text(&mut self, text: &str, at: [f32; 2], argb: u32, shadow: bool) {
         unimplemented!("DrawContext::text")
     }
+    /// Stack drawing does not enforce resident count or damage maxima. Unknown
+    /// item identities or unrepresentable component payloads still refuse drawing.
     /// Draw a stack and its slot decorations, except the count, at `at`,
     /// `size` GUI pixels square. False when nothing was drawn: an unknown item
     /// or an empty stack (air, or a count of 0, as `ItemStack.isEmpty`).
@@ -121,6 +123,7 @@ pub trait DrawContext {
         unimplemented!("DrawContext::tiled_sprite")
     }
     /// Draw an item stack with custom count/decoration text (or None) at `at` in GUI units.
+    /// Uses the same nonresident stack encoding as `item_stack`, not write validation.
     fn gui_draw_item_with(&mut self, stack: &ItemStack, at: [f32; 2], text: Option<&str>) {
         unimplemented!("DrawContext::gui_draw_item_with")
     }

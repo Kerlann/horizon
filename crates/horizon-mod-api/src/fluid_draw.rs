@@ -5,6 +5,7 @@
 /// still fluid: a machine's tank, a basin's contents.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct FluidBoxOptions {
     /// `0xAARRGGBB` drawn in place of the stack's own tint: plain water's `0xFF3F76E4`
     /// (never the biome's water colour) and lava's white. `None` keeps the stack's.
@@ -42,6 +43,7 @@ impl FluidBoxOptions {
 /// nothing. A refused box appends no geometry.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum FluidBoxError {
     /// The stack is not `minecraft:water` or `minecraft:lava` without components: an
     /// unresolved fluid, another fluid, or one with a component patch.

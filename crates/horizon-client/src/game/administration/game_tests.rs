@@ -1786,7 +1786,7 @@ pub(in crate::game) mod tests {
         options.resources = root.clone();
         options.execution_role = execution_role::ExecutionRole::IntegratedServer;
         let res: &'static _ = Box::leak(Box::new(loaded.resources));
-        Game::new(
+        let mut game = Game::new(
             res,
             loaded.pack,
             loaded.gui.unwrap(),
@@ -1797,7 +1797,14 @@ pub(in crate::game) mod tests {
             )),
             None,
         )
-        .unwrap()
+        .unwrap();
+        // Match the server fixture this replaces: commands can force this
+        // resident column without starting terrain generation.
+        game.world.chunks.insert(
+            (0, 0),
+            std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+        );
+        game
     }
 
     fn info(block_based: bool, max_ticks: i32, setup_ticks: i32) -> Info {

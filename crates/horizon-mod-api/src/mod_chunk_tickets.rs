@@ -1,6 +1,7 @@
 //! Moved here from the game so mods can name it.
 #[allow(unused_imports)]
 use crate::*;
+// no wire: encoded by the existing manual Wire implementation on its re-exported NativeTicketOwner alias.
 /// What a ticket belongs to: a block (a machine) or an entity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 // exhaustive: a closed set the game matches without a wildcard
@@ -13,6 +14,7 @@ pub enum TicketOwner {
 /// One chunk a mod holds loaded for an owner.
 #[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ModTicket {
     /// The controller that holds it: its slot in the installed controller table
     /// (`mod_api::TicketController::slot`).
@@ -28,6 +30,7 @@ pub struct ModTicket {
 /// The chunks one owner holds, the two kinds apart (NeoForge's `TicketSet`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct TicketSet {
     /// Chunks held without natural spawning.
     pub non_natural_spawning: Vec<[i32; 2]>,
@@ -78,6 +81,7 @@ pub trait TicketValidation {
     -> bool;
 }
 
+// no wire: controller-owned mutable ticket bookkeeping retains static mod ownership; individual ModTicket values cross instead.
 /// The game's [`TicketValidation`]: one controller's loaded tickets, and those removed.
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct ControllerTickets {

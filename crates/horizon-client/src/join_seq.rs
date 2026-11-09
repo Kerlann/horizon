@@ -17,6 +17,8 @@ use std::{
 
 #[path = "join_seq/residency.rs"]
 pub mod residency;
+#[path = "join_seq/visibility.rs"]
+pub mod visibility;
 
 static NEXT: AtomicU64 = AtomicU64::new(1);
 static NEXT_LIST: AtomicU64 = AtomicU64::new(1);
@@ -164,10 +166,15 @@ macro_rules! impl_joined {
 /// Bound owners must prohibit replacement or explicitly retire/install identities;
 /// Game bindings must audit and test every such call site before enabling emission.
 #[derive(Debug)]
-pub struct JoinList<T, const DIRECT: bool = true>(Vec<T>, Option<residency::Binding<T>>, ListStamp);
+pub struct JoinList<T, const DIRECT: bool = true>(
+    Vec<T>,
+    Option<residency::Binding<T>>,
+    ListStamp,
+    Option<visibility::Binding>,
+);
 impl<T: Clone, const DIRECT: bool> Clone for JoinList<T, DIRECT> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), None, ListStamp::new())
+        Self(self.0.clone(), None, ListStamp::new(), None)
     }
 }
 impl<T, const DIRECT: bool> Drop for JoinList<T, DIRECT> {
@@ -195,11 +202,15 @@ impl<T, const DIRECT: bool> Drop for JoinList<T, DIRECT> {
 /// let mut owner = ResidentSlot::<u32>::default();
 /// owner.take();
 /// ```
-pub struct ResidentSlot<T>(Option<T>, Option<residency::Binding<T>>);
+pub struct ResidentSlot<T>(
+    Option<T>,
+    Option<residency::Binding<T>>,
+    Option<visibility::Visibility>,
+);
 
 impl<T> Default for ResidentSlot<T> {
     fn default() -> Self {
-        Self(None, None)
+        Self(None, None, None)
     }
 }
 impl<T> Drop for ResidentSlot<T> {
@@ -208,6 +219,13 @@ impl<T> Drop for ResidentSlot<T> {
     }
 }
 impl<T> ResidentSlot<T> {
+    /// Bind the shared save signal; bare extraction requires a caller-held lease.
+    pub fn bind_visibility(&mut self, sink: &visibility::Visibility) {
+        self.2 = Some(sink.clone());
+    }
+    pub fn visibility_lease(&self) -> Option<visibility::Lease> {
+        self.2.as_ref().map(|s| s.enter())
+    }
     /// Bind the singleton to its owning dimension and journal.
     pub fn bind_residency(
         &mut self,
@@ -327,6 +345,14 @@ impl<T> Default for ResidentList<T> {
 }
 
 impl<T: Joined> ResidentList<T> {
+    /// Bind save visibility without activating membership producers.
+    pub fn bind_visibility(&mut self, sink: &visibility::Visibility) {
+        self.0.bind_visibility(sink);
+    }
+    /// Lease bare extraction or a caller's held-out copy until its terminal work.
+    pub fn visibility_lease(&self) -> Option<visibility::Lease> {
+        self.0.visibility_lease()
+    }
     /// Bind this family's storage to its owning dimension and journal.
     pub fn bind_residency(
         &mut self,
@@ -408,11 +434,25 @@ impl<'a, T> IntoIterator for &'a ResidentList<T> {
 
 impl<T, const DIRECT: bool> Default for JoinList<T, DIRECT> {
     fn default() -> Self {
-        Self(Vec::new(), None, ListStamp::new())
+        Self(Vec::new(), None, ListStamp::new(), None)
     }
 }
 
 impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
+    /// Bind snapshot visibility independently of the residency journal. Clones
+    /// are detached; bindings follow resident storage across level swaps.
+    pub fn bind_visibility(&mut self, sink: &visibility::Visibility) {
+        assert!(
+            self.3.as_ref().is_none_or(|b| b.lease.is_none()),
+            "rebinding a lifted pass"
+        );
+        self.3 = Some(visibility::Binding::resident(sink));
+    }
+    /// Lease a bare extraction or a held-out local copy. `extract` returns T,
+    /// so its caller must hold this across put_back OR permanent retirement.
+    pub fn visibility_lease(&self) -> Option<visibility::Lease> {
+        self.3.as_ref().map(|b| b.sink.enter())
+    }
     /// This list's identity and write generation. Any mutable element access or
     /// structural operation invalidates earlier stamps, even if it is a no-op.
     pub fn stamp(&self) -> ListStamp {
@@ -454,8 +494,16 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
     /// Lift a whole pass, leaving an empty spawn buffer behind.
     pub fn lift(&mut self) -> Self {
         self.written();
-        let taken = std::mem::take(self);
+        let mut taken = std::mem::take(self);
         self.1 = taken.1.clone();
+        self.3 = taken
+            .3
+            .as_ref()
+            .map(|b| visibility::Binding::resident(&b.sink));
+        if let Some(binding) = &mut taken.3 {
+            assert!(binding.lease.is_none(), "lifting an already owned pass");
+            binding.lease = Some(binding.sink.enter());
+        }
         if let Some(binding) = &self.1 {
             binding.marker(residency::Change::Lifted);
         }
@@ -472,6 +520,25 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
     /// An unbound staged batch is admitted without closing another pass.
     pub fn restore(&mut self, mut taken: Self, order: RestoreOrder) {
         self.written();
+        let visibility_lease = taken.3.as_mut().and_then(|b| b.lease.take());
+        if let (Some(a), Some(b)) = (&self.3, &taken.3) {
+            assert!(
+                a.sink.same(&b.sink),
+                "restoring a different visibility owner"
+            );
+        }
+        if taken.3.is_none() {
+            taken.3 = self
+                .3
+                .as_ref()
+                .map(|b| visibility::Binding::resident(&b.sink));
+        }
+        if self.3.is_none() {
+            self.3 = taken
+                .3
+                .as_ref()
+                .map(|b| visibility::Binding::resident(&b.sink));
+        }
         let closes_lift = taken.1.is_some();
         match (&self.1, &taken.1) {
             (Some(a), Some(b)) => assert!(a.same(b), "restoring a different entity owner"),
@@ -490,9 +557,10 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
         if closes_lift && let Some(binding) = &self.1 {
             binding.marker(residency::Change::Restored);
         }
+        drop(visibility_lease);
     }
     pub fn with_capacity(capacity: usize) -> Self {
-        Self(Vec::with_capacity(capacity), None, ListStamp::new())
+        Self(Vec::with_capacity(capacity), None, ListStamp::new(), None)
     }
     /// Move a batch back without changing its join numbers or order.
     pub fn append(&mut self, other: &mut Self) {
@@ -524,18 +592,21 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
     /// Extract selected owners eagerly in list order, compacting survivors in place.
     /// The predicate cannot replace an entity or change its identity.
     pub fn extract_if(&mut self, mut take: impl FnMut(&T) -> bool) -> std::vec::IntoIter<T> {
-        self.written();
-        let binding = &self.1;
-        self.0
-            .extract_if(.., |entity| {
-                let removed = take(entity);
-                if removed && let Some(binding) = binding {
-                    binding.entity(entity, residency::Change::Remove);
-                }
-                removed
-            })
+        self.extract_where(|entity| take(entity))
             .collect::<Vec<_>>()
             .into_iter()
+    }
+    fn extract_where(&mut self, mut take: impl FnMut(&mut T) -> bool) -> impl Iterator<Item = T> {
+        self.written();
+        let binding = &self.1;
+        self.0.extract_if(.., move |entity| {
+            let before = binding.as_ref().map(|binding| binding.read(entity));
+            let removed = take(entity);
+            if removed && let (Some(binding), Some((id, join))) = (binding, before) {
+                binding.identity(id, join, residency::Change::Remove);
+            }
+            removed
+        })
     }
     pub fn swap_remove(&mut self, index: usize) -> T {
         self.written();
@@ -637,6 +708,14 @@ impl<T> JoinList<T> {
         })
     }
 
+    /// Lazily yield selected owners in list order, compacting survivors in place.
+    /// Unlike `extract_if`, dropping this iterator leaves unvisited rows untouched.
+    /// A panicking predicate retains its current row and edits, without emitting
+    /// its removal. Only yielded rows retire, using their pre-predicate identity.
+    /// No journal lock is held while the predicate runs.
+    pub fn extract_if_mut(&mut self, take: impl FnMut(&mut T) -> bool) -> impl Iterator<Item = T> {
+        self.extract_where(take)
+    }
     pub fn retain_mut(&mut self, keep: impl FnMut(&mut T) -> bool) {
         self.written();
         self.retain_where(keep);
@@ -891,15 +970,41 @@ impl<'a, T> IntoIterator for &'a mut JoinList<T> {
 }
 impl<T, const DIRECT: bool> IntoIterator for JoinList<T, DIRECT> {
     type Item = T;
-    type IntoIter = std::vec::IntoIter<T>;
+    type IntoIter = IntoIter<T>;
     fn into_iter(mut self) -> Self::IntoIter {
         self.written();
         if let Some(binding) = &self.1 {
             binding.all(&self.0, residency::Change::Remove);
         }
-        std::mem::take(&mut self.0).into_iter()
+        IntoIter {
+            rows: std::mem::take(&mut self.0).into_iter(),
+            _lease: self.3.as_mut().and_then(|b| b.lease.take()),
+        }
     }
 }
+
+/// Consuming a lifted list keeps its visibility obligation through the loop.
+/// Bare yielded rows do not carry a lease after the iterator is dropped.
+pub struct IntoIter<T> {
+    rows: std::vec::IntoIter<T>,
+    _lease: Option<visibility::Lease>,
+}
+impl<T> Iterator for IntoIter<T> {
+    type Item = T;
+    fn next(&mut self) -> Option<T> {
+        self.rows.next()
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.rows.size_hint()
+    }
+}
+impl<T> DoubleEndedIterator for IntoIter<T> {
+    fn next_back(&mut self) -> Option<T> {
+        self.rows.next_back()
+    }
+}
+impl<T> ExactSizeIterator for IntoIter<T> {}
+impl<T> std::iter::FusedIterator for IntoIter<T> {}
 
 #[cfg(test)]
 mod tests {
@@ -1467,6 +1572,56 @@ mod tests {
             });
             assert_eq!(changes(&journal), expected);
         }
+    }
+
+    #[test]
+    fn lazy_mutable_extraction_keeps_unvisited_rows_and_original_identity() {
+        let (mut list, journal) = journal_list();
+        let keys: Vec<_> = list.iter().map(key).collect();
+        changes(&journal);
+        let mut visited = Vec::new();
+        {
+            let mut extracted = list.extract_if_mut(|row| {
+                visited.push(row.value);
+                row.value += 10;
+                row.join = JoinSeq::next();
+                true
+            });
+            assert_eq!(extracted.next().unwrap().value, 11);
+        }
+        assert_eq!(visited, [1]);
+        assert_eq!(changes(&journal), [residency::Change::Remove(keys[0])]);
+        assert_eq!(list.iter().map(key).collect::<Vec<_>>(), keys[1..]);
+    }
+
+    #[test]
+    fn lazy_mutable_extraction_panics_without_retiring_current_edits() {
+        let (mut list, journal) = journal_list();
+        let keys: Vec<_> = list.iter().map(key).collect();
+        changes(&journal);
+        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut iter = list.extract_if_mut(|row| {
+                let value = row.value;
+                row.value += 10;
+                // Binding access during a predicate must not hold a journal lock.
+                assert!(changes(&journal).is_empty());
+                assert_ne!(value, 2, "predicate panic");
+                true
+            });
+            assert_eq!(iter.next().unwrap().value, 11);
+            assert_eq!(changes(&journal), [residency::Change::Remove(keys[0])]);
+            iter.next();
+        }));
+        assert!(panic.is_err());
+        assert!(changes(&journal).is_empty());
+        assert_eq!(
+            list.iter().map(|row| row.join).collect::<Vec<_>>(),
+            keys[1..].iter().map(|key| key.join).collect::<Vec<_>>()
+        );
+        assert_eq!(
+            list.iter().map(|row| row.value).collect::<Vec<_>>(),
+            [12, 3]
+        );
     }
 
     #[test]

@@ -69,12 +69,31 @@ pub(crate) fn sources(root: &Path) -> Result<BTreeMap<String, String>, String> {
     .into_iter()
     .collect();
     let mut has_parts = false;
+    let mut has_host = false;
     for area in Catalog::modules(&dir).map_err(|e| e.to_string())? {
         let path = dir.join(format!("{area}.rs"));
         let source = fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?;
         let file = syn::parse_file(&source).map_err(|e| format!("{}: {e}", path.display()))?;
+        has_host |= file.items.iter().any(|item| matches!(item, Item::Mod(module) if module.ident == "host" && module.content.is_none()));
         has_parts |= file.items.iter().any(|item| matches!(item, Item::Mod(module) if module.ident == "parts" && module.content.is_none()));
         collect(root, "root", file.items, &mut out)?;
+    }
+    if has_host {
+        // Re-export the generated macro aliases, not the include!-expanded
+        // macro_export implementations, at their existing crate-root paths.
+        for item in syn::parse_file(&super::host::areas_source(root)?)
+            .map_err(|e| e.to_string())?
+            .items
+        {
+            if let Item::Use(item) = item
+                && let syn::UseTree::Rename(rename) = item.tree
+            {
+                let name = rename.rename;
+                out.get_mut("root")
+                    .unwrap()
+                    .push_str(&quote::quote!(#[doc(hidden)] pub use host::#name;).to_string());
+            }
+        }
     }
     if has_parts {
         out.get_mut("root")

@@ -3,6 +3,7 @@
 /// HUD and first-person hand visibility. Other hand-render restrictions still apply.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum HudMode {
     /// Show both HUD and hands.
     #[default]

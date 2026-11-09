@@ -7,6 +7,7 @@ use crate::{AttributeModifier, EntityRef, EquipmentSlot, Identifier, ItemStack, 
 /// Why a read or an edit of an unspawned mob was refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum UnspawnedMobError {
     /// The retained custom name exceeds the component boundary.
     Text(crate::text::TextFormError),
@@ -104,6 +105,7 @@ pub trait UnspawnedMobEdits {
 /// `AgeableMob.AgeableMobGroupData`: whether the pack's later members may be babies.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct NativeAgeableGroup {
     /// How many mobs of the pack have been finalized with this group so far.
     pub size: i32,
@@ -128,6 +130,7 @@ impl NativeAgeableGroup {
 /// names vanilla saves (`kob`, `orange`, `white`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct NativeTropicalVariant {
     /// The pattern (`TropicalFish.Pattern`).
     pub pattern: String,
@@ -153,6 +156,7 @@ impl NativeTropicalVariant {
 /// game does not know drops the group.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum NativeSpawnGroup {
     /// `AgeableMob.AgeableMobGroupData`, for the ageable mobs with no group of their own.
     Ageable(NativeAgeableGroup),

@@ -3,6 +3,7 @@ use crate::{Commands, Messages, Text};
 use std::cell::RefCell;
 use std::collections::HashSet;
 
+// no wire: in-process testing harness state, not a mod boundary payload.
 /// The server's command service: the commands run, in order, of which those listed as known
 /// succeed, and the feedback given.
 #[derive(Clone, Debug, Default)]
@@ -35,6 +36,7 @@ impl Commands for FakeCommands {
     }
 }
 
+// no wire: in-process testing harness state, not a mod boundary payload.
 /// The server's message service: the lines broadcast, in order, and the texts the chat filter
 /// blocks.
 #[derive(Clone, Debug, Default)]

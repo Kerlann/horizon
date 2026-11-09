@@ -8,6 +8,7 @@ use std::{
 /// A problem registering or ordering reload listeners.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum ReloadOrderError {
     /// A listener name has already been registered.
     DuplicateListener {

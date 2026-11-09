@@ -6,6 +6,7 @@ use crate::{
 /// A registered fluid's world-state definition, or an identity used only in tanks.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum FluidDefinition {
     /// A world fluid's default and legal serialized property values.
     World {
@@ -24,6 +25,7 @@ pub enum FluidDefinition {
 /// them, their fall modifier scales nothing and they drip nothing and never tick randomly.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct FluidTypeProperties {
     /// `FluidType.getDescriptionId`: `fluid_type.<mod>.<name>`, vanilla's by its block
     /// (`block.minecraft.water`, `block.minecraft.air` for the empty fluid).
@@ -59,6 +61,7 @@ pub struct FluidTypeProperties {
 /// Why fluid-state constraints could not be validated.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum FluidStateError {
     /// No such property, at this input index.
     UnknownProperty(u32),
@@ -81,6 +84,7 @@ pub trait HostFluidStates {
     fn fluid_states(&self) -> FluidStates<'_>;
 }
 
+// no wire: borrowed host or registrar backend; access stays scoped to the owning call.
 /// The fluid-state facts service, available in setup, reload and world callbacks after keys resolve.
 // exhaustive: only the host constructs this service
 pub struct FluidStates<'a> {

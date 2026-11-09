@@ -1,5 +1,6 @@
 //! The transaction journal fake: what a host keeps on each transaction it opens.
 
+// no wire: in-process testing harness state, not a mod boundary payload.
 /// A test host's transaction journal, as the game's keeps its storages: the state each open
 /// transaction began with, put back when it aborts, and every close in order.
 ///

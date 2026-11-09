@@ -327,17 +327,16 @@ impl CitGlintPass {
             ty,
             count: None,
         };
+        // hud.wgsl binds the array once per sampler (`cit_tex`, `cit_tex_sharp`).
+        let array = wgpu::BindingType::Texture {
+            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+            view_dimension: wgpu::TextureViewDimension::D2Array,
+            multisampled: false,
+        };
         let layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("CIT glint bindings"),
             entries: &[
-                entry(
-                    0,
-                    wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2Array,
-                        multisampled: false,
-                    },
-                ),
+                entry(0, array),
                 entry(1, filtering),
                 entry(2, filtering),
                 entry(
@@ -348,6 +347,7 @@ impl CitGlintPass {
                         min_binding_size: None,
                     },
                 ),
+                entry(4, array),
             ],
         });
         let group = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -369,6 +369,10 @@ impl CitGlintPass {
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: table.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: wgpu::BindingResource::TextureView(&view),
                 },
             ],
         });

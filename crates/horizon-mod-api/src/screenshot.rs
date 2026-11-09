@@ -6,6 +6,7 @@
 /// is not this image.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ScreenshotImage {
     /// Width in pixels.
     pub width: u32,

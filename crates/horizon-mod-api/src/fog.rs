@@ -4,6 +4,7 @@ use crate::*;
 /// `FogType` of the camera position.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum FogType {
     Atmospheric,
     Water,
@@ -13,6 +14,7 @@ pub enum FogType {
 /// The fog uniform (`FogData`).
 #[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct FogData {
     pub color: [f32; 4],
     pub environmental_start: f32,

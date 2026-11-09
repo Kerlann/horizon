@@ -5,6 +5,7 @@ use crate::BlockPos;
 /// The connected server, not the reconnect target of an earlier session.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ClientServer {
     /// The integrated world's display name. External connections do not retain
     /// a server display name; this is `None`, never the connecting player's name.
@@ -24,6 +25,7 @@ pub struct ClientServer {
 /// Existing local frame counters, sampled only when requested by a mod.
 #[derive(Clone, Copy, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ClientFrameStats {
     /// The game's most recently computed frames per second (updated about once
     /// a second), not an inverse of a single frame time.
@@ -39,6 +41,7 @@ pub struct ClientFrameStats {
 /// returns `None` from the handle, distinct from [`Self::Idle`].
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum BlockBreakingState {
     /// No block is currently being broken.
     Idle,

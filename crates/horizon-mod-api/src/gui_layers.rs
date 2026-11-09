@@ -3,6 +3,7 @@
 /// A HUD layer a native mod registers once at start: its id and where it goes.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: a mod builds it with a literal, an id and a placement
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct GuiLayer {
     /// `<namespace>:<path>` in a namespace other than vanilla's, like `mymod:compass`.
     pub id: String,
@@ -13,6 +14,7 @@ pub struct GuiLayer {
 /// Where a mod's HUD layer goes, the four orderings of `RegisterGuiLayersEvent`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: NeoForge's four orderings, matched without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum GuiLayerPlacement {
     /// Below every other layer, the crosshair included (`registerBelowAll`).
     BelowAll,

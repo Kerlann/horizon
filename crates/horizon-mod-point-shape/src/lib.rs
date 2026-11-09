@@ -676,29 +676,6 @@ impl Shape {
             }
             Returns::Opaque => (quote!(), quote!(), quote!()),
         };
-        let mut wire_names: Vec<syn::Ident> = names.iter().map(|name| (*name).clone()).collect();
-        let mut wire_reads: Vec<_> = self
-            .args
-            .iter()
-            .map(|arg| {
-                if arg.text {
-                    quote!(::std::borrow::Cow::Owned(input.take::<String>()?))
-                } else {
-                    quote!(input.take()?)
-                }
-            })
-            .collect();
-        if let Some((name, _)) = self.outcome_field() {
-            wire_names.push(name);
-            wire_reads.push(quote!(input.take()?));
-        }
-        let wire_puts = wire_names.iter().map(|name| {
-            if self.args.iter().any(|arg| arg.name == *name && arg.text) {
-                quote!(out.put(self.#name.as_ref());)
-            } else {
-                quote!(out.put(&self.#name);)
-            }
-        });
         let doc = format!(
             "The `{}` point's record: what its listeners get from `{target}`, a slot filled at load.",
             self.name
@@ -706,21 +683,10 @@ impl Shape {
         quote! {
             #[doc = #doc]
             #[non_exhaustive]
+            #[cfg_attr(any(target_arch = "wasm32", feature = "wasm-guest"), derive(::mod_api::Wire))]
             pub struct #record #lifetime {
                 #( #[doc = #field_docs] pub #names: #fields, )*
                 #extra
-            }
-            #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
-            impl #lifetime ::mod_api::wire::Wire for #record #lifetime {
-                const MIN: usize = 0;
-                fn put(&self, out: &mut ::mod_api::wire::Writer) {
-                    let _ = &out;
-                    #(#wire_puts)*
-                }
-                fn take(input: &mut ::mod_api::wire::Reader<'_>) -> Result<Self, ::mod_api::wire::WireError> {
-                    let _ = &input;
-                    Ok(Self { #(#wire_names: #wire_reads,)* })
-                }
             }
             impl #lifetime #record #lifetime {
                 /// The record of a call, its fields already API values (the game's side of the point).

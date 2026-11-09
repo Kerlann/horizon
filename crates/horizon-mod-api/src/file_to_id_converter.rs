@@ -4,6 +4,7 @@ use super::Identifier;
 /// An invalid directory or extension passed to [`FileToIdConverter`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum FileToIdConverterError {
     /// Directory.
     Directory,

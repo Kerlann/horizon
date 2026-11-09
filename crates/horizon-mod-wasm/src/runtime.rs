@@ -476,10 +476,10 @@ impl WasmMod {
                 .map_err(load)?
                 .call(&mut group.store, ())
                 .map_err(load)?;
-            if layout != mod_api::wire::LAYOUT {
+            if layout != *mod_api::wire::LAYOUT {
                 return Err(Refusal::Layout {
                     built: layout,
-                    game: mod_api::wire::LAYOUT,
+                    game: *mod_api::wire::LAYOUT,
                 });
             }
             if instance

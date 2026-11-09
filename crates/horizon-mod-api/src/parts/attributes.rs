@@ -5,6 +5,7 @@ use crate::Sentiment;
 /// attribute catalog (`Catalog::with_attributes`, #812).
 #[derive(Clone, Debug)]
 // exhaustive: only registration builds it; the game reads it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct AttributeDeclaration {
     /// The declaring mod's id: the first key of the catalog's sort order.
     pub mod_id: String,

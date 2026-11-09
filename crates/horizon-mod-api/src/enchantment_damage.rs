@@ -2,6 +2,7 @@
 use crate::{EntityRef, Identifier, ItemStack, LivingRef, ServerHost};
 use std::sync::Arc;
 
+// no wire: borrowed call-scoped view; transport uses owned snapshots rather than serializing references.
 /// Context of one value node in ordinary enchantment damage computation.
 // exhaustive: the game constructs the hit context with a literal; mods only read it
 pub struct EnchantmentDamageContext<'a> {
@@ -41,6 +42,7 @@ pub trait EnchantmentDamageEffects {
     ) -> Result<(), String>;
 }
 
+// no wire: process-local listener or callback storage; trait objects are invoked through host dispatch, not serialized.
 /// Engine-owned storage behind the startup registrar.
 #[derive(Default)]
 #[non_exhaustive]

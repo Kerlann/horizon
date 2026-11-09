@@ -8,6 +8,7 @@ use std::collections::HashSet;
 /// accepts (`RecipeManager.RECIPE_PROPERTY_SETS`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct RecipePropertyAddition {
     /// The set's key, `minecraft:furnace_input` for instance.
     pub set: String,
@@ -27,6 +28,7 @@ impl RecipePropertyAddition {
 /// items in its `HolderSet` order (`Ingredient.display`'s `TagSlotDisplay`).
 #[derive(Clone, Debug)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct Ingredient {
     /// The items it accepts, however the source shape named them.
     pub items: HashSet<String>,
@@ -43,6 +45,7 @@ pub struct Ingredient {
 /// How a shape's children combine at match time.
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum Shape {
     /// Any child matching the stack is enough.
     Compound,
@@ -54,6 +57,7 @@ pub enum Shape {
 /// Why an ingredient cannot be retained as an exact, component-independent key set.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum IngredientKeysError {
     /// A custom predicate may inspect components or context at match time.
     NotEnumerable,
@@ -113,6 +117,7 @@ impl Ingredient {
 /// A mod's own type leaves these fields empty and keeps its `json`.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct Recipe {
     /// `<namespace>:<path>`, its place under `data/<namespace>/recipe/`.
     pub id: String,
@@ -157,6 +162,7 @@ impl Recipe {
 /// Typed input to the engine's matched recipe lookup. Slot order is significant.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum RecipeInput {
     Crafting {
         width: u32,
@@ -173,6 +179,7 @@ pub enum RecipeInput {
 /// A refusal distinct from a valid input with no matching recipe.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum RecipeLookupError {
     InvalidInput,
     InvalidItem,
@@ -190,6 +197,7 @@ impl crate::NoBackend for RecipeLookupError {
 /// What the matched recipe assembles; lookup never consumes the input.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct RecipeMatch {
     pub recipe: crate::Identifier,
     pub output: ItemStack,

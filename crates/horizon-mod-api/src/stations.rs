@@ -1,6 +1,7 @@
 //! Moved here from the game so mods can name it.
 #[allow(unused_imports)]
 use crate::*;
+// no wire: borrowed call-scoped view; transport uses owned snapshots rather than serializing references.
 /// One offer row as `EnchantmentLevelSetEvent` reports it: the server player
 /// whose table it is (UUID and entity id), the row (0 to 2), the power (the
 /// bookshelves counted), the item and the level `getEnchantmentCost` drew.
@@ -16,6 +17,7 @@ pub struct EnchantmentRow<'a> {
 }
 #[derive(Clone, Debug, Default, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct AnvilResult {
     pub result: Option<ItemStack>,
     /// Level cost (the `cost` data slot).

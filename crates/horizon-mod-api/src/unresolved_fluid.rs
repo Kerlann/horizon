@@ -8,6 +8,7 @@ use std::{
 /// A registered fluid, or an opaque retained name from unavailable content.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum FluidIdentity {
     /// A registered fluid.
     Resolved(FluidKey),
@@ -26,6 +27,7 @@ impl FluidIdentity {
 }
 
 impl UnresolvedFluid {
+    #[cfg(any(not(target_arch = "wasm32"), test))]
     pub(crate) fn from_slot(slot: u64) -> Result<Self, &'static str> {
         let table = TABLE.read().unwrap();
         (slot < table.names.len() as u64)
