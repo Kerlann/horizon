@@ -39,6 +39,9 @@ jobs:
           cargo test --manifest-path "$manifest" --features wasm-guest --locked
           cargo check --manifest-path "$manifest" --features wasm-guest --target wasm32-unknown-unknown --locked
       - name: Build tool and shared member
+        env:
+          # A single wasm point compile already peaks near 9 GiB; do not overlap it.
+          CARGO_BUILD_JOBS: 1
         run: |
           cargo build -p cargo-horizon-mod
           cd crates/horizon-mod-wasm/tests/fixture
@@ -53,6 +56,8 @@ jobs:
           cargo test -p horizon-mod-wasm --test real_member -- --ignored --nocapture
           cargo test -p horizon-mod-wasm --lib guest_input_pool_stays_flat_for_100k_no_import_calls -- --ignored --nocapture
       - name: Build independent library members
+        env:
+          CARGO_BUILD_JOBS: 1
         run: |
           tool="$GITHUB_WORKSPACE/target/debug/cargo-horizon-mod"
           root="$GITHUB_WORKSPACE/crates/horizon-mod-wasm/tests/library-fixture"
@@ -67,6 +72,8 @@ jobs:
           HORIZON_WASM_DEPENDENT: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/library-fixture/dependent/target/horizon-mod/wasm_test_dependent.hmod
         run: cargo test -p horizon-mod-wasm --test real_library -- --nocapture
       - name: Build the same-group capability members
+        env:
+          CARGO_BUILD_JOBS: 1
         run: |
           tool="$GITHUB_WORKSPACE/target/debug/cargo-horizon-mod"
           groups="$GITHUB_WORKSPACE/crates/horizon-mod-wasm/tests/groups"
