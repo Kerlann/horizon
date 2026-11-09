@@ -487,8 +487,8 @@ impl Game<'_> {
             .then(|| EntityRef::new(level.epoch(), id));
         }
         let mut table = self.entity_residency.borrow_mut();
-        let (state, cached) =
-            table.server_entity_read_lookup(id, |at| self.locate_server_resident_owner(at));
+        let (at, state, _, _) =
+            table.server_admitted_read_lookup(id, |at| self.locate_server_resident_owner(at))?;
         let visible = match state {
             EntityLookup::Found {
                 location,
@@ -497,10 +497,9 @@ impl Game<'_> {
                 location.owner.dimension == level.dimension()
                     && self.server_read_target_visible(level.dimension(), target)
             }
-            EntityLookup::Taken => cached.is_some_and(|row| {
-                row.base.level == level
-                    && self.server_read_target_visible(level.dimension(), row.target)
-            }),
+            EntityLookup::Taken => at.owner.dimension == level.dimension()
+                && self.server_read_target_visible(level.dimension(),
+                    super::entity_residency::residency_target_at(at, id)),
             _ => false,
         };
         visible.then(|| EntityRef::new(level.epoch(), id))
