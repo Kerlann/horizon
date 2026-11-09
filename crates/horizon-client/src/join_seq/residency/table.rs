@@ -151,10 +151,38 @@ impl<R> EntityTable<R> {
         (result, cached)
     }
 
+    /// Validate one admitted source and return its canonical location, including
+    /// an explicitly lifted source. The caller separately validates world epoch
+    /// and authority. This never reconstructs generation from cached payloads.
+    pub fn server_admitted_location<T>(
+        &mut self,
+        id: u32,
+        locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
+    ) -> Option<(Location, EntityLookup<T>)> {
+        let state = self.lookup(None, id, locate);
+        if matches!(state, EntityLookup::Missing) {
+            return None;
+        }
+        let row = self.rows.get(&NonZeroU32::new(id)?)?;
+        Some((row.location, state))
+    }
+
     /// Publish captures of already admitted sources. Exact owner/join agreement
     /// prevents a delayed publication from replacing a transferred generation.
     /// Drain once per batch; no source scan or per-removal metadata is needed.
     pub fn publish_rows(&mut self, rows: impl IntoIterator<Item = (u32, Location, R)>) -> usize {
+        self.publish_rows_merging(rows, |_, prepared| prepared)
+    }
+
+    /// Install fully prepared captures and merge retained patches only AFTER
+    /// final generation validation. Capture failure must occur before this call,
+    /// so an accepted overlay cannot be lost by a fallible source projection.
+    /// The merge is pure payload work: no source/Game callbacks or effects.
+    pub fn publish_rows_merging(
+        &mut self,
+        rows: impl IntoIterator<Item = (u32, Location, R)>,
+        mut merge: impl FnMut(Option<R>, R) -> R,
+    ) -> usize {
         self.drain();
         let mut published = 0;
         for (id, location, cached) in rows {
@@ -162,7 +190,7 @@ impl<R> EntityTable<R> {
                 continue;
             };
             if row.location == location {
-                row.cached = Some(cached);
+                row.cached = Some(merge(row.cached.take(), cached));
                 published += 1;
             }
         }
@@ -340,6 +368,56 @@ mod tests {
                 self.source.get(&location).copied()
             })
         }
+    }
+
+    #[test]
+    fn admitted_generation_and_prepared_merge_preserve_pending_work() {
+        let mut list = JoinList::default();
+        list.push(Stored(7, JoinSeq::UNJOINED));
+        let mut table = EntityTable::<(u32, Vec<u32>)>::new(Journal::default());
+        list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
+        let at = Location {
+            owner: HOME,
+            join: list[0].1,
+        };
+        assert_eq!(table.publish_rows([(7, at, (10, vec![11, 12]))]), 1);
+        let owned = list.lift();
+        let (admitted, state) = table
+            .server_admitted_location(7, |at| locate(&list, at))
+            .unwrap();
+        assert_eq!(admitted, at);
+        assert_eq!(state, EntityLookup::Taken);
+        assert_eq!(
+            table.publish_rows_merging([(7, at, (20, Vec::new()))], |old, mut prepared| {
+                prepared.1 = old.unwrap().1;
+                prepared
+            }),
+            1
+        );
+        list.restore(owned, RestoreOrder::SurvivorsFirst);
+        assert_eq!(
+            table
+                .entity_read_lookup(&HOME.dimension, 7, |at| locate(&list, at))
+                .1,
+            Some(&(20, vec![11, 12]))
+        );
+        list.remove(0);
+        list.push(Stored(7, JoinSeq::UNJOINED));
+        assert_eq!(
+            table.publish_rows_merging([(7, at, (30, Vec::new()))], |_, _| panic!(
+                "stale generation reached merge"
+            )),
+            0
+        );
+        let (replacement, _) = table
+            .server_admitted_location(7, |at| locate(&list, at))
+            .unwrap();
+        assert_ne!(replacement, at);
+        assert!(
+            table
+                .server_admitted_location(8, |at| locate(&list, at))
+                .is_none()
+        );
     }
 
     #[test]

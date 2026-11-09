@@ -690,7 +690,9 @@ pub(super) fn emit<'a>(
         ));
         let build = format!("let mut {event} = {event_type} {{ {} }};", inits.join(", "));
         // A trait mod's call is marked with the mod for a panic to name.
-        let each = if answered {
+        let each = if name == "entity_command_completed" {
+            format!("super::entered_entity_command_recipient(HookId::{hook_id}, \"{name}\")")
+        } else if answered {
             format!("super::entered_with_id(HookId::{hook_id}, \"{name}\")")
         } else {
             format!("super::entered(HookId::{hook_id}, \"{name}\")")

@@ -418,7 +418,10 @@ impl mod_api::Hooks for TickOrder {
         let actor = host
             .entity(event.entity)
             .expect("actual mutable hook resolves its stored actor");
-        assert!(actor.set_silent(host, true));
+        assert_eq!(
+            actor.set_silent(host, true),
+            mod_api::WriteReceipt::Applied(true)
+        );
         if self.remove_first && event.entity == 71 {
             assert!(actor.discard(host));
         }
