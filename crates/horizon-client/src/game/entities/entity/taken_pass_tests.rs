@@ -285,6 +285,7 @@ fn lifecycle_fixture_walks_other_owners() {
             game.others.clear();
             for &(id, at) in entries {
                 game.others.push(crate::game::commands::OtherEntity {
+                    attachment_lifetime: Default::default(),
                     knot_check: None,
                     eye: None,
                     join: Default::default(),

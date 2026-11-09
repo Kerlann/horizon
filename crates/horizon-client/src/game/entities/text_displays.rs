@@ -576,6 +576,7 @@ mod tests {
 
         with_game(|game| {
             game.others.push(OtherEntity {
+                attachment_lifetime: Default::default(),
                 knot_check: None,
                 eye: None,
                 join: Default::default(),

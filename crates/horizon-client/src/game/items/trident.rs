@@ -22,6 +22,8 @@ use horizon_core::{
 use mod_api::SoundSource;
 
 pub(super) struct ThrownTrident {
+    /// Entity-owned registration metadata; content clones are detached.
+    pub(super) attachment_lifetime: horizon_mod_runtime::attachments::AttachmentLifetime,
     /// When it joined its list (`horizon_client::join_seq`); set by the list.
     pub(super) join: horizon_client::join_seq::JoinSeq,
     /// The entity id a server tracks it by (0 until it is tracked).
@@ -172,6 +174,7 @@ impl ThrownTrident {
     /// A trident a server sent (`handleAddEntity`): placed and moved by it.
     pub(super) fn remote(id: u32, position: Vec3, yaw: f32, pitch: f32) -> Self {
         Self {
+            attachment_lifetime: Default::default(),
             join: Default::default(),
             id,
             stack: ItemStack::new("minecraft:trident", 1),
@@ -574,6 +577,7 @@ impl Game<'_> {
         let id = self.take_entity_id();
         let owner_uuid = self.acting_player_uuid();
         self.tridents.push(ThrownTrident {
+            attachment_lifetime: Default::default(),
             join: Default::default(),
             id,
             loyalty: thrown.enchantment_level("minecraft:loyalty"),
@@ -1377,6 +1381,7 @@ impl Game<'_> {
     }
 }
 horizon_client::impl_joined!(ThrownTrident);
+horizon_mod_runtime::impl_attachment_lifetime!(ThrownTrident);
 
 #[cfg(test)]
 mod tests {

@@ -602,6 +602,7 @@ mod tests {
     fn push(game: &mut Game<'_>, id: u32, kind: &str) -> DisplayRef {
         game.options.dedicated = Some(Vec::new());
         game.others.push(OtherEntity {
+            attachment_lifetime: Default::default(),
             knot_check: None,
             eye: None,
             join: Default::default(),
@@ -629,6 +630,7 @@ mod tests {
             assert_eq!(item.kind(game), Some(NativeDisplayKind::Item));
             assert_eq!(text.entity(), game.entity(21).unwrap());
             game.others.push(OtherEntity {
+                attachment_lifetime: Default::default(),
                 knot_check: None,
                 eye: None,
                 join: Default::default(),

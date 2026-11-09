@@ -174,6 +174,49 @@ impl Game<'_> {
         self.levels.parked.get(&dim)?.locate_resident_owner(at)
     }
 
+    /// Visit exactly the actual physical lifetime slot. Resolution releases the
+    /// table and its journal before lending storage; no lift, swap or replacement
+    /// occurs, including when the visitor unwinds. Logical visibility is a caller
+    /// policy, just as for the underlying owner resolver. The visitor must not
+    /// call entity lookup or recursively enter this seam.
+    pub(super) fn with_resident_slot<R>(
+        &mut self,
+        dimension: &mod_api::DimensionKey,
+        id: std::num::NonZeroU32,
+        visit: impl FnOnce(&mut horizon_mod_runtime::attachments::AttachmentLifetime) -> R,
+    ) -> super::entity_residency::SlotAccess<R> {
+        use super::entity_residency::SlotAccess;
+        let resolved = {
+            self.entity_residency
+                .borrow_mut()
+                .entity_lookup(dimension, id.get(), |at| {
+                    self.locate_server_resident_owner(at)
+                })
+        };
+        let location = match resolved {
+            EntityLookup::Found { location, .. } => location,
+            EntityLookup::Taken => return SlotAccess::Taken,
+            EntityLookup::Missing => return SlotAccess::Missing,
+        };
+        debug_assert!(self.entity_residency.try_borrow_mut().is_ok());
+        if *dimension == self.dim.key() {
+            self.with_resident_owner_slot(location, visit)
+        } else {
+            let dim = match *dimension {
+                mod_api::DimensionKey::OVERWORLD => Dim::Overworld,
+                mod_api::DimensionKey::NETHER => Dim::Nether,
+                mod_api::DimensionKey::END => Dim::End,
+                key => Dim::Extra(key),
+            };
+            self.levels
+                .parked
+                .get_mut(&dim)
+                .map_or(SlotAccess::Missing, |parked| {
+                    parked.with_resident_owner_slot(location, visit)
+                })
+        }
+    }
+
     pub(super) fn server_resident_entity(&self, id: u32) -> EntityLookup<Target> {
         let found = self
             .entity_residency

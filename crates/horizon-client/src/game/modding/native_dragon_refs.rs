@@ -350,6 +350,7 @@ mod tests {
         with_game(|game| {
             let (_, dragon) = dragon_in(game);
             let cloud = |from_dragon| Breath {
+                attachment_lifetime: Default::default(),
                 join: Default::default(),
                 id: 0,
                 at: [0.0; 3],
