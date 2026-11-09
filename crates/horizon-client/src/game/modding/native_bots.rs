@@ -83,7 +83,7 @@ impl Game<'_> {
             return None;
         }
         let keys = input_keys(&input)?;
-        self.player_name(player)?;
+        self.player_name(player).ok()??;
         let mut body = self.native_bot_body(player.uuid())?;
         body.yaw = input.yaw;
         body.pitch = input.pitch.clamp(-90.0, 90.0);
