@@ -127,9 +127,14 @@ fn bound_boat_case(client: bool, tick: impl Fn(&mut Game<'_>, i32)) {
         game.persist
             .removals
             .push(super::super::commands::Target::Boat(71));
-        let clone = game.boats[0].clone();
-        assert!(!game.store_boat_back(0, clone));
-        assert_eq!(index.lock().unwrap().snapshot(&key).len(), 1);
+        game.with_boat_body(0, |_, actor| {
+            assert_eq!(actor.body_mut().unwrap().id, 71);
+        });
+        assert!(
+            game.boats.is_empty(),
+            "actual restoration cannot resurrect a logical removal"
+        );
+        assert!(index.lock().unwrap().snapshot(&key).is_empty());
         game.native_removals_flush();
         assert!(game.boats.is_empty());
         assert!(index.lock().unwrap().snapshot(&key).is_empty());

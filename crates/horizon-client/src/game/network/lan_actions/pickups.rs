@@ -134,13 +134,33 @@ impl Game<'_> {
             Vec3::new(at[0] + w, at[1] + f64::from(dims.height), at[2] + w),
         )
         .inflate(Vec3::new(1.0, 0.5, 1.0));
-        let mut projectiles = self.creatures.projectiles.lift();
+        // Keep every actual body canonical while the guest's inventory is
+        // borrowed. Subscribed callbacks use exact initial joins; without
+        // callbacks a compact cursor needs no new schedule allocation.
+        let initial_len = self.creatures.projectiles.len();
+        let schedule = mod_api::__private::entity_reads_listened().then(|| {
+            self.creatures
+                .projectiles
+                .iter()
+                .map(|shot| shot.join)
+                .collect::<Vec<_>>()
+        });
+        // Existing batch-boundary fixture injection, without lending storage.
         #[cfg(test)]
         crate::game::entity::taken_pass_tests::after_take(self);
         let mut picked = Vec::new();
-        projectiles.retain(|shot| {
+        let mut cursor = 0;
+        for ordinal in 0..initial_len {
+            let index = match &schedule {
+                Some(joins) => self.creatures.projectiles.locate(joins[ordinal]),
+                None => (cursor < self.creatures.projectiles.len()).then_some(cursor),
+            };
+            let Some(index) = index else { continue };
+            cursor = index + 1;
+            let shot = &self.creatures.projectiles[index];
+            let join = shot.join;
             let Some(a) = shot.arrow.as_ref().filter(|a| !a.removed) else {
-                return true;
+                continue;
             };
             let p = shot.position;
             let bounds = Aabb::new(
@@ -148,12 +168,12 @@ impl Game<'_> {
                 Vec3::new(p.x + 0.25, p.y + 0.5, p.z + 0.25),
             );
             if !bounds.intersects(reach) {
-                return true;
+                continue;
             }
-            let taken = match a.player_touch(creative) {
+            let touch = a.player_touch(creative);
+            let taken = match touch {
                 Touch::Ignore => false,
                 Touch::Take => true,
-                // Inventory.add: a creative player takes what does not fit.
                 Touch::Give(stack) => {
                     self.as_guest(conn, |g| g.add_stack_to_inventory(stack))
                         .flatten()
@@ -161,21 +181,20 @@ impl Game<'_> {
                         || creative
                 }
             };
-            if taken {
-                picked.push(shot.clone());
+            if taken && let Some(index) = self.creatures.projectiles.locate(join) {
+                cursor = index;
+                let shot = self.creatures.projectiles.remove(index);
+                if let Some(arrow) = shot.arrow {
+                    picked.push((shot.id, arrow.pickup_item.item));
+                }
             }
-            !taken
-        });
-        self.creatures.projectiles.restore(
-            projectiles,
-            horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
-        );
-        for shot in picked {
-            if let Some(arrow) = shot.arrow.as_ref() {
-                self.native_player_pickup_arrow(player, &name, shot.id, &arrow.pickup_item.item);
-            }
+        }
+        // Keep the existing after-pass notification moment. Only operation
+        // arguments survive removal, never cloned authoritative projectile bodies.
+        for (shot, item) in picked {
+            self.native_player_pickup_arrow(player, &name, shot, &item);
             if let Some(host) = self.lan.as_ref() {
-                host.hub.take_item(shot.id as i32, id, 1, at);
+                host.hub.take_item(shot as i32, id, 1, at);
             }
         }
     }

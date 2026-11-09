@@ -478,8 +478,7 @@ impl Game<'_> {
             let writer = self.begin_resident_actor_writer(
                 super::native_base_read_rows::BaseReadSource::Rocket(&self.rockets[i]),
             );
-            let mut actor =
-                super::projectile_actor_loan::ProjectileLoan::extract(self, join).unwrap();
+            let mut actor = super::entity_actor_loan::EntityActorLoan::extract(self, join).unwrap();
             let body = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 self.tick_rocket_body(&mut actor, &targets)
             }));
@@ -501,7 +500,7 @@ impl Game<'_> {
     }
     fn tick_rocket_body(
         &mut self,
-        actor: &mut super::projectile_actor_loan::ProjectileLoan<Rocket>,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<Rocket>,
         targets: &[(Who, Aabb)],
     ) -> Option<bool> {
         let mut r = actor.body_mut()?;
@@ -1074,7 +1073,7 @@ mod tests {
                         let header = <dyn mod_api::Host>::entity(game, id).unwrap();
                         let uuid = header.uuid(game);
                         let mut held =
-                            super::super::projectile_actor_loan::ProjectileLoan::<Rocket>::extract(
+                            super::super::entity_actor_loan::EntityActorLoan::<Rocket>::extract(
                                 game, join,
                             )
                             .unwrap();
