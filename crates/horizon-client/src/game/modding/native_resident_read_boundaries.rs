@@ -385,8 +385,8 @@ mod tests {
                     assert_eq!(game.boats[0].join, joins.0);
                     assert_eq!(game.held_out, [999]);
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        game.with_cart_body(0, |_, body| {
-                            body.position.x = 9.0;
+                        game.with_cart_body(0, |_, actor| {
+                            actor.body_mut().unwrap().position.x = 9.0;
                             panic!("cart physics panic");
                         })
                     }));
