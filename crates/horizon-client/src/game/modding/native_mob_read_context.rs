@@ -79,7 +79,8 @@ pub(super) struct NativeMobRelations {
     merchant_by_conn: HashMap<u32, u32>,
     merchants: HashMap<u32, std::collections::HashSet<u32>>,
     merchant_sessions_complete: bool,
-    saved_ids: HashMap<[i32; 4], u32>,
+    saved_ids: HashMap<[i32; 4], std::collections::HashSet<u32>>,
+    saved_uuids_complete: bool,
     /// Minimal ownership edges, like rider_vehicles. AI still needs these when
     /// the real roster is lent and no mod requested an R publication.
     tame_owners: HashMap<u32, [i32; 4]>,
@@ -99,7 +100,10 @@ impl NativeMobRelations {
         }
         self.merchant_by_conn.clear();
         self.merchant_sessions_complete = false;
-        self.saved_ids.clear();
+        for ids in self.saved_ids.values_mut() {
+            ids.clear();
+        }
+        self.saved_uuids_complete = false;
         self.tame_owners.clear();
         self.identity_candidates.clear();
         for riders in self.mob_riders.values_mut() {
@@ -218,6 +222,17 @@ impl NativeMobRelations {
             riders.remove(&id);
         }
     }
+    /// A nomination only: outer None means the actual owning saved store has
+    /// not been seeded. No body or primary identity is proved by a hit.
+    pub(super) fn saved_uuid_candidates(&self, uuid: [i32; 4]) -> Option<Vec<u32>> {
+        self.saved_uuids_complete.then(|| {
+            self.saved_ids
+                .get(&uuid)
+                .into_iter()
+                .flat_map(|ids| ids.iter().copied())
+                .collect()
+        })
+    }
     /// Canonical persisted UUID assignment/removal/travel must update both levels.
     pub(super) fn update_saved_uuid(
         &mut self,
@@ -225,13 +240,16 @@ impl NativeMobRelations {
         old: Option<[i32; 4]>,
         new: Option<[i32; 4]>,
     ) {
+        if old == new {
+            return;
+        }
         if let Some(old) = old
-            && self.saved_ids.get(&old) == Some(&id)
+            && let Some(ids) = self.saved_ids.get_mut(&old)
         {
-            self.saved_ids.remove(&old);
+            ids.remove(&id);
         }
         if let Some(new) = new {
-            self.saved_ids.insert(new, id);
+            self.saved_ids.entry(new).or_default().insert(id);
         }
     }
 }
@@ -461,10 +479,7 @@ impl Game<'_> {
     /// the primary table. Small writes update affected keys, not this population.
     pub(super) fn current_admitted_saved_id(&self, uuid: [i32; 4]) -> Option<u32> {
         let level = LevelRef::new(self.native_lifecycle.epoch()?, self.dim.key());
-        self.with_prepared_mob_relations(|index| {
-            let id = *index.saved_ids.get(&uuid)?;
-            (self.read_saved_uuid(id, level)? == uuid).then_some(id)
-        })?
+        self.with_prepared_mob_relations(|index| self.validated_saved_id(uuid, level, index))?
     }
 
     /// The primary table enumerates candidates only. Resolve each after dropping
@@ -548,27 +563,47 @@ impl Game<'_> {
         let mut seed = |id, uuid| {
             #[cfg(test)]
             record_backing_work(|work| work.population_visits += 1);
-            index.saved_ids.insert(uuid, id);
+            index.saved_ids.entry(uuid).or_default().insert(id);
         };
-        if level.dimension() == self.dim.key() {
-            for (&id, &uuid) in &self.persist.uuids {
-                seed(id, uuid);
-            }
-        } else if let Some(parked) = self.levels.parked_of(level.dimension_id()) {
-            for (id, uuid) in parked.saved_entity_uuids() {
-                seed(id, uuid);
+        if self.native_lifecycle.epoch() == Some(level.epoch()) {
+            if level.dimension() == self.dim.key() {
+                for (&id, &uuid) in &self.persist.uuids {
+                    seed(id, uuid);
+                }
+                index.saved_uuids_complete = true;
+            } else if let Some(parked) = self.levels.parked_of(level.dimension_id()) {
+                for (id, uuid) in parked.saved_entity_uuids() {
+                    seed(id, uuid);
+                }
+                index.saved_uuids_complete = true;
             }
         }
         self.for_admitted_saved_uuids(
             level.dimension(),
             &mut index.identity_candidates,
             |id, uuid| {
-                index.saved_ids.insert(uuid, id);
+                index.saved_ids.entry(uuid).or_default().insert(id);
                 if let Some(owner) = self.read_mob_facts(id, level).and_then(|facts| facts.owner) {
                     index.tame_owners.insert(id, owner);
                 }
             },
         );
+    }
+    fn validated_saved_id(
+        &self,
+        uuid: [i32; 4],
+        level: LevelRef,
+        index: &NativeMobRelations,
+    ) -> Option<u32> {
+        if !index.saved_uuids_complete {
+            return None;
+        }
+        index
+            .saved_ids
+            .get(&uuid)?
+            .iter()
+            .copied()
+            .find(|&id| self.read_saved_uuid(id, level) == Some(uuid))
     }
     fn read_saved_uuid(&self, id: u32, level: LevelRef) -> Option<[i32; 4]> {
         self.admitted_saved_uuid_at(id, level.dimension())
@@ -665,8 +700,7 @@ impl Game<'_> {
             if self.indexed_online_owner_name(uuid, index).is_some() {
                 return None;
             }
-            let id = *index.saved_ids.get(&uuid)?;
-            (self.read_saved_uuid(id, level)? == uuid).then_some(())?;
+            let id = self.validated_saved_id(uuid, level, index)?;
             index.tame_owners.get(&id).copied()
         };
         let mut root = owner?;
@@ -675,8 +709,7 @@ impl Game<'_> {
             if let Some(name) = self.indexed_online_owner_name(root, index) {
                 return self.score.board.players_team(name);
             }
-            let id = *index.saved_ids.get(&root)?;
-            (self.read_saved_uuid(id, level)? == root).then_some(())?;
+            let id = self.validated_saved_id(root, level, index)?;
             let Some(&next) = index.tame_owners.get(&id) else {
                 return self
                     .score
@@ -1267,10 +1300,7 @@ impl Game<'_> {
         if let Some(player) = self.resolve_mob_read_player(uuid, level, index) {
             return Some(player);
         }
-        let id = *index.saved_ids.get(&uuid)?;
-        if self.read_saved_uuid(id, level) != Some(uuid) {
-            return None;
-        }
+        let id = self.validated_saved_id(uuid, level, index)?;
         self.read_relation_entity(id, level, index)
     }
     pub(super) fn read_relation_guest(
