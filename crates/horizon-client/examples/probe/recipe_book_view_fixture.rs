@@ -42,6 +42,7 @@ pub fn main() -> horizon_client::Result<()> {
             s,
             items.get(&s.item),
             &horizon_client::item_tooltip::NoAttributeListener,
+            &items.enchantments,
             &translate,
         )
     };

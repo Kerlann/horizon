@@ -177,7 +177,7 @@ impl Game<'_> {
     /// A player's current supported menu. Refuses crafting tables, merchants,
     /// workstations, lecterns, mounts and menus with hidden slots; also refuses
     /// clients, stale players and players whose state is swapped out.
-    pub(super) fn player_container_menu(&self, player: PlayerRef) -> Option<MenuRef> {
+    pub(super) fn uncached_player_container_menu(&self, player: PlayerRef) -> Option<MenuRef> {
         if self.remote.is_some() {
             let remote = self.remote.as_ref()?;
             (self.local_player()? == player).then_some(())?;

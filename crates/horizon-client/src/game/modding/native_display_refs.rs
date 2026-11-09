@@ -158,12 +158,12 @@ impl Game<'_> {
     }
 
     /// Which `Display` subclass the entity is.
-    pub(super) fn display_kind(&self, display: DisplayRef) -> Option<NativeDisplayKind> {
+    pub(super) fn uncached_display_kind(&self, display: DisplayRef) -> Option<NativeDisplayKind> {
         Some(self.display_entity(display)?.0)
     }
 
     /// `Display.createTransformation`: the transformation as shown.
-    pub(super) fn display_transformation(
+    pub(super) fn uncached_display_transformation(
         &self,
         display: DisplayRef,
     ) -> Option<NativeTransformation> {
@@ -219,7 +219,10 @@ impl Game<'_> {
     }
 
     /// `Display.getBillboardConstraints`.
-    pub(super) fn display_billboard(&self, display: DisplayRef) -> Option<NativeBillboard> {
+    pub(super) fn uncached_display_billboard(
+        &self,
+        display: DisplayRef,
+    ) -> Option<NativeBillboard> {
         match self.display_value(display, None, 15)? {
             Value::Byte(v) => NativeBillboard::ALL.get(usize::try_from(v).ok()?).copied(),
             _ => None,
@@ -237,7 +240,7 @@ impl Game<'_> {
     }
 
     /// `Display.getBrightnessOverride`: block and sky light, 0 to 15 each, or None for no override.
-    pub(super) fn display_brightness(&self, display: DisplayRef) -> Option<(u8, u8)> {
+    pub(super) fn uncached_display_brightness(&self, display: DisplayRef) -> Option<(u8, u8)> {
         let packed = self.display_int(display, None, 16)?;
         (packed != -1).then_some((((packed >> 4) & 15) as u8, ((packed >> 20) & 15) as u8))
     }
@@ -267,7 +270,7 @@ impl Game<'_> {
     }
 
     /// `Display.getViewRange`.
-    pub(super) fn display_view_range(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn uncached_display_view_range(&self, display: DisplayRef) -> Option<f32> {
         self.display_float(display, 17)
     }
 
@@ -277,7 +280,7 @@ impl Game<'_> {
     }
 
     /// `Display.getShadowRadius`.
-    pub(super) fn display_shadow_radius(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn uncached_display_shadow_radius(&self, display: DisplayRef) -> Option<f32> {
         self.display_float(display, 18)
     }
 
@@ -287,7 +290,7 @@ impl Game<'_> {
     }
 
     /// `Display.getShadowStrength`.
-    pub(super) fn display_shadow_strength(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn uncached_display_shadow_strength(&self, display: DisplayRef) -> Option<f32> {
         self.display_float(display, 19)
     }
 
@@ -301,7 +304,7 @@ impl Game<'_> {
     }
 
     /// `Display.getWidth`: the culling box's width, 0 for none.
-    pub(super) fn display_width(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn uncached_display_width(&self, display: DisplayRef) -> Option<f32> {
         self.display_float(display, 20)
     }
 
@@ -311,7 +314,7 @@ impl Game<'_> {
     }
 
     /// `Display.getHeight`: the culling box's height, 0 for none.
-    pub(super) fn display_height(&self, display: DisplayRef) -> Option<f32> {
+    pub(super) fn uncached_display_height(&self, display: DisplayRef) -> Option<f32> {
         self.display_float(display, 21)
     }
 
@@ -321,7 +324,7 @@ impl Game<'_> {
     }
 
     /// `Display.getGlowColorOverride`: an ARGB color, or -1 for none.
-    pub(super) fn display_glow_color_override(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn uncached_display_glow_color_override(&self, display: DisplayRef) -> Option<i32> {
         self.display_int(display, None, 22)
     }
 
@@ -335,7 +338,10 @@ impl Game<'_> {
     }
 
     /// `Display.getTransformationInterpolationDuration`, in ticks.
-    pub(super) fn display_interpolation_duration(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn uncached_display_interpolation_duration(
+        &self,
+        display: DisplayRef,
+    ) -> Option<i32> {
         self.display_int(display, None, 9)
     }
 
@@ -350,7 +356,7 @@ impl Game<'_> {
 
     /// `Display.getTransformationInterpolationDelay`: ticks before an
     /// interpolation starts.
-    pub(super) fn display_start_interpolation(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn uncached_display_start_interpolation(&self, display: DisplayRef) -> Option<i32> {
         self.display_int(display, None, 8)
     }
 
@@ -371,7 +377,7 @@ impl Game<'_> {
     }
 
     /// `Display.getPosRotInterpolationDuration`: ticks a move eases over, 0 to 59.
-    pub(super) fn display_teleport_duration(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn uncached_display_teleport_duration(&self, display: DisplayRef) -> Option<i32> {
         self.display_int(display, None, 10)
     }
 
@@ -401,7 +407,7 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.getLineWidth`.
-    pub(super) fn display_line_width(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn uncached_display_line_width(&self, display: DisplayRef) -> Option<i32> {
         self.display_int(display, Some(NativeDisplayKind::Text), 24)
     }
 
@@ -416,7 +422,7 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.getBackgroundColor`: ARGB.
-    pub(super) fn display_background(&self, display: DisplayRef) -> Option<i32> {
+    pub(super) fn uncached_display_background(&self, display: DisplayRef) -> Option<i32> {
         self.display_int(display, Some(NativeDisplayKind::Text), 25)
     }
 
@@ -431,7 +437,7 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.getTextOpacity`: -1 is opaque, else 0 to 127 then -128 to -2.
-    pub(super) fn display_text_opacity(&self, display: DisplayRef) -> Option<i8> {
+    pub(super) fn uncached_display_text_opacity(&self, display: DisplayRef) -> Option<i8> {
         self.display_byte(display, NativeDisplayKind::Text, 26)
     }
 
@@ -455,7 +461,7 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.FLAG_SHADOW`.
-    pub(super) fn display_text_shadow(&self, display: DisplayRef) -> Option<bool> {
+    pub(super) fn uncached_display_text_shadow(&self, display: DisplayRef) -> Option<bool> {
         self.display_text_flag(display, 1)
     }
 
@@ -465,7 +471,7 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.FLAG_SEE_THROUGH`.
-    pub(super) fn display_see_through(&self, display: DisplayRef) -> Option<bool> {
+    pub(super) fn uncached_display_see_through(&self, display: DisplayRef) -> Option<bool> {
         self.display_text_flag(display, 2)
     }
 
@@ -475,7 +481,7 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.FLAG_USE_DEFAULT_BACKGROUND`.
-    pub(super) fn display_default_background(&self, display: DisplayRef) -> Option<bool> {
+    pub(super) fn uncached_display_default_background(&self, display: DisplayRef) -> Option<bool> {
         self.display_text_flag(display, 4)
     }
 
@@ -485,7 +491,10 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.getAlign`, from the left and right flags.
-    pub(super) fn display_alignment(&self, display: DisplayRef) -> Option<NativeTextAlignment> {
+    pub(super) fn uncached_display_alignment(
+        &self,
+        display: DisplayRef,
+    ) -> Option<NativeTextAlignment> {
         let flags = self.display_byte(display, NativeDisplayKind::Text, 27)?;
         Some(match (flags & 8 != 0, flags & 16 != 0) {
             (true, _) => NativeTextAlignment::Left,
@@ -505,7 +514,7 @@ impl Game<'_> {
     }
 
     /// `BlockDisplay.getBlockState`; None for another kind of display.
-    pub(super) fn display_block_state(&self, display: DisplayRef) -> Option<BlockStateId> {
+    pub(super) fn uncached_display_block_state(&self, display: DisplayRef) -> Option<BlockStateId> {
         let (_, tag) = self.display_tag(display, Some(NativeDisplayKind::Block))?;
         tag.get("block_state")
             .and_then(|t| self.state_from_nbt(t))
@@ -549,7 +558,7 @@ impl Game<'_> {
     }
 
     /// `ItemDisplay.getItemTransform`: how the item is displayed.
-    pub(super) fn display_item_context(
+    pub(super) fn uncached_display_item_context(
         &self,
         display: DisplayRef,
     ) -> Option<NativeItemDisplayContext> {

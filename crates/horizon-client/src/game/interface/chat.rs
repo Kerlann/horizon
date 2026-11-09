@@ -1855,6 +1855,9 @@ impl Game<'_> {
             self.sync_hub_clocks();
             return;
         }
+        // The End's independent clock runs one tick per tick while advance_time
+        // is enabled, regardless of the Overworld clock's pause or rate.
+        self.world.end_clock += 1;
         let mut names: Vec<String> = self.ui.command_clocks.keys().cloned().collect();
         let active = self.active_clock().to_owned();
         for name in [OVERWORLD_CLOCK.to_owned(), active] {

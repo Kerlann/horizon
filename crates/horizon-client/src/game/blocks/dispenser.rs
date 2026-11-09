@@ -1011,6 +1011,10 @@ impl Game<'_> {
         };
         // EntityType.create: `finalizeSpawn` first, the egg's components after.
         if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
+            // SpawnEggItemBehavior's `EntityType.spawn` never calls
+            // `setPersistenceRequired`, as a spawn egg used by hand doesn't;
+            // only the elder guardian's and copper golem's constructors do.
+            m.persistent = matches!(m.species(), Species::ElderGuardian | Species::CopperGolem);
             horizon_client::entity_nbt::apply_item_components(m, &stack);
         }
         // EntityType.updateCustomEntityTag: a configured egg
@@ -1160,6 +1164,8 @@ impl Game<'_> {
         // EntityType.create rolls a yaw from the level random before the stack config turns it.
         let _ = self.world.random.next_float();
         self.next_entity += 1;
+        let (_, uuid) = horizon_client::mobs::living_random();
+        self.persist.uuids.insert(self.next_entity, uuid);
         let mut stand =
             horizon_client::entities::ArmorStand::new(self.next_entity, foot, y_rot(facing));
         // Entity.applyImplicitComponents: a name from an anvil names the stand.

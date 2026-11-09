@@ -284,10 +284,8 @@ mod tests {
     use super::*;
 
     fn test_device() -> Option<(wgpu::Device, wgpu::Queue)> {
-        let instance =
-            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle().with_env());
-        let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
-        pollster::block_on(adapter.request_device(&Default::default())).ok()
+        let adapter = crate::gfx::test_gpu::adapter()?;
+        Some(crate::gfx::test_gpu::device(&adapter))
     }
 
     fn clear(encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView, depth: f32) {
@@ -309,7 +307,9 @@ mod tests {
     #[test]
     #[ignore = "requires a host GPU"]
     fn a_finished_frame_s_depth_is_taken_alone_never_an_older_one() {
-        let (device, raw) = test_device().expect("host GPU required");
+        let Some((device, raw)) = test_device() else {
+            return;
+        };
         let depth = device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size: wgpu::Extent3d {

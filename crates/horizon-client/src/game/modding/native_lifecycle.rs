@@ -86,6 +86,11 @@ impl NativeLifecycle {
         self.attempt.map(|a| NativeWorldEpoch::new(a.epoch))
     }
 
+    /// Logical capture clock, including tick zero during opening callbacks.
+    pub(super) fn capture_tick(&self) -> Option<NativeTickId> {
+        self.attempt.map(|a| NativeTickId::new(a.ticks))
+    }
+
     /// The open starts: a fresh process-wide epoch, never reused.
     pub(super) fn begin_open(&mut self, authority: NativeAuthority) {
         let epoch = fresh_epoch().get();

@@ -96,7 +96,7 @@ impl Game<'_> {
     /// `LivingEntity.getArrowCount`: the arrows stuck in a player or a mob.
     /// None for armor stands and the dragon, which Horizon keeps no count
     /// for.
-    pub(super) fn living_arrow_count(&mut self, living: LivingRef) -> Option<i32> {
+    pub(super) fn uncached_living_arrow_count(&mut self, living: LivingRef) -> Option<i32> {
         Some(self.native_living_stuck(living)?.arrows)
     }
     /// `LivingEntity.setArrowCount`: players around see the arrows (vanilla
@@ -108,7 +108,7 @@ impl Game<'_> {
     }
     /// `LivingEntity.getStingerCount`: the bee stingers stuck in a player or
     /// a mob. None for armor stands and the dragon.
-    pub(super) fn living_stinger_count(&mut self, living: LivingRef) -> Option<i32> {
+    pub(super) fn uncached_living_stinger_count(&mut self, living: LivingRef) -> Option<i32> {
         Some(self.native_living_stuck(living)?.stingers)
     }
     /// `LivingEntity.setStingerCount`: players around see the stingers. False
@@ -142,7 +142,7 @@ impl Game<'_> {
     /// player or a mob uses, 0 when it uses none. A mob's is the item's use
     /// duration less the ticks its use counter has run. None for armor stands
     /// and the dragon.
-    pub(super) fn living_item_use_remaining(&self, living: LivingRef) -> Option<i32> {
+    pub(super) fn uncached_living_item_use_remaining(&self, living: LivingRef) -> Option<i32> {
         match self.native_living_target(living)? {
             Target::Player => Some(super::item_use::remaining_of(self.using, self.use_duration)),
             Target::Guest(conn) => Some(self.lan.as_ref()?.play.get(&conn)?.use_remaining()),
@@ -179,7 +179,10 @@ impl Game<'_> {
     /// `LivingEntity.getUsedItemHand` while `isUsingItem`: the hand of the item
     /// a player or a mob uses, None when it uses none. On a client, the local
     /// player's only.
-    pub(in crate::game) fn living_used_item_hand(&self, living: LivingRef) -> Option<Hand> {
+    pub(in crate::game) fn uncached_living_used_item_hand(
+        &self,
+        living: LivingRef,
+    ) -> Option<Hand> {
         match self.native_living_read_target(living)? {
             Target::Player => self.used_hand(),
             Target::Guest(conn) => self.lan.as_ref()?.play.get(&conn)?.used_hand(),

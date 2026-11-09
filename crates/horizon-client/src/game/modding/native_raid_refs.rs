@@ -73,23 +73,23 @@ impl Game<'_> {
 
     /// `Raider.getCurrentRaid`: the raid a raider belongs to, even a stopped
     /// one. None for a mob that is no raider or in no raid.
-    pub(super) fn mob_raid(&self, mob: MobRef) -> Option<RaidRef> {
+    pub(super) fn uncached_mob_raid(&self, mob: MobRef) -> Option<RaidRef> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
         let raider = self.mobs.iter().find(|m| m.id == id && !m.removed)?;
         let id = horizon_client::mobs::raider::state(raider)?.raid_id?;
-        let level = self.entity_level(mob.entity())?;
+        let level = self.uncached_entity_level(mob.entity())?;
         self.level_raid(level, id)
     }
 
     /// `Raid.getCenter`.
-    pub(super) fn raid_center(&self, raid: RaidRef) -> Option<[i32; 3]> {
+    pub(super) fn uncached_raid_center(&self, raid: RaidRef) -> Option<[i32; 3]> {
         Some(self.native_raid_data(raid)?.center)
     }
 
     /// `Raid.getRaidOmenLevel`: 0 to 5 in play, any value a mod set.
-    pub(super) fn raid_omen_level(&self, raid: RaidRef) -> Option<i32> {
+    pub(super) fn uncached_raid_omen_level(&self, raid: RaidRef) -> Option<i32> {
         Some(self.native_raid_data(raid)?.omen_level)
     }
 
@@ -102,35 +102,35 @@ impl Game<'_> {
     }
 
     /// `Raid.getGroupsSpawned`: the waves spawned so far.
-    pub(super) fn raid_groups_spawned(&self, raid: RaidRef) -> Option<i32> {
+    pub(super) fn uncached_raid_groups_spawned(&self, raid: RaidRef) -> Option<i32> {
         Some(self.native_raid_data(raid)?.groups_spawned)
     }
 
     /// `Raid.numGroups`, set from `getNumGroups(difficulty)` when the raid
     /// began: 0, 3, 5 or 7. A raid of omen level 2 or more adds a bonus wave
     /// (`hasBonusWave`).
-    pub(super) fn raid_num_groups(&self, raid: RaidRef) -> Option<i32> {
+    pub(super) fn uncached_raid_num_groups(&self, raid: RaidRef) -> Option<i32> {
         Some(self.native_raid_data(raid)?.num_groups)
     }
 
     /// Whether the omen level is above 1, which adds a wave after the last
     /// (`Raid.hasBonusWave`).
-    pub(super) fn raid_has_bonus_wave(&self, raid: RaidRef) -> Option<bool> {
+    pub(super) fn uncached_raid_has_bonus_wave(&self, raid: RaidRef) -> Option<bool> {
         Some(self.native_raid_data(raid)?.omen_level > 1)
     }
 
     /// `Raid.isStarted`.
-    pub(super) fn raid_is_started(&self, raid: RaidRef) -> Option<bool> {
+    pub(super) fn uncached_raid_is_started(&self, raid: RaidRef) -> Option<bool> {
         Some(self.native_raid_data(raid)?.started)
     }
 
     /// `Raid.isActive`: false once stopped.
-    pub(super) fn raid_is_active(&self, raid: RaidRef) -> Option<bool> {
+    pub(super) fn uncached_raid_is_active(&self, raid: RaidRef) -> Option<bool> {
         Some(self.native_raid_data(raid)?.active)
     }
 
     /// `Raid.RaidStatus`.
-    pub(super) fn raid_status(&self, raid: RaidRef) -> Option<NativeRaidStatus> {
+    pub(super) fn uncached_raid_status(&self, raid: RaidRef) -> Option<NativeRaidStatus> {
         Some(match self.native_raid_data(raid)?.status {
             Status::Ongoing => NativeRaidStatus::Ongoing,
             Status::Victory => NativeRaidStatus::Victory,
@@ -141,12 +141,12 @@ impl Game<'_> {
 
     /// `Raid.getTotalHealth`: the health of every raider that joined, which
     /// the boss bar divides by.
-    pub(super) fn raid_total_health(&self, raid: RaidRef) -> Option<f32> {
+    pub(super) fn uncached_raid_total_health(&self, raid: RaidRef) -> Option<f32> {
         Some(self.native_raid_data(raid)?.total_health)
     }
 
     /// `Raid.getHealthOfLivingRaiders`.
-    pub(super) fn raid_living_health(&self, raid: RaidRef) -> Option<f32> {
+    pub(super) fn uncached_raid_living_health(&self, raid: RaidRef) -> Option<f32> {
         Some(
             self.native_raid_members(raid)?
                 .fold(0.0, |a, m| a + m.health),
@@ -154,7 +154,7 @@ impl Game<'_> {
     }
 
     /// The boss bar's progress, 0 to 1 (`Raid.raidEvent.getProgress`).
-    pub(super) fn raid_bar_progress(&self, raid: RaidRef) -> Option<f32> {
+    pub(super) fn uncached_raid_bar_progress(&self, raid: RaidRef) -> Option<f32> {
         Some(self.native_raid_data(raid)?.bar.progress)
     }
 

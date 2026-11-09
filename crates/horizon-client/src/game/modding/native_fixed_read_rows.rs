@@ -10,6 +10,9 @@ impl Game<'_> {
     /// Source-lane projection for a mob that may currently be lifted from its list.
     /// Identity and cross-entity credit are resolved by the publication pass;
     /// item use is supplied from its already resolved held-stack projection.
+    /// Portal eligibility includes pre-indexed rider flags, supplied by the pass.
+    /// The caller must hold the mob's level in place: climbing samples that level's
+    /// blocks at the borrowed mob position, without resolving the mob from Game.
     pub(super) fn snapshot_mob_living_read_row(
         &self,
         capture: EntityReadCapture,
@@ -18,6 +21,7 @@ impl Game<'_> {
         kill_credit: Option<EntityRef>,
         last_attacker: Option<EntityRef>,
         item_use_remaining: i32,
+        can_use_portal: bool,
     ) -> Option<LivingReadRow> {
         if mob.removed {
             return None;
@@ -53,7 +57,7 @@ impl Game<'_> {
             } else {
                 Hand::Main
             }),
-            can_use_portal: Some(self.mob_portal_eligible(mob)),
+            can_use_portal: Some(can_use_portal),
             can_breathe_underwater: Some(mob.kind.flags.breathes_water),
             arrow_count: Some(mob.extra.stuck.arrows),
             stinger_count: Some(mob.extra.stuck.stingers),
@@ -113,24 +117,24 @@ impl Game<'_> {
         Some(LivingReadRow {
             capture,
             entity: living.entity(),
-            gliding_ticks: self.living_gliding_ticks(living),
-            is_gliding: self.living_is_gliding(living),
-            is_sleeping: self.living_is_sleeping(living),
-            sleeping_pos: self.living_sleeping_pos(living),
-            is_jumping: self.living_is_jumping(living),
-            is_climbing: self.living_is_climbing(living),
-            baby: self.living_baby(living),
-            health: self.living_health(living),
-            max_health: self.living_max_health(living),
-            alive: self.living_alive(living),
-            kill_credit: self.living_kill_credit(living),
-            last_attacker: self.living_last_attacker(living),
-            is_tamed: self.living_is_tamed(living),
-            owner: self.living_owner(living),
-            item_use_remaining: self.living_item_use_remaining(living),
-            used_item_hand: self.living_used_item_hand(living),
-            can_use_portal: self.living_can_use_portal(living),
-            can_breathe_underwater: self.living_can_breathe_underwater(living),
+            gliding_ticks: self.uncached_living_gliding_ticks(living),
+            is_gliding: self.uncached_living_is_gliding(living),
+            is_sleeping: self.uncached_living_is_sleeping(living),
+            sleeping_pos: self.uncached_living_sleeping_pos(living),
+            is_jumping: self.uncached_living_is_jumping(living),
+            is_climbing: self.uncached_living_is_climbing(living),
+            baby: self.uncached_living_baby(living),
+            health: self.uncached_living_health(living),
+            max_health: self.uncached_living_max_health(living),
+            alive: self.uncached_living_alive(living),
+            kill_credit: self.uncached_living_kill_credit(living),
+            last_attacker: self.uncached_living_last_attacker(living),
+            is_tamed: self.uncached_living_is_tamed(living),
+            owner: self.uncached_living_owner(living),
+            item_use_remaining: self.uncached_living_item_use_remaining(living),
+            used_item_hand: self.uncached_living_used_item_hand(living),
+            can_use_portal: self.uncached_living_can_use_portal(living),
+            can_breathe_underwater: self.uncached_living_can_breathe_underwater(living),
             arrow_count: stuck.map(|s| s.arrows),
             stinger_count: stuck.map(|s| s.stingers),
         })
@@ -376,48 +380,51 @@ impl Game<'_> {
                 forced,
             }))
         });
-        Some(NativePlayerReadSnapshot(PlayerReadRow {
-            capture,
-            entity: player.entity(),
-            selected_slot: self.player_selected_slot(player),
-            container_menu: self.player_container_menu(player),
-            exp_cooldown: self.player_exp_cooldown(player),
-            last_death_location: last_death_location,
-            needs_food: self.player_needs_food(player),
-            has_enough_food: self.player_has_enough_food(player),
-            can_eat: [
-                self.player_can_eat(player, false)?,
-                self.player_can_eat(player, true)?,
-            ],
-            experience: self.player_experience(player),
-            xp_needed_for_next_level: self.player_xp_needed_for_next_level(player),
-            permission_level: self.player_permission_level(player),
-            has_infinite_materials: self.player_has_infinite_materials(player),
-            can_use_game_master_blocks: self.player_can_use_game_master_blocks(player),
-            previous_game_mode: self.player_previous_game_mode(player),
-            is_secondary_use_active: self.player_is_secondary_use_active(player),
-            is_fake: self.player_is_fake(player),
-            respawn_config: respawn_config,
-            text_filtering: self.player_text_filtering(player),
-            sleep_ignored: self.player_sleep_ignored(player),
-            counts_for_sleep: self.player_counts_for_sleep(player),
-            sleep_timer: self.player_sleep_timer(player),
-            game_mode: self.player_game_mode(player),
-            is_creative: self.player_is_creative(player),
-            is_spectator: self.player_is_spectator(player),
-            may_build: self.player_may_build(player),
-            food: self.player_food(player),
-            abilities: self.player_abilities(player),
-            block_breaking: self.player_block_breaking(player),
-            ambient_mood: self.player_ambient_mood(player),
-        }))
+        Some(NativePlayerReadSnapshot(
+            PlayerReadRow {
+                capture,
+                entity: player.entity(),
+                selected_slot: self.uncached_player_selected_slot(player),
+                container_menu: self.uncached_player_container_menu(player),
+                exp_cooldown: self.uncached_player_exp_cooldown(player),
+                last_death_location,
+                needs_food: self.uncached_player_needs_food(player),
+                has_enough_food: self.uncached_player_has_enough_food(player),
+                can_eat: [
+                    self.uncached_player_can_eat(player, false)?,
+                    self.uncached_player_can_eat(player, true)?,
+                ],
+                experience: self.uncached_player_experience(player),
+                xp_needed_for_next_level: self.uncached_player_xp_needed_for_next_level(player),
+                permission_level: self.uncached_player_permission_level(player),
+                has_infinite_materials: self.uncached_player_has_infinite_materials(player),
+                can_use_game_master_blocks: self.uncached_player_can_use_game_master_blocks(player),
+                previous_game_mode: self.uncached_player_previous_game_mode(player),
+                is_secondary_use_active: self.uncached_player_is_secondary_use_active(player),
+                is_fake: self.uncached_player_is_fake(player),
+                respawn_config,
+                text_filtering: self.uncached_player_text_filtering(player),
+                sleep_ignored: self.uncached_player_sleep_ignored(player),
+                counts_for_sleep: self.uncached_player_counts_for_sleep(player),
+                sleep_timer: self.uncached_player_sleep_timer(player),
+                game_mode: self.uncached_player_game_mode(player),
+                is_creative: self.uncached_player_is_creative(player),
+                is_spectator: self.uncached_player_is_spectator(player),
+                may_build: self.uncached_player_may_build(player),
+                food: self.uncached_player_food(player),
+                abilities: self.uncached_player_abilities(player),
+                block_breaking: self.uncached_player_block_breaking(player),
+                ambient_mood: self.uncached_player_ambient_mood(player),
+            },
+            player,
+        ))
     }
 }
 
 /// Retained player fields have no per-pass owning clones: Identifier is Arc-backed.
 /// Keep the row private so owned public materialization stays explicit.
 #[derive(Clone)]
-pub(super) struct NativePlayerReadSnapshot(PlayerReadRow);
+pub(super) struct NativePlayerReadSnapshot(pub(super) PlayerReadRow, pub(super) PlayerRef);
 impl NativePlayerReadSnapshot {
     pub(super) fn materialize(&self) -> PlayerReadRow {
         self.0.clone()
@@ -442,7 +449,6 @@ impl NativeReadIdentifiers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use horizon_core::nbt::{Compound, Tag};
 
     #[test]
     fn dimension_pool_preserves_unknown_dimensions_and_positions() {

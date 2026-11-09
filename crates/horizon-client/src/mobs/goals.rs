@@ -2107,6 +2107,8 @@ impl Goal for HurtByTarget {
             && !(t.is_player && t.creative)
             // HurtByTargetGoal.canUse ends with canAttack(lastHurtByMob).
             && !m.spares_target(cx.w, by)
+            // TargetGoal.canAttack: Mob.isWithinHome(target.blockPosition()).
+            && m.within_home_at(t.position)
     }
     fn can_continue(&mut self, m: &mut Mob, cx: &mut Cx) -> bool {
         if self.bee && !super::bee::angry(m, cx.w) {
@@ -4466,5 +4468,19 @@ mod hurt_by_anger_tests {
             Some(vec![true, false]),
             "a hit is retaliated with the rule off and left to the anger goals with it on"
         );
+    }
+}
+
+impl Mob {
+    /// `Mob.isWithinHome(BlockPos.containing(at))`; true with no home.
+    pub(super) fn within_home_at(&self, at: horizon_core::geometry::Vec3) -> bool {
+        let block = [
+            at.x.floor() as i32,
+            at.y.floor() as i32,
+            at.z.floor() as i32,
+        ];
+        self.ai
+            .home
+            .is_none_or(|(center, radius)| within_home(center, radius, block))
     }
 }

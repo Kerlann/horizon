@@ -85,6 +85,7 @@ impl Game<'_> {
             velocity,
             age: 0,
             no_gravity: false,
+            on_ground: false,
             drop_item: falling.drop_item,
             fall_distance: 0.0,
             stuck: Vec3::ZERO,
@@ -272,6 +273,7 @@ mod tests {
                 .unwrap();
             let at = Vec3::new(0.5, 70.0, 0.5);
             game.falling.push(FallingBlock {
+                on_ground: false,
                 attachment_lifetime: Default::default(),
                 rotation: [0.0; 2],
                 join: Default::default(),

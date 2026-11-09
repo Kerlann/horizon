@@ -28,6 +28,38 @@ struct EntityFluidWorld<'a> {
     fluids: &'a FluidResources,
     context: &'a LoopContext,
 }
+/// `ClipContext.Fluid.WATER` in a fall-reset ray through `p`: the water's
+/// shape from the shared `FlowingFluid.shapes` cache (the first query of a
+/// fluid state fixes its height), as the player's own ray reads it.
+pub fn water_clip(
+    context: &LoopContext,
+    world: &World,
+    fluids: &FluidResources,
+    from: Vec3,
+    to: Vec3,
+    p: BlockPos,
+) -> bool {
+    let state = fluids.fluid(world.block(p.x, p.y, p.z));
+    if !matches!(state.kind(), FluidKind::Water | FluidKind::FlowingWater) {
+        return false;
+    }
+    let mut velocity = Vec3::ZERO;
+    let mut scene = EntityFluidWorld {
+        bounds: Aabb::new(from, from),
+        position: from,
+        eye_y: from.y,
+        velocity: &mut velocity,
+        world,
+        fluids,
+        context,
+    };
+    let Ok(mut shapes) = fluids.shapes.lock() else {
+        return false;
+    };
+    shapes
+        .shape(&mut scene, state, p)
+        .is_ok_and(|shape| shape.clip(from, to, p).is_some())
+}
 /// `Entity.baseTick`'s fluid step for an entity that is pushed by fluid: its
 /// immersion heights, then the current of each fluid it sits in, added to
 /// `velocity` with vanilla's scales (water 0.014, lava 0.007 fast or

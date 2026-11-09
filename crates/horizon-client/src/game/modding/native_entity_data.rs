@@ -140,7 +140,7 @@ impl Game<'_> {
     }
     /// Whether the entity's name shows over it at any distance
     /// (`Entity.isCustomNameVisible`); false for the kinds that keep no name.
-    pub(super) fn entity_custom_name_visible(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_custom_name_visible(&self, entity: EntityRef) -> Option<bool> {
         let t = self.native_entity_target(entity)?;
         let Some(id) = named_id(t) else {
             return Some(false);
@@ -179,7 +179,7 @@ impl Game<'_> {
     }
     /// The category of the entity's type (`EntityType.getCategory`): a mob's
     /// from its type, `Monster` for the dragon, `Misc` for every other kind.
-    pub(super) fn entity_classification(&self, entity: EntityRef) -> Option<MobCategory> {
+    pub(super) fn uncached_entity_classification(&self, entity: EntityRef) -> Option<MobCategory> {
         Some(match self.native_entity_target(entity)? {
             Target::Mob(id) => match self.mobs.iter().find(|m| m.id == id)?.category() {
                 "monster" => MobCategory::Monster,
@@ -201,7 +201,7 @@ impl Game<'_> {
     /// tell (displays, markers, interactions, evoker fangs, area effect
     /// clouds, ominous item spawners), are in it while the handle names them.
     /// None for a stale handle or unknown client data.
-    pub(super) fn entity_added_to_level(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_added_to_level(&self, entity: EntityRef) -> Option<bool> {
         Some(match self.native_entity_target(entity)? {
             Target::Player
             | Target::Guest(_)

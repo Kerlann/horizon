@@ -369,6 +369,10 @@ def plan(args, base, changed, crates_of, libraries, dependencies):
     steps = [
         Step("Cargo.lock", where="git"),
         Step("Public tree", "python3 tools/check_public_tree.py", where="here"),
+        # Upstream layer/address policies are not yet fully adapted to the fork's
+        # split mod crates and separate launcher/registry workspaces. Run their
+        # diagnostics manually until the fork baseline is reviewed.
+        Step("File size", f"python3 tools/check_file_size.py --base {shlex.quote(base)}", where="here"),
         # Always, as in CI: some read the crates, the roadmap or the workflows.
         Step("Python tests", "python3 -m unittest discover -s tests", where="here", summary=unittest_passed),
         Step("rustfmt", "cargo fmt --all -- --check", skip=None if rust else no_rust),
@@ -487,6 +491,12 @@ def run_windows(steps, verbose):
             env.setdefault("CARGO_BUILD_JOBS", "4")
         if step.name == "Public tree":
             command = [sys.executable, "tools/check_public_tree.py"]
+        elif step.name == "Layers":
+            command = [sys.executable, "tools/check_layers.py", *command[2:]]
+        elif step.name == "Addresses":
+            command = [sys.executable, "tools/check_addresses.py", *command[2:]]
+        elif step.name == "File size":
+            command = [sys.executable, "tools/check_file_size.py", *command[2:]]
         elif step.name == "Python tests":
             command = [sys.executable, "-m", "unittest", "discover", "-s", "tests"]
         elif step.name == "rustfmt":

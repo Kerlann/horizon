@@ -47,7 +47,7 @@ impl Game<'_> {
 
     /// The signed pickup delay; the legacy infinite sentinel reads as vanilla's
     /// 32767. None also covers a stored value outside i32.
-    pub(super) fn item_entity_pickup_delay(&self, item: ItemEntityRef) -> Option<i32> {
+    pub(super) fn uncached_item_entity_pickup_delay(&self, item: ItemEntityRef) -> Option<i32> {
         let delay = self
             .dropped
             .get(self.native_item_entity_index(item)?)?
@@ -84,13 +84,13 @@ impl Game<'_> {
     }
 
     /// `ItemEntity.getAge`, including negative lifetime sentinels.
-    pub(super) fn item_entity_age(&self, item: ItemEntityRef) -> Option<i32> {
+    pub(super) fn uncached_item_entity_age(&self, item: ItemEntityRef) -> Option<i32> {
         Some(self.dropped.get(self.native_item_entity_index(item)?)?.age)
     }
 
     /// The UUID set by `ItemEntity.setTarget`, limiting pickup to that player;
     /// None also means an unavailable item. This is not the thrower.
-    pub(super) fn item_entity_target(&self, item: ItemEntityRef) -> Option<u128> {
+    pub(super) fn uncached_item_entity_target(&self, item: ItemEntityRef) -> Option<u128> {
         self.dropped
             .get(self.native_item_entity_index(item)?)?
             .target
@@ -113,7 +113,7 @@ impl Game<'_> {
     /// `ItemEntity.getOwner`: the thrower as a resolved entity, not the pickup
     /// target. None for no thrower, an unloaded or different-level thrower,
     /// an unavailable handle, or one Horizon cannot resolve.
-    pub(super) fn item_entity_owner(&self, item: ItemEntityRef) -> Option<EntityRef> {
+    pub(super) fn uncached_item_entity_owner(&self, item: ItemEntityRef) -> Option<EntityRef> {
         let uuid = self
             .dropped
             .get(self.native_item_entity_index(item)?)?
