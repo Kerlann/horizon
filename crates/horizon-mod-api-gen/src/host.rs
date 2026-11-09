@@ -28,27 +28,14 @@ pub(super) const GOAL_VIEW_READS: &[&str] = &[
     "living_health",
     "living_max_health",
     "living_alive",
-    "merchant_offers",
     "merchant_trading_player",
     "merchant_profession",
     "merchant_level",
     "merchant_villager_type",
     "merchant_xp",
-    "entity_dismount_location",
-    "entity_root_vehicle",
-    "entity_is_passenger_of_same_vehicle",
-    "entity_passengers",
-    "entity_is_vehicle",
-    "entity_indirect_passengers",
-    "entity_controlling_passenger",
-    "entity_on_block",
-    "entity_entities_team_damage_allowed",
     "living_can_use_portal",
-    "entity_tags",
-    "entity_name",
     "entity_added_to_level",
     "entity_portal_cooldown",
-    "entity_invulnerable_to_damage",
     "living_is_climbing",
     "living_last_attacker",
     "living_kill_credit",
@@ -58,15 +45,8 @@ pub(super) const GOAL_VIEW_READS: &[&str] = &[
     "entity_view_vector",
     "entity_up_vector",
     "entity_level",
-    "entity_vehicle",
-    "entity_is_passenger",
     "entity_sound_source",
     "entity_leash_holder",
-    "entity_pick",
-    "living_attribute_value",
-    "living_attribute_base",
-    "living_attributes",
-    "living_attribute_modifiers",
     "living_used_item_hand",
     "mob_can_use_portal",
     "mob_target",
@@ -96,27 +76,15 @@ pub(super) const GOAL_VIEW_READS: &[&str] = &[
     "entity_is_multipart",
     "entity_parts",
     "entity_dimensions",
-    "living_effect",
-    "living_effects",
-    "living_potion_affected",
     "living_gliding_ticks",
     "living_is_gliding",
     "living_is_sleeping",
     "living_sleeping_pos",
     "living_is_jumping",
     "living_baby",
-    "living_equipment",
-    "living_hand_item",
     "living_is_tamed",
     "living_owner",
-    "living_dimensions_for_pose",
-    "living_can_freeze",
     "living_can_breathe_underwater",
-    "living_has_line_of_sight",
-    "living_in_melee_range",
-    "living_bed_orientation",
-    "mob_goals",
-    "mob_target_goals",
     "mob_is_done",
     "mob_navigation_speed",
     "mob_pathfinding_malus",
@@ -895,7 +863,9 @@ fn handle_method(
     sig.inputs = rest.into_iter().collect();
     let mut docs = doc_comments(&entry.attrs, name, true)?;
     // Document the ownership routing where mods read these generated methods.
-    if GOAL_VIEW_READS.contains(&name) {
+    if entity_read_unavailable(&sig).is_some() {
+        docs.push_str("///\n/// In a mob's goal tick this reads the explicit actor's actual loan.\n/// Other handles use fresh resident or Parked sources, never AI snapshots\n/// or cached publication payloads. Physical and dependency refusals remain typed.\n");
+    } else if GOAL_VIEW_READS.contains(&name) {
         docs.push_str("///\n/// In a mob's goal tick ([`GoalContext::host`](crate::GoalContext::host)) this reads\n/// the explicit active mob loan. Foreign handles use the shared game host\n/// publication; unsupported OWN reads retain their typed refusal.\n");
     }
     let backend = match (mutable, tier.client()) {
@@ -1099,7 +1069,11 @@ fn goal_view(
         let foreign = format!(
             "mod_api::__private::backend_read(self.host, |backend| backend.{name}({args})){forwarded}"
         );
-        let body = if own_entities.is_empty() {
+        let body = if let Some(unavailable) = entity_read_unavailable(&sig) {
+            format!(
+                "self.with_heavy_backend(|backend| backend.{name}({args})).unwrap_or_else(|| {unavailable})"
+            )
+        } else if own_entities.is_empty() {
             foreign
         } else {
             let own_condition = own_entities
@@ -1154,7 +1128,9 @@ fn goal_view(
             continue;
         }
         let args = signature_args(&sig, name)?;
-        let body = if GOAL_VIEW_LOOKUPS.contains(&name) {
+        let body = if entity_read_unavailable(&sig).is_some() {
+            format!("self.with_heavy_host(|host| host.{name}({args}))")
+        } else if GOAL_VIEW_LOOKUPS.contains(&name) {
             format!("self.lookup_{name}({args})")
         } else {
             format!("self.host.{name}({args})")

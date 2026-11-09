@@ -23,6 +23,34 @@ pub(super) trait EntityBodyProvider {
     ) -> bool;
 }
 
+/// The explicit GoalCx actor, borrowed directly from its actual roster loan.
+/// The engine callback boundary supplies the validated canonical address.
+pub(super) struct MobBodyProvider<'a> {
+    address: Target,
+    mob: &'a horizon_client::mobs::Mob,
+}
+impl<'a> MobBodyProvider<'a> {
+    pub(super) fn new(address: Target, mob: &'a horizon_client::mobs::Mob) -> Self {
+        Self { address, mob }
+    }
+}
+impl EntityBodyProvider for MobBodyProvider<'_> {
+    fn with_read_source(
+        &self,
+        address: Target,
+        visit: &mut dyn FnMut(LentEntityReadSource<'_>),
+    ) -> bool {
+        if address != self.address {
+            return false;
+        }
+        visit(LentEntityReadSource {
+            body: BaseReadSource::Mob(self.mob),
+            cart_spawner: None,
+        });
+        true
+    }
+}
+
 /// The cart and its evolving spawner are borrowed together only for the
 /// callback. Construct this from the cart's canonical actor address and actual
 /// local values, never the old Game cart or cart.spawner while it is taken.

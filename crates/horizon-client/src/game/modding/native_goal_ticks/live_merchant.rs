@@ -1,7 +1,7 @@
 //! Merchant handles for villagers temporarily lent to an AI tick.
 use super::GoalCx;
 use crate::mobs::{Mob, Species, render::VILLAGER_TYPES};
-use mod_api::{MerchantOffer, MerchantRef, PlayerRef};
+use mod_api::{MerchantRef, PlayerRef};
 
 impl GoalCx<'_, '_> {
     fn lent_merchant(&self, merchant: MerchantRef) -> Option<&Mob> {
@@ -9,12 +9,6 @@ impl GoalCx<'_, '_> {
         (self.w.goal_host?.merchant_is_live(mob)
             && matches!(mob.species(), Species::Villager | Species::WanderingTrader))
         .then_some(mob)
-    }
-
-    pub(super) fn r_merchant_offers(&self, merchant: MerchantRef) -> Option<Vec<MerchantOffer>> {
-        self.w
-            .goal_host?
-            .merchant_offers_lent(self.lent_merchant(merchant)?)
     }
 
     pub(super) fn r_merchant_trading_player(&self, merchant: MerchantRef) -> Option<PlayerRef> {

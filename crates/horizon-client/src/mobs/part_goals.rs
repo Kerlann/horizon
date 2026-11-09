@@ -22,6 +22,10 @@ use mod_api::{
 /// the mob tick once beside `mob_world_base`, `None` in `MobWorld::goal_host`
 /// wherever no mod attached an entity part — so no other side runs one.
 pub trait GoalHost {
+    /// Supply a read Host backed by this explicit actor's actual loan. The
+    /// visitor cannot retain that host; unsupported engine doubles invoke none.
+    fn with_entity_read_host(&self, _actor: &Mob, _visit: &mut dyn FnMut(&dyn mod_api::Host)) {}
+
     /// Refresh the explicit actor publication at a real callback/apply boundary.
     /// A host without publication support must return false, never claim success.
     fn refresh_mob_read_publication(

@@ -11,36 +11,6 @@ impl GoalCx<'_, '_> {
         self.entity_mob(mob.entity())
     }
 
-    pub(super) fn r_mob_goals(&self, mob: MobRef) -> Option<Vec<MobGoalEntry>> {
-        Some(
-            self.live_mob(mob)?
-                .ai
-                .goals
-                .entries()
-                .map(|(priority, name, running)| MobGoalEntry {
-                    priority,
-                    id: super::super::native_mob_goals::goal_id(name),
-                    running,
-                })
-                .collect(),
-        )
-    }
-
-    pub(super) fn r_mob_target_goals(&self, mob: MobRef) -> Option<Vec<MobGoalEntry>> {
-        Some(
-            self.live_mob(mob)?
-                .ai
-                .targets
-                .entries()
-                .map(|(priority, name, running)| MobGoalEntry {
-                    priority,
-                    id: super::super::native_mob_goals::goal_id(name),
-                    running,
-                })
-                .collect(),
-        )
-    }
-
     pub(super) fn r_mob_is_done(&self, mob: MobRef) -> Option<bool> {
         Some(self.live_mob(mob)?.ai.nav.is_done())
     }

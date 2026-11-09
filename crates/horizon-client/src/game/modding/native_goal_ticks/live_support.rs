@@ -1,32 +1,24 @@
 //! Reads combining the explicit actor loan with authoritative game state.
 use super::GoalCx;
-use crate::mobs::Mob;
-use mod_api::EntityRef;
 
 impl GoalCx<'_, '_> {
-    pub(super) fn r_entity_on_block(&self, entity: EntityRef) -> Option<[i32; 3]> {
-        Some(self.w.goal_host?.mob_on_block(self.entity_mob(entity)?))
+    /// Select the real actor-loan Host once; engine doubles or absent adapters
+    /// fall back to the ordinary shared Host, never the world AI snapshots.
+    pub(super) fn with_heavy_host<R>(&self, read: impl FnOnce(&dyn mod_api::Host) -> R) -> R {
+        let mut read = Some(read);
+        let mut result = None;
+        if let Some(host) = self.w.goal_host {
+            host.with_entity_read_host(self.m, &mut |host| {
+                result = Some(read.take().expect("one callback loan Host")(host));
+            });
+        }
+        result.unwrap_or_else(|| read.take().expect("one selected Host")(self.host))
     }
 
-    pub(super) fn r_entity_entities_team_damage_allowed(
+    pub(super) fn with_heavy_backend<R>(
         &self,
-        entity: EntityRef,
-        source: EntityRef,
-    ) -> Option<bool> {
-        let mob = |handle| -> Option<Option<&Mob>> {
-            if self.is_own_entity(handle) {
-                Some(Some(&*self.m))
-            } else {
-                (self.host.entity(handle.id()) == Some(handle)).then_some(None)
-            }
-        };
-        self.w.goal_host?.entities_team_damage_allowed(
-            entity,
-            mob(entity)?,
-            source,
-            mob(source)?,
-            self.m,
-            self.w,
-        )
+        read: impl FnOnce(&dyn mod_api::Backend) -> R,
+    ) -> Option<R> {
+        self.with_heavy_host(|host| mod_api::__private::backend_read(host, read))
     }
 }

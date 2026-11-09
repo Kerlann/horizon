@@ -20,7 +20,6 @@ mod live_mob;
 #[cfg(test)]
 mod live_read_tests;
 mod live_support;
-mod live_vehicle;
 #[cfg(test)]
 mod redirect_tests;
 
@@ -273,6 +272,39 @@ impl BehaviorCxBackend for GoalCx<'_, '_> {
 }
 
 impl mobs::part_goals::GoalHost for Game<'_> {
+    fn with_entity_read_host(&self, actor: &Mob, visit: &mut dyn FnMut(&dyn mod_api::Host)) {
+        use horizon_client::join_seq::{
+            Joined as _,
+            residency::{Kind, table::EntityLookup, write_queue::Target},
+        };
+        let admitted = self
+            .entity_residency
+            .borrow_mut()
+            .server_admitted_read_lookup(actor.id, |at| self.locate_server_resident_owner(at))
+            .map(|(location, state, _, _)| (location, matches!(state, EntityLookup::Taken)));
+        let Some((location, taken)) = admitted else {
+            visit(self);
+            return;
+        };
+        if location.owner.kind != Kind::Mob
+            || location.join != actor.join_seq()
+            || !(taken || self.held_out.contains(&actor.id))
+        {
+            // A resident/disjoint value is not OWN. Use only its canonical body.
+            visit(self);
+            return;
+        }
+        let provider = super::native_entity_body_provider::MobBodyProvider::new(
+            Target {
+                runtime_id: actor.id,
+                location,
+            },
+            actor,
+        );
+        let host = super::native_borrowed_entity_host::BorrowedEntityHost::new(self, &provider);
+        visit(&host);
+    }
+
     fn refresh_mob_read_publication(
         &self,
         mob: &Mob,
