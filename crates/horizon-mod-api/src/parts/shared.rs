@@ -167,6 +167,8 @@ pub(crate) struct Installed {
     pub(crate) chunk_generators: Vec<crate::world::chunk_generator::ChunkGeneratorInfo>,
     pub(crate) hook_bits: Vec<bool>,
     pub(crate) tag_hook_bits: Vec<bool>,
+    /// Frozen after registering actual key and tag providers, not runtime enable toggles.
+    pub(crate) entity_reads: bool,
 }
 
 pub(crate) fn requested_keys() -> &'static horizon_mod_runtime::registry_keys::Requests {
@@ -725,6 +727,7 @@ pub(crate) fn install_registrar(
         chunk_generators: registrar.chunk_generators,
         hook_bits: Vec::new(),
         tag_hook_bits: vec![false; HOOK_COUNT],
+        entity_reads: false,
     };
     installed.keys.index_hooks();
     installed.hook_bits = installed.keys.hooks.iter().map(Option::is_some).collect();
@@ -740,6 +743,7 @@ pub(crate) fn install_registrar(
             installed.tag_hook_bits[*hook as usize] = true;
         }
     }
+    installed.entity_reads = installed.hook_bits.iter().any(|&subscribed| subscribed);
     #[cfg(any(test, feature = "testing"))]
     TEST_PARTS.set(Some(Box::leak(Box::new(installed))));
     #[cfg(not(any(test, feature = "testing")))]
