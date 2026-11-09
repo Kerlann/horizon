@@ -1616,6 +1616,7 @@ mod tests {
             base.custom_name_visible = None;
             base.is_sprinting = Some(false);
             let publication = NativeReadPublication {
+                silent_overlay: Default::default(),
                 capture: EntityReadCapture {
                     tick: NativeTickId::new(1),
                     pass: 2,

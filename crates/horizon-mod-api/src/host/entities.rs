@@ -85,6 +85,15 @@ pub trait EntitiesServerHost {
 #[doc(hidden)]
 #[horizon_mod_api_macros::host_area]
 pub trait EntitiesBackend {
+    /// Side: server.
+    /// Object-safe command status service used by `CommandId::query`. Validates
+    /// epoch and issuing-mod/package scope; retains terminals through next tick.
+    #[access(WorldOnly)]
+    fn entity_command_query(
+        &self,
+        command: CommandId,
+    ) -> Result<EntityCommandStatus, CommandQueryError>;
+
     /// Side: both.
     /// Materializes the cached row and its capture metadata, possibly stale.
     /// Physical lifting does not hide an existing row. None means no available
@@ -757,10 +766,20 @@ pub trait EntitiesBackendMut {
     #[access(WorldOnly)]
     fn entity_set_air_supply(&mut self, entity: EntityRef, air: i32) -> bool;
     /// Side: server.
-    /// Silences the mob or lets it make sounds again (`Entity.setSilent`).
-    /// False for the other kinds.
+    /// Silences a mob or lets it make sounds again (`Entity.setSilent`).
+    /// Outside an actor turn or for its explicit OWN actor, applies immediately.
+    /// A foreign target during a writer turn is accepted into the world FIFO,
+    /// including resident targets, and returns Pending rather than an applied
+    /// boolean. Pending light reads expose the latest ordered value and id.
+    /// Application revalidates generation; terminal event and query agree.
+    /// An active item transaction refuses a write that would enqueue with
+    /// TransactionActive, creating no id or overlay; retry after commit.
     #[access(WorldOnly)]
-    fn entity_set_silent(&mut self, entity: EntityRef, silent: bool) -> bool;
+    fn entity_set_silent(
+        &mut self,
+        entity: EntityRef,
+        silent: bool,
+    ) -> WriteReceipt<bool, EntityWriteError>;
     /// Side: server.
     /// Sets the mob's persistent glowing tag (`Entity.setGlowingTag`). Returns false for players and guests.
     #[access(WorldOnly)]
