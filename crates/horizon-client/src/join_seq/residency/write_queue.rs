@@ -201,6 +201,7 @@ mod tests {
         Target {
             runtime_id: id,
             location: Location {
+                source: super::super::Source::Ordinary,
                 owner: Owner {
                     dimension: DimensionKey::OVERWORLD,
                     kind: Kind::Mob,
