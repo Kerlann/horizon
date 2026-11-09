@@ -69,6 +69,18 @@ impl Game<'_> {
         self.entity_initialization.initialized.remove(&holder);
     }
 
+    /// Forget destroyed objects in this level before its UUID metadata is pruned.
+    /// The supplied set includes reachable off-level objects. Other levels and
+    /// player lifetimes are owned by their own cleanup boundaries.
+    pub(super) fn prune_entity_initializations(&mut self, retained: &HashSet<u32>) {
+        self.entity_initialization
+            .initialized
+            .retain(|holder| match holder {
+                Holder::Entity(id) => !self.persist.uuids.contains_key(id) || retained.contains(id),
+                _ => true,
+            });
+    }
+
     /// A LAN guest's player, its file just read for connection `conn`: told once per
     /// connection (`PlayerList.placeNewPlayer` constructs the `ServerPlayer`, then
     /// `loadPlayerData` reads its file).

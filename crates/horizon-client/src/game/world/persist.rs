@@ -2390,6 +2390,7 @@ impl Game<'_> {
                 self.entity_attachments.remove(id);
             }
         }
+        self.prune_entity_initializations(&alive);
         self.persist.uuids.retain(|id, _| alive.contains(id));
         self.persist.raw.retain(|id, _| alive.contains(id));
     }

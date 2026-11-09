@@ -253,6 +253,23 @@ fn borrowed_spawn_first_read_and_dimension_transfer_keep_one_initialization() {
                 "unsupported transfer never constructs a fallback"
             );
             assert_eq!(calls.lock().unwrap().len(), count);
+            // Constructor ownership is pruned by object identity before UUID cleanup.
+            // Equal UUIDs must not make an unreachable object's marker erase a survivor;
+            // player holders and objects belonging to parked levels stay untouched.
+            let removed = Holder::Entity(900_001);
+            let retained = Holder::Entity(900_002);
+            let parked = Holder::Entity(900_003);
+            let player = Holder::Player(900_001);
+            game.entity_initialization
+                .initialized
+                .extend([removed, retained, parked, player]);
+            game.persist.uuids.insert(900_001, [901, 2, 3, 4]);
+            game.persist.uuids.insert(900_002, [901, 2, 3, 4]);
+            game.prune_entity_initializations(&HashSet::from([900_002]));
+            assert!(!game.entity_initialization.initialized.contains(&removed));
+            for holder in [retained, parked, player] {
+                assert!(game.entity_initialization.initialized.contains(&holder));
+            }
         })
     });
 }
