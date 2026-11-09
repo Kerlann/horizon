@@ -319,6 +319,12 @@ impl Game<'_> {
             self.native_lifecycle.read_scope = true;
             self.native_server_tick(&context, phase);
             self.native_lifecycle.read_scope = false;
+            // Retention counts logical engine ticks, not dimensions, actor
+            // turns, frames or query calls. End listeners see the following
+            // tick's retained terminal before it expires here.
+            if let Some(commands) = self.entity_read_state.borrow_mut().commands.as_mut() {
+                commands.queue.end_tick();
+            }
         }
     }
 }

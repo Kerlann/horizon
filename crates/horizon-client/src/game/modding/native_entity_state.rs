@@ -292,20 +292,6 @@ impl Game<'_> {
             Body::Other(_) => None,
         }
     }
-    /// Silences the mob or lets it make sounds again (`Entity.setSilent`).
-    /// False for the other kinds.
-    pub(super) fn entity_set_silent(&mut self, entity: EntityRef, silent: bool) -> bool {
-        let Some(Target::Mob(id)) = self.native_entity_target(entity) else {
-            return false;
-        };
-        match self.mobs.iter_mut().find(|m| m.id == id) {
-            Some(m) => {
-                m.silent = silent;
-                true
-            }
-            None => false,
-        }
-    }
     /// Whether the entity's model is hidden (`Entity.isInvisible`): the
     /// invisibility effect on a player or a mob, a mob's or an armor stand's
     /// flag.

@@ -306,6 +306,7 @@ impl Game<'_> {
                 return false;
             };
             NativeReadPublication {
+                silent_overlay: Default::default(),
                 capture,
                 base,
                 details,
@@ -314,11 +315,10 @@ impl Game<'_> {
                 mob_target_facts: None,
             }
         };
-        let published =
-            self.entity_residency
-                .borrow_mut()
-                .publish_rows([(raw.id, at, publication)])
-                == 1;
+        let published = self.entity_residency.borrow_mut().publish_rows_merging(
+            [(raw.id, at, publication)],
+            NativeReadPublication::merge_pending_silent,
+        ) == 1;
         drop(scope);
         published
     }

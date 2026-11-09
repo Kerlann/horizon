@@ -20,8 +20,12 @@ impl Game<'_> {
         if self.remote.is_some() {
             return None;
         }
-        let t = self.native_entity_target(entity)?;
-        match self.command_target_nbt(t)? {
+        let target = self.native_entity_target(entity)?;
+        self.entity_nbt_for_target(target)
+    }
+    /// Serializes an already admitted target without resolving its handle again.
+    pub(super) fn entity_nbt_for_target(&mut self, target: Target) -> Option<Compound> {
+        match self.command_target_nbt(target)? {
             Tag::Compound(mut c) => {
                 c.remove(&"id".into());
                 Some(c)
@@ -42,7 +46,7 @@ impl Game<'_> {
         let Some(t) = self.native_entity_target(entity) else {
             return false;
         };
-        let Some(old) = self.entity_nbt(entity).map(Tag::Compound) else {
+        let Some(old) = self.entity_nbt_for_target(t).map(Tag::Compound) else {
             return false;
         };
         let nbt = Tag::Compound(nbt);

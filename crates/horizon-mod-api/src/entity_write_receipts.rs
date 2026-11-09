@@ -61,6 +61,10 @@ pub enum EntityWriteError<E = core::convert::Infallible> {
     TransactionClosed,
     /// The operation's original typed validation or application error.
     Domain(E),
+    /// An item transaction is active and this foreign write would enqueue.
+    /// No command identity, overlay or completion is created. Retry after commit.
+    /// Direct/OWN immediate application is not promised item rollback semantics.
+    TransactionActive,
 }
 
 /// A command query failed; neither case means that work is pending.
@@ -72,6 +76,38 @@ pub enum CommandQueryError {
     /// These cases intentionally share one result rather than disclosing another
     /// mod's commands. Pending commands are not silently expired.
     UnknownOrExpired,
+}
+
+/// Terminal operation-tagged results delivered identically by event and query.
+#[derive(Clone, Debug, PartialEq, Eq, Wire)]
+pub enum EntityWriteCompletion {
+    /// The actual result of an accepted `EntityRef::set_silent` command.
+    EntitySetSilent(CommandCompleted<bool, EntityWriteError>),
+}
+
+/// Non-destructive status of an accepted command in the issuing mod's scope.
+#[derive(Clone, Debug, PartialEq, Eq, Wire)]
+pub enum EntityCommandStatus {
+    /// Accepted, not yet terminal. Pending commands are never silently expired.
+    Pending,
+    /// The exact terminal value also carried by `entity_command_completed`.
+    Completed(EntityWriteCompletion),
+}
+
+impl<E> NoBackend for EntityWriteError<E> {
+    fn no_backend() -> Self {
+        Self::OutsideScope
+    }
+}
+impl NoBackend for CommandQueryError {
+    fn no_backend() -> Self {
+        Self::UnknownOrExpired
+    }
+}
+impl<R, E: NoBackend> NoBackend for WriteReceipt<R, E> {
+    fn no_backend() -> Self {
+        Self::Refused(E::no_backend())
+    }
 }
 
 #[cfg(test)]
