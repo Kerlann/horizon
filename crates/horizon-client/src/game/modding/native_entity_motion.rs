@@ -277,13 +277,13 @@ impl Game<'_> {
             native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
             native_read_dependencies::EntityReadDependency,
         };
-        let Some(read) = self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(read) = self.entity_read_admission(
             EntityReadSubject::Entity(entity),
             &[EntityReadDependency::Geometry],
         ) else {
             return Ok(None);
         };
-        self.with_live_entity_source(read?, provider, |source| {
+        self.with_admitted_entity_source(read, provider, |source| {
             let geometry = self.live_source_geometry(source.body)?;
             let [x, y, z] = geometry.position;
             let position = Vec3::new(x, y, z);
@@ -304,7 +304,6 @@ impl Game<'_> {
             };
             Some(on_block_position(support, position))
         })
-        .ok_or(mod_api::EntityReadError::Lifted)
     }
     /// What the entity looks at within `distance` blocks of its eyes: `Entity.pick`'s block
     /// ray along the view vector, outlines and no fluids.
@@ -329,13 +328,13 @@ impl Game<'_> {
         if !(distance.is_finite() && distance >= 0.0) {
             return Ok(None);
         }
-        let Some(read) = self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(read) = self.entity_read_admission(
             EntityReadSubject::Entity(entity),
             &[EntityReadDependency::Geometry],
         ) else {
             return Ok(None);
         };
-        self.with_live_entity_source(read?, provider, |source| {
+        self.with_admitted_entity_source(read, provider, |source| {
             let geometry = self.live_source_geometry(source.body)?;
             let mut from = geometry.position;
             from[1] += geometry.eye_height;
@@ -349,7 +348,6 @@ impl Game<'_> {
                 ClipFluid::None,
             )
         })
-        .ok_or(mod_api::EntityReadError::Lifted)
     }
     /// The square of the distance from the entity's feet to `pos`
     /// (`Entity.distanceToSqr`). API 379.

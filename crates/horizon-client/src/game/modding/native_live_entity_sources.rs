@@ -53,33 +53,44 @@ impl Game<'_> {
         project: impl for<'s> FnOnce(EntityReadSource<'s>) -> R,
     ) -> Option<R> {
         let mut project = Some(project);
+        if let Some(value) = self.with_borrowed_entity_source(read, provider, |source| {
+            project.take().expect("one selected body projection")(source)
+        }) {
+            return Some(value);
+        }
+        self.live_entity_source(read)
+            .map(|source| project.take().expect("one selected body projection")(source))
+    }
+
+    /// The provider owns one concrete callback loan. Matching its canonical
+    /// admitted address selects that loan; no actor permission or live-peer
+    /// directory can replace it, including a GoalCx without a writer frame.
+    pub(super) fn with_borrowed_entity_source<R>(
+        &self,
+        read: EntityReadTarget,
+        provider: Option<&dyn EntityBodyProvider>,
+        project: impl for<'s> FnOnce(EntityReadSource<'s>) -> R,
+    ) -> Option<R> {
+        let provider = provider?;
+        let address = horizon_client::join_seq::residency::write_queue::Target {
+            runtime_id: read.entity.id(),
+            location: read.location,
+        };
+        let mut project = Some(project);
         let mut result = None;
-        if let Some(provider) = provider
-            && let Some(frame) = self.active_entity_writer()
-            && frame.actor.location == read.location
-        {
-            provider.with_read_source(frame.actor, &mut |source| {
-                let Some(level) = self.entity_read_level(read.location.owner.dimension) else {
-                    return;
-                };
-                let project = project
-                    .take()
-                    .expect("a body provider visits its source once");
-                result = Some(project(EntityReadSource {
+        provider.with_read_source(address, &mut |source| {
+            let Some(level) = self.entity_read_level(read.location.owner.dimension) else {
+                return;
+            };
+            result = Some(project.take().expect("one actual body loan")(
+                EntityReadSource {
                     body: source.body,
                     level,
                     cart_spawner: source.cart_spawner,
-                }));
-            });
-            if result.is_some() {
-                return result;
-            }
-        }
-        self.live_entity_source(read).map(|source| {
-            project
-                .take()
-                .expect("a projection consumes one selected source")(source)
-        })
+                },
+            ));
+        });
+        result
     }
 
     /// Project actual storage only after admission. A missing concrete OWN loan

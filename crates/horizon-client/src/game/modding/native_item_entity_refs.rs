@@ -48,17 +48,16 @@ impl Game<'_> {
             native_live_entity_reads::EntityReadSubject,
             native_read_dependencies::EntityReadDependency,
         };
-        let Some(read) = self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(read) = self.entity_read_admission(
             EntityReadSubject::ItemEntity(item),
             &[EntityReadDependency::ItemStack],
         ) else {
             return Ok(None);
         };
-        self.with_live_entity_source(read?, provider, |source| match source.body {
+        self.with_admitted_entity_source(read, provider, |source| match source.body {
             super::native_base_read_rows::BaseReadSource::Item(item) => Some(item.stack.clone()),
             _ => None,
         })
-        .ok_or(mod_api::EntityReadError::Lifted)
     }
 
     /// Writes a nonempty complete stack using `ItemEntity.setItem`. Empty

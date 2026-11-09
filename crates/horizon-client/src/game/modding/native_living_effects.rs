@@ -169,13 +169,13 @@ impl Game<'_> {
         else {
             return Ok(None);
         };
-        let Some(read) = self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(read) = self.entity_read_admission(
             EntityReadSubject::MobOrPlayer(living),
             &[EntityReadDependency::Effects],
         ) else {
             return Ok(None);
         };
-        self.with_live_entity_source(read?, provider, |source| match source.body {
+        self.with_admitted_entity_source(read, provider, |source| match source.body {
             BaseReadSource::Mob(mob) => mob
                 .extra
                 .effects
@@ -192,7 +192,6 @@ impl Game<'_> {
             }
             _ => None,
         })
-        .ok_or(mod_api::EntityReadError::Lifted)
     }
 
     /// The entity's active effects (`LivingEntity.getActiveEffects`), in the
@@ -211,13 +210,13 @@ impl Game<'_> {
         living: LivingRef,
     ) -> Result<Option<Vec<ActiveEffect>>, mod_api::EntityReadError> {
         use super::native_base_read_rows::BaseReadSource;
-        let Some(read) = self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(read) = self.entity_read_admission(
             EntityReadSubject::MobOrPlayer(living),
             &[EntityReadDependency::Effects],
         ) else {
             return Ok(None);
         };
-        self.with_live_entity_source(read?, provider, |source| match source.body {
+        self.with_admitted_entity_source(read, provider, |source| match source.body {
             BaseReadSource::Mob(mob) => Some(
                 mob.extra
                     .effects
@@ -238,7 +237,6 @@ impl Game<'_> {
             }
             _ => None,
         })
-        .ok_or(mod_api::EntityReadError::Lifted)
     }
 
     /// Whether the entity has `effect` (`LivingEntity.hasEffect`), using its resolved key.
@@ -265,13 +263,13 @@ impl Game<'_> {
         else {
             return Ok(false);
         };
-        let Some(read) = self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(read) = self.entity_read_admission(
             EntityReadSubject::MobOrPlayer(living),
             &[EntityReadDependency::Effects],
         ) else {
             return Ok(false);
         };
-        self.with_live_entity_source(read?, provider, |source| match source.body {
+        self.with_admitted_entity_source(read, provider, |source| match source.body {
             BaseReadSource::Mob(mob) => mob
                 .extra
                 .effects
@@ -281,7 +279,6 @@ impl Game<'_> {
             BaseReadSource::Guest(guest) => guest.effects.get_registered(def.index).is_some(),
             _ => false,
         })
-        .ok_or(mod_api::EntityReadError::Lifted)
     }
 
     /// `LivingEntity.getEffectBlendFactor(effect, partialTick)` on a client:

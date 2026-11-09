@@ -64,6 +64,7 @@ impl EntityReadSubject {
 /// currently borrowed level. An OWN caller must still supply its actual loan.
 #[derive(Clone, Copy)]
 pub(super) struct EntityReadTarget {
+    pub(super) entity: EntityRef,
     pub(super) target: Target,
     pub(super) location: Location,
 }
@@ -92,6 +93,30 @@ impl EntityReadAdmission {
 }
 
 impl Game<'_> {
+    /// Select a real body before choosing pending work. Actor permission alone
+    /// cannot turn a missing OWN loan into a Pending error or payload absence.
+    pub(super) fn with_admitted_entity_source<R, E>(
+        &self,
+        admission: EntityReadAdmission,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        project: impl for<'s> FnOnce(super::native_live_entity_sources::EntityReadSource<'s>) -> R,
+    ) -> Result<R, EntityReadError<E>> {
+        let finish = |source: super::native_live_entity_sources::EntityReadSource<'_>| {
+            if let Some(id) = admission.pending {
+                return Err(EntityReadError::Pending(id));
+            }
+            Ok(project(source))
+        };
+        let result = if admission.lifted {
+            // Only the exact actual callback loan can supply a Taken body.
+            // A disjoint live peer or a cached publication is not a provider.
+            self.with_borrowed_entity_source(admission.read, provider, finish)
+        } else {
+            self.with_live_entity_source(admission.read, provider, finish)
+        };
+        result.unwrap_or(Err(EntityReadError::Lifted))
+    }
+
     pub(super) fn entity_read_dependency<E>(
         &self,
         subject: EntityReadSubject,
@@ -160,7 +185,11 @@ impl Game<'_> {
             return None;
         }
         Some(EntityReadAdmission {
-            read: EntityReadTarget { target, location },
+            read: EntityReadTarget {
+                entity,
+                target,
+                location,
+            },
             lifted: (matches!(state, EntityLookup::Taken) || self.held_out.contains(&entity.id()))
                 && !self.entity_read_actor_owns(entity.id(), location),
             pending: cached.and_then(|row| row.pending_dependency(dependencies)),

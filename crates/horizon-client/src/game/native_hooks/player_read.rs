@@ -24,20 +24,19 @@ impl Game<'_> {
             native_read_dependencies::EntityReadDependency,
         };
 
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let target = match self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Inventory],
         ) {
-            Some(target) => target?,
+            Some(target) => target,
             None => return Ok(None),
         };
-        self.with_live_entity_source(target, provider, |source| match source.body {
+        self.with_admitted_entity_source(target, provider, |source| match source.body {
             BaseReadSource::Player(_) => Some(self.inventory.iter().flatten().cloned().collect()),
             BaseReadSource::Guest(guest) => {
                 Some(guest.inventory.iter().flatten().cloned().collect())
             }
             _ => None,
         })
-        .ok_or(mod_api::EntityReadError::Lifted)
     }
 }
