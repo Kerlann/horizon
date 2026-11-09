@@ -198,7 +198,7 @@ impl Game<'_> {
             self.persist.uuids.get(&id).copied()
         } else {
             self.levels
-                .parked_of(mod_api::dimension_id(dimension)?)?
+                .parked_of(LevelRef::new(self.native_lifecycle.epoch()?, dimension).dimension_id())?
                 .saved_entity_uuid(id)
         }?;
         Some((at, details, uuid))
