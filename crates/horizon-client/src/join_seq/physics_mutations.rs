@@ -276,6 +276,15 @@ mod tests {
                 change: Change::Touched
             }]
         );
+        items.iter_mut().find(|item| item.id == 5).unwrap().data = 9;
+        watch.drain(&mut changes);
+        assert_eq!(
+            changes,
+            [Mutation {
+                join: joins[4],
+                change: Change::Touched
+            }]
+        );
         items.with_two_and_rest(4, 1, |a, b, _, _, _| {
             a.data = 5;
             b.data = 2;

@@ -1063,6 +1063,18 @@ impl<'a, T> Iterator for IterMut<'a, T> {
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.0.size_hint()
     }
+    fn find<P>(&mut self, predicate: P) -> Option<Self::Item>
+    where
+        P: FnMut(&Self::Item) -> bool,
+    {
+        // find's predicate receives only &&mut T. Only the returned member
+        // receives mutation authority; do not dirty its read-only prefix.
+        let entity = self.0.find(predicate)?;
+        if let Some(watch) = &self.1 {
+            watch.record(entity, physics_mutations::Change::Touched);
+        }
+        Some(entity)
+    }
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
         let entity = self.0.nth(n)?;
         if let Some(watch) = &self.1 {

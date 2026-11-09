@@ -203,11 +203,24 @@ impl Game<'_> {
                     p.fire_ticks = ticks;
                     true
                 }),
-            Some(Target::Mob(id)) => self.mobs.iter_mut().find(|m| m.id == id).is_some_and(|m| {
-                m.fire_ticks = ticks;
-                m.needs_sync = true;
+            Some(Target::Mob(id)) => {
+                let Some(join) = self
+                    .mobs
+                    .iter()
+                    .find(|mob| mob.id == id)
+                    .map(|mob| mob.join)
+                else {
+                    return false;
+                };
+                let Some(index) = self.mobs.locate(join) else {
+                    return false;
+                };
+                self.mobs.update(index, |mob| {
+                    mob.fire_ticks = ticks;
+                    mob.needs_sync = true;
+                });
                 true
-            }),
+            }
             Some(Target::Stand(id)) => self
                 .armor_stands
                 .iter_mut()
@@ -217,13 +230,19 @@ impl Game<'_> {
                     true
                 }),
             Some(Target::Item(id)) => {
-                self.dropped
-                    .iter_mut()
-                    .find(|i| i.id == id)
-                    .is_some_and(|i| {
-                        i.fire_ticks = ticks;
-                        true
-                    })
+                let Some(join) = self
+                    .dropped
+                    .iter()
+                    .find(|item| item.id == id)
+                    .map(|item| item.join)
+                else {
+                    return false;
+                };
+                let Some(index) = self.dropped.locate(join) else {
+                    return false;
+                };
+                self.dropped.update(index, |item| item.fire_ticks = ticks);
+                true
             }
             _ => false,
         }
