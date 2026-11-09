@@ -121,6 +121,11 @@ impl Parked {
         self.persist.uuids.get(&id).copied()
     }
 
+    /// The Game caller publishes the exact-level identity delta after this borrow ends.
+    pub(super) fn set_saved_entity_uuid(&mut self, id: u32, uuid: [i32; 4]) {
+        self.persist.uuids.insert(id, uuid);
+    }
+
     pub(super) fn saved_entity_uuids(&self) -> impl Iterator<Item = (u32, [i32; 4])> + '_ {
         self.persist.uuids.iter().map(|(&id, &uuid)| (id, uuid))
     }
@@ -201,6 +206,49 @@ impl Game<'_> {
             key => Dim::Extra(key),
         };
         self.levels.parked.get(&dim)?.locate_resident_owner(at)
+    }
+
+    /// Visit exactly the actual physical lifetime slot. Resolution releases the
+    /// table and its journal before lending storage; no lift, swap or replacement
+    /// occurs, including when the visitor unwinds. Logical visibility is a caller
+    /// policy, just as for the underlying owner resolver. The visitor must not
+    /// call entity lookup or recursively enter this seam.
+    pub(super) fn with_resident_slot<R>(
+        &mut self,
+        dimension: &mod_api::DimensionKey,
+        id: std::num::NonZeroU32,
+        visit: impl FnOnce(&mut horizon_mod_runtime::attachments::AttachmentLifetime) -> R,
+    ) -> super::entity_residency::SlotAccess<R> {
+        use super::entity_residency::SlotAccess;
+        let resolved = {
+            self.entity_residency
+                .borrow_mut()
+                .entity_lookup(dimension, id.get(), |at| {
+                    self.locate_server_resident_owner(at)
+                })
+        };
+        let location = match resolved {
+            EntityLookup::Found { location, .. } => location,
+            EntityLookup::Taken => return SlotAccess::Taken,
+            EntityLookup::Missing => return SlotAccess::Missing,
+        };
+        debug_assert!(self.entity_residency.try_borrow_mut().is_ok());
+        if *dimension == self.dim.key() {
+            self.with_resident_owner_slot(location, visit)
+        } else {
+            let dim = match *dimension {
+                mod_api::DimensionKey::OVERWORLD => Dim::Overworld,
+                mod_api::DimensionKey::NETHER => Dim::Nether,
+                mod_api::DimensionKey::END => Dim::End,
+                key => Dim::Extra(key),
+            };
+            self.levels
+                .parked
+                .get_mut(&dim)
+                .map_or(SlotAccess::Missing, |parked| {
+                    parked.with_resident_owner_slot(location, visit)
+                })
+        }
     }
 
     pub(super) fn server_resident_entity(&self, id: u32) -> EntityLookup<Target> {
@@ -789,7 +837,8 @@ impl Game<'_> {
         let raw = p.persist.raw.remove(&id);
         let slots = p.persist.passenger_slots.remove(&id);
         if let Some(u) = uuid {
-            self.persist.uuids.insert(id, u);
+            self.saved_entity_uuid_changed(from.key(), id, Some(u), None);
+            self.set_saved_entity_uuid(id, u);
         }
         if let Some(r) = raw {
             self.persist.raw.insert(id, r);

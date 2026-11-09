@@ -282,8 +282,8 @@ pub(super) struct ItemDisplayTransformation {
     right_rotation: [f32; 4],
 }
 
-impl From<mod_api::NativeTransformation> for ItemDisplayTransformation {
-    fn from(value: mod_api::NativeTransformation) -> Self {
+impl From<mod_api::Transformation> for ItemDisplayTransformation {
+    fn from(value: mod_api::Transformation) -> Self {
         Self {
             translation: value.translation,
             left_rotation: value.left_rotation,
@@ -966,6 +966,7 @@ impl Game<'_> {
             // to int before short narrowing; integer tags narrow directly.
             let fuse = tnt_fuse(&tag);
             self.tnts.push(super::tnt::PrimedTnt {
+                attachment_lifetime: Default::default(),
                 rotation: [0.0, 0.0],
                 join: Default::default(),
                 no_gravity: entity_nbt::flag(&tag, "NoGravity"),
@@ -1414,6 +1415,7 @@ impl Game<'_> {
             .then(|| super::interactions::InteractionState::from_tag(tag));
         let rotation = entity_nbt::rotation(tag);
         Some(super::commands::OtherEntity {
+            attachment_lifetime: Default::default(),
             join: Default::default(),
             id,
             kind: kind.to_owned(),
@@ -1955,26 +1957,51 @@ impl Game<'_> {
         self.set_saved_entity_uuid(id, uuid);
         uuid
     }
+    /// Assign lazily in the admitted owner level, without swapping Game dimensions.
+    pub(super) fn uuid_for_at(
+        &mut self,
+        dimension: mod_api::DimensionKey,
+        id: u32,
+    ) -> Option<[i32; 4]> {
+        if dimension == self.dim.key() {
+            return Some(self.uuid_for(id));
+        }
+        let level = mod_api::LevelRef::new(self.native_lifecycle.epoch()?, dimension);
+        let parked = self.levels.parked_mut_of(level.dimension_id())?;
+        if let Some(uuid) = parked.saved_entity_uuid(id) {
+            return Some(uuid);
+        }
+        let uuid = random_uuid();
+        parked.set_saved_entity_uuid(id, uuid);
+        self.saved_entity_uuid_changed(dimension, id, None, Some(uuid));
+        Some(uuid)
+    }
     /// Mutate canonical UUID ownership and its already prepared relation index.
     pub(super) fn set_saved_entity_uuid(&mut self, id: u32, uuid: [i32; 4]) -> Option<[i32; 4]> {
         let old = self.persist.uuids.insert(id, uuid);
         if old != Some(uuid) {
-            self.saved_entity_uuid_changed(id, old, Some(uuid));
+            self.saved_entity_uuid_changed(self.dim.key(), id, old, Some(uuid));
         }
         old
     }
     pub(super) fn remove_saved_entity_uuid(&mut self, id: u32) -> Option<[i32; 4]> {
         let old = self.persist.uuids.remove(&id);
         if old.is_some() {
-            self.saved_entity_uuid_changed(id, old, None);
+            self.saved_entity_uuid_changed(self.dim.key(), id, old, None);
         }
         old
     }
-    fn saved_entity_uuid_changed(&self, id: u32, old: Option<[i32; 4]>, new: Option<[i32; 4]>) {
+    pub(super) fn saved_entity_uuid_changed(
+        &self,
+        dimension: mod_api::DimensionKey,
+        id: u32,
+        old: Option<[i32; 4]>,
+        new: Option<[i32; 4]>,
+    ) {
         let Some(epoch) = self.native_lifecycle.epoch() else {
             return;
         };
-        let level = mod_api::LevelRef::new(epoch, self.dim.key());
+        let level = mod_api::LevelRef::new(epoch, dimension);
         if let Some(pass) = self
             .entity_read_state
             .borrow_mut()
@@ -4208,7 +4235,7 @@ mod item_display_saved_transform_tests {
         )
         .unwrap();
         game.native_lifecycle
-            .begin_open(mod_api::NativeAuthority::IntegratedServer);
+            .begin_open(mod_api::Authority::IntegratedServer);
         game.build_registries();
         game.set_allow_commands(true);
 
@@ -4345,17 +4372,17 @@ mod item_display_saved_transform_tests {
     #[test]
     #[ignore = "prepared resources; actual native setter, stale raw and no-raw writer"]
     fn existing_native_item_display_setter_carries_only_transform_state() {
-        use mod_api::NativeTransformation;
+        use mod_api::Transformation;
         with_game(|game| {
             // Same actual server-context setup as existing native machine/contact fixtures.
             game.options.dedicated = Some(Vec::new());
             let id = summon(game, 4, None);
             let uuid = game.persist.uuid_of(id);
             let clock = game.world.game_time;
-            let update = NativeTransformation {
+            let update = Transformation {
                 translation: [9.0, 8.0, 7.0],
                 scale: [2.0; 3],
-                ..NativeTransformation::IDENTITY
+                ..Transformation::IDENTITY
             };
             let display = game.display(game.entity(id).unwrap()).unwrap();
             assert!(game.display_set_transformation(display, update));
@@ -4388,7 +4415,7 @@ mod item_display_saved_transform_tests {
             assert_eq!(fresh.get("teleport_duration"), Some(&Tag::Int(0)));
             assert!(fresh.get("start_interpolation").is_none());
             game.persist.raw.insert(id, raw);
-            let invalid = NativeTransformation {
+            let invalid = Transformation {
                 left_rotation: [0.0; 4],
                 ..update
             };

@@ -63,6 +63,7 @@ enum EntityCollision {
     Deflected { first: bool },
 }
 pub(super) struct Hook {
+    pub(super) attachment_lifetime: horizon_mod_runtime::attachments::AttachmentLifetime,
     /// Its entity id, which a server's players track it under.
     id: u32,
     pub(super) position: Vec3,
@@ -209,6 +210,8 @@ fn minecart_hook_targets<'a>(
         .filter(move |c| Some(c.id) != own_vehicle)
         .map(|c| (c.id, c.bounds()))
 }
+horizon_mod_runtime::impl_attachment_lifetime!(Hook);
+
 impl Hook {
     fn hit_entity(&mut self, id: u32, deflects: bool) -> EntityCollision {
         if deflects {
@@ -488,6 +491,7 @@ impl Game<'_> {
             let v = cast_velocity(y_sin, y_cos, dir_y, &mut random);
             self.next_entity += 1;
             self.hook = Some(Hook {
+                attachment_lifetime: Default::default(),
                 id: self.next_entity,
                 position: start,
                 previous: start,
@@ -646,12 +650,11 @@ impl Game<'_> {
                 && mod_api::__private::listened(mod_api::HookId::ItemFished)
                 && let Ok(drops) = caught.try_into_api()
             {
-                let fished =
-                    mod_api::NativeItemFished::from(mod_api::__private::built::NativeItemFished {
-                        hook: hook.id,
-                        position: [hook.position.x, hook.position.y, hook.position.z],
-                        drops: &drops,
-                    });
+                let fished = mod_api::ItemFished::from(mod_api::__private::built::ItemFished {
+                    hook: hook.id,
+                    position: [hook.position.x, hook.position.y, hook.position.z],
+                    drops: &drops,
+                });
                 let mut cancel = false;
                 let entity_id = self.own_entity_id();
                 self.native_item_fished(player, entity_id, &fished, &mut rod_damage, &mut cancel);
@@ -1363,7 +1366,11 @@ impl Game<'_> {
             Some(eye + point)
         } else {
             let model = self.player_model.as_ref()?;
-            let body = mod_api::camera::lerp(alpha as f32, model.previous_body_yaw, model.body_yaw);
+            let body = mod_api::client::camera::lerp(
+                alpha as f32,
+                model.previous_body_yaw,
+                model.body_yaw,
+            );
             let angle = f64::from(body * (std::f64::consts::PI / 180.0) as f32);
             let (sin, cos) = (f64::from(trig::sin(angle)), f64::from(trig::cos(angle)));
             let right = f64::from(invert) * 0.35;
@@ -1560,6 +1567,7 @@ impl Hook {
     /// This client's own hook as its server tracks it: drawn, never ticked here.
     pub(in crate::game) fn remote(id: u32, at: Vec3) -> Self {
         Self {
+            attachment_lifetime: Default::default(),
             id,
             position: at,
             previous: at,
@@ -1931,8 +1939,11 @@ impl Game<'_> {
             .filter_map(|h| {
                 let owner = self.mobs.iter().find(|m| m.id == h.owner)?;
                 let feet = lerp(owner.previous, owner.position);
-                let body =
-                    mod_api::camera::lerp(alpha as f32, owner.previous_body_yaw, owner.body_yaw);
+                let body = mod_api::client::camera::lerp(
+                    alpha as f32,
+                    owner.previous_body_yaw,
+                    owner.body_yaw,
+                );
                 let angle = f64::from(body * (std::f64::consts::PI / 180.0) as f32);
                 let (sin, cos) = (f64::from(trig::sin(angle)), f64::from(trig::cos(angle)));
                 // The right arm; a crouching owner's eyes are lower.

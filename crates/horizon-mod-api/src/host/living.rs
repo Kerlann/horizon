@@ -43,7 +43,7 @@ pub trait LivingBackend {
         &self,
         living: LivingRef,
         effect: EffectKey,
-    ) -> Result<Option<NativeActiveEffect>, EntityReadError>;
+    ) -> Result<Option<ActiveEffect>, EntityReadError>;
     /// Side: both.
     /// The entity's active effects (`LivingEntity.getActiveEffects`), in the
     /// order their store keeps them, in `Some` even when it has none. None
@@ -57,7 +57,7 @@ pub trait LivingBackend {
     fn living_effects(
         &self,
         living: LivingRef,
-    ) -> Result<Option<Vec<NativeActiveEffect>>, EntityReadError>;
+    ) -> Result<Option<Vec<ActiveEffect>>, EntityReadError>;
     /// Side: both.
     /// Whether the entity has `effect` (`LivingEntity.hasEffect`), using its resolved key.
     /// False before effect resolution, for an armor stand, the dragon or a stale handle;
@@ -450,7 +450,7 @@ pub trait LivingBackendMut {
     /// stand, the dragon, a stale handle or a client, or when the active
     /// instance did not change, as in vanilla's `addEffect`.
     #[access(WorldOnly)]
-    fn living_add_effect(&mut self, living: LivingRef, effect: &NativeActiveEffect) -> bool;
+    fn living_add_effect(&mut self, living: LivingRef, effect: &ActiveEffect) -> bool;
     /// Side: server.
     /// `LivingEntity.removeEffect(effect)` the way its running out goes
     /// (`LivingEntity.tickEffects` drops it): what the effect gave the

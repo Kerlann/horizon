@@ -134,7 +134,7 @@ mod tests {
         assert_eq!(
             receipt,
             WriteReceipt::Pending(CommandId {
-                epoch: NativeWorldEpoch::new(7),
+                epoch: WorldEpoch::new(7),
                 sequence: 9
             })
         );

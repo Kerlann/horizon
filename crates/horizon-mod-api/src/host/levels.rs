@@ -120,7 +120,7 @@ pub trait LevelsBackend {
         &self,
         level: LevelRef,
         controller: TicketController,
-    ) -> Option<Vec<(NativeTicketOwner, [i32; 2], bool)>>;
+    ) -> Option<Vec<(TicketOwner, [i32; 2], bool)>>;
     /// Side: server.
     /// Whether this chunk is loaded; false on a client or for a stale handle.
     #[access(WorldOnly)]
@@ -292,7 +292,7 @@ pub trait LevelsBackend {
         &self,
         level: LevelRef,
         pos: [i32; 3],
-        kind: NativeBlockShapeKind,
+        kind: BlockShapeKind,
     ) -> Option<Vec<[f64; 6]>>;
     /// Side: server.
     /// Clip an empty-context ray against collider or outline shapes, without fluids.
@@ -303,9 +303,9 @@ pub trait LevelsBackend {
         level: LevelRef,
         from: [f64; 3],
         to: [f64; 3],
-        blocks: NativeClipBlock,
-        fluids: NativeClipFluid,
-    ) -> Option<NativeClipHit>;
+        blocks: ClipBlock,
+        fluids: ClipFluid,
+    ) -> Option<ClipHit>;
     /// Side: server.
     /// Gameplay's face support in the current or a parked server level, including
     /// live block entities for dynamic shapes. None for stale or closed levels,
@@ -315,8 +315,8 @@ pub trait LevelsBackend {
         &self,
         level: LevelRef,
         pos: [i32; 3],
-        face: NativeBlockFace,
-        support: NativeSupportType,
+        face: BlockFace,
+        support: SupportType,
     ) -> Option<bool>;
     /// Side: server.
     /// How strongly the block at `pos` powers the block on its `direction` side, power it
@@ -386,7 +386,7 @@ pub trait LevelsBackend {
     /// `special_multiplier` is vanilla's `getSpecialMultiplier`. None for a stale handle, a level
     /// the server has not opened, or a client.
     #[access(WorldOnly)]
-    fn level_local_difficulty(&self, level: LevelRef, pos: [i32; 3]) -> Option<NativeDifficulty>;
+    fn level_local_difficulty(&self, level: LevelRef, pos: [i32; 3]) -> Option<Difficulty>;
     /// Side: server.
     /// Read a registered boolean game rule.
     #[access(WorldOnly)]
@@ -623,7 +623,7 @@ pub trait LevelsBackendMut {
         level: LevelRef,
         kind: &str,
         pos: [f64; 3],
-        reason: NativeSpawnReason,
+        reason: SpawnReason,
     ) -> Option<EntityRef>;
     /// Side: server.
     /// Sets the level's natural spawning limits ([`SpawnLimits`]), from the next
@@ -676,7 +676,7 @@ pub trait LevelsBackendMut {
         &mut self,
         chunk: ChunkRef,
         controller: TicketController,
-        owner: NativeTicketOwner,
+        owner: TicketOwner,
         forced: bool,
         natural_spawning: bool,
     ) -> bool;
@@ -690,7 +690,7 @@ pub trait LevelsBackendMut {
         level: LevelRef,
         pos: [i32; 3],
         state: BlockState,
-        flags: NativeBlockUpdateFlags,
+        flags: BlockUpdateFlags,
     ) -> Result<bool, LevelWriteError>;
     /// Side: server.
     /// Remove a block in place (`Level.removeBlock`), preserving its fluid.
@@ -955,7 +955,7 @@ pub trait LevelsBackendMut {
         center: [f64; 3],
         radius: f32,
         fire: bool,
-        interaction: NativeExplosionInteraction,
+        interaction: ExplosionInteraction,
     ) -> bool;
     /// Side: server.
     /// Strikes lightning at `at`, as summoning a `minecraft:lightning_bolt`

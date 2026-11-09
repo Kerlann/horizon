@@ -6,7 +6,7 @@ use crate::*;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Wire)]
 pub struct CommandId {
     /// The world session that allocated the command.
-    pub epoch: NativeWorldEpoch,
+    pub epoch: WorldEpoch,
     /// Command sequence within that session.
     pub sequence: u64,
 }

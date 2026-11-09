@@ -65,6 +65,8 @@ pub struct AttachmentRowMut<'q, T: 'static> {
 fn write_error(error: AttachmentError) -> AttachmentRowError {
     match error {
         AttachmentError::MissingHolder => AttachmentRowError::StaleHolder,
+        AttachmentError::HolderBusy => AttachmentRowError::HolderBusy,
+        AttachmentError::UnsupportedHolder(kind) => AttachmentRowError::UnsupportedHolder(kind),
         error => AttachmentRowError::Value(error),
     }
 }

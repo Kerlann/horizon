@@ -14,7 +14,7 @@ use horizon_client::{
     mobs::{self, Mob, Species, Who, ai::brain_target},
 };
 use horizon_core::geometry::{Aabb, Axis};
-use mod_api::{EntityRef, LevelRef, LivingRef, NativeWorldEpoch};
+use mod_api::{EntityRef, LevelRef, LivingRef, WorldEpoch};
 use std::collections::HashMap;
 
 /// The minimal extra mob facts retained on the authoritative publication.
@@ -543,7 +543,7 @@ impl Game<'_> {
     pub(super) fn merchant_read_context<'a>(
         &'a self,
         source: &Mob,
-        epoch: NativeWorldEpoch,
+        epoch: WorldEpoch,
         index: &NativeMobRelations,
     ) -> MerchantReadContext<'a> {
         let conn = index.merchants.get(&source.id).copied().filter(|conn| {
@@ -1250,7 +1250,7 @@ mod lent_tests {
                     game.resolve_lent_mob_goal_target(
                         &sources[0],
                         &world,
-                        LivingRef::new(EntityRef::new(NativeWorldEpoch::new(epoch.get() + 1), 41)),
+                        LivingRef::new(EntityRef::new(WorldEpoch::new(epoch.get() + 1), 41)),
                         false
                     )
                     .is_none()

@@ -9,11 +9,12 @@
 //! LOGS: none. READS-BY: `Game::tick_world`, `tick_mobs`.
 //! ENDS-WHEN: every kind ticks from the join-order walk.
 
-use super::{Game, Result};
+use super::{Game, Result, native_base_read_rows::BaseReadSource};
 use horizon_client::join_seq::{JoinSeq, Joined};
 use horizon_client::random_source;
 use horizon_core::geometry::Vec3;
 use horizon_core::random::RandomSource as _;
+use mod_api::EntityReadCapturePhase;
 
 /// What this tick has ticked of the three kinds.
 #[derive(Default, Clone)]
@@ -133,6 +134,7 @@ impl Game<'_> {
         // run and again after an explosion, which can move or remove them.
         let mut obstacles: Option<horizon_client::entities::ObstacleGrid> = None;
         let mut nearby = Vec::new();
+        let mut completed_falling = Vec::new();
         for (join, kind) in pending.drain(..) {
             self.ordered.done = Some(join);
             // ServerLevel.tick: only entities in entity-ticking chunks tick.
@@ -143,6 +145,8 @@ impl Game<'_> {
                     };
                     let at = self.tnts[i].position;
                     if entity_ticking(at.x.floor() as i32, at.z.floor() as i32) {
+                        let read_scope =
+                            self.begin_resident_actor_read_pass(BaseReadSource::Tnt(&self.tnts[i]));
                         let t = &self.tnts[i];
                         let area = t.bounds().expand_towards(t.velocity);
                         obstacles
@@ -153,8 +157,19 @@ impl Game<'_> {
                             })
                             .near(area.inflate(Vec3::new(1.0, 1.0, 1.0)), &mut nearby);
                         let count = self.tnts.len();
-                        if let Err(e) = self.tick_one_tnt(i, &nearby) {
+                        let phase = if let Err(e) = self.tick_one_tnt(i, &nearby) {
                             first_error.get_or_insert(e);
+                            EntityReadCapturePhase::AfterAppliedWrite
+                        } else {
+                            EntityReadCapturePhase::AfterEntityTick
+                        };
+                        if read_scope.is_some()
+                            && let Some(at) = self.tnts.locate(join)
+                        {
+                            self.publish_resident_actor_reads(
+                                BaseReadSource::Tnt(&self.tnts[at]),
+                                phase,
+                            );
                         }
                         if self.tnts.len() < count {
                             obstacles = None;
@@ -168,6 +183,9 @@ impl Game<'_> {
                     let at = self.falling[i].position;
                     if entity_ticking(at.x.floor() as i32, at.z.floor() as i32) {
                         events = true;
+                        let read_scope = self.begin_resident_actor_read_pass(
+                            BaseReadSource::Falling(&self.falling[i]),
+                        );
                         let f = &self.falling[i];
                         let area = horizon_client::falling_block::bounds(f.position)
                             .expand_towards(f.velocity);
@@ -180,6 +198,16 @@ impl Game<'_> {
                             .near(area.inflate(Vec3::new(1.0, 1.0, 1.0)), &mut nearby);
                         if let Err(e) = self.tick_one_falling(i, &nearby) {
                             first_error.get_or_insert(e);
+                        } else if read_scope.is_some() {
+                            completed_falling.push(join);
+                        }
+                        if read_scope.is_some()
+                            && let Some(at) = self.falling.locate(join)
+                        {
+                            self.publish_resident_actor_reads(
+                                BaseReadSource::Falling(&self.falling[at]),
+                                EntityReadCapturePhase::AfterAppliedWrite,
+                            );
                         }
                     }
                 }
@@ -191,6 +219,8 @@ impl Game<'_> {
                     if !entity_ticking(at.x.floor() as i32, at.z.floor() as i32) {
                         continue;
                     }
+                    let read_scope =
+                        self.begin_resident_actor_read_pass(BaseReadSource::Orb(&self.orbs[i]));
                     // ExperienceOrb.tick runs scanForMerges before it moves.
                     // An orb absorbed here is gone before its own turn's
                     // find_join finds it.
@@ -279,13 +309,30 @@ impl Game<'_> {
                     self.entity_powder_snow_particles(snow.0, snow.1, snow.2, snow.3, false);
                     if !stays {
                         self.orbs.remove(i);
+                    } else if read_scope.is_some() {
+                        self.publish_resident_actor_reads(
+                            BaseReadSource::Orb(&self.orbs[i]),
+                            EntityReadCapturePhase::AfterEntityTick,
+                        );
                     }
                 }
             }
         }
         self.ordered.pending_buf = pending;
+        let mut effects_applied = true;
         if events && let Err(e) = self.process_level_events() {
+            effects_applied = false;
             first_error.get_or_insert(e);
+        }
+        if effects_applied {
+            for join in completed_falling {
+                if let Some(at) = self.falling.locate(join) {
+                    self.publish_resident_actor_reads(
+                        BaseReadSource::Falling(&self.falling[at]),
+                        EntityReadCapturePhase::AfterEntityTick,
+                    );
+                }
+            }
         }
         first_error.map_or(Ok(()), Err)
     }

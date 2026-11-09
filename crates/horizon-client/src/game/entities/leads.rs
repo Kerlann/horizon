@@ -11,16 +11,19 @@ use horizon_client::{
     pose::Pose,
 };
 use horizon_core::nbt::Tag;
-use mod_api::NativeLootDrops;
+use mod_api::LootDrops;
 
 /// Natural fence knot: the fence is its authoritative position, not a render cache.
 /// Its JoinList carries the common residency binding and journal.
 pub(super) struct Knot {
+    /// Entity-owned registration metadata; content clones are detached.
+    pub(super) attachment_lifetime: horizon_mod_runtime::attachments::AttachmentLifetime,
     pub id: u32,
     pub join: horizon_client::join_seq::JoinSeq,
     pub fence: [i32; 3],
 }
 horizon_client::impl_joined!(Knot);
+horizon_mod_runtime::impl_attachment_lifetime!(Knot);
 
 /// The item context of a leash success (`InteractionResult.Success`): tying
 /// held mobs to this one and the holder's detach are `withoutItem`, so item
@@ -201,6 +204,7 @@ impl Game<'_> {
         let id = self.next_entity;
         self.knot_ids.insert(fence, id);
         self.knots.push(Knot {
+            attachment_lifetime: Default::default(),
             id,
             join: Default::default(),
             fence,
@@ -494,7 +498,7 @@ impl Game<'_> {
             return;
         };
         let mut drops = vec![ItemStack::new("minecraft:lead", 1)];
-        let context = NativeLootDrops::from(mod_api::__private::built::NativeLootDrops {
+        let context = LootDrops::from(mod_api::__private::built::LootDrops {
             table: "",
             dimension: self.dim.id(),
             origin: at,

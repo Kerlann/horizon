@@ -30,7 +30,7 @@ pub(super) struct NativeReadState {
 
 #[derive(Default)]
 pub(super) struct NativeMobRelationPass {
-    pub(super) tick: Option<NativeTickId>,
+    pub(super) tick: Option<TickId>,
     pub(super) index: super::native_mob_read_context::NativeMobRelations,
 }
 

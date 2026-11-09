@@ -192,6 +192,17 @@ impl Game<'_> {
             // `Entity.<init>` comes before `addFreshEntity`: an entity that started on a
             // path that doesn't tell it (`entity_initialization.rs`) is told here.
             self.initialize_entity(mod_api::Holder::Entity(id), &kind);
+            // Constructor writes were canonical but unbound before insertion.
+            // The real lifetime is now resident, before join listeners query it.
+            if self
+                .persist
+                .uuids
+                .get(&id)
+                .and_then(|uuid| self.entity_attachments.get(uuid))
+                .is_some_and(|map| map.has_index_entries())
+            {
+                let _ = self.bind_resident_entity_attachments(id);
+            }
             self.native_entity_join_level(
                 dimension,
                 id,
@@ -717,6 +728,7 @@ mod tests {
                 );
 
                 game.crystals.push(super::super::dragon::Crystal {
+                    attachment_lifetime: Default::default(),
                     join: Default::default(),
                     id: base + 4,
                     position: Vec3::ZERO,
@@ -783,6 +795,7 @@ mod tests {
                 );
                 drop(seen);
                 game.tnts.push(super::super::tnt::PrimedTnt {
+                    attachment_lifetime: Default::default(),
                     rotation: [0.0, 0.0],
                     join: Default::default(),
                     id: 0,

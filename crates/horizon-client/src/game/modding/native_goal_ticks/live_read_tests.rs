@@ -159,7 +159,7 @@ fn explicit_own_loan_reads_applied_navigation_and_rejects_player_forgery() {
         assert_eq!(forged.selected_slot(&context), None);
         assert_eq!(forged.food(&context), None);
         let stale = EntityRef::new(
-            mod_api::NativeWorldEpoch::new(own.entity().epoch().get() + 1),
+            mod_api::WorldEpoch::new(own.entity().epoch().get() + 1),
             own.entity().id(),
         );
         assert_eq!(stale.position(&context), None);
@@ -227,7 +227,7 @@ fn foreign_lifted_read_observes_shared_publication_updates_not_seen_or_live_view
         let publication = NativeReadPublication {
             silent_overlay: Default::default(),
             capture: mod_api::EntityReadCapture {
-                tick: mod_api::NativeTickId::new(1),
+                tick: mod_api::TickId::new(1),
                 pass: 1,
                 revision: 0,
                 phase: mod_api::EntityReadCapturePhase::BeforeCallback,

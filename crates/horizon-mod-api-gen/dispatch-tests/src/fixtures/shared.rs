@@ -1,6 +1,6 @@
 //! Shared exception: dispatch infrastructure and cross-area fixture types/tests; no new hooks.
 use horizon_core::game_mode::GameMode;
-use mod_api::mod_api::hud_layout::GuiDraw;
+use mod_api::mod_api::client::hud_layout::GuiDraw;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -21,25 +21,28 @@ impl ItemStack {
         ItemKey(&self.item)
     }
 }
-mod registry_keys {
-    pub(super) fn block_key(name: &str) -> Option<super::BlockKey> {
-        match name {
-            "test:block" => Some(super::BlockKey::Test),
-            "test:other" => Some(super::BlockKey::Other),
-            _ => None,
+mod content {
+    pub(super) mod registry_keys {
+        pub(in crate::tests) fn block_key(name: &str) -> Option<super::super::BlockKey> {
+            match name {
+                "test:block" => Some(super::super::BlockKey::Test),
+                "test:other" => Some(super::super::BlockKey::Other),
+                _ => None,
+            }
+        }
+        pub(in crate::tests) fn item_id(key: super::super::ItemKey<'_>) -> Option<&str> {
+            Some(key.0)
         }
     }
-    pub(super) fn item_id(key: super::ItemKey<'_>) -> Option<&str> {
-        Some(key.0)
-    }
 }
+
 struct BlockEntityDraw(Vec<u32>);
 use serde_json::{Map, Value};
 use stubs::*;
 struct Text;
 struct ScreenshotImage;
 #[derive(Debug, PartialEq)]
-struct NativeZoom(u32);
+struct Zoom(u32);
 enum Flow {
     Continue,
     Cancel,
@@ -102,6 +105,10 @@ mod generated {
         pub struct Block;
         pub struct Item;
         pub(super) use super::super::ItemStack;
+        pub(super) use super::super::{
+            Command, Config, Dispensed, InteractionResult, MapDecoration, MapInfo, Minimap, Screen,
+            Zoom,
+        };
         pub struct FluidModel;
         include!(concat!(env!("OUT_DIR"), "/dispatch_fixtures_api.rs"));
     }
@@ -151,6 +158,14 @@ fn receives_cancelled(hook: HookId) -> bool {
 }
 fn entered(hook_id: HookId, hook: &'static str) -> impl Iterator<Item = &'static dyn Hooks> {
     entered_with_id(hook_id, hook).map(|(_, hooks)| hooks)
+}
+// These dispatch-only fixtures install no command-recipient scope. Real native
+// and converted issuer routing is exercised by the Game command fixtures.
+fn entered_entity_command_recipient(
+    _hook_id: HookId,
+    _hook: &'static str,
+) -> std::iter::Empty<&'static dyn Hooks> {
+    std::iter::empty()
 }
 fn entered_with_id(
     hook_id: HookId,
@@ -423,9 +438,9 @@ impl Hooks for Mod {
     fn level_tick_pre(&self, _: &mut dyn ServerHost, _: &mut LevelTickPreEvent<'_>) {
         self.calls.lock().unwrap().push(self.id);
     }
-    fn zoom(&self, _: &dyn ClientHost, _: &mut ZoomEvent) -> Option<NativeZoom> {
+    fn zoom(&self, _: &dyn ClientHost, _: &mut ZoomEvent) -> Option<Zoom> {
         self.calls.lock().unwrap().push(self.id);
-        Some(NativeZoom(self.id))
+        Some(Zoom(self.id))
     }
     fn should_apply_effect_tick_this_tick(
         &self,
@@ -497,12 +512,12 @@ mod stubs {
     pub(super) trait LevelTicksHost: LevelHost {}
     pub(super) trait LevelRandomHost: LevelHost {}
     pub(super) trait LevelWriteHost: LevelTicksHost + LevelRandomHost {}
-    pub(super) struct NativeDifficulty;
-    pub(super) struct NativeSpawner;
+    pub(super) struct Difficulty;
+    pub(super) struct SpawnSource;
     pub(super) struct Tag;
     pub(super) struct FeatureFlags(pub ());
-    pub(super) struct NativeNoteInstrument;
-    pub(super) struct NativeScreenView<'a>(pub &'a ());
+    pub(super) struct NoteInstrument;
+    pub(super) struct ScreenView<'a>(pub &'a ());
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub(super) struct EffectKey(pub(super) u32);
     #[derive(Debug, PartialEq)]
@@ -527,14 +542,14 @@ mod stubs {
     pub(super) struct Hand;
     #[derive(Clone, Copy)]
     pub(super) struct BlockHit;
-    pub(super) struct NativeBlockClick<'a>(pub &'a ());
+    pub(super) struct BlockClick<'a>(pub &'a ());
     #[derive(Clone, Copy)]
     pub(super) enum BonemealSource {
         Interaction,
     }
     pub(super) struct TooltipDisplay<'a>(pub &'a ());
-    pub(super) struct NativeTriState;
-    pub(super) struct NativeInteractionResult;
+    pub(super) struct TriState;
+    pub(super) struct InteractionResult;
     pub(super) struct HurtSource<'a> {
         pub(super) damage_type: &'a str,
         pub(super) position: Option<[f64; 3]>,
@@ -576,14 +591,14 @@ mod stubs {
         }
     }
     pub(super) struct LootStack;
-    pub(super) struct NativeLootContext;
+    pub(super) struct LootContext;
     pub(super) struct NativeReloadListener;
     pub(super) struct RecipePropertyAddition;
     pub(super) struct AdvancementProgress {
         pub done: bool,
     }
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    pub(super) enum NativeProgressType {
+    pub(super) enum ProgressType {
         Grant,
         Revoke,
     }
@@ -608,14 +623,14 @@ mod stubs {
     pub(super) struct SoundPlay;
     pub(super) struct ChannelRef;
     #[derive(Clone, Copy)]
-    pub(super) struct NativePlayerFood;
+    pub(super) struct PlayerFood;
     pub(super) use super::generated::mod_api::LivingRef;
     #[derive(Clone, Copy)]
     pub(super) struct EntityRef;
     #[derive(Clone, Copy)]
     pub(super) struct MinecartRef;
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-    pub(super) enum NativeMinecartKind {
+    pub(super) enum MinecartKind {
         Rideable,
     }
     pub(super) struct EffectTickChange;
@@ -624,6 +639,8 @@ mod stubs {
 }
 
 mod api {
+    #[derive(Clone)]
+    pub struct EntityWriteCompletion;
     // API values are deliberately distinct from the engine BlockStateId stub.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub enum BlockKey {
@@ -649,42 +666,50 @@ mod api {
     pub struct DamageContainer(pub f32);
     #[derive(Clone, Copy)]
     pub struct LivingRef;
-    pub mod camera {
-        pub struct CameraEntity;
-        pub struct FovPlayer;
-    }
+
     #[derive(Clone, Copy)]
     pub struct FluidKey;
-    pub mod menu {
-        pub struct MenuButtonContext {
-            pub player: u128,
-            pub player_entity_id: i32,
-            pub pos: [i32; 3],
-            pub id: i32,
-        }
-        pub struct AnvilCraft;
-        pub struct AnvilUpdate;
-        pub struct GrindstonePlace;
-        pub struct GrindstoneTake;
-    }
+
     pub mod mod_chunk_tickets {
         pub trait TicketValidation {}
     }
     pub use mod_chunk_tickets::TicketValidation;
-    pub mod stations {
-        pub struct EnchantmentRow<'a>(std::marker::PhantomData<&'a ()>);
+
+    pub mod client {
+        pub use super::fog;
+        pub mod camera {
+            pub struct CameraEntity;
+            pub struct FovPlayer;
+        }
+        pub mod first_person {
+            #[derive(Clone, Copy)]
+            pub struct Hand;
+        }
+        pub mod widgets {
+            pub struct TextEdit;
+        }
+        pub mod hud_layout {
+            pub struct HealthInputs;
+            pub struct GuiDraw;
+            #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+            pub enum HeartKind {}
+        }
     }
-    pub mod first_person {
-        #[derive(Clone, Copy)]
-        pub struct Hand;
-    }
-    pub mod widgets {
-        pub struct TextEdit;
-    }
-    pub mod hud_layout {
-        pub struct HealthInputs;
-        pub struct GuiDraw;
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        pub enum HeartKind {}
+    pub mod item {
+        pub mod menu {
+            pub struct MenuButtonContext {
+                pub player: u128,
+                pub player_entity_id: i32,
+                pub pos: [i32; 3],
+                pub id: i32,
+            }
+            pub struct AnvilCraft;
+            pub struct AnvilUpdate;
+            pub struct GrindstonePlace;
+            pub struct GrindstoneTake;
+        }
+        pub mod stations {
+            pub struct EnchantmentRow<'a>(std::marker::PhantomData<&'a ()>);
+        }
     }
 }

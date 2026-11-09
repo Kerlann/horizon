@@ -310,17 +310,17 @@ impl<R> EntityTable<R> {
                 }
                 Change::Extract(identity) => {
                     let location = location(identity);
-                    if self.rows.get(&identity.id).map(|row| row.location) == Some(location) {
-                        if self.extracted.get(&identity.id) != Some(&location) {
-                            forget_extraction(
-                                &mut self.extracted,
-                                &mut self.extracted_by_owner,
-                                identity.id,
-                                None,
-                            );
-                            self.extracted.insert(identity.id, location);
-                            *self.extracted_by_owner.entry(location.owner).or_default() += 1;
-                        }
+                    if self.rows.get(&identity.id).map(|row| row.location) == Some(location)
+                        && self.extracted.get(&identity.id) != Some(&location)
+                    {
+                        forget_extraction(
+                            &mut self.extracted,
+                            &mut self.extracted_by_owner,
+                            identity.id,
+                            None,
+                        );
+                        self.extracted.insert(identity.id, location);
+                        *self.extracted_by_owner.entry(location.owner).or_default() += 1;
                     }
                 }
                 Change::Lifted => {

@@ -203,6 +203,23 @@ macro_rules! define_resident_access {
             $this$(.$projectiles)+.bind_residency(journal, Owner { dimension, kind: Kind::Projectile }, |entity| (entity.id, entity.join_seq()));
             $this.dragon.bind_residency(journal, Owner { dimension, kind: Kind::Dragon }, |entity| (entity.id, entity.join_seq()));
         }
+        pub(super) fn with_resident_owner_slot<R>(
+            &mut $this,
+            at: Location,
+            visit: impl FnOnce(&mut horizon_mod_runtime::attachments::AttachmentLifetime) -> R,
+        ) -> $crate::game::entity_residency::SlotAccess<R> {
+            use $crate::game::entity_residency::SlotAccess;
+            match at.owner.kind {
+                $(Kind::$kind => $crate::game::entity_residency::resident_lifetime_slot!($kind, $this$(.$field)+, at.join, visit),)*
+                Kind::Projectile => $crate::game::entity_residency::resident_lifetime_slot!(Projectile, $this$(.$projectiles)+, at.join, visit),
+                Kind::Dragon => {
+                    $this.dragon.locate(at.join).map_or(SlotAccess::Missing, |_| {
+                        use horizon_mod_runtime::attachments::HasAttachmentLifetime;
+                        SlotAccess::Done(visit($this.dragon.as_mut().unwrap().attachment_lifetime()))
+                    })
+                },
+            }
+        }
         pub(super) fn locate_resident_owner(&$this, at: Location) -> Option<SourceEntity<(Target, bool)>> {
             let source = match at.owner.kind {
                 $(Kind::$kind => {
@@ -239,6 +256,13 @@ impl Game<'_> {
 }
 
 #[cfg(test)]
+#[path = "entity_residency/all_family_binding_tests.rs"]
+mod all_family_binding_tests;
+#[cfg(test)]
+#[path = "entity_residency/lifetime_tests.rs"]
+mod lifetime_tests;
+
+#[cfg(test)]
 mod tests {
     use super::*;
     use crate::game::native_entity_refs::tests::with_game;
@@ -247,6 +271,142 @@ mod tests {
         mobs::Mob,
     };
     use horizon_core::{geometry::Vec3, position::BlockPos};
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn resident_slot_access_routes_live_parked_taken_and_disjoint() {
+        use crate::game::Dim;
+        use std::num::NonZeroU32;
+        let id = |value| NonZeroU32::new(value).unwrap();
+        with_game(|game| {
+            game.reset_entity_residency();
+            let kind = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+            game.mobs.push(Mob::new(410, kind.clone(), Vec3::ZERO, 0.0));
+            assert_eq!(
+                game.with_resident_slot(&DimensionKey::OVERWORLD, id(410), |_| 7),
+                SlotAccess::Done(7)
+            );
+            assert_eq!(
+                game.with_resident_slot(&DimensionKey::NETHER, id(410), |_| panic!(
+                    "wrong dimension"
+                )),
+                SlotAccess::<()>::Missing
+            );
+            assert_eq!(
+                game.with_resident_slot(&DimensionKey::OVERWORLD, id(999), |_| panic!("missing")),
+                SlotAccess::<()>::Missing
+            );
+            let join = game.mobs[0].join_seq();
+            let extracted = game.mobs.extract(join).unwrap();
+            assert_eq!(
+                game.with_resident_slot(&DimensionKey::OVERWORLD, id(410), |_| panic!("extracted")),
+                SlotAccess::<()>::Taken
+            );
+            game.mobs.push(Mob::new(411, kind.clone(), Vec3::ZERO, 0.0));
+            assert_eq!(
+                game.with_resident_slot(&DimensionKey::OVERWORLD, id(411), |_| 8),
+                SlotAccess::Done(8)
+            );
+            game.mobs.put_back(0, extracted);
+            let lifted = game.mobs.lift();
+            assert_eq!(
+                game.with_resident_slot(&DimensionKey::OVERWORLD, id(410), |_| panic!("lifted")),
+                SlotAccess::<()>::Taken
+            );
+            game.mobs.push(Mob::new(412, kind, Vec3::ZERO, 0.0));
+            assert_eq!(
+                game.with_resident_slot(&DimensionKey::OVERWORLD, id(412), |_| 9),
+                SlotAccess::Done(9)
+            );
+            game.mobs.restore(lifted, RestoreOrder::SurvivorsFirst);
+            game.mobs.update(0, |mob| mob.removed = true);
+            assert_eq!(
+                game.with_resident_slot(&DimensionKey::OVERWORLD, id(410), |_| 10),
+                SlotAccess::Done(10)
+            );
+            game.summon_with_nbt("minecraft:tnt", [0.5, 70.0, 0.5], "{}")
+                .unwrap();
+            game.lan_assign_ids();
+            let tnt = id(game.tnts[0].id);
+            assert_eq!(
+                game.with_resident_slot(&DimensionKey::OVERWORLD, tnt, |slot| slot.is_bound()),
+                SlotAccess::Done(false)
+            );
+            game.enter_level(Dim::Nether).unwrap();
+            assert_eq!(
+                game.with_resident_slot(&DimensionKey::OVERWORLD, tnt, |slot| slot.is_bound()),
+                SlotAccess::Done(false)
+            );
+            assert_eq!(
+                game.with_resident_slot(&DimensionKey::OVERWORLD, id(410), |_| 11),
+                SlotAccess::Done(11)
+            );
+            assert_eq!(game.dim, Dim::Nether);
+            game.enter_level(Dim::Overworld).unwrap();
+            game.mobs.remove(0);
+            assert_eq!(
+                game.with_resident_slot(&DimensionKey::OVERWORLD, id(410), |_| panic!("removed")),
+                SlotAccess::<()>::Missing
+            );
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn resident_slot_access_cushion_reentry_and_panic_preserve_actual_lifetime() {
+        use horizon_mod_runtime::attachments::{
+            Attachments, HasAttachmentLifetime, index::AttachmentIndex,
+        };
+        use std::{
+            num::NonZeroU32,
+            sync::{Arc, Mutex},
+        };
+        with_game(|game| {
+            game.reset_entity_residency();
+            game.summon_with_nbt("minecraft:cushion", [0.5, 70.0, 0.5], "{}")
+                .unwrap();
+            game.lan_assign_ids();
+            let id = NonZeroU32::new(game.cushions[0].id).unwrap();
+            let holder = game.entity(id.get()).unwrap();
+            let index = Arc::new(Mutex::new(AttachmentIndex::default()));
+            let mut values = Attachments::default();
+            let journal = game.entity_residency.borrow().producer();
+            let result = game.with_resident_slot(&DimensionKey::OVERWORLD, id, |slot| {
+                // Reenter the same structural journal: a retained drain borrow panics.
+                journal.drain_into(&mut Vec::new());
+                slot.bind(&mut values, &index, holder);
+                slot.registration().unwrap()
+            });
+            let SlotAccess::Done(registration) = result else {
+                panic!("resident slot unavailable")
+            };
+            game.cushions.update(0, |mob| {
+                assert!(
+                    registration
+                        .same_registration(&mob.attachment_lifetime().registration().unwrap())
+                )
+            });
+            let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                game.with_resident_slot(&DimensionKey::OVERWORLD, id, |slot| {
+                    assert!(registration.same_registration(&slot.registration().unwrap()));
+                    panic!("visitor panic");
+                });
+            }));
+            assert!(panic.is_err());
+            game.cushions.update(0, |mob| {
+                assert!(
+                    registration
+                        .same_registration(&mob.attachment_lifetime().registration().unwrap())
+                )
+            });
+            assert!(game.entity_residency.try_borrow_mut().is_ok());
+            game.enter_level(crate::game::Dim::Nether).unwrap();
+            assert!(matches!(
+                game.with_resident_slot(&DimensionKey::OVERWORLD, id, |slot| slot.is_bound()),
+                SlotAccess::Done(true)
+            ));
+        });
+    }
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]

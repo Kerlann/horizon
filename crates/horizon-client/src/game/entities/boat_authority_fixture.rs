@@ -114,7 +114,8 @@ impl Game<'_> {
                                 false,
                             ]
                         });
-                        let boat = self.tick_boat(self.boats[0].clone(), true);
+                        let mut boat = self.boats[0].clone();
+                        self.tick_boat(&mut boat, true);
                         self.store_boat_back(0, boat);
                     }
                     self.tick_remote_boat_bubbles();
@@ -133,8 +134,8 @@ impl Game<'_> {
             for owned in case.owned {
                 self.riding = owned.then_some(1);
                 if owned {
-                    let boat = self.boats.remove(0);
-                    let boat = self.tick_boat(boat, true);
+                    let mut boat = self.boats.remove(0);
+                    self.tick_boat(&mut boat, true);
                     self.boats.push(boat);
                 }
                 self.tick_remote_boat_bubbles();

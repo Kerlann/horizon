@@ -269,13 +269,13 @@ pub(super) fn base_read_source_geometry(
 use super::native_base_read_rows::{BaseReadContext, BaseReadParts, CompactEntityReadRow};
 use horizon_client::join_seq::residency::Kind;
 use horizon_client::mobs::leash::Holder;
-use mod_api::{EntityRef, LeashHolder, LevelRef, NativeWorldEpoch};
+use mod_api::{EntityRef, LeashHolder, LevelRef, WorldEpoch};
 
 /// Pass-borrowed engine context. Resolvers use the existing validated tables;
 /// they must not scan source families or allocate runtime identities.
 pub(super) struct BaseReadOwner<'a> {
     pub(super) level: LevelRef,
-    pub(super) epoch: NativeWorldEpoch,
+    pub(super) epoch: WorldEpoch,
     pub(super) logical_server: bool,
     pub(super) resolve: &'a dyn Fn(u32) -> Option<(EntityRef, Kind)>,
     pub(super) player_leash: &'a dyn Fn([i32; 4]) -> Option<EntityRef>,
@@ -458,6 +458,7 @@ mod tests {
     #[test]
     fn interaction_uses_current_source_dimensions_not_registry_defaults() {
         let mut source = super::super::commands::OtherEntity {
+            attachment_lifetime: Default::default(),
             join: horizon_client::join_seq::JoinSeq::next(),
             id: 31,
             kind: "minecraft:interaction".into(),
@@ -496,11 +497,12 @@ mod tests {
     #[test]
     fn bound_knot_capture_uses_fence_geometry_without_persist_membership() {
         let knot = super::super::leads::Knot {
+            attachment_lifetime: Default::default(),
             id: 43,
             join: horizon_client::join_seq::JoinSeq::next(),
             fence: [-2, 64, 4],
         };
-        let epoch = NativeWorldEpoch::new(9);
+        let epoch = WorldEpoch::new(9);
         let owner = BaseReadOwner {
             level: LevelRef::new(epoch, mod_api::DimensionKey::OVERWORLD),
             epoch,
@@ -552,8 +554,9 @@ mod tests {
 
     #[test]
     fn lifted_source_capture_does_not_require_list_residency() {
-        let epoch = NativeWorldEpoch::new(3);
+        let epoch = WorldEpoch::new(3);
         let source = super::super::commands::OtherEntity {
+            attachment_lifetime: Default::default(),
             join: horizon_client::join_seq::JoinSeq::next(),
             id: 31,
             kind: "minecraft:marker".into(),
@@ -603,7 +606,7 @@ mod tests {
         )
         .unwrap();
         let capture = mod_api::EntityReadCapture {
-            tick: mod_api::NativeTickId::new(1),
+            tick: mod_api::TickId::new(1),
             pass: 1,
             revision: 1,
             phase: mod_api::EntityReadCapturePhase::BeforeCallback,

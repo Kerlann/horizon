@@ -670,6 +670,7 @@ mod tests {
                         game.armor_stands.push(ArmorStand::new(id, Vec3::ZERO, 0.0));
                     } else {
                         game.others.push(super::super::commands::OtherEntity {
+                            attachment_lifetime: Default::default(),
                             knot_check: None,
                             eye: None,
                             join: Default::default(),
@@ -927,7 +928,7 @@ mod tests {
             let rider = game.entity(50).unwrap();
             let vehicle = game.entity(51).unwrap();
             let stale = mod_api::EntityRef::new(
-                mod_api::NativeWorldEpoch::new(rider.epoch().get().wrapping_add(1)),
+                mod_api::WorldEpoch::new(rider.epoch().get().wrapping_add(1)),
                 rider.id(),
             );
             assert!(!game.entity_start_riding(stale, vehicle, true));
@@ -946,7 +947,7 @@ mod tests {
     }
     fn stale(entity: EntityRef) -> EntityRef {
         EntityRef::new(
-            mod_api::NativeWorldEpoch::new(entity.epoch().get().wrapping_add(1)),
+            mod_api::WorldEpoch::new(entity.epoch().get().wrapping_add(1)),
             entity.id(),
         )
     }
@@ -1431,6 +1432,7 @@ mod tests {
             assert_eq!(cow.dismount_location(game, LivingRef::new(player)), None);
             // An entity Horizon doesn't simulate keeps no box to stand on.
             game.others.push(super::super::commands::OtherEntity {
+                attachment_lifetime: Default::default(),
                 knot_check: None,
                 eye: None,
                 join: Default::default(),

@@ -1073,7 +1073,11 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         fs::write(
             root.join("entity-types.json"),
-            r#"{"minecraft:happy_ghast": {}, "minecraft:nautilus": {}, "minecraft:parrot": {}}"#,
+            r#"{
+                "minecraft:happy_ghast": {"width": 4.0, "height": 4.0, "eye_height": 2.6},
+                "minecraft:nautilus": {"width": 0.875, "height": 0.95, "eye_height": 0.2751},
+                "minecraft:parrot": {"width": 0.5, "height": 0.9, "eye_height": 0.54}
+            }"#,
         )
         .unwrap();
         fs::write(
@@ -1127,7 +1131,11 @@ mod tests {
         let root =
             std::env::temp_dir().join(format!("horizon-bat-animation-{}", std::process::id()));
         fs::create_dir(&root).unwrap();
-        fs::write(root.join("entity-types.json"), r#"{"minecraft:bat": {}}"#).unwrap();
+        fs::write(
+            root.join("entity-types.json"),
+            r#"{"minecraft:bat": {"width": 0.5, "height": 0.9, "eye_height": 0.45}}"#,
+        )
+        .unwrap();
         fs::write(
             root.join("entity-models.json"),
             r#"{"minecraft:bat#main": {"children": {"right_wing": {}, "head": {}}}}"#,
@@ -1489,7 +1497,10 @@ mod tests {
         fs::create_dir_all(&root).unwrap();
         fs::write(
             root.join("entity-types.json"),
-            r#"{"minecraft:pig": {}, "minecraft:strider": {}}"#,
+            r#"{
+                "minecraft:pig": {"width": 0.9, "height": 0.9, "eye_height": 0.765},
+                "minecraft:strider": {"width": 0.9, "height": 1.7, "eye_height": 1.445}
+            }"#,
         )
         .unwrap();
         fs::write(

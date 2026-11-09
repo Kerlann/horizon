@@ -2,6 +2,7 @@
 //! `ItemFrame.survives`, `interact` (put an item in, then rotate it),
 //! `hurtServer` (take the item out, then break the frame) and
 //! `ItemFrameRenderer` (the frame model and the item at a 45 degree step).
+use super::native_base_read_rows::BaseReadSource;
 use super::{Game, Hit, InteractTarget};
 use horizon_assets::{bake::bake_model, model::CuboidModel, resolve::ModelLibrary};
 use horizon_client::{entities::ItemFrame, items::ItemStack, mesher::Vertex};
@@ -10,6 +11,7 @@ use horizon_core::{
     position::BlockPos,
     random::RandomSource,
 };
+use mod_api::EntityReadCapturePhase;
 /// A baked frame model: (corners in block units, unit UVs, sprite) per quad.
 pub(super) type FrameModel = Vec<([[f32; 3]; 4], [[f32; 2]; 4], String)>;
 
@@ -547,6 +549,9 @@ impl Game<'_> {
                 i += 1;
                 continue;
             }
+            let join = self.item_frames[i].join;
+            let read_scope =
+                self.begin_resident_actor_read_pass(BaseReadSource::Frame(&self.item_frames[i]));
             self.item_frames[i].check_interval += 1;
             if self.item_frames[i].check_interval >= 100 {
                 self.item_frames[i].check_interval = 0;
@@ -566,6 +571,14 @@ impl Game<'_> {
                     }
                     continue;
                 }
+            }
+            if read_scope.is_some()
+                && let Some(at) = self.item_frames.locate(join)
+            {
+                self.publish_resident_actor_reads(
+                    BaseReadSource::Frame(&self.item_frames[at]),
+                    EntityReadCapturePhase::AfterEntityTick,
+                );
             }
             i += 1;
         }

@@ -125,6 +125,8 @@ fn teleport_velocity(velocity: Vec3, relative: [bool; 3], fall_flying: bool) -> 
 /// entity memory (`persist.raw`), its position and rotation here.
 #[derive(Clone, Debug)]
 pub(in crate::game) struct OtherEntity {
+    /// Entity-owned registration metadata; content clones are detached.
+    pub(super) attachment_lifetime: horizon_mod_runtime::attachments::AttachmentLifetime,
     pub(in crate::game) join: horizon_client::join_seq::JoinSeq,
     pub id: u32,
     pub kind: String,
@@ -141,6 +143,7 @@ pub(in crate::game) struct OtherEntity {
 }
 
 horizon_client::impl_joined!(OtherEntity);
+horizon_mod_runtime::impl_attachment_lifetime!(OtherEntity);
 
 pub(super) fn err(key: &str, args: &[&dyn std::fmt::Display]) -> CommandError {
     CommandError::tr(key, args)
@@ -2810,6 +2813,7 @@ impl Game<'_> {
                     let at = Vec3::new(pos[0], pos[1], pos[2]);
                     let drawn = self.world.random.next_int_bound(100_000).unwrap_or(0);
                     self.crystals.push(super::dragon::Crystal {
+                        attachment_lifetime: Default::default(),
                         join: Default::default(),
                         id: self.next_entity,
                         position: at,

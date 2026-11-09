@@ -61,7 +61,7 @@ pub(crate) enum List {
 /// A named type's definition.
 #[derive(Debug)]
 pub(crate) struct Def {
-    /// Its path as the generated glue names it (`mod_api::NativeBlockClick`).
+    /// Its path as the generated glue names it (`mod_api::BlockClick`).
     pub(super) rust: String,
     /// Its lifetime parameters: it borrows when there are any.
     pub(super) lifetimes: usize,
@@ -707,6 +707,48 @@ pub(super) fn derives(item: &Item, name: &str) -> bool {
 }
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn concrete_receipt_instantiations_keep_distinct_wire_types() {
+        std::thread::Builder::new()
+            .stack_size(64 << 20)
+            .spawn(|| {
+                let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+                let generated = crate::sources(&root, crate::FillMode::Require).unwrap();
+                let included = [
+                    ("mod_api_generated.rs", generated.hooks.as_str()),
+                    ("mod_api_generated_host.rs", generated.host.as_str()),
+                    ("mod_api_host_areas.rs", generated.areas.as_str()),
+                ];
+                let mut types =
+                    super::Types::new(crate::index::Index::new(&root, &included)).unwrap();
+                let api = types.index.module("mod_api", &[]).unwrap();
+                for name in ["WriteReceipt", "CommandCompleted"] {
+                    let boolean: syn::Type =
+                        syn::parse_str(&format!("{name}<bool, EntityWriteError>")).unwrap();
+                    let count: syn::Type =
+                        syn::parse_str(&format!("{name}<u32, EntityWriteError>")).unwrap();
+                    let first = types.ty(api, &boolean, &[]).unwrap();
+                    let second = types.ty(api, &count, &[]).unwrap();
+                    assert_ne!(
+                        first, second,
+                        "different results cannot share a concrete Wire definition"
+                    );
+                    assert_eq!(types.ty(api, &boolean, &[]).unwrap(), first);
+                    assert_eq!(
+                        super::super::calls::rust_ty(&types, &first, false),
+                        format!("mod_api::{name}<bool, mod_api::EntityWriteError>")
+                    );
+                    assert_eq!(
+                        super::super::calls::rust_ty(&types, &second, false),
+                        format!("mod_api::{name}<u32, mod_api::EntityWriteError>")
+                    );
+                }
+            })
+            .unwrap()
+            .join()
+            .unwrap();
+    }
+
     #[test]
     fn staged_identifier_exposure_does_not_add_backing_storage_to_wire_layouts() {
         std::thread::Builder::new().stack_size(64 << 20).spawn(|| {

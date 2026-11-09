@@ -35,7 +35,7 @@ pub trait MinecartsBackend {
     fn minecart_kind(
         &self,
         cart: MinecartRef,
-    ) -> Result<Option<NativeMinecartKind>, EntityReadError>;
+    ) -> Result<Option<MinecartKind>, EntityReadError>;
     /// Side: server.
     /// `AbstractMinecart.getMaxSpeed`, in blocks per tick: the old behaviour's
     /// 0.4 (0.2 in water), or with the `minecart_improvements` experiment the

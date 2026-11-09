@@ -54,12 +54,7 @@ pub trait EntitiesServerHost {
     /// `PlayerRef::give_experience_points`. Empty for a level not in place and on a
     /// client of a server.
     #[access(WorldOnly)]
-    fn experience_orbs(
-        &self,
-        dimension: &str,
-        min: [f64; 3],
-        max: [f64; 3],
-    ) -> Vec<NativeExperienceOrb>;
+    fn experience_orbs(&self, dimension: &str, min: [f64; 3], max: [f64; 3]) -> Vec<ExperienceOrb>;
     /// Side: server.
     /// Throws a falling block of `state` from `pos` (its bottom centre) at
     /// `velocity` (blocks a tick) in the level in place, `dimension`: it
@@ -77,7 +72,7 @@ pub trait EntitiesServerHost {
         state: BlockState,
         pos: [f64; 3],
         velocity: [f64; 3],
-        falling: NativeFalling,
+        falling: Falling,
     ) -> bool;
 }
 /// The handles' reads of the `entities` area, implemented by the game and reached through [`Backend`].
@@ -304,7 +299,7 @@ pub trait EntitiesBackend {
         &self,
         entity: EntityRef,
         distance: f64,
-    ) -> Result<Option<NativeClipHit>, EntityReadError>;
+    ) -> Result<Option<ClipHit>, EntityReadError>;
     /// Side: both.
     /// Whether the entity is made of parts that are entities of their own
     /// (`Entity.isMultipartEntity`): the ender dragon. Its parts are not the
@@ -736,7 +731,7 @@ pub trait EntitiesBackendMut {
     /// still with no death and no loot. False for a player, a dragon part (it
     /// leaves with its dragon), or a stale handle.
     #[access(WorldOnly)]
-    fn entity_remove(&mut self, entity: EntityRef, reason: NativeRemovalReason) -> bool;
+    fn entity_remove(&mut self, entity: EntityRef, reason: RemovalReason) -> bool;
     /// Side: server.
     /// Drops `stack` at the entity's feet, `y_offset` above
     /// (`Entity.spawnAtLocation`), or 0.15 out along a frame or painting's

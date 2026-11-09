@@ -155,12 +155,13 @@ mod tests {
     use super::*;
     #[test]
     fn direct_saved_source_preserves_domains_and_materializes_geometry() {
-        let epoch = mod_api::NativeWorldEpoch::new(7);
+        let epoch = mod_api::WorldEpoch::new(7);
         let raw = horizon_core::nbt::Tag::compound([(
             "CustomNameVisible",
             horizon_core::nbt::Tag::Byte(2),
         )]);
         let other = super::super::commands::OtherEntity {
+            attachment_lifetime: Default::default(),
             join: horizon_client::join_seq::JoinSeq::next(),
             id: 17,
             kind: "minecraft:marker".into(),
@@ -199,7 +200,7 @@ mod tests {
             },
         );
         let capture = EntityReadCapture {
-            tick: mod_api::NativeTickId::new(3),
+            tick: mod_api::TickId::new(3),
             pass: 2,
             revision: 1,
             phase: mod_api::EntityReadCapturePhase::BeforeCallback,
@@ -226,7 +227,7 @@ mod tests {
     fn part_storage_preserves_unknown_empty_and_bounded_domains() {
         let empty = BaseReadParts::new(&[]).unwrap();
         assert!(empty.materialize().is_empty());
-        let entity = EntityRef::new(mod_api::NativeWorldEpoch::new(1), 17);
+        let entity = EntityRef::new(mod_api::WorldEpoch::new(1), 17);
         let eight = [entity; 8];
         assert_eq!(BaseReadParts::new(&eight).unwrap().materialize(), eight);
         assert!(BaseReadParts::new(&[entity; 9]).is_none());

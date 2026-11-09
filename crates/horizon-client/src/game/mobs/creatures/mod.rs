@@ -11,11 +11,14 @@ mod pufferfish_player;
 #[cfg(test)]
 mod retained_limits_tests;
 use super::api_values::{TryIntoApi, TryIntoEngine};
+use super::native_base_read_rows::BaseReadSource;
+use horizon_client::join_seq::residency::Kind;
+use mod_api::EntityReadCapturePhase;
 
 use super::level_sounds::LevelSound;
 use super::{
     Dim, Game, Hand, InteractTarget, entity_culling::EntityCullDecision,
-    native_mob_draw::NativePlayerRender, native_projectiles::Impact, view_vector,
+    native_mob_draw::PlayerRender, native_projectiles::Impact, view_vector,
 };
 use horizon_assets::item_model::DisplayContext;
 use horizon_client::actions::Action;
@@ -44,7 +47,7 @@ use horizon_core::{
     position::BlockPos,
     random::RandomSource,
 };
-use mod_api::{EquipmentSlot, NativeLootDrops, SoundSource};
+use mod_api::{EquipmentSlot, LootDrops, SoundSource};
 use std::sync::Arc;
 
 /// `AbstractArrow.onHitEntity` when `hurtOrSimulate` returned false.
@@ -727,7 +730,7 @@ impl Game<'_> {
         // Entity.random first supplies the UUID, then LivingEntity's initial
         // yaw; species constructor draws continue from that same stream.
         let (own, uuid) = horizon_client::mobs::living_random();
-        self.persist.uuids.insert(self.next_entity, uuid);
+        self.set_saved_entity_uuid(self.next_entity, uuid);
         let mut mob = Mob::with_random(
             self.next_entity,
             t,
@@ -741,7 +744,10 @@ impl Game<'_> {
         match site {
             SpawnSite::Raw => return Some(mob),
             SpawnSite::Finalizing(reason) => match self.finalize_with(&mut mob, reason, None) {
-                Finalized::Cancelled => return None,
+                Finalized::Cancelled => {
+                    self.forget_entity(mob.id);
+                    return None;
+                }
                 Finalized::Skipped => return Some(mob),
                 Finalized::Done => {}
             },
@@ -902,13 +908,13 @@ impl Game<'_> {
                 .find(|m| m.id == id)
                 .map(super::native_hooks::mob_kind)
                 .unwrap_or_default();
-            let mut entries = vec![mod_api::NativeArmorHurt {
+            let mut entries = vec![mod_api::ArmorHurt {
                 slot: EquipmentSlot::Body,
                 stack: body_snapshot,
                 damage: super::durability_damage(damage),
                 new_damage: super::durability_damage(damage),
             }];
-            let hit = mod_api::health::HurtSource {
+            let hit = mod_api::entity::health::HurtSource {
                 damage_type: name,
                 causing: 0,
                 direct: 0,
@@ -1314,7 +1320,7 @@ impl Game<'_> {
         &mut self,
         mob: &mut Mob,
         reason: SpawnReason,
-        spawner: Option<mod_api::NativeSpawner>,
+        spawner: Option<mod_api::SpawnSource>,
     ) -> Finalized {
         let mut group = None;
         let (outcome, difficulty) = self.finalize_spawn_event(mob, reason, spawner, &mut group);
@@ -1332,7 +1338,7 @@ impl Game<'_> {
         &self,
         mob: &mut Mob,
         reason: SpawnReason,
-        spawner: Option<mod_api::NativeSpawner>,
+        spawner: Option<mod_api::SpawnSource>,
         group: &mut Option<Group>,
     ) -> (Finalized, spawning::LocalDifficulty) {
         let at = [mob.position.x, mob.position.y, mob.position.z];
@@ -1351,7 +1357,7 @@ impl Game<'_> {
         &self,
         mob: &mut Mob,
         reason: SpawnReason,
-        spawner: Option<mod_api::NativeSpawner>,
+        spawner: Option<mod_api::SpawnSource>,
         vanilla: u32,
     ) -> Option<u32> {
         if !mod_api::__private::has_entity_parts() {
@@ -1366,11 +1372,12 @@ impl Game<'_> {
         let at = [mob.position.x, mob.position.y, mob.position.z];
         self.lend_unspawned(&kind, at, Some(mob), |lent, _| {
             list.iter().find_map(|attached| {
-                let _guard = mod_api::crash::enter_native_mod(mod_api::crash::NativeModCall {
-                    id: attached.mod_id(),
-                    hook: "spawn_cluster_size",
-                    part: Some(attached.type_name()),
-                });
+                let _guard =
+                    mod_api::content::crash::enter_native_mod(mod_api::content::crash::ModCall {
+                        id: attached.mod_id(),
+                        hook: "spawn_cluster_size",
+                        part: Some(attached.type_name()),
+                    });
                 attached
                     .part()
                     .spawn_cluster_size(self, lent, reason, spawner, vanilla)
@@ -1385,7 +1392,7 @@ impl Game<'_> {
         kind: &str,
         at: [f64; 3],
         reason: SpawnReason,
-        spawner: Option<mod_api::NativeSpawner>,
+        spawner: Option<mod_api::SpawnSource>,
     ) -> (Finalized, spawning::LocalDifficulty) {
         let difficulty = self.local_difficulty(at);
         if !mod_api::__private::listened(mod_api::HookId::FinalizeSpawn) {
@@ -1401,12 +1408,12 @@ impl Game<'_> {
         kind: &str,
         at: [f64; 3],
         reason: SpawnReason,
-        spawner: Option<mod_api::NativeSpawner>,
+        spawner: Option<mod_api::SpawnSource>,
         difficulty: spawning::LocalDifficulty,
         mob: Option<&mut Mob>,
         group: &mut Option<Group>,
     ) -> (Finalized, spawning::LocalDifficulty) {
-        let mut heard = mod_api::NativeDifficulty::from(difficulty);
+        let mut heard = mod_api::Difficulty::from(difficulty);
         let (mut spawn_cancelled, mut skip) = (false, false);
         let given = group
             .as_ref()
@@ -1650,7 +1657,7 @@ impl Game<'_> {
             // The aborted pass never applies retention, including previously
             // finished despawn answers. Do not carry those into the retry.
             for m in &mut mobs {
-                m.despawn = mod_api::NativeDespawn::default();
+                m.despawn = mod_api::Despawn::default();
             }
         }
         lent.give_back(&mut self.world);
@@ -2312,7 +2319,7 @@ impl Game<'_> {
             }
         }
         let table = drops::death_loot_table(m, death.mob_drops).filter(|t| loot.has_table(t));
-        let context = NativeLootDrops::from(mod_api::__private::built::NativeLootDrops {
+        let context = LootDrops::from(mod_api::__private::built::LootDrops {
             table: table.as_deref().unwrap_or_default(),
             dimension: self.dim.id(),
             origin: [m.position.x, m.position.y, m.position.z],
@@ -5015,6 +5022,7 @@ impl Game<'_> {
         .inflate(Vec3::new(1.0, 0.5, 1.0));
         // Player.hasInfiniteMaterials.
         let creative = self.creative;
+        let read_scope = self.begin_resident_read_pass(Kind::Projectile);
         let mut projectiles = self.creatures.projectiles.lift();
         #[cfg(test)]
         super::entity::taken_pass_tests::after_take(self);
@@ -5054,6 +5062,12 @@ impl Game<'_> {
             projectiles,
             horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
         );
+        if read_scope.is_some() {
+            self.refresh_resident_owner_reads(
+                Kind::Projectile,
+                EntityReadCapturePhase::AfterAppliedWrite,
+            );
+        }
         for shot in picked {
             self.add_pickup(
                 super::pickups::Taken::Arrow(Box::new(shot)),
@@ -5067,8 +5081,14 @@ impl Game<'_> {
             self.flush_lan_explosions();
             return self.flush_wind_bursts();
         }
+        let read_scope = self.begin_resident_read_pass(Kind::Projectile);
         let mut projectiles = self.creatures.projectiles.lift();
         let ticking = self.entity_ticking_area();
+        let mut ticked_joins = if read_scope.is_some() {
+            Vec::with_capacity(projectiles.len())
+        } else {
+            Vec::new()
+        };
         let mut hits = Vec::new();
         // The breezes that deflected a projectile, and where.
         let mut deflections: Vec<(u32, [f64; 3])> = Vec::new();
@@ -5157,6 +5177,7 @@ impl Game<'_> {
                     pickable_projectile_hitboxes_into(&projectiles, &keep_flags, i, &mut winds);
                 }
                 let mut redirect = None;
+                let mut stepped = false;
                 projectiles.update(i, |p| {
                     if vanish
                         && matches!(p.kind, ProjectileKind::EnderPearl)
@@ -5212,6 +5233,7 @@ impl Game<'_> {
                             })
                         }
                     };
+                    stepped = true;
                     if (p.is_thrown() && !matches!(p.kind, ProjectileKind::LlamaSpit))
                         || p.is_arrow() && p.arrow.as_ref().is_none_or(|a| !a.no_physics)
                     {
@@ -5330,10 +5352,23 @@ impl Game<'_> {
                         redirect = Some((j, (p.owner, p.owner_uuid, p.guest)));
                     }
                 });
+                if stepped && read_scope.is_some() {
+                    ticked_joins.push(projectiles[i].join);
+                    self.publish_resident_actor_reads(
+                        BaseReadSource::Projectile(&projectiles[i]),
+                        EntityReadCapturePhase::AfterAppliedWrite,
+                    );
+                }
                 if let Some((j, (owner, owner_uuid, guest))) = redirect {
                     let look = self.owner_look(owner, guest);
                     projectiles.update(j, |wind| {
                         super::deflect::aim_deflect(wind, look, owner, owner_uuid, guest);
+                        if read_scope.is_some() {
+                            self.publish_resident_actor_reads(
+                                BaseReadSource::Projectile(wind),
+                                EntityReadCapturePhase::AfterAppliedWrite,
+                            );
+                        }
                     });
                 }
             }
@@ -5368,6 +5403,14 @@ impl Game<'_> {
                 &mut arrow_events,
             );
         }
+        if read_scope.is_some() {
+            for source in projectiles.iter() {
+                self.publish_resident_actor_reads(
+                    BaseReadSource::Projectile(source),
+                    EntityReadCapturePhase::AfterAppliedWrite,
+                );
+            }
+        }
         for (owner, guest, at) in shoot_events {
             self.with_projectile_dispatch(&mut projectiles, |game| {
                 game.projectile_shoot_event(owner, guest, at);
@@ -5392,32 +5435,48 @@ impl Game<'_> {
             projectiles,
             horizon_client::join_seq::RestoreOrder::SpawnsFirst,
         );
-        for (p, hit) in hits {
-            // A player's arrow on another player lands as the victim's hurt.
-            if let Some(victim) = self.projectile_pvp_victim(&p, hit) {
-                self.projectile_hits_player(&p, hit, victim)?;
-                continue;
-            }
-            // A guest's projectile lands as theirs: a pearl takes them, what
-            // it hurts answers to them. One hitting the host (`Who::Player`
-            // here) stays the host's hit.
-            match p.guest {
-                Some(conn)
-                    if !matches!(
-                        hit,
-                        Hit::Entity {
-                            who: Who::Player,
-                            ..
-                        }
-                    ) =>
-                {
-                    self.guest_projectile_hit(conn, &p, hit)?;
+        let effects = (|| {
+            for (p, hit) in hits {
+                // A player's arrow on another player lands as the victim's hurt.
+                if let Some(victim) = self.projectile_pvp_victim(&p, hit) {
+                    self.projectile_hits_player(&p, hit, victim)?;
+                    continue;
                 }
-                _ => self.projectile_hit(&p, hit)?,
+                // A guest's projectile lands as theirs: a pearl takes them, what
+                // it hurts answers to them. One hitting the host (`Who::Player`
+                // here) stays the host's hit.
+                match p.guest {
+                    Some(conn)
+                        if !matches!(
+                            hit,
+                            Hit::Entity {
+                                who: Who::Player,
+                                ..
+                            }
+                        ) =>
+                    {
+                        self.guest_projectile_hit(conn, &p, hit)?;
+                    }
+                    _ => self.projectile_hit(&p, hit)?,
+                }
+            }
+            self.flush_lan_explosions();
+            self.flush_wind_bursts()
+        })();
+        let phase = if effects.is_ok() {
+            EntityReadCapturePhase::AfterEntityTick
+        } else {
+            EntityReadCapturePhase::AfterAppliedWrite
+        };
+        for join in ticked_joins {
+            if let Some(at) = self.creatures.projectiles.locate(join) {
+                self.publish_resident_actor_reads(
+                    BaseReadSource::Projectile(&self.creatures.projectiles[at]),
+                    phase,
+                );
             }
         }
-        self.flush_lan_explosions();
-        self.flush_wind_bursts()
+        effects
     }
     /// `LivingEntity.hurtServer`'s `setLastHurtByPlayer` for a projectile a
     /// player owns (a fireball they turned back): the kill is theirs, so a
@@ -8738,7 +8797,7 @@ impl Game<'_> {
             let who = is_player
                 .then(|| self.remote_player_name(mob.id))
                 .flatten()
-                .map(|name| NativePlayerRender { name, local: false });
+                .map(|name| PlayerRender { name, local: false });
             let mut hidden = mod_api::HiddenParts::default();
             let modded = if layers_only {
                 false
@@ -12417,10 +12476,10 @@ mod armor_destroy_tests {
         });
     }
     use crate::game::{answered_wear, durability_damage, native_entity_refs::tests::with_game};
-    use mod_api::{EquipmentSlot, NativeArmorHurt};
+    use mod_api::EquipmentSlot;
 
-    fn entry(slot: EquipmentSlot, new_damage: f32) -> NativeArmorHurt {
-        NativeArmorHurt {
+    fn entry(slot: EquipmentSlot, new_damage: f32) -> mod_api::ArmorHurt {
+        mod_api::ArmorHurt {
             slot,
             stack: mod_api::ItemStack::new(
                 mod_api::__private::item_key("minecraft:diamond_helmet").unwrap(),
@@ -13159,7 +13218,7 @@ mod chorus_projectile_drop_tests {
         )
         .unwrap();
         game.native_lifecycle
-            .begin_open(mod_api::NativeAuthority::IntegratedServer);
+            .begin_open(mod_api::Authority::IntegratedServer);
         game.build_registries();
         game.set_allow_commands(true);
 

@@ -12,7 +12,7 @@
 use super::Game;
 use horizon_client::cooldowns::Cooldowns;
 use horizon_client::items::ItemStack;
-use mod_api::{NativeItemCooldown, PlayerRef};
+use mod_api::{ItemCooldown, PlayerRef};
 use std::sync::Arc;
 
 impl Game<'_> {
@@ -48,16 +48,16 @@ impl Game<'_> {
     pub(super) fn player_item_cooldowns(
         &self,
         player: PlayerRef,
-    ) -> Result<Option<Vec<NativeItemCooldown>>, mod_api::EntityReadError> {
+    ) -> Result<Option<Vec<ItemCooldown>>, mod_api::EntityReadError> {
 use super::{native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
 if !self.is_logical_server(){return Ok(None)}
 let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::Cooldowns]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
 Ok((||{
-        let mut out: Vec<NativeItemCooldown> = self
+        let mut out: Vec<ItemCooldown> = self
             .raw_cooldowns_of(target)?
             .remaining()
             .filter(|(_, left)| *left > 0)
-            .map(|(group, left)| NativeItemCooldown {
+            .map(|(group, left)| ItemCooldown {
                 group: group.to_string(),
                 ticks_left: left,
             })
@@ -197,7 +197,7 @@ mod tests {
         let entity = player.entity();
         mod_api::__private::game::player_ref(
             mod_api::EntityRef::new(
-                mod_api::NativeWorldEpoch::new(entity.epoch().get() + 1),
+                mod_api::WorldEpoch::new(entity.epoch().get() + 1),
                 entity.id(),
             ),
             player.uuid(),

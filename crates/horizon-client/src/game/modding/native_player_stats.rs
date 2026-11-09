@@ -4,7 +4,7 @@
 //! isn't online here. Writes return false (or None) for those, for a dead
 //! player, and, inside another player's turn, for anyone but that player.
 use super::{Game, stats::Stats};
-use mod_api::{NativeStatType, PlayerRef};
+use mod_api::{PlayerRef, StatType};
 
 /// An id with its namespace: `stone` is `minecraft:stone`.
 fn qualified(id: &str) -> String {
@@ -26,7 +26,7 @@ impl Game<'_> {
     pub(super) fn player_stat(
         &self,
         player: PlayerRef,
-        stat_type: NativeStatType,
+        stat_type: StatType,
         key: &str,
     ) -> Result<Option<i32>, mod_api::EntityReadError> {
 use super::{commands::Target,native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
@@ -41,7 +41,7 @@ Ok((||{let stats=match target {Target::Player=>Some(&self.stats),Target::Guest(c
     pub(super) fn player_award_stat(
         &mut self,
         player: PlayerRef,
-        stat_type: NativeStatType,
+        stat_type: StatType,
         key: &str,
         amount: i32,
     ) -> bool {
@@ -55,7 +55,7 @@ Ok((||{let stats=match target {Target::Player=>Some(&self.stats),Target::Guest(c
     pub(super) fn player_reset_stat(
         &mut self,
         player: PlayerRef,
-        stat_type: NativeStatType,
+        stat_type: StatType,
         key: &str,
     ) -> bool {
         let ty = stat_type.path();
@@ -133,7 +133,7 @@ Ok((||{let book=match target {Target::Player=>&self.level.recipe_book,Target::Gu
 #[cfg(test)]
 mod tests {
     use super::super::native_entity_refs::tests::with_game;
-    use mod_api::NativeStatType;
+    use mod_api::StatType;
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
@@ -195,8 +195,7 @@ mod tests {
             game.stats.add("custom", "minecraft:jump", 3);
 
             let player = game.player(123).unwrap();
-            let jump =
-                |game: &super::Game<'_>| game.player_stat(player, NativeStatType::Custom, "jump");
+            let jump = |game: &super::Game<'_>| game.player_stat(player, StatType::Custom, "jump");
             assert_eq!(jump(game), Some(7));
             assert_eq!(
                 game.player_has_discovered_recipe(player, "stick"),

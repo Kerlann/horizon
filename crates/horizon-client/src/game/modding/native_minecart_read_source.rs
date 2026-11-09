@@ -8,7 +8,7 @@ use super::{
     native_live_entity_reads::EntityReadTarget,
 };
 use horizon_world::registry::BlockStateId;
-use mod_api::NativeMinecartKind;
+use mod_api::MinecartKind;
 
 pub(super) struct MinecartRead<'a, 'w> {
     pub(super) game: &'a Game<'w>,
@@ -30,15 +30,15 @@ impl<'w> Game<'w> {
 }
 
 impl MinecartRead<'_, '_> {
-    pub(super) fn minecart_kind(&self) -> NativeMinecartKind {
+    pub(super) fn minecart_kind(&self) -> MinecartKind {
         match self.cart.kind {
-            CartKind::Rideable => NativeMinecartKind::Rideable,
-            CartKind::Chest => NativeMinecartKind::Chest,
-            CartKind::Furnace => NativeMinecartKind::Furnace,
-            CartKind::Tnt => NativeMinecartKind::Tnt,
-            CartKind::Hopper => NativeMinecartKind::Hopper,
-            CartKind::CommandBlock => NativeMinecartKind::CommandBlock,
-            CartKind::Spawner => NativeMinecartKind::Spawner,
+            CartKind::Rideable => MinecartKind::Rideable,
+            CartKind::Chest => MinecartKind::Chest,
+            CartKind::Furnace => MinecartKind::Furnace,
+            CartKind::Tnt => MinecartKind::Tnt,
+            CartKind::Hopper => MinecartKind::Hopper,
+            CartKind::CommandBlock => MinecartKind::CommandBlock,
+            CartKind::Spawner => MinecartKind::Spawner,
         }
     }
     pub(super) fn minecart_max_speed(&self) -> f64 {

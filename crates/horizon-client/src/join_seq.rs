@@ -15,6 +15,7 @@ use std::{
     slice::SliceIndex,
 };
 
+pub mod physics_mutations;
 #[path = "join_seq/residency.rs"]
 pub mod residency;
 #[path = "join_seq/visibility.rs"]
@@ -171,10 +172,11 @@ pub struct JoinList<T, const DIRECT: bool = true>(
     Option<residency::Binding<T>>,
     ListStamp,
     Option<visibility::Binding>,
+    Option<physics_mutations::Binding<T>>,
 );
 impl<T: Clone, const DIRECT: bool> Clone for JoinList<T, DIRECT> {
     fn clone(&self) -> Self {
-        Self(self.0.clone(), None, ListStamp::new(), None)
+        Self(self.0.clone(), None, ListStamp::new(), None, None)
     }
 }
 impl<T, const DIRECT: bool> Drop for JoinList<T, DIRECT> {
@@ -441,7 +443,7 @@ impl<T: Joined> ResidentList<T> {
         self.0.retain(keep);
     }
     pub fn retain_mut(&mut self, keep: impl FnMut(&mut T) -> bool) {
-        self.0.retain_where(keep);
+        self.0.retain_where(keep, true);
     }
     pub fn clear(&mut self) {
         self.0.clear();
@@ -490,11 +492,25 @@ impl<'a, T> IntoIterator for &'a ResidentList<T> {
 
 impl<T, const DIRECT: bool> Default for JoinList<T, DIRECT> {
     fn default() -> Self {
-        Self(Vec::new(), None, ListStamp::new(), None)
+        Self(Vec::new(), None, ListStamp::new(), None, None)
     }
 }
 
 impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
+    fn observe(&self, index: usize, change: physics_mutations::Change) {
+        if let Some(watch) = &self.4 {
+            watch.record(&self.0[index], change);
+        }
+    }
+    /// Observe only this physics pass. Closing the handle requires no Game work.
+    pub fn watch_physics_mutations(&mut self) -> physics_mutations::Watch
+    where
+        T: Joined,
+    {
+        let (binding, watch) = physics_mutations::Binding::start(self.4.as_ref(), self.len());
+        self.4 = Some(binding);
+        watch
+    }
     /// Bind snapshot visibility independently of the residency journal. Clones
     /// are detached; bindings follow resident storage across level swaps.
     pub fn bind_visibility(&mut self, sink: &visibility::Visibility) {
@@ -564,6 +580,7 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
         self.written();
         let mut taken = std::mem::take(self);
         self.1 = taken.1.clone();
+        self.4 = taken.4.clone();
         self.3 = taken
             .3
             .as_ref()
@@ -607,6 +624,25 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
                 .as_ref()
                 .map(|b| visibility::Binding::resident(&b.sink));
         }
+        if taken.4.is_none() {
+            if let Some(watch) = &self.4 {
+                watch.all(&taken.0, physics_mutations::Change::Added);
+            }
+            taken.4 = self.4.clone();
+        }
+        if self.4.is_none() {
+            if let Some(watch) = &taken.4 {
+                watch.all(&self.0, physics_mutations::Change::Added);
+            }
+            self.4 = taken.4.clone();
+        }
+        if let (Some(resident), Some(pass)) = (&self.4, &taken.4) {
+            if resident.covers(pass) {
+                taken.4 = self.4.clone();
+            } else if pass.covers(resident) {
+                self.4 = taken.4.clone();
+            }
+        }
         let closes_lift = taken.1.is_some();
         match (&self.1, &taken.1) {
             (Some(a), Some(b)) => assert!(a.same(b), "restoring a different entity owner"),
@@ -628,7 +664,13 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
         drop(visibility_lease);
     }
     pub fn with_capacity(capacity: usize) -> Self {
-        Self(Vec::with_capacity(capacity), None, ListStamp::new(), None)
+        Self(
+            Vec::with_capacity(capacity),
+            None,
+            ListStamp::new(),
+            None,
+            None,
+        )
     }
     /// Move a batch back without changing its join numbers or order.
     pub fn append(&mut self, other: &mut Self) {
@@ -646,11 +688,25 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
                 binding.all(&other.0, residency::Change::Install);
             }
         }
+        let same_watch = match (&self.4, &other.4) {
+            (Some(a), Some(b)) => a.same(b),
+            (None, None) => true,
+            _ => false,
+        };
+        if !same_watch {
+            if let Some(watch) = &other.4 {
+                watch.all(&other.0, physics_mutations::Change::Removed);
+            }
+            if let Some(watch) = &self.4 {
+                watch.all(&other.0, physics_mutations::Change::Added);
+            }
+        }
         other.written();
         self.0.append(&mut other.0);
     }
     pub fn remove(&mut self, index: usize) -> T {
         self.written();
+        self.observe(index, physics_mutations::Change::Removed);
         let entity = self.0.remove(index);
         if let Some(binding) = &self.1 {
             binding.entity(&entity, residency::Change::Remove);
@@ -660,16 +716,27 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
     /// Extract selected owners eagerly in list order, compacting survivors in place.
     /// The predicate cannot replace an entity or change its identity.
     pub fn extract_if(&mut self, mut take: impl FnMut(&T) -> bool) -> std::vec::IntoIter<T> {
-        self.extract_where(|entity| take(entity))
+        self.extract_where(|entity| take(entity), false)
             .collect::<Vec<_>>()
             .into_iter()
     }
-    fn extract_where(&mut self, mut take: impl FnMut(&mut T) -> bool) -> impl Iterator<Item = T> {
+    fn extract_where(
+        &mut self,
+        mut take: impl FnMut(&mut T) -> bool,
+        mutable: bool,
+    ) -> impl Iterator<Item = T> {
         self.written();
         let binding = &self.1;
+        let watch = &self.4;
         self.0.extract_if(.., move |entity| {
+            if mutable && let Some(watch) = watch {
+                watch.record(entity, physics_mutations::Change::Touched);
+            }
             let before = binding.as_ref().map(|binding| binding.read(entity));
             let removed = take(entity);
+            if removed && let Some(watch) = watch {
+                watch.record(entity, physics_mutations::Change::Removed);
+            }
             if removed && let (Some(binding), Some((id, join))) = (binding, before) {
                 binding.identity(id, join, residency::Change::Remove);
             }
@@ -678,6 +745,7 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
     }
     pub fn swap_remove(&mut self, index: usize) -> T {
         self.written();
+        self.observe(index, physics_mutations::Change::Removed);
         let entity = self.0.swap_remove(index);
         if let Some(binding) = &self.1 {
             binding.entity(&entity, residency::Change::Remove);
@@ -686,6 +754,9 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
     }
     pub fn pop(&mut self) -> Option<T> {
         self.written();
+        if !self.is_empty() {
+            self.observe(self.len() - 1, physics_mutations::Change::Removed);
+        }
         let entity = self.0.pop()?;
         if let Some(binding) = &self.1 {
             binding.entity(&entity, residency::Change::Remove);
@@ -701,18 +772,31 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
         if let Some(binding) = &self.1 {
             binding.all(&self.0[len.min(self.0.len())..], residency::Change::Remove);
         }
+        if let Some(watch) = &self.4 {
+            watch.all(
+                &self.0[len.min(self.0.len())..],
+                physics_mutations::Change::Removed,
+            );
+        }
         self.0.truncate(len);
     }
     pub fn retain(&mut self, mut keep: impl FnMut(&T) -> bool) {
         self.written();
-        self.retain_where(|entity| keep(entity));
+        self.retain_where(|entity| keep(entity), false);
     }
-    fn retain_where(&mut self, mut keep: impl FnMut(&mut T) -> bool) {
+    fn retain_where(&mut self, mut keep: impl FnMut(&mut T) -> bool, mutable: bool) {
         self.written();
         let binding = &self.1;
+        let watch = &self.4;
         self.0.retain_mut(|entity| {
+            if mutable && let Some(watch) = watch {
+                watch.record(entity, physics_mutations::Change::Touched);
+            }
             let before = binding.as_ref().map(|b| b.read(entity));
             let retained = keep(entity);
+            if !retained && let Some(watch) = watch {
+                watch.record(entity, physics_mutations::Change::Removed);
+            }
             if !retained && let (Some(binding), Some((id, join))) = (binding, before) {
                 binding.identity(id, join, residency::Change::Remove);
             }
@@ -725,6 +809,9 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
         let drained: Vec<_> = self.0.drain(range).collect();
         if let Some(binding) = &self.1 {
             binding.all(drained.as_slice(), residency::Change::Remove);
+        }
+        if let Some(watch) = &self.4 {
+            watch.all(&drained, physics_mutations::Change::Removed);
         }
         drained.into_iter()
     }
@@ -746,6 +833,7 @@ impl<T> JoinList<T> {
             return None;
         }
         self.written();
+        self.observe(index, physics_mutations::Change::Touched);
         let (before, at_and_after) = self.0.split_at_mut(index);
         let (at, after) = at_and_after.split_first_mut()?;
         Some(edit(at, before, after))
@@ -764,6 +852,8 @@ impl<T> JoinList<T> {
             return None;
         }
         self.written();
+        self.observe(first, physics_mutations::Change::Touched);
+        self.observe(second, physics_mutations::Change::Touched);
         let (low, high) = (first.min(second), first.max(second));
         let (before, low_and_after) = self.0.split_at_mut(low);
         let (low_item, after_low) = low_and_after.split_first_mut()?;
@@ -782,11 +872,11 @@ impl<T> JoinList<T> {
     /// its removal. Only yielded rows retire, using their pre-predicate identity.
     /// No journal lock is held while the predicate runs.
     pub fn extract_if_mut(&mut self, take: impl FnMut(&mut T) -> bool) -> impl Iterator<Item = T> {
-        self.extract_where(take)
+        self.extract_where(take, true)
     }
     pub fn retain_mut(&mut self, keep: impl FnMut(&mut T) -> bool) {
         self.written();
-        self.retain_where(keep);
+        self.retain_where(keep, true);
     }
     /// Run an audited state edit without returning a mutable entity reference.
     /// Whole-entity replacement belongs to the owning residency boundary.
@@ -798,23 +888,30 @@ impl<T> JoinList<T> {
     /// ```
     pub fn update<R>(&mut self, index: usize, edit: impl FnOnce(&mut T) -> R) -> R {
         self.written();
+        self.observe(index, physics_mutations::Change::Touched);
         edit(&mut self.0[index])
     }
     /// Edit each entity in list order without lending out mutable iteration.
     pub fn for_each_mut(&mut self, edit: impl FnMut(&mut T)) {
         self.written();
-        self.0.iter_mut().for_each(edit);
+        self.iter_mut().for_each(edit);
     }
     pub fn iter_mut(&mut self) -> IterMut<'_, T> {
         self.written();
-        IterMut(self.0.iter_mut())
+        IterMut(self.0.iter_mut(), self.4.clone())
     }
     pub fn get_mut(&mut self, index: usize) -> Option<&mut T> {
         self.written();
+        if index < self.len() {
+            self.observe(index, physics_mutations::Change::Touched);
+        }
         self.0.get_mut(index)
     }
     pub fn last_mut(&mut self) -> Option<&mut T> {
         self.written();
+        if !self.is_empty() {
+            self.observe(self.len() - 1, physics_mutations::Change::Touched);
+        }
         self.0.last_mut()
     }
     /// Borrow distinct entities without lending out a mutable slice.
@@ -823,6 +920,11 @@ impl<T> JoinList<T> {
         indices: [usize; N],
     ) -> Result<[&mut T; N], std::slice::GetDisjointMutError> {
         self.written();
+        for &index in &indices {
+            if index < self.len() {
+                self.observe(index, physics_mutations::Change::Touched);
+            }
+        }
         self.0.get_disjoint_mut(indices)
     }
 }
@@ -844,12 +946,14 @@ impl<T: horizon_mod_runtime::attachments::HasAttachmentLifetime> JoinList<T, fal
     /// Audited state edit; debug assertions detect a changed bound registration.
     pub fn update<R>(&mut self, index: usize, edit: impl FnOnce(&mut T) -> R) -> R {
         self.written();
+        self.observe(index, physics_mutations::Change::Touched);
         checked_edit(&mut self.0[index], edit)
     }
     pub fn for_each_mut(&mut self, mut edit: impl FnMut(&mut T)) {
         self.written();
-        for entity in &mut self.0 {
-            checked_edit(entity, &mut edit);
+        for index in 0..self.len() {
+            self.observe(index, physics_mutations::Change::Touched);
+            checked_edit(&mut self.0[index], &mut edit);
         }
     }
     /// Store a tick clone without dropping the owner's lifetime slot.
@@ -865,6 +969,7 @@ impl<T: horizon_mod_runtime::attachments::HasAttachmentLifetime> JoinList<T, fal
         else {
             return false;
         };
+        self.observe(index, physics_mutations::Change::Touched);
         store_back(&mut self.0[index], entity);
         true
     }
@@ -920,6 +1025,7 @@ impl<T, I: SliceIndex<[T]>, const DIRECT: bool> Index<I> for JoinList<T, DIRECT>
 impl<T> IndexMut<usize> for JoinList<T> {
     fn index_mut(&mut self, index: usize) -> &mut T {
         self.written();
+        self.observe(index, physics_mutations::Change::Touched);
         &mut self.0[index]
     }
 }
@@ -939,6 +1045,7 @@ impl<T: Joined, const DIRECT: bool> JoinList<T, DIRECT> {
     pub fn extract(&mut self, join: JoinSeq) -> Option<T> {
         self.written();
         let index = self.locate(join)?;
+        self.observe(index, physics_mutations::Change::Touched);
         let entity = self.0.remove(index);
         if let Some(binding) = &self.1 {
             binding.entity(&entity, residency::Change::Extract);
@@ -952,6 +1059,7 @@ impl<T: Joined, const DIRECT: bool> JoinList<T, DIRECT> {
         self.written();
         let index = index.min(self.0.len());
         self.0.insert(index, entity);
+        self.observe(index, physics_mutations::Change::Touched);
         if let Some(binding) = &self.1 {
             binding.entity(&self.0[index], residency::Change::PutBack);
         }
@@ -966,6 +1074,7 @@ impl<T: Joined, const DIRECT: bool> JoinList<T, DIRECT> {
         self.written();
         Self::number(&mut entity);
         self.0.push(entity);
+        self.observe(self.len() - 1, physics_mutations::Change::Added);
         if let Some(binding) = &self.1 {
             binding.entity(self.0.last().unwrap(), residency::Change::Install);
         }
@@ -974,6 +1083,7 @@ impl<T: Joined, const DIRECT: bool> JoinList<T, DIRECT> {
         self.written();
         Self::number(&mut entity);
         self.0.insert(index, entity);
+        self.observe(index, physics_mutations::Change::Added);
         if let Some(binding) = &self.1 {
             binding.entity(&self.0[index], residency::Change::Install);
         }
@@ -1004,23 +1114,50 @@ impl<'a, T, const DIRECT: bool> IntoIterator for &'a JoinList<T, DIRECT> {
 }
 /// Mutable entity iteration without lending out the backing slice.
 /// Unlike `slice::IterMut`, this cannot reorder the remaining list as a slice.
-pub struct IterMut<'a, T>(std::slice::IterMut<'a, T>);
+pub struct IterMut<'a, T>(
+    std::slice::IterMut<'a, T>,
+    Option<physics_mutations::Binding<T>>,
+);
 
 impl<'a, T> Iterator for IterMut<'a, T> {
     type Item = &'a mut T;
     fn next(&mut self) -> Option<Self::Item> {
-        self.0.next()
+        let entity = self.0.next()?;
+        if let Some(watch) = &self.1 {
+            watch.record(entity, physics_mutations::Change::Touched);
+        }
+        Some(entity)
     }
     fn size_hint(&self) -> (usize, Option<usize>) {
         self.0.size_hint()
     }
+    fn find<P>(&mut self, predicate: P) -> Option<Self::Item>
+    where
+        P: FnMut(&Self::Item) -> bool,
+    {
+        // find's predicate receives only &&mut T. Only the returned member
+        // receives mutation authority; do not dirty its read-only prefix.
+        let entity = self.0.find(predicate)?;
+        if let Some(watch) = &self.1 {
+            watch.record(entity, physics_mutations::Change::Touched);
+        }
+        Some(entity)
+    }
     fn nth(&mut self, n: usize) -> Option<Self::Item> {
-        self.0.nth(n)
+        let entity = self.0.nth(n)?;
+        if let Some(watch) = &self.1 {
+            watch.record(entity, physics_mutations::Change::Touched);
+        }
+        Some(entity)
     }
 }
 impl<T> DoubleEndedIterator for IterMut<'_, T> {
     fn next_back(&mut self) -> Option<Self::Item> {
-        self.0.next_back()
+        let entity = self.0.next_back()?;
+        if let Some(watch) = &self.1 {
+            watch.record(entity, physics_mutations::Change::Touched);
+        }
+        Some(entity)
     }
     fn nth_back(&mut self, n: usize) -> Option<Self::Item> {
         self.0.nth_back(n)
@@ -1043,6 +1180,9 @@ impl<T, const DIRECT: bool> IntoIterator for JoinList<T, DIRECT> {
         self.written();
         if let Some(binding) = &self.1 {
             binding.all(&self.0, residency::Change::Remove);
+        }
+        if let Some(watch) = &self.4 {
+            watch.all(&self.0, physics_mutations::Change::Removed);
         }
         IntoIter {
             rows: std::mem::take(&mut self.0).into_iter(),

@@ -6,9 +6,11 @@
 mod lifetime_tests;
 mod placement;
 
+use super::native_base_read_rows::BaseReadSource;
 use super::{Game, InteractTarget, entity::Entity, entity_culling::at, view_vector};
 use horizon_client::actions::Action;
 use horizon_client::entity_rules::EntityRules;
+use horizon_client::join_seq::residency::Kind;
 use horizon_client::{
     blocks::Fluid,
     collisions::{EntityCollisions, SceneCollisions},
@@ -29,6 +31,7 @@ use horizon_core::{
     random::{LegacyRandom, RandomSource},
 };
 use horizon_world::collision_context::CollisionContext;
+use mod_api::EntityReadCapturePhase;
 use std::{collections::HashMap, f32::consts::PI, sync::Arc};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -738,17 +741,17 @@ impl Game<'_> {
         b.fall_distance
     }
     /// `AbstractBoat.tick` for one boat (`controlled` when the player rides it).
-    pub(super) fn tick_boat(&mut self, mut b: Boat, controlled: bool) -> Boat {
+    pub(super) fn tick_boat(&mut self, b: &mut Boat, controlled: bool) {
         b.previous = b.position;
         b.previous_yaw = b.yaw;
         // Entity.baseTick ends with Leashable.tickLeash, on a server only
         // (a ridden boat's lead ticks in `tick_boats`).
         if !controlled && self.remote.is_none() {
-            self.tick_boat_leash(&mut b);
+            self.tick_boat_leash(b);
         }
         let had_status = std::mem::replace(&mut b.status_known, true);
         b.old_status = b.status;
-        b.status = self.boat_status(&mut b);
+        b.status = self.boat_status(b);
         b.tick_submersion();
         // `tick_boats_now` wears it off for the boats it ticks, before they burn.
         if controlled {
@@ -777,7 +780,7 @@ impl Game<'_> {
         let mut vspeed = 0.0 - b.get_gravity();
         let mut buoyancy = 0.0;
         let inv_friction: f32;
-        let obstacles = self.boat_move_obstacles(&b);
+        let obstacles = self.boat_move_obstacles(b);
         let mut scene = SceneCollisions {
             world: &self.world,
             binding: self.collision,
@@ -791,7 +794,7 @@ impl Game<'_> {
             // getY(1.0): the top of its box.
             b.water_level = b.position.y + HEIGHT;
             // getWaterLevelAbove() - getBbHeight(): a float subtraction.
-            let target = f64::from(self.water_level_above(&b) - HEIGHT as f32) + 0.101;
+            let target = f64::from(self.water_level_above(b) - HEIGHT as f32) + 0.101;
             let moved = Aabb::new(
                 Vec3::new(
                     b.bounds().min_position().x,
@@ -879,7 +882,7 @@ impl Game<'_> {
                 b.position.z + moved.z,
             );
             b.on_ground = movement.y < 0.0 && moved.y > movement.y;
-            b.fall_distance = self.boat_fall(&b, moved.y);
+            b.fall_distance = self.boat_fall(b, moved.y);
             if (moved.x - movement.x).abs() > 1.0e-7 {
                 b.velocity.x = 0.0;
             }
@@ -892,7 +895,7 @@ impl Game<'_> {
         }
         // AbstractBoat.tick's applyEffectsFromBlocks: powder snow makes the boat stuck,
         // which slows its next move (`PowderSnowBlock.entityInside`).
-        if !self.boat_powder_snow_cells(&b).is_empty() {
+        if !self.boat_powder_snow_cells(b).is_empty() {
             b.stuck = powder_snow_stuck();
         }
         // Entity.move's last step: soul sand and honey slow the boat too.
@@ -904,8 +907,7 @@ impl Game<'_> {
             None,
         );
         b.velocity = horizon_world::entity_move::scale_by_block_speed(b.velocity, factor);
-        Self::tick_boat_paddles(&mut b, &mut self.audio);
-        b
+        Self::tick_boat_paddles(b, &mut self.audio);
     }
     /// `AbstractBoat.tick` advances the oars even when this client does not move the hull.
     pub(super) fn tick_boat_paddles(b: &mut Boat, audio: &mut super::Audio) {
@@ -939,7 +941,40 @@ impl Game<'_> {
             }
         }
     }
-    /// Refuse a removed tick target before carrying its slot into the clone.
+    /// Return the progressed body to its stable source before resuming a panic.
+    /// Collision backing stays in place throughout this existing copied-body pass.
+    pub(super) fn with_boat_body<R>(
+        &mut self,
+        index: usize,
+        action: impl FnOnce(&mut Self, &mut Boat) -> R,
+    ) -> R {
+        let mut body = self.boats[index].clone();
+        let join = body.join;
+        let held_out_len = self.held_out.len();
+        if !mod_api::__private::mods().is_empty() {
+            self.held_out.push(body.id);
+        }
+        let result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| action(self, &mut body)));
+        if let Some(at) = self.boats.locate(join) {
+            self.store_boat_back(at, body);
+        }
+        self.held_out.truncate(held_out_len);
+        if mod_api::__private::entity_reads_listened()
+            && let Some(at) = self.boats.locate(join)
+        {
+            self.publish_resident_actor_reads(
+                BaseReadSource::Boat(&self.boats[at]),
+                EntityReadCapturePhase::AfterAppliedWrite,
+            );
+        }
+        match result {
+            Ok(value) => value,
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
+    }
+
+    /// Refuse a removed tick target before carrying its slot into the body.
     pub(super) fn store_boat_back(&mut self, index: usize, boat: Boat) -> bool {
         if self
             .persist
@@ -957,6 +992,7 @@ impl Game<'_> {
         self.vehicles_ticking(false);
     }
     fn tick_boats_now(&mut self) {
+        let read_scope = self.begin_resident_read_pass(Kind::Boat);
         // ServerLevel.tick: only entities in entity-ticking chunks tick.
         let ticking = self.entity_ticking_area();
         let mut round = self.native_tick_round();
@@ -971,61 +1007,91 @@ impl Game<'_> {
         let mut i = 0;
         while i < self.boats.len() {
             let id = self.boats[i].id;
+            let join = self.boats[i].join;
+            let initial = self.boats[i].position;
+            let in_ticking_area = ticking(initial.x.floor() as i32, initial.z.floor() as i32);
 
-            'boat: {
-                let p = self.boats[i].position;
-                if Some(id) == self.riding
-                    || driven.contains(&id)
-                    || !ticking(p.x.floor() as i32, p.z.floor() as i32)
-                {
-                    // Its rider's client moves it, but the server still wears
-                    // off its damage and then burns it.
-                    if ticking(p.x.floor() as i32, p.z.floor() as i32) {
-                        if driven.contains(&id) {
-                            self.boats.update(i, |b| b.wear_off_hurt());
+            let writer_scope = if in_ticking_area {
+                self.begin_resident_actor_writer(BaseReadSource::Boat(&self.boats[i]))
+            } else {
+                None
+            };
+            let body_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                'boat: {
+                    let p = self.boats[i].position;
+                    if Some(id) == self.riding
+                        || driven.contains(&id)
+                        || !ticking(p.x.floor() as i32, p.z.floor() as i32)
+                    {
+                        // Its rider's client moves it, but the server still wears
+                        // off its damage and then burns it.
+                        if ticking(p.x.floor() as i32, p.z.floor() as i32) {
+                            if driven.contains(&id) {
+                                self.boats.update(i, |b| b.wear_off_hurt());
+                            }
+                            if self.boat_fire_tick(i) {
+                                break 'boat;
+                            }
                         }
-                        if self.boat_fire_tick(i) {
-                            break 'boat;
+                        // The lead still ticks too.
+                        if ticking(p.x.floor() as i32, p.z.floor() as i32) && self.remote.is_none()
+                        {
+                            self.with_boat_body(i, |game, body| game.tick_boat_leash(body));
                         }
+                        self.boat_server_passes(id, &driven, &ticking, &round);
+                        break 'boat;
                     }
-                    // The lead still ticks too.
-                    if ticking(p.x.floor() as i32, p.z.floor() as i32) && self.remote.is_none() {
-                        self.with_entity_held_out(id, |game| {
-                            let mut b = game.boats[i].clone();
-                            game.tick_boat_leash(&mut b);
-                            game.store_boat_back(i, b);
-                        });
+                    let kind = if round.listening() {
+                        self.boats[i].entity_type()
+                    } else {
+                        String::new()
+                    };
+                    if read_scope.is_some() {
+                        self.publish_resident_actor_reads(
+                            BaseReadSource::Boat(&self.boats[i]),
+                            EntityReadCapturePhase::BeforeCallback,
+                        );
                     }
-                    self.boat_server_passes(id, &driven, &ticking, &round);
-                    break 'boat;
+                    if !self.native_tick_pre_one(&mut round, id, &kind) {
+                        self.boat_server_passes(id, &driven, &ticking, &round);
+                        break 'boat;
+                    }
+                    // The hook may have removed boats.
+                    let Some(i) = Some(i)
+                        .filter(|&i| self.boats.get(i).is_some_and(|b| b.id == id))
+                        .or_else(|| self.boats.iter().position(|b| b.id == id))
+                    else {
+                        break 'boat;
+                    };
+                    self.boats.update(i, |b| b.wear_off_hurt());
+                    // Entity.baseTick burns it before it moves; the fire may break it.
+                    if !self.boat_fire_tick(i) {
+                        self.with_boat_body(i, |game, body| game.tick_boat(body, false));
+                        self.boat_server_passes(id, &driven, &ticking, &round);
+                    }
+                    if read_scope.is_some()
+                        && let Some(at) = self.boats.locate(join)
+                    {
+                        self.publish_resident_actor_reads(
+                            BaseReadSource::Boat(&self.boats[at]),
+                            EntityReadCapturePhase::AfterEntityTick,
+                        );
+                    }
+                    self.native_tick_post_one(&round, id, &kind);
                 }
-                let kind = if round.listening() {
-                    self.boats[i].entity_type()
-                } else {
-                    String::new()
-                };
-                if !self.native_tick_pre_one(&mut round, id, &kind) {
-                    self.boat_server_passes(id, &driven, &ticking, &round);
-                    break 'boat;
-                }
-                // The hook may have removed boats.
-                let Some(i) = Some(i)
-                    .filter(|&i| self.boats.get(i).is_some_and(|b| b.id == id))
-                    .or_else(|| self.boats.iter().position(|b| b.id == id))
-                else {
-                    break 'boat;
-                };
-                self.boats.update(i, |b| b.wear_off_hurt());
-                // Entity.baseTick burns it before it moves; the fire may break it.
-                if !self.boat_fire_tick(i) {
-                    self.with_entity_held_out(id, |game| {
-                        let b = game.boats[i].clone();
-                        let b = game.tick_boat(b, false);
-                        game.store_boat_back(i, b);
-                    });
-                    self.boat_server_passes(id, &driven, &ticking, &round);
-                }
-                self.native_tick_post_one(&round, id, &kind);
+            }));
+            let finish = self.finish_resident_actor_turn(writer_scope.as_ref(), body_result);
+            if read_scope.is_some()
+                && in_ticking_area
+                && let Some(at) = self.boats.locate(join)
+            {
+                self.publish_resident_actor_reads(
+                    BaseReadSource::Boat(&self.boats[at]),
+                    EntityReadCapturePhase::AfterAppliedWrite,
+                );
+            }
+            if let Err(payload) = finish {
+                std::panic::resume_unwind(payload);
             }
             i = match self.boats.get(i) {
                 Some(b) if b.id == id => i + 1,

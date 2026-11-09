@@ -89,7 +89,7 @@ pub trait PlayersBackend {
     fn player_item_cooldowns(
         &self,
         player: PlayerRef,
-    ) -> Result<Option<Vec<NativeItemCooldown>>, EntityReadError>;
+    ) -> Result<Option<Vec<ItemCooldown>>, EntityReadError>;
     /// Side: server.
     /// `ItemCooldowns.isOnCooldown`: whether `group` still has time to run.
     /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
@@ -162,7 +162,7 @@ pub trait PlayersBackend {
     /// Side: both.
     /// `Player.experienceLevel`, `experienceProgress` and `totalExperience`.
     #[access(WorldOnly)]
-    fn player_experience(&self, player: PlayerRef) -> Option<NativePlayerExperience>;
+    fn player_experience(&self, player: PlayerRef) -> Option<PlayerExperience>;
     /// Side: both.
     /// `Player.getXpNeededForNextLevel`: the points the current level needs
     /// to fill.
@@ -220,7 +220,7 @@ pub trait PlayersBackend {
         &self,
         player: PlayerRef,
         pos: [i32; 3],
-        face: NativeBlockFace,
+        face: BlockFace,
         stack: &ItemStack,
     ) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
@@ -305,11 +305,11 @@ pub trait PlayersBackend {
     /// `HumanEntity#getFoodLevel/getSaturation/getExhaustion`. None until the
     /// guest's body exists, as well as for stale or unavailable players.
     #[access(WorldOnly)]
-    fn player_food(&self, player: PlayerRef) -> Option<NativePlayerFood>;
+    fn player_food(&self, player: PlayerRef) -> Option<PlayerFood>;
     /// Side: both.
     /// `Player.getAbilities`; Paper `Player#getAllowFlight/isFlying/getFlySpeed/getWalkSpeed`.
     #[access(WorldOnly)]
-    fn player_abilities(&self, player: PlayerRef) -> Option<NativePlayerAbilities>;
+    fn player_abilities(&self, player: PlayerRef) -> Option<PlayerAbilities>;
     /// Side: server.
     /// The value of statistic `stat_type` for `key` (`minecraft:stone`,
     /// `minecraft:jump`...), as `ServerStatsCounter.getValue`: 0 when never
@@ -322,7 +322,7 @@ pub trait PlayersBackend {
     fn player_stat(
         &self,
         player: PlayerRef,
-        stat_type: NativeStatType,
+        stat_type: StatType,
         key: &str,
     ) -> Result<Option<i32>, EntityReadError>;
     /// Side: server.
@@ -488,8 +488,7 @@ pub trait PlayersBackendMut {
     /// stale or unavailable player, a displaced outer player, and a speed
     /// that is not finite.
     #[access(WorldOnly)]
-    fn player_set_abilities(&mut self, player: PlayerRef, abilities: NativePlayerAbilities)
-    -> bool;
+    fn player_set_abilities(&mut self, player: PlayerRef, abilities: PlayerAbilities) -> bool;
     /// Side: server.
     /// A fake player acts as a player does, through the game's own path for the action
     /// (`ServerGamePacketListenerImpl.handleUseItemOn` / `handleUseItem` / `handleInteract`'s
@@ -659,7 +658,7 @@ pub trait PlayersBackendMut {
     fn player_award_stat(
         &mut self,
         player: PlayerRef,
-        stat_type: NativeStatType,
+        stat_type: StatType,
         key: &str,
         amount: i32,
     ) -> bool;
@@ -667,12 +666,7 @@ pub trait PlayersBackendMut {
     /// `Player.resetStat`: sets the statistic back to 0, which scoreboard
     /// criteria follow. False for a player it can't reach.
     #[access(WorldOnly)]
-    fn player_reset_stat(
-        &mut self,
-        player: PlayerRef,
-        stat_type: NativeStatType,
-        key: &str,
-    ) -> bool;
+    fn player_reset_stat(&mut self, player: PlayerRef, stat_type: StatType, key: &str) -> bool;
     /// Side: server.
     /// `ServerPlayer.awardRecipes`, as `/recipe give` does: the recipes
     /// unlock in the player's book, with their toasts and the
@@ -732,6 +726,6 @@ pub trait PlayersBackendMut {
     fn player_simulate_move(
         &mut self,
         player: PlayerRef,
-        input: NativePlayerInput,
-    ) -> Option<NativeSimulatedMove>;
+        input: PlayerInput,
+    ) -> Option<SimulatedMove>;
 }

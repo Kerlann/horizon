@@ -361,7 +361,7 @@ impl Game<'_> {
             // server is sent; this tick's keys are latched after it ticked.
             let mut b = self.boats[i].clone();
             if self.controls_boat(id) {
-                b = self.tick_boat(b, true);
+                self.tick_boat(&mut b, true);
                 b.input = [keys.left, keys.right, keys.forward, keys.backward];
             }
             // positionRider: the seat turns with the boat; clampRotation,

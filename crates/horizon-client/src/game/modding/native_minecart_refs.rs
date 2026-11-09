@@ -8,7 +8,7 @@ use super::{
     native_read_dependencies::EntityReadDependency,
 };
 use horizon_world::registry::BlockStateId;
-use mod_api::{EntityRef, MinecartRef, NativeMinecartKind};
+use mod_api::{EntityRef, MinecartKind, MinecartRef};
 
 impl Game<'_> {
     fn native_minecart_index(&self, cart: MinecartRef) -> Option<usize> {
@@ -47,7 +47,7 @@ impl Game<'_> {
     pub(super) fn minecart_kind(
         &self,
         cart: MinecartRef,
-    ) -> Result<Option<NativeMinecartKind>, mod_api::EntityReadError> {
+    ) -> Result<Option<MinecartKind>, mod_api::EntityReadError> {
         self.read_minecart_kind(None, cart)
     }
 
@@ -55,7 +55,7 @@ impl Game<'_> {
         &self,
         provider: Option<&dyn EntityBodyProvider>,
         cart: MinecartRef,
-    ) -> Result<Option<NativeMinecartKind>, mod_api::EntityReadError> {
+    ) -> Result<Option<MinecartKind>, mod_api::EntityReadError> {
         let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::MinecartKind],
@@ -462,7 +462,7 @@ mod tests {
     use horizon_client::entities::ArmorStand;
     use horizon_core::geometry::Vec3;
     use horizon_core::nbt::Tag;
-    use mod_api::NativeWorldEpoch;
+    use mod_api::WorldEpoch;
 
     fn spawn(game: &mut Game<'_>, id: u32, kind: CartKind) -> MinecartRef {
         game.carts.push(Minecart::new(id, kind, Vec3::ZERO));
@@ -552,13 +552,13 @@ mod tests {
         with_game(|game| {
             game.options.dedicated = Some(Vec::new());
             let kinds = [
-                (CartKind::Rideable, NativeMinecartKind::Rideable),
-                (CartKind::Chest, NativeMinecartKind::Chest),
-                (CartKind::Furnace, NativeMinecartKind::Furnace),
-                (CartKind::Tnt, NativeMinecartKind::Tnt),
-                (CartKind::Hopper, NativeMinecartKind::Hopper),
-                (CartKind::CommandBlock, NativeMinecartKind::CommandBlock),
-                (CartKind::Spawner, NativeMinecartKind::Spawner),
+                (CartKind::Rideable, MinecartKind::Rideable),
+                (CartKind::Chest, MinecartKind::Chest),
+                (CartKind::Furnace, MinecartKind::Furnace),
+                (CartKind::Tnt, MinecartKind::Tnt),
+                (CartKind::Hopper, MinecartKind::Hopper),
+                (CartKind::CommandBlock, MinecartKind::CommandBlock),
+                (CartKind::Spawner, MinecartKind::Spawner),
             ];
             let carts: Vec<_> = kinds
                 .iter()
@@ -711,7 +711,7 @@ mod tests {
             assert_eq!(rideable.command(game), None);
 
             let stale = MinecartRef::new(EntityRef::new(
-                NativeWorldEpoch::new(rideable.entity().epoch().get() + 1),
+                WorldEpoch::new(rideable.entity().epoch().get() + 1),
                 rideable.entity().id(),
             ));
             assert_eq!(stale.kind(game), None);

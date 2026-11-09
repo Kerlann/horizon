@@ -178,7 +178,7 @@ impl Game<'_> {
         &self,
         capture: EntityReadCapture,
         display: DisplayRef,
-        kind: NativeDisplayKind,
+        kind: DisplayKind,
         tag: &horizon_core::nbt::Tag,
         block_state: Option<BlockState>,
     ) -> Option<DisplayReadRow> {
@@ -187,11 +187,11 @@ impl Game<'_> {
         let int = |key: &str, default| number(tag.get(key)).map(|n| n as i32).unwrap_or(default);
         let real = |key: &str, default| float(tag.get(key)).map(|n| n as f32).unwrap_or(default);
         let named = |key: &str, name: &str| matches!(tag.get(key), Some(Tag::String(s)) if s.0.iter().copied().eq(name.encode_utf16()));
-        let text = kind == NativeDisplayKind::Text;
-        let billboard = NativeBillboard::ALL
+        let text = kind == DisplayKind::Text;
+        let billboard = Billboard::ALL
             .into_iter()
             .find(|b| named("billboard", b.name()))
-            .unwrap_or(NativeBillboard::Fixed);
+            .unwrap_or(Billboard::Fixed);
         let brightness = tag.get("brightness").and_then(|b| {
             let block = number(b.get("block")).filter(|v| (0..=15).contains(v))?;
             let sky = number(b.get("sky")).filter(|v| (0..=15).contains(v))?;
@@ -210,7 +210,7 @@ impl Game<'_> {
             capture,
             entity: display.entity(),
             kind: Some(kind),
-            transformation: Some(NativeTransformation {
+            transformation: Some(Transformation {
                 translation,
                 left_rotation,
                 scale,
@@ -235,23 +235,23 @@ impl Game<'_> {
             default_background: text.then(|| int("default_background", 0) != 0),
             alignment: text.then(|| {
                 if named("alignment", "left") {
-                    NativeTextAlignment::Left
+                    TextAlignment::Left
                 } else if named("alignment", "right") {
-                    NativeTextAlignment::Right
+                    TextAlignment::Right
                 } else {
-                    NativeTextAlignment::Center
+                    TextAlignment::Center
                 }
             }),
-            block_state: if kind == NativeDisplayKind::Block {
+            block_state: if kind == DisplayKind::Block {
                 block_state
             } else {
                 None
             },
-            item_context: (kind == NativeDisplayKind::Item).then(|| {
-                NativeItemDisplayContext::ALL
+            item_context: (kind == DisplayKind::Item).then(|| {
+                ItemDisplayContext::ALL
                     .into_iter()
                     .find(|c| named("item_display", c.name()))
-                    .unwrap_or(NativeItemDisplayContext::None)
+                    .unwrap_or(ItemDisplayContext::None)
             }),
         })
     }
@@ -312,9 +312,9 @@ impl Game<'_> {
             entity: projectile.entity(),
             owner,
             pickup: arrow.map(|a| match a.pickup {
-                Pickup::Disallowed => NativeArrowPickup::Disallowed,
-                Pickup::Allowed => NativeArrowPickup::Allowed,
-                Pickup::CreativeOnly => NativeArrowPickup::CreativeOnly,
+                Pickup::Disallowed => ArrowPickup::Disallowed,
+                Pickup::Allowed => ArrowPickup::Allowed,
+                Pickup::CreativeOnly => ArrowPickup::CreativeOnly,
             }),
             pierce_level: arrow
                 .map(|a| a.pierce as i8)
@@ -366,10 +366,10 @@ impl Game<'_> {
             is_started: Some(source.started),
             is_active: Some(source.active),
             status: Some(match source.status {
-                Status::Ongoing => NativeRaidStatus::Ongoing,
-                Status::Victory => NativeRaidStatus::Victory,
-                Status::Loss => NativeRaidStatus::Loss,
-                Status::Stopped => NativeRaidStatus::Stopped,
+                Status::Ongoing => RaidStatus::Ongoing,
+                Status::Victory => RaidStatus::Victory,
+                Status::Loss => RaidStatus::Loss,
+                Status::Stopped => RaidStatus::Stopped,
             }),
             total_health: Some(source.total_health),
             living_health: Some(living_health),

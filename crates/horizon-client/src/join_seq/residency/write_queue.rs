@@ -8,7 +8,7 @@
 //! captured runtime id AND location generation; this core never resolves targets.
 use super::table::Location;
 use horizon_core::fast_hash::FxHashMap;
-use mod_api::{CommandId, NativeWorldEpoch};
+use mod_api::{CommandId, WorldEpoch};
 use std::collections::VecDeque;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -52,7 +52,7 @@ struct Record<C> {
 /// C is the caller's operation-tagged terminal sum preserving each real R/E.
 /// Pending is never evicted, and no bool/count is synthesized on acceptance.
 pub struct WriteQueue<O, C> {
-    epoch: NativeWorldEpoch,
+    epoch: WorldEpoch,
     next: Option<u64>,
     pending: VecDeque<Command<O>>,
     records: FxHashMap<CommandId, Record<C>>,
@@ -61,7 +61,7 @@ pub struct WriteQueue<O, C> {
     expiry: VecDeque<(u64, CommandId)>,
 }
 impl<O, C> WriteQueue<O, C> {
-    pub fn new(epoch: NativeWorldEpoch) -> Self {
+    pub fn new(epoch: WorldEpoch) -> Self {
         Self {
             epoch,
             next: Some(0),
@@ -183,7 +183,7 @@ impl<O, C> WriteQueue<O, C> {
     }
 
     /// Epochs must strictly increase, preventing old ids from ever aliasing.
-    pub fn reset(&mut self, epoch: NativeWorldEpoch) {
+    pub fn reset(&mut self, epoch: WorldEpoch) {
         assert!(epoch.get() > self.epoch.get(), "world epochs must increase");
         *self = Self::new(epoch);
     }
@@ -212,7 +212,7 @@ mod tests {
     }
     #[test]
     fn ordered_apply_callbacks_and_terminal_lifecycle() {
-        let mut queue = WriteQueue::<i32, Result<i32, &'static str>>::new(NativeWorldEpoch::new(1));
+        let mut queue = WriteQueue::<i32, Result<i32, &'static str>>::new(WorldEpoch::new(1));
         let issuer = Issuer(4);
         let turn = WriterTurn(1);
         let a = target(1);
@@ -258,12 +258,12 @@ mod tests {
             Err(QueryError::UnknownOrExpired)
         );
         assert_eq!(queue.query(issuer, pending), Ok(Query::Pending));
-        queue.reset(NativeWorldEpoch::new(2));
+        queue.reset(WorldEpoch::new(2));
         assert_eq!(queue.query(issuer, pending), Err(QueryError::StaleEpoch));
     }
     #[test]
     fn rollback_preserves_survivor_order_and_generation() {
-        let mut queue = WriteQueue::<i32, i32>::new(NativeWorldEpoch::new(1));
+        let mut queue = WriteQueue::<i32, i32>::new(WorldEpoch::new(1));
         let old = target(7);
         let replacement = target(7);
         assert_ne!(old.location, replacement.location);

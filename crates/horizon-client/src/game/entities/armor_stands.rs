@@ -3,6 +3,7 @@
 //! of `hurtServer` (creative breaks at once), and `ArmorStandRenderer` with
 //! the default pose, the hit wobble and humanoid armor layers.
 use super::entity::Entity;
+use super::native_base_read_rows::BaseReadSource;
 use super::{Game, InteractTarget};
 use horizon_assets::resource_source::ResourceSource;
 use horizon_client::{
@@ -20,6 +21,7 @@ use horizon_core::{
     position::BlockPos,
     random::RandomSource,
 };
+use mod_api::EntityReadCapturePhase;
 use std::{collections::HashMap, sync::Arc};
 
 /// Build the living-drops input at the loot-source boundary, before equipment pops.
@@ -579,7 +581,7 @@ impl Game<'_> {
         self.world.random.next_float();
         self.next_entity += 1;
         let (_, uuid) = horizon_client::mobs::living_random();
-        self.persist.uuids.insert(stand.id, uuid);
+        self.set_saved_entity_uuid(stand.id, uuid);
         self.audio.play(
             "minecraft:entity.armor_stand.place",
             Some([foot.x, foot.y, foot.z]),
@@ -1004,6 +1006,8 @@ impl Game<'_> {
                 self.armor_stands[i].previous_yaw = self.armor_stands[i].yaw;
                 continue;
             }
+            let read_scope =
+                self.begin_resident_actor_read_pass(BaseReadSource::Stand(&self.armor_stands[i]));
             self.armor_stands[i].first_tick = false;
             // Entity.baseTick: the saved invulnerability window counts down
             // (#916).
@@ -1153,6 +1157,17 @@ impl Game<'_> {
                 },
             ) {
                 dead.push((i, damage_type));
+                if read_scope.is_some() {
+                    self.publish_resident_actor_reads(
+                        BaseReadSource::Stand(&self.armor_stands[i]),
+                        EntityReadCapturePhase::AfterAppliedWrite,
+                    );
+                }
+            } else if read_scope.is_some() {
+                self.publish_resident_actor_reads(
+                    BaseReadSource::Stand(&self.armor_stands[i]),
+                    EntityReadCapturePhase::AfterEntityTick,
+                );
             }
         }
         for (i, damage_type) in dead.into_iter().rev() {

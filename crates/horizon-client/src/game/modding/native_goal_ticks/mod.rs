@@ -9,7 +9,7 @@ use crate::mobs::{
 };
 use mod_api::{
     BehaviorCxBackend, EntityRef, GoalCxBackend, Host, LegacyRandom, LivingRef, MobRef,
-    crash::{NativeModCall, enter_native_mod},
+    content::crash::{ModCall, enter_native_mod},
 };
 
 mod cached_reads;
@@ -291,7 +291,7 @@ impl mobs::part_goals::GoalHost for Game<'_> {
         Game::resolve_lent_mob_goal_target(self, actor, world, target, validate)
     }
 
-    fn epoch(&self) -> Option<mod_api::NativeWorldEpoch> {
+    fn epoch(&self) -> Option<mod_api::WorldEpoch> {
         self.native_lifecycle.epoch()
     }
 
@@ -442,7 +442,7 @@ impl mobs::part_goals::GoalHost for Game<'_> {
         self.publish_lent_mob_reads(m, w, mod_api::EntityReadCapturePhase::BeforeCallback);
         let mut gcx = GoalCx { m, w, host: self };
         let mut context = mod_api::GoalContext::new(&mut gcx);
-        let _guard = enter_native_mod(NativeModCall {
+        let _guard = enter_native_mod(ModCall {
             id: mod_id,
             hook: call,
             part: Some(part),
@@ -486,7 +486,7 @@ impl mobs::part_goals::GoalHost for Game<'_> {
         self.publish_lent_mob_reads(m, w, mod_api::EntityReadCapturePhase::BeforeCallback);
         let mut gcx = GoalCx { m, w, host: self };
         let mut context = mod_api::BehaviorCx::new(&mut gcx);
-        let _guard = enter_native_mod(NativeModCall {
+        let _guard = enter_native_mod(ModCall {
             id: mod_id,
             hook: call,
             part: Some(part),
