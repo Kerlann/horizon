@@ -5255,6 +5255,16 @@ impl Game<'_> {
     fn tick_items(&mut self) {
         // EntityTickEvent.Pre for the items about to tick, and the Post after them.
         let mut round = self.native_tick_round();
+        if self.native_authoritative()
+            && self.is_logical_server()
+            && mod_api::__private::entity_reads_listened()
+        {
+            self.tick_dropped_items_listened(&mut round);
+            self.drain_entity_inside();
+            self.native_tick_post_batch(round);
+            return;
+        }
+
         if round.listening() {
             let ticking = self.entity_ticking_area();
             let merging = self.remote.is_none();
@@ -5324,12 +5334,12 @@ impl Game<'_> {
         let merging = self.remote.is_none();
         let mut pass = item_tick::ItemPhysicsPass::new(
             items,
-            self.item_entity_collisions(),
+            horizon_client::entities::ObstacleGrid::new(self.item_entity_collisions()),
             merging,
             read_scope.is_some(),
         );
         for i in 0..pass.items.len() {
-            if pass.removed[i] {
+            if pass.index.is_removed(i, pass.items[i].join) {
                 // Merged into an earlier item before its own tick: it never ticked.
                 round.not_ticked(pass.items[i].id);
                 continue;
@@ -5350,7 +5360,7 @@ impl Game<'_> {
         }
         let item_tick::ItemPhysicsPass {
             mut items,
-            removed,
+            index,
             bubble_tops,
             destroyed,
             ..
@@ -5358,8 +5368,19 @@ impl Game<'_> {
         for pos in bubble_tops {
             self.bubble_column_particles(pos);
         }
-        let mut removed = removed.into_iter();
-        items.retain(|_| !removed.next().unwrap_or(false));
+        let mut item_index = 0;
+        items.retain(|item| {
+            let keep = !index.is_removed(item_index, item.join);
+            item_index += 1;
+            keep
+        });
+        self.finish_dropped_item_pickups(items, destroyed);
+    }
+    pub(super) fn finish_dropped_item_pickups(
+        &mut self,
+        mut items: horizon_client::join_seq::JoinList<horizon_client::entities::ItemEntity>,
+        destroyed: Vec<(ItemStack, Vec3)>,
+    ) {
         let Some(p) = self.player.as_ref() else {
             self.put_back_dropped(items);
             self.spawn_destroyed_contents(destroyed);

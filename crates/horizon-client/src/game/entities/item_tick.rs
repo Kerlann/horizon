@@ -1,8 +1,9 @@
 //! Shared item physics arithmetic. Callback-driven orchestration and the
 //! compact unlistened pass use one body, with pass-owned scratch storage.
+use super::item_merge_index::ItemMergeIndex;
 use super::{Game, ItemStack};
 use horizon_client::{
-    entities::{ItemCells, ItemEntity, ObstacleGrid},
+    entities::{ItemEntity, ObstacleGrid},
     join_seq::JoinList,
 };
 use horizon_core::random::RandomSource;
@@ -13,8 +14,7 @@ use horizon_core::{
 
 pub(super) struct ItemPhysicsPass {
     pub(super) items: JoinList<ItemEntity>,
-    pub(super) removed: Vec<bool>,
-    pub(super) cells: ItemCells,
+    pub(super) index: ItemMergeIndex,
     pub(super) obstacles: ObstacleGrid,
     pub(super) nearby: Vec<Aabb>,
     pub(super) bubble_tops: Vec<BlockPos>,
@@ -25,15 +25,14 @@ pub(super) struct ItemPhysicsPass {
 impl ItemPhysicsPass {
     pub(super) fn new(
         items: JoinList<ItemEntity>,
-        collisions: Vec<Aabb>,
+        obstacles: ObstacleGrid,
         merging: bool,
         capture_reads: bool,
     ) -> Self {
         Self {
-            removed: vec![false; items.len()],
-            cells: ItemCells::new(&items),
+            index: ItemMergeIndex::new(&items, capture_reads),
             items,
-            obstacles: ObstacleGrid::new(collisions),
+            obstacles,
             nearby: Vec::new(),
             bubble_tops: Vec::new(),
             destroyed: Vec::new(),
@@ -46,8 +45,7 @@ impl Game<'_> {
     pub(super) fn tick_dropped_item_body(&mut self, pass: &mut ItemPhysicsPass, i: usize) {
         let ItemPhysicsPass {
             items,
-            removed,
-            cells,
+            index,
             obstacles,
             nearby,
             bubble_tops,
@@ -88,8 +86,7 @@ impl Game<'_> {
             self.apply_item_splash(splash);
         }
         if discarded {
-            removed[i] = true;
-            cells.remove(i, item.previous);
+            index.discard(i, item.join, item.previous);
             return;
         }
         if merging && !no_physics {
@@ -102,7 +99,7 @@ impl Game<'_> {
                 false,
             );
         }
-        cells.moved(i, item.previous, item.position);
+        index.moved(i, item.join, item.previous, item.position);
         // Entity.handleOnAboveBubbleColumn: the server sends the particles of
         // the surface of a bubble column the item is at the top of.
         if merging {
@@ -127,11 +124,15 @@ impl Game<'_> {
             && item.ticks.is_multiple_of(rate)
         {
             let max_stack = |stack: &ItemStack| self.stack_max_size(stack).max(1);
-            horizon_client::entities::merge_with_neighbours(items, removed, cells, i, &max_stack);
+            index.merge(items, i, &max_stack);
         }
         let item = &mut items[i];
         let mut alive = alive || (item.age < 6000 && item.position.y > -128.0);
-        if merging && !removed[i] && item.age >= 6000 && item.position.y > -128.0 {
+        if merging
+            && !index.is_removed(i, item.join)
+            && item.age >= 6000
+            && item.position.y > -128.0
+        {
             let mut extra_life = 0;
             self.native_item_expire(item.id, &item.stack, &mut extra_life);
             if extra_life > 0 {
@@ -146,9 +147,8 @@ impl Game<'_> {
                 );
             }
         }
-        if !alive || removed[i] {
-            removed[i] = true;
-            cells.remove(i, item.position);
+        if !alive || index.is_removed(i, item.join) {
+            index.discard(i, item.join, item.position);
             return;
         }
         let item_id = item.id;
@@ -209,13 +209,12 @@ impl Game<'_> {
             );
         }
         if !environment.alive {
-            removed[i] = true;
-            cells.remove(i, item.position);
+            index.discard(i, item.join, item.position);
             for stack in environment.spilled {
                 destroyed.push((stack, item.position));
             }
         }
-        if capture_reads && !removed[i] {
+        if capture_reads && !index.is_removed(i, item.join) {
             self.publish_lent_resident_reads(
                 horizon_client::join_seq::residency::table::Location {
                     owner: horizon_client::join_seq::residency::Owner {
@@ -233,40 +232,53 @@ impl Game<'_> {
 
 #[cfg(test)]
 mod tests {
+    struct Reader;
+    impl mod_api::Hooks for Reader {
+        fn subscribed(&self) -> &'static [Option<mod_api::HookId>] {
+            &[Some(mod_api::HookId::ClientTickPre)]
+        }
+    }
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
-    fn compact_item_pass_keeps_vanilla_merge_age_and_motion() {
-        mod_api::testing::with_mods(Vec::new().into(), || {
-            crate::game::native_entity_refs::tests::with_game(|game| {
-                game.options.dedicated = Some(Vec::new());
-                game.player = None;
-                game.world.chunks.insert(
-                    (0, 0),
-                    std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
-                );
-                game.tickets.update(None);
-                for (x, count, age) in [(8.5, 3, 39), (8.6, 5, 17), (12.5, 2, 39)] {
-                    game.summon_with_nbt("minecraft:item",[x,80.0,8.5],&format!("{{Item:{{id:\"minecraft:sand\",count:{count}}},Age:{age}s,PickupDelay:0s,Motion:[0.0d,0.0d,0.0d]}}")).unwrap();
-                }
-                for item in &mut game.dropped {
-                    item.ticks = 39;
-                }
-                game.ticked_entities_through = u32::MAX;
-                game.tick_items();
-                assert_eq!(game.dropped.len(), 2);
-                assert_eq!(
-                    game.dropped
-                        .iter()
-                        .map(|item| (item.stack.count, item.age))
-                        .collect::<Vec<_>>(),
-                    [(8, 18), (2, 40)]
-                );
-                for item in &game.dropped {
-                    assert!((item.position.y - 79.96).abs() < 1e-12);
-                    // Vanilla widens the 0.98F air drag before multiplying.
-                    assert!((item.velocity.y + 0.03920000076293945).abs() < 1e-12);
-                }
+    fn compact_and_keyed_item_passes_keep_vanilla_merge_age_and_motion() {
+        for listened in [false, true] {
+            let mods = if listened {
+                vec![mod_api::ModEntry::new("item_reader", Box::new(Reader))]
+            } else {
+                Vec::new()
+            };
+            mod_api::testing::with_mods(mods.into(), || {
+                crate::game::native_entity_refs::tests::with_game(|game| {
+                    game.options.dedicated = Some(Vec::new());
+                    game.player = None;
+                    game.world.chunks.insert(
+                        (0, 0),
+                        std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+                    );
+                    game.tickets.update(None);
+                    for (x, count, age) in [(8.5, 3, 39), (8.6, 5, 17), (12.5, 2, 39)] {
+                        game.summon_with_nbt("minecraft:item",[x,80.0,8.5],&format!("{{Item:{{id:\"minecraft:sand\",count:{count}}},Age:{age}s,PickupDelay:0s,Motion:[0.0d,0.0d,0.0d]}}")).unwrap();
+                    }
+                    for item in &mut game.dropped {
+                        item.ticks = 39;
+                    }
+                    game.ticked_entities_through = u32::MAX;
+                    game.tick_items();
+                    assert_eq!(game.dropped.len(), 2);
+                    assert_eq!(
+                        game.dropped
+                            .iter()
+                            .map(|item| (item.stack.count, item.age))
+                            .collect::<Vec<_>>(),
+                        [(8, 18), (2, 40)]
+                    );
+                    for item in &game.dropped {
+                        assert!((item.position.y - 79.96).abs() < 1e-12);
+                        // Vanilla widens the 0.98F air drag before multiplying.
+                        assert!((item.velocity.y + 0.03920000076293945).abs() < 1e-12);
+                    }
+                });
             });
-        });
+        }
     }
 }
