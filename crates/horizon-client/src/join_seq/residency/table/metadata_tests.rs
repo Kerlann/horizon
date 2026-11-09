@@ -4,7 +4,7 @@ use crate::join_seq::residency::EntitySubtype;
 #[test]
 fn cold_identity_details_survive_real_loan_and_stale_removal_but_not_absence() {
     let journal = Journal::default();
-    let mut table = EntityTable::new(journal.clone());
+    let mut table = EntityTable::<()>::new(journal.clone());
     let owner = Owner {
         dimension: DimensionKey::OVERWORLD,
         kind: super::super::Kind::Mob,
@@ -67,7 +67,7 @@ fn cold_identity_details_survive_real_loan_and_stale_removal_but_not_absence() {
 #[test]
 fn candidate_iteration_does_not_resolve_or_invent_physical_membership() {
     let journal = Journal::default();
-    let mut table = EntityTable::new(journal.clone());
+    let mut table = EntityTable::<()>::new(journal.clone());
     let owner = Owner {
         dimension: DimensionKey::NETHER,
         kind: super::super::Kind::Other,

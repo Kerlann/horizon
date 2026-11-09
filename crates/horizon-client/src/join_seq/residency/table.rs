@@ -153,13 +153,13 @@ impl<R> EntityTable<R> {
         &mut self,
         id: u32,
         locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
-    ) -> Option<(Location, EntityLookup<T>, Option<&R>)> {
+    ) -> Option<(Location, EntityLookup<T>, Option<&R>, IdentityDetails)> {
         let state = self.lookup(None, id, locate);
         if matches!(state, EntityLookup::Missing) {
             return None;
         }
         let row = self.rows.get(&NonZeroU32::new(id)?)?;
-        Some((row.location, state, row.cached.as_ref()))
+        Some((row.location, state, row.cached.as_ref(), row.details))
     }
 
     fn read_lookup<T>(
@@ -494,10 +494,12 @@ mod tests {
         let mut table = EntityTable::<()>::new(Journal::default());
         list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
         let first_at = Location {
+            source: Default::default(),
             owner: HOME,
             join: list[0].1,
         };
         let second_at = Location {
+            source: Default::default(),
             owner: HOME,
             join: list[1].1,
         };
@@ -545,13 +547,14 @@ mod tests {
         let mut table = EntityTable::<u32>::new(Journal::default());
         list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
         let address = Location {
+            source: Default::default(),
             owner: HOME,
             join: list[0].1,
         };
         assert_eq!(table.publish_rows([(7, address, 19)]), 1);
         let calls = Cell::new(0);
         {
-            let (at, state, metadata) = table
+            let (at, state, metadata, _) = table
                 .server_admitted_read_lookup(7, |at| {
                     calls.set(calls.get() + 1);
                     locate(&list, at)
@@ -564,7 +567,7 @@ mod tests {
         }
         let held = list.lift();
         calls.set(0);
-        let (at, state, metadata) = table
+        let (at, state, metadata, _) = table
             .server_admitted_read_lookup(7, |at| {
                 calls.set(calls.get() + 1);
                 locate(&list, at)
@@ -604,6 +607,7 @@ mod tests {
         let mut table = EntityTable::<(u32, Vec<u32>)>::new(Journal::default());
         list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
         let at = Location {
+            source: Default::default(),
             owner: HOME,
             join: list[0].1,
         };
@@ -654,6 +658,7 @@ mod tests {
         let mut table = EntityTable::<u32>::new(Journal::default());
         list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
         let old = Location {
+            source: Default::default(),
             owner: HOME,
             join: list[0].1,
         };
@@ -672,6 +677,7 @@ mod tests {
         list.remove(0);
         list.push(Stored(7, JoinSeq::UNJOINED));
         let replacement = Location {
+            source: Default::default(),
             owner: HOME,
             join: list[0].1,
         };
@@ -710,6 +716,7 @@ mod tests {
         for action in 0..3 {
             list.push(Stored(7, JoinSeq::UNJOINED));
             let at = Location {
+                source: Default::default(),
                 owner: HOME,
                 join: list[0].1,
             };
@@ -743,6 +750,7 @@ mod tests {
         let mut table = EntityTable::<u32>::new(Journal::default());
         list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
         let at = Location {
+            source: Default::default(),
             owner: HOME,
             join: list[0].1,
         };
