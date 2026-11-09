@@ -493,6 +493,9 @@ pub(super) fn game_forwarders(root: &Path) -> Result<String, String> {
                 code.push_str(&format!("{sig} {{ {access} {setup} {call} }}\n"));
             }
             code.push_str("}\n");
+            if matches!(tier, Tier::Host | Tier::Backend | Tier::ClientBackend) {
+                code.push_str(&borrowed_host_forwarders(&area, *tier, entries)?);
+            }
         }
     }
     let parsed = syn::parse_file(&code).map_err(|e| e.to_string())?;
@@ -503,6 +506,70 @@ pub(super) fn game_forwarders(root: &Path) -> Result<String, String> {
 
 /// API records whose game representation is owned by another crate. Conversions are
 /// implemented once by the game; this rule only selects the boundary, never its behaviour.
+/// Shared callback Host forwarding. Only concrete lent cart reads select the
+/// source projection; every other service uses Game's existing typed adapter.
+fn borrowed_host_forwarders(area: &Area, tier: Tier, entries: &[Entry]) -> Result<String, String> {
+    let trait_name = area.trait_name(tier);
+    let mut code = format!(
+        "#[deny(unconditional_recursion)]\nimpl mod_api::prelude::{trait_name} for crate::game::native_borrowed_entity_host::BorrowedEntityHost<'_, '_> {{\n"
+    );
+    for entry in entries {
+        if matches!(entry.sig.inputs.first(), Some(FnArg::Receiver(receiver)) if receiver.mutability.is_some())
+        {
+            continue;
+        }
+        let name = &entry.name;
+        let sig = entry.sig.to_token_stream();
+        let args = signature_args(&entry.sig, name)?;
+        let forwarded_args = if args.is_empty() {
+            "self.game".to_owned()
+        } else {
+            format!("self.game, {args}")
+        };
+        let foreign =
+            format!("<Game<'_> as mod_api::prelude::{trait_name}>::{name}({forwarded_args})");
+        let own = if area.stem == "minecarts" && tier == Tier::Backend {
+            let required = match name.as_str() {
+                "minecart_fuel" | "minecart_push" => {
+                    "Some(crate::game::minecarts::CartKind::Furnace)"
+                }
+                "minecart_fuse" => "Some(crate::game::minecarts::CartKind::Tnt)",
+                "minecart_hopper_enabled" => "Some(crate::game::minecarts::CartKind::Hopper)",
+                "minecart_command" => "Some(crate::game::minecarts::CartKind::CommandBlock)",
+                _ => "None",
+            };
+            let level = entry
+                .attrs
+                .iter()
+                .find(|attr| attr.path().is_ident("access"))
+                .expect("Game forwarding validated the access declaration")
+                .parse_args::<syn::Ident>()
+                .map_err(|error| error.to_string())?;
+            let converted = match &entry.sig.output {
+                syn::ReturnType::Type(_, ty) if boundary_value(ty) => {
+                    "value.try_into_api().unwrap_or_default()"
+                }
+                _ => "value",
+            };
+            let returned = if result_error(&entry.sig.output)
+                .is_some_and(|error| outer_type(error, "EntityReadError"))
+            {
+                format!("Ok({converted})")
+            } else {
+                converted.to_owned()
+            };
+            format!(
+                "if let Some(value) = self.with_owned_cart(cart.entity(), {required}, |read, _spawner| {{ mod_api::__private::check_access({name:?}, mod_api::__private::LoadAccess::{level}); read.{name}() }}) {{ return {returned}; }}"
+            )
+        } else {
+            String::new()
+        };
+        code.push_str(&format!("{sig} {{ {own} {foreign} }}\n"));
+    }
+    code.push_str("}\n");
+    Ok(code)
+}
+
 fn text_value(ty: &Type) -> bool {
     contains_value(ty, &["Text", "GuiDraw"])
 }
@@ -1317,6 +1384,10 @@ mod tests {
                             .parse_args::<syn::Ident>()
                             .is_ok_and(|lint| lint == "unconditional_recursion")
                 }));
+                if !matches!(item.self_ty.as_ref(), Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "Game"))
+                {
+                    continue;
+                }
                 let owner = item
                     .trait_
                     .unwrap()
@@ -1339,6 +1410,50 @@ mod tests {
         // Other area traits must not be in scope. The current impl's own trait is
         // implicitly in scope; deny(unconditional_recursion) rejects that fallback.
         assert!(!source.contains("prelude::*"));
+    }
+
+    #[test]
+    fn borrowed_host_provides_every_read_area_method_explicitly() {
+        use std::collections::BTreeSet;
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let expected: BTreeSet<_> = load(&root).unwrap().into_iter().flat_map(|area| {
+            area.tiers.into_iter()
+                .filter(|(tier, _)| matches!(tier, Tier::Host | Tier::Backend | Tier::ClientBackend))
+                .flat_map(move |(tier, entries)| {
+                    let owner = format!("{}{}", area.camel, tier.suffix());
+                    entries.into_iter()
+                        .filter(|entry| !matches!(entry.sig.inputs.first(), Some(FnArg::Receiver(receiver)) if receiver.mutability.is_some()))
+                        .map(move |entry| (owner.clone(), entry.name))
+                })
+        }).collect();
+        let file = syn::parse_file(&game_forwarders(&root).unwrap()).unwrap();
+        let mut actual = BTreeSet::new();
+        for item in file.items {
+            let Item::Impl(item) = item else { continue };
+            if !matches!(item.self_ty.as_ref(), Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "BorrowedEntityHost"))
+            {
+                continue;
+            }
+            let owner = item
+                .trait_
+                .unwrap()
+                .1
+                .segments
+                .last()
+                .unwrap()
+                .ident
+                .to_string();
+            for member in item.items {
+                let syn::ImplItem::Fn(method) = member else {
+                    panic!("non-method in borrowed Host impl")
+                };
+                assert!(actual.insert((owner.clone(), method.sig.ident.to_string())));
+            }
+        }
+        assert_eq!(
+            actual, expected,
+            "the borrowed Host must not inherit a read-area default"
+        );
     }
 
     #[test]
