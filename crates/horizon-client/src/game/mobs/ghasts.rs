@@ -11,7 +11,7 @@ use mod_api::SoundSource;
 
 /// `canBeCollidedWith` toward a mover that is neither a player nor a happy ghast:
 /// a living shulker, or an adult happy ghast held still.
-fn stops_movers(m: &Mob) -> bool {
+pub(super) fn stops_movers(m: &Mob) -> bool {
     match m.species() {
         Species::HappyGhast => m.alive() && !m.is_baby() && happy_ghast::on_still_timeout(m),
         Species::Shulker => m.alive(),

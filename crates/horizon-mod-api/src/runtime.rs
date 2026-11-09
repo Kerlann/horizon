@@ -124,7 +124,11 @@ pub(crate) fn mods() -> &'static [ModEntry] {
 }
 
 pub(crate) fn entity_reads_listened() -> bool {
-    installed().is_some_and(|installed| installed.entity_reads)
+    installed().is_some_and(|installed| {
+        !installed.mods.is_empty()
+            && (installed.entity_reads
+                || crate::parts::installed().is_some_and(|parts| parts.entity_reads))
+    })
 }
 
 pub(crate) fn listened(hook: generated::HookId) -> bool {
@@ -333,4 +337,35 @@ pub(crate) fn enter_listener(
     hook: &'static str,
 ) -> (crate::content::crash::ModGuard, &'static dyn Hooks) {
     (mark_mod(entry.id, hook), &*entry.hooks)
+}
+
+#[cfg(test)]
+mod entity_read_interest_tests {
+    use super::*;
+    struct Provider;
+    #[crate::horizon_part]
+    impl BlockPart for Provider {
+        fn smoke_source(&self, _: &dyn LevelHost, _: &mut SmokeSourceEvent) -> Option<bool> {
+            Some(true)
+        }
+    }
+    struct PartOnly;
+    #[crate::__subscriptions]
+    impl Hooks for PartOnly {
+        fn register(&self, r: &mut dyn Registrar, _: &RegistrationContext) {
+            let stone = r.block_key("minecraft:stone");
+            r.block_part(stone, Provider);
+        }
+    }
+    #[test]
+    fn part_only_interest_is_frozen_but_empty_mods_stay_disabled() {
+        let mods: Mods = vec![ModEntry::new("part_only_interest", Box::new(PartOnly))].into();
+        crate::parts::tests::install_parts_fixture(&mods).unwrap();
+        crate::testing::with_mods(mods, || {
+            assert!(entity_reads_listened());
+            assert!(set_mod_enabled("part_only_interest", false));
+            assert!(entity_reads_listened());
+            crate::testing::with_mods(Vec::new().into(), || assert!(!entity_reads_listened()));
+        });
+    }
 }

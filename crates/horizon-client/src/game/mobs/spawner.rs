@@ -35,6 +35,16 @@ pub(super) enum Planned {
     Loaded(Tag, Option<Tag>, u32),
 }
 
+/// Work applied once the completed spawner and its owner are canonical.
+pub(super) struct SpawnerTickCompletion {
+    key: Pos,
+    cart: Option<u32>,
+    planned: Vec<Planned>,
+    created: Vec<Mob>,
+    rides: Vec<(u32, u32)>,
+    events: Vec<SpawnerEvent>,
+}
+
 /// What the spawner code keeps between ticks.
 #[derive(Default)]
 pub(super) struct SpawnerState {
@@ -109,17 +119,20 @@ impl Game<'_> {
             )
         });
     }
-    fn server_tick_spawner(&mut self, key: Pos, spawner: &mut Spawner) -> Result<()> {
-        self.server_tick_spawner_of(key, spawner, None)
+    /// A block spawner completes its plan immediately. A cart instead returns
+    /// its plan across the canonical body handoff before applying it.
+    pub(super) fn server_tick_spawner(&mut self, key: Pos, spawner: &mut Spawner) -> Result<()> {
+        if let Some(work) = self.plan_server_tick_spawner_of(key, spawner, None) {
+            self.complete_spawner_tick(work)?;
+        }
+        Ok(())
     }
-    /// `BaseSpawner.serverTick` at `key`: a spawner block's, or the spawner minecart
-    /// `cart` is at (its `broadcastEvent` is an entity event on the cart).
-    pub(super) fn server_tick_spawner_of(
+    pub(super) fn plan_server_tick_spawner_of(
         &mut self,
         key: Pos,
         spawner: &mut Spawner,
-        cart: Option<u32>,
-    ) -> Result<()> {
+        cart: Option<&super::minecarts::Minecart>,
+    ) -> Option<SpawnerTickCompletion> {
         // `BaseSpawner.serverTick` does nothing without an alive player in
         // range (`isNearPlayer`) or with the rule off: no level to build for it.
         let at = [key.0, key.1, key.2].map(|c| f64::from(c) + 0.5);
@@ -130,14 +143,14 @@ impl Game<'_> {
                 .rules
                 .bool_at(horizon_client::gamerules::vanilla::SPAWNER_BLOCKS_WORK)
         {
-            return Ok(());
+            return None;
         }
         // While its delay counts down, `serverTick` only takes one off it: no
         // level, random or event (a server with hundreds of dungeons near its
         // players built the level for every one of them, every tick).
         if spawner.spawn_delay > 0 {
             spawner.spawn_delay -= 1;
-            return Ok(());
+            return None;
         }
         let pos = [key.0, key.1, key.2];
         let mut random = std::mem::replace(
@@ -150,7 +163,7 @@ impl Game<'_> {
         let source = cart
             .is_none()
             .then(|| mod_api::SpawnSource::Block(mod_api::BlockPos::new(key.0, key.1, key.2)));
-        let extras = {
+        let extras = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut level = self.natural_level();
             // A minecart spawner has no block to tell the spawn checks of.
             level.spawner = cart.is_none().then_some(mod_api::Spawner::Block {
@@ -158,17 +171,65 @@ impl Game<'_> {
             });
             let mut spawn = |l: &super::natural_spawning::GameLevel,
                              r: &SpawnerSpawn,
+                             actual_spawner: &Spawner,
                              rng: &mut LegacyRandom| {
-                l.game.plan_spawner_mob(l, r, source, &mut planned, rng)
+                let provider = cart.map(|cart| {
+                    super::native_entity_body_provider::CartSpawnerBodyProvider::new(
+                        horizon_client::join_seq::residency::write_queue::Target {
+                            runtime_id: cart.id,
+                            location: horizon_client::join_seq::residency::table::Location {
+                                source: horizon_client::join_seq::residency::Source::Ordinary,
+                                owner: horizon_client::join_seq::residency::Owner {
+                                    dimension: self.dim.key(),
+                                    kind: horizon_client::join_seq::residency::Kind::Cart,
+                                },
+                                join: cart.join,
+                            },
+                        },
+                        cart,
+                        actual_spawner,
+                    )
+                });
+                l.game.plan_spawner_mob(
+                    l,
+                    r,
+                    source,
+                    &mut planned,
+                    rng,
+                    provider.as_ref().map(|provider| {
+                        provider as &dyn super::native_entity_body_provider::EntityBodyProvider
+                    }),
+                )
             };
             spawner.server_tick(&level, &mut random, pos, &mut spawn, &mut events);
             (
                 std::mem::take(&mut *level.spawned.borrow_mut()),
                 std::mem::take(&mut *level.rides.borrow_mut()),
             )
-        };
+        }));
         self.world.random = random;
-        let (created, rides) = extras;
+        let (created, rides) = match extras {
+            Ok(extras) => extras,
+            Err(payload) => std::panic::resume_unwind(payload),
+        };
+        Some(SpawnerTickCompletion {
+            key,
+            cart: cart.map(|cart| cart.id),
+            planned,
+            created,
+            rides,
+            events,
+        })
+    }
+    pub(super) fn complete_spawner_tick(&mut self, work: SpawnerTickCompletion) -> Result<()> {
+        let SpawnerTickCompletion {
+            key,
+            cart,
+            planned,
+            created,
+            rides,
+            events,
+        } = work;
         let ids = self.add_planned(planned, created, rides);
         self.apply_spawner_events(key, events, &ids, cart)
     }
@@ -232,6 +293,7 @@ impl Game<'_> {
         source: Option<mod_api::SpawnSource>,
         planned: &mut Vec<Planned>,
         random: &mut horizon_core::random::LegacyRandom,
+        body_provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
     ) -> Option<SpawnerAdded> {
         let kind = self.res.mob_types().get(r.id)?.clone();
         let [x, y, z] = r.position;
@@ -249,7 +311,7 @@ impl Game<'_> {
             // TrialSpawner.spawnMob: setPersistenceRequired.
             mob.persistent = r.trial;
             let mut group = None;
-            match self.finalize_spawn_event(&mut mob, reason, source, &mut group) {
+            match self.finalize_spawn_event(&mut mob, reason, source, &mut group, body_provider) {
                 (Finalized::Cancelled, _) => return None,
                 (outcome, difficulty) => {
                     if outcome == Finalized::Done {
