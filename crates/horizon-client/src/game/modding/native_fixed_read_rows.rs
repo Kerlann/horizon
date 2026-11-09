@@ -387,7 +387,7 @@ impl Game<'_> {
                 selected_slot: self.uncached_player_selected_slot(player),
                 container_menu: self.uncached_player_container_menu(player),
                 exp_cooldown: self.uncached_player_exp_cooldown(player),
-                last_death_location: last_death_location,
+                last_death_location,
                 needs_food: self.uncached_player_needs_food(player),
                 has_enough_food: self.uncached_player_has_enough_food(player),
                 can_eat: [
@@ -402,7 +402,7 @@ impl Game<'_> {
                 previous_game_mode: self.uncached_player_previous_game_mode(player),
                 is_secondary_use_active: self.uncached_player_is_secondary_use_active(player),
                 is_fake: self.uncached_player_is_fake(player),
-                respawn_config: respawn_config,
+                respawn_config,
                 text_filtering: self.uncached_player_text_filtering(player),
                 sleep_ignored: self.uncached_player_sleep_ignored(player),
                 counts_for_sleep: self.uncached_player_counts_for_sleep(player),
