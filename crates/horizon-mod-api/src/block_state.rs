@@ -2,6 +2,8 @@
 use crate::{BlockKey, BlockMetadata, BlockStateError, BlockStateRecord, StateConstraint};
 
 /// A block and its local state ordinal. Persist canonical names and properties, not this value.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub struct BlockState {

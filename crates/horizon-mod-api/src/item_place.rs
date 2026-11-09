@@ -17,6 +17,7 @@ use super::{
 use std::{collections::HashSet, fmt::Debug, marker::PhantomData, sync::Mutex};
 
 /// Where a stack lives.
+// no wire: preserves stable explicit variant tags (Equipment is 9) and interns Mod.provider into a bounded static string.
 #[non_exhaustive]
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ItemPlace {
@@ -407,7 +408,7 @@ impl ItemPlace {
             return 0;
         }
         // Through index `slot` of `handler`, then for an insert that `spills` the whole handler,
-        // each in passes while one moves something (`Inventory.add`'s and NeoForge's loops: a
+        // each in passes while one moves something (`Inventory.add`'s loop: a
         // handler may move less per call than it could): what `slot` doesn't take goes to the
         // other indices (`forHandlerIndex`).
         let through = |handler: Capability<dyn ResourceHandler<ItemResource>>,

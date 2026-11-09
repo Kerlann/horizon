@@ -180,9 +180,7 @@ fn event_input(
         let tag = format!("tag_{}", expr.replace('.', "_"));
         write!(setup, "let {tag}=match &mut {expr} {{").unwrap();
         for (i, case) in cases.iter().enumerate() {
-            let super::ty::Payload::Tuple(v) = &case.payload else {
-                unreachable!()
-            };
+            let v = &case.payload;
             let Ty::Dyn(name, m) = &v[0] else {
                 unreachable!()
             };
@@ -201,7 +199,7 @@ fn event_input(
         write!(put, "w.put(&{tag});").unwrap();
         return;
     }
-    let Some(fields) = types.defs[def].kind.fields() else {
+    let Some(fields) = types.defs[def].borrowed.fields() else {
         return;
     };
     for f in fields.iter() {
@@ -240,6 +238,12 @@ fn event_input(
 }
 fn fallback(types: &super::ty::Types<'_>, m: &Method) -> &'static str {
     match &m.ret {
+        Ty::Named(d) if types.defs[*d].rust.contains("::WriteReceipt<") => {
+            "mod_api::NoBackend::no_backend()"
+        }
+        Ty::Result(_, error) if matches!(&**error, Ty::Named(d) if types.defs[*d].rust.ends_with("::CommandQueryError")) => {
+            "Err(mod_api::NoBackend::no_backend())"
+        }
         Ty::Result(ok, _) if **ok == Ty::Unit => "Ok(())",
         Ty::Result(..) => "Err(call_refused())",
         Ty::Named(d) if types.defs[*d].rust.ends_with("::Flow") => "mod_api::Flow::Continue",

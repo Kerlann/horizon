@@ -1762,7 +1762,9 @@ fn retry_line(info: &Info, retry: Retry, attempts: i32, successes: i32, passed: 
 pub(in crate::game) mod tests {
     use super::*;
 
-    pub(in crate::game) fn server_game() -> Game<'static> {
+    pub(in crate::game) fn server_game<'a>(
+        resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>,
+    ) -> Game<'a> {
         use crate::game::*;
         let root = std::path::PathBuf::from(
             std::env::var_os("HORIZON_TEST_RESOURCES")
@@ -1785,7 +1787,7 @@ pub(in crate::game) mod tests {
         let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
         options.resources = root.clone();
         options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-        let res: &'static _ = Box::leak(Box::new(loaded.resources));
+        let res = resources.insert(loaded.resources);
         let mut game = Game::new(
             res,
             loaded.pack,
@@ -1953,7 +1955,8 @@ mod completed_test_coordinate_feedback_tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES and scratch homes/cwd"]
     fn actual_completed_test_retains_player_source_for_coordinate_feedback() {
-        let mut game = tests::server_game();
+        let mut resources = None;
+        let mut game = tests::server_game(&mut resources);
         game.build_registries();
         game.set_allow_commands(true);
         game.level.player_uuid = Some([0, 0, 0, 77]);

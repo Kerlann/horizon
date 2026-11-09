@@ -929,7 +929,7 @@ impl Enchantments {
         !self.custom_damage.is_empty()
     }
     /// `EnchantmentHelper.has`: whether `stack` has any enchantment providing
-    /// `component`. It reads the stack's own component, as NeoForge leaves it.
+    /// `component`. It reads the stack's own component.
     pub fn has_component(&self, stack: &ItemStack, component: &str) -> bool {
         stack.enchantments().iter().any(|(id, _)| {
             self.get(id)

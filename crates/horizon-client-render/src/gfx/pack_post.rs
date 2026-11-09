@@ -81,6 +81,9 @@ mod custom_type_tests;
 mod sky_depth_tests;
 
 #[cfg(test)]
+mod depth_copy_tests;
+
+#[cfg(test)]
 mod end_fan_tests;
 
 #[cfg(test)]

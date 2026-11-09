@@ -449,7 +449,7 @@ impl Game<'_> {
     }
 }
 
-/// The ticks left after a mod's `Tick`, a cancel being NeoForge's -1, and
+/// The ticks left after a mod's `Tick`, a cancel leaving -1, and
 /// whether a mod ever set this use's: once one did, the use goes on only
 /// while some are left, else it ran out. A use no mod touched goes on as
 /// vanilla's own do (an eye of ender's has none from the start).
@@ -531,9 +531,9 @@ fn use_counter_leaving(own: i32, remaining: i32) -> i32 {
 }
 
 /// What a `Start` left of a use of `own` ticks: None refused (a cancel, or
-/// a time below 0, as NeoForge's `startUsingItem` returns), else whether a
+/// a time below 0), else whether a
 /// mod set the ticks left to none. Such a use runs out on its first tick
-/// (`tick_left`), as NeoForge's `--useItemRemaining <= 0` completes it, while
+/// (`tick_left`), while
 /// an item's own 0 (an eye of ender) is held until let go, as vanilla's.
 fn start_of(own: i32, duration: i32, canceled: bool) -> Option<bool> {
     (!canceled && duration >= 0).then_some(duration == 0 && own != 0)
@@ -905,7 +905,7 @@ mod tests {
         assert!(!goes_on(tick_left(20, -1, false, false)));
         // a use a mod ran out stays out on the next ticks (a crossbow frozen).
         assert!(!goes_on(tick_left(-1, -1, false, true)));
-        // and goes on again if a mod gives it ticks back, as NeoForge's.
+        // and goes on again if a mod gives it ticks back.
         assert!(goes_on(tick_left(-1, 10, false, true)));
     }
 

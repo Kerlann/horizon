@@ -48,6 +48,7 @@ pub(super) struct BorrowedMobTick<'a> {
     pub(super) mobs: &'a mut horizon_client::join_seq::JoinList<Mob>,
     pub(super) snapshot: &'a mut Vec<Seen>,
     pub(super) events: &'a mut Vec<MobEvent>,
+    pub(super) pushes: &'a mut horizon_client::mobs::PendingPushes,
     pub(super) dead: &'a mut Vec<Mob>,
     pub(super) corpses: &'a mut Vec<Mob>,
     pub(super) died: &'a mut horizon_client::fast_hash::FxHashSet<u32>,
@@ -68,6 +69,13 @@ pub(super) struct BorrowedMobTick<'a> {
     pub(super) round: &'a mut super::super::native_ticks::TickRound,
     pub(super) publish_reads: bool,
 }
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TickHookKind {
+    Pre,
+    Post,
+    Finish,
+}
+
 struct TickHookLoans<'a> {
     credit: &'a mut std::collections::HashMap<u32, super::super::combat::PlayerCredit>,
     died: &'a mut horizon_client::fast_hash::FxHashSet<u32>,
@@ -108,7 +116,7 @@ impl Game<'_> {
         mobs: &mut horizon_client::join_seq::JoinList<Mob>,
         lent: horizon_client::health::LentLevel,
         round: &mut super::super::native_ticks::TickRound,
-        (join, pre, publish): (horizon_client::join_seq::JoinSeq, bool, bool),
+        (join, hook, publish): (horizon_client::join_seq::JoinSeq, TickHookKind, bool),
         loans: TickHookLoans<'_>,
     ) -> (
         horizon_client::health::LentLevel,
@@ -126,24 +134,35 @@ impl Game<'_> {
             std::mem::swap(&mut host.mob_players, loans.bindings);
         }
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            let Some(i) = self.mobs.locate(join) else {
-                return false;
-            };
-            let actor = &self.mobs[i];
-            if publish {
-                self.publish_mob_read_source(
-                    actor,
-                    mod_api::EntityReadCapturePhase::BeforeCallback,
-                );
-            }
-            let id = actor.id;
-            let kind = actor.kind.clone();
-            if pre {
-                self.native_tick_pre_one(round, id, &kind.id)
-            } else {
-                self.native_tick_post_one(round, id, &kind.id);
+            let allowed = if hook == TickHookKind::Finish {
                 true
+            } else if let Some(i) = self.mobs.locate(join) {
+                let actor = &self.mobs[i];
+                if publish {
+                    self.publish_mob_read_source(
+                        actor,
+                        mod_api::EntityReadCapturePhase::BeforeCallback,
+                    );
+                }
+                let id = actor.id;
+                let kind = actor.kind.clone();
+                match hook {
+                    TickHookKind::Pre => self.native_tick_pre_one(round, id, &kind.id),
+                    TickHookKind::Post => {
+                        self.native_tick_post_one(round, id, &kind.id);
+                        true
+                    }
+                    TickHookKind::Finish => true,
+                }
+            } else {
+                false
+            };
+            if hook != TickHookKind::Pre {
+                if let Some(frame) = self.active_entity_writer() {
+                    self.drain_entity_commands(frame.turn);
+                }
             }
+            allowed
         }));
         *mobs = self.mobs.lift();
         std::mem::swap(&mut self.last_hurt_by_player, loans.credit);
@@ -184,7 +203,7 @@ impl Game<'_> {
         let level_id = state.level_id;
         let round = state.round;
         let mut dispatch_panic = None;
-        let mut pushes = horizon_client::mobs::PendingPushes::default();
+        let mut pushes = std::mem::take(state.pushes);
         let original_len = snapshot.len();
         let mut keep = vec![true; original_len];
         let mut grid =
@@ -250,6 +269,7 @@ impl Game<'_> {
             .borrow_mut()
             .mob_player_writes
             .clear();
+        let mut writer_scope = None;
         self.leash_boats = self
             .boats
             .iter()
@@ -264,6 +284,27 @@ impl Game<'_> {
                 break;
             }
             let scheduled = schedule.as_ref().and_then(|s| s.get(cursor)).copied();
+            if !resuming {
+                drop(writer_scope.take());
+                let actor = match scheduled {
+                    Some(join) => mobs.locate(join).map(|i| &mobs[i]),
+                    None => mobs.get(cursor),
+                };
+                writer_scope = actor.and_then(|actor| {
+                    self.begin_entity_writer(
+                        horizon_client::join_seq::residency::write_queue::Target {
+                            runtime_id: actor.id,
+                            location: horizon_client::join_seq::residency::table::Location {
+                                owner: horizon_client::join_seq::residency::Owner {
+                                    dimension: self.dim.key(),
+                                    kind: horizon_client::join_seq::residency::Kind::Mob,
+                                },
+                                join: actor.join,
+                            },
+                        },
+                    )
+                });
+            }
             if !resuming
                 && round.listening()
                 && let Some(join) = scheduled
@@ -284,7 +325,7 @@ impl Game<'_> {
                         &mut mobs,
                         lent,
                         round,
-                        (join, true, state.publish_reads),
+                        (join, TickHookKind::Pre, state.publish_reads),
                         TickHookLoans {
                             credit: &mut player_credit,
                             died: &mut died,
@@ -636,6 +677,19 @@ impl Game<'_> {
                                     spare =
                                         w.player.map(|v| std::mem::replace(&mut guests[k].1, v));
                                 }
+                                horizon_client::mobs::take_mob_pushes(
+                                    &mut events,
+                                    from,
+                                    &mut pushes,
+                                );
+                                route_player_events(
+                                    &mut events,
+                                    from,
+                                    seen_guest,
+                                    &guest_ids,
+                                    &mut guest_events,
+                                    mobs[i].id,
+                                );
                                 dispatch_panic = Some(payload);
                                 break 'actor;
                             }
@@ -762,7 +816,7 @@ impl Game<'_> {
                     &mut mobs,
                     lent,
                     round,
-                    (join, false, state.publish_reads),
+                    (join, TickHookKind::Post, state.publish_reads),
                     TickHookLoans {
                         credit: &mut player_credit,
                         died: &mut died,
@@ -783,6 +837,34 @@ impl Game<'_> {
                         mod_api::EntityReadCapturePhase::AfterEntityTick,
                     );
                 }
+            }
+            if pause.is_none() {
+                if post.is_none()
+                    && let Some(scope) = &writer_scope
+                {
+                    let (returned, result) = self.mob_tick_hook_boundary(
+                        &mut mobs,
+                        lent,
+                        round,
+                        (
+                            scope.frame.actor.location.join,
+                            TickHookKind::Finish,
+                            state.publish_reads,
+                        ),
+                        TickHookLoans {
+                            credit: &mut player_credit,
+                            died: &mut died,
+                            ticked: &mut ticked,
+                            bindings: &mut bindings,
+                        },
+                    );
+                    lent = returned;
+                    if let Err(payload) = result {
+                        dispatch_panic = Some(payload);
+                        break;
+                    }
+                }
+                drop(writer_scope.take());
             }
             let Some(decision) = pause else { continue };
             // No MobWorld, DamageLevel or navigation loan crosses this boundary.
@@ -912,6 +994,33 @@ impl Game<'_> {
             cached_difficulty = None;
             resuming = true;
         }
+        if dispatch_panic.is_some()
+            && let Some(scope) = &writer_scope
+        {
+            // Store back and finish accepted work even on unwind; a later
+            // completion panic must not replace the original callback payload.
+            let (returned, result) = self.mob_tick_hook_boundary(
+                &mut mobs,
+                lent,
+                round,
+                (
+                    scope.frame.actor.location.join,
+                    TickHookKind::Finish,
+                    state.publish_reads,
+                ),
+                TickHookLoans {
+                    credit: &mut player_credit,
+                    died: &mut died,
+                    ticked: &mut ticked,
+                    bindings: &mut bindings,
+                },
+            );
+            lent = returned;
+            if result.is_err() {
+                log::error!("completion callback panicked while preserving an earlier mob panic");
+            }
+        }
+        drop(writer_scope);
         laps.lap("creature_loop");
         if dispatch_panic.is_none() {
             if let Some(slots) = &schedule_slots {
@@ -944,6 +1053,7 @@ impl Game<'_> {
                 }
             }
         }
+        *state.pushes = pushes;
         *state.mobs = mobs;
         *state.snapshot = snapshot;
         *state.events = events;

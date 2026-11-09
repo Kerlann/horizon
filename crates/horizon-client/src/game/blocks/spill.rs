@@ -212,6 +212,7 @@ impl Pending {
 /// Constructor random retained while drop hooks edit a not-yet-joined item.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(super) struct ItemRandom {
+    pub own: (u64, Option<f64>),
     pub uuid: [i32; 4],
     pub bob: f32,
     pub yaw: f32,
@@ -230,6 +231,7 @@ pub(super) fn prepare_item_random(velocity: Option<[f64; 3]>) -> ItemRandom {
         [x, 0.2, own.next_double() * 0.2 - 0.1]
     });
     ItemRandom {
+        own: (&own).into(),
         uuid,
         bob,
         yaw,

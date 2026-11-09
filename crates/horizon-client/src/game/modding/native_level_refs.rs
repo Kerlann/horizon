@@ -2072,8 +2072,7 @@ mod tests {
 
     /// The flag adds a chunk to the spawning chunks (inhabited time, a spawn
     /// attempt); the local mob cap still wants a non-spectator within 128
-    /// blocks of its centre, as NeoForge (which leaves `LocalMobCapCalculator`
-    /// alone) does.
+    /// blocks of its centre.
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_natural_spawning_ticket_far_from_every_player_runs_the_attempt_but_the_local_cap_refuses()

@@ -2196,7 +2196,7 @@ impl<'a> Plan<'a> {
     }
 
     /// The creative inventory (`creative-inventory.json`): each mod tab after
-    /// vanilla's, ten to a page as NeoForge pages them (the top row's first
+    /// vanilla's, ten to a page (the top row's first
     /// five columns, then the bottom row's), with only the items the game has;
     /// the mods' new items join the search tab under their English names.
     fn creative_tabs(&self, doc: &mut J) -> Result<()> {
@@ -2687,7 +2687,7 @@ impl SavedModifiers {
 }
 
 /// A world's data packs (`packs`) with the content root `root`'s biome
-/// modifiers applied over them. NeoForge applies modifiers once every data
+/// modifiers applied over them. Modifiers apply once every data
 /// pack is in, to the final biomes and tags: a pack's file for a biome
 /// (Terralith's `minecraft:plains`) keeps the mods' features and spawns, and
 /// a pack's biome its tags put under a modifier's selector gets them too.

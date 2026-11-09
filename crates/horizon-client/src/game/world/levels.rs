@@ -63,7 +63,7 @@ pub(super) struct Parked {
     random_tick_sections: RandomTickSections,
     level_events: Vec<LevelEvent>,
     /// Entity portal processes and cooldowns belong to this level's entities.
-    portal_states: HashMap<u32, horizon_client::nether_portal::PortalState>,
+    pub(super) portal_states: HashMap<u32, horizon_client::nether_portal::PortalState>,
     falling: horizon_client::join_seq::JoinList<FallingBlock, false>,
     paintings: horizon_client::join_seq::JoinList<horizon_client::entities::Painting>,
     item_frames: horizon_client::join_seq::JoinList<horizon_client::entities::ItemFrame>,
@@ -828,8 +828,8 @@ impl Game<'_> {
     fn tick_server_body(&mut self, paused: bool) -> Result<()> {
         // `tickRateManager.tick()` once per server tick, before any level
         // (each `ServerLevel.tick` only reads `runsNormally`), and the native
-        // `ServerTickStart` before that level work, where NeoForge fires
-        // `ServerTickEvent.Pre`. A paused pass and a held server tick nothing.
+        // `ServerTickStart` before that level work (NeoForge's
+        // `ServerTickEvent.Pre`). A paused pass and a held server tick nothing.
         let running = if !paused && !self.agent.hold_server {
             self.clock.check_sprint_completion();
             if let Some(report) = self.clock.take_sprint_report() {
@@ -1341,11 +1341,12 @@ mod tests {
 
     /// A game on a scratch world folder, the way `dedicated.rs` opens one
     /// (`load_world` with an absolute folder).
-    fn open_game(
+    fn open_game<'a>(
+        resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>,
         root: &std::path::Path,
         home: &std::path::Path,
         world: &std::path::Path,
-    ) -> Game<'static> {
+    ) -> Game<'a> {
         use crate::game::{Audio, Options, Progress, Settings, load_resources};
         let settings = Settings::default();
         let loaded = load_resources(
@@ -1362,7 +1363,7 @@ mod tests {
         )
         .unwrap();
         // The game keeps a reference to its resources for the whole test.
-        let resources: &'static _ = Box::leak(Box::new(loaded.resources));
+        let resources = resources.insert(loaded.resources);
         let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
         options.resources = root.to_path_buf();
         options.game_dir = Some(home.to_path_buf());
@@ -1410,14 +1411,16 @@ mod tests {
         let home = std::path::PathBuf::from(std::env::var_os("HORIZON_HOME").unwrap()).join("h260");
         let world = home.join("saves/h260");
         {
-            let mut game = open_game(&root, &home, &world);
+            let mut resources = None;
+            let mut game = open_game(&mut resources, &root, &home, &world);
             // A server ticks before it saves.
             game.tick_world(true).unwrap();
             assert!(game.run_command("worldborder set 50"));
             assert!(game.run_command("execute in minecraft:the_nether run worldborder set 100"));
             game.save_game().unwrap();
         }
-        let mut game = open_game(&root, &home, &world);
+        let mut resources = None;
+        let mut game = open_game(&mut resources, &root, &home, &world);
         let mut failures = Vec::new();
         if game.border.size() != 50.0 {
             failures.push(format!("in place after the open: {}", game.border.size()));
@@ -1464,7 +1467,8 @@ mod tests {
         const DEFAULT: f64 = 59_999_968.0;
         let mut failures = Vec::new();
         {
-            let mut game = open_game(&root, &home, &world);
+            let mut resources = None;
+            let mut game = open_game(&mut resources, &root, &home, &world);
             // A new world: every level at the default.
             if game.border.size() != DEFAULT {
                 failures.push(format!("new world in place: {}", game.border.size()));
@@ -1479,7 +1483,8 @@ mod tests {
             game.save_game().unwrap();
         }
         {
-            let mut game = open_game(&root, &home, &world);
+            let mut resources = None;
+            let mut game = open_game(&mut resources, &root, &home, &world);
             // Before the first tick: the read, then the set.
             if game.border.size() != 50.0 {
                 failures.push(format!("first read before a tick: {}", game.border.size()));
@@ -1496,7 +1501,8 @@ mod tests {
             game.save_game().unwrap();
         }
         {
-            let mut game = open_game(&root, &home, &world);
+            let mut resources = None;
+            let mut game = open_game(&mut resources, &root, &home, &world);
             let got = sizes(&mut game);
             if got != (Some(70.0), Some(100.0), Some(DEFAULT)) {
                 failures.push(format!("after the save and another reopen: {got:?}"));
@@ -1530,7 +1536,8 @@ mod tests {
             }
         }
         copy(&source, &world);
-        let mut game = open_game(&root, &home, &world);
+        let mut resources = None;
+        let mut game = open_game(&mut resources, &root, &home, &world);
         // The world's level.dat has cheats off: the open read it after open_game's setting.
         game.set_allow_commands(true);
         assert!(game.run_command("forceload add 208 0 239 15"));
@@ -1592,7 +1599,8 @@ mod tests {
         }
         copy(&source, &world);
         {
-            let mut game = open_game(&root, &home, &world);
+            let mut resources = None;
+            let mut game = open_game(&mut resources, &root, &home, &world);
             // The world's level.dat has cheats off: the open read it after open_game's setting.
             game.set_allow_commands(true);
             assert!(game.run_command("forceload add 208 0 239 15"));
@@ -1690,7 +1698,8 @@ mod tests {
             }
         }
         copy(&source, &world);
-        let mut game = open_game(&root, &home, &world);
+        let mut resources = None;
+        let mut game = open_game(&mut resources, &root, &home, &world);
         game.set_allow_commands(true);
         assert!(game.run_command("forceload add 208 0 239 15"));
         let mut loaded = false;

@@ -119,14 +119,18 @@ pub struct StoredEffect {
     pub duration: i32,
     pub amplifier: i32,
     pub registry_index: Option<usize>,
+    /// `MobEffectInstance.showIcon`, kept apart from the particle flag: the saved `show_icon`.
+    pub show_icon: bool,
 }
 impl StoredEffect {
+    /// `new MobEffectInstance(effect, duration, amplifier)`: its icon shows.
     pub fn new(id: &'static str, duration: i32, amplifier: i32) -> Self {
         Self {
             id,
             duration,
             amplifier,
             registry_index: horizon_client_core::potions::effect(id).map(|def| def.index),
+            show_icon: true,
         }
     }
     /// Copy a registered instance after an update or hidden-effect promotion, without resolving again.
@@ -136,6 +140,7 @@ impl StoredEffect {
             duration: instance.duration,
             amplifier: instance.amplifier,
             registry_index: instance.registry_index,
+            show_icon: instance.show_icon,
         }
     }
 }
@@ -3369,6 +3374,10 @@ pub struct PendingPushes {
 }
 impl PendingPushes {
     const LIST_MAX: usize = 64;
+    /// Whether every queued push has been consumed or retired with its target.
+    pub fn is_empty(&self) -> bool {
+        self.list.is_empty() && self.by_mob.is_empty()
+    }
     pub fn push(&mut self, id: u32, v: Vec3) {
         if self.by_mob.is_empty() && self.list.len() < Self::LIST_MAX {
             self.list.push((id, v));
@@ -3630,7 +3639,7 @@ pub struct Vehicle {
     pub velocity: Vec3,
 }
 impl PlayerView {
-    /// `LivingEntity.getVisibilityPercent(level, looking)` before NeoForge's
+    /// `LivingEntity.getVisibilityPercent(level, looking)` before the visibility
     /// event and the clamp: sneaking, invisibility by armour cover, and the
     /// worn head's `mob_visibility` for the `looking` mob's type.
     pub fn visibility_percent(&self, looking: Species) -> f64 {
@@ -3932,7 +3941,7 @@ impl MobWorld<'_> {
         self.mob_griefing || self.mob_hooks.is_some_and(|hooks| hooks.grief_hooked())
     }
     /// `EventHooks.canEntityGrief(level, mob)`: the `mob_griefing` rule, or
-    /// what a mod answers for this mob. Asked where NeoForge asks it; the
+    /// what a mod answers for this mob (`native_entity_mob_griefing`); the
     /// places vanilla reads the rule with no entity still read `mob_griefing`.
     pub fn can_grief(&self, mob: u32) -> bool {
         match self.mob_hooks {
@@ -4735,7 +4744,7 @@ impl Mob {
             container.record_reduction(Reduction::Absorption, dealt - through);
             self.health -= through;
         }
-        // NeoForge bubbles what Pre left up to `lastHurt`: vanilla's value plus what Pre
+        // `lastHurt` takes what Pre left: vanilla's value plus what Pre
         // added, so a hit no listener changes keeps vanilla's.
         self.last_hurt = incoming + container.pre_change();
         self.invulnerable = container.post_attack_invulnerability_ticks();
@@ -5019,8 +5028,7 @@ impl Mob {
         if creaking::is_creaking(self) && !creaking::can_move(self) {
             return;
         }
-        // The native hook runs first, on the raw strength (NeoForge's `LivingKnockBackEvent` fires
-        // at the start of `LivingEntity.knockback`), then the resistance scales what it left.
+        // The native hook runs first, on the raw strength, then the resistance scales what it left.
         let mut knock = crate::health::Knock {
             strength: power,
             x: xd,
@@ -5178,11 +5186,9 @@ impl Mob {
         changed
     }
     /// Loads an effect without applying its attribute modifiers a second time.
-    pub fn load_effect(&mut self, effect: &'static str, ticks: i32, amplifier: i32) {
-        self.extra.effects.retain(|e| e.id != effect);
-        self.extra
-            .effects
-            .push(StoredEffect::new(effect, ticks, amplifier));
+    pub fn load_effect(&mut self, effect: StoredEffect) {
+        self.extra.effects.retain(|e| e.id != effect.id);
+        self.extra.effects.push(effect);
         self.effects_dirty = true;
     }
     /// `LivingEntity.addEffect` of a `MobEffectInstance` with its flags: the effect as
@@ -5224,7 +5230,7 @@ impl Mob {
                 amplifier: stored.amplifier,
                 ambient: false,
                 visible: true,
-                show_icon: true,
+                show_icon: stored.show_icon,
                 client_blend: (false, false),
                 hidden: None,
             };
@@ -5513,12 +5519,20 @@ impl Mob {
         if self.species() == Species::Wither || !self.can_be_affected(effect) {
             return;
         }
-        let had = self.extra.effects.iter().any(|e| e.id == effect);
+        let had = self
+            .extra
+            .effects
+            .iter()
+            .find(|e| e.id == effect)
+            .map(|e| e.show_icon);
         let ambient = self.extra.ambient_effects.contains(&effect);
         let hidden = self.extra.hidden_effects.contains(&effect);
         self.add_effect_with(effect, ticks, amplifier, false, true);
         // The basic overload changes the chain, not the existing active flags.
-        if had {
+        if let Some(show_icon) = had {
+            if let Some(e) = self.extra.effects.iter_mut().find(|e| e.id == effect) {
+                e.show_icon = show_icon;
+            }
             self.extra.ambient_effects.retain(|id| *id != effect);
             if ambient {
                 self.extra.ambient_effects.push(effect);
@@ -6743,6 +6757,28 @@ mod magic_absorb_tests {
             m.extra.effects,
             vec![crate::mobs::StoredEffect::new(speed, 900, 0)]
         );
+    }
+
+    /// `MobEffectInstance.showIcon` on a mob: a new instance keeps its own, `update` always takes
+    /// the incoming one (a change by itself counts), and the basic overload leaves it alone.
+    #[test]
+    fn a_mobs_effect_keeps_its_icon_flag_apart_from_its_particles() {
+        let mut m = witch();
+        let speed = "minecraft:speed";
+        let instance = |ticks, show_icon| {
+            let mut e = crate::effects::EffectInstance::new(speed, ticks, 0);
+            e.show_icon = show_icon;
+            e
+        };
+        let icon = |m: &Mob| m.extra.effects[0].show_icon;
+        assert!(m.add_effect_instance(speed, instance(600, false)));
+        assert!(!icon(&m) && !m.extra.hidden_effects.contains(&speed));
+        assert!(m.add_effect_instance(speed, instance(100, true)));
+        assert!(icon(&m));
+        assert!(m.add_effect_instance(speed, instance(100, false)));
+        m.add_effect("speed", 900, 0);
+        assert!(!icon(&m));
+        assert_eq!(m.extra.effects[0].duration, 900);
     }
 
     #[test]

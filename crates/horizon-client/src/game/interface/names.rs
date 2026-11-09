@@ -116,10 +116,17 @@ impl NameTagLayouts {
 impl Game<'_> {
     /// A named name tag names the mob under the crosshair.
     pub(super) fn name_mob(&mut self, index: usize) -> bool {
-        let Some(name) = self
+        // `NameTagItem`: the mob takes the tag's `custom_name` component, style and all.
+        let Some((name, text)) = self
             .held()
             .filter(|h| &*h.item == "minecraft:name_tag")
-            .and_then(|h| h.custom_name())
+            .and_then(|h| {
+                let text = h.data()?.other("minecraft:custom_name");
+                Some((
+                    h.custom_name()?,
+                    text.map(horizon_client::entity_nbt::name_text),
+                ))
+            })
         else {
             return false;
         };
@@ -130,6 +137,7 @@ impl Game<'_> {
         let entity_id = m.id;
         let entity_name = name.clone();
         m.custom_name = Some(name);
+        m.custom_name_text = text;
         m.persistent = true;
         // itemStack.shrink(1), in creative too.
         self.consume_held();
@@ -834,6 +842,15 @@ struct NameTag {
     discrete: bool,
 }
 
+/// `Entity.DATA_CUSTOM_NAME` of a mob named `name`: its component with its style (a name
+/// summoned or set as `{text: "..", color: "red"}` keeps its colour), else the plain text.
+pub(super) fn name_component(m: &Mob, name: &str) -> horizon_core::nbt::Tag {
+    match &m.custom_name_text {
+        Some(text) => horizon_client::scoreboard::json_to_tag(&text.component()),
+        None => horizon_protocol::text::literal(name),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -841,6 +858,29 @@ mod tests {
     use horizon_client::pose::Pose;
     use horizon_core::geometry::Vec3;
     use std::sync::Arc;
+
+    #[test]
+    fn a_mobs_name_is_sent_with_its_style() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../.local/horizon-client")
+            .join(horizon_core::VANILLA_VERSION);
+        let Ok(types) = horizon_client::mobs::MobTypes::load(&root) else {
+            return;
+        };
+        let cow = Arc::new(types.types["minecraft:cow"].clone());
+        let mut m = Mob::new(1, cow, Vec3::new(0.0, 64.0, 0.0), 0.0);
+        m.custom_name = Some("RED NAME".into());
+        let plain = horizon_protocol::text::literal("RED NAME");
+        assert_eq!(name_component(&m, "RED NAME"), plain);
+        let styled = horizon_core::nbt::Tag::compound([
+            ("text", horizon_core::nbt::Tag::String("RED NAME".into())),
+            ("color", horizon_core::nbt::Tag::String("red".into())),
+        ]);
+        m.custom_name_text = Some(horizon_client::entity_nbt::name_text(&styled));
+        let sent = horizon_client::entity_nbt::name_text(&name_component(&m, "RED NAME"));
+        assert_eq!(sent, horizon_client::entity_nbt::name_text(&styled));
+        assert_ne!(sent, horizon_client::entity_nbt::name_text(&plain));
+    }
 
     fn tag_font() -> HudAtlas {
         static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);

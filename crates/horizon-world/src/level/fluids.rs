@@ -436,7 +436,7 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             if fluid.kind().same_family(kind)
                 && self.can_pass_through_wall(direction, state, neighbour)
             {
-                // NeoForge asks for each neighbouring source, the fluid's rule
+                // Mods are asked for each neighbouring source, the fluid's rule
                 // as the default (`CreateFluidSourceEvent`).
                 if fluid.is_source()
                     && self

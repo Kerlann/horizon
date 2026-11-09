@@ -23,6 +23,7 @@ pub(super) struct NativeReadState {
     pub(super) mob_backing: super::native_mob_backing::MobBackingRevision,
     pub(super) mob_player_writes: HashMap<[i32; 4], Option<u32>>,
     pub(super) mob_owner_writes: HashMap<u32, Option<([i32; 4], Option<[i32; 4]>)>>,
+    pub(super) commands: Option<super::native_entity_commands::EntityCommands>,
     pub(super) identities: HashSet<Arc<str>>,
     pub(super) player_identifiers: NativeReadIdentifiers,
     pub(super) raids: HashMap<RaidRef, RaidReadRow>,
@@ -43,6 +44,7 @@ impl NativeReadState {
         self.mob_backing = Default::default();
         self.mob_owner_writes.clear();
         self.mob_player_writes.clear();
+        self.commands = None;
         self.identities.clear();
         self.player_identifiers = NativeReadIdentifiers::default();
         self.raids.clear();
@@ -52,6 +54,7 @@ impl NativeReadState {
 }
 
 pub(super) struct NativeReadPublication {
+    pub(super) silent_overlay: super::native_silent_overlay::SilentOverlay,
     pub(super) capture: EntityReadCapture,
     pub(super) base: CompactEntityReadRow,
     pub(super) details: NativeReadDetails,

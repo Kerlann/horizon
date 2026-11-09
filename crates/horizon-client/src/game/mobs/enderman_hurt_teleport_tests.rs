@@ -11,7 +11,10 @@ use std::sync::Arc;
 
 /// A game over 5x5 empty chunks around (0, 0) with a stone floor at y = 3:
 /// every enderman teleport from (8.5, 4, 8.5) lands on it or fails.
-fn floored_game(root: &std::path::Path) -> Game<'static> {
+fn floored_game<'a>(
+    resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>,
+    root: &std::path::Path,
+) -> Game<'a> {
     let settings = Settings::default();
     let loaded = load_resources(
         horizon_assets::resource_source::ResourceRoot::directory(root.to_path_buf()),
@@ -29,7 +32,7 @@ fn floored_game(root: &std::path::Path) -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.to_path_buf();
     options.execution_role = super::execution_role::ExecutionRole::IntegratedServer;
-    let resources = Box::leak(Box::new(loaded.resources));
+    let resources = resources.insert(loaded.resources);
     let mut game = Game::new(
         resources,
         loaded.pack,
@@ -85,7 +88,8 @@ fn enderman(game: &Game, id: u32, at: Vec3, seed: i64) -> Mob {
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn an_explosion_teleports_endermen_before_it_returns() {
     let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
-    let mut game = floored_game(&root);
+    let mut resources = None;
+    let mut game = floored_game(&mut resources, &root);
     let center = Vec3::new(8.5, 4.0, 8.5);
     for k in 0..12 {
         let angle = f64::from(k) * std::f64::consts::TAU / 12.0;
@@ -131,7 +135,8 @@ fn an_explosion_teleports_endermen_before_it_returns() {
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn an_infested_endermans_silverfish_come_out_where_it_was_hurt() {
     let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
-    let mut game = floored_game(&root);
+    let mut resources = None;
+    let mut game = floored_game(&mut resources, &root);
     let at = Vec3::new(8.5, 4.0, 8.5);
     // A hurt with nothing living behind it, from a seed whose draws after the
     // hurt sound pass the effect's 1-in-10 chance and then `nextInt(10) != 0`:
@@ -196,7 +201,8 @@ fn shulker(game: &Game, id: u32, at: Vec3, seed: i64) -> Mob {
 fn a_shulker_bullets_hit_teleports_an_open_shulker_before_it_returns() {
     use horizon_client::projectiles::{Hit, Projectile, ProjectileKind};
     let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
-    let mut game = floored_game(&root);
+    let mut resources = None;
+    let mut game = floored_game(&mut resources, &root);
     let at = Vec3::new(8.5, 4.0, 8.5);
     let mut moved = 0;
     // On a flat floor one try in 17 finds a block to cling to: some seeds teleport.
@@ -249,7 +255,8 @@ fn a_shulker_bullets_hit_teleports_an_open_shulker_before_it_returns() {
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_teleporting_shulker_leaves_its_rider_behind() {
     let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
-    let mut game = floored_game(&root);
+    let mut resources = None;
+    let mut game = floored_game(&mut resources, &root);
     let at = Vec3::new(8.5, 4.0, 8.5);
     let mut teleported = 0;
     for seed in 0..40 {

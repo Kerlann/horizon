@@ -23,7 +23,7 @@ pub fn qualified(id: &str) -> String {
 pub fn sources(root: &Path, overlay: &PackOverlay) -> Result<Vec<(String, Value)>> {
     // Vanilla's recipes by bare name, then content mods' as `<ns>:<name>`.
     let mut sources: Vec<(String, Vec<u8>)> = Vec::new();
-    // NeoForge's load conditions: `mod_loaded` asks which mods' data is
+    // Load conditions: `mod_loaded` asks which mods' data is
     // in this root (`minecraft`, always, and the content mods').
     // `mod_loaded` asks which mods are loaded, not which namespaces
     // they own: a mod that also owns a namespace doesn't make that
@@ -74,8 +74,7 @@ pub fn sources(root: &Path, overlay: &PackOverlay) -> Result<Vec<(String, Value)
                 continue;
             }
         };
-        // A file whose load conditions don't hold is silently absent,
-        // as NeoForge's ICondition leaves it out of the manager.
+        // A file whose load conditions don't hold is silently absent.
         if !horizon_world::conditions::conditions_hold(&v, &|id: &str| mods.contains(&id)) {
             continue;
         }

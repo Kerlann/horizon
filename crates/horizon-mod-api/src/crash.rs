@@ -156,34 +156,51 @@ impl ConvertedPackage<'_> {
         export: impl Into<Cow<'static, str>>,
         site: impl Into<Cow<'static, str>>,
     ) -> Option<ConvertedPackageGuard> {
-        if current_native_mod() != Some(self.runtime) {
-            return None;
-        }
         let call = ConvertedCall {
             runtime: self.runtime,
             package: self.package.clone(),
             export: export.into(),
             site: site.into(),
         };
-        let frame = NATIVE_FRAME.try_with(Cell::get).ok().flatten()?;
-        let token = NEXT_SCOPE
-            .try_with(|c| {
-                let next = c.get().checked_add(1)?;
-                c.set(next);
-                Some(next)
-            })
-            .ok()
-            .flatten()?;
-        let scope = ConvertedScope { call, frame, token };
-        let outer = IN_CONVERTED_PACKAGE
-            .try_with(|current| current.replace(Some(scope)))
-            .ok()?;
-        Some(ConvertedPackageGuard {
-            outer,
-            token,
-            _thread: std::marker::PhantomData,
-        })
+        enter_converted_call(call)
     }
+}
+
+/// Engine-owned captured recipient; no guest identity is accepted here.
+pub(crate) fn enter_entity_command_package(
+    runtime: &'static str,
+    package: std::sync::Arc<str>,
+) -> Option<ConvertedPackageGuard> {
+    enter_converted_call(ConvertedCall {
+        runtime,
+        package: Cow::Owned(package.as_ref().to_owned()),
+        export: Cow::Borrowed("entity_command_completed"),
+        site: Cow::Borrowed(""),
+    })
+}
+
+fn enter_converted_call(call: ConvertedCall) -> Option<ConvertedPackageGuard> {
+    if current_native_mod() != Some(call.runtime) {
+        return None;
+    }
+    let frame = NATIVE_FRAME.try_with(Cell::get).ok().flatten()?;
+    let token = NEXT_SCOPE
+        .try_with(|c| {
+            let next = c.get().checked_add(1)?;
+            c.set(next);
+            Some(next)
+        })
+        .ok()
+        .flatten()?;
+    let scope = ConvertedScope { call, frame, token };
+    let outer = IN_CONVERTED_PACKAGE
+        .try_with(|current| current.replace(Some(scope)))
+        .ok()?;
+    Some(ConvertedPackageGuard {
+        outer,
+        token,
+        _thread: std::marker::PhantomData,
+    })
 }
 
 struct ConvertedScope {

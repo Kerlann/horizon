@@ -18,6 +18,8 @@ pub trait Component {
 }
 
 /// An owned component patch, independent of the engine's component representation.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct Components {
@@ -54,6 +56,7 @@ impl From<&Components> for Compound {
 /// A refused hook output retains its captured engine value. The clicked-slot bridge also
 /// stages the slot, cursor and cancellation flags together. Independent host effects,
 /// including storage writes, commands and messages, are not undone by output validation.
+// no wire: decoding rejects zero counts through new and validates component patches through set_components; damage is applied through set_damage.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct ItemStack {

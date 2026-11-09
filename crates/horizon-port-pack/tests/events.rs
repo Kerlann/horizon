@@ -94,7 +94,7 @@ const LABELS: &str = r#"{"hooks": [
     {"name": "arrow_nock", "neoforge": "net.neoforged.neoforge.event.entity.player.ArrowNockEvent (NeoForge.EVENT_BUS, ICancellableEvent)"},
     {"name": "level_tick_post", "neoforge": "LevelTickEvent.Post"},
     {"name": "config_loading", "neoforge": "ModConfigEvent.Loading"},
-    {"name": "container_opened", "neoforge": "none (NeoForge's PlayerContainerEvent.Open fires after the menu is open)"},
+    {"name": "container_opened", "neoforge": "none (not NeoForge's PlayerContainerEvent.Open: this hook can cancel the opening)"},
     {"name": "open_menu", "neoforge": "IPlayerExtension.openMenu(MenuProvider)"},
     {"name": "block_entity_container", "neoforge": "Capabilities.Item.BLOCK"},
     {"name": "recipes_received", "neoforge": "RecipesReceivedEvent"},

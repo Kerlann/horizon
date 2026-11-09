@@ -7,7 +7,7 @@ pub trait Hooks {
     /// `rgba` packs it (`u32::MAX` keeps the text's own); they land beside the attribute lines
     /// without finding where those end. `shown` is whether the stack's
     /// `minecraft:tooltip_display` shows the attribute modifiers (`shouldShow`); the hook is
-    /// asked either way, as NeoForge's is. `player` and `player_entity_id` are the local player's,
+    /// asked either way. `player` and `player_entity_id` are the local player's,
     /// `None` for the recipe book's search text, which has none and drops the colours, and for a stack
     /// nested in another's tooltip (a crossbow's loaded projectile); `advanced`
     /// (F3+H) and `creative` (a creative tab's own slot) are the tooltip's `TooltipFlag`. Asked

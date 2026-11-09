@@ -3,6 +3,17 @@
 //! (`game`). None of it is part of the API a mod is written against.
 use crate::*;
 
+/// Deliver a terminal only to its captured issuing mod/package. Generated
+/// dispatch selects this recipient before entering any native/crash scope.
+/// Scope restoration is RAII, including callback panic and nested delivery.
+pub fn with_entity_command_recipient<R>(
+    native: &'static str,
+    package: Option<std::sync::Arc<str>>,
+    f: impl FnOnce() -> R,
+) -> R {
+    crate::entity_command_dispatch::with_recipient(native, package, f)
+}
+
 /// The game's profiler control and reports, not a mod-facing API contract.
 #[path = "profiler.rs"]
 pub mod profiler;
@@ -68,6 +79,15 @@ pub fn mods() -> &'static [ModEntry] {
 /// The engine uses this dispatch inventory to apply its saved code switches.
 pub fn installed_code_ids() -> impl Iterator<Item = &'static str> {
     crate::mods().iter().map(|entry| entry.id)
+}
+
+/// The command argument types mods registered at startup, by namespaced id, for the game's
+/// command trees. Not part of the mod surface.
+pub fn command_argument_types() -> Vec<(String, std::sync::Arc<dyn crate::CommandArgumentType>)> {
+    crate::parts::installed_command_arguments()
+        .iter()
+        .map(|info| (info.id.to_string(), info.argument.clone()))
+        .collect()
 }
 
 /// The startup package inventory at an owning engine load boundary.

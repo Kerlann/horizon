@@ -8,6 +8,8 @@ mod runtime_sprites;
 #[cfg(test)]
 pub(in crate::game) use runtime_sprites::fixture_png;
 pub(in crate::game) use runtime_sprites::{collect_runtime_sprites, stage_runtime_sprites};
+mod texture_atlases;
+pub(in crate::game) use texture_atlases::{collect_texture_atlases, stage_texture_atlases};
 
 #[cfg(test)]
 #[path = "client_reload_tests.rs"]
@@ -51,8 +53,7 @@ impl Game<'_> {
 }
 
 /// Registers the first load's client listeners: no game exists yet, so
-/// [`StartupClientHost`] stands in, as NeoForge's construction-time event
-/// fires on a client whose resources are not loaded either.
+/// [`StartupClientHost`] stands in, before any resources are loaded.
 pub(super) fn register_startup_client_reload_listeners() -> mod_api::ClientListenerRegistry {
     let phase = mod_api::__private::PhaseOwner::scope(mod_api::__private::ModPhase::Setup);
     let _reload = phase.reloading().expect("initial client registration");

@@ -8,8 +8,10 @@ use horizon_core::position::ChunkPos;
 use horizon_protocol::packets::configuration::ClientInformation;
 use std::sync::{Arc, atomic::AtomicI32, mpsc};
 
-fn scene() -> (Game<'static>, mpsc::Receiver<Out>) {
-    let mut g = crate::game::game_tests::tests::server_game();
+fn scene<'a>(
+    resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>,
+) -> (Game<'a>, mpsc::Receiver<Out>) {
+    let mut g = crate::game::game_tests::tests::server_game(resources);
     g.build_registries();
     g.set_allow_commands(true);
     let stone = g
@@ -148,7 +150,8 @@ fn group(g: &mut Game<'_>, packets: Vec<S>, token: i32) {
     g.tick_lan(false);
 }
 fn walk_stop(assert_trajectory: bool) {
-    let (mut g, _rx) = scene();
+    let mut resources = None;
+    let (mut g, _rx) = scene(&mut resources);
     for _ in 0..2 {
         g.tick_boats();
     }
@@ -225,7 +228,8 @@ fn boat_tick_uses_stopped_players_known_movement() {
 #[test]
 #[ignore = "needs prepared resources and isolated homes/cwd"]
 fn walking_then_still_tick_end_preserves_the_accepted_displacement() {
-    let (mut g, _rx) = scene();
+    let mut resources = None;
+    let (mut g, _rx) = scene(&mut resources);
     let id = g.boats[0].id;
     group(
         &mut g,

@@ -20,6 +20,49 @@ use std::{
     sync::{Arc, Mutex},
 };
 
+/// Read filesystem-bound package declarations concurrently, retaining dependency order and
+/// keeping an individual package's refusal attached to that package.
+fn read_contents(
+    requests: &[(&Path, &horizon_mod_package::Manifest, Vec<String>)],
+) -> Vec<Result<horizon_mod_package::Content, String>> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let next = AtomicUsize::new(0);
+    let threads = horizon_threads::worker_count().clamp(1, requests.len().max(1));
+    let mut done: Vec<_> = std::thread::scope(|scope| {
+        let workers: Vec<_> = (0..threads)
+            .map(|_| {
+                scope.spawn(|| {
+                    let mut done = Vec::new();
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        let Some((path, manifest, declared)) = requests.get(index) else {
+                            return done;
+                        };
+                        let content =
+                            horizon_mod_package::Content::read_declaring(path, manifest, declared);
+                        if declared.is_empty()
+                            && let Ok(content) = &content
+                        {
+                            remember_verdict(path, content);
+                        }
+                        done.push((index, content));
+                    }
+                })
+            })
+            .collect();
+        workers
+            .into_iter()
+            .flat_map(|worker| {
+                worker
+                    .join()
+                    .unwrap_or_else(|e| std::panic::resume_unwind(e))
+            })
+            .collect()
+    });
+    done.sort_by_key(|(index, _)| *index);
+    done.into_iter().map(|(_, result)| result).collect()
+}
+
 #[derive(Default)]
 pub(super) struct CodeSwitches {
     disabled: std::collections::BTreeSet<String>,
@@ -485,7 +528,6 @@ pub(super) fn content_overlay(
     jar_store: &std::path::Path,
 ) -> horizon_client::Result<ContentOverlay> {
     use horizon_client::mod_content::{self, ContentMod};
-    use horizon_mod_package::Content;
     let here = std::env::current_dir().unwrap_or_default();
     let original_base = root.to_owned();
 
@@ -568,27 +610,34 @@ pub(super) fn content_overlay(
     let order = horizon_mod_package::dependencies::resolve_content(&inputs)
         .map_err(|error| error.to_string())?
         .order;
-    for index in order {
+    // Hooks are queried on the calling thread, never from a content reader.
+    let native_items = &native_declared().items;
+    let requests: Vec<_> = order
+        .iter()
+        .map(|&index| {
+            let source = &packages[index];
+            let declared = native_items
+                .iter()
+                .filter(|i| {
+                    i.id.split_once(':')
+                        .is_some_and(|(ns, _)| ns == source.manifest.id)
+                })
+                .map(|i| i.id.clone())
+                .collect::<Vec<_>>();
+            (source.path, source.manifest, declared)
+        })
+        .collect();
+    let read = read_contents(&requests);
+    for (index, content) in order.into_iter().zip(read) {
         let source = &packages[index];
         let m = source.manifest;
-        // The items this mod's native code declares may be a file item's crafting remainder.
-        let declared: Vec<String> = native_declared()
-            .items
-            .iter()
-            .filter(|i| i.id.split_once(':').is_some_and(|(ns, _)| ns == m.id))
-            .map(|i| i.id.clone())
-            .collect();
-        let content = match Content::read_declaring(source.path, m, &declared) {
+        let content = match content {
             Ok(content) => content,
             Err(e) => {
                 log::warn!("Horizon: mod {} content not loaded: {e}", m.id);
                 continue;
             }
         };
-        // Read as `Content::read` reads it: `start_mods` need not read it again.
-        if declared.is_empty() {
-            remember_verdict(source.path, &content);
-        }
         let known = match &mut known {
             Some(types) => types,
             None => match mod_content::known_components(root) {
@@ -1205,6 +1254,7 @@ impl Game<'_> {
 
     pub(super) fn install_loop_context(&mut self, context: PreparedLoopContext) {
         self.loop_context = context.game;
+        self.setting_overrides.borrow_mut().clear();
         if let Some(host) = self.lan.as_mut() {
             host.hub.loop_context = self.loop_context.clone();
         }
@@ -2588,5 +2638,61 @@ mod tests {
             0,
             brewing::Category::Neutral
         )]));
+    }
+}
+
+#[cfg(test)]
+mod concurrent_content_tests {
+    use super::*;
+    #[test]
+    fn mods_read_at_once_keep_their_order_and_their_own_errors() {
+        let dir = std::env::temp_dir().join(format!("horizon-read-at-once-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let paths: Vec<PathBuf> = (0..12).map(|i| dir.join(format!("m{i}"))).collect();
+        for (i, path) in paths.iter().enumerate() {
+            std::fs::create_dir_all(path).unwrap();
+            std::fs::write(
+                path.join("horizon-mod.toml"),
+                format!(
+                    "id = \"m{i}\"\nname = \"M\"\nversion = \"0.1.0\"\napi = \"0.2\"\n\
+                     side = \"both\"\ncapabilities = [\"registries\"]\n"
+                ),
+            )
+            .unwrap();
+            // Mod i has i + 1 language files; mod 5 also writes into another mod's namespace.
+            let lang = path.join(format!("assets/m{i}/lang"));
+            std::fs::create_dir_all(&lang).unwrap();
+            for n in 0..=i {
+                std::fs::write(lang.join(format!("l{n}.json")), "{}").unwrap();
+            }
+            if i == 5 {
+                std::fs::create_dir_all(path.join("assets/m0/lang")).unwrap();
+                std::fs::write(path.join("assets/m0/lang/x.json"), "{}").unwrap();
+            }
+        }
+        let packages: Vec<(&PathBuf, horizon_mod_package::Package)> = paths
+            .iter()
+            .map(|p| (p, horizon_mod_package::Package::read(p).unwrap()))
+            .collect();
+        let requests: Vec<_> = packages
+            .iter()
+            .map(|(path, package)| (path.as_path(), &package.manifest, Vec::new()))
+            .collect();
+        let read = read_contents(&requests);
+        assert_eq!(read.len(), 12);
+        for (i, content) in read.iter().enumerate() {
+            if i == 5 {
+                assert!(content.as_ref().unwrap_err().contains("own namespaces"));
+                continue;
+            }
+            let files = &content.as_ref().unwrap().files;
+            assert_eq!(files.len(), i + 1, "mod {i}");
+            assert!(
+                files
+                    .iter()
+                    .all(|f| f.starts_with(&format!("assets/m{i}/")))
+            );
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }

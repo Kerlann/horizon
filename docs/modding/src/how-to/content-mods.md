@@ -436,12 +436,17 @@ doesn't have are left out):
 { "title": "Ruby", "icon": "ruby:ruby", "items": ["ruby:ruby", "ruby:ruby_block"] }
 ```
 
-They come after vanilla's tabs, ten to a page as NeoForge pages them; the
+They come after vanilla's tabs, ten to a page; the
 buttons above the inventory turn the pages. The title is a lang key or English
 text: `"title": "itemGroup.ruby"` uses that key from the mod's lang files, and a
 lang file's `itemGroup.<mod id>.<file name>` (`creative_tab/gems.json` →
 `itemGroup.ruby.gems`) translates any title. A mod's items join the search tab
 under their names.
+
+A file only makes new tabs. To put items into a tab the mod doesn't own, such as
+vanilla's `minecraft:ingredients` or another mod's, a native mod listens to the
+client hook `build_creative_mode_tab_contents` (NeoForge's
+`BuildCreativeModeTabContentsEvent`) and pushes its stacks for that `tab`.
 
 A component type no vanilla item has is refused, so a misspelt one fails
 the load instead of doing nothing. Behaviour the game ties to a vanilla
@@ -662,7 +667,7 @@ vanilla's `FeatureSorter` does, so an added feature takes its place in that orde
 biome no modifier names keeps its text, and a world without mods keeps vanilla's biomes byte for byte. A modifier
 naming a biome, biome tag, feature, feature tag, entity type or entity type tag the game doesn't have (another mod's, a
 `#c:` convention tag), or of a type not read yet (`add_carvers`, a mod's own serializer), is skipped with a warning
-naming the mod and file, as NeoForge skips what it can't resolve; the mods still load. A malformed modifier of a type
+naming the mod and file; the mods still load. A malformed modifier of a type
 that is read (an unknown step, a missing field, `minCount > maxCount`) stops the build, and the game starts without
 content mods ("content mods not loaded: ..." in the log). Feature tags are vanilla's for now (`#tag` in `features`
 doesn't read a mod's `placed_feature` tags yet); a world's data pack that replaces a biome replaces the mods' changes to

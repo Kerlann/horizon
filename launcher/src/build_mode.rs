@@ -136,9 +136,6 @@ impl Launcher {
             Some(step) => card.child(self.panel().child(self.building_card(step, pal, cx))),
             None => card.child(self.mode_status(error, mine, pal, cx)),
         };
-        if let Some(mods) = &self.native_confirm {
-            card = card.child(self.native_warning(mods, cx));
-        }
         Some(card)
     }
 
@@ -226,7 +223,7 @@ impl Launcher {
             State::NotBuilt => Some(tr("Not built")),
             State::Outdated => Some(tr("Needs rebuild")),
         };
-        let can_build = self.native_confirm.is_none()
+        let can_build = self.pending_consent.is_none()
             && !(self.native_step.is_some() && mine)
             && (error.is_some() || needs.is_some());
         let mut right = div().flex().items_center().gap(px(8.));
@@ -240,7 +237,11 @@ impl Launcher {
         if can_build && self.native_step.is_none() {
             right = right.child(button("native-build", "Build", Kind::Primary, &t).on_click(
                 cx.listener(|this, _: &ClickEvent, _, cx| {
-                    this.native_confirm = Some(this.native_mods_to_build().map(|(_, b)| b));
+                    if this.settings.native_mods_allowed_at.is_some() {
+                        this.build_native();
+                    } else {
+                        this.request_native_build_consent();
+                    }
                     cx.notify();
                 }),
             ));
@@ -656,7 +657,11 @@ impl Launcher {
                     return;
                 }
                 this.mods.route_open = None;
-                this.native_confirm = Some(this.native_mods_to_build().map(|(_, b)| b));
+                if this.settings.native_mods_allowed_at.is_some() {
+                    this.build_native();
+                } else {
+                    this.request_native_build_consent();
+                }
                 cx.notify();
             }));
             let log = ui::menu_item(

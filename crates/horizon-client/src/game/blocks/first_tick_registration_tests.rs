@@ -9,7 +9,7 @@ use horizon_client::chunk::Chunk;
 use horizon_core::position::ChunkPos;
 use std::sync::Arc;
 
-fn game() -> Game<'static> {
+fn game(resources: &mut Option<std::sync::Arc<Resources>>) -> Game<'_> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -31,7 +31,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -63,7 +63,8 @@ fn fluid_ticks(game: &Game<'_>, key: (i32, i32)) -> Option<usize> {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn water_placed_before_the_first_world_tick_keeps_its_flow_tick() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     let key = (80, 80);
     // Queue the ticket without a load barrier: the test supplies the worker result below.
     assert!(game.streaming.set_forced(key.0, key.1, true));
@@ -104,7 +105,8 @@ fn water_placed_before_the_first_world_tick_keeps_its_flow_tick() {
 fn early_registration_keeps_saved_ticks_and_ticks_nothing() {
     use horizon_core::random::RandomSource;
     use horizon_core::ticks::{SavedTick, TickPriority, TickTypeId};
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     let key = (80, 80);
     // Queue the ticket without a load barrier: the test supplies the worker result below.
     assert!(game.streaming.set_forced(key.0, key.1, true));
@@ -157,7 +159,8 @@ fn early_registration_keeps_saved_ticks_and_ticks_nothing() {
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn saved_block_and_fluid_ticks_unpack_when_the_chunk_starts_ticking() {
     use horizon_core::ticks::{SavedTick, TickPriority, TickTypeId};
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     let key = (80, 80);
     // Queue the ticket without a load barrier: the test supplies the worker result below.
     assert!(game.streaming.set_forced(key.0, key.1, true));
@@ -235,7 +238,8 @@ fn saved_block_and_fluid_ticks_unpack_when_the_chunk_starts_ticking() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn an_unloaded_chunk_saves_its_ticks_and_a_reloaded_one_gets_them_back() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     let key = (80, 80);
     let pos = ChunkPos::new(key.0, key.1);
     // Queue the ticket without a load barrier: the test supplies the worker result below.

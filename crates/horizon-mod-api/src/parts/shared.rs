@@ -101,6 +101,8 @@ pub struct Parts {
     pub(crate) place_providers: HashMap<&'static str, PlaceProviderPart>,
     /// The tooltip appenders, in registration order.
     pub(crate) tooltip_appenders: Vec<TooltipAppenderPart>,
+    /// Command argument types the mods registered, by namespaced id, in registration order.
+    pub(crate) command_arguments: Vec<CommandArgumentInfo>,
     /// Only the parts that override each scoped hook, resolved at load or reload.
     pub(crate) hooks: Vec<Option<HookParts>>,
 }

@@ -6,9 +6,14 @@ use syn::{Data, DeriveInput, Fields, Type, parse_quote, visit::Visit};
 pub(crate) fn expand(mut input: DeriveInput) -> syn::Result<TokenStream> {
     let name = &input.ident;
     let mut via: Option<Type> = None;
+    let mut internal_field_layouts = false;
     for attr in &input.attrs {
         if attr.path().is_ident("wire") {
             attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("internal_field_layouts") && !internal_field_layouts {
+                    internal_field_layouts = true;
+                    return Ok(());
+                }
                 if !meta.path.is_ident("via") || via.is_some() {
                     return Err(meta.error("expected one `via = Type`"));
                 }
@@ -16,6 +21,12 @@ pub(crate) fn expand(mut input: DeriveInput) -> syn::Result<TokenStream> {
                 Ok(())
             })?;
         }
+    }
+    if via.is_some() && internal_field_layouts {
+        return Err(syn::Error::new_spanned(
+            name,
+            "internal_field_layouts requires a structural derive",
+        ));
     }
     if via.is_none() {
         for param in input.generics.type_params_mut() {
@@ -63,6 +74,7 @@ pub(crate) fn expand(mut input: DeriveInput) -> syn::Result<TokenStream> {
     let mut takes = Vec::new();
     let shape;
     let nested;
+    let mut schema = Vec::new();
     match &input.data {
         Data::Struct(data) => {
             shape = match &data.fields {
@@ -72,7 +84,13 @@ pub(crate) fn expand(mut input: DeriveInput) -> syn::Result<TokenStream> {
             };
             nested = !matches!(data.fields, Fields::Unit);
             let (pattern, build, fields) = fields(&data.fields);
-            for (field, bind) in data.fields.iter().zip(&fields) {
+            for (index, (field, bind)) in data.fields.iter().zip(&fields).enumerate() {
+                let label = field
+                    .ident
+                    .as_ref()
+                    .map_or_else(|| index.to_string(), ToString::to_string);
+                let ft = &field.ty;
+                schema.push(quote!((#label, <#ft as #w::Wire>::layout(&mut vec![]))));
                 check_owned(&field.ty)?;
                 let ft = &field.ty;
                 min = quote!(#min + <#ft as #w::Wire>::MIN);
@@ -86,6 +104,7 @@ pub(crate) fn expand(mut input: DeriveInput) -> syn::Result<TokenStream> {
         }
         Data::Enum(data) => {
             shape = "enum";
+            schema.push(quote!(("tag", <u32 as #w::Wire>::layout(&mut vec![]))));
             min = quote!(4usize);
             nested = data
                 .variants
@@ -101,7 +120,18 @@ pub(crate) fn expand(mut input: DeriveInput) -> syn::Result<TokenStream> {
                 let build = construct(&variant.fields, quote!(Self::#case));
                 let mut ps = Vec::new();
                 let mut os = Vec::new();
-                for (field, bind) in variant.fields.iter().zip(binds) {
+                if matches!(variant.fields, Fields::Unit) {
+                    let label = format!("{index}:{case}");
+                    schema.push(quote!((#label, <() as #w::Wire>::layout(&mut vec![]))));
+                }
+                for (field_index, (field, bind)) in variant.fields.iter().zip(binds).enumerate() {
+                    let field_name = field
+                        .ident
+                        .as_ref()
+                        .map_or_else(|| field_index.to_string(), ToString::to_string);
+                    let label = format!("{index}:{case}.{field_name}");
+                    let ft = &field.ty;
+                    schema.push(quote!((#label, <#ft as #w::Wire>::layout(&mut vec![]))));
                     check_owned(&field.ty)?;
                     layout = field_layout(layout, field, name);
                     ps.push(quote!(out.put(#bind);));
@@ -125,10 +155,19 @@ pub(crate) fn expand(mut input: DeriveInput) -> syn::Result<TokenStream> {
     } else {
         quote!(Ok(#(#takes)*))
     };
+    // Explicit internal opt-in: do not emit a cfg(test) trait method in external
+    // derives, whose mod_api dependency is compiled without cfg(test).
+    let schema = internal_field_layouts.then(|| {
+        quote! {
+            #[cfg(test)]
+            fn __field_layouts() -> Option<Vec<(&'static str, u64)>> { Some(vec![#(#schema),*]) }
+        }
+    });
     Ok(quote! {
         #[allow(unreachable_patterns, unused_variables)]
         #[automatically_derived]
             impl #imp #w::Wire for #name #ty #clause {
+            #schema
             const MIN: usize = #min;
             const LAYOUT_SEED: u64 = #w::layout_name(stringify!(#name));
             fn layout(visiting: &mut Vec<&'static str>) -> u64 {
@@ -255,6 +294,34 @@ mod tests {
     }
 
     #[test]
+    fn field_schema_is_opt_in_for_internal_api_tests_only() {
+        let ordinary = expand(syn::parse_quote!(
+            struct Ordinary {
+                value: u32,
+            }
+        ))
+        .unwrap();
+        let internal = expand(syn::parse_quote!(
+            #[wire(internal_field_layouts)]
+            enum Internal {
+                Unit,
+                Tuple(u32),
+                Record { value: bool },
+            }
+        ))
+        .unwrap();
+        let ordinary: syn::ItemImpl = syn::parse2(ordinary).unwrap();
+        let internal: syn::ItemImpl = syn::parse2(internal).unwrap();
+        let schema = |item: &syn::ImplItem| matches!(item, syn::ImplItem::Fn(f) if f.sig.ident == "__field_layouts");
+        assert!(!ordinary.items.iter().any(schema));
+        let method = internal.items.iter().find(|item| schema(item)).unwrap();
+        let syn::ImplItem::Fn(method) = method else {
+            unreachable!()
+        };
+        assert!(method.attrs.iter().any(|attr| attr.path().is_ident("cfg")));
+    }
+
+    #[test]
     fn borrowed_fields_are_rejected_even_inside_containers() {
         for source in [
             "struct Borrow<'a> { value: &'a str }",
@@ -274,6 +341,8 @@ mod tests {
             "union Union { a: u32, b: u8 }",
             "#[wire(unknown)] struct Unknown;",
             "#[wire(via = String, via = u8)] struct Duplicate;",
+            "#[wire(via = String, internal_field_layouts)] struct NonStructural;",
+            "#[wire(internal_field_layouts, internal_field_layouts)] struct DuplicateSchema;",
         ] {
             assert!(expand(syn::parse_str(source).unwrap()).is_err());
         }

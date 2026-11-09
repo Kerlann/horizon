@@ -65,7 +65,7 @@ fn zoom_rows(s: &Settings) -> Vec<Row<ExtraRow>> {
     let on = Value::Switch(s.mods.is_on(i));
     let mut rows = vec![Row::new(ExtraRow::Zoom(i), lang::get(ZOOM), on).about(about)];
     let page = installed[i].native.as_ref();
-    if page.is_some_and(|page| !page.mappings.is_empty() || !page.buttons.is_empty()) {
+    if page.is_some_and(|page| !page.mappings.is_empty() || !page.settings.is_empty()) {
         let name = lang::get(MOD_SETTINGS);
         rows.push(Row::new(ExtraRow::ZoomSettings(i), name, Value::Press));
     }

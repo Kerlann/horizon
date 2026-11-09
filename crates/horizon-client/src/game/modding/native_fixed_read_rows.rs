@@ -11,13 +11,13 @@ impl Game<'_> {
     /// Identity and cross-entity credit are resolved by the publication pass;
     /// item use is supplied from its already resolved held-stack projection.
     /// Portal eligibility includes pre-indexed rider flags, supplied by the pass.
-    /// The caller must hold the mob's level in place: climbing samples that level's
-    /// blocks at the borrowed mob position, without resolving the mob from Game.
+    /// Climbing samples the explicitly borrowed source world, including a
+    /// parked level, without swapping dimensions or resolving the mob from Game.
     pub(super) fn snapshot_mob_living_read_row(
         &self,
         capture: EntityReadCapture,
         living: LivingRef,
-        mob: &horizon_client::mobs::Mob,
+        (mob, world): (&horizon_client::mobs::Mob, &horizon_client::world::World),
         kill_credit: Option<EntityRef>,
         last_attacker: Option<EntityRef>,
         item_use_remaining: i32,
@@ -36,7 +36,7 @@ impl Game<'_> {
             is_sleeping: Some(horizon_client::mobs::villager::sleeping(mob)),
             sleeping_pos: horizon_client::mobs::villager::sleeping_pos(mob),
             is_jumping: Some(false),
-            is_climbing: Some(self.native_mob_is_climbing(mob)),
+            is_climbing: Some(self.native_mob_is_climbing_in(mob, world)),
             baby: Some(mob.extra.age < 0),
             health: Some(mob.health),
             max_health: Some(mob.attrs.max_health),

@@ -372,8 +372,9 @@ impl<'a> Split<'a> {
             None,
             api,
             batching,
-            self.host.settings.horizon.wide_frame(),
+            &self.host.settings.horizon,
             shader_pack,
+            old.display_reading(),
             (
                 self.host.settings.file.int("textureFiltering"),
                 self.host.settings.file.int("maxAnisotropyBit"),
@@ -455,8 +456,9 @@ impl<'a> Split<'a> {
             None,
             api,
             batching,
-            self.host.settings.horizon.wide_frame(),
+            &self.host.settings.horizon,
             shader_pack,
+            old.display_reading(),
             (
                 self.host.settings.file.int("textureFiltering"),
                 self.host.settings.file.int("maxAnisotropyBit"),
