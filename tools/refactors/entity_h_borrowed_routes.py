@@ -10,7 +10,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[2]
 HOST = ROOT / 'crates/horizon-mod-api/src/host'
-GAME = ROOT / 'crates/horizon-client/src/game/modding'
+GAME = ROOT / 'crates/horizon-client/src/game'
 
 
 def body_end(source, opening):
@@ -75,7 +75,7 @@ def main():
             if re.search(r'\bEntityReadError\b', source[match.start():end]):
                 names.add(match[1])
     assert len(names) == 66, f'Expected the signed 66 H rows, got {len(names)}'
-    files = {path: path.read_text() for path in GAME.glob('native*.rs')}
+    files = {path: path.read_text() for path in GAME.rglob('*.rs')}
     edits = {}
     for name in sorted(names):
         helper = 'read_' + name
@@ -101,7 +101,7 @@ def main():
         wrapper = signature + ' {\n        ' + call + '\n    }\n\n'
         private = signature.replace('fn ' + name, 'fn ' + helper, 1)
         receiver = private.index('&self') + len('&self')
-        private = private[:receiver] + ', _provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>' + private[receiver:]
+        private = private[:receiver] + ', _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>' + private[receiver:]
         replacement = wrapper + private + ' ' + source[opening:end]
         edits.setdefault(path, []).append((match.start(), end, replacement))
     for path, changes in edits.items():
