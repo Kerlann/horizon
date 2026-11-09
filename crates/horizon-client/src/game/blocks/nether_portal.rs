@@ -1467,12 +1467,7 @@ impl Game<'_> {
         if !self.portals.dirty || self.remote.is_some() {
             return;
         }
-        let list = self
-            .portals
-            .arrivals
-            .iter()
-            .map(|arrival| arrival_tag(arrival))
-            .collect();
+        let list = self.portals.arrivals.iter().map(arrival_tag).collect();
         let root = Tag::compound([("arrivals", Tag::List(list))]);
         if horizon_client::save::write_dat(&self.arrivals_path(), root).is_ok() {
             self.portals.dirty = false;

@@ -260,16 +260,15 @@ pub(super) fn write_attachments(
     id: u32,
     maps: &HashMap<u32, horizon_mod_runtime::attachments::Attachments>,
 ) {
-    if let Tag::Compound(root) = tag {
-        if let Some(map) = maps.get(&id)
-            && attachment_compound(root.get(&ATTACHMENTS_KEY.into())).is_ok()
-        {
-            let data = map.to_nbt();
-            if data.is_empty() {
-                root.remove(&ATTACHMENTS_KEY.into());
-            } else {
-                root.insert(ATTACHMENTS_KEY.into(), Tag::Compound(data));
-            }
+    if let Tag::Compound(root) = tag
+        && let Some(map) = maps.get(&id)
+        && attachment_compound(root.get(&ATTACHMENTS_KEY.into())).is_ok()
+    {
+        let data = map.to_nbt();
+        if data.is_empty() {
+            root.remove(&ATTACHMENTS_KEY.into());
+        } else {
+            root.insert(ATTACHMENTS_KEY.into(), Tag::Compound(data));
         }
     }
 }
