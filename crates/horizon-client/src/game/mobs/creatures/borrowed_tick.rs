@@ -157,10 +157,10 @@ impl Game<'_> {
             } else {
                 false
             };
-            if hook != TickHookKind::Pre {
-                if let Some(frame) = self.active_entity_writer() {
-                    self.drain_entity_commands(frame.turn);
-                }
+            if hook != TickHookKind::Pre
+                && let Some(frame) = self.active_entity_writer()
+            {
+                self.drain_entity_commands(frame.turn);
             }
             allowed
         }));

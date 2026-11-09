@@ -111,7 +111,12 @@ An active item transaction refuses a foreign write that would enqueue with
 `EntityWriteError::TransactionActive`, before creating an id, overlay or event.
 Retry after committing the transaction. Immediate OWN/direct entity edits are not
 promised item-transaction rollback. Completion callbacks keep the enclosing writer
-turn and append to its FIFO without recursively draining it.
+turn and append to its FIFO without recursively draining it. Each writer turn
+accepts at most 256 queued entity commands cumulatively, including commands generated
+by completion callbacks, not merely commands currently pending. Further requests return
+`WorkLimit` before allocating a command id or overlay. Every already accepted command
+still drains before the next actor; an endlessly appending listener cannot monopolize
+the tick.
 
 Other deferred write methods still require their own ordered implementations.
 The heavy-dependent group has no speculative heavy payload overlay. Synchronous live
