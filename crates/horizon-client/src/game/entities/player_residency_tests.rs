@@ -280,6 +280,14 @@ fn production_login_and_local_body_constructor_admit_profile_and_real_loan() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn actual_dragon_admits_exactly_eight_checked_parts_with_independent_uuids() {
+    const VALUE: mod_api::AttachmentType<i32> = mod_api::AttachmentType {
+        namespace: "source_test",
+        name: "part_refusal",
+        default: || 0,
+        codec: None,
+        copy_on_death: false,
+        sync: false,
+    };
     crate::game::native_entity_refs::tests::with_game(|game| {
         let parent = game
             .spawn_dragon_spawned([0.0; 3], crate::game::creatures::SpawnSite::Plain)
@@ -313,6 +321,10 @@ fn actual_dragon_admits_exactly_eight_checked_parts_with_independent_uuids() {
                     |_| panic!("part aliased parent lifetime")
                 ),
                 SlotAccess::UnsupportedKind(Kind::DragonPart)
+            );
+            assert_eq!(
+                VALUE.set(game, mod_api::Holder::Entity(id), 7),
+                Err(mod_api::AttachmentError::UnsupportedHolder("dragonpart")),
             );
         }
         assert_eq!(
