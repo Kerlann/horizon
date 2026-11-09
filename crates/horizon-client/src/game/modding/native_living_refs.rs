@@ -132,6 +132,11 @@ impl Game<'_> {
     /// equipment, effects and health only as far as it draws them. API 382.
     pub(super) fn living(&self, entity: EntityRef) -> Option<LivingRef> {
         let living = LivingRef::new(entity);
+        if let Some(available) =
+            self.with_entity_read_publication(entity, |row| Some(row.details.living().is_some()))
+        {
+            return available.then_some(living);
+        }
         self.native_living_read_target(living).map(|_| living)
     }
     /// What a living handle names for a read that works on both sides: the

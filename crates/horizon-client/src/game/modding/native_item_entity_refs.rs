@@ -18,6 +18,16 @@ impl Game<'_> {
     /// stale handle, a client, or an item temporarily taken out for ticking.
     pub(super) fn item_entity(&self, entity: EntityRef) -> Option<ItemEntityRef> {
         let item = ItemEntityRef::new(entity);
+        if self.is_logical_server()
+            && let Some(available) = self.with_entity_read_publication(entity, |row| {
+                Some(matches!(
+                    row.details,
+                    super::native_entity_read_cache::NativeReadDetails::Item(_)
+                ))
+            })
+        {
+            return available.then_some(item);
+        }
         self.native_item_entity_index(item).map(|_| item)
     }
 

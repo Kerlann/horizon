@@ -41,6 +41,7 @@ pub enum Kind {
     Spawner,
     Cloud,
     Cushion,
+    Knot,
 }
 
 /// The dimension and family owning a list or singleton.

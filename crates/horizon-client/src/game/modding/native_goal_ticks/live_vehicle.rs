@@ -1,4 +1,4 @@
-//! Passenger reads over the mob tick's disjoint live entity loan.
+//! OWN vehicle reads through the actor loan and shared authoritative Host.
 use super::GoalCx;
 use mod_api::{EntityRef, LivingRef};
 
@@ -55,24 +55,9 @@ impl GoalCx<'_, '_> {
     }
 
     pub(super) fn r_entity_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
-        self.entity_mob(entity)?;
-        let live = self.w.live_mobs?;
-        let host = self.w.goal_host?;
-        let mut seats = host.player_passenger_seats(entity.id());
-        let mut add_mob = |mob: &crate::mobs::Mob| {
-            if mob.extra.mount == Some(entity.id()) && !mob.removed && mob.alive() {
-                seats.push((mob.extra.vehicle_order, mob.id));
-            }
-        };
-        add_mob(self.m);
-        live.for_each(&mut add_mob);
-        seats.sort_by_key(|&(order, _)| order);
-        Some(
-            seats
-                .into_iter()
-                .filter_map(|(_, id)| self.lookup_entity(id))
-                .collect(),
-        )
+        self.w
+            .goal_host?
+            .mob_passengers_lent(self.entity_mob(entity)?)
     }
 
     pub(super) fn r_entity_is_vehicle(&self, entity: EntityRef) -> Option<bool> {
@@ -96,9 +81,7 @@ impl GoalCx<'_, '_> {
                 })
                 .flatten()
             };
-            if let Some(riders) = children {
-                next.extend(riders.into_iter().rev());
-            }
+            next.extend(children?.into_iter().rev());
         }
         Some(all)
     }
@@ -106,12 +89,15 @@ impl GoalCx<'_, '_> {
     pub(super) fn r_entity_controlling_passenger(&self, entity: EntityRef) -> Option<LivingRef> {
         let vehicle = self.entity_mob(entity)?;
         let first = *self.r_entity_passengers(entity)?.first()?;
-        if let Some(rider) = self.entity_mob(first) {
+        if let Some(rider) = self.lookup_mob(first) {
+            let kind = rider.entity().kind(self.host)?;
             let tagged = self
                 .w
                 .data
-                .entity_has("minecraft:non_controlling_rider", &rider.kind.id);
-            return (!vehicle.no_ai && !tagged).then(|| LivingRef::new(first));
+                .entity_has("minecraft:non_controlling_rider", &kind);
+            return (!vehicle.no_ai && !tagged)
+                .then(|| self.lookup_living(first))
+                .flatten();
         }
         // The game only lets a player control this kind when the relevant
         // saddle, steering item or harness is present.

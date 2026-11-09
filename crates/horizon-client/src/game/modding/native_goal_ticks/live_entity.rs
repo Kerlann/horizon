@@ -1,13 +1,12 @@
 //! Entity reads from mobs lent to an AI goal or target-change callback.
 //!
-//! These use the mob in hand or the disjoint live loan; a snapshot does not
-//! carry these fields and must not be mistaken for a live entity.
+//! These use only the explicit mob in hand. Foreign reads use the shared Host.
 use super::super::{
     native_entity_moves::facing,
     native_entity_sounds::hostile_species,
     native_entity_state::{POSES, max_air},
 };
-use super::{GoalCx, Resolved};
+use super::GoalCx;
 use crate::mobs::Mob;
 use mod_api::{EntityRef, MobCategory};
 
@@ -52,11 +51,7 @@ impl GoalCx<'_, '_> {
         )
     }
     pub(super) fn entity_mob(&self, entity: EntityRef) -> Option<&Mob> {
-        match self.resolve(entity)? {
-            Resolved::Own => Some(self.m),
-            Resolved::Live(mob) => Some(mob),
-            _ => None,
-        }
+        self.is_own_entity(entity).then_some(&*self.m)
     }
 
     pub(super) fn r_entity_custom_name_visible(&self, entity: EntityRef) -> Option<bool> {
@@ -211,7 +206,7 @@ impl GoalCx<'_, '_> {
 
     pub(super) fn r_entity_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
         let id = self.entity_mob(entity)?.extra.mount?;
-        self.lookup_entity(id).or_else(|| self.host.entity(id))
+        self.lookup_entity(id)
     }
 
     pub(super) fn r_entity_is_passenger(&self, entity: EntityRef) -> Option<bool> {
@@ -238,16 +233,12 @@ impl GoalCx<'_, '_> {
         Some(match mob.extra.leash {
             None => mod_api::LeashHolder::Unleashed,
             Some(Holder::Knot(pos)) => mod_api::LeashHolder::Knot(pos),
-            Some(Holder::Mob(id) | Holder::Boat(id)) => mod_api::LeashHolder::Entity(
-                self.lookup_entity(id).or_else(|| self.host.entity(id))?,
-            ),
+            Some(Holder::Mob(id) | Holder::Boat(id)) => {
+                mod_api::LeashHolder::Entity(self.lookup_entity(id)?)
+            }
             Some(Holder::Player) => {
                 let uuid = horizon_client::lan::playerdata::ints_uuid(mob.extra.leash_player?);
-                mod_api::LeashHolder::Entity(
-                    self.lookup_player(uuid)
-                        .or_else(|| self.host.player(uuid))?
-                        .entity(),
-                )
+                mod_api::LeashHolder::Entity(self.host.player(uuid)?.entity())
             }
         })
     }

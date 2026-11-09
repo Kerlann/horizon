@@ -15,6 +15,7 @@
 use super::commands::Target;
 use super::entity_residency::{define_resident_access, resident_owners};
 use super::native_base_read_source::parked_base_read_access;
+use super::native_resident_read_publication::resident_read_access;
 use super::{
     Dim, ExperienceOrb, FallingBlock, Game, ItemEntity, Mob, boats, commands,
     creaking::CreakingState, dragon, fireworks, lightning, machines, minecarts,
@@ -87,6 +88,7 @@ pub(super) struct Parked {
     pub(super) mobs: horizon_client::join_seq::JoinList<Mob>,
     /// The entity ids of the level's fence knots (`knot_ids`).
     knot_ids: HashMap<[i32; 3], u32>,
+    knots: horizon_client::join_seq::JoinList<super::leads::Knot>,
     projectiles: horizon_client::join_seq::JoinList<horizon_client::projectiles::Projectile, false>,
     dropped: horizon_client::join_seq::JoinList<ItemEntity>,
     orbs: horizon_client::join_seq::JoinList<ExperienceOrb>,
@@ -126,6 +128,7 @@ impl Parked {
 
     resident_owners!(define_resident_access, self, projectiles);
     resident_owners!(parked_base_read_access, self, projectiles);
+    resident_owners!(resident_read_access, self, projectiles);
 }
 
 impl Game<'_> {
@@ -508,6 +511,7 @@ impl Game<'_> {
             hoppers: HashMap::new(),
             mobs: Default::default(),
             knot_ids: HashMap::new(),
+            knots: Default::default(),
             projectiles: Default::default(),
             dropped: Default::default(),
             orbs: Default::default(),
@@ -657,6 +661,7 @@ impl Game<'_> {
         swap(&mut self.hoppers, &mut p.hoppers);
         swap(&mut self.mobs, &mut p.mobs);
         swap(&mut self.knot_ids, &mut p.knot_ids);
+        swap(&mut self.knots, &mut p.knots);
         swap(&mut self.creatures.projectiles, &mut p.projectiles);
         swap(&mut self.dropped, &mut p.dropped);
         swap(&mut self.orbs, &mut p.orbs);
