@@ -159,11 +159,7 @@ pub(super) struct Fixture {
 
 impl Fixture {
     pub(super) fn new() -> Option<Self> {
-        let instance = crate::gfx::test_gpu::instance();
-        let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
-            eprintln!("Post destination test skipped: no GPU adapter");
-            return None;
-        };
+        let adapter = crate::gfx::pack_post::test_adapter()?;
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             required_limits: adapter.limits(),
             ..Default::default()

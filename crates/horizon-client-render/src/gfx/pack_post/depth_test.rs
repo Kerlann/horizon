@@ -12,8 +12,7 @@ pub(super) struct Gpu {
 }
 impl Gpu {
     pub(super) fn new() -> Option<Self> {
-        let instance = crate::gfx::test_gpu::instance();
-        let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
+        let adapter = crate::gfx::pack_post::test_adapter()?;
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             required_limits: adapter.limits(),
             required_features: adapter.features() & wgpu::Features::FLOAT32_FILTERABLE,
