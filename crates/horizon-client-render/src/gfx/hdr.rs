@@ -1779,7 +1779,10 @@ struct ReferenceParams { peak: f32, scene: f32, world: f32, debug: f32, share: v
         // SDR picture, clipped at white.
         hdr.lighting = false;
         for gamma in [0.5f32, 0.9, 1.0] {
-            let w = [gamma, gamma / 2.0, 0.0];
+            // fs_keep reads the stored half-float world before writing the 8-bit HUD
+            // backdrop. Quantize first here too: 0.9 rounds to a half-float below
+            // the 8-bit rounding boundary; the original f32 can round to a different code.
+            let w = [gamma, gamma / 2.0, 0.0].map(|v| half::f16::from_f32(v).to_f32());
             // Uncovered, the HUD's target holds the world as drawn; the icon ignores the HUD.
             let got = shoot(&mut hdr, w.map(f64::from), w.map(f64::from), 0.0, false);
             assert_eq!(got[..3], w.map(|v| half::f16::from_f32(v).to_f32()));
