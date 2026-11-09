@@ -28,6 +28,26 @@ use horizon_world::{level::data::PushReaction, piston_push};
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 
+/// Owned hook arguments, never a body or a deferred resident slot.
+pub(super) struct ItemVerticalContact {
+    entity: u32,
+    state: horizon_world::registry::BlockStateId,
+    pos: BlockPos,
+    position: Vec3,
+    stack: Option<horizon_client::items::ItemStack>,
+    discard: bool,
+    client: bool,
+}
+impl ItemVerticalContact {
+    pub(super) fn apply(self, item: &mut ItemEntity) -> bool {
+        match self.stack {
+            Some(stack) => item.stack = stack,
+            None => return true,
+        }
+        self.discard || item.stack.count == 0
+    }
+}
+
 /// Assign a stored owner's delayed id at its existing allocation point.
 /// Kinds without a lifetime slot pass None; a bound owner must keep its id.
 pub(super) fn assign_stored_id(
@@ -608,14 +628,13 @@ impl Game<'_> {
     /// and explicit consumption by a block-contact handler. `escape_speed`:
     /// the item is inside a block and moves without physics this tick, pushed
     /// out at this speed.
-    pub(super) fn tick_item_with_block_contacts(
+    pub(super) fn prepare_item_motion(
         &mut self,
         item: &mut ItemEntity,
         escape_speed: Option<f32>,
         entity_boxes: &[Aabb],
-        client: bool,
         splash: &mut impl FnMut(horizon_client::entities::ItemSplash),
-    ) -> (bool, bool) {
+    ) -> horizon_client::entities::ItemStep {
         let no_physics = escape_speed.is_some();
         let heights =
             item.push_by_fluid(&self.world, &self.res.motion().fluids, &self.loop_context);
@@ -636,39 +655,15 @@ impl Game<'_> {
         item.check_fall(&mut step, |fall, from, moved| {
             self.vehicle_fall_reset(fall, from, moved)
         });
-        if !client && let Some((on, distance)) = step.landed() {
-            self.item_fall_on(item.id, on, distance);
-        }
-        if let Some(pos) = step.vertical_contact {
-            let state = self.world.block(pos.x, pos.y, pos.z);
-            let position = item.position;
-            let mut discarded = false;
-            if crate::game::api_values::block_state::block_listens(
-                mod_api::HookId::ItemAfterVerticalCollision,
-                state,
-            ) {
-                let mut stack = Some(item.stack.clone());
-                self.native_item_after_vertical_collision(
-                    crate::game::native_hooks::ItemAfterVerticalCollisionCall {
-                        dimension: self.dim.id(),
-                        client,
-                        entity: item.id,
-                        state,
-                        block_pos: [pos.x, pos.y, pos.z],
-                        item_pos: [position.x, position.y, position.z],
-                        stack: &mut stack,
-                        discard: &mut discarded,
-                    },
-                );
-                match stack {
-                    Some(stack) => item.stack = stack,
-                    None => discarded = true,
-                }
-            }
-            if discarded || item.stack.count == 0 {
-                return (false, true);
-            }
-        }
+        step
+    }
+    pub(super) fn finish_item_motion(
+        &mut self,
+        item: &mut ItemEntity,
+        no_physics: bool,
+        step: horizon_client::entities::ItemStep,
+        splash: &mut impl FnMut(horizon_client::entities::ItemSplash),
+    ) -> bool {
         item.finish_move_block_effects(
             &self.world,
             self.res.facts(),
@@ -688,7 +683,73 @@ impl Game<'_> {
         let (water, _) =
             item.push_by_fluid(&self.world, &self.res.motion().fluids, &self.loop_context);
         item.water_entry(water > 0.0, false, splash);
-        (alive, false)
+        alive
+    }
+    pub(super) fn prepare_item_vertical_contact(
+        &self,
+        item: &ItemEntity,
+        pos: BlockPos,
+        client: bool,
+    ) -> Option<ItemVerticalContact> {
+        let state = self.world.block(pos.x, pos.y, pos.z);
+        if !crate::game::api_values::block_state::block_listens(
+            mod_api::HookId::ItemAfterVerticalCollision,
+            state,
+        ) {
+            return None;
+        }
+        Some(ItemVerticalContact {
+            entity: item.id,
+            state,
+            pos,
+            position: item.position,
+            stack: Some(item.stack.clone()),
+            discard: false,
+            client,
+        })
+    }
+    pub(super) fn dispatch_item_vertical_contact(&mut self, contact: &mut ItemVerticalContact) {
+        self.native_item_after_vertical_collision(
+            crate::game::native_hooks::ItemAfterVerticalCollisionCall {
+                dimension: self.dim.id(),
+                client: contact.client,
+                entity: contact.entity,
+                state: contact.state,
+                block_pos: [contact.pos.x, contact.pos.y, contact.pos.z],
+                item_pos: [contact.position.x, contact.position.y, contact.position.z],
+                stack: &mut contact.stack,
+                discard: &mut contact.discard,
+            },
+        );
+    }
+    pub(super) fn tick_item_with_block_contacts(
+        &mut self,
+        item: &mut ItemEntity,
+        escape_speed: Option<f32>,
+        entity_boxes: &[Aabb],
+        client: bool,
+        splash: &mut impl FnMut(horizon_client::entities::ItemSplash),
+    ) -> (bool, bool) {
+        let no_physics = escape_speed.is_some();
+        let step = self.prepare_item_motion(item, escape_speed, entity_boxes, splash);
+        if !client && let Some((on, distance)) = step.landed() {
+            self.item_fall_on(item.id, on, distance);
+        }
+        if let Some(pos) = step.vertical_contact {
+            if let Some(mut contact) = self.prepare_item_vertical_contact(item, pos, client) {
+                self.dispatch_item_vertical_contact(&mut contact);
+                if contact.apply(item) {
+                    return (false, true);
+                }
+            }
+            if item.stack.count == 0 {
+                return (false, true);
+            }
+        }
+        (
+            self.finish_item_motion(item, no_physics, step, splash),
+            false,
+        )
     }
 }
 

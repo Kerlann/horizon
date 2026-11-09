@@ -106,7 +106,7 @@ impl ColliderChanges {
 
 fn refresh_items(
     game: &Game<'_>,
-    pass: &mut ItemPhysicsPass,
+    index: &mut super::item_merge_index::ItemMergeIndex,
     watch: &Watch,
     events: &mut Vec<Mutation>,
     dirty: &mut FxHashSet<JoinSeq>,
@@ -125,7 +125,7 @@ fn refresh_items(
                     .removals
                     .contains(&super::commands::Target::Item(item.id))
             });
-        pass.index.refresh(join, source);
+        index.refresh(join, source);
         if join != actor
             && let Some(item) = source
         {
@@ -145,25 +145,116 @@ fn refresh_items(
     }
 }
 
+pub(super) struct ItemChanges {
+    watch: Watch,
+    colliders: ColliderChanges,
+    events: Vec<Mutation>,
+    dirty: FxHashSet<JoinSeq>,
+    removal_cursor: usize,
+}
+impl ItemChanges {
+    fn new(game: &mut Game<'_>) -> (Self, ObstacleGrid) {
+        let watch = game.dropped.watch_physics_mutations();
+        let (colliders, grid) = ColliderChanges::new(game);
+        (
+            Self {
+                watch,
+                colliders,
+                events: Vec::new(),
+                dirty: FxHashSet::default(),
+                removal_cursor: 0,
+            },
+            grid,
+        )
+    }
+    pub(super) fn refresh(
+        &mut self,
+        game: &Game<'_>,
+        index: &mut super::item_merge_index::ItemMergeIndex,
+        grid: &mut ObstacleGrid,
+        actor: JoinSeq,
+    ) {
+        refresh_items(
+            game,
+            index,
+            &self.watch,
+            &mut self.events,
+            &mut self.dirty,
+            actor,
+        );
+        self.colliders.refresh(game, grid);
+        if self.removal_cursor > game.persist.removals.len() {
+            self.removal_cursor = 0;
+        }
+        for target in &game.persist.removals[self.removal_cursor..] {
+            match *target {
+                super::commands::Target::Item(id) => index.remove_id(id),
+                super::commands::Target::Boat(id) => self.colliders.remove_boat(id, grid),
+                _ => {}
+            }
+        }
+        self.removal_cursor = game.persist.removals.len();
+    }
+}
+
 impl Game<'_> {
+    /// The whole actual owner is resident for the callback. No body reference
+    /// or resident element position crosses it; the caller resolves its join again.
+    pub(super) fn with_canonical_item_callback<R>(
+        &mut self,
+        items: &mut horizon_client::join_seq::JoinList<horizon_client::entities::ItemEntity>,
+        index: &mut super::item_merge_index::ItemMergeIndex,
+        obstacles: &mut ObstacleGrid,
+        changes: &mut Option<ItemChanges>,
+        actor: JoinSeq,
+        callback: impl FnOnce(&mut Self) -> R,
+    ) -> R {
+        let Some(changes) = changes else {
+            return callback(self);
+        };
+        self.dropped
+            .restore(std::mem::take(items), RestoreOrder::SurvivorsFirst);
+        if let Some(writer) = self.active_entity_writer() {
+            self.publish_resident_read_location(
+                writer.actor.location,
+                mod_api::EntityReadCapturePhase::BeforeCallback,
+            );
+        }
+        let result = catch_unwind(AssertUnwindSafe(|| callback(self)));
+        let completion = catch_unwind(AssertUnwindSafe(|| {
+            changes.refresh(self, index, obstacles, actor)
+        }));
+        *items = self.dropped.lift();
+        match result {
+            Err(primary) => {
+                if completion.is_err() {
+                    log::error!("item index completion also panicked during callback unwind");
+                }
+                resume_unwind(primary)
+            }
+            Ok(value) => {
+                if let Err(panic) = completion {
+                    resume_unwind(panic);
+                }
+                value
+            }
+        }
+    }
     pub(super) fn tick_dropped_items_listened(
         &mut self,
         round: &mut super::native_ticks::TickRound,
     ) {
         // Both owner publication and the stable schedule precede the first Pre.
         let _reads = self.begin_resident_read_pass(horizon_client::join_seq::residency::Kind::Item);
-        let watch = self.dropped.watch_physics_mutations();
-        let (mut colliders, grid) = ColliderChanges::new(self);
+        let (changes, grid) = ItemChanges::new(self);
         let items = self.dropped.lift();
         let schedule: Vec<_> = items.iter().map(|item| item.join).collect();
         let mut pass = ItemPhysicsPass::new(items, grid, self.remote.is_none(), true);
+        pass.changes = Some(changes);
         self.dropped.restore(
             std::mem::take(&mut pass.items),
             RestoreOrder::SurvivorsFirst,
         );
-        let mut removal_cursor = 0;
-        let mut events = Vec::new();
-        let mut dirty = FxHashSet::default();
         for join in schedule {
             let Some(at) = self.dropped.locate(join) else {
                 continue;
@@ -194,20 +285,7 @@ impl Game<'_> {
                 if !self.native_tick_pre_one(round, id, "minecraft:item") {
                     return;
                 }
-                refresh_items(self, &mut pass, &watch, &mut events, &mut dirty, join);
-                colliders.refresh(self, &mut pass.obstacles);
-                for target in
-                    &self.persist.removals[removal_cursor.min(self.persist.removals.len())..]
-                {
-                    match *target {
-                        super::commands::Target::Item(id) => pass.index.remove_id(id),
-                        super::commands::Target::Boat(id) => {
-                            colliders.remove_boat(id, &mut pass.obstacles)
-                        }
-                        _ => {}
-                    }
-                }
-                removal_cursor = self.persist.removals.len();
+                pass.refresh(self, join);
                 let Some(at) = self.dropped.locate(join) else {
                     return;
                 };
@@ -233,7 +311,7 @@ impl Game<'_> {
                         self.dropped.remove(at);
                     }
                 }
-                refresh_items(self, &mut pass, &watch, &mut events, &mut dirty, join);
+                pass.refresh(self, join);
                 self.native_tick_post_one(round, id, "minecraft:item");
             }));
             if lifted {
@@ -249,8 +327,7 @@ impl Game<'_> {
             }
             let result = self.finish_resident_actor_turn(writer.as_ref(), body);
             drop(writer);
-            refresh_items(self, &mut pass, &watch, &mut events, &mut dirty, join);
-            colliders.refresh(self, &mut pass.obstacles);
+            pass.refresh(self, join);
             if let Err(panic) = result {
                 resume_unwind(panic);
             }
@@ -405,5 +482,171 @@ mod tests {
             };
             assert_eq!(&*order.lock().unwrap(), expected);
         }
+    }
+    struct ExpiryObserver {
+        panic: bool,
+        mob: Arc<OnceLock<u32>>,
+        completed: Arc<std::sync::atomic::AtomicUsize>,
+    }
+    #[mod_api::__subscriptions]
+    impl mod_api::Hooks for ExpiryObserver {
+        fn item_expire(
+            &self,
+            host: &mut dyn mod_api::ServerHost,
+            event: &mut mod_api::ItemExpireEvent<'_>,
+        ) {
+            let actor = host
+                .entity(event.entity)
+                .expect("actual item is canonical at expiry");
+            assert!((actor.position(host).unwrap()[1] - 79.96).abs() < 1e-12);
+            assert_eq!(
+                actor.cached_row(host).unwrap().capture.phase,
+                mod_api::EntityReadCapturePhase::BeforeCallback
+            );
+            assert!(matches!(
+                host.entity(*self.mob.get().unwrap())
+                    .unwrap()
+                    .set_silent(host, true),
+                mod_api::WriteReceipt::Pending(_)
+            ));
+            if self.panic {
+                panic!("item expiry panic");
+            }
+            event.extra_life = 20;
+        }
+        fn entity_command_completed(
+            &self,
+            _: &mut dyn mod_api::ServerHost,
+            event: &mut mod_api::EntityCommandCompletedEvent<'_>,
+        ) {
+            let mod_api::EntityWriteCompletion::EntitySetSilent(done) = event.completion;
+            assert_eq!(done.outcome, Ok(true));
+            self.completed
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        }
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn item_expiry_sees_actual_progress_and_unwind_restores_it_before_fifo() {
+        for panic in [false, true] {
+            let mob = Arc::new(OnceLock::new());
+            let completed = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            mod_api::testing::with_mods(
+                vec![mod_api::ModEntry::new(
+                    "expiry_observer",
+                    Box::new(ExpiryObserver {
+                        panic,
+                        mob: mob.clone(),
+                        completed: completed.clone(),
+                    }),
+                )]
+                .into(),
+                || {
+                    crate::game::native_entity_refs::tests::with_game(|game| {
+                        game.options.dedicated = Some(Vec::new());
+                        game.player = None;
+                        game.world
+                            .chunks
+                            .insert((0, 0), Arc::new(horizon_client::chunk::Chunk::empty(0, 0)));
+                        game.tickets.update(None);
+                        game.summon_with_nbt("minecraft:item",[8.5,80.0,8.5],"{Item:{id:\"minecraft:sand\",count:1},Age:5999s,PickupDelay:0s,Motion:[0.0d,0.0d,0.0d]}").unwrap();
+                        game.summon_with_nbt("minecraft:pig", [4.5, 80.0, 8.5], "{}")
+                            .unwrap();
+                        game.native_joins_skip();
+                        mob.set(game.mobs[0].id).unwrap();
+                        game.ticked_entities_through = u32::MAX;
+                        let result = catch_unwind(AssertUnwindSafe(|| game.tick_items()));
+                        if panic {
+                            assert_eq!(
+                                result.unwrap_err().downcast_ref::<&str>(),
+                                Some(&"item expiry panic")
+                            );
+                        } else {
+                            result.unwrap();
+                        }
+                        assert_eq!(completed.load(std::sync::atomic::Ordering::Relaxed), 1);
+                        assert!(game.mobs[0].silent);
+                        assert_eq!(game.dropped.len(), 1);
+                        assert!((game.dropped[0].position.y - 79.96).abs() < 1e-12);
+                        assert_eq!(game.dropped[0].age, if panic { 6000 } else { 5980 });
+                    });
+                },
+            );
+        }
+    }
+    struct BirthOnContact(Arc<std::sync::atomic::AtomicUsize>);
+    #[mod_api::horizon_part]
+    impl mod_api::BlockPart for BirthOnContact {
+        fn item_after_vertical_collision(
+            &self,
+            host: mod_api::HostSide,
+            event: &mut mod_api::ItemAfterVerticalCollisionEvent<'_>,
+        ) -> mod_api::Flow {
+            let mod_api::HostSide::Server(host) = host else {
+                panic!("expected server contact");
+            };
+            let actor = host
+                .entity(event.entity)
+                .expect("contact owner is canonical");
+            assert_eq!(actor.position(host).unwrap()[1], 65.0);
+            assert!(
+                actor
+                    .spawn_at_location(host, event.stack.as_ref().unwrap().clone(), 0.0)
+                    .unwrap()
+                    .is_some()
+            );
+            self.0.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            mod_api::Flow::Continue
+        }
+    }
+    struct BirthMod(Arc<std::sync::atomic::AtomicUsize>);
+    #[mod_api::__subscriptions]
+    impl mod_api::Hooks for BirthMod {
+        fn register(&self, r: &mut dyn mod_api::Registrar, _: &mod_api::RegistrationContext) {
+            let stone = r.block_key("minecraft:stone");
+            r.block_part(stone, BirthOnContact(self.0.clone()));
+        }
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn contact_birth_is_a_merge_neighbor_but_not_another_tick_this_pass() {
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mods: mod_api::Mods = vec![mod_api::ModEntry::new(
+            "contact_birth",
+            Box::new(BirthMod(calls.clone())),
+        )]
+        .into();
+        crate::game::api_values::install_parts(&mods).unwrap();
+        mod_api::testing::with_mods(mods, || {
+            crate::game::native_entity_refs::tests::with_game(|game| {
+                game.options.dedicated = Some(Vec::new());
+                game.player = None;
+                game.build_registries();
+                game.world
+                    .chunks
+                    .insert((0, 0), Arc::new(horizon_client::chunk::Chunk::empty(0, 0)));
+                game.tickets.update(None);
+                let stone = game
+                    .pack
+                    .assets
+                    .registry
+                    .default_state("minecraft:stone")
+                    .unwrap();
+                game.world.set(8, 64, 8, stone).unwrap();
+                game.summon_with_nbt("minecraft:item",[8.5,65.01,8.5],"{Item:{id:\"minecraft:sand\",count:2},Age:10s,PickupDelay:0s,Motion:[0.0d,-0.2d,0.0d]}").unwrap();
+                game.dropped[0].ticks = 39;
+                game.native_joins_skip();
+                let original = game.dropped[0].join;
+                game.ticked_entities_through = u32::MAX;
+                game.tick_items();
+                assert_eq!(calls.load(std::sync::atomic::Ordering::Relaxed), 1);
+                assert_eq!(game.dropped.len(), 1);
+                let newborn = &game.dropped[0];
+                assert_ne!(newborn.join, original);
+                assert_eq!(newborn.stack.count, 4);
+                assert_eq!(newborn.age, 0);
+                assert_eq!(newborn.position.y, 65.0);
+            });
+        });
     }
 }
