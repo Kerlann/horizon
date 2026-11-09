@@ -101,6 +101,7 @@ mod tests {
     use super::*;
     use horizon_client::mobs::spawner::SpawnerExt;
     use mod_api::{EntityRef, HookId, Hooks, ModEntry};
+    use std::sync::{Arc, Mutex, OnceLock};
     struct VehicleObserver {
         mode: u8,
         terminals: std::sync::Arc<std::sync::Mutex<usize>>,
@@ -375,7 +376,7 @@ mod tests {
                     game.held_out.push(999);
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         game.with_boat_body(0, |_, body| {
-                            body.position.x = 7.0;
+                            body.body_mut().unwrap().position.x = 7.0;
                             panic!("boat physics panic");
                         })
                     }));
@@ -398,6 +399,159 @@ mod tests {
             },
         );
     }
+    struct BoatLeadObserver {
+        mode: u8,
+        ids: Arc<OnceLock<[u32; 3]>>,
+        order: Arc<Mutex<Vec<&'static str>>>,
+    }
+    #[mod_api::__subscriptions]
+    impl Hooks for BoatLeadObserver {
+        fn entity_join_level(
+            &self,
+            host: &mut dyn mod_api::ServerHost,
+            event: &mut mod_api::EntityJoinLevelEvent<'_>,
+        ) -> mod_api::Flow {
+            let Some([a, b, mob]) = self.ids.get().copied() else {
+                return mod_api::Flow::Continue;
+            };
+            if event.kind != "minecraft:item" {
+                return mod_api::Flow::Continue;
+            }
+            let first = event.pos[0] < 10.0;
+            let actor = host
+                .entity(if first { a } else { b })
+                .expect("actual current Boat remains canonical at lead join");
+            assert_eq!(actor.position(host), Some(event.pos));
+            assert_eq!(
+                actor.cached_row(host).unwrap().capture.phase,
+                mod_api::EntityReadCapturePhase::BeforeCallback
+            );
+            assert!(actor.set_velocity(host, [0.2, 0.3, 0.1]));
+            if first {
+                self.order.lock().unwrap().push("A");
+                assert!(matches!(
+                    host.entity(mob).unwrap().set_silent(host, true),
+                    mod_api::WriteReceipt::Pending(_)
+                ));
+                if self.mode == 1 {
+                    panic!("primary Boat lead join panic");
+                }
+                if self.mode == 2 {
+                    assert!(actor.discard(host));
+                }
+            } else {
+                assert_eq!(&*self.order.lock().unwrap(), &["A", "done"]);
+                assert_eq!(host.entity(mob).unwrap().is_silent(host), Some(true));
+                self.order.lock().unwrap().push("B");
+            }
+            mod_api::Flow::Continue
+        }
+        fn entity_command_completed(
+            &self,
+            _: &mut dyn mod_api::ServerHost,
+            event: &mut mod_api::EntityCommandCompletedEvent<'_>,
+        ) {
+            let mod_api::EntityWriteCompletion::EntitySetSilent(done) = event.completion;
+            assert_eq!(done.outcome, Ok(true));
+            self.order.lock().unwrap().push("done");
+            if self.mode == 1 {
+                panic!("secondary Boat completion panic");
+            }
+        }
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn actual_boat_lead_callback_owns_progress_and_finishes_fifo_before_next_boat() {
+        for mode in 0..4 {
+            let ids = Arc::new(OnceLock::new());
+            let order = Arc::new(Mutex::new(Vec::new()));
+            mod_api::testing::with_mods(
+                vec![ModEntry::new(
+                    "boat_lead_observer",
+                    Box::new(BoatLeadObserver {
+                        mode,
+                        ids: ids.clone(),
+                        order: order.clone(),
+                    }),
+                )]
+                .into(),
+                || {
+                    with_game(|game| {
+                        use horizon_core::geometry::Vec3;
+                        game.options.dedicated = Some(Vec::new());
+                        game.player = None;
+                        game.world
+                            .chunks
+                            .insert((0, 0), Arc::new(horizon_client::chunk::Chunk::empty(0, 0)));
+                        game.tickets.update(None);
+                        for x in [8.5, 12.5] {
+                            let mut boat = super::super::boats::Boat::new(
+                                game.take_entity_id(),
+                                "oak".into(),
+                                Vec3::new(x, 80.0, 8.5),
+                                0.0,
+                            );
+                            boat.age = 100;
+                            boat.leash_pending =
+                                Some(horizon_client::mobs::leash::Pending::Uuid([11, 22, 33, 44]));
+                            game.boats.push(boat);
+                        }
+                        game.summon_with_nbt("minecraft:zombie", [4.5, 80.0, 8.5], "{}")
+                            .unwrap();
+                        game.native_joins_skip();
+                        ids.set([game.boats[0].id, game.boats[1].id, game.mobs[0].id])
+                            .unwrap();
+                        let a = game.boats[0].join;
+                        if mode == 3 {
+                            game.riding = Some(game.boats[0].id);
+                        }
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            game.tick_boats()
+                        }));
+                        assert!(game.held_out.is_empty());
+                        assert!(game.mobs[0].silent);
+                        if mode == 1 {
+                            assert_eq!(
+                                result.unwrap_err().downcast_ref::<&str>(),
+                                Some(&"primary Boat lead join panic")
+                            );
+                            let at = game.boats.locate(a).unwrap();
+                            assert_eq!(game.boats[at].age, 101);
+                            assert_eq!(game.boats[at].velocity, Vec3::new(0.2, 0.3, 0.1));
+                            assert_eq!(&*order.lock().unwrap(), &["A", "done"]);
+                        } else {
+                            result.unwrap();
+                            assert_eq!(game.boats.len(), if mode == 2 { 1 } else { 2 });
+                            if mode == 2 {
+                                assert!(matches!(game.server_resident_entity(ids.get().unwrap()[0]), horizon_client::join_seq::residency::table::EntityLookup::Missing));
+                            }
+                            let drag = f64::from(0.9f32);
+                            for boat in game.boats.iter() {
+                                assert_eq!(boat.age, 101);
+                                assert!(boat.leash_pending.is_none());
+                                let ridden = mode == 3 && boat.id == ids.get().unwrap()[0];
+                                let start = if boat.id == ids.get().unwrap()[0] {
+                                    8.5
+                                } else {
+                                    12.5
+                                };
+                                assert_eq!(
+                                    boat.position,
+                                    Vec3::new(
+                                        start + if ridden { 0.0 } else { 0.2 * drag },
+                                        80.0 + if ridden { 0.0 } else { 0.26 },
+                                        8.5 + if ridden { 0.0 } else { 0.1 * drag }
+                                    )
+                                );
+                            }
+                            assert_eq!(&*order.lock().unwrap(), &["A", "done", "B"]);
+                        }
+                    });
+                },
+            );
+        }
+    }
+
     struct SpawnerCartObserver {
         panic: bool,
         planning_panic: bool,

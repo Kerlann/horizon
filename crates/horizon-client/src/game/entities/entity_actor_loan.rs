@@ -5,11 +5,24 @@ use horizon_client::join_seq::residency::{Kind, Owner, Source, table::Location};
 use horizon_client::join_seq::{JoinList, JoinSeq, Joined};
 use mod_api::EntityReadCapturePhase;
 
-pub(super) trait EntityActor: Joined + Sized {
+pub(super) trait EntityActor<const DIRECT: bool = true>: Joined + Sized {
     const KIND: Kind;
     fn id(&self) -> u32;
     fn target(&self) -> super::commands::Target;
-    fn owner<'a, 'g>(game: &'a mut Game<'g>) -> &'a mut JoinList<Self>;
+    fn owner<'a, 'g>(game: &'a mut Game<'g>) -> &'a mut JoinList<Self, DIRECT>;
+}
+
+impl EntityActor<false> for super::boats::Boat {
+    const KIND: Kind = Kind::Boat;
+    fn id(&self) -> u32 {
+        self.id
+    }
+    fn target(&self) -> super::commands::Target {
+        super::commands::Target::Boat(self.id)
+    }
+    fn owner<'a, 'g>(game: &'a mut Game<'g>) -> &'a mut JoinList<Self, false> {
+        &mut game.boats
+    }
 }
 
 impl EntityActor for super::fireworks::Rocket {
@@ -37,13 +50,13 @@ impl EntityActor for super::trident::ThrownTrident {
     }
 }
 
-pub(super) struct EntityActorLoan<T> {
+pub(super) struct EntityActorLoan<T, const DIRECT: bool = true> {
     body: Option<T>,
     location: Location,
     // A restoration ordinal only. Identity is always reacquired by exact join.
     ordinal: usize,
 }
-impl<T: EntityActor> EntityActorLoan<T> {
+impl<T: EntityActor<DIRECT>, const DIRECT: bool> EntityActorLoan<T, DIRECT> {
     pub(super) fn extract(game: &mut Game<'_>, join: JoinSeq) -> Option<Self> {
         let owner = Owner {
             dimension: game.dim.key(),

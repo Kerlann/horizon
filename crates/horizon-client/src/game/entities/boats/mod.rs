@@ -741,15 +741,23 @@ impl Game<'_> {
         b.fall_distance
     }
     /// `AbstractBoat.tick` for one boat (`controlled` when the player rides it).
-    pub(super) fn tick_boat(&mut self, b: &mut Boat, controlled: bool) {
+    pub(super) fn tick_controlled_boat(&mut self, b: &mut Boat) {
         b.previous = b.position;
         b.previous_yaw = b.yaw;
-        // Entity.baseTick ends with Leashable.tickLeash, on a server only
-        // (a ridden boat's lead ticks in `tick_boats`).
-        if !controlled && self.remote.is_none() {
-            self.tick_boat_leash(b);
+        self.tick_boat_motion(b, true);
+    }
+    fn tick_boat(
+        &mut self,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<Boat, false>,
+    ) -> Option<()> {
+        let b = actor.body_mut()?;
+        b.previous = b.position;
+        b.previous_yaw = b.yaw;
+        if self.remote.is_none() {
+            self.tick_boat_leash(actor)?;
         }
-        self.tick_boat_motion(b, controlled);
+        self.tick_boat_motion(actor.body_mut()?, false);
+        Some(())
     }
     /// Shared motion after the existing previous-pose and leash phase.
     fn tick_boat_motion(&mut self, b: &mut Boat, controlled: bool) {
@@ -945,33 +953,28 @@ impl Game<'_> {
             }
         }
     }
-    /// Return the progressed body to its stable source before resuming a panic.
-    /// Collision backing stays in place throughout this existing copied-body pass.
+    /// Own the actual body, restoring it before returning or resuming a panic.
     pub(super) fn with_boat_body<R>(
         &mut self,
         index: usize,
-        action: impl FnOnce(&mut Self, &mut Boat) -> R,
+        action: impl FnOnce(&mut Self, &mut super::entity_actor_loan::EntityActorLoan<Boat, false>) -> R,
     ) -> R {
-        let mut body = self.boats[index].clone();
-        let join = body.join;
-        let held_out_len = self.held_out.len();
-        if !mod_api::__private::mods().is_empty() {
-            self.held_out.push(body.id);
-        }
+        let join = self.boats[index].join;
+        let mut actor =
+            super::entity_actor_loan::EntityActorLoan::<Boat, false>::extract(self, join)
+                .expect("selected actual Boat");
         let result =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| action(self, &mut body)));
-        if let Some(at) = self.boats.locate(join) {
-            self.store_boat_back(at, body);
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| action(self, &mut actor)));
+        if actor.body_mut().is_some_and(|body| {
+            self.persist
+                .removals
+                .contains(&super::commands::Target::Boat(body.id))
+        }) {
+            actor.retire(self);
+        } else {
+            actor.restore(self);
         }
-        self.held_out.truncate(held_out_len);
-        if mod_api::__private::entity_reads_listened()
-            && let Some(at) = self.boats.locate(join)
-        {
-            self.publish_resident_actor_reads(
-                BaseReadSource::Boat(&self.boats[at]),
-                EntityReadCapturePhase::AfterAppliedWrite,
-            );
-        }
+        actor.publish(self, EntityReadCapturePhase::AfterAppliedWrite);
         match result {
             Ok(value) => value,
             Err(payload) => std::panic::resume_unwind(payload),
@@ -1070,7 +1073,7 @@ impl Game<'_> {
                     self.boats.update(i, |b| b.wear_off_hurt());
                     // Entity.baseTick burns it before it moves; the fire may break it.
                     if !self.boat_fire_tick(i) {
-                        self.with_boat_body(i, |game, body| game.tick_boat(body, false));
+                        self.with_boat_body(i, |game, body| game.tick_boat(body));
                         self.boat_server_passes(id, &driven, &ticking, &round);
                     }
                     if read_scope.is_some()

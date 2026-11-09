@@ -115,7 +115,7 @@ impl Game<'_> {
                             ]
                         });
                         let mut boat = self.boats[0].clone();
-                        self.tick_boat(&mut boat, true);
+                        self.tick_controlled_boat(&mut boat);
                         self.store_boat_back(0, boat);
                     }
                     self.tick_remote_boat_bubbles();
@@ -135,7 +135,7 @@ impl Game<'_> {
                 self.riding = owned.then_some(1);
                 if owned {
                     let mut boat = self.boats.remove(0);
-                    self.tick_boat(&mut boat, true);
+                    self.tick_controlled_boat(&mut boat);
                     self.boats.push(boat);
                 }
                 self.tick_remote_boat_bubbles();

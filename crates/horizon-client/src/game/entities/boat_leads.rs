@@ -177,13 +177,21 @@ impl Game<'_> {
         drop.then_some([b.position.x, b.position.y, b.position.z])
     }
 
-    fn release_boat_leash(&mut self, b: &mut Boat, drop: bool) {
-        let holder = b.leash;
+    fn release_boat_leash(
+        &mut self,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<Boat, false>,
+        drop: bool,
+    ) -> Option<()> {
+        let b = actor.body_mut()?;
+        let (holder, id) = (b.leash, b.id);
         let at = Self::take_boat_leash(b, drop);
-        self.notify_knot_leashee_removed(holder, b.id);
-        if let Some(at) = at {
-            self.drop_lead_item(at);
-        }
+        actor.with_game(self, |game| {
+            game.notify_knot_leashee_removed(holder, id);
+            if let Some(at) = at {
+                game.drop_lead_item(at);
+            }
+        })?;
+        Some(())
     }
 
     pub(super) fn release_stored_boat_leash(&mut self, i: usize, drop: bool) {
@@ -208,16 +216,21 @@ impl Game<'_> {
     }
 
     /// `Leashable.tickLeash` for a boat, at the end of `Entity.baseTick`.
-    pub(super) fn tick_boat_leash(&mut self, b: &mut Boat) {
+    pub(super) fn tick_boat_leash(
+        &mut self,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<Boat, false>,
+    ) -> Option<()> {
+        let mut b = actor.body_mut()?;
         b.age += 1;
         if let Some(pending) = b.leash_pending {
-            self.restore_boat_leash(b, pending);
+            self.restore_boat_leash(actor, pending)?;
+            b = actor.body_mut()?;
         }
         let Some(holder) = b.leash else {
-            return;
+            return Some(());
         };
         let (state, quad) = match self.boat_holder(holder, b.leash_player) {
-            Held::Elsewhere => return,
+            Held::Elsewhere => return Some(()),
             // !leashHolder.canInteractWithLevel(): dropLeash with entity_drops
             // on, else removeLeash.
             Held::Gone => {
@@ -225,8 +238,7 @@ impl Game<'_> {
                     .ui
                     .rules
                     .bool_at(horizon_client::gamerules::vanilla::ENTITY_DROPS);
-                self.release_boat_leash(b, drops);
-                return;
+                return self.release_boat_leash(actor, drops);
             }
             Held::At(state, quad) => (state, quad),
         };
@@ -241,8 +253,7 @@ impl Game<'_> {
         if away > leash::SNAP {
             let p = state.position;
             self.lead_sound("break", [p.x, p.y, p.z]);
-            self.release_boat_leash(b, true);
-            return;
+            return self.release_boat_leash(actor, true);
         }
         if away > leash::ELASTIC - state.width - f64::from(WIDTH)
             && let Some((force, torque)) = leash::elastic_pull(
@@ -268,6 +279,7 @@ impl Game<'_> {
         }
         b.yaw = (f64::from(b.yaw) - b.leash_spin) as f32;
         b.leash_spin *= f64::from(self.boat_angular_friction(b));
+        Some(())
     }
 
     /// `Leashable.angularFriction`.
@@ -286,7 +298,12 @@ impl Game<'_> {
     /// `Leashable.restoreLeashFromSave`: a holder read from a save becomes
     /// real once its entity is found; one that never shows up in 100 ticks
     /// drops the lead.
-    fn restore_boat_leash(&mut self, b: &mut Boat, pending: Pending) {
+    fn restore_boat_leash(
+        &mut self,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<Boat, false>,
+        pending: Pending,
+    ) -> Option<()> {
+        let mut b = actor.body_mut()?;
         let found = match pending {
             Pending::Knot(p) => Some((Holder::Knot(p), None)),
             Pending::Uuid(u) => {
@@ -310,16 +327,21 @@ impl Game<'_> {
             // The boat is out of the list while it ticks: its own knot is
             // made here, not found by `lead_fences`.
             if let Holder::Knot(fence) = holder {
-                self.forget_untied_knots();
-                self.tie_knot(fence);
+                actor.with_game(self, |game| {
+                    game.forget_untied_knots();
+                    game.tie_knot(fence);
+                })?;
+                b = actor.body_mut()?;
             }
             b.leash = Some(holder);
             b.leash_player = player;
             b.leash_pending = None;
         } else if b.age > 100 {
             b.leash_pending = None;
-            self.drop_lead_item([b.position.x, b.position.y, b.position.z]);
+            let at = [b.position.x, b.position.y, b.position.z];
+            actor.with_game(self, |game| game.drop_lead_item(at))?;
         }
+        Some(())
     }
 
     /// The `leash` tag of a boat about to be saved.
