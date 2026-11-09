@@ -2,8 +2,9 @@
 //! fight. It floats, growing and turning (`OminousItemSpawnerRenderer`), for
 //! 60 to 120 ticks, then falls as an item or is fired straight down as a
 //! projectile (`spawnItem`). Saved with its chunk's entities (persist.rs).
-use super::Game;
+use super::{Game, native_base_read_rows::BaseReadSource};
 use horizon_assets::item_model::DisplayContext;
+use horizon_client::join_seq::residency::Kind;
 use horizon_client::{
     block_entity_render::vertex_light,
     item_render,
@@ -12,6 +13,7 @@ use horizon_client::{
     particles::{ParticleOptions, ParticleType},
 };
 use horizon_core::{geometry::Vec3, random::RandomSource};
+use mod_api::EntityReadCapturePhase;
 
 /// `TICKS_BEFORE_ABOUT_TO_SPAWN_SOUND`.
 const ABOUT_TO_SPAWN: i64 = 36;
@@ -112,6 +114,7 @@ impl Game<'_> {
     /// warning sound, then the item) and `tickClient` (particles every 5
     /// game ticks).
     pub(super) fn tick_ominous_item_spawners(&mut self) {
+        let read_scope = self.begin_resident_read_pass(Kind::Spawner);
         let mut spawners = self.ominous_spawners.lift();
         #[cfg(test)]
         super::entity::taken_pass_tests::after_take(self);
@@ -130,10 +133,22 @@ impl Game<'_> {
             }
             if s.tick_count >= s.spawn_item_after {
                 self.spawn_ominous_item(s);
+                if read_scope.is_some() {
+                    self.publish_resident_actor_reads(
+                        BaseReadSource::Spawner(s),
+                        EntityReadCapturePhase::AfterEntityTick,
+                    );
+                }
                 return false;
             }
             if self.world.game_time % 5 == 0 {
                 self.ominous_spawner_particles(s.position);
+            }
+            if read_scope.is_some() {
+                self.publish_resident_actor_reads(
+                    BaseReadSource::Spawner(s),
+                    EntityReadCapturePhase::AfterEntityTick,
+                );
             }
             true
         });
@@ -141,6 +156,12 @@ impl Game<'_> {
             spawners,
             horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
         );
+        if read_scope.is_some() {
+            self.refresh_resident_owner_reads(
+                Kind::Spawner,
+                EntityReadCapturePhase::AfterAppliedWrite,
+            );
+        }
     }
     /// `handleAddEntity` for a spawner a server sent: its item comes with the
     /// entity data (`ItemStack.EMPTY` until then, which draws nothing).

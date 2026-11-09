@@ -5326,6 +5326,8 @@ impl Game<'_> {
         id > self.ticked_entities_through || self.contact_drops.contains(&id)
     }
     fn tick_dropped_items(&mut self, round: &mut native_ticks::TickRound) {
+        let read_scope =
+            self.begin_resident_read_pass(horizon_client::join_seq::residency::Kind::Item);
         let mut items = self.dropped.lift();
         // ServerLevel.tick: only entities in entity-ticking chunks tick.
         let ticking = self.entity_ticking_area();
@@ -5522,6 +5524,19 @@ impl Game<'_> {
                     destroyed.push((stack, item.position));
                 }
             }
+            if read_scope.is_some() && !removed[i] {
+                self.publish_lent_resident_reads(
+                    horizon_client::join_seq::residency::table::Location {
+                        owner: horizon_client::join_seq::residency::Owner {
+                            dimension: self.dim.key(),
+                            kind: horizon_client::join_seq::residency::Kind::Item,
+                        },
+                        join: item.join,
+                    },
+                    native_base_read_rows::BaseReadSource::Item(item),
+                    mod_api::EntityReadCapturePhase::AfterEntityTick,
+                );
+            }
         }
         for pos in bubble_tops {
             self.bubble_column_particles(pos);
@@ -5628,6 +5643,10 @@ impl Game<'_> {
         self.dropped.restore(
             items,
             horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
+        );
+        self.refresh_resident_owner_reads(
+            horizon_client::join_seq::residency::Kind::Item,
+            mod_api::EntityReadCapturePhase::AfterAppliedWrite,
         );
     }
     /// `ItemUtils.onContainerDestroyed`: each stack a destroyed item held
