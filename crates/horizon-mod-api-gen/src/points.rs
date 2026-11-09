@@ -1360,6 +1360,39 @@ mod tests {
         assert!(api > 0);
     }
 
+    #[test]
+    fn no_wire_public_values_refuse_before_point_record_emission() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        let wire = crate::build::wire_types(&root).unwrap();
+        for name in [
+            "EnchantmentEffect",
+            "RegistrationData",
+            "Parts",
+            "Attachments",
+            "AttachmentAccess",
+        ] {
+            let method: syn::ImplItemFn =
+                syn::parse_str(&format!("fn patch(&mut self, value: &{name}) {{}}")).unwrap();
+            let imports = vec![(name.to_owned(), format!("mod_api::{name}"))];
+            assert!(
+                super::mirrors(&method.sig, &imports, &wire, false).is_empty(),
+                "{name} must not be admitted by Clone alone"
+            );
+            let shape = point_shape::shape(quote!(side = "server"), &method.sig).unwrap();
+            assert!(shape.api_refusal.as_ref().unwrap().contains(name));
+            assert!(shape.api_items("test").listeners.is_empty());
+        }
+        for name in [
+            "mod_api::ConnectionKind",
+            "mod_api::containers::ModRevision",
+            "mod_api::camera::UseItem",
+            "mod_api::wire::Id",
+        ] {
+            assert!(wire.contains(name), "supported public path {name} was lost");
+        }
+        assert!(!wire.contains("mod_api::wire_slots::Id"));
+    }
+
     fn point(attribute: &str, method: &str) -> Result<point_shape::Shape, String> {
         let method: syn::ImplItemFn = syn::parse_str(method).map_err(|e| e.to_string())?;
         point_shape::shape(attribute.parse().unwrap(), &method.sig).map_err(|e| e.to_string())

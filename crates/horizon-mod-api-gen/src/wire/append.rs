@@ -1,6 +1,6 @@
 //! A private collection editable only through public, untransformed enum pushes.
 //! Keep its contract separate from public records: replies may append, never replace it.
-use super::ty::{Case, Field, List, Payload, Ty, Types};
+use super::ty::{Case, Field, List, Ty, Types};
 use crate::index::{Found, ItemId};
 use std::collections::HashSet;
 use syn::{Expr, Fields, Item, Stmt};
@@ -79,7 +79,7 @@ pub(super) fn detect(
             .collect::<Result<Vec<_>, _>>()?;
         cases.push(Case {
             rust: case.ident.to_string(),
-            payload: Payload::Tuple(payload),
+            payload,
         });
     }
     let path = &types.defs[*e].rust;
@@ -153,9 +153,7 @@ pub(super) fn detect(
             let Some(case) = cases.iter().find(|c| segments[1].ident == c.rust) else {
                 return Ok(None);
             };
-            let Payload::Tuple(payload) = &case.payload else {
-                return Ok(None);
-            };
+            let payload = &case.payload;
             if payload.len() != value.args.len() {
                 return Ok(None);
             }
@@ -243,9 +241,7 @@ fn equal(ty: &Ty, a: &str, b: &str) -> Option<String> {
 fn equal_cases(path: &str, cases: &[Case]) -> Option<String> {
     let mut arms = Vec::new();
     for case in cases {
-        let Payload::Tuple(fields) = &case.payload else {
-            return None;
-        };
+        let fields = &case.payload;
         let left = (0..fields.len())
             .map(|i| format!("a{i}"))
             .collect::<Vec<_>>()

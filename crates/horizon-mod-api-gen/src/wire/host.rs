@@ -180,9 +180,7 @@ fn event_input(
         let tag = format!("tag_{}", expr.replace('.', "_"));
         write!(setup, "let {tag}=match &mut {expr} {{").unwrap();
         for (i, case) in cases.iter().enumerate() {
-            let super::ty::Payload::Tuple(v) = &case.payload else {
-                unreachable!()
-            };
+            let v = &case.payload;
             let Ty::Dyn(name, m) = &v[0] else {
                 unreachable!()
             };

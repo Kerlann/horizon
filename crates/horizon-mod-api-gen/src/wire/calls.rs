@@ -498,7 +498,7 @@ pub(super) fn frame_cases<'t>(types: &'t Types<'_>, def: usize) -> Option<&'t [s
     let super::ty::BorrowedShape::Variant(cases) = &types.defs[def].borrowed else {
         return None;
     };
-    cases.iter().all(|case|matches!(&case.payload,super::ty::Payload::Tuple(v) if matches!(v.as_slice(),[Ty::Dyn(..)]))).then_some(cases.as_slice())
+    Some(cases.as_slice())
 }
 pub(super) fn held(types: &Types<'_>, ty: &Ty) -> Option<String> {
     held_in(types, ty, false)
@@ -713,9 +713,7 @@ fn borrowed(
     if let Some(cases) = frame_cases(types, def) {
         let mut arms = String::new();
         for (i, case) in cases.iter().enumerate() {
-            let super::ty::Payload::Tuple(v) = &case.payload else {
-                unreachable!()
-            };
+            let v = &case.payload;
             let Ty::Dyn(_, m) = &v[0] else { unreachable!() };
             write!(
                 arms,

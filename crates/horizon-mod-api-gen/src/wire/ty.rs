@@ -65,8 +65,6 @@ pub(crate) struct Def {
     pub(super) rust: String,
     /// Its lifetime parameters: it borrows when there are any.
     pub(super) lifetimes: usize,
-    /// It implements `Clone`, so a point record can hold a copy of a borrowed one.
-    pub(super) clone: bool,
     pub(super) borrowed: BorrowedShape,
     pub(super) append: Option<super::append::Append>,
     pub(super) projection: Option<Vec<Field>>,
@@ -74,12 +72,12 @@ pub(crate) struct Def {
 }
 
 impl Def {
-    pub(super) fn borrow_fields(&self) -> Option<std::borrow::Cow<'_, [Field]>> {
+    pub(super) fn borrow_fields(&self) -> Option<&[Field]> {
         if let Some(fields) = &self.projection {
-            return Some(std::borrow::Cow::Borrowed(fields));
+            return Some(fields);
         }
         if let Some(append) = &self.append {
-            Some(std::borrow::Cow::Borrowed(&append.fields))
+            Some(&append.fields)
         } else {
             self.borrowed.fields()
         }
@@ -96,27 +94,16 @@ pub(super) struct View {
 #[derive(Debug)]
 pub(crate) enum BorrowedShape {
     Record(Vec<Field>),
-    /// A tuple struct with public fields.
-    TupleRecord(Vec<Ty>),
+    TupleRecord(Vec<Field>),
     Variant(Vec<Case>),
     /// An owned value: its type owns the Wire implementation.
     None,
 }
 
 impl BorrowedShape {
-    pub(super) fn fields(&self) -> Option<std::borrow::Cow<'_, [Field]>> {
+    pub(super) fn fields(&self) -> Option<&[Field]> {
         match self {
-            Self::Record(fields) => Some(std::borrow::Cow::Borrowed(fields)),
-            Self::TupleRecord(fields) => Some(std::borrow::Cow::Owned(
-                fields
-                    .iter()
-                    .enumerate()
-                    .map(|(i, ty)| Field {
-                        rust: i.to_string(),
-                        ty: ty.clone(),
-                    })
-                    .collect(),
-            )),
+            Self::Record(fields) | Self::TupleRecord(fields) => Some(fields),
             _ => None,
         }
     }
@@ -130,15 +117,7 @@ pub(crate) struct Field {
 #[derive(Clone, Debug)]
 pub(crate) struct Case {
     pub(super) rust: String,
-    pub(super) payload: Payload,
-}
-
-#[derive(Clone, Debug)]
-pub(crate) enum Payload {
-    None,
-    Tuple(Vec<Ty>),
-    /// Named variant fields.
-    Record(Vec<Field>),
+    pub(super) payload: Vec<Ty>,
 }
 
 /// The resolved types, by definition.
@@ -345,7 +324,6 @@ impl<'a> Types<'a> {
             view: None,
             rust: rust.into(),
             lifetimes: 0,
-            clone: true,
             borrowed: BorrowedShape::None,
         }))
     }
@@ -357,7 +335,7 @@ impl<'a> Types<'a> {
     }
 
     /// The named item `id`, used with type arguments `args`.
-    pub(super) fn item(&mut self, id: ItemId, name: &str, args: Vec<Ty>) -> Result<Ty, String> {
+    fn item(&mut self, id: ItemId, name: &str, args: Vec<Ty>) -> Result<Ty, String> {
         let item = self.index.item(id).clone();
         if let Item::Type(alias) = &item {
             let params: Vec<String> = alias
@@ -376,13 +354,6 @@ impl<'a> Types<'a> {
         }
         let rust = self.public_path(id, name);
         let lifetimes = generics(&item).lifetimes().count();
-        let krate = self.index.modules[id.module].krate;
-        let clone = derives(&item, "Clone")
-            || self.index.modules.iter().filter(|m| m.krate == krate).flat_map(|m| &m.items).any(|other| {
-                matches!(other, Item::Impl(i)
-                    if i.trait_.as_ref().is_some_and(|(_, t, _)| t.segments.last().is_some_and(|s| s.ident == "Clone"))
-                    && matches!(&*i.self_ty, syn::Type::Path(p) if p.path.segments.last().is_some_and(|s| s.ident == name)))
-            });
         // Reserve the slot first: a type may refer to itself.
         let def = self.push(Def {
             projection: None,
@@ -390,7 +361,6 @@ impl<'a> Types<'a> {
             view: None,
             rust,
             lifetimes,
-            clone,
             borrowed: BorrowedShape::None,
         });
         self.by_item.insert(id, def);
@@ -671,36 +641,38 @@ impl<'a> Types<'a> {
                     fields
                         .unnamed
                         .iter()
-                        .map(|f| self.ty(id.module, &f.ty, &[]))
-                        .collect::<Result<_, _>>()
+                        .enumerate()
+                        .map(|(i, f)| {
+                            Ok(Field {
+                                rust: i.to_string(),
+                                ty: self.ty(id.module, &f.ty, &[])?,
+                            })
+                        })
+                        .collect::<Result<_, String>>()
                         .map(BorrowedShape::TupleRecord)
                 }
                 _ => Ok(BorrowedShape::None),
             },
-            Item::Enum(record) => record
-                .variants
-                .iter()
-                .map(|case| {
-                    let payload = match &case.fields {
-                        Fields::Unit => Payload::None,
-                        Fields::Unnamed(fields) => Payload::Tuple(
-                            fields
-                                .unnamed
-                                .iter()
-                                .map(|f| self.ty(id.module, &f.ty, &[]))
-                                .collect::<Result<_, _>>()?,
-                        ),
-                        Fields::Named(fields) => {
-                            Payload::Record(self.fields(id.module, fields.named.iter())?)
-                        }
+            Item::Enum(record) => {
+                let mut cases = Vec::new();
+                for case in &record.variants {
+                    let Fields::Unnamed(fields) = &case.fields else {
+                        return Ok(BorrowedShape::None);
                     };
-                    Ok(Case {
+                    let [field] = fields.unnamed.iter().collect::<Vec<_>>()[..] else {
+                        return Ok(BorrowedShape::None);
+                    };
+                    let payload = self.ty(id.module, &field.ty, &[])?;
+                    if !matches!(payload, Ty::Dyn(..)) {
+                        return Ok(BorrowedShape::None);
+                    }
+                    cases.push(Case {
                         rust: case.ident.to_string(),
-                        payload,
-                    })
-                })
-                .collect::<Result<_, String>>()
-                .map(BorrowedShape::Variant),
+                        payload: vec![payload],
+                    });
+                }
+                Ok(BorrowedShape::Variant(cases))
+            }
             _ => Ok(BorrowedShape::None),
         }
     }
@@ -804,7 +776,7 @@ fn generics(item: &Item) -> syn::Generics {
     }
 }
 
-fn derives(item: &Item, name: &str) -> bool {
+pub(super) fn derives(item: &Item, name: &str) -> bool {
     let attrs = match item {
         Item::Struct(item) => &item.attrs,
         Item::Enum(item) => &item.attrs,
