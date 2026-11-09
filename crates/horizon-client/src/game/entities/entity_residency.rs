@@ -98,6 +98,66 @@ macro_rules! resident_visible {
 }
 pub(crate) use resident_visible;
 
+macro_rules! bind_resident_list {
+    (Mob, $list:expr, $journal:expr, $owner:expr) => {
+        $list.bind_residency_with_subtype(
+            $journal,
+            $owner,
+            |entity| (entity.id, entity.join_seq()),
+            |entity| {
+                if matches!(
+                    entity.species(),
+                    horizon_client::mobs::Species::Villager
+                        | horizon_client::mobs::Species::WanderingTrader
+                ) {
+                    horizon_client::join_seq::residency::EntitySubtype::Merchant
+                } else {
+                    horizon_client::join_seq::residency::EntitySubtype::Ordinary
+                }
+            },
+        )
+    };
+    (Other, $list:expr, $journal:expr, $owner:expr) => {
+        $list.bind_residency_with_subtype(
+            $journal,
+            $owner,
+            |entity| (entity.id, entity.join_seq()),
+            |entity| {
+                use horizon_client::join_seq::residency::EntitySubtype;
+                match entity.kind.as_str() {
+                    "minecraft:block_display" => EntitySubtype::BlockDisplay,
+                    "minecraft:item_display" => EntitySubtype::ItemDisplay,
+                    "minecraft:text_display" => EntitySubtype::TextDisplay,
+                    _ => EntitySubtype::Ordinary,
+                }
+            },
+        )
+    };
+    (Cart, $list:expr, $journal:expr, $owner:expr) => {
+        $list.bind_residency_with_subtype(
+            $journal,
+            $owner,
+            |entity| (entity.id, entity.join_seq()),
+            |entity| {
+                use horizon_client::join_seq::residency::EntitySubtype;
+                use $crate::game::minecarts::CartKind;
+                match entity.kind {
+                    CartKind::Chest => EntitySubtype::ChestCart,
+                    CartKind::Furnace => EntitySubtype::FurnaceCart,
+                    CartKind::Hopper => EntitySubtype::HopperCart,
+                    CartKind::Tnt => EntitySubtype::TntCart,
+                    CartKind::CommandBlock => EntitySubtype::CommandCart,
+                    _ => EntitySubtype::Ordinary,
+                }
+            },
+        )
+    };
+    ($kind:ident, $list:expr, $journal:expr, $owner:expr) => {
+        $list.bind_residency($journal, $owner, |entity| (entity.id, entity.join_seq()))
+    };
+}
+pub(crate) use bind_resident_list;
+
 /// Physical lifetime access, not a cached publication or a delivery promise.
 #[derive(Debug, PartialEq, Eq)]
 pub(super) enum SlotAccess<R> {
@@ -126,7 +186,7 @@ pub(crate) use resident_lifetime_slot;
 macro_rules! define_resident_access {
     (($this:ident, $($projectiles:ident).+) $($kind:ident => $target:ident: $($field:ident).+,)*) => {
         pub(super) fn bind_resident_owners(&mut $this, journal: &Journal, dimension: DimensionKey) {
-            $($this$(.$field)+.bind_residency(journal, Owner { dimension, kind: Kind::$kind }, |entity| (entity.id, entity.join_seq()));)*
+            $($crate::game::entity_residency::bind_resident_list!($kind, $this$(.$field)+, journal, Owner { dimension, kind: Kind::$kind });)*
             $this$(.$projectiles)+.bind_residency(journal, Owner { dimension, kind: Kind::Projectile }, |entity| (entity.id, entity.join_seq()));
             $this.dragon.bind_residency(journal, Owner { dimension, kind: Kind::Dragon }, |entity| (entity.id, entity.join_seq()));
         }
