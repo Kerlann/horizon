@@ -78,13 +78,6 @@ pub enum CommandQueryError {
     UnknownOrExpired,
 }
 
-/// Terminal operation-tagged results delivered identically by event and query.
-#[derive(Clone, Debug, PartialEq, Eq, Wire)]
-pub enum EntityWriteCompletion {
-    /// The actual result of an accepted `EntityRef::set_silent` command.
-    EntitySetSilent(CommandCompleted<bool, EntityWriteError>),
-}
-
 /// Non-destructive status of an accepted command in the issuing mod's scope.
 #[derive(Clone, Debug, PartialEq, Eq, Wire)]
 pub enum EntityCommandStatus {
@@ -147,6 +140,32 @@ mod tests {
         encoded.put_owned(WriteReceipt::<bool, EntityWriteError>::Applied(false));
         assert_eq!(encoded.error(), None);
         assert_eq!(encoded.bytes(), applied_false);
+    }
+
+    #[test]
+    fn discovered_silent_completion_keeps_its_wire_tag_and_actual_false() {
+        let bytes = [
+            &[0, 0, 0, 0][..], // EntitySetSilent, independently pinned
+            &7u64.to_le_bytes(),
+            &9u64.to_le_bytes(),
+            &[0, 0], // Result::Ok(false), never Pending
+        ]
+        .concat();
+        let expected = EntityWriteCompletion::EntitySetSilent(CommandCompleted {
+            id: CommandId {
+                epoch: WorldEpoch::new(7),
+                sequence: 9,
+            },
+            outcome: Ok(false),
+        });
+        assert_eq!(
+            Reader::decode::<EntityWriteCompletion>(&bytes).unwrap(),
+            expected
+        );
+        let mut encoded = Writer::new();
+        encoded.put_owned(expected);
+        assert_eq!(encoded.error(), None);
+        assert_eq!(encoded.bytes(), bytes);
     }
 
     #[test]

@@ -1,0 +1,2 @@
+mod entity_write_completions_generated;
+pub use entity_write_completions_generated::EntityWriteCompletion;

@@ -16,9 +16,10 @@ struct RuntimeIssuers {
     packages: HashMap<Arc<str>, Issuer>,
 }
 
-pub(super) enum EntityOperation {
-    SetSilent(bool),
-}
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/entity_operations_generated.rs"
+));
 #[derive(Clone, Copy)]
 pub(super) struct WriterFrame {
     pub(super) turn: WriterTurn,

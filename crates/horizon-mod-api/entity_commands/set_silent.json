@@ -1,0 +1,7 @@
+{
+  "operation": "SetSilent",
+  "completion": "EntitySetSilent",
+  "payload": "bool",
+  "result": "bool",
+  "error": "EntityWriteError"
+}
