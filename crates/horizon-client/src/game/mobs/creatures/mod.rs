@@ -727,7 +727,7 @@ impl Game<'_> {
         // Entity.random first supplies the UUID, then LivingEntity's initial
         // yaw; species constructor draws continue from that same stream.
         let (own, uuid) = horizon_client::mobs::living_random();
-        self.persist.uuids.insert(self.next_entity, uuid);
+        self.set_saved_entity_uuid(self.next_entity, uuid);
         let mut mob = Mob::with_random(
             self.next_entity,
             t,

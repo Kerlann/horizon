@@ -398,6 +398,58 @@ mod tests {
 
     #[test]
     #[ignore = "needs prepared resources"]
+    fn parked_uuid_assignment_updates_only_the_actual_owner_level() {
+        with_game(|game| {
+            game.native_lifecycle.world_open_ready().unwrap();
+            game.native_lifecycle.server_tick_start(true).unwrap();
+            game.enter_level(super::super::Dim::Nether).unwrap();
+            let entity = push_mob(game, 935, "minecraft:cow");
+            game.enter_level(super::super::Dim::Overworld).unwrap();
+            let dimension = game.dim.key();
+            let (at, _) = game
+                .entity_residency
+                .borrow_mut()
+                .server_admitted_location(entity.id(), |at| game.locate_server_resident_owner(at))
+                .unwrap();
+            let level = mod_api::LevelRef::new(entity.epoch(), at.owner.dimension);
+            let mob = game
+                .levels
+                .parked_of(level.dimension_id())
+                .unwrap()
+                .mobs
+                .iter()
+                .find(|mob| mob.id == entity.id())
+                .unwrap();
+            assert!(game.publish_mob_read_source_at(
+                mob,
+                at,
+                mod_api::EntityReadCapturePhase::PassStart
+            ));
+            let uuid = game.uuid_for_at(at.owner.dimension, entity.id()).unwrap();
+            assert_eq!(game.dim.key(), dimension);
+            assert!(!game.persist.uuids.contains_key(&entity.id()));
+            assert_eq!(
+                game.levels
+                    .parked_of(level.dimension_id())
+                    .unwrap()
+                    .saved_entity_uuid(entity.id()),
+                Some(uuid)
+            );
+            assert_eq!(
+                game.with_mob_read_relations(level, |index| {
+                    game.resolve_read_uuid(uuid, level, index)
+                }),
+                Some(Some(entity))
+            );
+            assert_eq!(
+                game.uuid_for_at(at.owner.dimension, entity.id()),
+                Some(uuid)
+            );
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
     fn classification_is_the_types_category() {
         with_game(|game| {
             for (id, kind, category) in [

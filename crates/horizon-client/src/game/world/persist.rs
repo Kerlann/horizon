@@ -1955,26 +1955,51 @@ impl Game<'_> {
         self.set_saved_entity_uuid(id, uuid);
         uuid
     }
+    /// Assign lazily in the admitted owner level, without swapping Game dimensions.
+    pub(super) fn uuid_for_at(
+        &mut self,
+        dimension: mod_api::DimensionKey,
+        id: u32,
+    ) -> Option<[i32; 4]> {
+        if dimension == self.dim.key() {
+            return Some(self.uuid_for(id));
+        }
+        let level = mod_api::LevelRef::new(self.native_lifecycle.epoch()?, dimension);
+        let parked = self.levels.parked_mut_of(level.dimension_id())?;
+        if let Some(uuid) = parked.saved_entity_uuid(id) {
+            return Some(uuid);
+        }
+        let uuid = random_uuid();
+        parked.set_saved_entity_uuid(id, uuid);
+        self.saved_entity_uuid_changed(dimension, id, None, Some(uuid));
+        Some(uuid)
+    }
     /// Mutate canonical UUID ownership and its already prepared relation index.
     pub(super) fn set_saved_entity_uuid(&mut self, id: u32, uuid: [i32; 4]) -> Option<[i32; 4]> {
         let old = self.persist.uuids.insert(id, uuid);
         if old != Some(uuid) {
-            self.saved_entity_uuid_changed(id, old, Some(uuid));
+            self.saved_entity_uuid_changed(self.dim.key(), id, old, Some(uuid));
         }
         old
     }
     pub(super) fn remove_saved_entity_uuid(&mut self, id: u32) -> Option<[i32; 4]> {
         let old = self.persist.uuids.remove(&id);
         if old.is_some() {
-            self.saved_entity_uuid_changed(id, old, None);
+            self.saved_entity_uuid_changed(self.dim.key(), id, old, None);
         }
         old
     }
-    fn saved_entity_uuid_changed(&self, id: u32, old: Option<[i32; 4]>, new: Option<[i32; 4]>) {
+    pub(super) fn saved_entity_uuid_changed(
+        &self,
+        dimension: mod_api::DimensionKey,
+        id: u32,
+        old: Option<[i32; 4]>,
+        new: Option<[i32; 4]>,
+    ) {
         let Some(epoch) = self.native_lifecycle.epoch() else {
             return;
         };
-        let level = mod_api::LevelRef::new(epoch, self.dim.key());
+        let level = mod_api::LevelRef::new(epoch, dimension);
         if let Some(pass) = self
             .entity_read_state
             .borrow_mut()
