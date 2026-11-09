@@ -56,6 +56,7 @@ pub(super) struct CompactEntityReadRow {
     pub(super) on_ground: bool,
     pub(super) bounding_box: [[f64; 3]; 2],
     pub(super) eye_height: f64,
+    pub(super) dimensions: [f64; 2],
     pub(super) is_multipart: Option<bool>,
     pub(super) parts: Option<BaseReadParts>,
     pub(super) head_yaw: Option<f32>,
@@ -123,10 +124,7 @@ impl CompactEntityReadRow {
             parts: self.parts.as_ref().map(BaseReadParts::materialize),
             head_yaw: self.head_yaw,
             direction: self.direction.map(str::to_owned),
-            dimensions: [
-                self.bounding_box[1][0] - self.bounding_box[0][0],
-                self.bounding_box[1][1] - self.bounding_box[0][1],
-            ],
+            dimensions: self.dimensions,
             no_physics: self.no_physics,
             leash_holder: self.leash_holder,
             sound_source: self.sound_source,
@@ -183,6 +181,7 @@ mod tests {
                 on_ground: false,
                 bounding_box: [[-0.6, 12.75, 2.5], [0.4, 14.75, 3.5]],
                 eye_height: 1.5,
+                dimensions: [1.0, 2.0],
             },
             BaseReadContext {
                 level: LevelRef::new(epoch, mod_api::DimensionKey::OVERWORLD),
@@ -271,9 +270,14 @@ pub(super) struct BaseReadGeometry {
     pub(super) on_ground: bool,
     pub(super) bounding_box: [[f64; 3]; 2],
     pub(super) eye_height: f64,
+    pub(super) dimensions: [f64; 2],
 }
 impl BaseReadGeometry {
-    pub(super) fn from_entity<E: super::entity::Entity>(e: &E, eye_height: f64) -> Self {
+    pub(super) fn from_entity<E: super::entity::Entity>(
+        e: &E,
+        eye_height: f64,
+        dimensions: [f64; 2],
+    ) -> Self {
         let p = e.position();
         let v = e.velocity();
         let b = e.bounds();
@@ -286,6 +290,7 @@ impl BaseReadGeometry {
             on_ground: e.on_ground(),
             bounding_box: [[lo.x, lo.y, lo.z], [hi.x, hi.y, hi.z]],
             eye_height,
+            dimensions,
         }
     }
 }
@@ -451,6 +456,7 @@ impl CompactEntityReadRow {
             on_ground: geometry.on_ground,
             bounding_box: geometry.bounding_box,
             eye_height: geometry.eye_height,
+            dimensions: geometry.dimensions,
             is_multipart: Some(matches!(source, Dragon(_))),
             parts: if matches!(source, Dragon(_)) {
                 context.parts

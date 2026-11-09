@@ -617,8 +617,57 @@ fn culls_back_faces(key: &str) -> bool {
     matches!(key, "minecraft:bat#main" | "minecraft:turtle_baby#main")
 }
 
+/// Vanilla type geometry, narrowed to Java floats once at the resource boundary
+/// and widened for engine geometry calculations. Includes nonliving types.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EntityTypeGeometry {
+    pub width: f64,
+    pub height: f64,
+    pub eye_height: f64,
+}
+
+/// Resource-owned geometry for every entity type, independent of living models.
+#[derive(Debug)]
+pub struct EntityTypeGeometries(HashMap<String, EntityTypeGeometry>);
+
+impl EntityTypeGeometries {
+    pub fn get(&self, id: &str) -> Option<EntityTypeGeometry> {
+        self.0.get(id).copied()
+    }
+
+    fn parse(document: &Value) -> crate::Result<Self> {
+        let rows = document
+            .as_object()
+            .ok_or("entity-types.json must be an object")?;
+        let mut geometry = HashMap::with_capacity(rows.len());
+        for (id, row) in rows {
+            let mut dimensions = [0.0; 3];
+            for (index, field) in ["width", "height", "eye_height"].into_iter().enumerate() {
+                let raw = row[field]
+                    .as_f64()
+                    .ok_or_else(|| format!("entity type {id}: {field} must be numeric"))?;
+                // Resource declarations cross Java's float boundary, including
+                // negative values and overflow to infinity. Do not impose a
+                // stricter numerical domain than EntityDimensions' float fields.
+                dimensions[index] = f64::from(raw as f32);
+            }
+            let [width, height, eye_height] = dimensions;
+            geometry.insert(
+                id.clone(),
+                EntityTypeGeometry {
+                    width,
+                    height,
+                    eye_height,
+                },
+            );
+        }
+        Ok(Self(geometry))
+    }
+}
+
 pub struct MobTypes {
     pub types: HashMap<String, MobType>,
+    pub geometry: EntityTypeGeometries,
 }
 impl MobTypes {
     pub fn load(root: &Path) -> crate::Result<Self> {
@@ -666,6 +715,7 @@ impl MobTypes {
     ) -> crate::Result<Self> {
         let bytes = fs::read(root.join("entity-types.json"))?;
         let types: Value = serde_json::from_slice(&bytes)?;
+        let geometry = EntityTypeGeometries::parse(&types)?;
         let exact = exact_attributes(&bytes);
         let models = models_needed
             .then(|| -> crate::Result<EntityModelDocument> {
@@ -785,9 +835,9 @@ impl MobTypes {
                 MobType {
                     species: def.species,
                     item_stack_limits: item_stack_limits.clone(),
-                    width: t["width"].as_f64().unwrap_or(0.6),
-                    height: t["height"].as_f64().unwrap_or(1.8),
-                    eye_height: t["eye_height"].as_f64().unwrap_or(1.6),
+                    width: geometry.0[&id].width,
+                    height: geometry.0[&id].height,
+                    eye_height: geometry.0[&id].eye_height,
                     max_health: fields.max_health,
                     speed: fields.speed,
                     flying_speed: fields.flying_speed,
@@ -844,7 +894,10 @@ impl MobTypes {
                 },
             );
         }
-        Ok(Self { types: out })
+        Ok(Self {
+            types: out,
+            geometry,
+        })
     }
 }
 pub use horizon_client_core::who::Who;
@@ -8017,5 +8070,77 @@ mod hidden_speed_mob_tick_tests {
             assert!(m.effects_dirty);
             assert!(!m.has_effect("minecraft:absorption"));
         }
+    }
+}
+
+#[cfg(test)]
+mod entity_type_geometry_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn nonliving_geometry_is_resource_owned_and_uses_java_float_precision() {
+        let first = EntityTypeGeometries::parse(&json!({
+            "minecraft:marker": {"width":0.0,"height":0.0,"eye_height":0.0},
+            "minecraft:area_effect_cloud": {"width":6.0,"height":0.5,"eye_height":0.1}
+        }))
+        .unwrap();
+        let second = EntityTypeGeometries::parse(&json!({
+            "minecraft:area_effect_cloud": {"width":2.0,"height":1.0,"eye_height":0.2}
+        }))
+        .unwrap();
+        assert_eq!(
+            first.get("minecraft:marker"),
+            Some(EntityTypeGeometry {
+                width: 0.0,
+                height: 0.0,
+                eye_height: 0.0
+            })
+        );
+        let old = first.get("minecraft:area_effect_cloud").unwrap();
+        assert_eq!(old.width, 6.0);
+        assert_eq!(old.height, 0.5);
+        assert_eq!(old.eye_height, f64::from(f32::from_bits(0x3dcc_cccd)));
+        assert_eq!(
+            second.get("minecraft:area_effect_cloud").unwrap().width,
+            2.0
+        );
+        assert_eq!(first.get("minecraft:area_effect_cloud"), Some(old));
+        assert_eq!(second.get("minecraft:marker"), None);
+    }
+
+    #[test]
+    fn geometry_preserves_float_domain_without_invented_size_limits() {
+        let table = EntityTypeGeometries::parse(&json!({
+            "test:unusual": {"width":-2.5,"height":1e300,"eye_height":-0.25}
+        }))
+        .unwrap();
+        assert_eq!(
+            table.get("test:unusual"),
+            Some(EntityTypeGeometry {
+                width: -2.5,
+                height: f64::INFINITY,
+                eye_height: -0.25
+            })
+        );
+    }
+
+    #[test]
+    fn malformed_geometry_is_refused_at_the_resource_boundary() {
+        for field in ["width", "height", "eye_height"] {
+            for invalid in [json!(null), json!("1.0"), json!(false)] {
+                let mut row = json!({"width":1.0,"height":2.0,"eye_height":1.5});
+                row[field] = invalid;
+                let error = EntityTypeGeometries::parse(&json!({"test:bad":row}))
+                    .unwrap_err()
+                    .to_string();
+                assert!(error.contains("test:bad"), "{error}");
+                assert!(error.contains(field), "{error}");
+            }
+            let mut row = json!({"width":1.0,"height":2.0,"eye_height":1.5});
+            row.as_object_mut().unwrap().remove(field);
+            assert!(EntityTypeGeometries::parse(&json!({"test:missing":row})).is_err());
+        }
+        assert!(EntityTypeGeometries::parse(&json!([])).is_err());
     }
 }

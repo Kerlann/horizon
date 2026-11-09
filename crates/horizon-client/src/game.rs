@@ -2170,6 +2170,7 @@ struct WorldRest {
     recipes: Recipes,
     transformers: horizon_client::block_transform::Transformers,
     mob_types: HashMap<String, Arc<MobType>>,
+    entity_type_geometry: horizon_client::mobs::EntityTypeGeometries,
     mob_data: horizon_client::mobs::MobData,
     providers: Providers,
     block_entity_render: BlockEntityRenderer,
@@ -17797,7 +17798,7 @@ fn load_world_rest(
             horizon_client::mobs::cem::CemModels::default()
         }));
         horizon_client::mobs::trial_spawner::load_registry(root);
-        Ok((mob_types, mob_data))
+        Ok((mob_types, mob_data, types.geometry))
     };
     let load_transformers = || -> Result<_> {
         let _step = startup::step("rest.transformers_models");
@@ -17923,7 +17924,7 @@ fn load_world_rest(
     };
     let (items, recipes, stations) = items?;
     let (animate, fog) = animate?;
-    let (mob_types, mob_data) = mobs?;
+    let (mob_types, mob_data, entity_type_geometry) = mobs?;
     let (transformers, (player_type, player_arm, player_arm_slim, spin_attack)) = transformers?;
     let nether_environment = nether_environment?;
     let end_environment = end_environment?;
@@ -17951,6 +17952,7 @@ fn load_world_rest(
         end_environment,
         behaviours: behaviours?,
         mob_types,
+        entity_type_geometry,
         mob_data,
         player_type,
         player_arm,

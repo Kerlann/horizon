@@ -185,27 +185,10 @@ impl Game<'_> {
     /// `EntityType.getDimensions().eyeHeight()` from `entity-types.json`,
     /// read once: a float, widened as `Entity.getEyeY` does.
     fn type_eye_height(&self, ty: &str) -> f64 {
-        static EYE_HEIGHTS: std::sync::OnceLock<std::collections::HashMap<String, f64>> =
-            std::sync::OnceLock::new();
-        EYE_HEIGHTS
-            .get_or_init(|| {
-                std::fs::read(self.options.resources.join("entity-types.json"))
-                    .ok()
-                    .and_then(|b| serde_json::from_slice::<serde_json::Value>(&b).ok())
-                    .and_then(|v| {
-                        v.as_object().map(|o| {
-                            o.iter()
-                                .filter_map(|(k, t)| {
-                                    Some((k.clone(), f64::from(t["eye_height"].as_f64()? as f32)))
-                                })
-                                .collect()
-                        })
-                    })
-                    .unwrap_or_default()
-            })
+        self.res
+            .entity_type_geometry()
             .get(ty)
-            .copied()
-            .unwrap_or(0.0)
+            .map_or(0.0, |geometry| geometry.eye_height)
     }
     /// EntityAnchorArgument.Anchor.apply.
     pub(super) fn anchor_position(&self, s: &Source) -> [f64; 3] {

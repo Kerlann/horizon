@@ -4,14 +4,7 @@ use super::native_base_read_rows::{BaseReadGeometry, BaseReadSource};
 use horizon_core::geometry::{Aabb, Vec3};
 use std::{collections::HashMap, sync::Arc};
 
-/// Existing resource facts, widened from vanilla floats at the owning loader.
-/// The publisher seeds these once, using its already loaded type resources.
-#[derive(Clone, Copy, Debug)]
-pub(super) struct BaseReadTypeFacts {
-    pub(super) width: f64,
-    pub(super) height: f64,
-    pub(super) eye_height: f64,
-}
+use horizon_client::mobs::EntityTypeGeometry;
 
 /// Type identity is interned once, never formatted or cloned as an owned String
 /// during a capture pass. This pool does not load a second resource table.
@@ -19,13 +12,8 @@ pub(super) struct BaseReadTypeFacts {
 pub(super) struct BaseReadKindPool {
     names: HashMap<String, Arc<str>>,
     boats: [HashMap<String, Arc<str>>; 2],
-    facts: HashMap<Arc<str>, BaseReadTypeFacts>,
 }
 impl BaseReadKindPool {
-    pub(super) fn register(&mut self, name: &str, facts: BaseReadTypeFacts) {
-        let key = self.intern(name);
-        self.facts.insert(key, facts);
-    }
     pub(super) fn intern(&mut self, name: &str) -> Arc<str> {
         if let Some(key) = self.names.get(name) {
             return key.clone();
@@ -38,9 +26,6 @@ impl BaseReadKindPool {
         self.names.insert(name.to_owned(), key.clone());
         key
     }
-    pub(super) fn facts(&self, kind: &str) -> Option<BaseReadTypeFacts> {
-        self.facts.get(kind).copied()
-    }
 }
 
 fn array(p: Vec3) -> [f64; 3] {
@@ -51,11 +36,12 @@ fn corners(b: Aabb) -> [[f64; 3]; 2] {
 }
 /// Entity.makeBoundingBox: feet-centred, with the current (possibly dynamic) dimensions.
 fn feet_box(p: [f64; 3], width: f64, height: f64) -> [[f64; 3]; 2] {
-    let half = width / 2.0;
-    [
-        [p[0] - half, p[1], p[2] - half],
-        [p[0] + half, p[1] + height, p[2] + half],
-    ]
+    // EntityDimensions.makeBoundingBox divides its float width before widening.
+    let half = f64::from((width / 2.0) as f32);
+    corners(Aabb::new(
+        Vec3::new(p[0] - half, p[1], p[2] - half),
+        Vec3::new(p[0] + half, p[1] + height, p[2] + half),
+    ))
 }
 
 /// Source kind without `target_type` or Entity::native_type (Mob's implementation
@@ -105,12 +91,12 @@ pub(super) fn base_read_source_kind(
 /// fixed-size fallback and type eye height; dynamic source bounds always win.
 pub(super) fn base_read_source_geometry(
     source: BaseReadSource<'_>,
-    facts: BaseReadTypeFacts,
+    facts: EntityTypeGeometry,
 ) -> Option<BaseReadGeometry> {
     use BaseReadSource::*;
     macro_rules! walked {
         ($e:expr) => {
-            BaseReadGeometry::from_entity($e, facts.eye_height)
+            BaseReadGeometry::from_entity($e, facts.eye_height, [facts.width, facts.height])
         };
     }
     let mut geometry = match source {
@@ -124,6 +110,7 @@ pub(super) fn base_read_source_geometry(
         Stand(e) => {
             let mut g = walked!(e);
             g.eye_height = if e.marker {
+                g.bounding_box = feet_box(array(e.position), 0.0, 0.0);
                 0.0
             } else if e.small {
                 f64::from(0.9875f32)
@@ -199,6 +186,7 @@ pub(super) fn base_read_source_geometry(
                 on_ground: false,
                 bounding_box: bounds,
                 eye_height: facts.eye_height,
+                dimensions: [facts.width, facts.height],
             }
         }
     };
@@ -213,6 +201,41 @@ pub(super) fn base_read_source_geometry(
         Other(o) => [o.yaw, o.pitch],
         Guest(g) => [g.yaw, g.pitch],
         _ => [0.0; 2],
+    };
+    geometry.dimensions = match source {
+        Mob(m) => {
+            let (w, h, _) = m.dims();
+            [w, h]
+        }
+        Stand(s) => {
+            if s.marker {
+                [0.0; 2]
+            } else if s.small {
+                [0.25, f64::from(1.975f32) / 2.0]
+            } else {
+                [0.5, f64::from(1.975f32)]
+            }
+        }
+        Player(p) => [
+            f64::from(p.dimensions.width),
+            f64::from(p.dimensions.height),
+        ],
+        Guest(g) => {
+            let d = g.dimensions();
+            [f64::from(d.width), f64::from(d.height)]
+        }
+        Cloud(c) => [f64::from(c.radius * 2.0f32), facts.height],
+        Other(o) => o
+            .interaction
+            .as_ref()
+            .map_or([facts.width, facts.height], |i| {
+                [f64::from(i.width), f64::from(i.height)]
+            }),
+        DragonPart(_, index) => {
+            let (w, h) = *super::dragon::PART_SIZES.get(index)?;
+            [w, h]
+        }
+        _ => [facts.width, facts.height],
     };
     match source {
         Player(p) => {
@@ -244,7 +267,7 @@ pub(super) struct BaseReadOwner<'a> {
     pub(super) resolve: &'a dyn Fn(u32) -> Option<(EntityRef, Kind)>,
     pub(super) player_leash: &'a dyn Fn([i32; 4]) -> Option<EntityRef>,
     pub(super) pearl_cooldown: &'a dyn Fn(u32) -> i32,
-    pub(super) type_facts: &'a dyn Fn(&str) -> Option<BaseReadTypeFacts>,
+    pub(super) type_facts: &'a dyn Fn(&str) -> Option<EntityTypeGeometry>,
     pub(super) default_player_uuid: Option<[i32; 4]>,
     /// Local/acting player state, unused for resident nonplayer families.
     pub(super) local_rotation: [f32; 2],
@@ -305,14 +328,9 @@ pub(super) fn snapshot_base_read_source(
 ) -> Option<CompactEntityReadRow> {
     use BaseReadSource::*;
     let kind = base_read_source_kind(source, pool);
-    let facts = match pool.facts(&kind) {
-        Some(facts) => facts,
-        None => {
-            let facts = (owner.type_facts)(&kind)?;
-            pool.register(&kind, facts);
-            facts
-        }
-    };
+    // Facts belong to the current resources, not the identity pool. In
+    // particular a retained kind pool must not pin the first world's sizes.
+    let facts = (owner.type_facts)(&kind)?;
     let mut geometry = base_read_source_geometry(source, facts)?;
     if matches!(source, Player(_)) {
         geometry.rotation = owner.local_rotation;
@@ -465,6 +483,38 @@ mod tests {
     use horizon_core::nbt::Tag;
 
     #[test]
+    fn fixed_type_box_preserves_float_half_width_and_normalizes_negative_dimensions() {
+        assert_eq!(
+            feet_box([0.0; 3], f64::from(f32::from_bits(1)), 1.0),
+            [[0.0, 0.0, 0.0], [0.0, 1.0, 0.0]]
+        );
+        assert_eq!(
+            feet_box([0.0; 3], -2.0, -3.0),
+            [[-1.0, -3.0, -1.0], [1.0, 0.0, 1.0]]
+        );
+    }
+
+    #[test]
+    fn stand_dimensions_preserve_small_and_marker_state_at_large_coordinates() {
+        let mut stand =
+            horizon_client::entities::ArmorStand::new(11, Vec3::new(1e16, 8.0, 1e16), 0.0);
+        let facts = EntityTypeGeometry {
+            width: 0.5,
+            height: f64::from(1.975f32),
+            eye_height: f64::from(1.7775f32),
+        };
+        stand.small = true;
+        let small = base_read_source_geometry(BaseReadSource::Stand(&stand), facts).unwrap();
+        assert_eq!(small.dimensions, [0.25, f64::from(0.9875f32)]);
+        assert_eq!(small.bounding_box[0][0], small.bounding_box[1][0]);
+        stand.marker = true;
+        let marker = base_read_source_geometry(BaseReadSource::Stand(&stand), facts).unwrap();
+        assert_eq!(marker.dimensions, [0.0; 2]);
+        assert_eq!(marker.bounding_box, [[1e16, 8.0, 1e16]; 2]);
+        assert_eq!(marker.eye_height, 0.0);
+    }
+
+    #[test]
     fn interaction_uses_current_source_dimensions_not_registry_defaults() {
         let mut source = super::super::commands::OtherEntity {
             join: horizon_client::join_seq::JoinSeq::next(),
@@ -484,7 +534,7 @@ mod tests {
             knot_check: None,
             eye: None,
         };
-        let facts = BaseReadTypeFacts {
+        let facts = EntityTypeGeometry {
             width: 1.0,
             height: 1.0,
             eye_height: 0.85,
@@ -531,9 +581,9 @@ mod tests {
             player_leash: &|_| None,
             pearl_cooldown: &|_| 0,
             type_facts: &|_| {
-                Some(BaseReadTypeFacts {
-                    width: 0.0,
-                    height: 0.0,
+                Some(EntityTypeGeometry {
+                    width: f64::from(f32::from_bits(1)),
+                    height: -2.0,
                     eye_height: 0.0,
                 })
             },
@@ -563,10 +613,35 @@ mod tests {
         };
         let row = compact.materialize(capture, EntityRef::new(epoch, 31), source.join.get());
         assert_eq!(row.position, [2.0, 5.0, 8.0]);
-        assert_eq!(row.bounding_box, [[2.0, 5.0, 8.0]; 2]);
+        assert_eq!(row.bounding_box, [[2.0, 3.0, 8.0], [2.0, 5.0, 8.0]]);
+        assert_eq!(row.dimensions, [f64::from(f32::from_bits(1)), -2.0]);
         assert_eq!(row.custom_name_visible, Some(true));
         assert_eq!(row.level.dimension(), mod_api::DimensionKey::NETHER);
         assert_eq!(row.portal_cooldown, None);
         assert_eq!(row.kind.as_deref(), Some("minecraft:marker"));
+        // Reusing interned identity must not reuse the first resource root's
+        // geometry. A previously retained row stays unchanged, however.
+        let second_owner = BaseReadOwner {
+            type_facts: &|_| {
+                Some(EntityTypeGeometry {
+                    width: 2.0,
+                    height: 3.0,
+                    eye_height: 1.0,
+                })
+            },
+            ..owner
+        };
+        let second = snapshot_base_read_source(
+            BaseReadSource::Other(&source),
+            31,
+            &persist,
+            &portals,
+            &mut pool,
+            &second_owner,
+        )
+        .unwrap();
+        let second = second.materialize(capture, EntityRef::new(epoch, 31), source.join.get());
+        assert_eq!(second.dimensions, [2.0, 3.0]);
+        assert_eq!(row.dimensions, [f64::from(f32::from_bits(1)), -2.0]);
     }
 }
