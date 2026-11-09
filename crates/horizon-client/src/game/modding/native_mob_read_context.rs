@@ -466,7 +466,7 @@ impl Game<'_> {
 }
 
 impl Game<'_> {
-    fn read_relation_entity(
+    pub(super) fn read_relation_entity(
         &self,
         id: u32,
         level: LevelRef,
@@ -1230,5 +1230,40 @@ mod lent_tests {
             drop(world);
             game.mobs.restore(sources, RestoreOrder::SurvivorsFirst);
         });
+    }
+}
+
+impl Game<'_> {
+    /// Saved UUID resolution uses the retained identity index but validates its
+    /// binding against the canonical level record before returning a handle.
+    pub(super) fn resolve_read_uuid(
+        &self,
+        uuid: [i32; 4],
+        level: LevelRef,
+        index: &NativeMobRelations,
+    ) -> Option<EntityRef> {
+        if self.native_lifecycle.epoch() != Some(level.epoch()) {
+            return None;
+        }
+        if let Some(player) = self.resolve_mob_read_player(uuid, level, index) {
+            return Some(player);
+        }
+        let id = *index.saved_ids.get(&uuid)?;
+        if self.read_saved_uuid(id, level) != Some(uuid) {
+            return None;
+        }
+        self.read_relation_entity(id, level, index)
+    }
+    pub(super) fn read_relation_guest(
+        &self,
+        conn: u32,
+        level: LevelRef,
+        index: &NativeMobRelations,
+    ) -> Option<EntityRef> {
+        let guest = self.read_guest(index, conn)?;
+        if !guest.participates_online() {
+            return None;
+        }
+        self.read_relation_entity(u32::try_from(guest.entity_id).ok()?, level, index)
     }
 }

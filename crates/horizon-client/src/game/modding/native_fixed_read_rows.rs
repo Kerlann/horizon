@@ -96,6 +96,38 @@ impl Game<'_> {
         })
     }
 
+    pub(super) fn snapshot_stand_living_read_row(
+        &self,
+        capture: EntityReadCapture,
+        living: LivingRef,
+        source: &horizon_client::entities::ArmorStand,
+    ) -> LivingReadRow {
+        LivingReadRow {
+            capture,
+            entity: living.entity(),
+            gliding_ticks: None,
+            is_gliding: None,
+            is_sleeping: None,
+            sleeping_pos: None,
+            is_jumping: None,
+            is_climbing: None,
+            baby: Some(false),
+            health: Some(source.health),
+            max_health: Some(20.0),
+            alive: Some(source.health > 0.0),
+            kill_credit: None,
+            last_attacker: None,
+            is_tamed: None,
+            owner: None,
+            item_use_remaining: None,
+            used_item_hand: None,
+            can_use_portal: None,
+            can_breathe_underwater: None,
+            arrow_count: None,
+            stinger_count: None,
+        }
+    }
+
     /// Resident fallback for players and armor stands. Mob and lifted-dragon
     /// passes must use the direct source variants above instead of this lookup path.
     pub(super) fn snapshot_living_read_row(
