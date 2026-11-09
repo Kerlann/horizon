@@ -16,13 +16,7 @@ impl Game<'_> {
         match t {
             Target::Player => self.riding,
             Target::Guest(conn) => self.command_guest(conn)?.vehicle,
-            Target::Mob(id) => {
-                self.mobs
-                    .iter()
-                    .find(|m| m.id == id && !m.removed)?
-                    .extra
-                    .mount
-            }
+            Target::Mob(id) => self.mob_object(id).filter(|m| !m.removed)?.extra.mount,
             _ => None,
         }
     }
@@ -32,26 +26,39 @@ impl Game<'_> {
         Some(self.native_vehicle_id(t).and_then(|v| self.entity(v)))
     }
     /// What the entity rides (`Entity.getVehicle`): `None` when it rides
-    /// nothing, or for a stale handle.
+    /// nothing, its actual vehicle is off-level, or the input handle is stale.
     pub(super) fn entity_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
         self.native_vehicle(entity).flatten()
     }
-    /// Whether the entity rides another (`Entity.isPassenger`).
+    /// Whether the entity rides another object, including a retained off-level vehicle.
     pub(super) fn entity_is_passenger(&self, entity: EntityRef) -> Option<bool> {
-        Some(self.native_vehicle(entity)?.is_some())
+        Some(
+            self.native_vehicle_id(self.native_entity_target(entity)?)
+                .is_some(),
+        )
     }
     /// The lowest vehicle under the entity (`Entity.getRootVehicle`): the
-    /// entity itself when it rides nothing.
+    /// entity itself when it rides nothing. Off-level intermediaries are traversed;
+    /// an off-level root or a cycle returns no handle, never a descendant substitute.
     pub(super) fn entity_root_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
-        let mut root = entity;
-        // A chain of riders is short; the bound only guards against a loop.
-        for _ in 0..64 {
-            match self.native_vehicle(root)? {
-                Some(v) => root = v,
-                None => break,
-            }
+        let target = self.native_entity_target(entity)?;
+        self.entity(self.native_root_vehicle_id(entity.id(), target)?)
+    }
+
+    /// Follow full object links, returning no root for a cycle. Only mobs can
+    /// be intermediate vehicles, so their object count bounds the walk without
+    /// truncating valid deep trees or allocating a visited set.
+    fn native_root_vehicle_id(&self, id: u32, target: Target) -> Option<u32> {
+        let mut root = id;
+        let mut next = self.native_vehicle_id(target);
+        for _ in 0..=self.mobs.len() + self.persist.off_level.len() {
+            let Some(vehicle) = next else {
+                return Some(root);
+            };
+            root = vehicle;
+            next = self.native_vehicle_id(Target::Mob(vehicle));
         }
-        Some(root)
+        None
     }
     /// The entities riding this one (`Entity.getPassengers`), in `addPassenger`'s order.
     pub(super) fn entity_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
@@ -59,25 +66,44 @@ impl Game<'_> {
         let seats = self.seated_passengers(entity.id()).into_iter();
         Some(seats.filter_map(|(_, id, _)| self.entity(id)).collect())
     }
-    /// Whether anything rides the entity (`Entity.isVehicle`).
+    /// Whether any object rides the entity, including retained off-level passengers.
     pub(super) fn entity_is_vehicle(&self, entity: EntityRef) -> Option<bool> {
-        Some(!self.entity_passengers(entity)?.is_empty())
+        self.native_entity_target(entity)?;
+        Some(!self.seated_passengers(entity.id()).is_empty())
     }
     /// Every entity riding this one, at any depth (`Entity.getIndirectPassengers`): each
-    /// passenger in `passengers` order, followed by those riding it.
+    /// passenger in boarding order, followed by those riding it. Traverse off-level
+    /// intermediaries but return only resident handles.
     pub(super) fn entity_indirect_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
-        let mut all = Vec::new();
-        let mut next = self.entity_passengers(entity)?;
-        next.reverse();
+        self.native_entity_target(entity)?;
+        let mut all: Vec<EntityRef> = Vec::new();
+        // This vector allocates only when a retained, unrepresentable object is
+        // actually encountered; ordinary resident-only trees keep two buffers.
+        let mut visited_off_level = Vec::new();
+        let mut next: Vec<u32> = self
+            .seated_passengers(entity.id())
+            .into_iter()
+            .rev()
+            .map(|(_, id, _)| id)
+            .collect();
         while let Some(passenger) = next.pop() {
-            // A chain of riders is short; the check only guards against a loop.
-            if passenger == entity || all.contains(&passenger) {
+            if passenger == entity.id()
+                || all.iter().any(|r| r.id() == passenger)
+                || visited_off_level.contains(&passenger)
+            {
                 continue;
             }
-            all.push(passenger);
-            if let Some(riders) = self.entity_passengers(passenger) {
-                next.extend(riders.into_iter().rev());
+            if let Some(handle) = self.entity(passenger) {
+                all.push(handle);
+            } else {
+                visited_off_level.push(passenger);
             }
+            next.extend(
+                self.seated_passengers(passenger)
+                    .into_iter()
+                    .rev()
+                    .map(|(_, id, _)| id),
+            );
         }
         Some(all)
     }
@@ -123,8 +149,8 @@ impl Game<'_> {
     /// handle.
     pub(super) fn entity_controlling_passenger(&self, entity: EntityRef) -> Option<LivingRef> {
         let vehicle = self.native_entity_target(entity)?;
-        let passengers = self.entity_passengers(entity)?;
-        let first = *passengers.first()?;
+        let first_id = self.seated_passengers(entity.id()).first()?.1;
+        let first = self.entity(first_id)?;
         let rider = self.native_entity_target(first)?;
         let is_player = matches!(rider, Target::Player | Target::Guest(_));
         match vehicle {
@@ -153,7 +179,12 @@ impl Game<'_> {
         entity: EntityRef,
         other: EntityRef,
     ) -> Option<bool> {
-        Some(self.entity_root_vehicle(entity)? == self.entity_root_vehicle(other)?)
+        let target = self.native_entity_target(entity)?;
+        let other_target = self.native_entity_target(other)?;
+        Some(
+            self.native_root_vehicle_id(entity.id(), target)?
+                == self.native_root_vehicle_id(other.id(), other_target)?,
+        )
     }
     /// Where getting off this vehicle puts `passenger` as it stands now, riding it or not. This
     /// is the game's own placement, from the code `stop_riding` runs, so it can differ from
@@ -946,6 +977,98 @@ mod tests {
             assert_eq!(top.is_passenger_of_same_vehicle(game, stale(camel)), None);
             assert_eq!(stale(camel).indirect_passengers(game), None);
             assert_eq!(stale(camel).controlling_passenger(game), None);
+            // Dying is not removal: a dead first passenger still owns its place.
+            game.mob_object_mut(81).unwrap().health = 0.0;
+            assert_eq!(camel.passengers(game), Some(vec![first, second]));
+            assert_eq!(
+                camel.controlling_passenger(game).map(|r| r.entity()),
+                Some(first)
+            );
+            game.mob_object_mut(81).unwrap().health = 1.0;
+            let index = game.mobs.iter().position(|m| m.id == 81).unwrap();
+            let ghost = game.mobs.remove(index);
+            game.persist
+                .off_level
+                .insert(81, super::super::persist::OffLevel::Mob(ghost));
+            assert!(game.entity(81).is_none());
+            assert_eq!(camel.passengers(game), Some(vec![second]));
+            assert_eq!(
+                camel.controlling_passenger(game),
+                None,
+                "never skip the actual first rider"
+            );
+            assert_eq!(
+                top.vehicle(game),
+                None,
+                "off-level vehicle has no public handle"
+            );
+            assert_eq!(top.is_passenger(game), Some(true));
+            assert_eq!(top.root_vehicle(game), Some(camel));
+            assert_eq!(camel.indirect_passengers(game), Some(vec![top, second]));
+            assert_eq!(
+                first.is_passenger(game),
+                None,
+                "retained objects cannot revive stale handles"
+            );
+            let index = game.mobs.iter().position(|m| m.id == 82).unwrap();
+            let ghost = game.mobs.remove(index);
+            game.persist
+                .off_level
+                .insert(82, super::super::persist::OffLevel::Mob(ghost));
+            assert_eq!(camel.passengers(game), Some(Vec::new()));
+            assert_eq!(
+                camel.is_vehicle(game),
+                Some(true),
+                "ghost-only children still ride"
+            );
+            assert_eq!(camel.indirect_passengers(game), Some(vec![top]));
+            let index = game.mobs.iter().position(|m| m.id == 80).unwrap();
+            let ghost = game.mobs.remove(index);
+            game.persist
+                .off_level
+                .insert(80, super::super::persist::OffLevel::Mob(ghost));
+            assert_eq!(
+                top.root_vehicle(game),
+                None,
+                "an off-level root is not its resident descendant"
+            );
+            game.mob_object_mut(84).unwrap().extra.mount = Some(80);
+            assert_eq!(top.is_passenger_of_same_vehicle(game, apart), Some(true));
+            assert_eq!(apart.root_vehicle(game), None);
+            assert_eq!(top.is_passenger_of_same_vehicle(game, top), Some(true));
+            assert_eq!(stale(top).root_vehicle(game), None);
+            assert_eq!(stale(top).is_passenger(game), None);
+            assert_eq!(stale(top).is_vehicle(game), None);
+            let other_root = add_mob(game, 85, "minecraft:cow", Vec3::ZERO);
+            let index = game
+                .mobs
+                .iter()
+                .position(|m| m.id == other_root.id())
+                .unwrap();
+            let ghost = game.mobs.remove(index);
+            game.persist
+                .off_level
+                .insert(85, super::super::persist::OffLevel::Mob(ghost));
+            game.persist.uuids.insert(80, [1, 2, 3, 4]);
+            game.persist.uuids.insert(85, [1, 2, 3, 4]);
+            game.mob_object_mut(84).unwrap().extra.mount = Some(85);
+            assert_eq!(
+                top.is_passenger_of_same_vehicle(game, apart),
+                Some(false),
+                "equal UUIDs are not the same object root"
+            );
+            // The topology walk must not truncate a valid tree at an arbitrary depth.
+            let root = add_mob(game, 200, "minecraft:pig", Vec3::ZERO);
+            let mut leaf = root;
+            for id in 201..=270 {
+                let rider = add_mob(game, id, "minecraft:pig", Vec3::ZERO);
+                game.mob_object_mut(id).unwrap().extra.mount = Some(leaf.id());
+                leaf = rider;
+            }
+            assert_eq!(leaf.root_vehicle(game), Some(root));
+            game.mob_object_mut(200).unwrap().extra.mount = Some(leaf.id());
+            assert_eq!(leaf.root_vehicle(game), None, "cycles have no root");
+            assert_eq!(root.indirect_passengers(game).unwrap().len(), 70);
         });
     }
 

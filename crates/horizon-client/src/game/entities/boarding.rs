@@ -67,7 +67,7 @@ impl Game<'_> {
         }
         seats.extend(
             self.mob_objects()
-                .filter(|m| m.extra.mount == Some(vehicle) && !m.removed && m.alive())
+                .filter(|m| m.extra.mount == Some(vehicle) && !m.removed)
                 .map(|m| (m.extra.vehicle_order, m.id, false)),
         );
         seats.sort_by_key(|&(place, ..)| place);

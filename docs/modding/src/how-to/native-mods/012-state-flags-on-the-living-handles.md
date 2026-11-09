@@ -57,3 +57,28 @@ such as an enderman carrying a block. It is independent of `PersistenceRequired`
 either flag. The separately modeled dragon has no such predicate and answers `None` to this query, even though
 its persistence flag can be read and set. A `/summon` and a spawn egg set their flags before the entity-join hook
 runs, so a mod's own write in that hook is what stays.
+
+#### Riding topology and resident handles
+
+`EntityRef` names only an entity resident in the current level. A rejected Mob
+passenger can remain a full object in a riding tree without becoming resident;
+its saved UUID does not make another object's handle refer to it.
+
+`is_passenger` and `is_vehicle` describe the actual relationships, including
+retained off-level objects. Thus `is_passenger` can be `Some(true)` while
+`vehicle` is `None`, and `is_vehicle` can be `Some(true)` while `passengers`
+returns an empty list. Dying passengers keep their place until removed.
+
+`passengers` returns only resident direct passengers in boarding order.
+`indirect_passengers` walks the full tree depth-first, through retained objects,
+and omits only unrepresentable handles: a resident grandchild below an off-level
+passenger still appears. `root_vehicle` also traverses retained intermediaries,
+but returns `None` if the actual root is off-level; it never returns a resident
+descendant in its place. `is_passenger_of_same_vehicle` compares the actual roots,
+so two resident entities can share an off-level root even though neither can
+obtain its handle. Cyclic relationships have no root and return `None`.
+
+`controlling_passenger` chooses the actual first passenger before checking whether
+its handle can be returned. An off-level first passenger means `None`, not a later
+resident rider. All these reads refuse stale input handles; none loads a retained
+object into the level or exposes a handle for it.
