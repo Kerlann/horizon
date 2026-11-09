@@ -89,10 +89,52 @@ pub fn current_converted_call() -> Option<ConvertedCall> {
             let current = current.borrow();
             let scope = current.as_ref()?;
             let frame = NATIVE_FRAME.try_with(Cell::get).ok().flatten()?;
-            (scope.frame == frame).then(|| scope.call.clone())
+            (scope.frame == frame).then(|| ConvertedCall {
+                runtime: scope.call.runtime,
+                package: scope.call.package.to_cow(),
+                export: scope.call.export.clone(),
+                site: scope.call.site.clone(),
+            })
         })
         .ok()
         .flatten()
+}
+
+#[derive(Clone, Debug)]
+enum ConvertedPackageId {
+    Static(&'static str),
+    Shared(std::sync::Arc<str>),
+}
+impl ConvertedPackageId {
+    fn as_str(&self) -> &str {
+        match self {
+            Self::Static(id) => id,
+            Self::Shared(id) => id,
+        }
+    }
+    fn to_cow(&self) -> Cow<'static, str> {
+        match self {
+            Self::Static(id) => Cow::Borrowed(id),
+            Self::Shared(id) => Cow::Owned(id.to_string()),
+        }
+    }
+}
+struct CapturedCall {
+    runtime: &'static str,
+    package: ConvertedPackageId,
+    export: Cow<'static, str>,
+    site: Cow<'static, str>,
+}
+/// Borrow the validated package identity without cloning public crash text.
+pub(crate) fn with_current_converted_package<R>(f: impl FnOnce(Option<&str>) -> R) -> R {
+    IN_CONVERTED_PACKAGE.with(|slot| {
+        let slot = slot.borrow();
+        let frame = NATIVE_FRAME.with(Cell::get);
+        f(slot
+            .as_ref()
+            .filter(|scope| Some(scope.frame) == frame)
+            .map(|scope| scope.call.package.as_str()))
+    })
 }
 
 // no wire: process-local crash attribution uses static runtime identities; not a hook payload.
@@ -106,12 +148,14 @@ pub fn current_converted_call() -> Option<ConvertedCall> {
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct ConvertedPackages {
     runtime: &'static str,
-    packages: Vec<Cow<'static, str>>,
+    packages: Vec<ConvertedPackageId>,
 }
 
 impl ConvertedPackages {
     /// Declares `packages` as the ones `runtime` (its `[mod] id`) loaded. Ids read from
-    /// manifests or module bytes are stored here. Entering clones an owned id on each call.
+    /// manifests or module bytes are interned here once. Entering preserves static
+    /// ids and shares owned ids without copying their text. The public crash-call
+    /// snapshot materializes owned text only when explicitly requested.
     pub fn new<I>(runtime: &'static str, packages: I) -> Self
     where
         I: IntoIterator,
@@ -119,7 +163,13 @@ impl ConvertedPackages {
     {
         Self {
             runtime,
-            packages: packages.into_iter().map(Into::into).collect(),
+            packages: packages
+                .into_iter()
+                .map(|id| match id.into() {
+                    Cow::Borrowed(id) => ConvertedPackageId::Static(id),
+                    Cow::Owned(id) => ConvertedPackageId::Shared(id.into()),
+                })
+                .collect(),
         }
     }
 
@@ -127,7 +177,7 @@ impl ConvertedPackages {
     pub fn package(&self, id: &str) -> Option<ConvertedPackage<'_>> {
         self.packages
             .iter()
-            .find(|package| package.as_ref() == id)
+            .find(|package| package.as_str() == id)
             .map(|package| ConvertedPackage {
                 runtime: self.runtime,
                 package,
@@ -141,7 +191,7 @@ impl ConvertedPackages {
 // exhaustive: its fields are private, so only a registry creates it
 pub struct ConvertedPackage<'a> {
     runtime: &'static str,
-    package: &'a Cow<'static, str>,
+    package: &'a ConvertedPackageId,
 }
 
 impl ConvertedPackage<'_> {
@@ -156,7 +206,7 @@ impl ConvertedPackage<'_> {
         export: impl Into<Cow<'static, str>>,
         site: impl Into<Cow<'static, str>>,
     ) -> Option<ConvertedPackageGuard> {
-        let call = ConvertedCall {
+        let call = CapturedCall {
             runtime: self.runtime,
             package: self.package.clone(),
             export: export.into(),
@@ -171,15 +221,15 @@ pub(crate) fn enter_entity_command_package(
     runtime: &'static str,
     package: std::sync::Arc<str>,
 ) -> Option<ConvertedPackageGuard> {
-    enter_converted_call(ConvertedCall {
+    enter_converted_call(CapturedCall {
         runtime,
-        package: Cow::Owned(package.as_ref().to_owned()),
+        package: ConvertedPackageId::Shared(package),
         export: Cow::Borrowed("entity_command_completed"),
         site: Cow::Borrowed(""),
     })
 }
 
-fn enter_converted_call(call: ConvertedCall) -> Option<ConvertedPackageGuard> {
+fn enter_converted_call(call: CapturedCall) -> Option<ConvertedPackageGuard> {
     if current_native_mod() != Some(call.runtime) {
         return None;
     }
@@ -204,7 +254,7 @@ fn enter_converted_call(call: ConvertedCall) -> Option<ConvertedPackageGuard> {
 }
 
 struct ConvertedScope {
-    call: ConvertedCall,
+    call: CapturedCall,
     frame: u64,
     token: u64,
 }

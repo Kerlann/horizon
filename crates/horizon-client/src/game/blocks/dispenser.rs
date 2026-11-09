@@ -1171,7 +1171,7 @@ impl Game<'_> {
         let _ = self.world.random.next_float();
         self.next_entity += 1;
         let (_, uuid) = horizon_client::mobs::living_random();
-        self.persist.uuids.insert(self.next_entity, uuid);
+        self.set_saved_entity_uuid(self.next_entity, uuid);
         let mut stand =
             horizon_client::entities::ArmorStand::new(self.next_entity, foot, y_rot(facing));
         // Entity.applyImplicitComponents: a name from an anvil names the stand.

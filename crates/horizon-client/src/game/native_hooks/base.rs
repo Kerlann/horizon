@@ -4187,6 +4187,7 @@ impl Game<'_> {
         kind: &str,
         canceled: &mut bool,
     ) {
+        let _actor = self.enter_native_callback_actor(entity);
         self.fire_entity_tick_pre(dimension, entity, kind, canceled);
     }
     /// The entity `entity` of type `kind` ticked in the server level `dimension` (NeoForge's
@@ -4199,6 +4200,7 @@ impl Game<'_> {
         entity: u32,
         kind: &str,
     ) {
+        let _actor = self.enter_native_callback_actor(entity);
         self.fire_entity_tick_post(dimension, entity, kind);
     }
     /// Whether the experience orb `into` takes the orb `from` in (vanilla's

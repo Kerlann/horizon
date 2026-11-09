@@ -717,6 +717,7 @@ mod tests {
                 );
 
                 game.crystals.push(super::super::dragon::Crystal {
+                    attachment_lifetime: Default::default(),
                     join: Default::default(),
                     id: base + 4,
                     position: Vec3::ZERO,
@@ -783,6 +784,7 @@ mod tests {
                 );
                 drop(seen);
                 game.tnts.push(super::super::tnt::PrimedTnt {
+                    attachment_lifetime: Default::default(),
                     rotation: [0.0, 0.0],
                     join: Default::default(),
                     id: 0,

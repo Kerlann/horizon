@@ -63,6 +63,7 @@ enum EntityCollision {
     Deflected { first: bool },
 }
 pub(super) struct Hook {
+    pub(super) attachment_lifetime: horizon_mod_runtime::attachments::AttachmentLifetime,
     /// Its entity id, which a server's players track it under.
     id: u32,
     pub(super) position: Vec3,
@@ -209,6 +210,8 @@ fn minecart_hook_targets<'a>(
         .filter(move |c| Some(c.id) != own_vehicle)
         .map(|c| (c.id, c.bounds()))
 }
+horizon_mod_runtime::impl_attachment_lifetime!(Hook);
+
 impl Hook {
     fn hit_entity(&mut self, id: u32, deflects: bool) -> EntityCollision {
         if deflects {
@@ -488,6 +491,7 @@ impl Game<'_> {
             let v = cast_velocity(y_sin, y_cos, dir_y, &mut random);
             self.next_entity += 1;
             self.hook = Some(Hook {
+                attachment_lifetime: Default::default(),
                 id: self.next_entity,
                 position: start,
                 previous: start,
@@ -1560,6 +1564,7 @@ impl Hook {
     /// This client's own hook as its server tracks it: drawn, never ticked here.
     pub(in crate::game) fn remote(id: u32, at: Vec3) -> Self {
         Self {
+            attachment_lifetime: Default::default(),
             id,
             position: at,
             previous: at,

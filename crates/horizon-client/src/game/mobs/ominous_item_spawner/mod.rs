@@ -23,6 +23,8 @@ const TICKS_SCALING: f32 = 50.0;
 const ROTATION_SPEED: f32 = 40.0;
 
 pub(super) struct OminousItemSpawner {
+    /// Entity-owned registration metadata; content clones are detached.
+    pub(super) attachment_lifetime: horizon_mod_runtime::attachments::AttachmentLifetime,
     pub(in crate::game) join: horizon_client::join_seq::JoinSeq,
     /// Its entity id: from the entity counter on the server, the server's on
     /// a client.
@@ -39,6 +41,7 @@ pub(super) struct OminousItemSpawner {
 }
 
 horizon_client::impl_joined!(OminousItemSpawner);
+horizon_mod_runtime::impl_attachment_lifetime!(OminousItemSpawner);
 
 /// `ProjectileItem.DispenseConfig` of the items fired down: power,
 /// uncertainty and `overrideDispenseEvent`; None for items that just fall.
@@ -75,6 +78,7 @@ impl Game<'_> {
     ) {
         self.next_entity += 1;
         self.ominous_spawners.push(OminousItemSpawner {
+            attachment_lifetime: Default::default(),
             join: Default::default(),
             id: self.next_entity,
             item,
@@ -100,6 +104,7 @@ impl Game<'_> {
         self.remember_uuid(id, saved, &tag);
         let uuid = self.uuid_for(id);
         self.ominous_spawners.push(OminousItemSpawner {
+            attachment_lifetime: Default::default(),
             join: Default::default(),
             id,
             item,
@@ -167,6 +172,7 @@ impl Game<'_> {
     /// entity data (`ItemStack.EMPTY` until then, which draws nothing).
     pub(super) fn add_remote_ominous_item_spawner(&mut self, id: u32, position: [f64; 3]) {
         self.ominous_spawners.push(OminousItemSpawner {
+            attachment_lifetime: Default::default(),
             join: Default::default(),
             id,
             item: ItemStack::new("minecraft:air", 1),
