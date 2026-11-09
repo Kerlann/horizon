@@ -120,9 +120,7 @@ impl Game<'_> {
                 if raw.starts_with('{') {
                     let (tag, _) = horizon_core::nbt::parse_snbt(&raw)
                         .map_err(|_| err("command.failed", &[]))?;
-                    let json = horizon_core::json_nbt::tag_to_json(&tag)
-                        .map_err(|_| err("command.failed", &[]))?
-                        .to_string();
+                    let json = horizon_client::scoreboard::tag_to_json(&tag).to_string();
                     let at = horizon_core::position::BlockPos::new(pos[0], pos[1], pos[2]);
                     let placed = self
                         .with_level(|b, level, ticks| {

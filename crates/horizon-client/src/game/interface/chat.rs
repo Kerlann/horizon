@@ -799,9 +799,7 @@ impl Game<'_> {
         // installed while it was prepared, before its registries are built).
         self.ui.registries.inline_feature = self.res.behaviours().live_features().map(|features| {
             horizon_client_core::registries::InlineFeatureCheck::new(move |tag| {
-                let json = horizon_core::json_nbt::tag_to_json(tag)
-                    .map_err(|e| e.to_string())?
-                    .to_string();
+                let json = horizon_client::scoreboard::tag_to_json(tag).to_string();
                 features
                     .decode_inline(&json)
                     .map(drop)

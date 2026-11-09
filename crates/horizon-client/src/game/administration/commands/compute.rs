@@ -37,9 +37,7 @@ impl Game<'_> {
         if first == '{' || first == '[' || first == '-' || first.is_ascii_digit() || first == '"' {
             let (tag, _) = horizon_core::nbt::parse_snbt(&raw)
                 .map_err(|e| err("argument.nbt.invalid", &[&e]))?;
-            let value = horizon_core::json_nbt::tag_to_json(&tag)
-                .map_err(|e| err("argument.nbt.invalid", &[&e.to_string()]))?;
-            return Ok((None, value));
+            return Ok((None, horizon_client::scoreboard::tag_to_json(&tag)));
         }
         let id = if raw.contains(':') {
             raw
