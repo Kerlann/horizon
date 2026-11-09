@@ -53,13 +53,21 @@ pub trait PlayersBackend {
     /// Velocity proxy, the address the proxy forwards). Displaced connected
     /// players keep their address; an acting player with no known connection
     /// has an empty address. None for a stale or unavailable player.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn player_address(&self, player: PlayerRef) -> Option<String>;
+    fn player_address(&self, player: PlayerRef) -> Result<Option<String>, EntityReadError>;
     /// Side: server.
     /// The stable name of a connected or acting player. None for a stale or
     /// unavailable player; displaced online players retain their identity.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn player_name(&self, player: PlayerRef) -> Option<String>;
+    fn player_name(&self, player: PlayerRef) -> Result<Option<String>, EntityReadError>;
     /// Side: both.
     /// `Inventory.getSelectedSlot`: the hotbar slot the player holds, 0..9.
     #[access(WorldOnly)]
@@ -73,17 +81,40 @@ pub trait PlayersBackend {
     /// Side: server.
     /// Every group the player waits on and its ticks left, ordered by
     /// group.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn player_item_cooldowns(&self, player: PlayerRef) -> Option<Vec<NativeItemCooldown>>;
+    fn player_item_cooldowns(
+        &self,
+        player: PlayerRef,
+    ) -> Result<Option<Vec<NativeItemCooldown>>, EntityReadError>;
     /// Side: server.
     /// `ItemCooldowns.isOnCooldown`: whether `group` still has time to run.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn player_has_item_cooldown(&self, player: PlayerRef, group: &str) -> Option<bool>;
+    fn player_has_item_cooldown(
+        &self,
+        player: PlayerRef,
+        group: &str,
+    ) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
     /// `ItemCooldowns.getCooldownPercent(group, 0)`: what is left of the
     /// group's cooldown, from 1 (just started) to 0 (none).
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn player_item_cooldown_percent(&self, player: PlayerRef, group: &str) -> Option<f32>;
+    fn player_item_cooldown_percent(
+        &self,
+        player: PlayerRef,
+        group: &str,
+    ) -> Result<Option<f32>, EntityReadError>;
     /// Side: server.
     /// `Player.getAttackStrengthScale(partial)`: the charge the player's next
     /// `Player.attack` reads, from 0 (just swung) to 1 (full), where `partial`
@@ -93,9 +124,17 @@ pub trait PlayersBackend {
     /// Inside `attack_entity` it reads the charge that blow uses: the hook
     /// runs before `Player.attack` resets the ticker. 1.0 under 1.8.9 rules,
     /// which have no cooldown. None for a stale or unavailable player.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
     /// Non-finite partial ticks return `None`; finite partials are not restricted.
-    fn player_attack_strength_scale(&self, player: PlayerRef, partial: f32) -> Option<f32>;
+    fn player_attack_strength_scale(
+        &self,
+        player: PlayerRef,
+        partial: f32,
+    ) -> Result<Option<f32>, EntityReadError>;
     /// Side: server.
     /// `Player.takeXpDelay`: the ticks before the player can take the next
     /// experience orb.
@@ -172,6 +211,10 @@ pub trait PlayersBackend {
     /// `can_place_on` component matches the clicked block, the one `pos` lies against. The game's
     /// own use runs the same check (`ItemStack.useOn`, buckets). None for a stale or unavailable
     /// player, and for one in another level than the one in place.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
     fn player_may_use_item_at(
         &self,
@@ -179,14 +222,22 @@ pub trait PlayersBackend {
         pos: [i32; 3],
         face: NativeBlockFace,
         stack: &ItemStack,
-    ) -> Option<bool>;
+    ) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
     /// `ServerPlayer.canHarmPlayer(other)`: whether `player` may hurt `other`: the `pvp` game
     /// rule is on, and their teams allow it (allies on a team without friendly fire cannot,
     /// `Player.canHarmPlayer`). Attacks, arrows and tridents ask the same. None when either
     /// handle is stale or unavailable.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn player_can_harm(&self, player: PlayerRef, other: PlayerRef) -> Option<bool>;
+    fn player_can_harm(
+        &self,
+        player: PlayerRef,
+        other: PlayerRef,
+    ) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
     /// `ServerPlayer.getRespawnConfig`: where the player comes back after dying: a bed, a
     /// respawn anchor or a `/spawnpoint`, with the yaw they face and whether it is forced.
@@ -223,8 +274,15 @@ pub trait PlayersBackend {
     /// `Inventory.items`: the non-empty main inventory stacks in slot order, including
     /// their components. None for a stale or unavailable player; on clients only the
     /// local player's inventory is available.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn player_inventory(&self, player: PlayerRef) -> Option<Vec<ItemStack>>;
+    fn player_inventory(
+        &self,
+        player: PlayerRef,
+    ) -> Result<Option<Vec<ItemStack>>, EntityReadError>;
     /// Side: both.
     /// `ServerPlayerGameMode.getGameModeForPlayer`; Paper `HumanEntity#getGameMode`.
     /// None for stale, offline or unavailable players (including displaced outer players).
@@ -256,24 +314,52 @@ pub trait PlayersBackend {
     /// The value of statistic `stat_type` for `key` (`minecraft:stone`,
     /// `minecraft:jump`...), as `ServerStatsCounter.getValue`: 0 when never
     /// counted.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn player_stat(&self, player: PlayerRef, stat_type: NativeStatType, key: &str) -> Option<i32>;
+    fn player_stat(
+        &self,
+        player: PlayerRef,
+        stat_type: NativeStatType,
+        key: &str,
+    ) -> Result<Option<i32>, EntityReadError>;
     /// Side: server.
     /// Whether the player's recipe book knows `recipe`
     /// (`ServerRecipeBook.contains`).
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn player_has_discovered_recipe(&self, player: PlayerRef, recipe: &str) -> Option<bool>;
+    fn player_has_discovered_recipe(
+        &self,
+        player: PlayerRef,
+        recipe: &str,
+    ) -> Result<Option<bool>, EntityReadError>;
     /// Side: both.
     /// The recipes in the player's recipe book (`ServerRecipeBook.recipes`), as qualified ids in
     /// order (`minecraft:oak_planks`). None for a player it can't reach.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn player_discovered_recipes(&self, player: PlayerRef) -> Option<Vec<String>>;
+    fn player_discovered_recipes(
+        &self,
+        player: PlayerRef,
+    ) -> Result<Option<Vec<String>>, EntityReadError>;
     /// Side: both.
     /// The brand the player's client announced when it connected (`ServerPlayer.clientBrand`),
     /// empty when it sent none. Displaced connected players keep theirs; an acting player with
     /// no known connection has an empty one. None for a stale or unavailable player.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn player_client_brand(&self, player: PlayerRef) -> Option<String>;
+    fn player_client_brand(&self, player: PlayerRef) -> Result<Option<String>, EntityReadError>;
 }
 /// The handles' client reads of the `players` area, implemented by the game and reached through [`Backend`].
 // hidden: a handle's backend, reached through `Backend`; mods call the handle, never this trait

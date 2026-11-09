@@ -112,19 +112,27 @@ pub trait ItemsBackend {
     #[access(WorldOnly)]
     fn item_resource_bar(&self, stack: &ItemStack) -> Option<ItemBar>;
     /// Side: both. Effective stack range for the supplied actor.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
     fn item_resource_entity_attack_range(
         &self,
         stack: &ItemStack,
         attacker: LivingRef,
-    ) -> Option<ItemAttackRange>;
+    ) -> Result<Option<ItemAttackRange>, EntityReadError>;
     /// Side: both. Effective stack melee source for the supplied actor.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
     fn item_resource_damage_source(
         &self,
         stack: &ItemStack,
         attacker: LivingRef,
-    ) -> Option<ItemDamageSource>;
+    ) -> Result<Option<ItemDamageSource>, EntityReadError>;
     /// Side: both. Item immunity to the supplied damage source.
     #[access(WorldOnly)]
     fn item_resource_can_be_hurt_by(
@@ -133,6 +141,10 @@ pub trait ItemsBackend {
         source: &ItemDamageSource,
     ) -> Option<bool>;
     /// Side: both. Attack bonus preview without consuming world RNG or equipping the stack.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
     fn item_resource_attack_damage_bonus(
         &self,
@@ -140,7 +152,7 @@ pub trait ItemsBackend {
         attacker: LivingRef,
         target: EntityRef,
         base_damage: f32,
-    ) -> Option<f32>;
+    ) -> Result<Option<f32>, EntityReadError>;
     /// Side: client. The item's standard tooltip lines before mod callbacks or drawing.
     #[access(WorldOnly)]
     fn item_resource_tooltip(

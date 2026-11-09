@@ -34,22 +34,45 @@ pub trait LivingBackend {
     /// None when it has the effect not, before effect resolution, or for an armor
     /// stand, the dragon or a stale handle; on a client, for any entity but the
     /// local player, whose copy of what the server sent it is read.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn living_effect(&self, living: LivingRef, effect: EffectKey) -> Option<NativeActiveEffect>;
+    fn living_effect(
+        &self,
+        living: LivingRef,
+        effect: EffectKey,
+    ) -> Result<Option<NativeActiveEffect>, EntityReadError>;
     /// Side: both.
     /// The entity's active effects (`LivingEntity.getActiveEffects`), in the
     /// order their store keeps them, in `Some` even when it has none. None
     /// for an armor stand, the dragon or a stale handle; on a client, for any
     /// entity but the local player (its copy of what the server sent it).
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn living_effects(&self, living: LivingRef) -> Option<Vec<NativeActiveEffect>>;
+    fn living_effects(
+        &self,
+        living: LivingRef,
+    ) -> Result<Option<Vec<NativeActiveEffect>>, EntityReadError>;
     /// Side: both.
     /// Whether the entity has `effect` (`LivingEntity.hasEffect`), using its resolved key.
     /// False before effect resolution, for an armor stand, the dragon or a stale handle;
     /// on a client, for any entity but the local player, whose copy of what the server
     /// sent it is read.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn living_potion_affected(&self, living: LivingRef, effect: EffectKey) -> bool;
+    fn living_potion_affected(
+        &self,
+        living: LivingRef,
+        effect: EffectKey,
+    ) -> Result<bool, EntityReadError>;
     /// Side: both.
     /// The ticks the entity has glided (`LivingEntity.getFallFlyingTicks`),
     /// counted from 0 again the tick after the glide ends. Players (including
@@ -144,8 +167,16 @@ pub trait LivingBackend {
     /// False for a target in another level. None for a stale or unavailable
     /// living entity or target, one outside the level in place, or on a
     /// client.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn living_has_line_of_sight(&self, living: LivingRef, target: EntityRef) -> Option<bool>;
+    fn living_has_line_of_sight(
+        &self,
+        living: LivingRef,
+        target: EntityRef,
+    ) -> Result<Option<bool>, EntityReadError>;
     /// Side: both.
     /// The effective value of an attribute on a living entity
     /// (`AttributeMap.getValue`). None for an unknown or absent attribute, an
@@ -154,13 +185,29 @@ pub trait LivingBackend {
     /// an armor stand and the dragon answer from their live attribute map: the
     /// type's defaults, the saved `attributes`, and the modifiers of what they
     /// wear or hold.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn living_attribute_value(&self, living: LivingRef, id: &str) -> Option<f64>;
+    fn living_attribute_value(
+        &self,
+        living: LivingRef,
+        id: &str,
+    ) -> Result<Option<f64>, EntityReadError>;
     /// Side: both.
     /// The base value of an attribute, before modifiers
     /// (`AttributeMap.getBaseValue`), read as the effective value is.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn living_attribute_base(&self, living: LivingRef, id: &str) -> Option<f64>;
+    fn living_attribute_base(
+        &self,
+        living: LivingRef,
+        id: &str,
+    ) -> Result<Option<f64>, EntityReadError>;
     /// Side: both.
     /// The ids of the attributes the entity's type has
     /// (`AttributeMap`'s holder's attribute set), in registry order: the same
@@ -168,8 +215,15 @@ pub trait LivingBackend {
     /// unavailable entity; on a client, for any entity but the local player
     /// (the client keeps no attribute map of another entity's, only the few
     /// fields it draws).
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn living_attributes(&self, living: LivingRef) -> Option<Vec<Identifier>>;
+    fn living_attributes(
+        &self,
+        living: LivingRef,
+    ) -> Result<Option<Vec<Identifier>>, EntityReadError>;
     /// Side: both.
     /// The modifiers on the entity's attribute `id`
     /// (`AttributeInstance.getModifiers`), in the order they were added: a
@@ -178,12 +232,16 @@ pub trait LivingBackend {
     /// empty list; None for an attribute the entity type does not have, a
     /// stale handle, or on a client for any entity but the local player,
     /// whose copy of the synced instances it reads.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
     fn living_attribute_modifiers(
         &self,
         living: LivingRef,
         id: &str,
-    ) -> Option<Vec<AttributeModifier>>;
+    ) -> Result<Option<Vec<AttributeModifier>>, EntityReadError>;
     /// Side: both.
     /// The stack in `slot` (`LivingEntity.getItemBySlot`). Players, guests,
     /// mobs, armor stands and the dragon store all eight slots. An armor
@@ -192,12 +250,28 @@ pub trait LivingBackend {
     /// The stack in equipment slot `slot` (`LivingEntity.getItemBySlot`):
     /// None when it is empty, the entity has no such slot (a player has no
     /// body or saddle slot), or the handle is stale. API 382.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn living_equipment(&self, living: LivingRef, slot: EquipmentSlot) -> Option<ItemStack>;
+    fn living_equipment(
+        &self,
+        living: LivingRef,
+        slot: EquipmentSlot,
+    ) -> Result<Option<ItemStack>, EntityReadError>;
     /// Side: both.
     /// The stack in hand `hand` (`LivingEntity.getItemInHand`). API 382.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn living_hand_item(&self, living: LivingRef, hand: Hand) -> Option<ItemStack>;
+    fn living_hand_item(
+        &self,
+        living: LivingRef,
+        hand: Hand,
+    ) -> Result<Option<ItemStack>, EntityReadError>;
     /// Side: server.
     /// `TamableAnimal.isTame`, `AbstractHorse.isTamed`: None for a kind that
     /// can't be tamed or a stale handle. API @API:living_refs@.
@@ -229,8 +303,16 @@ pub trait LivingBackend {
     /// own state still answers where its `getDefaultDimensions` reads it: a
     /// digging sniffer or an emerging warden is low in every pose. None for
     /// a stale or unavailable handle.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn living_dimensions_for_pose(&self, living: LivingRef, pose: Pose) -> Option<[f64; 3]>;
+    fn living_dimensions_for_pose(
+        &self,
+        living: LivingRef,
+        pose: Pose,
+    ) -> Result<Option<[f64; 3]>, EntityReadError>;
     /// Side: server.
     /// `Entity.canUsePortal`: the engine's one gate for a player,
     /// `player_can_use_portal` (`Entity.canUsePortal(false)`: alive, nobody's
@@ -254,16 +336,28 @@ pub trait LivingBackend {
     /// entity that is no mob (a guest, an armor stand, the dragon), a
     /// stale `living` handle, a mob already removed, or a `target` with no
     /// box here (a stale or unavailable handle). #943.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn living_in_melee_range(&self, living: LivingRef, target: EntityRef) -> Option<bool>;
+    fn living_in_melee_range(
+        &self,
+        living: LivingRef,
+        target: EntityRef,
+    ) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
     /// `LivingEntity.canFreeze`: the decision the freeze tick itself runs —
     /// a mob's (`ai::can_freeze`: not `#freeze_immune_entity_types`, no
     /// `#freeze_immune_wearables` worn), a player's
     /// (`PlayerMotion::can_freeze`: not a spectator, no immune armor).
     /// None for a stale handle, an armor stand or the dragon. #943.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn living_can_freeze(&self, living: LivingRef) -> Option<bool>;
+    fn living_can_freeze(&self, living: LivingRef) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
     /// `LivingEntity.canBreatheUnderwater`: the species' own breath —
     /// `is(#can_breathe_under_water)` in vanilla, `breathes_water` here (a
@@ -282,8 +376,15 @@ pub trait LivingBackend {
     /// one of `#minecraft:beds` — one path for every sleeper. None where
     /// the sleeper keeps no position, the block is not a bed, or the handle
     /// is stale. #943.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn living_bed_orientation(&self, living: LivingRef) -> Option<Direction>;
+    fn living_bed_orientation(
+        &self,
+        living: LivingRef,
+    ) -> Result<Option<Direction>, EntityReadError>;
 }
 /// The handles' client reads of the `living` area, implemented by the game and reached through [`Backend`].
 // hidden: a handle's backend, reached through `Backend`; mods call the handle, never this trait
@@ -303,13 +404,17 @@ pub trait LivingClientBackend {
     /// 0 when the entity lacks the effect. None before effect resolution, for a stale
     /// handle, or an entity other than the local player: the client keeps no
     /// other entity's effects.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
     fn living_effect_blend_factor(
         &self,
         living: LivingRef,
         effect: EffectKey,
         partial: f32,
-    ) -> Option<f32>;
+    ) -> Result<Option<f32>, EntityReadError>;
 }
 /// The handles' writes of the `living` area, implemented by the game and reached through [`BackendMut`].
 // hidden: a handle's backend, reached through `Backend`; mods call the handle, never this trait

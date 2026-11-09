@@ -194,6 +194,10 @@ pub trait LevelsBackend {
     /// simulation. The player must be live in the level in place, and the block must be loaded;
     /// parked levels cannot provide the hook's level context. A stale handle, invalid face,
     /// unavailable player or level, or no transformation returns None.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
     fn level_block_transform(
         &self,
@@ -203,7 +207,7 @@ pub trait LevelsBackend {
         stack: &ItemStack,
         pos: [i32; 3],
         hit: BlockHit,
-    ) -> Option<BlockTransformPreview>;
+    ) -> Result<Option<BlockTransformPreview>, EntityReadError>;
     /// Side: both.
     /// The block at `pos` without its properties: `minecraft:oak_stairs`.
     /// None as for `block_state`. API 381.

@@ -66,13 +66,24 @@ pub trait MobsBackend {
     /// selector as a `NativeMobGoalEntry` (the priority, the kind id and
     /// whether it runs), in registration order. None for a stale or
     /// unavailable mob, a client, and the dragon.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn mob_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>>;
+    fn mob_goals(&self, mob: MobRef) -> Result<Option<Vec<NativeMobGoalEntry>>, EntityReadError>;
     /// Side: server.
     /// Every goal of the target selector, as `goals` reads the goal
     /// selector's.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn mob_target_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>>;
+    fn mob_target_goals(
+        &self,
+        mob: MobRef,
+    ) -> Result<Option<Vec<NativeMobGoalEntry>>, EntityReadError>;
     /// Side: server.
     /// `PathNavigation.isDone`; None for a stale or unavailable mob, or on a
     /// client, and for the dragon (no navigation).

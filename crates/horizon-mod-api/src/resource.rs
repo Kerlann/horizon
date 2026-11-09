@@ -253,22 +253,29 @@ impl ItemResource {
         backend_of(host)?.item_resource_bar(&self.0)
     }
     /// `AttackRange.defaultFor` or this stack's effective attack-range component for `attacker`.
-    /// Returns None for an unavailable actor or item. Does not equip this stack.
+    /// Returns ordinary absence for an unavailable actor or item. Does not equip this stack.
+    /// Lifted foreign sources and relevant pending writes return the corresponding typed
+    /// [`crate::EntityReadError`] instead of stale success.
     pub fn entity_attack_range(
         &self,
         host: &dyn Host,
         attacker: crate::LivingRef,
-    ) -> Option<ItemAttackRange> {
-        backend_of(host)?.item_resource_entity_attack_range(&self.0, attacker)
+    ) -> Result<Option<ItemAttackRange>, crate::EntityReadError> {
+        backend_of(host).map_or(Ok(None), |backend| {
+            backend.item_resource_entity_attack_range(&self.0, attacker)
+        })
     }
     /// `ItemStack.getDamageSource`: component override, item-specific source (mace smash),
-    /// then the attacker's ordinary melee source. None for an unavailable actor or damage type.
+    /// then the attacker's ordinary melee source. Ordinary absence for an unavailable actor or damage type.
+    /// Lifted foreign sources and relevant pending writes return [`crate::EntityReadError`].
     pub fn damage_source(
         &self,
         host: &dyn Host,
         attacker: crate::LivingRef,
-    ) -> Option<ItemDamageSource> {
-        backend_of(host)?.item_resource_damage_source(&self.0, attacker)
+    ) -> Result<Option<ItemDamageSource>, crate::EntityReadError> {
+        backend_of(host).map_or(Ok(None), |backend| {
+            backend.item_resource_damage_source(&self.0, attacker)
+        })
     }
     /// `ItemStack.canBeHurtBy`: whether this item itself can be hurt by `source`, after
     /// effective damage-resistant components. This is not wearer protection.
@@ -280,15 +287,18 @@ impl ItemResource {
     /// fall damage. Returns the additional damage above `base_damage`. Uses a cloned RNG
     /// snapshot: a read never consumes world RNG. This is a preview under the current state; a later attack may
     /// roll differently. The queried stack is never equipped. None for unavailable handles
-    /// or actors and targets outside the host's active level.
+    /// or actors and targets outside the host's active level. Lifted foreign sources and
+    /// relevant pending writes return [`crate::EntityReadError`] without drawing RNG.
     pub fn attack_damage_bonus(
         &self,
         host: &dyn Host,
         attacker: crate::LivingRef,
         target: crate::EntityRef,
         base_damage: f32,
-    ) -> Option<f32> {
-        backend_of(host)?.item_resource_attack_damage_bonus(&self.0, attacker, target, base_damage)
+    ) -> Result<Option<f32>, crate::EntityReadError> {
+        backend_of(host).map_or(Ok(None), |backend| {
+            backend.item_resource_attack_damage_bonus(&self.0, attacker, target, base_damage)
+        })
     }
     /// Standard tooltip text, with explicit advanced and creative flags and the client's
     /// current viewer context. Uses the same line builder as inventory tooltips and skips

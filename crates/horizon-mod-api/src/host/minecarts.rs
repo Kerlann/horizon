@@ -19,63 +19,121 @@ pub trait MinecartsBackend {
     /// A furnace minecart's push (`MinecartFurnace.push`): the way its fuel drives it on rails,
     /// x and z; its y part stays between ticks and sets the push's length. None for another
     /// kind of cart.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn minecart_push(&self, cart: MinecartRef) -> Option<[f64; 3]>;
+    fn minecart_push(&self, cart: MinecartRef) -> Result<Option<[f64; 3]>, EntityReadError>;
     /// Side: server.
     /// Which `AbstractMinecart` subclass the cart is.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn minecart_kind(&self, cart: MinecartRef) -> Option<NativeMinecartKind>;
+    fn minecart_kind(
+        &self,
+        cart: MinecartRef,
+    ) -> Result<Option<NativeMinecartKind>, EntityReadError>;
     /// Side: server.
     /// `AbstractMinecart.getMaxSpeed`, in blocks per tick: the old behaviour's
     /// 0.4 (0.2 in water), or with the `minecart_improvements` experiment the
     /// `max_minecart_speed` rule over 20 (halved in water). A furnace minecart
     /// takes half of that, three quarters in water (`MinecartFurnace`).
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn minecart_max_speed(&self, cart: MinecartRef) -> Option<f64>;
+    fn minecart_max_speed(&self, cart: MinecartRef) -> Result<Option<f64>, EntityReadError>;
     /// Side: server.
     /// `AbstractMinecart.isOnRails`.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn minecart_is_on_rails(&self, cart: MinecartRef) -> Option<bool>;
+    fn minecart_is_on_rails(&self, cart: MinecartRef) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
     /// `AbstractMinecart.isFlipped`.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn minecart_flipped(&self, cart: MinecartRef) -> Option<bool>;
+    fn minecart_flipped(&self, cart: MinecartRef) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
     /// `VehicleEntity.getDamage`, the wobble damage (`DATA_ID_DAMAGE`).
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn minecart_damage(&self, cart: MinecartRef) -> Option<f32>;
+    fn minecart_damage(&self, cart: MinecartRef) -> Result<Option<f32>, EntityReadError>;
     /// Side: server.
     /// `VehicleEntity.getHurtTime`, the wobble ticks (`DATA_ID_HURT`).
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn minecart_hurt_time(&self, cart: MinecartRef) -> Option<i32>;
+    fn minecart_hurt_time(&self, cart: MinecartRef) -> Result<Option<i32>, EntityReadError>;
     /// Side: server.
     /// `AbstractMinecart.customDisplayBlockState`: the block the cart shows in
     /// place of its kind's default, None (inner) when it has none.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn minecart_custom_display_block(&self, cart: MinecartRef) -> Option<Option<BlockState>>;
+    fn minecart_custom_display_block(
+        &self,
+        cart: MinecartRef,
+    ) -> Result<Option<Option<BlockState>>, EntityReadError>;
     /// Side: server.
     /// `AbstractMinecart.getDisplayOffset`, in sixteenths of a block: the set
     /// offset, else the kind's default.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn minecart_display_offset(&self, cart: MinecartRef) -> Option<i32>;
+    fn minecart_display_offset(&self, cart: MinecartRef) -> Result<Option<i32>, EntityReadError>;
     /// Side: server.
     /// `MinecartFurnace`'s fuel ticks; None for another kind of cart.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn minecart_fuel(&self, cart: MinecartRef) -> Option<i32>;
+    fn minecart_fuel(&self, cart: MinecartRef) -> Result<Option<i32>, EntityReadError>;
     /// Side: server.
     /// `MinecartTNT`'s fuse ticks, -1 when it is not primed; None for another
     /// kind of cart.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn minecart_fuse(&self, cart: MinecartRef) -> Option<i32>;
+    fn minecart_fuse(&self, cart: MinecartRef) -> Result<Option<i32>, EntityReadError>;
     /// Side: server.
     /// `MinecartHopper.isEnabled`; None for another kind of cart.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn minecart_hopper_enabled(&self, cart: MinecartRef) -> Option<bool>;
+    fn minecart_hopper_enabled(&self, cart: MinecartRef) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
     /// A command block minecart's command (`MinecartCommandBlock.getCommandBlock().getCommand()`).
     /// None for another kind of cart.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn minecart_command(&self, cart: MinecartRef) -> Option<String>;
+    fn minecart_command(&self, cart: MinecartRef) -> Result<Option<String>, EntityReadError>;
 }
 /// The handles' writes of the `minecarts` area, implemented by the game and reached through [`BackendMut`].
 // hidden: a handle's backend, reached through `Backend`; mods call the handle, never this trait

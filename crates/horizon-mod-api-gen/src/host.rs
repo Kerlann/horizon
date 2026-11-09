@@ -439,7 +439,17 @@ pub(super) fn game_forwarders(root: &Path) -> Result<String, String> {
                 };
                 let text_result = result_error(&entry.sig.output)
                     .is_some_and(|error| outer_type(error, "TextFormError"));
-                let call = if text_output {
+                let entity_read = result_error(&entry.sig.output)
+                    .is_some_and(|error| outer_type(error, "EntityReadError"));
+                let call = if entity_read && text_output {
+                    format!(
+                        "{call}.and_then(|value| value.try_into_api().map_err(|error| mod_api::EntityReadError::Domain(error.into())))"
+                    )
+                } else if entity_read && crosses_output {
+                    // These Option payloads historically use ordinary absence for a refused
+                    // engine-value conversion. Keep that separate from the live-read refusal.
+                    format!("{call}.map(|value| value.try_into_api().unwrap_or_default())")
+                } else if text_output {
                     if text_result {
                         format!("{call}.try_into_api().map_err(Into::into)")
                     } else {
@@ -628,6 +638,8 @@ fn boundary_arguments(
             )
         } else if text || checked_write {
             format!("{conversion}?")
+        } else if let Some(unavailable) = entity_read_unavailable(sig) {
+            format!("match {conversion} {{ Ok(value) => value, Err(_) => return {unavailable} }}")
         } else if result_error(&sig.output).is_some() {
             format!(
                 "match {conversion} {{ Ok(value) => value, Err(_) => return Err(mod_api::NoBackend::no_backend()) }}"
@@ -697,6 +709,45 @@ fn signature_args(sig: &syn::Signature, name: &str) -> Result<String, String> {
         .join(", "))
 }
 
+/// A missing backend or unsupported OWN adapter is ordinary unavailability,
+/// never proof of physical lifting or pending work. Preserve the old successful
+/// absence, or the existing typed domain's no-backend error.
+fn entity_read_unavailable(sig: &syn::Signature) -> Option<&'static str> {
+    let error = result_error(&sig.output)?;
+    if !outer_type(error, "EntityReadError") {
+        return None;
+    }
+    let Type::Path(error) = error else {
+        return None;
+    };
+    if let syn::PathArguments::AngleBracketed(args) = &error.path.segments.last()?.arguments
+        && args.args.iter().any(
+            |arg| matches!(arg, syn::GenericArgument::Type(ty) if !outer_type(ty, "Infallible")),
+        )
+    {
+        return Some("Err(mod_api::EntityReadError::Domain(mod_api::NoBackend::no_backend()))");
+    }
+    let syn::ReturnType::Type(_, ty) = &sig.output else {
+        return None;
+    };
+    let Type::Path(result) = &**ty else {
+        return None;
+    };
+    let syn::PathArguments::AngleBracketed(args) = &result.path.segments.last()?.arguments else {
+        return None;
+    };
+    let syn::GenericArgument::Type(value) = args.args.first()? else {
+        return None;
+    };
+    if outer_type(value, "Option") {
+        Some("Ok(None)")
+    } else if outer_type(value, "bool") {
+        Some("Ok(false)")
+    } else {
+        None
+    }
+}
+
 /// How a read answers where there is no backend to ask: its typed refusal, or `None` where only
 /// a `String` forwards.
 fn refusal(sig: &syn::Signature, name: &str) -> Result<Option<&'static str>, String> {
@@ -708,6 +759,9 @@ fn refusal(sig: &syn::Signature, name: &str) -> Result<Option<&'static str>, Str
             "{name}: the goal view cannot refuse its return type"
         ));
     };
+    if let Some(unavailable) = entity_read_unavailable(sig) {
+        return Ok(Some(unavailable));
+    }
     let last = path.path.segments.last().map(|seg| seg.ident.to_string());
     Ok(match last.as_deref() {
         Some("Option") => Some("None"),
@@ -801,6 +855,8 @@ fn handle_method(
         format!("{backend}(host).expect(\"registry key metadata requires a game host\").{call}")
     } else if returns("bool") {
         format!("{backend}(host).map(|backend| backend.{call}).unwrap_or(false)")
+    } else if let Some(unavailable) = entity_read_unavailable(&sig) {
+        format!("{backend}(host).map_or_else(|| {unavailable}, |backend| backend.{call})")
     } else if returns("Result") {
         format!(
             "{backend}(host).map_or_else(|| Err(crate::NoBackend::no_backend()), |backend| backend.{call})"
@@ -1106,6 +1162,42 @@ mod tests {
             assert!(code.contains(&format!("backend.{}(", method.name)));
             assert_eq!(code.contains(&format!("self.r_{}(", method.name)), own);
         }
+    }
+
+    #[test]
+    fn heavy_read_unavailability_keeps_absence_and_original_domain() {
+        let handles = handles("pub struct EntityRef; pub struct LivingRef; pub struct DisplayRef;");
+        for (source, expected) in [
+            (
+                "fn entity_tags(&self, entity: EntityRef) -> Result<Option<Vec<String>>, EntityReadError>;",
+                "Ok(None)",
+            ),
+            (
+                "fn living_potion_affected(&self, living: LivingRef, effect: EffectKey) -> Result<bool, EntityReadError>;",
+                "Ok(false)",
+            ),
+            (
+                "fn display_text(&self, display: DisplayRef) -> Result<Option<Text>, EntityReadError<TextFormError>>;",
+                "Err(mod_api::EntityReadError::Domain(mod_api::NoBackend::no_backend()))",
+            ),
+        ] {
+            let method = entry(source);
+            assert_eq!(entity_read_unavailable(&method.sig), Some(expected));
+            assert_eq!(refusal(&method.sig, &method.name).unwrap(), Some(expected));
+            let (_, code) = handle_method(&method, Tier::Backend, &handles)
+                .unwrap()
+                .unwrap();
+            assert!(code.contains(expected));
+            assert!(!code.contains("EntityReadError::Lifted"));
+            assert!(!code.contains("EntityReadError::Pending"));
+        }
+        let method = entry(
+            "fn item_resource_entity_attack_range(&self, stack: &ItemStack, attacker: LivingRef) -> Result<Option<ItemAttackRange>, EntityReadError>;",
+        );
+        let (setup, _, checked_write) = boundary_arguments(&method.sig, &method.name).unwrap();
+        assert!(!checked_write);
+        assert!(setup.contains("Err(_) => return Ok(None)"));
+        assert!(!setup.contains("NoBackend"));
     }
 
     #[test]
