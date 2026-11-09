@@ -98,6 +98,17 @@ impl Game<'_> {
             && let Some(host) = self.lan.as_ref()
         {
             self.save_connected_guest_statistics(host);
+            for guest in host.hub.guests.iter() {
+                if host
+                    .owner
+                    .as_ref()
+                    .is_some_and(|owner| owner.uuid == guest.uuid)
+                    || !host.play.contains_key(&guest.conn)
+                {
+                    continue;
+                }
+                self.save_guest_advancements(host, guest);
+            }
         }
         self.save_world_state();
         self.message = Some(("Saved the game".into(), Instant::now()));

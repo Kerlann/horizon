@@ -62,6 +62,7 @@ impl FluidStack {
 
 /// A fluid and its components, without an amount, as NeoForge's `FluidResource`: what a tank
 /// holds. An empty tank holds none.
+// no wire: decoding calls FluidResource::of to normalize the incoming fluid amount to one; a structural derive would preserve a non-unit wire amount.
 #[derive(Clone)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct FluidResource(pub(crate) FluidStack);
@@ -196,7 +197,7 @@ pub struct SizedFluidIngredient {
 }
 
 impl SizedFluidIngredient {
-    /// The sized ingredient of `v`, as NeoForge's codec reads it:
+    /// The sized ingredient of `v`, from its JSON form:
     /// `{"ingredient": <fluid ingredient>, "amount": n}` — `amount`
     /// defaults to a bucket (1000 mB) and must be positive.
     pub fn from_json(v: &serde_json::Value, context: &dyn DataLoadContext) -> Option<Self> {

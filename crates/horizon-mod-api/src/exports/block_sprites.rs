@@ -3,5 +3,6 @@
 pub mod block_sprites;
 pub use crate::block_sprites::{
     AtlasRegion, BlockSprites, FaceSprite, RuntimeSprite, SpriteRef, TextureAtlas,
+    TextureAtlasRegistration,
 };
 pub use block_sprites::BlockFaceTexture;

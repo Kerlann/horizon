@@ -8,10 +8,8 @@ pub trait Hooks {
     /// opening another world, or adding a splitscreen player, is not a new start, so
     /// it never fires again. This is
     /// the opposite of `client_resources_reloaded`, which never runs at initial
-    /// startup and runs after every later reload. NeoForge's event hands the mod a
-    /// `DeferredWorkQueue` for work on the main thread; the listener here already
-    /// runs on that thread, so there is no counterpart, and work a mod wants done in
-    /// parallel is its own. The dedicated server has no client and never fires it
+    /// startup and runs after every later reload. The listener runs on the main thread;
+    /// work a mod wants done in parallel is its own. The dedicated server has no client and never fires it
     /// (see `server_about_to_start` for its `FMLDedicatedServerSetupEvent`). A
     /// Setup permits client resource reads, not world handles or transactions.
     /// The listener is a pure function of its `ClientHost` reads and its own state.

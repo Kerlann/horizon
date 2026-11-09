@@ -15,8 +15,8 @@ const CASES: [(&str, &str); 3] = [
     ("radius 12", ",home_pos:[I;{x},200,4],home_radius:12"),
 ];
 
-fn game() -> Game<'static> {
-    let mut game = crate::game::game_tests::tests::server_game();
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
+    let mut game = crate::game::game_tests::tests::server_game(resources);
     game.build_registries();
     game.set_allow_commands(true);
     for x in 0..9 {
@@ -76,7 +76,8 @@ fn step(game: &mut Game<'_>, ticks: u32) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_zombie_takes_revenge_only_on_a_cow_inside_its_home() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     step(&mut game, 2);
     for (i, (name, _)) in CASES.iter().enumerate() {
         let (zombie, cow) = (id(&game, 2 * i + 1), id(&game, 2 * i + 2));

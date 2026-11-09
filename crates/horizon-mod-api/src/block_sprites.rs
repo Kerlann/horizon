@@ -97,6 +97,37 @@ pub struct RuntimeSprite {
     pub png: Vec<u8>,
 }
 
+/// An atlas a client mod adds beside the game's (`RegisterTextureAtlasesEvent`), as
+/// `register_texture_atlases` declares it: its id and the atlas definition listing its sprites.
+/// Horizon stitches its sprites into the GUI atlas, each under [`Self::sprite_name`].
+#[derive(Clone, Debug, PartialEq, Eq)]
+// exhaustive: mods submit declarations by value
+#[derive(horizon_mod_api_macros::Wire)]
+pub struct TextureAtlasRegistration {
+    /// The atlas's id, in the mod's own namespace (`mymod:icons`).
+    pub atlas: Identifier,
+    /// Its definition, `assets/<namespace>/atlases/<path>.json` (`mymod:icons`): a `sources` list
+    /// like vanilla's atlas definitions (`directory`, `single`, `filter`, `unstitch`,
+    /// `paletted_permutations`), which resource packs can change like theirs.
+    pub definition: Identifier,
+}
+
+impl TextureAtlasRegistration {
+    /// The GUI atlas name of this atlas's sprite `sprite` (`mymod:heart` in `mymod:icons` is
+    /// `mymod:gui/atlases/icons/mymod/heart`): what `gui_sprite` looks it up by and
+    /// `DrawContext::sprite` draws.
+    pub fn sprite_name(&self, sprite: &Identifier) -> Identifier {
+        let path = format!(
+            "gui/atlases/{}/{}/{}",
+            self.atlas.path(),
+            sprite.namespace(),
+            sprite.path()
+        );
+        Identifier::from_parts(self.atlas.namespace(), &path)
+            .expect("the parts of two identifiers form a valid path")
+    }
+}
+
 /// Where a sprite lies in the GUI atlas, as `gui_sprite` answers it: plain data, a snapshot of the
 /// atlas built last. It stays right until the next `texture_atlas_stitched` for
 /// [`TextureAtlas::Gui`], when a mod reads it again.

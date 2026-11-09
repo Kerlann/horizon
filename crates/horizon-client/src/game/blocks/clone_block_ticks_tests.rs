@@ -7,7 +7,7 @@ use horizon_client::chunk::Chunk;
 use horizon_core::position::{BlockPos, ChunkPos};
 use std::sync::Arc;
 
-fn game() -> Game<'static> {
+fn game(resources: &mut Option<std::sync::Arc<Resources>>) -> Game<'_> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -29,7 +29,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -71,7 +71,8 @@ fn ticks_at(game: &Game<'_>, pos: BlockPos) -> Vec<(u32, i64)> {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_strict_clone_copies_the_pending_block_ticks_of_its_source() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     let source = BlockPos::new(1, 101, 1);
     assert!(game.run_command("setblock 1 101 1 sand"));
     let pending = ticks_at(&game, source);
@@ -107,7 +108,8 @@ fn a_strict_clone_copies_the_pending_block_ticks_of_its_source() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn copied_block_ticks_keep_order_priority_and_dedup() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     let queued = |game: &Game<'_>, pos: BlockPos| {
         game.block_ticks
             .blocks

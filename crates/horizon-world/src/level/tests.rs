@@ -9,7 +9,6 @@ use std::{
     path::PathBuf,
     sync::OnceLock,
 };
-
 struct Fixture {
     registry: BlockRegistry,
     behaviours: Behaviours,
@@ -4843,3 +4842,5 @@ fn fresh_chunk_sculk_charge_does_not_wait_for_ticking_readiness() {
         );
     }
 }
+
+mod barrel;

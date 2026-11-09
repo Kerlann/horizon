@@ -749,9 +749,9 @@ impl Game<'_> {
             // A server's table: its data slots carry the offers, and its
             // client menu only clears them without an enchantable item.
             Kind::Enchanting if self.remote.is_some() => {
-                let enchantable = s.inputs[0].as_ref().is_some_and(|i| {
-                    data.enchantments.enchantable_of(i) > 0 && i.enchantments().is_empty()
-                });
+                let enchantable = s.inputs[0]
+                    .as_ref()
+                    .is_some_and(|i| stations::is_enchantable(&data.enchantments, i));
                 if !enchantable {
                     s.offers = Default::default();
                 }
@@ -3415,6 +3415,9 @@ impl Game<'_> {
         if let Some(ingredient) = ingredient {
             self.native_brewing_start(at, &ingredient);
         }
+        if !was_idle || consumed_fuel || started || out != brewing::BrewTick::default() {
+            self.container_changed(pos);
+        }
         let (x, y, z) = pos;
         if out.brewed {
             self.native_brewing_complete(at);
@@ -4051,3 +4054,7 @@ mod cycling_tests {
         assert_eq!(y, 4.0);
     }
 }
+
+#[cfg(test)]
+#[path = "tests/brewing_changed_tests.rs"]
+mod brewing_changed_tests;

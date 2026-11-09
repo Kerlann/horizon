@@ -42,6 +42,13 @@ fn porkchops(game: &Game<'_>) -> usize {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_vetoed_kill_keeps_the_mob_and_a_later_kill_dies_once() {
+    crate::game::in_own_process(
+        "game::kill_die_cancel_tests::a_vetoed_kill_keeps_the_mob_and_a_later_kill_dies_once",
+        a_vetoed_kill_keeps_the_mob_and_a_later_kill_dies_once_isolated,
+    );
+}
+
+fn a_vetoed_kill_keeps_the_mob_and_a_later_kill_dies_once_isolated() {
     let probe = Arc::new(Probe::default());
     let mods: mod_api::Mods = vec![ModEntry::new(
         "kill-death-probe",

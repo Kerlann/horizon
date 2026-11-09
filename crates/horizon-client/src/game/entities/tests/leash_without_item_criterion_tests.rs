@@ -6,7 +6,8 @@ use horizon_core::{geometry::Vec3, position::BlockPos};
 #[test]
 #[ignore = "needs prepared resources"]
 fn actual_holder_detach_does_not_reaward_the_held_lead_criterion() {
-    let mut game = server_game();
+    let mut resources = None;
+    let mut game = server_game(&mut resources);
     game.options.dedicated = None;
     game.player = Some(PlayerMotion::new(game.motion, Vec3::new(4.5, 100.0, 4.5)).unwrap());
     game.level.player_uuid = Some([413, 0, 0, 1]);

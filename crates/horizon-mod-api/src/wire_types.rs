@@ -26,22 +26,41 @@ impl Wire for crate::OwnProvider {
     }
 }
 
-impl Wire for crate::Transaction {
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::Transaction));
-    const MIN: usize = 0;
-    fn put(&self, _: &mut Writer) {}
-    fn take(_: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self(()))
+impl Wire for crate::ItemResource {
+    layout_fields!("stack" => crate::ItemStack);
+    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::ItemResource));
+    const MIN: usize = crate::ItemStack::MIN;
+    fn put(&self, out: &mut Writer) {
+        out.put(&self.0);
+    }
+    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
+        Ok(Self::of(&input.take()?))
     }
 }
-impl Wire for crate::TransactionSeal {
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::TransactionSeal));
-    const MIN: usize = 0;
-    fn put(&self, _: &mut Writer) {}
-    fn take(_: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self(()))
+impl Wire for crate::FluidResource {
+    layout_fields!("stack" => crate::FluidStack);
+    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::FluidResource));
+    const MIN: usize = crate::FluidStack::MIN;
+    fn put(&self, out: &mut Writer) {
+        out.put(&self.0);
+    }
+    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
+        Ok(Self::of(&input.take()?))
     }
 }
+
+impl Wire for crate::FeatureFlags {
+    layout_fields!("flags" => Vec<String>);
+    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::FeatureFlags));
+    const MIN: usize = 4;
+    fn put(&self, out: &mut Writer) {
+        out.put(&self.iter().map(str::to_owned).collect::<Vec<_>>());
+    }
+    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
+        Ok(Self::new(input.take::<Vec<String>>()?.into()))
+    }
+}
+
 impl Wire for crate::LoadedMods {
     const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::LoadedMods));
     const MIN: usize = 0;
@@ -56,69 +75,6 @@ impl Wire for crate::RegistrationContext {
     fn put(&self, _: &mut Writer) {}
     fn take(_: &mut Reader<'_>) -> Result<Self, WireError> {
         Ok(Self::new())
-    }
-}
-impl Wire for crate::PackageKind {
-    layout_fields!("tag" => u32, "0:Code" => (), "1:Content" => ());
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::PackageKind));
-    const MIN: usize = 4;
-    fn put(&self, out: &mut Writer) {
-        out.put(
-            &(match self {
-                Self::Code => 0u32,
-                Self::Content => 1,
-            }),
-        );
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        match input.take()? {
-            0u32 => Ok(Self::Code),
-            1 => Ok(Self::Content),
-            _ => Err(WireError::Invalid("invalid package kind")),
-        }
-    }
-}
-impl Wire for crate::Side {
-    layout_fields!("tag" => u32, "0:Client" => (), "1:Both" => ());
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::Side));
-    const MIN: usize = 4;
-    fn put(&self, out: &mut Writer) {
-        out.put(
-            &(match self {
-                Self::Client => 0u32,
-                Self::Both => 1,
-            }),
-        );
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        match input.take()? {
-            0u32 => Ok(Self::Client),
-            1 => Ok(Self::Both),
-            _ => Err(WireError::Invalid("invalid package side")),
-        }
-    }
-}
-impl Wire for crate::PackageInfo {
-    layout_fields!("id" => String, "version" => String, "kind" => crate::PackageKind, "side" => crate::Side, "namespaces" => Vec<String>, "dependencies" => Vec<String>);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::PackageInfo));
-    const MIN: usize = 24;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.id);
-        out.put(&self.version);
-        out.put(&self.kind);
-        out.put(&self.side);
-        out.put(&self.namespaces);
-        out.put(&self.dependencies);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(
-            input.take()?,
-            input.take()?,
-            input.take()?,
-            input.take()?,
-            input.take()?,
-            input.take()?,
-        ))
     }
 }
 
@@ -194,63 +150,6 @@ layout_fields!("slot" => $width);
 }
 slot_keys!(u32; BlockEntityTypeKey, BlockKey, BoolGameRuleKey, DimensionKey, EffectKey, FluidKey, ItemKey, crate::particle_keys::ParticleKey, TagKey);
 slot_keys!(u64; UnresolvedFluid);
-
-impl Wire for crate::NativeWorldEpoch {
-    layout_fields!("0" => u64);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::NativeWorldEpoch));
-    const MIN: usize = 8;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.get());
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(input.take()?))
-    }
-}
-impl Wire for crate::NativeTickId {
-    layout_fields!("0" => u64);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::NativeTickId));
-    const MIN: usize = 8;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.get());
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(input.take()?))
-    }
-}
-impl Wire for crate::EntityRef {
-    layout_fields!("epoch" => crate::NativeWorldEpoch, "id" => u32);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::EntityRef));
-    const MIN: usize = 12;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.epoch());
-        out.put(&self.id());
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(input.take()?, input.take()?))
-    }
-}
-macro_rules! entity_handles {
-    ($($ty:ty),+ $(,)?) => { $(
-        impl Wire for $ty {
-layout_fields!("entity" => crate::EntityRef);
-            const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!($ty));
-    const MIN: usize = crate::EntityRef::MIN;
-            fn put(&self, out: &mut Writer) { out.put(&self.entity()); }
-            fn take(input: &mut Reader<'_>) -> Result<Self, WireError> { Ok(Self::new(input.take()?)) }
-        }
-    )+ };
-}
-entity_handles!(
-    crate::LivingRef,
-    crate::MobRef,
-    crate::DragonRef,
-    crate::ItemEntityRef,
-    crate::DisplayRef,
-    crate::ProjectileRef,
-    crate::FishingHookRef,
-    crate::MerchantRef,
-    crate::MinecartRef
-);
 
 impl Wire for crate::Identifier {
     layout_fields!("namespace" => String, "path" => String);
@@ -333,18 +232,7 @@ impl Wire for crate::ReloadResourceError {
         Ok(Self::from(input.take::<(crate::Identifier, String)>()?))
     }
 }
-impl Wire for crate::BlockState {
-    layout_fields!("block" => crate::BlockKey, "ordinal" => u16);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::BlockState));
-    const MIN: usize = 6;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.block());
-        out.put(&self.ordinal());
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(crate::BlockStateRecord::new(input.take()?, input.take()?).into())
-    }
-}
+
 impl Wire for crate::BlockStateRange {
     layout_fields!("first" => crate::BlockState, "len" => u32);
     const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::BlockStateRange));
@@ -372,17 +260,6 @@ impl Wire for horizon_core::nbt::JavaString {
     }
 }
 
-impl Wire for crate::Components {
-    layout_fields!("entries" => horizon_core::nbt::Compound);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::Components));
-    const MIN: usize = 4;
-    fn put(&self, out: &mut Writer) {
-        out.put(self.as_nbt());
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::from(input.take::<horizon_core::nbt::Compound>()?))
-    }
-}
 impl Wire for crate::ItemStack {
     layout_fields!("item" => crate::ItemKey, "count" => u32, "damage" => Option<u32>, "components" => Option<crate::Components>);
     const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::ItemStack));
@@ -408,165 +285,6 @@ impl Wire for crate::ItemStack {
     }
 }
 
-impl Wire for crate::SpawnerEntry {
-    layout_fields!("tag" => u32, "0:Builtin" => crate::SpawnerKind, "1:Mod" => crate::SpawnerKey);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::SpawnerEntry));
-    const MIN: usize = 4;
-    fn put(&self, out: &mut Writer) {
-        match self {
-            Self::Builtin(v) => {
-                out.put(&0u32);
-                out.put(v)
-            }
-            Self::Mod(v) => {
-                out.put(&1u32);
-                out.put(v)
-            }
-        }
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(match input.take::<u32>()? {
-            0 => Self::Builtin(input.take()?),
-            1 => Self::Mod(input.take()?),
-            n => return Err(WireError::Tag(n)),
-        })
-    }
-}
-impl Wire for crate::LevelRef {
-    layout_fields!("epoch" => crate::NativeWorldEpoch, "dimension" => crate::DimensionKey);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::LevelRef));
-    const MIN: usize = 12;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.epoch());
-        out.put(&self.dimension());
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(input.take()?, input.take()?))
-    }
-}
-impl Wire for crate::ChunkRef {
-    layout_fields!("level" => crate::LevelRef, "pos" => crate::ChunkPos);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::ChunkRef));
-    const MIN: usize = 20;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.level());
-        out.put(&self.pos());
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(input.take()?, input.take()?))
-    }
-}
-impl Wire for crate::RaidRef {
-    layout_fields!("level" => crate::LevelRef, "id" => u32);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::RaidRef));
-    const MIN: usize = 16;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.level());
-        out.put(&self.id());
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(input.take()?, input.take()?))
-    }
-}
-impl Wire for crate::PlayerRef {
-    layout_fields!("entity" => crate::EntityRef, "uuid" => u128);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::PlayerRef));
-    const MIN: usize = 28;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.entity());
-        out.put(&self.uuid());
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(crate::__private::game::player_ref(
-            input.take()?,
-            input.take()?,
-        ))
-    }
-}
-impl Wire for crate::GlobalPos {
-    layout_fields!("dimension" => crate::Identifier, "pos" => crate::BlockPos);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::GlobalPos));
-    const MIN: usize = 20;
-    fn put(&self, out: &mut Writer) {
-        out.put(self.dimension());
-        out.put(&self.pos());
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(input.take()?, input.take()?))
-    }
-}
-impl Wire for crate::SoundRef {
-    layout_fields!("0" => u64);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::SoundRef));
-    const MIN: usize = 8;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.id);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self { id: input.take()? })
-    }
-}
-impl Wire for crate::BossBarRef {
-    layout_fields!("epoch" => crate::NativeWorldEpoch, "uuid" => u128);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::BossBarRef));
-    const MIN: usize = 24;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.epoch);
-        out.put(&self.uuid);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self {
-            epoch: input.take()?,
-            uuid: input.take()?,
-        })
-    }
-}
-impl Wire for crate::MenuRef {
-    layout_fields!("player" => crate::PlayerRef, "window" => i32, "generation" => u64);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::MenuRef));
-    const MIN: usize = 40;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.player);
-        out.put(&self.window);
-        out.put(&self.generation);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self {
-            player: input.take()?,
-            window: input.take()?,
-            generation: input.take()?,
-        })
-    }
-}
-impl Wire for crate::BlockEntityRef {
-    layout_fields!("level" => crate::LevelRef, "position" => crate::BlockPos, "generation" => u64);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::BlockEntityRef));
-    const MIN: usize = 32;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.level);
-        out.put(&self.position);
-        out.put(&self.generation);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self {
-            level: input.take()?,
-            position: input.take()?,
-            generation: input.take()?,
-        })
-    }
-}
-impl Wire for crate::UnspawnedMobRef {
-    layout_fields!("epoch" => crate::NativeWorldEpoch, "lend" => u64);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::UnspawnedMobRef));
-    const MIN: usize = 16;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.epoch());
-        out.put(&self.lend());
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(input.take()?, input.take()?))
-    }
-}
 impl Wire for crate::ModelRef {
     layout_fields!("generation" => u64, "slot" => u32);
     const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::ModelRef));
@@ -603,24 +321,6 @@ impl Wire for crate::TicketController {
     }
 }
 
-impl Wire for crate::SpawnerKind {
-    layout_fields!("tag" => u32, "0:Phantom" => (), "1:Patrol" => (), "2:Cat" => (), "3:VillageSiege" => (), "4:WanderingTrader" => ());
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::SpawnerKind));
-    const MIN: usize = 4;
-    fn put(&self, out: &mut Writer) {
-        out.put(&(*self as u32));
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(match input.take::<u32>()? {
-            0 => Self::Phantom,
-            1 => Self::Patrol,
-            2 => Self::Cat,
-            3 => Self::VillageSiege,
-            4 => Self::WanderingTrader,
-            n => return Err(WireError::Tag(n)),
-        })
-    }
-}
 impl Wire for crate::NativeBlockUpdateFlags {
     layout_fields!("0" => u32);
     const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::NativeBlockUpdateFlags));
@@ -632,136 +332,7 @@ impl Wire for crate::NativeBlockUpdateFlags {
         Ok(Self(input.take()?))
     }
 }
-impl Wire for crate::FeatureFlags {
-    layout_fields!("flags" => Vec<String>);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::FeatureFlags));
-    const MIN: usize = 4;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.iter().map(str::to_owned).collect::<Vec<_>>());
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(input.take::<Vec<String>>()?.into()))
-    }
-}
-impl Wire for crate::NativeMobGoalEntry {
-    layout_fields!("priority" => i32, "id" => String, "running" => bool);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::NativeMobGoalEntry));
-    const MIN: usize = 9;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.priority);
-        out.put_str(self.id);
-        out.put(&self.running);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self {
-            priority: input.take()?,
-            id: crate::wire::intern(&input.take::<String>()?)?,
-            running: input.take()?,
-        })
-    }
-}
-impl Wire for crate::BlockEntityPartError {
-    layout_fields!("tag" => u32, "0:VanillaType.kind" => crate::BlockEntityTypeKey, "1:Duplicate.kind" => crate::BlockEntityTypeKey, "1:Duplicate.part" => String);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::BlockEntityPartError));
-    const MIN: usize = 8;
-    fn put(&self, out: &mut Writer) {
-        match self {
-            Self::VanillaType { kind } => {
-                out.put(&0u32);
-                out.put(kind);
-            }
-            Self::Duplicate { kind, part } => {
-                out.put(&1u32);
-                out.put(kind);
-                out.put_str(part);
-            }
-        }
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(match input.take::<u32>()? {
-            0 => Self::VanillaType {
-                kind: input.take()?,
-            },
-            1 => Self::Duplicate {
-                kind: input.take()?,
-                part: crate::wire::intern(&input.take::<String>()?)?,
-            },
-            n => return Err(WireError::Tag(n)),
-        })
-    }
-}
-impl Wire for crate::ItemResource {
-    layout_fields!("stack" => crate::ItemStack);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::ItemResource));
-    const MIN: usize = crate::ItemStack::MIN;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.0);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::of(&input.take()?))
-    }
-}
-impl Wire for crate::FluidResource {
-    layout_fields!("stack" => crate::FluidStack);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::FluidResource));
-    const MIN: usize = crate::FluidStack::MIN;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.0);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::of(&input.take()?))
-    }
-}
-impl Wire for crate::Corners {
-    layout_fields!("width" => f32, "height" => f32, "used" => [f32;4]);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::Corners));
-    const MIN: usize = 24;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.width);
-        out.put(&self.height);
-        out.put(&self.used);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self {
-            width: input.take()?,
-            height: input.take()?,
-            used: input.take()?,
-        })
-    }
-}
-impl Wire for crate::ParticleOptions {
-    layout_fields!("ty" => crate::ParticleKey, "block" => Option<(String,u32)>, "color" => [f32;4], "scale" => f32, "to_color" => [f32;3], "trail" => Option<([f64;3],i32)>, "item" => Option<Vec<String>>, "geyser" => Option<(i32,f32)>, "vibration" => Option<(crate::particles::PositionSource,[f64;3],i32)>, "legacy_entity_effect" => Option<bool>, "legacy_trail_lifetime" => bool);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::ParticleOptions));
-    const MIN: usize = 45;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.ty);
-        out.put(&self.block);
-        out.put(&self.color);
-        out.put(&self.scale);
-        out.put(&self.to_color);
-        out.put(&self.trail);
-        out.put(&self.item);
-        out.put(&self.geyser);
-        out.put(&self.vibration);
-        out.put(&self.legacy_entity_effect);
-        out.put(&self.legacy_trail_lifetime);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self {
-            ty: input.take()?,
-            block: input.take()?,
-            color: input.take()?,
-            scale: input.take()?,
-            to_color: input.take()?,
-            trail: input.take()?,
-            item: input.take()?,
-            geyser: input.take()?,
-            vibration: input.take()?,
-            legacy_entity_effect: input.take()?,
-            legacy_trail_lifetime: input.take()?,
-        })
-    }
-}
+
 impl Wire for crate::Reduction {
     layout_fields!("tag" => u8, "0:Invulnerability" => (), "1:Armor" => (), "2:Enchantments" => (), "3:MobEffects" => (), "4:Absorption" => (), "5:InnateResistance" => ());
     const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::Reduction));
@@ -816,199 +387,7 @@ impl Wire for crate::ReductionChange {
         })
     }
 }
-impl Wire for crate::DamageContainer {
-    layout_fields!("snapshot" => crate::DamageValues);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::DamageContainer));
-    const MIN: usize = 53;
-    fn put(&self, out: &mut Writer) {
-        let v = crate::DamageValues::from(self);
-        out.put(&v.original);
-        out.put(&v.new_damage);
-        out.put(&v.blocked);
-        out.put(&v.shield_damage);
-        out.put(&v.post_attack_invulnerability_ticks);
-        out.put(&v.should_cause_side_effects);
-        out.put(&v.reductions);
-        out.put(&v.reduction_modifiers);
-        out.put(&v.entered_pre);
-        out.put(&v.inflicted);
-        out.put(&v.health_damage);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(crate::DamageValues {
-            original: input.take()?,
-            new_damage: input.take()?,
-            blocked: input.take()?,
-            shield_damage: input.take()?,
-            post_attack_invulnerability_ticks: input.take()?,
-            should_cause_side_effects: input.take()?,
-            reductions: input.take()?,
-            reduction_modifiers: input.take()?,
-            entered_pre: input.take()?,
-            inflicted: input.take()?,
-            health_damage: input.take()?,
-        }
-        .into())
-    }
-}
 
-impl Wire for crate::BiomeId {
-    layout_fields!("0" => u32);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::BiomeId));
-    const MIN: usize = 4;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.0);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(crate::__private::biome_id(input.take()?))
-    }
-}
-impl Wire for crate::ModColorResolver {
-    layout_fields!("0" => u32);
-    const LAYOUT_SEED: u64 = crate::wire::layout_name("ModColorResolver");
-    const MIN: usize = 4;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.0);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(crate::__private::mod_color_resolver(input.take()?))
-    }
-}
-impl Wire for crate::StatePredicate {
-    layout_fields!("target" => crate::StatePredicateTarget, "constraints" => Vec<crate::StateConstraint>);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::StatePredicate));
-    const MIN: usize = 12;
-    fn put(&self, out: &mut Writer) {
-        let record = crate::StatePredicateRecord::from(self);
-        match record.target {
-            crate::StatePredicateTarget::Block(key) => {
-                out.put(&0u32);
-                out.put(&key);
-            }
-            crate::StatePredicateTarget::Tag(key) => {
-                out.put(&1u32);
-                out.put(&key);
-            }
-        }
-        out.put(&record.constraints);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        let target = match input.take::<u32>()? {
-            0 => crate::StatePredicateTarget::Block(input.take()?),
-            1 => crate::StatePredicateTarget::Tag(input.take()?),
-            n => return Err(WireError::Tag(n)),
-        };
-        // The owning game boundary validates the constraints against its metadata.
-        Ok(crate::StatePredicateRecord::new(target, input.take()?).into())
-    }
-}
-impl Wire for crate::particles::PositionSource {
-    layout_fields!("tag" => u32, "0:Block" => crate::BlockPos, "1:Entity.id" => u32, "1:Entity.y_offset" => f32);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::particles::PositionSource));
-    const MIN: usize = 4;
-    fn put(&self, out: &mut Writer) {
-        match self {
-            Self::Block(pos) => {
-                out.put(&0u32);
-                out.put(pos)
-            }
-            Self::Entity { id, y_offset } => {
-                out.put(&1u32);
-                out.put(id);
-                out.put(y_offset)
-            }
-        }
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(match input.take::<u32>()? {
-            0 => Self::Block(input.take()?),
-            1 => Self::Entity {
-                id: input.take()?,
-                y_offset: input.take()?,
-            },
-            n => return Err(WireError::Tag(n)),
-        })
-    }
-}
-impl Wire for crate::EquipmentSlotGroup {
-    layout_fields!("tag" => u32, "0:Any" => (), "1:MainHand" => (), "2:OffHand" => (), "3:Hand" => (), "4:Feet" => (), "5:Legs" => (), "6:Chest" => (), "7:Head" => (), "8:Armor" => (), "9:Body" => (), "10:Saddle" => ());
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::EquipmentSlotGroup));
-    const MIN: usize = 4;
-    fn put(&self, out: &mut Writer) {
-        out.put(&(*self as u32));
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(match input.take::<u32>()? {
-            0 => Self::Any,
-            1 => Self::MainHand,
-            2 => Self::OffHand,
-            3 => Self::Hand,
-            4 => Self::Feet,
-            5 => Self::Legs,
-            6 => Self::Chest,
-            7 => Self::Head,
-            8 => Self::Armor,
-            9 => Self::Body,
-            10 => Self::Saddle,
-            n => return Err(WireError::Tag(n)),
-        })
-    }
-}
-impl Wire for crate::ItemAttributeModifier {
-    layout_fields!("attribute" => crate::Identifier, "modifier" => crate::AttributeModifier, "slot" => crate::EquipmentSlotGroup);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::ItemAttributeModifier));
-    const MIN: usize = 0;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.attribute);
-        out.put(&self.modifier);
-        out.put(&self.slot);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(input.take()?, input.take()?, input.take()?))
-    }
-}
-impl Wire for crate::ItemAttributeModifiers {
-    layout_fields!("entries" => Vec<crate::ItemAttributeModifier>, "changed" => bool);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::ItemAttributeModifiers));
-    const MIN: usize = 5;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.entries);
-        out.put(&self.changed);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self {
-            entries: input.take()?,
-            changed: input.take()?,
-        })
-    }
-}
-impl Wire for crate::ItemEnchantments {
-    layout_fields!("entries" => Vec<(crate::Identifier,u32)>, "changed" => bool);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::ItemEnchantments));
-    const MIN: usize = 5;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.entries);
-        out.put(&self.changed);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self {
-            entries: input.take()?,
-            changed: input.take()?,
-        })
-    }
-}
-impl Wire for crate::containers::ModRevision {
-    layout_fields!("born" => u64, "changes" => u64);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::containers::ModRevision));
-    const MIN: usize = 16;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.identity());
-        out.put(&self.changes());
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::from_snapshot(input.take()?, input.take()?))
-    }
-}
 impl Wire for crate::ModBlockEntity {
     layout_fields!("snapshot" => crate::containers::ModBlockEntitySnapshot);
     const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::ModBlockEntity));
@@ -1216,41 +595,6 @@ impl Wire for crate::LegacyRandom {
     }
     fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
         Ok(Self::from(input.take::<(u64, Option<f64>)>()?))
-    }
-}
-
-/// The converted files of a reload, as the game hands them over: ids that parsed, with their bytes.
-impl Wire for crate::reload::ReloadFiles {
-    layout_fields!("files" => std::collections::BTreeMap<crate::Identifier,Vec<u8>>);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::reload::ReloadFiles));
-    const MIN: usize = 4;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.0);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(input.take()?))
-    }
-}
-impl Wire for crate::ServerReloadContext {
-    layout_fields!("files" => crate::reload::ReloadFiles);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::ServerReloadContext));
-    const MIN: usize = 4;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.files);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(input.take()?))
-    }
-}
-impl Wire for crate::ClientReloadContext {
-    layout_fields!("files" => crate::reload::ReloadFiles);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(crate::ClientReloadContext));
-    const MIN: usize = 4;
-    fn put(&self, out: &mut Writer) {
-        out.put(&self.files);
-    }
-    fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Ok(Self::new(input.take()?))
     }
 }
 

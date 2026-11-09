@@ -1353,7 +1353,15 @@ fn game_version_at(dir: &Path) -> String {
 }
 
 pub fn resources(tag: &str) -> PathBuf {
-    resources_at(&version_dir(tag))
+    let base = crate::native_mods::about(tag).map(|about| about.base);
+    resources_at(&version_dir(base.as_deref().unwrap_or(tag)))
+}
+
+/// Installed native clients retain their base's prepared data even when not selected.
+pub(crate) fn resource_dependents(tag: &str) -> bool {
+    installed()
+        .iter()
+        .any(|version| crate::native_mods::about(version).is_some_and(|about| about.base == tag))
 }
 
 fn resources_at(dir: &Path) -> PathBuf {
@@ -1745,6 +1753,8 @@ fn reuse_prepared(versions: &Path, tag: &str) -> Option<String> {
 /// another installed version's resources if it has none, whatever its resources lack, then its
 /// data file.
 pub(crate) fn reuse_prepared_for(tag: &str) {
+    let about = crate::native_mods::about(tag);
+    let tag = about.as_ref().map_or(tag, |about| about.base.as_str());
     reuse_prepared(&versions_dir(), tag);
     complete_assets(tag);
     forget_prepared();
@@ -2977,6 +2987,15 @@ pub fn remove_version(tag: &str) -> Result<(), String> {
     if !installed().iter().any(|t| t == tag) {
         return Err(format!("{tag} is not installed."));
     }
+    if let Some(build) = installed()
+        .into_iter()
+        .find(|version| crate::native_mods::about(version).is_some_and(|about| about.base == tag))
+    {
+        return Err(crate::i18n::trf(
+            "This version supplies resources to native build {build}. Remove that build first.",
+            &[("build", &build)],
+        ));
+    }
     if in_use(tag) {
         return Err(format!("{tag} is running. Quit it first."));
     }
@@ -3084,6 +3103,10 @@ pub fn prune_old_versions() -> Vec<String> {
         &protected,
         auto_installed,
     ) {
+        if resource_dependents(&tag) {
+            eprintln!("Keeping old version {tag}: a native build uses its resources.");
+            continue;
+        }
         if in_use(&tag) {
             eprintln!("Keeping old version {tag}: the game is running from it.");
             continue;
@@ -3117,6 +3140,16 @@ pub fn server_dir(requested: Option<PathBuf>) -> PathBuf {
 
 /// Whether `tag` is prepared, with the run-time reports it needs completed when another copy has them.
 pub fn need_prepared(tag: &str) -> Result<(), String> {
+    let about = crate::native_mods::about(tag);
+    if let Some(about) = &about {
+        if !version_dir(&about.base).join(COMPLETE).is_file() {
+            return Err(crate::i18n::trf(
+                "This native build needs its base version {base}; reinstall it.",
+                &[("base", &about.base)],
+            ));
+        }
+    }
+    let tag = about.as_ref().map_or(tag, |about| about.base.as_str());
     if check_prepared(tag) {
         complete_reports(&versions_dir(), tag);
         Ok(())
@@ -4468,10 +4501,6 @@ pub struct Settings {
     /// and before Play (`browser::horizon::auto`). Unset is on.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mods_auto_update: Option<bool>,
-    /// The player has read the notice before the first native mod (`native_status::NOTICE`).
-    /// Native mods are always on: an older file's `native_mods` switch is ignored.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub native_mods_noticed: bool,
     /// First-use native code permission for this launcher install, Unix seconds.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub native_mods_allowed_at: Option<u64>,
@@ -4925,6 +4954,46 @@ pub fn {f}("
         assert_eq!(assets_folder(resolved, &empty, "26.3", &log), empty);
         assert!(lines.borrow().last().unwrap().contains("will be silent"));
         fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn native_resources_resolve_to_the_base_and_prevent_its_removal() {
+        const ACTOR: &str = "HORIZON_RESOURCE_TEST_ACTOR";
+        if std::env::var_os(ACTOR).is_none() {
+            let home = tempfile::tempdir().unwrap();
+            assert!(Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "backend::tests::native_resources_resolve_to_the_base_and_prevent_its_removal",
+                    "--nocapture"
+                ])
+                .env(ACTOR, "1")
+                .env("HORIZON_LAUNCHER_HOME", home.path())
+                .status()
+                .unwrap()
+                .success());
+            return;
+        }
+        let base = format!("resource-test-{}", std::process::id());
+        let native = format!("native-resource-test-{}", std::process::id());
+        let base_dir = version_dir(&base);
+        let native_dir = version_dir(&native);
+        fs::create_dir_all(&base_dir).unwrap();
+        fs::create_dir_all(&native_dir).unwrap();
+        fs::write(base_dir.join(COMPLETE), "").unwrap();
+        fs::write(native_dir.join(COMPLETE), "").unwrap();
+        fs::write(native_dir.join("native-mods.json"), serde_json::json!({
+            "base": base, "horizon": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", "target": "client"
+        }).to_string()).unwrap();
+        assert_eq!(resources(&native), resources(&base));
+        assert!(resource_dependents(&base));
+        assert!(remove_version(&base).is_err());
+        assert!(base_dir.join(COMPLETE).exists());
+        fs::remove_dir_all(&base_dir).unwrap();
+        let error = need_prepared(&native).unwrap_err();
+        assert!(error.contains(&base), "{error}");
+        fs::remove_dir_all(&native_dir).unwrap();
+        assert!(!resource_dependents(&base));
     }
 
     #[test]

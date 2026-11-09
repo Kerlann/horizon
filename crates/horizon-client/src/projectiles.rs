@@ -333,6 +333,10 @@ pub struct Projectile {
     pub no_deflect_ticks: u8,
     pub air_supply: i32,
     pub has_visual_fire: bool,
+    /// `Entity.fallDistance` (`fall_distance` in its save): a projectile sets
+    /// its position without `Entity.move`, so it keeps what it was given.
+    pub fall_distance: f64,
+    /// `Entity.DATA_SHARED_FLAGS_ID`'s fire bit, set by the server's base tick.
     pub synced_fire: bool,
     /// `Fireball.DATA_ITEM_STACK`: the item a fireball is drawn as, a fire
     /// charge until [`Projectile::set_item`] gives it another. None for the
@@ -564,6 +568,7 @@ impl Projectile {
             no_deflect_ticks,
             air_supply: 300,
             has_visual_fire: false,
+            fall_distance: 0.0,
             synced_fire: false,
             item,
             arrow: kind_is_arrow.then(|| Box::new(crate::arrows::ArrowState::new())),
@@ -812,7 +817,7 @@ impl Projectile {
             return -1;
         }
         let rgb = match (effect, &self.arrow) {
-            (Some((id, _)), _) => crate::brewing::effect(id).map(|e| e.color),
+            (Some((id, _)), _) => crate::brewing::effect(id).map(|e| e.shown_color()),
             (None, Some(a)) if &*a.pickup_item.item == "minecraft:tipped_arrow" => a
                 .pickup_item
                 .potion()

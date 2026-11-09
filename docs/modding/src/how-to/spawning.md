@@ -64,7 +64,7 @@ check, and a spawner or trial spawner whose spawn data carries entity data, whic
 
 ## Stopping a spawn or leaving a mob plain
 
-`finalize_spawn` has two cancels, as in NeoForge. Returning `Flow::Cancel` skips finalization: the mob still spawns, but with no equipment, attributes or class setup. Setting `event.spawn_cancelled = true` adds no mob at all.
+`finalize_spawn` has two cancels. Returning `Flow::Cancel` skips finalization: the mob still spawns, but with no equipment, attributes or class setup. Setting `event.spawn_cancelled = true` adds no mob at all.
 
 ```rust,ignore
 fn finalize_spawn(&self, _: &dyn mod_api::Host, event: &mut mod_api::FinalizeSpawnEvent<'_>) -> mod_api::Flow {
@@ -101,7 +101,7 @@ fn finalize_spawn(&self, host: &dyn mod_api::Host, event: &mut mod_api::Finalize
 }
 ```
 
-Listeners run before finalization, as in NeoForge. Finalization's own rolls still follow them: equipment it rolls for a
+Listeners run before finalization. Finalization's own rolls still follow them: equipment it rolls for a
 slot replaces what a listener put there, and the attribute bonuses it adds apply on top of a listener's base. Return
 `Flow::Cancel` to keep exactly what the listener left, since no finalization runs. Attribute edits reach the
 attributes a mob keeps itself (max health, movement speed, follow range, attack damage, knockback resistance,

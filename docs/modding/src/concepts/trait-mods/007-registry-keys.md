@@ -343,8 +343,8 @@ A hook whose catalog entry has a `scope` (`block`, `block_entity`, `item`, `menu
 naming the thing it is about, is a method on that scope's trait only: `BlockPart`, `BlockEntityPart` (a
 `BlockPart` too), `ItemPart` and `MenuPart`, as vanilla's and NeoForge's `Block` and `Item` methods are. It has
 no `Hooks` method: a thing without parts is never asked, and the game asks the parts attached to it in dispatch
-order, through the hook's contract, so a `Cancel` or a replacement skips the parts after it. Where NeoForge fires
-a bus event at that moment, the event is a hook of its own on `Hooks`, asked first for every thing, and its cancel
+order, through the hook's contract, so a `Cancel` or a replacement skips the parts after it. Where a NeoForge
+bus event is the counterpart for that moment, the event is a hook of its own on `Hooks`, asked first for every thing, and its cancel
 skips the parts: a mod reacting to its own blocks uses a part, one reacting to every block the event. A part's kind is its type: the same kind twice on one
 thing, an invalid key declaration, or an unnamespaced id in the other Part registrations stops
 the game at startup with a message naming the mods. A panic in a part

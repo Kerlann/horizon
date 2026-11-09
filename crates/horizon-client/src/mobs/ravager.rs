@@ -145,8 +145,8 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
     // Entity.checkInsideBlocks -> CropBlock.entityInside: a ravager walking
     // through a crop destroys it, drops and all, with mobGriefing; a pitcher
     // crop (PitcherCropBlock.entityInside) goes the same way, both halves.
-    // NeoForge asks `canEntityGrief` for each crop, and reads the rule alone
-    // for a pitcher crop.
+    // Mods are asked through `can_grief` for each crop; a pitcher crop reads
+    // the rule alone.
     if w.griefing_possible() {
         let b = m
             .bounds()

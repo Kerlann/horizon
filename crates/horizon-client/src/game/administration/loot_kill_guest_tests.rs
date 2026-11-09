@@ -19,7 +19,7 @@ const PIG: &str = "00000038-0000-0000-0000-000000000002";
 
 /// A host on a stone floor, holding a plain sword, with one connected,
 /// placed guest (conn 2), an elder guardian, a pig and a chest.
-fn game() -> Game<'static> {
+fn game(resources: &mut Option<std::sync::Arc<Resources>>) -> Game<'_> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -41,7 +41,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -166,7 +166,8 @@ fn loot(game: &mut Game<'_>, command: &str) -> (Vec<String>, Vec<String>) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn loot_kill_as_a_guest_is_killed_by_that_player() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     let insert = format!("loot insert 8 100 8 kill {ELDER}");
     let sponge = |items: &[String]| items.iter().any(|i| i == "minecraft:wet_sponge");
     // The host: a player kill.
@@ -211,7 +212,8 @@ fn an_empty_handed_guest_is_the_killer_and_a_missing_one_is_not() {
     let mut looting = ItemStack::new("minecraft:diamond_sword", 1);
     looting.data_mut().enchantments = vec![("minecraft:looting".into(), 3)];
     // As the empty-handed guest, while the host holds a Looting III sword.
-    let mut first = game();
+    let mut first_resources = None;
+    let mut first = game(&mut first_resources);
     first
         .lan
         .as_mut()
@@ -227,7 +229,8 @@ fn an_empty_handed_guest_is_the_killer_and_a_missing_one_is_not() {
         "{as_guest:?}"
     );
     // The host's own kill with an empty hand, from the same sequence state.
-    let mut other = game();
+    let mut other_resources = None;
+    let mut other = game(&mut other_resources);
     other.inventory[other.selected] = None;
     let as_host = loot_stacks(&mut other, &insert);
     assert_eq!(

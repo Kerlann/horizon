@@ -616,7 +616,8 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources and isolated homes/cwd"]
     fn non_guest_holder_branches_keep_their_existing_velocity_sources() {
-        let mut game = crate::game::game_tests::tests::server_game();
+        let mut resources = None;
+        let mut game = crate::game::game_tests::tests::server_game(&mut resources);
         game.build_registries();
         game.set_allow_commands(true);
         assert!(game.run_command("summon oak_boat 6.5 100 4.5 {UUID:[I;327,1,0,1]}"));

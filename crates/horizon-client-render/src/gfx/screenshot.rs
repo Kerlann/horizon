@@ -12,8 +12,6 @@ pub struct PendingScreenshot {
 pub(super) struct HdrScreenshot {
     pub size: [u32; 2],
     pub pixels: Vec<u8>,
-    pub peak: f32,
-    pub paper_white: f32,
 }
 
 /// Files successfully written for a requested screenshot.
@@ -160,11 +158,9 @@ impl HdrScreenshot {
             png::Encoder::with_info(std::io::BufWriter::new(std::fs::File::create(path)?), info)?;
         let mut writer = encoder.write_header()?;
         writer.write_chunk(png::chunk::cICP, &[9, 16, 0, 1])?;
-        let nits = |n: f32| ((n * 10_000.0) as u32).to_be_bytes();
-        let peak = self.peak.max(self.paper_white);
         writer.write_chunk(
             png::chunk::cLLI,
-            &[nits(peak), nits(self.paper_white.min(peak))].concat(),
+            &hdr_icc::content_light_levels(&self.pixels),
         )?;
         writer.write_image_data(&self.pixels)?;
         Ok(())
@@ -182,8 +178,6 @@ mod tests {
             hdr: hdr.then(|| HdrScreenshot {
                 size: [1, 1],
                 pixels: vec![0, 0, 255, 255, 128, 0],
-                peak: 1000.0,
-                paper_white: 203.0,
             }),
         }
     }

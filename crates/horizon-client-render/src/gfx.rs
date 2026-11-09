@@ -366,9 +366,10 @@ mod hdr;
 mod hdr_icc;
 mod hdr_stats;
 pub(crate) mod hud_coverage;
-pub use hdr::Calibration as HdrCalibration;
+pub use hdr::{Calibration as HdrCalibration, Output as HdrOutput};
 mod hold;
 pub use hold::WorldHold;
+pub use output::{DisplayReading, EffectiveOutput, FrameConfiguration, FrameRequest};
 pub mod block_light;
 mod custom_sky;
 mod displace;
@@ -383,6 +384,7 @@ mod native_sky;
 mod occlusion;
 mod oit;
 mod oit_features;
+pub(crate) mod output;
 mod pack_atlas;
 mod pack_center_depth;
 pub mod pack_draw;
@@ -1360,6 +1362,9 @@ pub struct Renderer {
     /// Watched only while HDR is On or Auto, including Auto in SDR;
     /// before `window`, so it's dropped first.
     display: Option<DisplayWatch>,
+    /// What this renderer's display last reported (`DisplayWatch`), its own: another
+    /// renderer's watch never changes it.
+    reading: output::DisplayReading,
     /// The watch was just made: the settings' Auto values take what it reported.
     display_fresh: bool,
     window: Arc<Window>,
@@ -1698,22 +1703,14 @@ pub struct Renderer {
     /// Which pixels of each block sprite may shine in HDR output (terrain.wgsl's
     /// `emission_thresholds`), measured when HDR output turns on.
     emission_stats: hdr_stats::EmissionStats,
-    /// The HDR output the window's surface can present.
-    hdr_output: Option<hdr::Output>,
-    /// What every pipeline that draws the frame targets: the swapchain's 8-bit format, or
-    /// `Rgba16Unorm` when the renderer was made with HDR output on (`wide_frame`) and the
-    /// device draws and blends into it, or `LINEAR_FRAME` (`frame_format`). A 16-bit frame
-    /// with HDR off since reaches the swapchain through `readback`.
-    frame_format: wgpu::TextureFormat,
-    /// The layered float HDR frame (no pack or a 0.2 one), with independent blending, an 8-bit
-    /// HUD target and an R8 coverage target.
-    hud_coverage: bool,
-    /// What the hand, the camera overlays and the HUD draw on (`overlay_format`).
-    overlay_format: wgpu::TextureFormat,
-    /// What `frame_format` was picked from besides the settings and the pack: whether the
-    /// surface offers HDR output, the device draws the 16-bit and float frames, and it supports
-    /// the HUD layer. The layer must follow the pack even when the format stays float.
-    frame_device: (bool, bool, bool, bool),
+    /// What this renderer's destination offers and its device draws.
+    output_caps: output::OutputCapabilities,
+    /// The output applied (`update_output`), with the frame every pipeline that draws it
+    /// targets: the swapchain's 8-bit format, or `Rgba16Unorm` when the renderer was made with
+    /// HDR output on and Smooth Gradients and the device draws and blends into it, or
+    /// `LINEAR_FRAME` (`frame_format`). A 16-bit frame with HDR off since reaches the
+    /// swapchain through `readback`.
+    output: output::EffectiveOutput,
     /// Whether a pack picked or dropped since the renderer was made has been told it runs on
     /// the frame that exists (`set_native_shader_pack`).
     frame_kept_logged: bool,
@@ -2402,7 +2399,7 @@ const LINEAR_FRAME: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 /// it, for a 0.2 pack, or for the layered HDR frame where the surface offers HDR output
 /// (`linear`: `(a 0.2 pack picked, the layered HDR frame, the device draws it)`); else
 /// `WIDE_FRAME` when it is made with HDR on and Smooth Gradients (`wide_frame`,
-/// `Graphics::wide_frame`), the surface offering HDR output (`hdr_offered`) and the device
+/// `output::resolve_frame`), the surface offering HDR output (`hdr_offered`) and the device
 /// drawing it (`draws_wide_frame`): an 8-bit frame's steps band in dark gradients, and HDR
 /// shows them. Else the swapchain's 8-bit format, as without HDR.
 fn frame_format(
@@ -2464,27 +2461,6 @@ fn overlay_format(
 /// world, unless a 0.2 pack's `[tonemap]` already mapped it. One tone mapping, never two.
 fn horizon_tone_curve(layered: bool, world: bool, pack_tonemap: bool) -> bool {
     layered && world && !pack_tonemap
-}
-
-fn frame_follows(
-    current: (wgpu::TextureFormat, bool),
-    wide_frame: bool,
-    device: (bool, bool, bool, bool),
-    swapchain: wgpu::TextureFormat,
-    linear_pack: bool,
-    hdr_float: bool,
-) -> bool {
-    current == frame_configuration(wide_frame, device, swapchain, linear_pack, hdr_float)
-}
-
-/// The frame-follow decision needs the same HDR availability as the output selection.
-fn update_hdr_output(
-    output: &mut Option<hdr::Output>,
-    frame_device: &mut (bool, bool, bool, bool),
-    now: Option<hdr::Output>,
-) {
-    *output = now;
-    frame_device.0 = output.is_some();
 }
 
 /// Opens a device on the first of `backend_order`'s backends that gives one.
@@ -3018,7 +2994,7 @@ impl Renderer {
             &self.device,
             &self.reuse,
             &self.entity_bindings,
-            prepared_model::prepared_attachment(self.frame_format),
+            prepared_model::prepared_attachment(self.output.frame.format),
             generation,
             vertices,
             ranges,
@@ -3073,10 +3049,12 @@ impl Renderer {
         previous: Option<&Self>,
         api: GraphicsApi,
         translucent_batching: bool,
-        wide_frame: bool,
         shader_pack: bool,
-        linear_pack: bool,
-        hdr_float: bool,
+        // The settings and the pack's `request` pick the frame (`output::resolve_frame`),
+        // with what this window's display reported to the renderer before (`display`).
+        settings: &crate::graphics::Graphics,
+        request: output::FrameRequest,
+        display: output::DisplayReading,
     ) -> Result<Self> {
         let Opened {
             instance,
@@ -3146,7 +3124,6 @@ impl Renderer {
         };
         let (config, present_modes, hdr_output) = if let Some((config, caps)) = configured {
             let hdr_output = hdr::output(&caps);
-            crate::graphics::offer_hdr(hdr_output.is_some());
             if previous.is_none() {
                 log::info!(
                     "Horizon renderer: HDR output {}",
@@ -3170,16 +3147,14 @@ impl Renderer {
                 color_space: wgpu::SurfaceColorSpace::default(),
             };
             let hdr_output = hdr::offscreen_output();
-            // Only where one is named: splitscreen's views draw offscreen too, and their
-            // window's renderer offers what its display does.
-            if let Some(output) = hdr_output {
-                crate::graphics::offer_hdr(true);
-                if previous.is_none() {
-                    log::info!(
-                        "Horizon renderer: HDR output {} offscreen (HORIZON_HDR_OUTPUT)",
-                        output.name()
-                    );
-                }
+            // Only where one is named: splitscreen's views draw offscreen too.
+            if let Some(output) = hdr_output
+                && previous.is_none()
+            {
+                log::info!(
+                    "Horizon renderer: HDR output {} offscreen (HORIZON_HDR_OUTPUT)",
+                    output.name()
+                );
             }
             (config, Vec::new(), hdr_output)
         };
@@ -3190,13 +3165,8 @@ impl Renderer {
             device.features(),
             adapter.get_texture_format_features(WIDE_FRAME),
         );
-        crate::graphics::offer_smooth_gradients(wide_ok);
-        let linear = (
-            linear_pack,
-            hdr_float,
-            draws_frame(adapter.get_texture_format_features(LINEAR_FRAME)),
-        );
-        if linear.0 && !linear.2 {
+        let float_ok = draws_frame(adapter.get_texture_format_features(LINEAR_FRAME));
+        if request.linear_pack && !float_ok {
             log::warn!(
                 "Horizon renderer: the device can't draw a float frame; the shader API 0.2 pack runs on the 8-bit one"
             );
@@ -3206,15 +3176,15 @@ impl Renderer {
             adapter.get_downlevel_capabilities().flags,
             adapter.get_texture_format_features(hud_coverage::FORMAT),
         );
-        let frame_device = (hdr_output.is_some(), wide_ok, linear.2, coverage_ok);
-        let (frame_format, hud_coverage) = frame_configuration(
-            wide_frame,
-            frame_device,
-            config.format,
-            linear_pack,
-            hdr_float,
-        );
-        let overlay_format = overlay_format(frame_format, hud_coverage, config.format);
+        let output_caps = output::OutputCapabilities {
+            hdr: hdr_output,
+            wide_frame: wide_ok,
+            float_frame: float_ok,
+            hud_layer: coverage_ok,
+        };
+        let frame = output::resolve_frame(settings, request, output_caps, display, config.format);
+        let (frame_format, hud_coverage, overlay_format) =
+            (frame.format, frame.hud_layer, frame.overlay_format);
         if previous.is_none() {
             startup_step(format_args!("creating the pipelines"));
         }
@@ -5238,6 +5208,7 @@ impl Renderer {
         );
         Ok(Self {
             display: None,
+            reading: display,
             display_fresh: false,
             instance,
             adapter,
@@ -5462,11 +5433,9 @@ impl Renderer {
             hdr: None,
             hdr_lighting_setting: true,
             emission_stats,
-            hdr_output,
-            frame_format,
-            hud_coverage,
-            overlay_format,
-            frame_device,
+            output_caps,
+            // Nothing is presented as HDR yet: `update_output` applies the settings.
+            output: output::resolve_output(settings, output_caps, display, frame, false),
             frame_kept_logged: false,
             hdr_marker: None,
             pack_post: None,
@@ -5532,7 +5501,7 @@ impl Renderer {
         pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
         pass.set_vertex_buffer(0, self.entity_buffer.slice(..));
         pass.draw_indexed(0..quads * 6, (first * 4) as i32, 0..1);
-        if light_marks(self.frame_format, self.hdr.is_some()) {
+        if light_marks(self.output.frame.format, self.hdr.is_some()) {
             // Drawn into the world: the light sources it holds are marked as the world's are.
             pass.set_pipeline(&self.hdr_entity_mark_pipeline);
             pass.draw_indexed(0..quads * 6, (first * 4) as i32, 0..1);
@@ -5540,7 +5509,7 @@ impl Renderer {
     }
     /// HDR lighting on the clouds just drawn: the sky's value (`fs_hdr_cloud_mark`).
     fn mark_clouds(&self, pass: &mut wgpu::RenderPass<'_>, quads: u32) {
-        if !light_marks(self.frame_format, self.hdr.is_some())
+        if !light_marks(self.output.frame.format, self.hdr.is_some())
             || self.hdr.as_ref().is_none_or(|h| !h.lighting)
         {
             return;
@@ -5561,7 +5530,7 @@ impl Renderer {
         solid_draws: u32,
         translucent_draws: u32,
     ) {
-        if !light_marks(self.frame_format, self.hdr.is_some())
+        if !light_marks(self.output.frame.format, self.hdr.is_some())
             || self.hdr.as_ref().is_none_or(|h| !h.lighting)
         {
             return;
@@ -5637,7 +5606,7 @@ impl Renderer {
     /// The resource packs' `core/rendertype_lines` (`HudAtlas::lines_shader`) for the block
     /// outline, or the built-in one.
     pub fn set_lines_shader(&mut self, program: Option<&horizon_shaders::CoreProgram>) {
-        let format = self.frame_format;
+        let format = self.output.frame.format;
         self.core_lines =
             program.and_then(|program| core_lines::CoreLines::new(&self.device, format, program));
     }
@@ -5648,7 +5617,7 @@ impl Renderer {
         disc: Option<&horizon_shaders::CoreProgram>,
         stars: Option<&horizon_shaders::CoreProgram>,
     ) {
-        self.core_sky = core_sky::CoreSky::new(&self.device, self.frame_format, disc, stars);
+        self.core_sky = core_sky::CoreSky::new(&self.device, self.output.frame.format, disc, stars);
     }
     /// LevelRenderer.submitBlockOutline: the buffer holds `edges` per stroke, the black
     /// secondary stroke first when high contrast is on.
@@ -5920,7 +5889,7 @@ impl Renderer {
             .cull
             .as_ref()
             .filter(|c| c.early())
-            .map(|_| self.frame_format);
+            .map(|_| self.output.frame.format);
         let Some(mut gpu) = gpu_culling::GpuCulling::new(&self.device, test) else {
             // Not offered from now on: its switch greys out.
             self.offer_gpu_culling(crate::graphics::GpuCullingOffer::Unsupported);
@@ -7160,13 +7129,7 @@ impl Renderer {
             return Err("the graphics device was lost".into());
         }
         if let Some(hdr) = hdr {
-            horizon_hdr::set_metadata(
-                device,
-                surface,
-                hdr.paper_white,
-                hdr.declared_peak(),
-                hdr.black,
-            );
+            horizon_hdr::set_metadata(device, surface, hdr.declared_peak(), hdr.black);
         }
         Ok(())
     }
@@ -7204,13 +7167,7 @@ impl Renderer {
     }
     fn send_hdr_metadata(&self) {
         if let (Some(surface), Some(hdr)) = (&self.surface, &self.hdr) {
-            horizon_hdr::set_metadata(
-                &self.device,
-                surface,
-                hdr.paper_white,
-                hdr.declared_peak(),
-                hdr.black,
-            );
+            horizon_hdr::set_metadata(&self.device, surface, hdr.declared_peak(), hdr.black);
         }
     }
     /// The swapchain's configuration: `config` (what every pipeline draws in), or
@@ -7225,12 +7182,21 @@ impl Renderer {
         }
         config
     }
-    /// The F3 screen's HDR line while the setting is on: the swapchain HDR presents to with
-    /// its paper white and peak, or that the surface offers none.
+    /// This renderer's output as applied, with what its destination offers and reports.
+    pub fn output(&self) -> &output::EffectiveOutput {
+        &self.output
+    }
+    /// What this renderer's display last reported: a renderer made again for the window
+    /// starts from it (`Renderer::new`'s `display`).
+    pub fn display_reading(&self) -> output::DisplayReading {
+        self.reading
+    }
     /// Whether HDR output is on: the setting, where the display offers it.
     pub fn hdr_on(&self) -> bool {
-        self.hdr.is_some()
+        self.output.hdr_on()
     }
+    /// The F3 screen's HDR line while the setting is on: the swapchain HDR presents to with
+    /// its paper white and peak, or that the surface offers none.
     pub fn hdr_line(&self) -> String {
         match &self.hdr {
             Some(hdr) => format!(
@@ -7249,65 +7215,78 @@ impl Renderer {
             hdr.look = on;
         }
     }
-    /// Whether this renderer's frame is the one a renderer made now would draw in, with HDR and
-    /// Smooth Gradients (`wide_frame`) and the pack picked (`linear_pack`, `hdr_float`, as
-    /// `Renderer::new` takes them). Under `HORIZON_HDR_FRAME=float` the game makes the renderer
-    /// again when it isn't (docs/design/hdr-linear-light.md, "When it changes").
-    pub fn frame_follows(&self, wide_frame: bool, linear_pack: bool, hdr_float: bool) -> bool {
-        frame_follows(
-            (self.frame_format, self.hud_coverage),
-            wide_frame,
-            self.frame_device,
+    /// Whether this renderer's frame is the one a renderer made now would draw in
+    /// (`requested_frame`). Under `HORIZON_HDR_FRAME=float` the game makes the renderer again
+    /// when it isn't (docs/design/hdr-linear-light.md, "When it changes").
+    pub fn frame_follows(
+        &self,
+        settings: &crate::graphics::Graphics,
+        request: output::FrameRequest,
+    ) -> bool {
+        self.requested_frame(settings, request) == self.output.frame
+    }
+    /// The frame a renderer made now would draw in (`output::resolve_frame`) for `settings`
+    /// and the pack's `request`, with what this renderer's destination offers and its display
+    /// reports.
+    pub fn requested_frame(
+        &self,
+        settings: &crate::graphics::Graphics,
+        request: output::FrameRequest,
+    ) -> output::FrameConfiguration {
+        output::resolve_frame(
+            settings,
+            request,
+            self.output_caps,
+            self.reading,
             self.config.format,
-            linear_pack,
-            hdr_float,
         )
     }
     /// Follows the selected mode even when Auto currently wants SDR. Off never asks
     /// the system about the display; selecting On or Auto starts a fresh watch.
-    pub fn watch_hdr(&mut self, mode: crate::graphics::HdrMode) {
+    fn watch_hdr(&mut self, mode: crate::graphics::HdrMode) {
         if mode == crate::graphics::HdrMode::Off {
             self.display = None;
             self.display_fresh = false;
-            crate::graphics::report_system_hdr(None);
+            self.reading.stop_watching();
         } else if self.display.is_none() {
             let (watch, now) =
                 DisplayWatch::new(&self.window, self.surface.as_deref(), &self.adapter);
             self.display = Some(watch);
-            if let Some(surface) = &self.surface {
-                update_hdr_output(
-                    &mut self.hdr_output,
-                    &mut self.frame_device,
-                    hdr::output(&surface.get_capabilities(&self.adapter)),
-                );
-                crate::graphics::offer_hdr(self.hdr_output.is_some());
-            }
-            now.publish();
+            self.refresh_hdr_offer();
+            self.reading = now;
             self.display_fresh = true;
         }
     }
-    /// HDR output (Horizon setting): HDR10 or scRGB at `paper_white` nits, the world's
-    /// highlights expanded up to `peak` nits. Off where the surface can't present it.
-    /// Offscreen (`hdr::offscreen_output`) the frame is drawn the same and its HDR screenshot
-    /// taken, but nothing is presented, and Auto takes its defaults: no display reports.
-    pub fn set_hdr(
+    /// What the window's surface offers now: Vulkan's offered formats can change with desktop
+    /// HDR or the window's output.
+    fn refresh_hdr_offer(&mut self) {
+        if let Some(surface) = &self.surface {
+            self.output_caps.hdr = hdr::output(&surface.get_capabilities(&self.adapter));
+        }
+    }
+    /// HDR output (Horizon setting) as `settings` ask for it on this renderer's frame
+    /// (`output::resolve_output`): HDR10 or scRGB at paper white, the world's highlights
+    /// expanded up to the peak. Off where the surface can't present it. Offscreen
+    /// (`hdr::offscreen_output`) the frame is drawn the same and its HDR screenshot taken,
+    /// but nothing is presented, and Auto takes its defaults: no display reports.
+    pub fn update_output(
         &mut self,
-        on: bool,
-        paper_white: f32,
-        peak: f32,
-        black: f32,
-        ui: f32,
+        settings: &crate::graphics::Graphics,
         marker: &std::path::Path,
     ) {
-        // A 0.2 pack's frame without the HUD's layer is SDR (`overlay_format`).
-        let output = self.hdr_output.filter(|_| {
-            on && (self.surface.is_some() || self.offscreen.is_some())
-                && self.overlay_format == self.frame_format
-        });
-        if output.is_some() != self.hdr.is_some() {
+        self.watch_hdr(settings.hdr);
+        let next = output::resolve_output(
+            settings,
+            self.output_caps,
+            self.reading,
+            self.output.frame,
+            self.surface.is_some() || self.offscreen.is_some(),
+        );
+        let [paper_white, peak, black] = next.nits;
+        if next.encoding.is_some() != self.hdr.is_some() {
             // If the game dies before HDR output shows a frame, the marker is still there at
             // the next start, which then comes up with HDR off.
-            if output.is_some() {
+            if next.encoding.is_some() {
                 if self.surface.is_some() {
                     let _ = std::fs::write(marker, "HDR output was being switched on\n");
                     self.hdr_marker = Some(marker.to_owned());
@@ -7315,15 +7294,21 @@ impl Renderer {
             } else if let Some(marker) = self.hdr_marker.take() {
                 let _ = std::fs::remove_file(marker);
             }
-            let format = self.frame_format;
-            self.hdr = output.map(|output| {
-                hdr::Hdr::new(&self.device, &self.queue, format, output, self.hud_coverage)
+            let frame = self.output.frame;
+            self.hdr = next.encoding.map(|output| {
+                hdr::Hdr::new(
+                    &self.device,
+                    &self.queue,
+                    frame.format,
+                    output,
+                    frame.hud_layer,
+                )
             });
             if let Some(hdr) = &mut self.hdr {
                 hdr.look = self.hdr_lighting_setting;
             }
             self.configure_surface();
-            match output {
+            match next.encoding {
                 Some(output) => log::info!(
                     "Horizon renderer: HDR on: {} ({:?}), {paper_white}/{peak} nits",
                     output.name(),
@@ -7334,7 +7319,7 @@ impl Renderer {
             self.measure_emission();
         }
         if let Some(hdr) = &mut self.hdr {
-            hdr.ui = ui;
+            hdr.ui = next.ui_brightness;
         }
         if let Some(hdr) = &mut self.hdr
             && (hdr.paper_white, hdr.peak, hdr.black) != (paper_white, peak, black)
@@ -7344,6 +7329,12 @@ impl Renderer {
             hdr.black = black;
             self.send_hdr_metadata();
         }
+        // An output of another encoding than the one presented doesn't replace it yet, only
+        // Off does: the snapshot says what is presented.
+        self.output = output::EffectiveOutput {
+            encoding: self.hdr.as_ref().map(|hdr| hdr.output),
+            ..next
+        };
     }
     /// Measures which pixels of each block sprite may shine (`hdr_stats`), at the current
     /// masks. Only with HDR output on: without it the frame's alpha is never read.
@@ -7365,19 +7356,11 @@ impl Renderer {
         let Some(watch) = self.display.as_mut() else {
             return false;
         };
-        let Some(now) = watch.changed(self.surface.as_deref(), &self.adapter) else {
+        let Some(now) = watch.changed(self.reading, self.surface.as_deref(), &self.adapter) else {
             return false;
         };
-        // Vulkan's offered formats can change with desktop HDR or the window's output.
-        if let Some(surface) = &self.surface {
-            update_hdr_output(
-                &mut self.hdr_output,
-                &mut self.frame_device,
-                hdr::output(&surface.get_capabilities(&self.adapter)),
-            );
-            crate::graphics::offer_hdr(self.hdr_output.is_some());
-        }
-        now.publish();
+        self.refresh_hdr_offer();
+        self.reading = now;
         true
     }
     /// The share of real frames frame generation shows a made frame before (1 while it
@@ -7508,7 +7491,7 @@ impl Renderer {
                 &self.queue,
                 &self.adapter,
                 post,
-                self.frame_format,
+                self.output.frame.format,
                 world,
                 &std::sync::atomic::AtomicBool::new(false),
             )
@@ -7606,7 +7589,7 @@ impl Renderer {
         let device = self.device.clone();
         let queue = self.queue.clone();
         let adapter = self.adapter.clone();
-        let format = self.frame_format;
+        let format = self.output.frame.format;
         let atlas = self.pack_atlas.as_ref().map(|a| (a.view.clone(), a.size()));
         let sprite_rects = self
             .pack_atlas
@@ -7766,13 +7749,13 @@ impl Renderer {
         let linear = pack
             .as_ref()
             .is_some_and(|p| p.0.manifest.api == horizon_shader_api::Api::V0_2);
-        if (linear || self.frame_format == LINEAR_FRAME)
-            && linear != (self.frame_format == LINEAR_FRAME)
+        if (linear || self.output.frame.format == LINEAR_FRAME)
+            && linear != (self.output.frame.format == LINEAR_FRAME)
             && !std::mem::replace(&mut self.frame_kept_logged, true)
         {
             log::info!(
                 "Horizon renderer: the {:?} frame stays until the renderer is made again; a shader pack picked or dropped since runs on it",
-                self.frame_format
+                self.output.frame.format
             );
         }
         let Some((report, constants, sprite_tags, sprite_materials, lights)) = pack else {
@@ -7783,7 +7766,7 @@ impl Renderer {
             globals: &self.terrain_layout,
             flat: self.flat.as_ref().map(|f| &f.draw_layout),
             sprites: self.terrain_sprites,
-            format: self.frame_format,
+            format: self.output.frame.format,
             sprite_tags: &sprite_tags,
             sprite_materials: &sprite_materials,
             entities: &self.entity_bindings,
@@ -8177,7 +8160,7 @@ impl Renderer {
     }
     fn animate(&mut self, encoder: &mut wgpu::CommandEncoder, tick: u64, cull_inactive: bool) {
         let active = cull_inactive.then_some(&self.active_animated_layers[..]);
-        self.animations.animate(
+        self.animations.animate_modes(
             encoder,
             &mut self.uploads,
             tick,
@@ -8254,7 +8237,7 @@ impl Renderer {
         let scaled = self.screenshot_size();
         let rendered = match scaled {
             Some(size) => self.draw_scaled_frame(frame, size),
-            None => self.draw_frame(frame, None),
+            None => self.draw_frame(frame, None, self.output),
         };
         self.finish_prepared_frame();
         // A frame that was not drawn still submits the section copies and
@@ -8322,15 +8305,16 @@ impl Renderer {
         // A frame the overlays draw on past 8 bits (16-bit, or the layered float frame), read
         // back through an 8-bit copy (`take_readback`). A 0.2 pack's float frame in SDR keeps
         // the swapchain's format here, which its picture finishes on (`Readback::finish`).
-        if self.overlay_format != config.format.remove_srgb_suffix() {
-            config.format = self.frame_format;
-            config.view_formats = vec![self.frame_format];
+        if self.output.frame.overlay_format != config.format.remove_srgb_suffix() {
+            config.format = self.output.frame.format;
+            config.view_formats = vec![self.output.frame.format];
             config.usage |= wgpu::TextureUsages::TEXTURE_BINDING;
         }
         // The layered float frame keeps HDR: its world's light and HUD layer make the picture
         // (`Hdr::sdr_screenshot`), in HDR's own targets at `size`; it presents nothing, as the
         // swapchain is set aside. Other frames draw without HDR, into a target of their own.
-        let layered = self.hdr.as_ref().is_some_and(hdr::Hdr::layered);
+        let output = self.output.scaled_screenshot();
+        let layered = output.hdr_on();
         // Out of video memory (an invalid texture's view is a validation error):
         // tried again at half the size next frame; the window keeps its last one.
         let checks = GpuChecks::push(&self.device);
@@ -8354,7 +8338,7 @@ impl Renderer {
         let offscreen = std::mem::replace(&mut self.offscreen, target);
         let window_depth = std::mem::replace(&mut self.depth, depth);
         // The frame's own targets at `size` can run out of memory too.
-        let drawn = self.draw_frame(frame, Some(GpuChecks::push(&self.device)));
+        let drawn = self.draw_frame(frame, Some(GpuChecks::push(&self.device)), output);
         self.depth = window_depth;
         self.offscreen = offscreen;
         match hdr {
@@ -8373,7 +8357,14 @@ impl Renderer {
         drawn
     }
     /// `checks`: the error scopes of a scaled screenshot's frame, checked before its PNG is written.
-    fn draw_frame(&mut self, frame: &Frame, checks: Option<GpuChecks>) -> Result<bool> {
+    /// `output`: what this frame is drawn for, the window's output or a screenshot's.
+    fn draw_frame(
+        &mut self,
+        frame: &Frame,
+        checks: Option<GpuChecks>,
+        output: output::EffectiveOutput,
+    ) -> Result<bool> {
+        debug_assert_eq!(output.encoding, self.hdr.as_ref().map(|hdr| hdr.output));
         // Its steps as spans (HORIZON_SPIKES): each lap names the step that just ended.
         let mut laps = crate::spans::laps();
         let landing = Instant::now();
@@ -8443,7 +8434,7 @@ impl Renderer {
         let fg = self.frame_gen.on
             && !self.frame_gen.paused
             && self.hdr.is_none()
-            && self.frame_format == self.config.format.remove_srgb_suffix()
+            && self.output.frame.format == self.config.format.remove_srgb_suffix()
             && !frame.title
             && frame.menu_blur.is_none()
             && self.pack_post.as_ref().is_none_or(|p| p.1.is_none())
@@ -8531,7 +8522,7 @@ impl Renderer {
                     .target(
                         &self.device,
                         &image,
-                        self.frame_format,
+                        self.output.frame.format,
                         self.screenshot.is_some(),
                     )
                     .unwrap_or(image)
@@ -10322,7 +10313,7 @@ impl Renderer {
             );
         }
         let view_target = target_texture.create_view(&wgpu::TextureViewDescriptor {
-            format: Some(self.frame_format),
+            format: Some(self.output.frame.format),
             ..Default::default()
         });
         if let Some(timer) = &mut self.gpu_timer {
@@ -10437,7 +10428,7 @@ impl Renderer {
             let (device, layout, sprites) =
                 (&self.device, &self.terrain_layout, self.terrain_sprites);
             let clouds = [0, 1].map(|i| self.cloud_pipeline.get_bind_group_layout(i));
-            let format = self.frame_format;
+            let format = self.output.frame.format;
             let flat = self
                 .flat
                 .as_ref()
@@ -10503,13 +10494,9 @@ impl Renderer {
                 .size()
                 .filter(|_| scaled.is_some())
                 .unwrap_or([self.config.width, self.config.height]);
-            // A 0.2 pack sees the HDR display where its picture goes to one: on the layered frame.
-            native.frame.display = self
-                .hdr
-                .as_ref()
-                .filter(|h| h.layered())
-                .map(hdr::Hdr::display);
-            native.frame.write(&self.queue, frame, size);
+            native
+                .frame
+                .write(&self.queue, frame, size, output.display());
             native.frame.block_light.update(
                 &self.queue,
                 frame.camera,
@@ -10620,7 +10607,7 @@ impl Renderer {
             && let Some(sky) = &native.sky
         {
             if let Some(t) = &mut native.timing {
-                let format = self.frame_format;
+                let format = self.output.frame.format;
                 t.mark(&self.device, &mut encoder, (world_view, format));
             }
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
@@ -10683,7 +10670,7 @@ impl Renderer {
                     size,
                     color: target(
                         "Water mirror",
-                        self.frame_format,
+                        self.output.frame.format,
                         wgpu::TextureUsages::RENDER_ATTACHMENT
                             | wgpu::TextureUsages::TEXTURE_BINDING,
                     ),
@@ -11323,7 +11310,7 @@ impl Renderer {
                 pass.set_vertex_buffer(0, self.entity_buffer.slice(..));
                 if self.prepared_draws.is_empty() {
                     pass.draw_indexed(0..entity_quads * 6, 0, 0..1);
-                    if light_marks(self.frame_format, self.hdr.is_some()) {
+                    if light_marks(self.output.frame.format, self.hdr.is_some()) {
                         pass.set_pipeline(&self.hdr_entity_mark_pipeline);
                         pass.draw_indexed(0..entity_quads * 6, 0, 0..1);
                     }
@@ -11335,7 +11322,7 @@ impl Renderer {
                             hdr_pipeline: &self.hdr_entity_mark_pipeline,
                             vertices: &self.entity_buffer,
                             indices: &self.indices,
-                            hdr: light_marks(self.frame_format, self.hdr.is_some()),
+                            hdr: light_marks(self.output.frame.format, self.hdr.is_some()),
                         },
                         self.prepared_models.as_ref(),
                         &self.prepared_instance_buffer,
@@ -11379,7 +11366,7 @@ impl Renderer {
                     ((base_quads - translucent_item_quads) * 4) as i32,
                     0..1,
                 );
-                if light_marks(self.frame_format, self.hdr.is_some()) {
+                if light_marks(self.output.frame.format, self.hdr.is_some()) {
                     // A glowing item in the world (Item sheet quads), as entities are.
                     pass.set_pipeline(&self.hdr_mark_pipeline);
                     pass.draw_indexed(
@@ -11464,7 +11451,7 @@ impl Renderer {
                 pass.set_pipeline(&self.lightning_pipeline);
                 pass.set_bind_group(0, &self.entity_group, &[]);
                 self.lightning.draw(&mut pass, &frame.lightning);
-                if light_marks(self.frame_format, self.hdr.is_some()) {
+                if light_marks(self.output.frame.format, self.hdr.is_some()) {
                     pass.set_pipeline(&self.hdr_mark_lightning_pipeline);
                     self.lightning.draw(&mut pass, &frame.lightning);
                 }
@@ -11504,7 +11491,7 @@ impl Renderer {
                     pass.draw_indexed(first * 6..end * 6, (world_quads * 4) as i32, 0..1);
                     first = end;
                 }
-                if light_marks(self.frame_format, self.hdr.is_some()) {
+                if light_marks(self.output.frame.format, self.hdr.is_some()) {
                     // The dragon's eyes and death rays, marked as entities are.
                     pass.set_pipeline(&self.hdr_mark_pipeline);
                     pass.draw_indexed(0..additive_quads * 6, (world_quads * 4) as i32, 0..1);
@@ -11735,7 +11722,7 @@ impl Renderer {
                     // HDR output's mark on what shines in the stages, as the classic
                     // pass marks it after drawing it: eyes, the dragon's eyes and rays,
                     // firework sparks and lightning.
-                    if light_marks(self.frame_format, self.hdr.is_some()) {
+                    if light_marks(self.output.frame.format, self.hdr.is_some()) {
                         pass.set_pipeline(&self.hdr_mark_pipeline);
                         pass.set_bind_group(0, &self.entity_group, &[]);
                         pass.set_vertex_buffer(0, self.entity_buffer.slice(..));
@@ -11813,7 +11800,7 @@ impl Renderer {
                     ((base_quads - translucent_item_quads - translucent_particle_quads) * 4) as i32,
                     0..1,
                 );
-                if light_marks(self.frame_format, self.hdr.is_some()) {
+                if light_marks(self.output.frame.format, self.hdr.is_some()) {
                     // Fireworks: their sparks are translucent-layer particles.
                     pass.set_pipeline(&self.hdr_entity_mark_pipeline);
                     pass.draw_indexed(
@@ -12135,7 +12122,7 @@ impl Renderer {
                     encoder: &mut encoder,
                     color: &target_texture,
                     color_view: &view_target,
-                    color_format: self.overlay_format,
+                    color_format: self.output.frame.overlay_format,
                     size,
                     depth,
                     depth_size,
@@ -12161,7 +12148,7 @@ impl Renderer {
         }
         // A 0.2 pack in SDR: its picture finishes on 8 bits before the hand, the camera overlays
         // and the HUD draw over it (`overlay_format`).
-        let finished = (self.overlay_format != self.frame_format)
+        let finished = (self.output.frame.overlay_format != self.output.frame.format)
             .then(|| {
                 let image = surface_frame.as_ref().map(|f| &f.texture);
                 image.or(self.offscreen.as_ref())
@@ -12175,12 +12162,12 @@ impl Renderer {
         let (target_texture, view_target, overlay_format) = match finished {
             Some(texture) => {
                 let view = texture.create_view(&wgpu::TextureViewDescriptor {
-                    format: Some(self.overlay_format),
+                    format: Some(self.output.frame.overlay_format),
                     ..Default::default()
                 });
-                (texture, view, self.overlay_format)
+                (texture, view, self.output.frame.overlay_format)
             }
-            None => (target_texture, view_target, self.frame_format),
+            None => (target_texture, view_target, self.output.frame.format),
         };
         let overlay = Overlay {
             hand_quads: hand_quads * u32::from(!pack_draws_hand && !hand_in_world),
@@ -12237,7 +12224,7 @@ impl Renderer {
         }
         // A 0.2 pack is shown at paper white: HDR output lifts nothing of its world.
         let lifts_world = !frame.title
-            && self.frame_format != LINEAR_FRAME
+            && self.output.frame.format != LINEAR_FRAME
             && self
                 .native
                 .as_ref()
@@ -12482,7 +12469,7 @@ impl Renderer {
             {
                 hdr.mark_hand(encoder, timing.as_mut());
                 // The non-layered 0.2 hand keeps its UI-brightness sentinel, not light marks.
-                if light_marks(self.frame_format, true)
+                if light_marks(self.output.frame.format, true)
                     && let Some(view) = hdr.hand_light_view()
                 {
                     // The light sources in the hand may shine, the rest of it stays at the
@@ -12530,7 +12517,7 @@ impl Renderer {
                     encoder: &mut *encoder,
                     color: target_texture,
                     color_view: view_target,
-                    color_format: self.overlay_format,
+                    color_format: self.output.frame.overlay_format,
                     size: [self.config.width, self.config.height],
                     hand: if overlay.hand_drawn { frame.hand } else { &[] },
                     view_proj: overlay.hand_view_proj,
@@ -12737,7 +12724,7 @@ impl Renderer {
             timing.as_mut(),
         );
         if let Some(radius) = menu_blur {
-            let format = self.overlay_format;
+            let format = self.output.frame.overlay_format;
             let device = &self.device;
             let software = is_software(self.info.device_type);
             let blur = self
@@ -12963,12 +12950,11 @@ impl Renderer {
                     hdr.sdr_screenshot(&self.device, encoder, format, request.size.is_some())
                 })
                 .or_else(|| {
-                    (texture.format() != format && texture.format() == self.frame_format).then(
-                        || {
+                    (texture.format() != format && texture.format() == self.output.frame.format)
+                        .then(|| {
                             self.readback
                                 .unorm_copy(&self.device, encoder, texture, format)
-                        },
-                    )
+                        })
                 });
             let texture = copy.as_ref().unwrap_or(texture);
             Some((request, copy_frame(&self.device, encoder, texture, size)))
@@ -13033,18 +13019,14 @@ impl Renderer {
             ),
             None => (self.config.width, self.config.height, pixels),
         };
-        let hdr = hdr_buffer.zip(self.hdr.as_ref()).and_then(|(buffer, hdr)| {
-            match self.read_frame(buffer) {
-                Ok(pixels) => Some(screenshot::HdrScreenshot {
-                    size: [self.config.width, self.config.height],
-                    pixels: hdr10_to_rgb16(&pixels),
-                    peak: hdr.peak,
-                    paper_white: hdr.paper_white,
-                }),
-                Err(e) => {
-                    log::warn!("Horizon renderer: HDR screenshot readback: {e}");
-                    None
-                }
+        let hdr = hdr_buffer.and_then(|buffer| match self.read_frame(buffer) {
+            Ok(pixels) => Some(screenshot::HdrScreenshot {
+                size: [self.config.width, self.config.height],
+                pixels: hdr10_to_rgb16(&pixels),
+            }),
+            Err(e) => {
+                log::warn!("Horizon renderer: HDR screenshot readback: {e}");
+                None
             }
         });
         Ok(PendingScreenshot {
@@ -13606,78 +13588,6 @@ mod tests {
         // No world (the title screen), or no layered frame (SDR, the compatibility frames).
         assert!(!horizon_tone_curve(true, false, false));
         assert!(!horizon_tone_curve(false, true, false));
-    }
-
-    #[test]
-    fn frame_follows_requires_a_rebuild_when_only_layering_changes() {
-        use super::{LINEAR_FRAME, frame_follows};
-        use wgpu::TextureFormat::Bgra8Unorm;
-
-        let device = (true, true, true, true);
-        assert!(frame_follows(
-            (LINEAR_FRAME, true),
-            true,
-            device,
-            Bgra8Unorm,
-            false,
-            true
-        ));
-        assert!(!frame_follows(
-            (LINEAR_FRAME, true),
-            true,
-            device,
-            Bgra8Unorm,
-            true,
-            false
-        ));
-        assert!(frame_follows(
-            (LINEAR_FRAME, false),
-            true,
-            device,
-            Bgra8Unorm,
-            true,
-            false
-        ));
-        // HDR turned on under a 0.2 pack: the layered frame.
-        assert!(!frame_follows(
-            (LINEAR_FRAME, false),
-            true,
-            device,
-            Bgra8Unorm,
-            true,
-            true
-        ));
-        assert!(frame_follows(
-            (LINEAR_FRAME, true),
-            true,
-            device,
-            Bgra8Unorm,
-            true,
-            true
-        ));
-        assert!(!frame_follows(
-            (LINEAR_FRAME, false),
-            true,
-            device,
-            Bgra8Unorm,
-            false,
-            true
-        ));
-    }
-
-    #[test]
-    fn hdr_availability_refresh_rebuilds_a_frame_created_in_sdr() {
-        use super::{LINEAR_FRAME, frame_follows, hdr::Output, update_hdr_output};
-        use wgpu::TextureFormat::Bgra8Unorm;
-
-        let mut output = None;
-        let mut device = (false, true, true, true);
-        let sdr = (Bgra8Unorm, false);
-        let follows = |frame, device, on| frame_follows(frame, on, device, Bgra8Unorm, false, on);
-        assert!(follows(sdr, device, false));
-        update_hdr_output(&mut output, &mut device, Some(Output::Pq));
-        assert!(!follows(sdr, device, true));
-        assert!(follows((LINEAR_FRAME, true), device, true));
     }
 
     #[test]
@@ -15603,16 +15513,11 @@ mod sprite_upload_tests {
 struct DisplayWatch {
     #[cfg(target_os = "linux")]
     wayland: Option<horizon_hdr::wayland::Watch>,
-    /// Without Wayland's event, what wgpu last read and when to read it again: the OS
-    /// sends no event for a moved window or a changed SDR brightness slider.
-    polled: Option<(DisplayReading, std::time::Instant)>,
+    /// Without Wayland's event, when to read wgpu's values again: the OS sends no event for
+    /// a moved window or a changed SDR brightness slider.
+    polled: Option<std::time::Instant>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-struct DisplayReading {
-    luminance: Option<crate::graphics::Reported>,
-    hdr: Option<bool>,
-}
 impl DisplayReading {
     fn os(info: &wgpu::DisplayHdrInfo) -> Self {
         #[cfg(target_os = "macos")]
@@ -15623,10 +15528,6 @@ impl DisplayReading {
             luminance: os_reported(info),
             hdr,
         }
-    }
-    fn publish(self) {
-        crate::graphics::report(self.luminance);
-        crate::graphics::report_system_hdr(self.hdr);
     }
 }
 /// Potential EDR is fixed for a screen; current EDR follows brightness and must not
@@ -15665,13 +15566,14 @@ impl DisplayWatch {
         let watch = Self {
             #[cfg(target_os = "linux")]
             wayland: None,
-            polled: Some((now, std::time::Instant::now() + DISPLAY_POLL)),
+            polled: Some(std::time::Instant::now() + DISPLAY_POLL),
         };
         (watch, now)
     }
-    /// What the system reports, if that changed since the last call.
+    /// What the system reports, if that changed from `last`.
     fn changed(
         &mut self,
+        last: DisplayReading,
         surface: Option<&wgpu::Surface>,
         adapter: &wgpu::Adapter,
     ) -> Option<DisplayReading> {
@@ -15679,7 +15581,7 @@ impl DisplayWatch {
         if let Some(wayland) = &mut self.wayland {
             return wayland.changed().map(wayland_reading);
         }
-        let (last, next) = self.polled.as_mut()?;
+        let next = self.polled.as_mut()?;
         let time = std::time::Instant::now();
         if time < *next {
             return None;
@@ -15688,9 +15590,8 @@ impl DisplayWatch {
         let now = surface.map_or_else(DisplayReading::default, |surface| {
             DisplayReading::os(&surface.display_hdr_info(adapter))
         });
-        (now != *last).then(|| {
+        (now != last).then(|| {
             log_os_reported(now.luminance);
-            *last = now;
             now
         })
     }

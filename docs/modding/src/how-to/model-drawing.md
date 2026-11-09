@@ -102,3 +102,19 @@ draw.fluid_box(&tank.stack, [0.125, 0.0625, 0.125, 0.875, level, 0.875], options
 - A stack of 0 draws nothing and returns `Ok` without checking `bounds`. Non-finite or reversed
   bounds, a box of more than 65,536 tiled quads and a ratio out of range are
   `FluidBoxError::InvalidBox`. A refusal draws nothing.
+
+## A player's or humanoid's parts
+
+`mob_layer` gets a humanoid's parts as vanilla posed them this frame (`parts`,
+`HumanoidModel.setupAnim`), read-only, to attach geometry to an arm or the head without
+animating it again. Only `HumanoidMobRenderer`'s families have them (players, zombies and their
+kin, skeletons, piglins); every other mob gets `None`, a cow included, though its model has a
+head and a body. `PosedParts` is a fixed-size snapshot: `get(part)` or `iter()`.
+
+`player_submit` can hide single parts of the vanilla player model instead of replacing all of
+it: `hidden.hide(HumanoidPart::Head)`, as a mod drawing its own outer skin layer does.
+
+- Hiding happens after Skin Customization, for this frame only.
+- A hidden part takes its children with it: the hat goes with the head, a sleeve with its arm.
+- Only the body loses the part. The armour, held items and other layers keep every part, and
+  the cape, a layer of its own, stays.

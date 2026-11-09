@@ -1454,3 +1454,89 @@ fn h149_oblique_local_offsets_are_grouped_before_the_origin() {
         "exact oblique local-coordinate bit mismatches: {failures:#?}"
     );
 }
+
+#[test]
+fn a_custom_argument_parses_completes_and_keeps_its_id() {
+    let argument = ArgType::Custom(CustomArgument::new(
+        "example:machine",
+        CustomArgumentKind::Word,
+        |input| {
+            if input == "press" {
+                Ok(input.to_owned())
+            } else {
+                Err(Text::literal(format!("unknown machine `{input}`")))
+            }
+        },
+        |prefix| {
+            ["press", "furnace"]
+                .into_iter()
+                .filter(|machine| machine.starts_with(prefix))
+                .map(|text| CustomSuggestion {
+                    text: text.to_owned(),
+                    tooltip: None,
+                })
+                .collect()
+        },
+    ));
+    let mut dispatcher = Dispatcher::new();
+    let command = dispatcher.literal(0, "machine");
+    let use_node = dispatcher.literal(command, "use");
+    let machine = dispatcher.argument(use_node, "machine", argument);
+    dispatcher.executes(machine, "test");
+
+    let registries = reg();
+    let parsed = dispatcher.parse("machine use press", &registries);
+    let (context, _) = parsed.executable().unwrap();
+    assert_eq!(
+        context.get("machine"),
+        Some(&Arg::Custom {
+            kind: "example:machine".into(),
+            value: "press".into(),
+        })
+    );
+    let error = dispatcher
+        .parse("machine use banana", &registries)
+        .executable()
+        .unwrap_err();
+    assert_eq!(error.message, Text::literal("unknown machine `banana`"));
+
+    let typed = "machine use pr";
+    let (_, suggestions) = dispatcher.suggestions(
+        &dispatcher.parse(typed, &registries),
+        typed.len(),
+        &registries,
+    );
+    assert_eq!(
+        suggestions
+            .iter()
+            .map(|s| s.text.as_str())
+            .collect::<Vec<_>>(),
+        ["press"]
+    );
+}
+
+#[test]
+fn a_greedy_custom_argument_takes_the_rest_of_the_line() {
+    let argument = ArgType::Custom(CustomArgument::new(
+        "example:note",
+        CustomArgumentKind::Greedy,
+        |input| Ok(input.trim().to_owned()),
+        |_| Vec::new(),
+    ));
+    let mut dispatcher = Dispatcher::new();
+    let note = dispatcher.literal(0, "note");
+    let set = dispatcher.literal(note, "set");
+    let text = dispatcher.argument(set, "text", argument);
+    dispatcher.executes(text, "test");
+
+    let registries = reg();
+    let parsed = dispatcher.parse("note set hello there", &registries);
+    let (context, _) = parsed.executable().unwrap();
+    assert_eq!(
+        context.get("text"),
+        Some(&Arg::Custom {
+            kind: "example:note".into(),
+            value: "hello there".into(),
+        })
+    );
+}

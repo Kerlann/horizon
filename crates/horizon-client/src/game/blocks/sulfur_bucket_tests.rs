@@ -7,7 +7,7 @@ use horizon_client::{chunk::Chunk, mobs::Mob};
 use horizon_core::nbt::Tag;
 use std::sync::Arc;
 
-fn game() -> Game<'static> {
+fn game(resources: &mut Option<std::sync::Arc<Resources>>) -> Game<'_> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -29,7 +29,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -97,7 +97,8 @@ fn owned(items: &[(&str, u32)]) -> Vec<(String, u32)> {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn an_empty_bucket_picks_up_an_adult_sulfur_cube() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     // Survival, two buckets: one is filled, the other stays in the hand.
     let id = mob(&mut game, "minecraft:sulfur_cube", |_| {});
     assert_eq!(
@@ -129,7 +130,8 @@ fn an_empty_bucket_picks_up_an_adult_sulfur_cube() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn no_pickup_without_an_empty_bucket_or_of_a_baby_or_primed_cube() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     fn plain(_: &mut Mob) {}
     fn baby(m: &mut Mob) {
         m.extra.age = -24000;
@@ -182,7 +184,8 @@ fn field(tag: &Option<Tag>, key: &str) -> Option<Tag> {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn the_sulfur_bucket_carries_the_live_cube_s_age_lock_and_body() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     let id = mob(&mut game, "minecraft:sulfur_cube", |m| {
         m.extra.age = 1200;
         m.extra.age_locked = true;

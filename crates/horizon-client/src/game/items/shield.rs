@@ -15,6 +15,15 @@ use horizon_world::blocking_rules::{BlockingRules, DamageReduction, ItemDamageFu
 /// `Inventory.SLOT_OFFHAND`: the `using` slot of an off-hand item.
 pub(super) const OFFHAND_SLOT: usize = 40;
 
+/// `LivingEntity.getItemBlockingWith`'s delay: an item that blocks attacks blocks once it has been
+/// used for `BlocksAttacks.blockDelayTicks` (`Math.round(seconds * 20)`) ticks.
+pub(super) fn block_delay_passed(
+    component: &horizon_client::items::BlocksAttacks,
+    ticks: u32,
+) -> bool {
+    ticks as i32 >= (component.delay_seconds * 20.0).round() as i32
+}
+
 impl Game<'_> {
     /// The stack in an inventory slot, the off hand at `OFFHAND_SLOT`.
     pub(super) fn stack_in(&self, slot: usize) -> Option<&ItemStack> {
@@ -62,8 +71,7 @@ impl Game<'_> {
     ) -> Option<Blocking> {
         let (slot, ticks) = self.using?;
         let component = self.blocks_attacks(self.stack_in(slot)?)?;
-        // BlocksAttacks.blockDelayTicks: Math.round(seconds * 20).
-        if (ticks as i32) < (component.delay_seconds * 20.0).round() as i32 {
+        if !block_delay_passed(&component, ticks) {
             return None;
         }
         let tags = &self.stations().enchantments.damage_tags;

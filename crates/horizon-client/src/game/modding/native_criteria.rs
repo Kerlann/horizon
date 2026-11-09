@@ -1,8 +1,7 @@
 //! A mod's own advancement criteria triggers (docs/modding/src/how-to/native-mods.md,
 //! "Advancement triggers"). An advancement of a content mod or a world's data
 //! pack names a trigger of the mod's (`mymod:pipe_connected`); the tree keeps
-//! it as it keeps vanilla's, and the mod fires it where its event happens, as
-//! a NeoForge mod calls its own `SimpleCriterionTrigger.trigger`.
+//! it as it keeps vanilla's, and the mod fires it where its event happens.
 use super::{Game, advancements::item_view};
 use horizon_client::advancements::{self as adv, EntityView};
 use mod_api::{

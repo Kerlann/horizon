@@ -3,6 +3,8 @@ use crate::BlockEntityTypeKey;
 use std::fmt;
 
 /// A native Part cannot be attached to this type during registration.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum BlockEntityPartError {

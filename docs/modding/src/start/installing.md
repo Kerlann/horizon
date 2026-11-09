@@ -7,7 +7,7 @@ Two kinds of mod run in Horizon:
 | **Content mod** | `.hmod` | Data and assets: blocks, items, recipes, loot, tags, models, textures, structures. No code. | Loaded at startup; assets-and-data-only switches can reload live |
 | **Native mod** | `.hmod` | A flat Rust project using the typed hook API, with optional raw injections. | In a game the launcher builds for the player ([native mods](../how-to/native-mods.md)) |
 
-Fabric and NeoForge jars do **not** run as they are: their code calls and patches Minecraft's Java classes, and
+Fabric and NeoForge jars do **not** run as they are: they target Minecraft's Java runtime, and
 Horizon has none. What carries over is the data and assets inside a jar ([modpacks.md](../../../modpacks.md)).
 
 Mods are **off by default**. A fresh install has no `horizon-mods` folder and plays exactly like vanilla 26.3.

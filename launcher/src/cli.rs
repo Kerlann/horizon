@@ -9,7 +9,6 @@ use horizon_launcher::i18n::{tr, trf};
 use horizon_launcher::instances;
 use horizon_launcher::loaders;
 use horizon_launcher::native_mods;
-use horizon_launcher::native_status;
 use horizon_launcher::other_launchers;
 use horizon_launcher::server_list;
 use horizon_launcher::storage::{Category, Storage};
@@ -2298,13 +2297,6 @@ fn github_native(
     });
     github_mods::discard(found);
     let done = done?;
-    // The window's trust notice, once. Nothing is turned on: native mods are always on.
-    let mut settings = backend::Settings::load();
-    if !settings.native_mods_noticed {
-        eprintln!("{}", native_status::NOTICE);
-        settings.native_mods_noticed = true;
-        settings.save()?;
-    }
     for o in done {
         println!(
             "Installed {} {} from GitHub ({}), sha256 {}.",
@@ -2603,14 +2595,6 @@ fn mods(action: ModsCmd, as_json: bool) -> Result<(), String> {
                 Some(target) => java_instance::install(&*source, target, &p, &home, &line)?,
                 None => installed::install(&*source, &p, everything, &home, &line)?,
             };
-            // The first native mod: the window's trust notice, once.
-            let mut settings = backend::Settings::load();
-            let native = done.iter().any(|e| native_status::is_native_file(&e.file));
-            if native && !settings.native_mods_noticed {
-                eprintln!("{}", native_status::NOTICE);
-                settings.native_mods_noticed = true;
-                settings.save()?;
-            }
             if as_json {
                 json(done.iter().map(entry_json).collect());
             }

@@ -46,7 +46,7 @@ pub const ENTITY_ITEMS: EntityCapabilityKey<dyn ResourceHandler<ItemResource>> =
                     return Some(Box::new(ContainerItems { entity, size }));
                 }
                 // A living entity without a container: its equipment (a mob's
-                // or an armor stand's), as NeoForge's wrapper answers it.
+                // or an armor stand's).
                 let size = backend_of(host)?.entity_equipment_size(entity.id())?;
                 return Some(Box::new(LivingEquipment { entity, size }));
             }

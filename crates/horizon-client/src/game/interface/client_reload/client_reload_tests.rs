@@ -797,6 +797,7 @@ fn refused_client_context_keeps_pack_and_listeners() {
             &game.mods,
             game.register_client_reload_listeners(),
             &[],
+            &[],
             &game.pack.assets,
             &game.res,
             &game.pack.context,

@@ -43,6 +43,24 @@ impl Game<'_> {
         }
     }
 
+    /// `save::decode_block_entity` for data loaded into the block at `pos`
+    /// (`/setblock`, `/data`): a jigsaw without `joint` takes the default its
+    /// facing gives (`JigsawBlockEntity.loadAdditional`), which the decode
+    /// alone cannot know.
+    pub(super) fn decode_block_entity_at(&self, pos: Pos, tag: &Tag) -> Option<(Pos, BlockEntity)> {
+        let (key, mut entity) = horizon_client::save::decode_block_entity_for_block(
+            tag,
+            &self.data_block_name([pos.0, pos.1, pos.2]),
+        )?;
+        if let BlockEntity::JigsawBlock(b) = &mut entity
+            && tag.get("joint").is_none()
+            && let Some(front) = self.jigsaw_front(pos)
+        {
+            b.joint = JointType::default_for_front(&front);
+        }
+        Some((key, entity))
+    }
+
     /// `handleSetJigsawBlock` for a guest: only a creative player with game
     /// master commands edits the block.
     pub(super) fn lan_set_jigsaw_block(&mut self, conn: u32, p: play::SetJigsawBlock) {

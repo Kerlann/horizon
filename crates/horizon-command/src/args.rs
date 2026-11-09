@@ -1,11 +1,78 @@
 //! Argument types (Brigadier's and Minecraft's `ArgumentType`s): parsing with
 //! the vanilla error messages and completion suggestions.
 use super::{CmdResult, CommandError, Context, Reader, SuggestionsBuilder};
+use horizon_client_core::text::Text;
+use std::{fmt, sync::Arc};
 
 pub use horizon_client_core::registries::{
     CustomCompletionAction, Registries, RegistryIds, modify_custom_completions,
 };
 pub use horizon_core::game_mode::GameMode;
+
+/// How much of the command line a registered custom argument takes.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum CustomArgumentKind {
+    /// One word: the text up to the next space.
+    Word,
+    /// The rest of the line, spaces included.
+    Greedy,
+}
+
+/// One completion a registered custom argument offers.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CustomSuggestion {
+    /// The text that replaces the typed prefix.
+    pub text: String,
+    /// An optional explanation shown beside the completion.
+    pub tooltip: Option<String>,
+}
+
+/// A mod's registered argument type, as the dispatcher parses and completes it.
+///
+/// The mod API object lives above this crate; the game adapts it into these closures so command
+/// parsing stays independent of the mod API.
+#[derive(Clone)]
+pub struct CustomArgument {
+    id: Arc<str>,
+    kind: CustomArgumentKind,
+    parse: Arc<dyn Fn(&str) -> Result<String, Text> + Send + Sync>,
+    suggest: Arc<dyn Fn(&str) -> Vec<CustomSuggestion> + Send + Sync>,
+}
+
+impl fmt::Debug for CustomArgument {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CustomArgument")
+            .field("id", &self.id)
+            .field("kind", &self.kind)
+            .finish()
+    }
+}
+
+impl CustomArgument {
+    /// A custom argument type `id` (such as `mymod:machine`) that reads a [`CustomArgumentKind`],
+    /// validates it with `parse` and completes it with `suggest`.
+    pub fn new(
+        id: impl Into<Arc<str>>,
+        kind: CustomArgumentKind,
+        parse: impl Fn(&str) -> Result<String, Text> + Send + Sync + 'static,
+        suggest: impl Fn(&str) -> Vec<CustomSuggestion> + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            id: id.into(),
+            kind,
+            parse: Arc::new(parse),
+            suggest: Arc::new(suggest),
+        }
+    }
+    /// The registered type's namespaced id.
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+    /// How much of the line the argument takes.
+    pub fn kind(&self) -> CustomArgumentKind {
+        self.kind
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Resource {
@@ -142,6 +209,8 @@ pub enum ArgType {
     ResourceOrId(&'static str),
     /// ResourceSelectorArgument: a `*`/`?` pattern over a registry's ids.
     ResourceSelector(&'static str),
+    /// A registered argument type: the mod's parser and suggestions.
+    Custom(CustomArgument),
 }
 
 /// FilenameUtils.wildcardMatch (case-sensitive) of `*` and `?` patterns.
@@ -435,6 +504,11 @@ pub enum Arg {
     ScoreHolder(ScoreHolderArg),
     IntRange(IntRange),
     DoubleRange(DoubleRange),
+    /// A custom argument: the id of its registered type and its canonical value.
+    Custom {
+        kind: Arc<str>,
+        value: String,
+    },
 }
 
 pub fn is_id_char(c: char) -> bool {
@@ -1664,6 +1738,26 @@ impl ArgType {
                     }
                 }
             }
+            ArgType::Custom(custom) => {
+                let text = match custom.kind {
+                    CustomArgumentKind::Word => reader.read_unquoted_string().to_owned(),
+                    CustomArgumentKind::Greedy => {
+                        let text = reader.remaining().to_owned();
+                        reader.cursor = reader.string.len();
+                        text
+                    }
+                };
+                match (custom.parse)(&text) {
+                    Ok(value) => Arg::Custom {
+                        kind: custom.id.clone(),
+                        value,
+                    },
+                    Err(message) => {
+                        reader.cursor = start;
+                        return Err(CommandError::at(message, reader));
+                    }
+                }
+            }
         })
     }
     pub fn suggest(
@@ -1840,6 +1934,15 @@ impl ArgType {
             ArgType::Anchor => builder.suggest_matching(["eyes", "feet"]),
             ArgType::Component | ArgType::Style | ArgType::NbtTag => super::snbt::suggest(builder),
             ArgType::Swizzle | ArgType::Message | ArgType::Nbt => {}
+            ArgType::Custom(custom) => {
+                let prefix = builder.remaining().to_owned();
+                for suggestion in (custom.suggest)(&prefix) {
+                    match suggestion.tooltip {
+                        Some(tooltip) => builder.suggest_tooltip(suggestion.text, tooltip),
+                        None => builder.suggest(suggestion.text),
+                    }
+                }
+            }
             _ => {}
         }
     }

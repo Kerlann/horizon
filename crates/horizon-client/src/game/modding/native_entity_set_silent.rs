@@ -2,7 +2,7 @@
 use super::{
     Game,
     commands::Target as EntityTarget,
-    native_entity_commands::{CommandIssuer, EntityCommands, EntityOperation},
+    native_entity_commands::{EntityCommands, EntityOperation},
 };
 use horizon_client::join_seq::residency::{
     Kind,
@@ -12,6 +12,35 @@ use horizon_client::join_seq::residency::{
 use mod_api::*;
 
 impl Game<'_> {
+    /// Ordinary scalar OWN reads bypass foreign pending projections. Explicit
+    /// cached_row retains its speculative metadata and is not a live OWN read.
+    pub(super) fn entity_own_silent(&self, entity: EntityRef) -> Option<Option<bool>> {
+        let writer = self.active_entity_writer()?;
+        if writer.actor.runtime_id != entity.id() {
+            return None;
+        }
+        if self.native_lifecycle.epoch() != Some(entity.epoch()) {
+            return Some(None);
+        }
+        let at = writer.actor.location;
+        let raw = if at.owner.dimension == self.dim.key() {
+            self.resident_read_source(at)
+        } else {
+            let level = LevelRef::new(entity.epoch(), at.owner.dimension);
+            self.levels
+                .parked_of(level.dimension_id())
+                .and_then(|parked| parked.resident_read_source(at))
+        };
+        Some(raw.and_then(|raw| match raw.source {
+            super::native_base_read_rows::BaseReadSource::Mob(mob)
+                if raw.id == entity.id() && !mob.removed =>
+            {
+                Some(mob.silent)
+            }
+            _ => None,
+        }))
+    }
+
     fn admitted_silent_target(&self, entity: EntityRef) -> Result<Target, EntityWriteError> {
         if self.native_lifecycle.epoch() != Some(entity.epoch()) {
             return Err(EntityWriteError::StaleEpoch);
@@ -99,7 +128,7 @@ impl Game<'_> {
         if !self.transactions.is_empty() {
             return WriteReceipt::Refused(EntityWriteError::TransactionActive);
         }
-        let Some(identity) = CommandIssuer::current() else {
+        let Some(native) = mod_api::crash::current_native_mod() else {
             return WriteReceipt::Refused(EntityWriteError::OutsideScope);
         };
         let mut cached = false;
@@ -114,17 +143,13 @@ impl Game<'_> {
             .commands
             .as_mut()
             .expect("active writer has command state");
-        let issuer = match commands.issuer(identity) {
+        let issuer = match mod_api::__private::with_current_converted_package(|package| {
+            commands.issuer(native, package)
+        }) {
             Ok(issuer) => issuer,
             Err(error) => return WriteReceipt::Refused(error),
         };
-        let id = match commands.queue.accept(
-            issuer,
-            writer.turn,
-            target,
-            None,
-            EntityOperation::SetSilent(silent),
-        ) {
+        let id = match commands.accept(issuer, writer, target, EntityOperation::SetSilent(silent)) {
             Ok(id) => id,
             Err(_) => return WriteReceipt::Refused(EntityWriteError::WorkLimit),
         };
@@ -249,10 +274,10 @@ impl Game<'_> {
                     || self.native_entity_command_completed(&terminal),
                 );
             }));
-            if let Err(payload) = result {
-                if dispatch_panic.is_none() {
-                    dispatch_panic = Some(payload);
-                }
+            if let Err(payload) = result
+                && dispatch_panic.is_none()
+            {
+                dispatch_panic = Some(payload);
             }
         }
         // A failed notification cannot leave the turn's remaining accepted

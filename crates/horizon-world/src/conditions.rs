@@ -1,6 +1,6 @@
 //! NeoForge's load conditions (`neoforge:conditions`): a data file that has
 //! the key loads only when every condition in it holds, and is silently
-//! absent otherwise, as NeoForge's `ICondition` does. Mods' packs lean on it
+//! absent otherwise (NeoForge's `ICondition`). Mods' packs lean on it
 //! for cross-mod recipes — a recipe for another mod's material only makes
 //! sense to load when that mod's data is in the root.
 use serde_json::Value;

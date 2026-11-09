@@ -62,6 +62,17 @@ const KINDS: [&str; 8] = [
     "block_pos",
 ];
 
+/// The custom argument types the mods registered, by namespaced id, for the command tree being
+/// built and its server dispatcher.
+pub(super) type CommandArguments = HashMap<String, Arc<dyn mod_api::CommandArgumentType>>;
+
+/// The argument types the installed mods registered at startup.
+pub(super) fn command_arguments() -> CommandArguments {
+    mod_api::__private::command_argument_types()
+        .into_iter()
+        .collect()
+}
+
 /// The brigadier parser of an argument kind, its properties and its dispatcher type.
 fn parser(kind: &str) -> Option<(&'static str, Value, ArgType)> {
     Some(match kind {
@@ -108,7 +119,10 @@ const LEVELS: [&str; 5] = ["", "moderators", "gamemasters", "admins", "owners"];
 
 /// One parsed word of a usage: its key in the tree and its node, without
 /// children.
-fn usage_nodes(usage: &str) -> Result<Vec<(String, Value, bool)>, String> {
+fn usage_nodes(
+    usage: &str,
+    custom: &CommandArguments,
+) -> Result<Vec<(String, Value, bool)>, String> {
     let mut out = Vec::new();
     let mut optional_seen = false;
     let mut greedy_seen = false;
@@ -140,14 +154,41 @@ fn usage_nodes(usage: &str) -> Result<Vec<(String, Value, bool)>, String> {
         if optional_seen && !optional {
             return Err(format!("`{usage}`: `{word}` follows an optional argument"));
         }
-        let Some((parser, properties, _)) = parser(kind) else {
-            return Err(format!("`{usage}`: unknown kind `{kind}`"));
+        let (parser, properties, greedy, custom) = match parser(kind) {
+            Some((parser, properties, _)) => (parser, properties, kind == "text", None),
+            None => {
+                let Some(argument) = custom.get(kind) else {
+                    return Err(format!("`{usage}`: unknown kind `{kind}`"));
+                };
+                let (properties, greedy) = match std::panic::catch_unwind(
+                    std::panic::AssertUnwindSafe(|| argument.kind()),
+                )
+                .map_err(|_| format!("`{usage}`: argument type `{kind}` panicked"))?
+                {
+                    mod_api::CommandArgumentKind::Word => (json!({"type": "word"}), false),
+                    mod_api::CommandArgumentKind::Greedy => (json!({"type": "greedy"}), true),
+                    _ => {
+                        return Err(format!(
+                            "`{usage}`: argument type `{kind}` uses a kind this build cannot read"
+                        ));
+                    }
+                };
+                ("brigadier:string", properties, greedy, Some(kind))
+            }
         };
         optional_seen |= optional;
-        greedy_seen |= kind == "text";
+        greedy_seen |= greedy;
         let mut node = json!({"type": "argument", "parser": parser});
         if !properties.is_null() {
             node["properties"] = properties;
+        }
+        if let Some(id) = custom {
+            // A client that does not know the type parses a word (or the rest of the line).
+            // Fabric sends the registered type's id, which an unmodded client cannot read and
+            // whose node it drops; a Brigadier string keeps the tree valid and asks the server
+            // for the completions.
+            node["custom_argument"] = id.into();
+            node["suggestions"] = "minecraft:ask_server".into();
         }
         out.push((name.to_owned(), node, optional));
     }
@@ -166,12 +207,13 @@ fn usage_nodes(usage: &str) -> Result<Vec<(String, Value, bool)>, String> {
 pub(super) fn command_tree(
     commands: &[NativeCommand],
     vanilla: impl Fn(&str) -> bool,
+    custom: &CommandArguments,
 ) -> (Value, HashMap<String, u8>, Vec<String>) {
     let mut root: Map<String, Value> = Map::new();
     let mut levels: HashMap<String, u8> = HashMap::new();
     let mut problems = Vec::new();
     for command in commands {
-        let nodes = match usage_nodes(&command.usage) {
+        let nodes = match usage_nodes(&command.usage, custom) {
             Ok(n) => n,
             Err(e) => {
                 problems.push(e);
@@ -189,10 +231,12 @@ pub(super) fn command_tree(
             let Some(entry) = children.get(name) else {
                 break;
             };
-            // `word` and `text` share a parser; their properties tell them apart.
+            // `word` and `text` share a parser; their properties tell them apart, and a custom
+            // kind shares the word (or greedy) properties with them.
             if entry["type"] != node["type"]
                 || entry["parser"] != node["parser"]
                 || entry["properties"] != node["properties"]
+                || entry["custom_argument"] != node["custom_argument"]
             {
                 conflict = Some(name);
                 break;
@@ -280,25 +324,20 @@ pub(super) fn register_dispatcher(
     dispatcher: &mut Dispatcher,
     tree: &Value,
     handler: &'static str,
+    arguments: &CommandArguments,
 ) {
     fn add(
         dispatcher: &mut Dispatcher,
         parent: usize,
         children: &Map<String, Value>,
         handler: &'static str,
+        arguments: &CommandArguments,
     ) {
         for (name, node) in children {
             let id = if node["type"] == "literal" {
                 dispatcher.literal(parent, name)
             } else {
-                let ty = KINDS
-                    .into_iter()
-                    .filter_map(parser)
-                    .find_map(|(id, properties, ty)| {
-                        (node["parser"] == id && node["properties"] == properties).then_some(ty)
-                    })
-                    .expect("native command tree contains registered parsers");
-                dispatcher.argument(parent, name, ty)
+                dispatcher.argument(parent, name, argument_type(node, arguments))
             };
             let level = node["permissions"]["permission"]["level"]
                 .as_str()
@@ -315,13 +354,91 @@ pub(super) fn register_dispatcher(
                 );
             }
             if let Some(children) = node["children"].as_object() {
-                add(dispatcher, id, children, handler);
+                add(dispatcher, id, children, handler, arguments);
             }
         }
     }
     if let Some(children) = tree["children"].as_object() {
-        add(dispatcher, 0, children, handler);
+        add(dispatcher, 0, children, handler, arguments);
     }
+}
+
+/// The message a mod's argument parser refused with, as the engine's text. A text the
+/// boundary cannot carry is reported as its own diagnostic: the refusal still fails the
+/// argument, never silently passing it.
+fn refused_argument_text(error: mod_api::CommandArgumentError) -> Text {
+    let message: mod_api::Text = error.into();
+    match message.try_into_engine(&()) {
+        Ok(text) => text,
+        Err(error) => Text::literal(error.to_string()),
+    }
+}
+
+/// The dispatcher type of one validated tree node: a vanilla kind, or the mod's registered
+/// argument type with its parser and suggestions.
+fn argument_type(node: &Value, arguments: &CommandArguments) -> ArgType {
+    if let Some(id) = node["custom_argument"].as_str() {
+        let argument = arguments
+            .get(id)
+            .unwrap_or_else(|| panic!("native command tree names unregistered argument type {id}"));
+        let parse = argument.clone();
+        let suggest = argument.clone();
+        // Use the validated tree property rather than calling mod code again.
+        let kind = if node["properties"]["type"] == "greedy" {
+            horizon_client::command::CustomArgumentKind::Greedy
+        } else {
+            horizon_client::command::CustomArgumentKind::Word
+        };
+        return ArgType::Custom(horizon_client::command::CustomArgument::new(
+            id,
+            kind,
+            move |input| {
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| parse.parse(input)))
+                    .map_err(|_| Text::tr("commands.generic.failed", &[]))?
+                    .map_err(refused_argument_text)
+            },
+            move |prefix| {
+                let Ok(results) = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    suggest.suggest(prefix)
+                })) else {
+                    eprintln!("mod command argument completer panicked");
+                    return Vec::new();
+                };
+                // Suggestions use STRING_UTF8 (Java UTF-16 length). Tooltips are
+                // literal NBT strings, whose modified UTF-8 byte length is unsigned u16.
+                if results.iter().any(|s| {
+                    s.text.encode_utf16().count() > 32767
+                        || s.tooltip.as_ref().is_some_and(|tip| {
+                            tip.encode_utf16()
+                                .map(|unit| match unit {
+                                    1..=0x7f => 1,
+                                    0..=0x7ff => 2,
+                                    _ => 3,
+                                })
+                                .sum::<usize>()
+                                > 65535
+                        })
+                }) {
+                    eprintln!("mod command argument completion exceeds the protocol string limit");
+                    return Vec::new();
+                }
+                results
+                    .into_iter()
+                    .map(|suggestion| horizon_client::command::CustomSuggestion {
+                        text: suggestion.text,
+                        tooltip: suggestion.tooltip,
+                    })
+                    .collect()
+            },
+        ));
+    }
+    KINDS
+        .into_iter()
+        .filter_map(parser)
+        .find_map(|(id, properties, ty)| {
+            (node["parser"] == id && node["properties"] == properties).then_some(ty)
+        })
+        .expect("native command tree contains registered parsers")
 }
 
 /// The live player body, or a guest record outside a player swap.
@@ -1747,6 +1864,7 @@ fn system_chat(line: &Text) -> C {
 pub(super) struct NativeCommands {
     levels: HashMap<String, u8>,
     tree: Value,
+    arguments: CommandArguments,
 }
 
 /// Where the game calls the server hook points.
@@ -1778,9 +1896,12 @@ impl Game<'_> {
             self.server_lists.is_some(),
         );
         commands.extend(extras.iter().cloned());
-        let (tree, mut levels, problems) = command_tree(&commands, |name| {
-            host.hub.vanilla_command(name) || vanilla.find(name).is_some()
-        });
+        let arguments = command_arguments();
+        let (tree, mut levels, problems) = command_tree(
+            &commands,
+            |name| host.hub.vanilla_command(name) || vanilla.find(name).is_some(),
+            &arguments,
+        );
         for p in problems {
             log::warn!("Horizon: a native mod's command was left out: {p}");
         }
@@ -1799,6 +1920,7 @@ impl Game<'_> {
         host.native_commands = Some(NativeCommands {
             levels,
             tree: execution_tree,
+            arguments,
         });
         if refresh {
             host.hub.store_mod_commands(0, tree);
@@ -1823,6 +1945,7 @@ impl Game<'_> {
                 Arc::make_mut(&mut self.ui.dispatcher.0),
                 &commands.tree,
                 "native_mod_command",
+                &commands.arguments,
             );
         }
     }
@@ -1989,6 +2112,10 @@ impl Game<'_> {
                         .try_into_api()
                         .expect("command item validation resolves registered items"),
                 ),
+                Arg::Custom { kind, value } => Value::Custom {
+                    kind: kind.to_string(),
+                    value,
+                },
                 _ => unreachable!("the native tree contains only registered native argument kinds"),
             };
             arguments.push(CommandArgument::new(argument.name, value));
@@ -2451,7 +2578,7 @@ mod tests {
     }
 
     fn tree(commands: &[NativeCommand]) -> (Value, HashMap<String, u8>, Vec<String>) {
-        command_tree(commands, |name| name == "give")
+        command_tree(commands, |name| name == "give", &HashMap::new())
     }
 
     fn stack(item: &str, count: u32) -> Option<ItemStack> {
@@ -2567,7 +2694,12 @@ mod tests {
             assert_eq!(problems.len(), 1, "{first} then {second}: {problems:?}");
             assert!(problems[0].starts_with(&format!("`{second}`")));
             let mut dispatcher = Dispatcher::new();
-            register_dispatcher(&mut dispatcher, &tree, "native_mod_command");
+            register_dispatcher(
+                &mut dispatcher,
+                &tree,
+                "native_mod_command",
+                &HashMap::new(),
+            );
             let registries = horizon_client::command::Registries::default();
             assert!(dispatcher.parse(line, &registries).executable().is_ok());
             // The kept kind decides: `word` stops at the space, `text` takes it all.
@@ -2585,6 +2717,185 @@ mod tests {
         assert!(KINDS.into_iter().all(|kind| parser(kind).is_some()));
     }
 
+    /// A test mod's argument type: named machines, one word, completed by prefix.
+    struct MachineArgument;
+
+    impl mod_api::CommandArgumentType for MachineArgument {
+        fn kind(&self) -> mod_api::CommandArgumentKind {
+            mod_api::CommandArgumentKind::Word
+        }
+
+        fn parse(&self, input: &str) -> Result<String, mod_api::CommandArgumentError> {
+            match input {
+                "press" | "furnace" => Ok(input.to_owned()),
+                _ => Err(mod_api::CommandArgumentError::new(
+                    mod_api::Text::translate(
+                        "test.commands.machine.unknown",
+                        vec![mod_api::Text::literal(input)],
+                    ),
+                )),
+            }
+        }
+
+        fn suggest(&self, prefix: &str) -> Vec<mod_api::CommandSuggestion> {
+            ["press", "furnace"]
+                .into_iter()
+                .filter(|machine| machine.starts_with(prefix))
+                .map(mod_api::CommandSuggestion::new)
+                .collect()
+        }
+    }
+
+    struct HostileArgument;
+
+    impl mod_api::CommandArgumentType for HostileArgument {
+        fn kind(&self) -> mod_api::CommandArgumentKind {
+            mod_api::CommandArgumentKind::Word
+        }
+        fn parse(&self, input: &str) -> Result<String, mod_api::CommandArgumentError> {
+            if input == "panic" {
+                panic!("parser")
+            }
+            Ok(input.into())
+        }
+        fn suggest(&self, prefix: &str) -> Vec<mod_api::CommandSuggestion> {
+            match prefix {
+                "panic" => panic!("completer"),
+                "text" => vec![mod_api::CommandSuggestion::new("a".repeat(32768))],
+                "tip" => vec![mod_api::CommandSuggestion::with_tooltip(
+                    "ok",
+                    "a".repeat(65536),
+                )],
+                "unicode" => vec![mod_api::CommandSuggestion::with_tooltip(
+                    "ok",
+                    "\0".repeat(32768),
+                )],
+                _ => vec![mod_api::CommandSuggestion::with_tooltip(
+                    "a".repeat(32767),
+                    "a".repeat(65535),
+                )],
+            }
+        }
+    }
+
+    #[test]
+    fn hostile_argument_callbacks_are_refused_without_losing_the_dispatcher() {
+        let arguments: CommandArguments = HashMap::from([(
+            "test:hostile".into(),
+            Arc::new(HostileArgument) as Arc<dyn mod_api::CommandArgumentType>,
+        )]);
+        let (tree, _, problems) = super::command_tree(
+            &[NativeCommand::new("probe <value:test:hostile>")],
+            |_| false,
+            &arguments,
+        );
+        assert!(problems.is_empty());
+        let mut dispatcher = Dispatcher::new();
+        register_dispatcher(&mut dispatcher, &tree, "native_mod_command", &arguments);
+        let registries = horizon_client::command::Registries::default();
+        for prefix in ["panic", "text", "tip", "unicode"] {
+            let input = format!("probe {prefix}");
+            let parsed = dispatcher.parse(&input, &registries);
+            assert_eq!(parsed.executable().is_err(), prefix == "panic");
+            let (_, suggestions) = dispatcher.suggestions(&parsed, input.len(), &registries);
+            assert!(suggestions.is_empty(), "{prefix}");
+        }
+        let input = "probe valid";
+        let parsed = dispatcher.parse(input, &registries);
+        let (_, suggestions) = dispatcher.suggestions(&parsed, input.len(), &registries);
+        assert_eq!(suggestions.len(), 1);
+        assert_eq!(suggestions[0].text.len(), 32767);
+    }
+
+    #[test]
+    fn panicking_argument_kind_is_left_out_of_the_tree() {
+        struct PanicKind;
+        impl mod_api::CommandArgumentType for PanicKind {
+            fn kind(&self) -> mod_api::CommandArgumentKind {
+                panic!("kind")
+            }
+            fn parse(&self, _: &str) -> Result<String, mod_api::CommandArgumentError> {
+                unreachable!()
+            }
+            fn suggest(&self, _: &str) -> Vec<mod_api::CommandSuggestion> {
+                unreachable!()
+            }
+        }
+        let arguments: CommandArguments = HashMap::from([(
+            "test:panic".into(),
+            Arc::new(PanicKind) as Arc<dyn mod_api::CommandArgumentType>,
+        )]);
+        let (_, _, problems) = super::command_tree(
+            &[NativeCommand::new("probe <value:test:panic>")],
+            |_| false,
+            &arguments,
+        );
+        assert_eq!(problems.len(), 1);
+        assert!(problems[0].contains("panicked"));
+    }
+
+    struct Machines;
+
+    #[mod_api::__subscriptions]
+    impl mod_api::Hooks for Machines {
+        fn register(&self, r: &mut dyn mod_api::Registrar, _: &mod_api::RegistrationContext) {
+            r.register_command_argument("machine", MachineArgument);
+        }
+    }
+
+    #[test]
+    fn a_registered_argument_type_parses_and_completes_its_values() {
+        mod_api::__private::part_tests::install_parts_fixture(&[mod_api::ModEntry::new(
+            "test",
+            Box::new(Machines),
+        )])
+        .unwrap();
+        let arguments = command_arguments();
+        assert!(arguments.contains_key("test:machine"));
+
+        let (tree, _, problems) = super::command_tree(
+            &[NativeCommand::new("machine use <machine:test:machine>")],
+            |_| false,
+            &arguments,
+        );
+        assert!(problems.is_empty(), "{problems:?}");
+        let machine = &tree["children"]["machine"]["children"]["use"]["children"]["machine"];
+        assert_eq!(machine["custom_argument"], "test:machine");
+        assert_eq!(machine["suggestions"], "minecraft:ask_server");
+        assert_eq!(machine["properties"], json!({"type": "word"}));
+
+        let mut dispatcher = Dispatcher::new();
+        register_dispatcher(&mut dispatcher, &tree, "native_mod_command", &arguments);
+        let registries = horizon_client::command::Registries::default();
+        let parsed = dispatcher.parse("machine use press", &registries);
+        let (context, _) = parsed.executable().unwrap();
+        assert_eq!(
+            context.get("machine"),
+            Some(&Arg::Custom {
+                kind: "test:machine".into(),
+                value: "press".into(),
+            })
+        );
+        assert!(
+            dispatcher
+                .parse("machine use banana", &registries)
+                .executable()
+                .is_err(),
+            "the mod's parser rejects what it does not know"
+        );
+
+        let typed = "machine use pr";
+        let parse = dispatcher.parse(typed, &registries);
+        let (_, suggestions) = dispatcher.suggestions(&parse, typed.len(), &registries);
+        assert_eq!(
+            suggestions
+                .iter()
+                .map(|s| s.text.as_str())
+                .collect::<Vec<_>>(),
+            ["press"]
+        );
+    }
+
     #[test]
     fn native_usages_parse_with_their_permissions_in_the_server_dispatcher() {
         let (tree, _, problems) = tree(&[
@@ -2594,7 +2905,12 @@ mod tests {
         ]);
         assert!(problems.is_empty(), "{problems:?}");
         let mut dispatcher = Dispatcher::new();
-        register_dispatcher(&mut dispatcher, &tree, "native_mod_command");
+        register_dispatcher(
+            &mut dispatcher,
+            &tree,
+            "native_mod_command",
+            &HashMap::new(),
+        );
         let mut registries = horizon_client::command::Registries::default();
         assert!(dispatcher.parse("warp", &registries).executable().is_ok());
         assert!(
@@ -3127,7 +3443,12 @@ mod tests {
                 let (tree, _, problems) = tree(&commands);
                 assert!(problems.is_empty(), "{problems:?}");
                 let mut dispatcher = Dispatcher::new();
-                register_dispatcher(&mut dispatcher, &tree, "native_mod_command");
+                register_dispatcher(
+                    &mut dispatcher,
+                    &tree,
+                    "native_mod_command",
+                    &HashMap::new(),
+                );
                 for permission in 0..=4 {
                     let registries = horizon_client::command::Registries {
                         permission,
@@ -3157,7 +3478,12 @@ mod tests {
             let (tree, _, problems) = tree(&commands);
             assert!(problems.is_empty(), "{problems:?}");
             let mut dispatcher = Dispatcher::new();
-            register_dispatcher(&mut dispatcher, &tree, "native_mod_command");
+            register_dispatcher(
+                &mut dispatcher,
+                &tree,
+                "native_mod_command",
+                &HashMap::new(),
+            );
             for permission in 0..=4 {
                 let registries = horizon_client::command::Registries {
                     permission,
@@ -3188,7 +3514,12 @@ mod tests {
             let (tree, _, problems) = tree(&commands);
             assert!(problems.is_empty(), "{problems:?}");
             let mut dispatcher = Dispatcher::new();
-            register_dispatcher(&mut dispatcher, &tree, "native_mod_command");
+            register_dispatcher(
+                &mut dispatcher,
+                &tree,
+                "native_mod_command",
+                &HashMap::new(),
+            );
             for permission in 0..=4 {
                 let registries = horizon_client::command::Registries {
                     permission,
@@ -3214,7 +3545,12 @@ mod tests {
         ]);
         assert_eq!(problems.len(), 1);
         let mut dispatcher = Dispatcher::new();
-        register_dispatcher(&mut dispatcher, &tree, "native_mod_command");
+        register_dispatcher(
+            &mut dispatcher,
+            &tree,
+            "native_mod_command",
+            &HashMap::new(),
+        );
         for permission in 0..=4 {
             let registries = horizon_client::command::Registries {
                 permission,
@@ -3600,6 +3936,8 @@ mod fake_action_tests {
                 "the count doesn't climb"
             );
 
+            let diamonds = Some(ItemStack::new("minecraft:diamond", 5));
+            game.ender_items[0] = diamonds.clone();
             let ender = [2, 64, 0];
             place(game, ender, "minecraft:ender_chest");
             assert_eq!(
@@ -3608,9 +3946,16 @@ mod fake_action_tests {
             );
             assert!(game.ender_open.is_none());
             let key = (ender[0], ender[1], ender[2]);
-            assert!(
-                game.world.block_entities.get(&key).is_none(),
-                "a stand-in chest stayed",
+            match game.world.block_entities.get(&key) {
+                Some(horizon_client::chunk::block_entity::BlockEntity::Chest(items)) => assert!(
+                    items.iter().all(Option::is_none),
+                    "the player's items stayed"
+                ),
+                other => panic!("the ender chest lost its block entity: {other:?}"),
+            }
+            assert_eq!(
+                game.ender_items[0], diamonds,
+                "the server's own ender items changed"
             );
             assert!(!game.lid_openers.contains_key(&key), "its lid stayed open");
         });

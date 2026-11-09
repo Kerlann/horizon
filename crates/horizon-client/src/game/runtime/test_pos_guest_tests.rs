@@ -14,7 +14,7 @@ use std::sync::{Arc, atomic::AtomicI32, mpsc};
 const GUEST: &str = "H274Guest";
 
 /// A host on a stone floor with one connected, placed guest (conn 2).
-fn game() -> Game<'static> {
+fn game(resources: &mut Option<std::sync::Arc<Resources>>) -> Game<'_> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -36,7 +36,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -125,7 +125,8 @@ fn run(game: &mut Game<'_>, command: &str) -> (bool, Vec<String>) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn test_pos_as_a_guest_uses_the_guest_s_view() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     // One test box, under the guest (TestCommand.createTestPositionAround:
     // around the host, who stands there for it).
     game.player.as_mut().unwrap().position = Vec3::new(16.5, 100.0, 0.5);
@@ -165,7 +166,8 @@ fn test_pos_as_a_guest_uses_the_guest_s_view() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn test_pos_refuses_other_sources_and_restores_the_views() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     game.player.as_mut().unwrap().position = Vec3::new(16.5, 100.0, 0.5);
     assert!(run(&mut game, "test create minecraft:always_pass 10 10 10").0);
     game.player.as_mut().unwrap().position = Vec3::new(4.5, 101.0, 6.5);

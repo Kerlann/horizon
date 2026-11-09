@@ -297,6 +297,14 @@ pub trait LivingBackend {
     #[access(WorldOnly)]
     fn living_used_item_hand(&self, living: LivingRef) -> Option<Hand>;
     /// Side: both.
+    /// `LivingEntity.isBlocking`: whether a player or a mob holds up an item that blocks attacks
+    /// (a shield, or any item with `minecraft:blocks_attacks`): it is using that item, from either
+    /// hand, and has used it for the component's `block_delay_seconds` (5 ticks for a shield).
+    /// False while it uses nothing or another item. On a client, the local player's only. None
+    /// for armor stands and the dragon, and for a stale handle.
+    #[access(WorldOnly)]
+    fn living_is_blocking(&self, living: LivingRef) -> Option<bool>;
+    /// Side: both.
     /// `LivingEntity.getDimensions(Pose)`: the box the living entity has in
     /// `pose` — its width, height and eye height, `minecraft:scale`
     /// included, the fixed 0.2 box of a sleeping pose included. The species'

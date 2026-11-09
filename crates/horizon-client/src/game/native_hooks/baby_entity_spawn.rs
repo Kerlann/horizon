@@ -12,8 +12,7 @@ impl Game<'_> {
     /// have yet. Set `cancel` for no baby: the
     /// parents still rest and lose their love (their ages were already set
     /// to 6000), but there is no baby, no experience, no `animals_bred`
-    /// statistic, no advancement and no heart particles, as NeoForge
-    /// returns before `finalizeSpawnChildFromBreeding`. Not fired for
+    /// statistic, no advancement and no heart particles. Not fired for
     /// turtles, frogs and sniffers (an egg, no baby), villagers or
     /// armadillos' own paths. On the server. API 395.
     pub(in crate::game) fn native_baby_entity_spawn(

@@ -21,7 +21,7 @@ pub struct ModTickets {
 
 impl ModTickets {
     /// Tickets read from a save, whose controllers are registered (the save
-    /// drops the others, as NeoForge does): they wait in the loaded set for
+    /// drops the others): they wait in the loaded set for
     /// validation and hold nothing yet.
     pub fn from_saved(saved: Vec<ModTicket>) -> Self {
         Self {

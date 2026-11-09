@@ -408,7 +408,10 @@ mod tests {
     use super::*;
 
     /// A game on the prepared resources with a creative player.
-    fn game_with_player(root: &std::path::Path) -> (Game<'static>, [f64; 3]) {
+    fn game_with_player<'a>(
+        resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>,
+        root: &std::path::Path,
+    ) -> (Game<'a>, [f64; 3]) {
         use crate::game::{Audio, Options, Progress, Settings, load_resources};
         let settings = Settings::default();
         let loaded = load_resources(
@@ -427,7 +430,7 @@ mod tests {
         let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
         options.resources = root.to_path_buf();
         options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
-        let res: &'static _ = Box::leak(Box::new(loaded.resources));
+        let res = resources.insert(loaded.resources);
         let mut game = Game::new(
             res,
             loaded.pack,
@@ -461,7 +464,8 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn bow_and_crossbow_shots_sound_at_the_feet_not_the_eye() {
         let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
-        let (mut game, feet) = game_with_player(&root);
+        let mut resources = None;
+        let (mut game, feet) = game_with_player(&mut resources, &root);
         let eye = game.eye_position().unwrap();
         assert_ne!(eye, feet);
 
@@ -497,7 +501,8 @@ mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_flame_crossbow_shoots_burning_arrows() {
         let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
-        let (mut game, _) = game_with_player(&root);
+        let mut resources = None;
+        let (mut game, _) = game_with_player(&mut resources, &root);
         // Shoots a crossbow with `enchantments` and one arrow loaded per shot,
         // and returns how long each new arrow burns for.
         let mut shoot = |enchantments: &[&str], shots: usize| -> Vec<i32> {

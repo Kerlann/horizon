@@ -1532,7 +1532,7 @@ impl Game<'_> {
         if !self.minecart_improvements() {
             let (xd, zd) = (c.previous.x - c.position.x, c.previous.z - c.position.z);
             if xd * xd + zd * zd > 0.001 {
-                c.yaw = zd.atan2(xd).to_degrees() as f32;
+                c.yaw = horizon_core::geometry::trig::atan2_degrees_double(zd, xd);
                 if c.flipped {
                     c.yaw += 180.0;
                 }
@@ -4123,7 +4123,8 @@ mod tnt_impact_tests {
         // OldMinecartBehavior.moveAlongTrack places the cart at the rail's top
         // height, moves it horizontally (Entity.move records the step) and settles
         // it on the slope; the tick's applyEffectsFromBlocks still sweeps the step.
-        let mut game = crate::game::game_tests::tests::server_game();
+        let mut resources = None;
+        let mut game = crate::game::game_tests::tests::server_game(&mut resources);
         let registry = game.pack.assets.registry;
         let stone = registry.default_state("minecraft:stone").unwrap();
         let plate = registry

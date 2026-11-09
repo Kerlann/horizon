@@ -665,12 +665,57 @@ pub(super) fn compile(
     }
     cmd.arg("-o").arg(&binary).arg(&main);
     super::run(cmd, "Linking the game", |_| {})?;
-    Ok((binary, vec![game_library, standard_library(rust)?]))
+    let mut runtime = game_dylibs(&deps)?;
+    runtime.push(standard_library(rust)?);
+    Ok((binary, runtime))
+}
+
+/// The game's own dynamic libraries, which the executable loads from beside itself: the game and
+/// the wasm mod runtime it links (`tools/prebuilt_game.py` checks the archive holds both).
+fn game_dylibs(deps: &Path) -> Result<Vec<PathBuf>, String> {
+    ["horizon_client", "horizon_mod_wasm"]
+        .into_iter()
+        .map(|krate| {
+            let path = library(deps, krate)?;
+            if path.extension().is_some_and(|ext| ext != "rmeta") {
+                Ok(path)
+            } else {
+                Err(trf(
+                    "The prebuilt game has no {crate}.",
+                    &[("crate", krate)],
+                ))
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_executable_carries_the_game_and_its_wasm_runtime() {
+        let deps = super::super::tests::dir("prebuilt-dylibs");
+        let ext = std::env::consts::DLL_EXTENSION;
+        fs::write(deps.join(format!("libhorizon_client.{ext}")), b"").unwrap();
+        fs::write(deps.join("libhorizon_mod_wasm-0123.rmeta"), b"").unwrap();
+        // Metadata alone has no code to load: the archive is incomplete.
+        assert!(game_dylibs(&deps).is_err());
+        fs::write(deps.join(format!("libhorizon_mod_wasm.{ext}")), b"").unwrap();
+        let names: Vec<_> = game_dylibs(&deps)
+            .unwrap()
+            .iter()
+            .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(
+            names,
+            [
+                format!("libhorizon_client.{ext}"),
+                format!("libhorizon_mod_wasm.{ext}")
+            ]
+        );
+        fs::remove_dir_all(deps).unwrap();
+    }
 
     #[test]
     fn plans_all_private_sources_and_keeps_named_refusals_invalid() {

@@ -231,6 +231,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::sound_state` | crosses | Wire call |
 | `Backend::sound_stop` | crosses | Wire call |
 | `Backend::sound_fade` | crosses | Wire call |
+| `Backend::entity_command_query` | crosses | Wire call |
 | `Backend::entity_cached_row` | crosses | Wire call |
 | `Backend::entity_tags` | crosses | Wire call |
 | `Backend::entity_name` | crosses | Wire call |
@@ -437,6 +438,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::living_owner` | crosses | Wire call |
 | `Backend::living_item_use_remaining` | crosses | Wire call |
 | `Backend::living_used_item_hand` | crosses | Wire call |
+| `Backend::living_is_blocking` | crosses | Wire call |
 | `Backend::living_dimensions_for_pose` | crosses | Wire call |
 | `Backend::living_can_use_portal` | crosses | Wire call |
 | `Backend::living_in_melee_range` | crosses | Wire call |
@@ -955,6 +957,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Registrar::block_key` | crosses | Wire call |
 | `Registrar::attach_block_part` | crosses | Wire call |
 | `Registrar::attach_block_part_tag` | crosses | Wire call |
+| `Registrar::add_command_argument` | crosses | Wire call |
 | `Registrar::add_dimension` | crosses | Wire call |
 | `Registrar::effect_key` | crosses | Wire call |
 | `Registrar::provide_entity_capability` | crosses | Wire call |
@@ -1103,8 +1106,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Hooks::register_client_commands` | crosses | Wire call |
 | `Hooks::zoom` | crosses | Wire call |
 | `Hooks::minimap` | crosses | Wire call |
-| `Hooks::settings` | crosses | Wire call |
-| `Hooks::settings_click` | crosses | Wire call |
+| `Hooks::setting_changed` | crosses | Wire call |
 | `Hooks::panel_event` | crosses | Wire call |
 | `Hooks::block_entity_container` | crosses | Wire call |
 | `Hooks::register_commands` | crosses | Wire call |
@@ -1420,6 +1422,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Hooks::block_screen_effect_draw` | crosses | Wire call |
 | `Hooks::block_tool_modification` | crosses | Wire call |
 | `Hooks::bonemeal` | crosses | Wire call |
+| `Hooks::build_creative_mode_tab_contents` | crosses | Wire call |
 | `Hooks::calculate_player_turn` | crosses | Wire call |
 | `Hooks::camera_pose` | crosses | Wire call |
 | `Hooks::camera_type_cycle` | crosses | Wire call |
@@ -1471,6 +1474,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Hooks::ender_entity_teleport` | crosses | Wire call |
 | `Hooks::enderman_anger` | crosses | Wire call |
 | `Hooks::entity_change_block_pre` | crosses | Wire call |
+| `Hooks::entity_command_completed` | crosses | Wire call |
 | `Hooks::entity_constructing` | crosses | Wire call |
 | `Hooks::entity_interact_specific` | crosses | Wire call |
 | `Hooks::entity_invulnerability_check` | crosses | Wire call |
@@ -1588,6 +1592,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Hooks::register_range_select_item_model_property` | crosses | Wire call |
 | `Hooks::register_runtime_sprites` | crosses | Wire call |
 | `Hooks::register_select_item_model_property` | crosses | Wire call |
+| `Hooks::register_texture_atlases` | crosses | Wire call |
 | `Hooks::render_arm` | crosses | Wire call |
 | `Hooks::render_frame_post` | crosses | Wire call |
 | `Hooks::render_frame_pre` | crosses | Wire call |
@@ -1730,6 +1735,9 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `BlockTintSource::relevant_properties` | crosses | Wire call |
 | `ParticleProvider::tick` | crosses | Wire call |
 | `EnchantmentDamageEffect::apply` | crosses | Wire call |
+| `CommandArgumentType::kind` | crosses | Wire call |
+| `CommandArgumentType::parse` | crosses | Wire call |
+| `CommandArgumentType::suggest` | crosses | Wire call |
 | `GroundStateProvider::state_at` | crosses | Wire call |
 | `PlaceProvider::stack` | crosses | Wire call |
 | `PlaceProvider::insert` | crosses | Wire call |
