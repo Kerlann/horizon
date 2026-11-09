@@ -13,6 +13,7 @@ pub struct GuestList {
     connections: FxHashMap<u32, usize>,
     identities: FxHashMap<(u128, u32), usize>,
     online_profiles: FxHashMap<u128, usize>,
+    vehicle_riders: FxHashMap<u32, std::collections::HashSet<u32>>,
     residency: Option<(
         crate::join_seq::residency::Journal,
         fn(&str) -> mod_api::DimensionKey,
@@ -73,6 +74,7 @@ impl GuestList {
             .as_ref()
             .map(|(_, key)| key(&self.rows[index].dimension));
         let released = self.rows[index].released;
+        let vehicle = self.rows[index].vehicle;
         let edit = Edit {
             list: self,
             index,
@@ -80,6 +82,7 @@ impl GuestList {
             registration,
             dimension,
             released,
+            vehicle,
         };
         update(&mut edit.list.rows[index])
     }
@@ -303,7 +306,27 @@ impl GuestList {
         self.rows.reverse();
         self.reindex();
     }
+    /// Candidate connections only. Each reader must validate current primary membership.
+    pub fn rider_connections(&self, vehicle: u32) -> impl Iterator<Item = u32> + '_ {
+        self.vehicle_riders
+            .get(&vehicle)
+            .into_iter()
+            .flat_map(|riders| riders.iter().copied())
+    }
+    fn update_vehicle_rider(&mut self, conn: u32, old: Option<u32>, new: Option<u32>) {
+        if let Some(old) = old
+            && let Some(riders) = self.vehicle_riders.get_mut(&old)
+        {
+            riders.remove(&conn);
+        }
+        if let Some(new) = new {
+            self.vehicle_riders.entry(new).or_default().insert(conn);
+        }
+    }
     fn reindex(&mut self) {
+        for riders in self.vehicle_riders.values_mut() {
+            riders.clear();
+        }
         self.simulation.clear();
         self.connections.clear();
         self.identities.clear();
@@ -315,7 +338,16 @@ impl GuestList {
             if let Some(uuid) = online_profile_uuid(guest) {
                 self.online_profiles.entry(uuid).or_insert(index);
             }
-            self.connections.entry(guest.conn).or_insert(index);
+            let first = *self.connections.entry(guest.conn).or_insert(index) == index;
+            if first
+                && !guest.released
+                && let Some(vehicle) = guest.vehicle
+            {
+                self.vehicle_riders
+                    .entry(vehicle)
+                    .or_default()
+                    .insert(guest.conn);
+            }
             self.identities
                 .entry((guest.uuid, guest.entity_id as u32))
                 .or_insert(index);
@@ -355,6 +387,7 @@ struct Edit<'a> {
     registration: Option<horizon_mod_runtime::attachments::AttachmentRegistration>,
     dimension: Option<mod_api::DimensionKey>,
     released: bool,
+    vehicle: Option<u32>,
 }
 fn online_profile_uuid(guest: &Guest) -> Option<u128> {
     (guest.placed && !guest.released && guest.participates_online()).then_some(guest.uuid)
@@ -397,8 +430,15 @@ impl Drop for Edit<'_> {
         {
             self.list.bind_guest(self.index);
         }
-        if after != self.before {
+        if after != self.before || self.list.rows[self.index].released != self.released {
             self.list.reindex();
+        } else if self.list.rows[self.index].vehicle != self.vehicle
+            && self.list.connection_index(after.0) == Some(self.index)
+        {
+            let new = (!self.list.rows[self.index].released)
+                .then_some(self.list.rows[self.index].vehicle)
+                .flatten();
+            self.list.update_vehicle_rider(after.0, self.vehicle, new);
         }
     }
 }
@@ -406,6 +446,33 @@ impl Drop for Edit<'_> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn vehicle_candidates_follow_source_edits_membership_and_unwind() {
+        let mut list = GuestList::default();
+        let mut first = guest(1);
+        first.vehicle = Some(100);
+        list.push(first);
+        list.update(0, |g| g.vehicle = Some(200));
+        assert_eq!(list.rider_connections(100).count(), 0);
+        assert_eq!(list.rider_connections(200).collect::<Vec<_>>(), vec![1]);
+        list.update(0, |g| g.conn = 9);
+        assert_eq!(list.rider_connections(200).collect::<Vec<_>>(), vec![9]);
+        let mut next = guest(2);
+        next.vehicle = Some(300);
+        list.replace(0, next);
+        assert_eq!(list.rider_connections(200).count(), 0);
+        assert_eq!(list.rider_connections(300).collect::<Vec<_>>(), vec![2]);
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            list.update(0, |g| {
+                g.vehicle = Some(400);
+                panic!("fixture");
+            });
+        }));
+        assert_eq!(list.rider_connections(300).count(), 0);
+        assert_eq!(list.rider_connections(400).collect::<Vec<_>>(), vec![2]);
+        list.update(0, |g| g.released = true);
+        assert_eq!(list.rider_connections(400).count(), 0);
+    }
     fn guest(conn: u32) -> Guest {
         let (tx, _) = std::sync::mpsc::channel();
         Guest::new(

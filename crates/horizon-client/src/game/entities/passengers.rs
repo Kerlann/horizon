@@ -94,6 +94,7 @@ impl Game<'_> {
                 let m = &mut self.mobs[i];
                 m.extra.mount = None;
                 m.extra.passenger = false;
+                self.record_ai_mob_owner_id(self.mobs[i].id);
             }
         }
         for m in &mut self.mobs {

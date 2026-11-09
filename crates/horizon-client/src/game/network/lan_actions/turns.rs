@@ -106,6 +106,9 @@ impl Game<'_> {
         conn: u32,
         outer_dimension: Dim,
     ) -> Result<GuestSwap, TurnRefused> {
+        // Before the outer body becomes Taken, preserve its current relation
+        // candidate independently of R publication and AI projection refresh.
+        self.with_prepared_mob_relations(|_| ());
         let spawn_protection = self.lan.as_ref().and_then(|host| {
             host.hub
                 .guests
@@ -994,6 +997,15 @@ impl Game<'_> {
                 g.send(&g.abilities_packet());
             }
         });
+        if let Some(epoch) = self.native_lifecycle.epoch()
+            && let Some(pass) = self
+                .entity_read_state
+                .borrow_mut()
+                .mob_relations
+                .get_mut(&mod_api::LevelRef::new(epoch, self.dim.key()))
+        {
+            pass.index.update_guest(&host.hub.guests[i]);
+        }
         // LivingEntity.checkTotemDeathProtection's entity event, to every
         // client tracking the guest and its own; this window draws it too.
         if let Some(body) = totem {

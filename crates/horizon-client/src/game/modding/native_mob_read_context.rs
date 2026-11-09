@@ -85,6 +85,7 @@ pub(super) struct NativeMobRelations {
     identity_candidates: Vec<(u32, Location, IdentityDetails)>,
     mob_riders: HashMap<u32, std::collections::HashSet<u32>>,
     rider_vehicles: HashMap<u32, u32>,
+    mob_riders_complete: bool,
 }
 impl NativeMobRelations {
     pub(super) fn clear(&mut self) {
@@ -101,6 +102,20 @@ impl NativeMobRelations {
             riders.clear();
         }
         self.rider_vehicles.clear();
+        self.mob_riders_complete = false;
+    }
+    /// None means the real roster was unavailable before any complete seed.
+    /// Empty is meaningful only after a complete actual-source traversal.
+    pub(super) fn mob_rider_candidates(
+        &self,
+        vehicle: u32,
+    ) -> Option<impl Iterator<Item = u32> + '_> {
+        self.mob_riders_complete.then(|| {
+            self.mob_riders
+                .get(&vehicle)
+                .into_iter()
+                .flat_map(|riders| riders.iter().copied())
+        })
     }
     pub(super) fn guest_riders_of(&self, vehicle: u32) -> impl Iterator<Item = u32> + '_ {
         self.guest_riders
@@ -110,13 +125,16 @@ impl NativeMobRelations {
     }
     /// Call after canonical guest vehicle commits. Identity belongs to GuestList.
     pub(super) fn update_guest(&mut self, guest: &horizon_client::lan::guest::Guest) {
-        if self.guest_vehicles.get(&guest.conn).copied() == guest.vehicle {
+        self.update_guest_vehicle(guest.conn, guest.vehicle);
+    }
+    pub(super) fn update_guest_vehicle(&mut self, conn: u32, vehicle: Option<u32>) {
+        if self.guest_vehicles.get(&conn).copied() == vehicle {
             return;
         }
-        self.remove_guest(guest.conn);
-        if let Some(id) = guest.vehicle {
-            self.guest_vehicles.insert(guest.conn, id);
-            self.guest_riders.entry(id).or_default().insert(guest.conn);
+        self.remove_guest(conn);
+        if let Some(id) = vehicle {
+            self.guest_vehicles.insert(conn, id);
+            self.guest_riders.entry(id).or_default().insert(conn);
         }
     }
     /// Call before guest removal. Hub owns positional indexing.
@@ -163,16 +181,19 @@ impl NativeMobRelations {
     /// The relation index contains identities only; current facts stay in the row.
     pub(super) fn update_mob_rider(&mut self, source: &Mob) {
         self.update_mob_owner(source);
-        self.remove_mob_rider(source.id);
-        if !source.removed
-            && source.alive()
-            && let Some(vehicle) = source.extra.mount
-        {
-            self.rider_vehicles.insert(source.id, vehicle);
-            self.mob_riders
-                .entry(vehicle)
-                .or_default()
-                .insert(source.id);
+        self.update_rider(
+            source.id,
+            (!source.removed).then_some(source.extra.mount).flatten(),
+        );
+    }
+    fn update_rider(&mut self, id: u32, vehicle: Option<u32>) {
+        if self.rider_vehicles.get(&id).copied() == vehicle {
+            return;
+        }
+        self.remove_mob_rider(id);
+        if let Some(vehicle) = vehicle {
+            self.rider_vehicles.insert(id, vehicle);
+            self.mob_riders.entry(vehicle).or_default().insert(id);
         }
     }
     pub(super) fn remove_mob_rider(&mut self, id: u32) {
@@ -275,7 +296,7 @@ impl Game<'_> {
     /// Seed only ownership edges from the actual pass roster. This also works
     /// without mods/read publications; no foreign H payload is materialized.
     pub(super) fn prepare_ai_mob_relations(&self, mobs: &[Mob]) {
-        if self.with_prepared_mob_relations(|_| ()).is_none() {
+        if self.with_prepared_mob_relations(|index| index.mob_riders_complete) != Some(false) {
             return;
         }
         let level = LevelRef::new(self.native_lifecycle.epoch().unwrap(), self.dim.key());
@@ -284,8 +305,9 @@ impl Game<'_> {
         #[cfg(test)]
         record_backing_work(|work| work.population_visits += mobs.len());
         for source in mobs {
-            pass.index.update_mob_owner(source);
+            pass.index.update_mob_rider(source);
         }
+        pass.index.mob_riders_complete = true;
     }
 
     pub(super) fn record_ai_mob_owner(&self, source: &Mob) {
@@ -299,7 +321,7 @@ impl Game<'_> {
             .mob_relations
             .get_mut(&level)
         {
-            pass.index.update_mob_owner(source);
+            pass.index.update_mob_rider(source);
         }
     }
 
@@ -308,15 +330,41 @@ impl Game<'_> {
             return;
         };
         let level = LevelRef::new(epoch, self.dim.key());
-        let owner = self.read_mob_facts(id, level).and_then(|facts| facts.owner);
+        let facts = self.read_mob_facts(id, level);
         if let Some(pass) = self
             .entity_read_state
             .borrow_mut()
             .mob_relations
             .get_mut(&level)
         {
-            pass.index.update_owner(id, owner);
+            pass.index
+                .update_owner(id, facts.and_then(|facts| facts.owner));
+            pass.index
+                .update_rider(id, facts.and_then(|facts| facts.mount));
         }
+    }
+
+    /// Canonical GuestList nominations plus only the explicit selected-body
+    /// loan edges. Neither branch supplies identity proof or H data.
+    pub(super) fn mob_guest_rider_candidates(&self, vehicle: u32) -> Option<Vec<u32>> {
+        let mut candidates = self
+            .lan
+            .as_ref()
+            .into_iter()
+            .flat_map(|host| host.hub.guests.rider_connections(vehicle))
+            .filter(|conn| !self.lan_guest_swaps.contains(conn))
+            .collect::<Vec<_>>();
+        if !self.lan_guest_swaps.is_empty() {
+            let level = LevelRef::new(self.native_lifecycle.epoch()?, self.dim.key());
+            self.with_mob_read_relations(level, |index| {
+                candidates.extend(
+                    index
+                        .guest_riders_of(vehicle)
+                        .filter(|conn| self.lan_guest_swaps.contains(conn)),
+                );
+            })?;
+        }
+        Some(candidates)
     }
 
     pub(super) fn current_admitted_saved_uuid(&self, id: u32) -> Option<[i32; 4]> {
@@ -397,6 +445,31 @@ impl Game<'_> {
         index: &mut NativeMobRelations,
     ) {
         index.clear();
+        let owner = horizon_client::join_seq::residency::Owner {
+            dimension: level.dimension(),
+            kind: horizon_client::join_seq::residency::Kind::Mob,
+        };
+        if self
+            .entity_residency
+            .borrow_mut()
+            .owner_physically_available(owner, None)
+        {
+            let roster = if level.dimension() == self.dim.key() {
+                Some(&self.mobs)
+            } else {
+                self.levels
+                    .parked_of(level.dimension_id())
+                    .map(|parked| &parked.mobs)
+            };
+            if let Some(roster) = roster {
+                #[cfg(test)]
+                record_backing_work(|work| work.population_visits += roster.len());
+                for source in roster {
+                    index.update_mob_rider(source);
+                }
+                index.mob_riders_complete = true;
+            }
+        }
         if let Some(host) = &self.lan {
             for guest in host.hub.guests.iter() {
                 index.update_guest(guest);
@@ -958,12 +1031,13 @@ impl Game<'_> {
                 _ => return None,
             }
         };
+        let guest_candidates = self.mob_guest_rider_candidates(actor.id)?;
         self.with_mob_read_relations(level, |index| {
             self.read_relation_entity(actor.id, level, index)?;
             let mut seats = Vec::new();
             let acting = self.lan_acting.filter(|_| self.player.is_some());
-            if let Some(riders) = index.guest_riders.get(&actor.id) {
-                for &conn in riders {
+            {
+                for conn in guest_candidates {
                     if acting == Some(conn) {
                         continue;
                     }
@@ -1006,8 +1080,8 @@ impl Game<'_> {
                     ));
                 }
             }
-            if let Some(riders) = index.mob_riders.get(&actor.id) {
-                for &id in riders {
+            {
+                for id in index.mob_rider_candidates(actor.id)? {
                     let facts = if id == actor.id {
                         NativeMobTargetFacts::capture(actor)
                     } else {
@@ -1277,6 +1351,10 @@ mod tests {
             );
             game.mobs[0].invulnerable_flag = false;
             let warden = mob(game, 42, "minecraft:warden");
+            let warden_slot = game.mobs.len();
+            game.mobs.push(warden);
+            let join = game.mobs[warden_slot].join;
+            let warden = game.mobs.extract(join).unwrap();
             assert!(
                 game.read_mob_target(&warden, Who::Mob(40), level, &index)
                     .is_some()
@@ -1287,8 +1365,8 @@ mod tests {
                     .is_none()
             );
             game.mobs[0].position.x = 0.0;
-            game.persist.uuids.insert(40, [0, 0, 0, 40]);
-            game.persist.uuids.insert(42, [0, 0, 0, 42]);
+            game.set_saved_entity_uuid(40, [0, 0, 0, 40]);
+            game.set_saved_entity_uuid(42, [0, 0, 0, 42]);
             index.update_saved_uuid(40, None, Some([0, 0, 0, 40]));
             index.update_saved_uuid(42, None, Some([0, 0, 0, 42]));
             game.score.board.add_team("allies");
@@ -1302,6 +1380,7 @@ mod tests {
                 game.read_mob_target(&warden, Who::Mob(40), level, &index)
                     .is_none()
             );
+            game.mobs.put_back(warden_slot, warden);
             let mut session = horizon_client::merchant::Session::new(Vec::new(), true);
             session.xp = 17;
             session.level = 3;

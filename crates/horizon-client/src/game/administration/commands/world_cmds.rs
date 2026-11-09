@@ -1824,6 +1824,7 @@ impl Game<'_> {
             return;
         }
         self.mobs[i].extra.mount = None;
+        self.record_ai_mob_owner_id(rider);
         let remaining = self
             .mobs
             .iter()

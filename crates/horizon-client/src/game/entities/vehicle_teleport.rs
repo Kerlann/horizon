@@ -216,6 +216,7 @@ impl Game<'_> {
                 m.extra.mount = Some(root);
                 m.extra.passenger = true;
             }
+            self.record_ai_mob_owner_id(rider);
         }
     }
 

@@ -244,6 +244,7 @@ impl Game<'_> {
             self.mobs[i].extra.leash = None;
         }
         self.mobs[i].extra.mount = None;
+        self.record_ai_mob_owner_id(mob);
         let tag = self.mob_tree_nbt(i);
         let flower = bee::get(&self.mobs[i]).and_then(|b| b.flower);
         let Some((lease, BlockEntity::Beehive(mut hive))) = self.world.block_entities.take(&key)
