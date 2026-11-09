@@ -25,6 +25,56 @@ impl SpecializedSource<'_> {
 }
 
 impl Game<'_> {
+    /// Candidate addresses from the actual specialized owners, not a second
+    /// identity index. Exact generation and physical source resolution follow.
+    pub(super) fn specialized_read_locations(&self, kind: Kind) -> Vec<Location> {
+        let mut locations = Vec::new();
+        match kind {
+            Kind::Player => {
+                locations.extend(self.local_player_residency.location());
+                if let Some(lan) = &self.lan {
+                    locations.extend(
+                        lan.hub
+                            .guests
+                            .iter()
+                            .filter_map(|guest| guest.residency.location()),
+                    );
+                }
+            }
+            Kind::Hook => {
+                locations.extend(self.hook.resident_location());
+                if let Some(lan) = &self.lan {
+                    locations.extend(
+                        lan.play
+                            .values()
+                            .filter_map(|play| play.hook.resident_location()),
+                    );
+                }
+            }
+            Kind::DragonPart => {
+                if let Some(dragon) = self.dragon.as_ref() {
+                    locations.extend((0..dragon.parts.len()).map(|offset| Location {
+                        owner: Owner {
+                            dimension: self.dim.key(),
+                            kind,
+                        },
+                        join: dragon.join_seq(),
+                        source: Source::DragonPart(offset as u8),
+                    }));
+                }
+            }
+            _ => unreachable!("only specialized owner groups select this projection"),
+        }
+        locations.retain(|at| {
+            at.owner
+                == Owner {
+                    dimension: self.dim.key(),
+                    kind,
+                }
+        });
+        locations
+    }
+
     pub(super) fn current_player_resident_location(&self) -> Option<Location> {
         match self.lan_acting {
             Some(conn) => self.command_guest(conn)?.residency.location(),

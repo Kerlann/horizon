@@ -69,24 +69,30 @@ pub(crate) use resident_owners;
 
 macro_rules! define_resident_targets {
     (($this:ident, $($projectiles:ident).+) $($kind:ident => $target:ident: $($field:ident).+,)*) => {
-        pub(super) fn target_residency_kind(target: Target) -> Option<Kind> {
-            match target {
-                $(Target::$target(_) => Some(Kind::$kind),)*
-                Target::Projectile(_) => Some(Kind::Projectile),
-                Target::Dragon(_) => Some(Kind::Dragon),
-                _ => None,
-            }
-        }
         pub(super) fn residency_target(kind: Kind, id: u32) -> Target {
             match kind {
                 $(Kind::$kind => Target::$target(id),)*
                 Kind::Projectile => Target::Projectile(id),
                 Kind::Dragon => Target::Dragon(id),
+                Kind::Player => Target::Player,
+                Kind::Hook => Target::Hook(id),
+                Kind::DragonPart => Target::DragonPart(id),
             }
         }
     };
 }
 resident_owners!(define_resident_targets, unused, unused);
+
+pub(super) fn residency_target_at(at: Location, id: u32) -> Target {
+    use horizon_client::join_seq::residency::Source;
+    match at.source {
+        Source::Ordinary => residency_target(at.owner.kind, id),
+        Source::LocalPlayer => Target::Player,
+        Source::Guest(conn) => Target::Guest(conn),
+        Source::Hook { .. } => Target::Hook(id),
+        Source::DragonPart(_) => Target::DragonPart(id),
+    }
+}
 
 macro_rules! resident_visible {
     (Mob, $entity:expr) => {
