@@ -231,6 +231,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::sound_state` | crosses | Wire call |
 | `Backend::sound_stop` | crosses | Wire call |
 | `Backend::sound_fade` | crosses | Wire call |
+| `Backend::entity_command_query` | crosses | Wire call |
 | `Backend::entity_cached_row` | crosses | Wire call |
 | `Backend::entity_tags` | crosses | Wire call |
 | `Backend::entity_name` | crosses | Wire call |
@@ -1473,6 +1474,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Hooks::ender_entity_teleport` | crosses | Wire call |
 | `Hooks::enderman_anger` | crosses | Wire call |
 | `Hooks::entity_change_block_pre` | crosses | Wire call |
+| `Hooks::entity_command_completed` | crosses | Wire call |
 | `Hooks::entity_constructing` | crosses | Wire call |
 | `Hooks::entity_interact_specific` | crosses | Wire call |
 | `Hooks::entity_invulnerability_check` | crosses | Wire call |
