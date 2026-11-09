@@ -323,7 +323,7 @@ impl Game<'_> {
                     &self.damage_hooks,
                 );
                 laps.lap("creature_prepare");
-                while cursor < original_len {
+                'actor: {
                     let slot = cursor;
                     let i = if let Some(join) = scheduled {
                         let Some(i) = mobs.locate(join) else {
@@ -332,7 +332,7 @@ impl Game<'_> {
                             resuming = false;
                             resume_sampled = None;
                             cursor += 1;
-                            break;
+                            break 'actor;
                         };
                         i
                     } else {
@@ -345,7 +345,7 @@ impl Game<'_> {
                                     resuming = false;
                                     resume_sampled = None;
                                     cursor += 1;
-                                    break;
+                                    break 'actor;
                                 };
                                 i
                             }
@@ -356,7 +356,7 @@ impl Game<'_> {
                         keep[slot] = false;
                         snapshot[slot].alive = false;
                         cursor += 1;
-                        break;
+                        break 'actor;
                     }
                     let (bx, bz) = (m.position.x.floor() as i32, m.position.z.floor() as i32);
                     let seen_guest = if resuming {
@@ -384,7 +384,7 @@ impl Game<'_> {
                     if !resuming && !base.world.loaded(bx, bz) {
                         keep[slot] = !m.hostile() || m.persistent;
                         cursor += 1;
-                        break;
+                        break 'actor;
                     }
                     let nearest_player = nearest
                         .nearest(m.position.x, m.position.y, m.position.z)
@@ -421,7 +421,7 @@ impl Game<'_> {
                     {
                         m.despawn = mod_api::NativeDespawn::default();
                         dispatch_panic = Some(payload);
-                        break;
+                        break 'actor;
                     }
                     // ServerLevel.tick: every loaded entity checks despawning, but
                     // only those in entity-ticking chunks (within the simulation
@@ -453,7 +453,7 @@ impl Game<'_> {
                             );
                         }
                         cursor += 1;
-                        break;
+                        break 'actor;
                     }
                     let controlling_player_movement = horizon_client::mobs::equine::controlled(m)
                         .then(|| {
@@ -473,7 +473,7 @@ impl Game<'_> {
                     if !resuming && round.canceled(m.id) {
                         m.despawn = mod_api::NativeDespawn::default();
                         cursor += 1;
-                        break;
+                        break 'actor;
                     }
                     // getCurrentDifficultyAt(blockPosition()): the mob's own chunk,
                     // not the local player's (a server thread has no player).
@@ -621,7 +621,7 @@ impl Game<'_> {
                                         w.player.map(|v| std::mem::replace(&mut guests[k].1, v));
                                 }
                                 dispatch_panic = Some(payload);
-                                break;
+                                break 'actor;
                             }
                         };
                     let kept = match progress {
@@ -644,7 +644,7 @@ impl Game<'_> {
                             resume_sampled = sampled;
                             resume_guest = seen_guest;
                             pause = Some(decision);
-                            break;
+                            break 'actor;
                         }
                     };
                     if let Some((started, kind)) = sampled {
@@ -734,7 +734,7 @@ impl Game<'_> {
                     // without a population scan or stale cached array position.
                     post = round.listening().then_some(scheduled).flatten();
                     cursor += 1;
-                    break;
+                    break 'actor;
                 }
                 player_backing = base.player;
             }
