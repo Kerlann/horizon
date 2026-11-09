@@ -125,7 +125,7 @@ pub enum InstanceError {
 /// Native and wasm mods use the same storage, ownership and drawing rules.
 /// Static groups cache CPU conversion; all visible GPU-routed copies still upload every frame.
 /// Frequent group pose changes rebuild the live cache and can cost more than transient copies.
-// no wire: the manual Wire codec owns the explicit byte layout and checked reconstruction, rather than a structural derive.
+// no wire: decoding from_parts rejects generation zero (an unpublished instance group handle).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: only the engine creates handles
 pub struct InstanceGroupRef(pub(crate) u64, pub(crate) u32);

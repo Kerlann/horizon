@@ -47,7 +47,8 @@ impl VanillaClientListeners {
 /// resolved. Keys have their directory and extension removed. This cannot read
 /// data files or filesystem paths. Its fields are private so the view can grow.
 // exhaustive: its fields are private, so mods cannot build or destructure it
-// no wire: the manual Wire codec owns the explicit byte layout and checked reconstruction, rather than a structural derive.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
 pub struct ClientReloadContext {
     pub(crate) files: ReloadFiles,
 }

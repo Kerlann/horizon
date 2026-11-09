@@ -2,7 +2,7 @@
 use crate::{BlockKey, BlockState, BlockStateError, BlockStateRecord};
 
 /// States of one block in immutable definition order, not world numeric ID order.
-// no wire: the manual Wire codec owns the explicit byte layout and checked reconstruction, rather than a structural derive.
+// no wire: decoding calls new to reject spans whose last ordinal would overflow u16; zero-length spans remain valid.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub struct BlockStateRange {

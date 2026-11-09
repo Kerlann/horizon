@@ -6,7 +6,8 @@
 use std::{fmt, sync::Arc};
 
 /// A spawner vanilla runs for every level (`MinecraftServer`'s custom spawners).
-// no wire: the manual Wire codec owns the explicit byte layout and checked reconstruction, rather than a structural derive.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum SpawnerKind {
@@ -24,7 +25,7 @@ pub enum SpawnerKind {
 
 /// The identity of a mod's spawner, `namespace:path` (`mymod:rat_swarm`), checked once where a
 /// mod names it: what [`CustomSpawners::add`] takes and `custom_spawner_tick` hands back.
-// no wire: the manual Wire codec owns the explicit byte layout and checked reconstruction, rather than a structural derive.
+// no wire: decoding calls SpawnerKey::new to enforce a valid namespaced spawner identifier.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct SpawnerKey(Arc<str>);
@@ -55,7 +56,8 @@ impl TryFrom<String> for SpawnerKey {
 }
 
 /// One entry of a level's custom spawner list.
-// no wire: the manual Wire codec owns the explicit byte layout and checked reconstruction, rather than a structural derive.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
 pub enum SpawnerEntry {
@@ -89,7 +91,7 @@ impl std::error::Error for SpawnerError {}
 
 /// A level's custom spawners, in the order they tick: what `ModifyCustomSpawnersEvent` edits.
 /// It starts with vanilla's, and a spawner a mod adds goes at the end.
-// no wire: the manual Wire codec owns the explicit byte layout and checked reconstruction, rather than a structural derive.
+// no wire: decoding TryFrom<Vec<SpawnerEntry>> rejects duplicate builtin or mod spawner entries.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct CustomSpawners(Vec<SpawnerEntry>);

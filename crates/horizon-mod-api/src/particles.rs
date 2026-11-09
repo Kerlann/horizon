@@ -4,7 +4,8 @@ use crate::*;
 
 /// The listener of a vibration signal (`VibrationParticleOption`), independent
 /// of its resolved rendering destination and of the network protocol.
-// no wire: the manual Wire codec owns the explicit byte layout and checked reconstruction, rather than a structural derive.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum PositionSource {
@@ -20,16 +21,13 @@ pub enum PositionSource {
 }
 
 /// `ParticleOptions` with the parameters of the option classes used here.
-// no wire: the manual Wire codec owns the explicit byte layout and checked reconstruction, rather than a structural derive.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods use the constructors
 pub struct ParticleOptions {
     /// Provider identity issued by `Registrar::particle_key`, never an engine enum.
     pub ty: ParticleKey,
-    /// Older entity-effect providers use velocity as RGB; true is ambient.
-    pub legacy_entity_effect: Option<bool>,
-    /// Older trails choose their lifetime in the provider rather than on the wire.
-    pub legacy_trail_lifetime: bool,
     /// `BlockParticleOption`: the block's particle sprite and terrain tint.
     pub block: Option<(String, u32)>,
     /// RGB(A) for dust, spells, entity effects and tinted leaves.
@@ -52,6 +50,10 @@ pub struct ParticleOptions {
     /// sent to clients; the resolved point is used for local rendering
     /// (`ParticleEngine::vibration` is the same particle).
     pub vibration: Option<(PositionSource, [f64; 3], i32)>,
+    /// Older entity-effect providers use velocity as RGB; true is ambient.
+    pub legacy_entity_effect: Option<bool>,
+    /// Older trails choose their lifetime in the provider rather than on the wire.
+    pub legacy_trail_lifetime: bool,
 }
 impl ParticleOptions {
     /// Construct an option for a retained vanilla or custom sprite-provider key.

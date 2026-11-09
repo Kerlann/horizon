@@ -3,7 +3,7 @@ use horizon_mod_runtime::registry_keys::{ParticleKind, Particles};
 use std::sync::OnceLock;
 
 /// A particle requested at registration, resolved once when providers load.
-// no wire: the manual Wire codec owns the explicit byte layout and checked reconstruction, rather than a structural derive.
+// no wire: decoding validates the u32 slot with ParticleKey::from_slot on the host; wasm carries the host-issued opaque token without consulting guest tables.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: only the load-owned table creates keys
 pub struct ParticleKey(pub(crate) u32);
