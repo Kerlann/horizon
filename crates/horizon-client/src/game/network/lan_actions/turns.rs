@@ -22,7 +22,6 @@ impl Game<'_> {
         f: impl FnOnce(&mut Self) -> R,
     ) -> Result<R, TurnRefused> {
         let swap = self.enter_guest_at(gi, conn, self.dim)?;
-        let before_ai = self.player_ai_facts();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             crate::game::dedicated::crash_fixture("guest", || {
                 self.lan
@@ -33,15 +32,12 @@ impl Game<'_> {
                 .then_some(self.dim.id());
             let result = horizon_client::block_contact::in_level(dimension, || f(self));
             self.drain_entity_inside();
-            (result, self.player_ai_facts_delta(&before_ai))
+            result
         }));
         // Commit the guest's progress and restore the outer player before propagating a panic.
         self.leave_guest(swap);
         match result {
-            Ok((result, delta)) => {
-                self.publish_player_ai_delta(delta);
-                Ok(result)
-            }
+            Ok(result) => Ok(result),
             Err(payload) => std::panic::resume_unwind(payload),
         }
     }
@@ -449,6 +445,7 @@ impl Game<'_> {
         self.block_reach = self.interaction_range("minecraft:block_interaction_range", 4.5, 5.0);
         let building_boxes = std::mem::replace(&mut self.lan_building_boxes, other_boxes);
         Ok(GuestSwap {
+            before_ai: self.player_ai_facts(),
             attachments,
             conn,
             i,
@@ -578,7 +575,9 @@ impl Game<'_> {
             Ok(totem) => (totem, None),
             Err(payload) => (None, Some(payload)),
         };
+        let ai_delta = self.player_ai_facts_delta(&swap.before_ai);
         let GuestSwap {
+            before_ai: _,
             attachments,
             conn,
             i,
@@ -1060,6 +1059,7 @@ impl Game<'_> {
         if let Some(mob) = guest_mount {
             self.lan_open_mount(conn, mob);
         }
+        self.publish_player_ai_delta(ai_delta);
         // The turn's teleports are in the hub now: the mods hear them.
         self.flush_teleport_notes();
         if let Some(host) = self.lan.as_ref() {
