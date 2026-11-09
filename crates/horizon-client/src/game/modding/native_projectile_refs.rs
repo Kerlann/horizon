@@ -59,6 +59,16 @@ impl Game<'_> {
     /// handle or a client.
     pub(super) fn projectile(&self, entity: EntityRef) -> Option<ProjectileRef> {
         let projectile = ProjectileRef::new(entity);
+        if self.is_logical_server()
+            && let Some(available) = self.with_entity_read_publication(entity, |row| {
+                Some(matches!(
+                    row.details,
+                    super::native_entity_read_cache::NativeReadDetails::Projectile(_)
+                ))
+            })
+        {
+            return available.then_some(projectile);
+        }
         self.native_projectile_backing(projectile)
             .map(|_| projectile)
     }

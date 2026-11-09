@@ -130,6 +130,19 @@ impl Game<'_> {
     /// another kind, a stale handle, or a client.
     pub(super) fn merchant(&self, entity: EntityRef) -> Option<MerchantRef> {
         let merchant = MerchantRef::new(entity);
+        if self.is_logical_server()
+            && let Some(available) = self.with_entity_read_publication(entity, |row| {
+                Some(matches!(
+                    row.details,
+                    super::native_entity_read_cache::NativeReadDetails::Mob {
+                        merchant: Some(_),
+                        ..
+                    }
+                ))
+            })
+        {
+            return available.then_some(merchant);
+        }
         self.native_merchant_index(merchant).map(|_| merchant)
     }
 

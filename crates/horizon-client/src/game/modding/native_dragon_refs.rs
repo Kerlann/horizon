@@ -25,6 +25,16 @@ impl Game<'_> {
     /// The entity as the ender dragon, or None for another kind, a stale
     /// handle or a client.
     pub(super) fn dragon(&self, entity: EntityRef) -> Option<DragonRef> {
+        if self.is_logical_server()
+            && let Some(available) = self.with_entity_read_publication(entity, |row| {
+                Some(matches!(
+                    row.details,
+                    super::native_entity_read_cache::NativeReadDetails::Dragon { .. }
+                ))
+            })
+        {
+            return available.then(|| DragonRef::new(entity));
+        }
         self.native_dragon(entity)?;
         Some(DragonRef::new(entity))
     }
