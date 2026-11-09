@@ -1950,6 +1950,9 @@ impl Game<'_> {
         self.uuid_for(id)
     }
     pub(super) fn uuid_for(&mut self, id: u32) -> [i32; 4] {
+        if let Some(uuid) = self.known_resident_entity_uuid_at(self.dim.key(), id) {
+            return uuid;
+        }
         if let Some(&uuid) = self.persist.uuids.get(&id) {
             return uuid;
         }
@@ -1963,6 +1966,9 @@ impl Game<'_> {
         dimension: mod_api::DimensionKey,
         id: u32,
     ) -> Option<[i32; 4]> {
+        if let Some(uuid) = self.known_resident_entity_uuid_at(dimension, id) {
+            return Some(uuid);
+        }
         if dimension == self.dim.key() {
             return Some(self.uuid_for(id));
         }
