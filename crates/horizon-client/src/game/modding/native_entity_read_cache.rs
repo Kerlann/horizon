@@ -28,6 +28,7 @@ pub(super) struct NativeReadState {
     pub(super) raids: HashMap<RaidRef, RaidReadRow>,
     pub(super) kind_pool: super::native_base_read_source::BaseReadKindPool,
     pub(super) mob_relations: HashMap<LevelRef, NativeMobRelationPass>,
+    pub(super) merchant_session_loans: Rc<RefCell<HashSet<u32>>>,
 }
 
 #[derive(Default)]
@@ -37,6 +38,11 @@ pub(super) struct NativeMobRelationPass {
 }
 
 impl NativeReadState {
+    pub(super) fn record_merchant_connection(&mut self, conn: u32, merchant: Option<u32>) {
+        for pass in self.mob_relations.values_mut() {
+            pass.index.update_merchant(conn, merchant);
+        }
+    }
     pub(super) fn reset(&mut self) {
         self.passes.borrow_mut().reset();
         self.mob_backing = Default::default();
@@ -115,7 +121,11 @@ impl Game<'_> {
                 let mut state = self.entity_read_state.borrow_mut();
                 std::mem::take(state.mob_relations.entry(level).or_default())
             };
-            self.rebuild_mob_read_relations(level, &mut pass.index);
+            self.rebuild_mob_read_relations(
+                level,
+                &mut pass.index,
+                self.merchant_sources_available(),
+            );
             pass.tick = Some(tick);
             self.entity_read_state
                 .borrow_mut()

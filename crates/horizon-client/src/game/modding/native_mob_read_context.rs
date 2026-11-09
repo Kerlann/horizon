@@ -77,7 +77,8 @@ pub(super) struct NativeMobRelations {
     guest_riders: HashMap<u32, std::collections::HashSet<u32>>,
     guest_vehicles: HashMap<u32, u32>,
     merchant_by_conn: HashMap<u32, u32>,
-    merchants: HashMap<u32, u32>,
+    merchants: HashMap<u32, std::collections::HashSet<u32>>,
+    merchant_sessions_complete: bool,
     saved_ids: HashMap<[i32; 4], u32>,
     /// Minimal ownership edges, like rider_vehicles. AI still needs these when
     /// the real roster is lent and no mod requested an R publication.
@@ -93,8 +94,11 @@ impl NativeMobRelations {
             riders.clear();
         }
         self.guest_vehicles.clear();
-        self.merchants.clear();
+        for customers in self.merchants.values_mut() {
+            customers.clear();
+        }
         self.merchant_by_conn.clear();
+        self.merchant_sessions_complete = false;
         self.saved_ids.clear();
         self.tame_owners.clear();
         self.identity_candidates.clear();
@@ -147,15 +151,26 @@ impl NativeMobRelations {
     }
     /// Call at merchant session open/close/rebinding, including disconnect.
     pub(super) fn update_merchant(&mut self, conn: u32, mob: Option<u32>) {
+        if self.merchant_by_conn.get(&conn).copied() == mob {
+            return;
+        }
         if let Some(old) = self.merchant_by_conn.remove(&conn)
-            && self.merchants.get(&old) == Some(&conn)
+            && let Some(customers) = self.merchants.get_mut(&old)
         {
-            self.merchants.remove(&old);
+            customers.remove(&conn);
         }
         if let Some(id) = mob {
             self.merchant_by_conn.insert(conn, id);
-            self.merchants.insert(id, conn);
+            self.merchants.entry(id).or_default().insert(conn);
         }
+    }
+    fn merchant_connections(&self, mob: u32) -> Option<impl Iterator<Item = u32> + '_> {
+        self.merchant_sessions_complete.then(|| {
+            self.merchants
+                .get(&mob)
+                .into_iter()
+                .flat_map(|customers| customers.iter().copied())
+        })
     }
     pub(super) fn update_mob_owner(&mut self, source: &Mob) {
         let owner = (!source.removed && source.extra.tame)
@@ -218,6 +233,15 @@ impl NativeMobRelations {
         if let Some(new) = new {
             self.saved_ids.insert(new, id);
         }
+    }
+}
+pub(super) struct MerchantSessionLoan {
+    active: std::rc::Rc<std::cell::RefCell<std::collections::HashSet<u32>>>,
+    conn: u32,
+}
+impl Drop for MerchantSessionLoan {
+    fn drop(&mut self) {
+        self.active.borrow_mut().remove(&self.conn);
     }
 }
 struct PlayerTargetSource<'a> {
@@ -344,6 +368,39 @@ impl Game<'_> {
         }
     }
 
+    pub(super) fn merchant_sources_available(&self) -> bool {
+        self.lan_guest_swaps.is_empty()
+            && self
+                .entity_read_state
+                .borrow()
+                .merchant_session_loans
+                .borrow()
+                .is_empty()
+    }
+    /// Mark the actual session extraction, not a logical close. The candidate
+    /// survives until a canonical close/removal, including across callbacks.
+    pub(super) fn begin_merchant_session_loan(&self, conn: u32) -> Option<MerchantSessionLoan> {
+        self.with_prepared_mob_relations(|_| ());
+        let active = self
+            .entity_read_state
+            .borrow()
+            .merchant_session_loans
+            .clone();
+        if !active.borrow_mut().insert(conn) {
+            return None;
+        }
+        Some(MerchantSessionLoan { active, conn })
+    }
+    /// None is incomplete, not no customer. Values nominate connections only;
+    /// H must validate each actual guest and actual merchant session itself.
+    pub(super) fn merchant_customer_connections(&self, mob_id: u32) -> Option<Vec<u32>> {
+        self.with_prepared_mob_relations(|index| {
+            index
+                .merchant_connections(mob_id)
+                .map(|customers| customers.collect())
+        })?
+    }
+
     /// Canonical GuestList nominations plus only the explicit selected-body
     /// loan edges. Neither branch supplies identity proof or H data.
     pub(super) fn mob_guest_rider_connections(&self, vehicle: u32) -> Option<Vec<u32>> {
@@ -461,6 +518,7 @@ impl Game<'_> {
         &self,
         level: LevelRef,
         index: &mut NativeMobRelations,
+        merchant_sources_available: bool,
     ) {
         index.clear();
         let owner = horizon_client::join_seq::residency::Owner {
@@ -492,9 +550,15 @@ impl Game<'_> {
             for guest in host.hub.guests.iter() {
                 index.update_guest(guest);
             }
-            for (&conn, play) in &host.play {
-                index.update_merchant(conn, play.merchant.as_ref().and_then(|m| m.merchant.mob));
+            if merchant_sources_available {
+                for (&conn, play) in &host.play {
+                    index
+                        .update_merchant(conn, play.merchant.as_ref().and_then(|m| m.merchant.mob));
+                }
+                index.merchant_sessions_complete = true;
             }
+        } else {
+            index.merchant_sessions_complete = true;
         }
         // Saved keys are only candidates, never admission proof. Preserve keys
         // whose real source arrives later in this same pass; each lookup still
@@ -810,13 +874,17 @@ impl Game<'_> {
         epoch: WorldEpoch,
         index: &NativeMobRelations,
     ) -> MerchantReadContext<'a> {
-        let conn = index.merchants.get(&source.id).copied().filter(|conn| {
-            self.lan
-                .as_ref()
-                .and_then(|host| host.play.get(conn))
-                .and_then(|play| play.merchant.as_ref())
-                .is_some_and(|m| m.merchant.mob == Some(source.id))
-        });
+        let conn = index
+            .merchants
+            .get(&source.id)
+            .and_then(|customers| customers.iter().next().copied())
+            .filter(|conn| {
+                self.lan
+                    .as_ref()
+                    .and_then(|host| host.play.get(conn))
+                    .and_then(|play| play.merchant.as_ref())
+                    .is_some_and(|m| m.merchant.mob == Some(source.id))
+            });
         let session = conn
             .and_then(|conn| self.lan.as_ref()?.play.get(&conn)?.merchant.as_ref())
             .filter(|m| m.merchant.mob == Some(source.id))
@@ -1353,7 +1421,7 @@ mod tests {
             let mut actor = mob(game, 42, "minecraft:iron_golem");
             actor.ai.target = Some(Who::Mob(40));
             let mut index = NativeMobRelations::default();
-            game.rebuild_mob_read_relations(level, &mut index);
+            game.rebuild_mob_read_relations(level, &mut index, game.merchant_sources_available());
             assert_eq!(
                 game.mob_read_context(&actor, level, &index)
                     .target
