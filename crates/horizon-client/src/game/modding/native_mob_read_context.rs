@@ -497,9 +497,13 @@ impl Game<'_> {
                 location.owner.dimension == level.dimension()
                     && self.server_read_target_visible(level.dimension(), target)
             }
-            EntityLookup::Taken => at.owner.dimension == level.dimension()
-                && self.server_read_target_visible(level.dimension(),
-                    super::entity_residency::residency_target_at(at, id)),
+            EntityLookup::Taken => {
+                at.owner.dimension == level.dimension()
+                    && self.server_read_target_visible(
+                        level.dimension(),
+                        super::entity_residency::residency_target_at(at, id),
+                    )
+            }
             _ => false,
         };
         visible.then(|| EntityRef::new(level.epoch(), id))
