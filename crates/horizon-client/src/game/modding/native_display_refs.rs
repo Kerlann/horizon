@@ -154,6 +154,16 @@ impl Game<'_> {
     /// handle or a client.
     pub(super) fn display(&self, entity: EntityRef) -> Option<DisplayRef> {
         let display = DisplayRef::new(entity);
+        if self.is_logical_server()
+            && let Some(available) = self.with_entity_read_publication(entity, |row| {
+                Some(matches!(
+                    row.details,
+                    super::native_entity_read_cache::NativeReadDetails::Display(_)
+                ))
+            })
+        {
+            return available.then_some(display);
+        }
         self.display_entity(display).map(|_| display)
     }
 

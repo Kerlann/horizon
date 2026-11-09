@@ -209,6 +209,17 @@ impl Game<'_> {
     /// stands, stale handles and clients are rejected. Mobs taken out for
     /// ticking are unavailable (a #29 follow-up).
     pub(super) fn mob(&self, entity: EntityRef) -> Option<MobRef> {
+        if self.is_logical_server()
+            && let Some(available) = self.with_entity_read_publication(entity, |row| {
+                Some(matches!(
+                    row.details,
+                    super::native_entity_read_cache::NativeReadDetails::Mob { .. }
+                        | super::native_entity_read_cache::NativeReadDetails::Dragon { .. }
+                ))
+            })
+        {
+            return available.then(|| MobRef::new(entity));
+        }
         match self.native_entity_target(entity)? {
             Target::Mob(_) | Target::Dragon(_) => Some(MobRef::new(entity)),
             _ => None,

@@ -175,7 +175,8 @@ impl Game<'_> {
     /// this window's own player included. API 373.
     pub(super) fn entity(&self, id: u32) -> Option<EntityRef> {
         let entity = EntityRef::new(self.native_lifecycle.epoch()?, id);
-        (self.native_entity_read_target(entity).is_some()
+        (self.read_resident_identity(id).is_some()
+            || self.native_entity_read_target(entity).is_some()
             || self.native_client_tracked(entity).is_some())
         .then_some(entity)
     }

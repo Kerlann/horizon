@@ -7,6 +7,16 @@ impl Game<'_> {
     /// Narrows an entity to a cast fishing hook. None for another kind, a
     /// stale handle, a client, or a hook taken out for its tick.
     pub(super) fn fishing_hook(&self, entity: EntityRef) -> Option<FishingHookRef> {
+        if self.is_logical_server()
+            && let Some(available) = self.with_entity_read_publication(entity, |row| {
+                Some(matches!(
+                    row.details,
+                    super::native_entity_read_cache::NativeReadDetails::Hook(_)
+                ))
+            })
+        {
+            return available.then(|| FishingHookRef::new(entity));
+        }
         matches!(self.native_entity_target(entity)?, Target::Hook(_))
             .then(|| FishingHookRef::new(entity))
     }
