@@ -10,6 +10,8 @@ use std::{
     },
 };
 
+#[path = "residency/read_pass.rs"]
+pub mod read_pass;
 #[path = "residency/table.rs"]
 pub mod table;
 

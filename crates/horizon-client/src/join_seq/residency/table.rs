@@ -37,14 +37,19 @@ pub struct UnbalancedPass {
 
 /// One game's index, shared by active and parked dimensions through the journal.
 /// Runtime ids are allocated by the game's one counter, not per dimension.
-pub struct EntityTable {
+struct ResidentRow<R> {
+    location: Location,
+    cached: Option<R>,
+}
+
+pub struct EntityTable<R = ()> {
     journal: Journal,
     pending: Vec<Event>,
-    rows: FxHashMap<NonZeroU32, Location>,
+    rows: FxHashMap<NonZeroU32, ResidentRow<R>>,
     extracted: FxHashMap<NonZeroU32, Location>,
     lifted: FxHashMap<Owner, usize>,
 }
-impl EntityTable {
+impl<R> EntityTable<R> {
     /// Observe this game's existing structural-event sink.
     pub fn new(journal: Journal) -> Self {
         Self {
@@ -85,7 +90,7 @@ impl EntityTable {
             return EntityLookup::Missing;
         };
         self.drain();
-        let Some(&location) = self.rows.get(&id) else {
+        let Some(location) = self.rows.get(&id).map(|row| row.location) else {
             return EntityLookup::Missing;
         };
         if dimension.is_some_and(|dimension| location.owner.dimension != *dimension) {
@@ -104,10 +109,48 @@ impl EntityTable {
         {
             return EntityLookup::Taken;
         }
-        forget(&mut self.rows, id, location);
+        forget_row(&mut self.rows, id, location);
         forget(&mut self.extracted, id, location);
         EntityLookup::Missing
     }
+    /// Validate the source once, then borrow its cached publication. A lifted
+    /// source may have a row; a missing or corrupt source never does. The cache
+    /// shares the authoritative identity record, so retirement needs no second
+    /// journal consumer, tombstones or reconciliation sweep.
+    pub fn entity_read_lookup<T>(
+        &mut self,
+        dimension: &DimensionKey,
+        id: u32,
+        locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
+    ) -> (EntityLookup<T>, Option<&R>) {
+        let result = self.lookup(Some(dimension), id, locate);
+        let cached = match &result {
+            EntityLookup::Missing => None,
+            _ => NonZeroU32::new(id)
+                .and_then(|id| self.rows.get(&id))
+                .and_then(|row| row.cached.as_ref()),
+        };
+        (result, cached)
+    }
+
+    /// Publish captures of already admitted sources. Exact owner/join agreement
+    /// prevents a delayed publication from replacing a transferred generation.
+    /// Drain once per batch; no source scan or per-removal metadata is needed.
+    pub fn publish_rows(&mut self, rows: impl IntoIterator<Item = (u32, Location, R)>) -> usize {
+        self.drain();
+        let mut published = 0;
+        for (id, location, cached) in rows {
+            let Some(row) = NonZeroU32::new(id).and_then(|id| self.rows.get_mut(&id)) else {
+                continue;
+            };
+            if row.location == location {
+                row.cached = Some(cached);
+                published += 1;
+            }
+        }
+        published
+    }
+
     /// Apply pending operations in mutation order, reusing the event buffer.
     pub fn drain(&mut self) {
         self.journal.drain_into(&mut self.pending);
@@ -119,19 +162,25 @@ impl EntityTable {
             match event.change {
                 Change::Install(identity) | Change::PutBack(identity) => {
                     let location = location(identity);
-                    if let Some(old) = self.rows.insert(identity.id, location) {
-                        debug_assert_eq!(old, location, "duplicate loaded entity id");
+                    let row = self.rows.entry(identity.id).or_insert(ResidentRow {
+                        location,
+                        cached: None,
+                    });
+                    debug_assert_eq!(row.location, location, "duplicate loaded entity id");
+                    if row.location != location {
+                        row.location = location;
+                        row.cached = None;
                     }
                     self.extracted.remove(&identity.id);
                 }
                 Change::Remove(identity) => {
                     let location = location(identity);
-                    forget(&mut self.rows, identity.id, location);
+                    forget_row(&mut self.rows, identity.id, location);
                     forget(&mut self.extracted, identity.id, location);
                 }
                 Change::Extract(identity) => {
                     let location = location(identity);
-                    if self.rows.get(&identity.id) == Some(&location) {
+                    if self.rows.get(&identity.id).map(|row| row.location) == Some(location) {
                         self.extracted.insert(identity.id, location);
                     }
                 }
@@ -180,6 +229,15 @@ impl EntityTable {
         self.rows.clear();
         self.extracted.clear();
         self.lifted.clear();
+    }
+}
+fn forget_row<R>(
+    map: &mut FxHashMap<NonZeroU32, ResidentRow<R>>,
+    id: NonZeroU32,
+    location: Location,
+) {
+    if map.get(&id).map(|row| row.location) == Some(location) {
+        map.remove(&id);
     }
 }
 fn forget(map: &mut FxHashMap<NonZeroU32, Location>, id: NonZeroU32, location: Location) {
@@ -244,6 +302,123 @@ mod tests {
     }
 
     #[test]
+    fn cached_publications_survive_lifts_but_not_replaced_generations() {
+        let mut list = JoinList::default();
+        list.push(Stored(7, JoinSeq::UNJOINED));
+        let mut table = EntityTable::<u32>::new(Journal::default());
+        list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
+        let old = Location {
+            owner: HOME,
+            join: list[0].1,
+        };
+        assert_eq!(table.publish_rows([(7, old, 10)]), 1);
+        let taken = list.lift();
+        let (state, row) = table.entity_read_lookup(&HOME.dimension, 7, |at| locate(&list, at));
+        assert_eq!(state, EntityLookup::Taken);
+        assert_eq!(row, Some(&10));
+        list.restore(taken, RestoreOrder::SurvivorsFirst);
+        assert_eq!(
+            table
+                .entity_read_lookup(&HOME.dimension, 7, |at| locate(&list, at))
+                .1,
+            Some(&10)
+        );
+        drop(list.remove(0));
+        list.push(Stored(7, JoinSeq::UNJOINED));
+        let replacement = Location {
+            owner: HOME,
+            join: list[0].1,
+        };
+        assert_ne!(old.join, replacement.join);
+        assert_eq!(table.publish_rows([(7, old, 11)]), 0);
+        assert_eq!(
+            table
+                .entity_read_lookup(&HOME.dimension, 7, |at| locate(&list, at))
+                .1,
+            None
+        );
+        assert_eq!(table.publish_rows([(7, replacement, 20)]), 1);
+        table.producer().push(Event {
+            owner: HOME,
+            change: Change::Remove(Identity::new(7, old.join).unwrap()),
+        });
+        assert_eq!(
+            table
+                .entity_read_lookup(&HOME.dimension, 7, |at| locate(&list, at))
+                .1,
+            Some(&20)
+        );
+        table.end_tick().unwrap();
+    }
+
+    #[test]
+    fn cached_payloads_retire_with_source_corruption_removal_and_epoch() {
+        use std::rc::Rc;
+        let mut list: JoinList<Stored> = JoinList::default();
+        let mut table = EntityTable::<Rc<()>>::new(Journal::default());
+        list.bind_residency(&table.producer(), HOME, |v: &Stored| (v.0, v.1));
+        for action in 0..3 {
+            list.push(Stored(7, JoinSeq::UNJOINED));
+            let at = Location {
+                owner: HOME,
+                join: list[0].1,
+            };
+            let payload = Rc::new(());
+            assert_eq!(table.publish_rows([(7, at, payload.clone())]), 1);
+            assert_eq!(Rc::strong_count(&payload), 2);
+            match action {
+                0 => {
+                    let (state, row) = table.entity_read_lookup(&HOME.dimension, 7, |_| {
+                        Some(SourceEntity { id: 8, value: () })
+                    });
+                    assert_eq!(state, EntityLookup::Missing);
+                    assert!(row.is_none());
+                }
+                1 => {
+                    list.clear();
+                    table.drain();
+                }
+                _ => table.reset(),
+            }
+            assert_eq!(Rc::strong_count(&payload), 1);
+            list.clear();
+            list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
+        }
+    }
+
+    #[test]
+    fn cached_read_validates_once_and_never_exposes_wrong_dimension() {
+        let mut list = JoinList::default();
+        list.push(Stored(7, JoinSeq::UNJOINED));
+        let mut table = EntityTable::<u32>::new(Journal::default());
+        list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
+        let at = Location {
+            owner: HOME,
+            join: list[0].1,
+        };
+        assert_eq!(table.publish_rows([(7, at, 99)]), 1);
+        let mut calls = 0;
+        let (state, row) = table.entity_read_lookup(&HOME.dimension, 7, |at| {
+            calls += 1;
+            locate(&list, at)
+        });
+        assert!(matches!(state, EntityLookup::Found { value: 0, .. }));
+        assert_eq!(row, Some(&99));
+        assert_eq!(calls, 1);
+        let (state, row) = table.entity_read_lookup::<()>(&DimensionKey::NETHER, 7, |_| {
+            panic!("wrong dimension inspected storage")
+        });
+        assert_eq!(state, EntityLookup::Missing);
+        assert!(row.is_none());
+        assert_eq!(
+            table
+                .entity_read_lookup(&HOME.dimension, 7, |at| locate(&list, at))
+                .1,
+            Some(&99)
+        );
+    }
+
+    #[test]
     fn server_lookup_follows_a_transfer_without_a_dimension_scan() {
         let mut f = Fixture::new();
         let old = f.admit(7, HOME);
@@ -298,7 +473,7 @@ mod tests {
     fn a_spawn_during_a_real_lift_is_found_while_the_survivor_is_taken() {
         let mut list = JoinList::default();
         list.push(Stored(7, JoinSeq::UNJOINED));
-        let mut table = EntityTable::new(Journal::default());
+        let mut table = EntityTable::<()>::new(Journal::default());
         list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
         let first = Location {
             owner: HOME,
@@ -343,7 +518,7 @@ mod tests {
     fn nested_real_lifts_remain_taken_until_the_outer_restore() {
         let mut list = JoinList::default();
         list.push(Stored(7, JoinSeq::UNJOINED));
-        let mut table = EntityTable::new(Journal::default());
+        let mut table = EntityTable::<()>::new(Journal::default());
         list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
         let outer = list.lift();
         let inner = list.lift();
