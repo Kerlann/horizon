@@ -712,13 +712,6 @@ impl Game<'_> {
         if self.score.board.teams.is_empty() {
             return Default::default();
         }
-        // One pass over the mobs, not one per mob.
-        let tame_owners: HashMap<u32, [i32; 4]> = mobs
-            .iter()
-            .filter_map(|m| Some((m.id, tame_owner(m)?)))
-            .collect();
-        // Bounded combat/collision facts survive mutable Game hook boundaries;
-        // full member sets, display components and strings stay authoritative here.
         let shared: HashMap<_, _> = self
             .score
             .board
@@ -736,15 +729,52 @@ impl Game<'_> {
                 )
             })
             .collect();
+        let mut identities = HashMap::new();
+        self.for_admitted_saved_uuids(self.dim.key(), &mut Vec::new(), |id, uuid| {
+            identities.insert(id, uuid);
+        });
+        // A loaned real body can already be removed before its list is restored.
+        for mob in mobs.iter().filter(|mob| mob.removed) {
+            identities.remove(&mob.id);
+        }
+        let by_uuid: HashMap<_, _> = identities.iter().map(|(&id, &uuid)| (uuid, id)).collect();
+        let tame_owners: HashMap<_, _> = mobs
+            .iter()
+            .filter(|mob| !mob.removed)
+            .filter_map(|mob| Some((mob.id, tame_owner(mob)?)))
+            .collect();
+        // Online player names have global precedence over saved entity names,
+        // including a real guest currently placed in another dimension.
+        let mut player_names: HashMap<_, _> = self
+            .command_players()
+            .map(|guest| {
+                (
+                    horizon_client::lan::playerdata::uuid_ints(guest.uuid),
+                    guest.name.as_str(),
+                )
+            })
+            .collect();
+        if self.player.is_some() && !self.lan_acting_fake {
+            player_names.insert(self.acting_uuid(), self.acting_player_name());
+        }
         horizon_client::mobs::TeamRulesSnapshot {
             player: self.player_team().map(|team| shared[team.name.as_str()]),
-            mobs: self
-                .persist
-                .uuids
-                .keys()
-                .filter_map(|id| {
-                    let owner = || tame_owners.get(id).copied();
-                    Some((*id, shared[self.team_with_owner(*id, owner)?.name.as_str()]))
+            mobs: identities
+                .into_iter()
+                .filter_map(|(id, uuid)| {
+                    let own = self.scoreboard_name(id, uuid);
+                    let team = self.score.board.players_team(&own).or_else(|| {
+                        let owner = *tame_owners.get(&id)?;
+                        let root =
+                            root_owner(owner, |uuid| tame_owners.get(by_uuid.get(&uuid)?).copied());
+                        let owner_name = if let Some(name) = player_names.get(&root) {
+                            (*name).to_owned()
+                        } else {
+                            by_uuid.contains_key(&root).then(|| uuid_text(root))?
+                        };
+                        self.score.board.players_team(&owner_name)
+                    })?;
+                    Some((id, shared[team.name.as_str()]))
                 })
                 .collect(),
         }
