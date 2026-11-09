@@ -38,6 +38,13 @@ impl Hooks for Probe {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES and an isolated mod registry"]
 fn a_changed_inventory_is_heard_once_with_its_41_slots() {
+    crate::game::in_own_process(
+        "game::advancements::inventory_changed_tests::a_changed_inventory_is_heard_once_with_its_41_slots",
+        a_changed_inventory_is_heard_once_with_its_41_slots_isolated,
+    );
+}
+
+fn a_changed_inventory_is_heard_once_with_its_41_slots_isolated() {
     crate::game::native_entity_refs::tests::with_game(|game| {
         let probe = Probe::default();
         let heard_values = probe.heard.clone();

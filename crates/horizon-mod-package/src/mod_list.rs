@@ -81,13 +81,92 @@ pub struct Installed {
     pub native: Option<NativePage>,
 }
 
-/// A native mod's settings page: its keys as Key Binds rows, then its
-/// buttons. The keys the player chooses are kept in `ModList::keys`.
+/// A native mod's settings page: its keys as Key Binds rows, then the settings it registered
+/// (`Registrar::register_setting`). The keys the player chooses are kept in `ModList::keys`, the
+/// settings in the mod's data folder.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct NativePage {
     /// The keys the mod registers on Options > Controls, under its title.
     pub mappings: Vec<KeyMapping>,
-    pub buttons: Vec<String>,
+    /// Its settings, in registration order, with the values the page shows.
+    pub settings: Vec<NativeSetting>,
+}
+
+/// A setting on a native mod's page: its key within the mod, the translation keys of its label
+/// and tooltip, and its value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct NativeSetting {
+    pub key: String,
+    pub label: String,
+    pub tooltip: Option<String>,
+    pub value: NativeSettingValue,
+}
+
+/// A setting's value as its row shows and changes it.
+#[derive(Clone, Debug, PartialEq)]
+pub enum NativeSettingValue {
+    /// On or off: a click flips it.
+    Toggle(bool),
+    /// Option `index` of `options` (translation keys): a click moves to the next.
+    Choice { options: Vec<String>, index: usize },
+    /// A number from `min` to `max` in steps of `step`, on a slider.
+    Range {
+        min: f64,
+        max: f64,
+        step: f64,
+        value: f64,
+    },
+    /// A colour, `0xRRGGBB`: a click moves to the next of the sixteen dye colours.
+    Color(u32),
+}
+
+/// The sixteen dye colours (`DyeColor.getTextureDiffuseColor`, white to black), a colour
+/// setting's button steps through.
+pub const DYE_COLORS: [u32; 16] = [
+    0xF9FFFE, 0xF9801D, 0xC74EBD, 0x3AB3DA, 0xFED83D, 0x80C71F, 0xF38BAA, 0x474F52, 0x9D9D97,
+    0x169C9C, 0x8932B8, 0x3C44AA, 0x835432, 0x5E7C16, 0xB02E26, 0x1D1D21,
+];
+
+impl NativeSettingValue {
+    /// A click on its button: a toggle flips, a choice and a colour move to the next (a colour
+    /// that isn't a dye colour to the first one), a range doesn't change (it is a slider).
+    pub fn click(&mut self) {
+        match self {
+            Self::Toggle(on) => *on = !*on,
+            Self::Choice { options, index } => *index = (*index + 1) % options.len().max(1),
+            Self::Color(rgb) => {
+                let next = DYE_COLORS
+                    .iter()
+                    .position(|c| c == rgb)
+                    .map_or(0, |i| i + 1);
+                *rgb = DYE_COLORS[next % DYE_COLORS.len()];
+            }
+            Self::Range { .. } => {}
+        }
+    }
+    /// A range's value as the slider's handle place, 0 to 1; 0 for the other kinds.
+    pub fn fraction(&self) -> f32 {
+        match self {
+            Self::Range {
+                min, max, value, ..
+            } => ((value - min) / (max - min)).clamp(0.0, 1.0) as f32,
+            _ => 0.0,
+        }
+    }
+    /// A range moved to slider place `fraction` (0 to 1): the nearest step, kept in range.
+    pub fn slide(&mut self, fraction: f32) {
+        if let Self::Range {
+            min,
+            max,
+            step,
+            value,
+        } = self
+        {
+            let raw = *min + f64::from(fraction.clamp(0.0, 1.0)) * (*max - *min);
+            let steps = ((raw - *min) / *step).round();
+            *value = (*min + steps * *step).clamp(*min, *max);
+        }
+    }
 }
 
 /// A key a native mod registers on Options > Controls, under the mod's title.
@@ -434,5 +513,56 @@ mod tests {
         list.toggle(2);
         assert!(list.is_on(2));
         assert_eq!(list.serialize(), "mod.c:true\n");
+    }
+}
+
+#[cfg(test)]
+mod native_setting_tests {
+    use super::*;
+
+    #[test]
+    fn a_setting_button_steps_its_value_and_a_slider_snaps_to_its_step() {
+        let mut toggle = NativeSettingValue::Toggle(false);
+        toggle.click();
+        assert_eq!(toggle, NativeSettingValue::Toggle(true));
+        let mut choice = NativeSettingValue::Choice {
+            options: vec!["a".into(), "b".into()],
+            index: 1,
+        };
+        choice.click();
+        assert_eq!(
+            choice,
+            NativeSettingValue::Choice {
+                options: vec!["a".into(), "b".into()],
+                index: 0
+            }
+        );
+        let mut color = NativeSettingValue::Color(0x12_3456);
+        color.click();
+        assert_eq!(color, NativeSettingValue::Color(DYE_COLORS[0]));
+        let mut color = NativeSettingValue::Color(DYE_COLORS[15]);
+        color.click();
+        assert_eq!(color, NativeSettingValue::Color(DYE_COLORS[0]));
+        let mut range = NativeSettingValue::Range {
+            min: 1.0,
+            max: 3.0,
+            step: 0.5,
+            value: 2.0,
+        };
+        assert_eq!(range.fraction(), 0.5);
+        range.slide(0.6);
+        assert_eq!(
+            range,
+            NativeSettingValue::Range {
+                min: 1.0,
+                max: 3.0,
+                step: 0.5,
+                value: 2.0
+            }
+        );
+        range.slide(0.9);
+        assert_eq!(range.fraction(), 1.0, "2.8 snaps to 3.0");
+        range.slide(-4.0);
+        assert_eq!(range.fraction(), 0.0);
     }
 }

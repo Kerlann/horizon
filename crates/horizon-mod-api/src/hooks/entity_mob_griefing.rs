@@ -3,7 +3,7 @@
 pub trait Hooks {
     /// May `entity` change the world? (NeoForge's `EntityMobGriefingEvent`,
     /// `EventHooks.canEntityGrief`.) `can_grief` starts as the `mob_griefing`
-    /// game rule; set it either way. Asked where NeoForge 26.3 asks it: a mob
+    /// game rule; set it either way. Asked for a mob
     /// explosion (`ExplosionInteraction.MOB`, for the creeper, wither, ghast
     /// fireball or wither skull), a mob picking up items, an enderman taking
     /// or placing a block, a sheep eating grass, a mob trampling
@@ -12,9 +12,8 @@ pub trait Hooks {
     /// entering stone, a snow golem's snow, a fox's berries, a rabbit's
     /// carrots, a villager's farming, an evoker's sheep, a zombie trampling
     /// eggs, an allay's pickup, and a mob's arrow or small fireball changing
-    /// a block (asked for its owner). Where NeoForge reads the rule alone
-    /// (doors, the dragon, pitcher crops, weaving, decorations and items in
-    /// explosions) the rule decides. Asked often: answer fast. Server-side.
+    /// a block (asked for its owner). For doors, the dragon, pitcher crops,
+    /// weaving, and decorations and items in explosions, the rule decides. Asked often: answer fast. Server-side.
     #[hook(
         side = "server",
         contract = "listen",

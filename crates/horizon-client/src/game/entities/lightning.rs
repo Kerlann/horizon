@@ -802,7 +802,7 @@ impl Game<'_> {
 impl Game<'_> {
     /// `EntityStruckByLightningEvent`, before `thunderHit` on entity `entity`
     /// from bolt `bolt`: false when a mod cancelled the hit. The entity still
-    /// counts as struck (`hitEntities`), as in NeoForge.
+    /// counts as struck (`hitEntities`).
     fn lightning_may_strike(&mut self, entity: u32, bolt: u32) -> bool {
         if !self.native_authoritative()
             || !mod_api::__private::listened(mod_api::HookId::EntityStruckByLightning)

@@ -21,7 +21,7 @@ the GUI atlas by name, so a pack's texture or a mod's runtime sprite
 out of the drawing. A mod type never counts toward a map's decoration limit (`trackCount`).
 
 An id in vanilla's namespace, not of that form, registered already, or with an empty sprite is
-logged and left out, where NeoForge's registry throws. Types are frozen once at startup; a type a
+logged and left out. Types are frozen once at startup; a type a
 server's map data names that a client did not register is not drawn. Map data a Horizon server
 sends to a client (`ClientboundMapItemData`) numbers vanilla's types only, so a mod type reaches a
 client through the item's component, not through that packet."#]

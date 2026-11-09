@@ -55,8 +55,8 @@ pub trait FluidsEnergyBackendMut {
     /// Side: server.
     /// Puts as much of `fluid` as tank `tank` of those `at`'s side reaches takes: a mod
     /// block's fillable tank, empty or holding that fluid, up to its capacity; a cauldron by
-    /// whole thirds, lava only whole into an empty one, discarding the fluid's components as
-    /// NeoForge's `CauldronFluidContent` does. What didn't fit. The write is kept by
+    /// whole thirds, lava only whole into an empty one, discarding the fluid's components.
+    /// What didn't fit. The write is kept by
     /// transaction `tx`.
     #[access(WorldOnly)]
     fn fluid_tank_insert(

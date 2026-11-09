@@ -45,7 +45,7 @@ class ModApiBoundaryTests(unittest.TestCase):
     def test_every_public_type_has_an_explicit_wire_policy(self):
         from tools.check_mod_api_wire import repository_violations
         self.assertEqual(repository_violations(), [],
-                         "derive Wire, implement Wire explicitly, or attach // no wire: <reason>")
+                         "derive Wire or attach // no wire: <reason> explaining a manual codec or refusal")
 
     def test_every_public_type_is_non_exhaustive_or_says_why(self):
         missing = []

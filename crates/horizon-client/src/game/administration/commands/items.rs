@@ -862,7 +862,7 @@ impl Game<'_> {
     /// One item modifier (a typed object, a list or a datapack reference)
     /// applied to a stack; `None` when the stack ends up empty.
     fn apply_item_modifier(
-        &self,
+        &mut self,
         m: &serde_json::Value,
         stack: Option<ItemStack>,
         rng: &mut horizon_core::random::LegacyRandom,
@@ -892,8 +892,8 @@ impl Game<'_> {
             Value::Array(list) => list.iter().fold(stack, |s, f| {
                 self.apply_item_modifier(f, s, rng, this, origin, depth + 1)
             }),
-            Value::String(id) => match self.fns.store.item_modifiers.get(id) {
-                Some(f) => self.apply_item_modifier(f, stack, rng, this, origin, depth + 1),
+            Value::String(id) => match self.fns.store.item_modifiers.get(id).cloned() {
+                Some(f) => self.apply_item_modifier(&f, stack, rng, this, origin, depth + 1),
                 None => stack,
             },
             Value::Object(_) => {
@@ -913,6 +913,14 @@ impl Game<'_> {
                             .fold(Some(stack), |s, f| {
                                 self.apply_item_modifier(f, s, rng, this, origin, depth + 1)
                             });
+                    }
+                    "minecraft:exploration_map" => {
+                        if stack.count > 0 {
+                            let map = horizon_world::loot::ExplorationMap::from_json(m);
+                            // A failed command search keeps the input; pending loot's
+                            // caller owns its separate filtered/drop policy.
+                            self.materialize_exploration_map(&mut stack, &map, origin);
+                        }
                     }
                     "minecraft:set_count" => {
                         let n = int(&m["count"], rng);
@@ -2514,7 +2522,8 @@ mod registered_slot_source_read_tests {
     #[test]
     #[ignore = "needs prepared resources and isolated homes/cwd"]
     fn registered_first_three_reads_match_inline_and_keep_the_chest() {
-        let mut game = crate::game::game_tests::tests::server_game();
+        let mut resources = None;
+        let mut game = crate::game::game_tests::tests::server_game(&mut resources);
         game.build_registries();
         game.set_allow_commands(true);
         let root = std::env::current_dir()
@@ -2610,8 +2619,11 @@ mod registered_slot_source_read_tests {
 mod registered_slot_source_preservation_tests {
     use super::*;
 
-    fn scene(name: &str) -> (Game<'static>, std::path::PathBuf) {
-        let mut game = crate::game::game_tests::tests::server_game();
+    fn scene<'a>(
+        resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>,
+        name: &str,
+    ) -> (Game<'a>, std::path::PathBuf) {
+        let mut game = crate::game::game_tests::tests::server_game(resources);
         game.build_registries();
         game.set_allow_commands(true);
         let root = std::env::current_dir().unwrap().join(name);
@@ -2643,7 +2655,8 @@ mod registered_slot_source_preservation_tests {
     #[test]
     #[ignore = "needs prepared resources and isolated homes/cwd"]
     fn loaded_snapshot_changes_only_on_existing_reload_with_pack_precedence() {
-        let (mut game, file) = scene("slot-source-snapshot-world");
+        let mut resources = None;
+        let (mut game, file) = scene(&mut resources, "slot-source-snapshot-world");
         let before = game.block_entity_nbt([0, 100, 0]).unwrap();
         let clock = game.world.game_time;
         count(&mut game, 3); // Higher-priority pack overrides the same id.
@@ -2664,7 +2677,8 @@ mod registered_slot_source_preservation_tests {
     #[test]
     #[ignore = "needs prepared resources and isolated homes/cwd"]
     fn admitted_item_arguments_still_fail_without_writing_or_player_fallback() {
-        let (mut game, _) = scene("slot-source-unsupported-world");
+        let mut resources = None;
+        let (mut game, _) = scene(&mut resources, "slot-source-unsupported-world");
         let before = game.block_entity_nbt([0, 100, 0]).unwrap();
         let clock = game.world.game_time;
         count(&mut game, 3);

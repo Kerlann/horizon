@@ -45,8 +45,7 @@ pub fn registered() -> &'static MapDecorationTypes {
 impl MapDecorationTypes {
     /// Registers each type in push order. An id that is not `<namespace>:<path>` in a mod's
     /// namespace, is registered already, or has an empty or already used sprite (a vanilla
-    /// type's included, which `vanilla` recognises) is logged and left out, where NeoForge's
-    /// registry throws.
+    /// type's included, which `vanilla` recognises) is logged and left out.
     pub fn place(registered: Vec<MapDecorationType>, vanilla: impl Fn(&str) -> bool) -> Self {
         let mut types = Self::default();
         for MapDecorationType {

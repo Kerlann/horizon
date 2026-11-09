@@ -5,5 +5,6 @@ pub mod wire;
 #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
 #[doc(hidden)]
 pub mod wire_guest;
+mod wire_handlers;
 mod wire_slots;
 mod wire_types;

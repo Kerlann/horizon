@@ -20,6 +20,8 @@ first build, or prebuilt game. While compiling it shows the crate and crates don
 progress. Afterwards it identifies the completed profile and plan. Neither the window nor `native-build` promises
 or displays a build duration. `native/build.log` retains Cargo's diagnostic output, without the progress bar.
 
+Native client builds share the prepared resources of their base version instead of copying them into every build. The launcher passes that base folder to the game as `--resources` and retains the base while an installed native build references it. Remove those builds before removing their base. Dedicated server exports remain standalone and include their own resources.
+
 Disk use varies with the platform, profile and set of mods. Run `horizon-launcher storage` to inspect the actual
 cache rather than estimating its size from another computer's build.
 

@@ -254,23 +254,17 @@ pub trait Hooks {
         neoforge = "none (Horizon-only; NeoForge has no counterpart)"
     )]
     fn minimap();
-    /// The buttons of mod `mod_id`'s settings page: push
-    /// their labels when it is yours. Asked again each time the page opens
-    /// and after each click.
-    #[hook(
-        side = "both",
-        contract = "collect",
-        out = "buttons",
-        neoforge = "none (Horizon's own settings page; NeoForge's per-mod screen is IConfigScreenFactory, not an event)"
-    )]
-    fn settings();
-    /// Button `button` of mod `mod_id`'s settings page was clicked.
+    /// The player changed setting `key` of mod `mod_id` on its page in Options > Mods
+    /// (`Registrar::register_setting`); the new value is kept already, so read it with
+    /// `setting_bool` and its siblings. Only mod `mod_id` hears it: a mod is told of its own
+    /// settings, never another's.
     #[hook(
         side = "client",
         contract = "listen",
-        neoforge = "none (Horizon's own settings page; NeoForge's per-mod screen is IConfigScreenFactory, not an event)"
+        owner = "mod_id",
+        neoforge = "ModConfigEvent.Reloading (a ModConfigSpec value set on the config screen)"
     )]
-    fn settings_click();
+    fn setting_changed();
     /// The player did `event` on mod `mod_id`'s panel (`native_panel_items`):
     /// act on it when it is yours.
     #[hook(
@@ -436,7 +430,10 @@ pub trait Hooks {
     /// name vanilla has is left out. Asked again after a mod calls
     /// `host.commands().refresh_commands()`. Each executable usage keeps its own
     /// permission level; a lower-level child only opens traversal through a
-    /// shared prefix, not execution of that prefix.
+    /// shared prefix, not execution of that prefix. An argument's kind is one
+    /// of `word`, `text`, `integer`, `number`, `boolean`, `player`, `item` and
+    /// `block_pos`, or a command argument type a mod registered
+    /// (`Registrar::register_command_argument`), named by its namespaced id.
     #[hook(
         side = "server",
         contract = "collect",
@@ -2648,7 +2645,12 @@ requires a farmer at work and `mob_griefing` enabled."#]
     /// window's player is drawn only in third person (and F5 front view); an
     /// invisible player is not asked. `draw` is the frame of `native_mob_submit`:
     /// at the player's feet, turned with the body. The name tag, shadow,
-    /// flames and glowing outline draw as before.
+    /// flames and glowing outline draw as before. `hidden.hide(part)` leaves
+    /// only that part out of the vanilla model this frame (after Skin
+    /// Customization), as a mod drawing its own outer skin layer does: a
+    /// hidden part takes its children with it (the hat goes with the head),
+    /// while its armour, held items and other layers, the cape among them,
+    /// keep every part.
     #[hook(
         side = "client",
         contract = "cancel",
@@ -2663,7 +2665,10 @@ requires a farmer at work and `mob_griefing` enabled."#]
     /// in the entity's frame, which starts at its feet turned with the body
     /// (`mob.head_yaw`, `mob.pitch` and the walk cycle place a part, the eyes
     /// being at the entity type's eye height). `who` is set for a player.
-    /// Not asked for what a mod drew itself (`native_mob_submit`,
+    /// `parts` is a humanoid model's parts as vanilla posed them this frame
+    /// (`HumanoidModel.setupAnim`), read-only: attach geometry to an arm or
+    /// the head without animating it again; None for a model that isn't
+    /// humanoid. Not asked for what a mod drew itself (`native_mob_submit`,
     /// `native_player_submit`) nor for a mob that isn't drawn at all.
     #[hook(
         side = "client",
@@ -3639,7 +3644,7 @@ requires a farmer at work and `mob_griefing` enabled."#]
         side = "server",
         contract = "cancel",
         out = "cancel",
-        neoforge = "none (NeoForge's PlayerContainerEvent.Open fires after the menu is open and is not cancellable)",
+        neoforge = "none (not NeoForge's PlayerContainerEvent.Open: this hook can cancel the opening)",
         cancellable = true
     )]
     fn container_opened();

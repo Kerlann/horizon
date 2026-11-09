@@ -648,15 +648,11 @@ pub fn rustc(mut args: Vec<String>) -> Result<(), String> {
             sha512_of(format!("{}{}", config["registrations"], config["points"]).as_bytes())
         ));
     }
-    if command
-        .args(args)
-        .status()
-        .map_err(|e| e.to_string())?
-        .success()
-    {
+    let status = command.args(args).status().map_err(|e| e.to_string())?;
+    if status.success() {
         Ok(())
     } else {
-        Err("rustc failed".into())
+        Err(format!("rustc failed: {status}"))
     }
 }
 

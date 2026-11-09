@@ -29,6 +29,10 @@ use {
 
 /// `Player.getDimensionChangingDelay`.
 pub(super) const PLAYER_DELAY: i32 = 10;
+/// `VehicleEntity.getDimensionChangingDelay`: boats and minecarts.
+const VEHICLE_DELAY: i32 = 10;
+/// `Projectile.getDimensionChangingDelay`.
+const PROJECTILE_DELAY: i32 = 2;
 
 /// Where in its portal a traveller stood, and where its exit is to be found.
 #[derive(Clone, Copy, Debug)]
@@ -97,6 +101,10 @@ pub(super) struct Portals {
     /// What a carrying minecart moved by when its portal was handled, at the
     /// start of its tick: its motion is what crosses (`arrive_vehicle`).
     pub(super) carried_motion: HashMap<u32, Vec3>,
+    /// The cooldown a carrying vehicle left with. Vanilla's copy arrives in
+    /// the same tick (`Entity.restoreFrom`), so the source level ticking
+    /// while the destination loads must not run it down.
+    pub(super) carried_cooldown: HashMap<u32, i32>,
     /// Where a carrying vehicle stood then: its plan is taken from there
     /// (`vehicle_plan`), as vanilla's is, not from where its rider's own tick
     /// has moved it on to since.
@@ -214,6 +222,23 @@ fn end_portal_rotation(into_end: bool, [yaw, pitch]: [f32; 2], spawn: [f32; 2]) 
     };
     [yaw, pitch.clamp(-90.0, 90.0)]
 }
+/// Apply a resolved destination to the entity tree without resetting its cooldown.
+fn set_arrival_pose(tag: &mut Tag, at: Vec3, motion: Vec3, [yaw, pitch]: [f32; 2], yaw_turn: f32) {
+    if let Some(was) = horizon_client::entity_nbt::position(tag) {
+        move_passengers(tag, at.subtract(was), yaw_turn);
+    }
+    if let Tag::Compound(c) = tag {
+        c.insert("Pos".into(), doubles([at.x, at.y, at.z]));
+        c.insert("Motion".into(), doubles([motion.x, motion.y, motion.z]));
+        c.insert(
+            "Rotation".into(),
+            Tag::List(vec![Tag::Float(yaw.to_bits()), Tag::Float(pitch.to_bits())]),
+        );
+        // PortalCooldown keeps what setPortalCooldown gave it before
+        // the teleport (`send_through_portal`), copied by restoreFrom.
+    }
+}
+
 /// A waiting entity as `horizon_portal_arrivals.dat` keeps it.
 fn arrival_tag(a: &Arrival) -> Tag {
     let p = &a.plan;
@@ -700,10 +725,11 @@ impl Game<'_> {
             present.contains(id) || vehicle != vehicles
         });
         for (id, allowed) in ids {
+            let delay = self.dimension_changing_delay(id);
             let Some(state) = self.portals.entities.get_mut(&id) else {
                 continue;
             };
-            if let Some(entry) = state.handle(allowed, 0, ENTITY_DELAY) {
+            if let Some(entry) = state.handle(allowed, 0, delay) {
                 leaving.push((id, entry));
             }
             if state.cooldown == 0 && state.process.is_none() {
@@ -714,6 +740,8 @@ impl Game<'_> {
             // `Entity.teleportCrossDimension` carries the passengers: a
             // vehicle server players ride takes them along.
             if self.guest_rides(id) {
+                let cooldown = self.portals.entities.get(&id).map_or(0, |s| s.cooldown);
+                self.portals.carried_cooldown.insert(id, cooldown);
                 if let Some(c) = self.carts.iter().find(|c| c.id == id) {
                     self.portals.carried_motion.insert(id, c.velocity);
                     self.portals.carried_at.insert(id, c.position);
@@ -763,27 +791,56 @@ impl Game<'_> {
             fields.insert("PortalCooldown".into(), Tag::Int(cooldown));
         }
     }
+    /// `Entity.getDimensionChangingDelay`, by class: boats and minecarts
+    /// (`VehicleEntity`) always 10, projectiles (`Projectile`) 2; any other
+    /// entity takes its first passenger's delay when that is a server player
+    /// (`Player.getDimensionChangingDelay`), else 300.
+    fn dimension_changing_delay(&self, id: u32) -> i32 {
+        if self.boats.iter().any(|b| b.id == id)
+            || self.carts.iter().any(|c| c.id == id)
+            || self.lan_acting_entity == Some(id)
+            || self
+                .lan
+                .iter()
+                .flat_map(|h| &h.hub.guests)
+                .any(|g| g.entity_id as u32 == id)
+        {
+            VEHICLE_DELAY
+        } else if self.creatures.projectiles.iter().any(|p| p.id == id)
+            || self.tridents.iter().any(|t| t.id == id)
+            || self.rockets.iter().any(|r| r.id == id)
+        {
+            PROJECTILE_DELAY
+        } else if self
+            .seated_passengers(id)
+            .first()
+            .is_some_and(|&(_, _, player)| player)
+        {
+            PLAYER_DELAY
+        } else {
+            ENTITY_DELAY
+        }
+    }
     /// `Entity.setAsInsidePortal` on an entity that is still on its portal
     /// cooldown, whatever the portal: the cooldown restarts and it stays.
     pub(super) fn restart_portal_cooldown(&mut self, id: u32) -> bool {
-        match self.portals.entities.get_mut(&id) {
-            Some(state) if state.cooldown > 0 => {
-                state.cooldown = ENTITY_DELAY;
-                true
-            }
-            _ => false,
+        if self
+            .portals
+            .entities
+            .get(&id)
+            .is_some_and(|state| state.cooldown > 0)
+        {
+            self.set_portal_cooldown(id);
+            true
+        } else {
+            false
         }
     }
-    /// `Entity.setPortalCooldown` on an entity that has just spawned in a
-    /// portal: it stands in the portal for 300 ticks without going through.
+    /// `Entity.setPortalCooldown`: assign the passenger-dependent delay,
+    /// leaving the existing portal process intact.
     pub(super) fn set_portal_cooldown(&mut self, id: u32) {
-        self.portals.entities.insert(
-            id,
-            PortalState {
-                cooldown: ENTITY_DELAY,
-                process: None,
-            },
-        );
+        let delay = self.dimension_changing_delay(id);
+        self.portals.entities.entry(id).or_default().cooldown = delay;
     }
     /// `LivingEntity.canUsePortal` over a player's body and its transport
     /// (#943): `Entity.canUsePortal(false)` (alive, nobody's passenger) and
@@ -951,11 +1008,12 @@ impl Game<'_> {
         });
         self.portals.sections = portal_sections;
         for (id, pos) in inside {
+            let delay = self.dimension_changing_delay(id);
             self.portals
                 .entities
                 .entry(id)
                 .or_default()
-                .set_inside(pos, ENTITY_DELAY);
+                .set_inside(pos, delay);
         }
     }
     /// The first nether or End portal block an entity box swept through
@@ -1051,6 +1109,9 @@ impl Game<'_> {
     /// entity is saved and removed, and waits for its dimension to load.
     fn send_through_portal(&mut self, id: u32, entry: BlockPos) {
         let arrivals = self.portals.arrivals.len();
+        // `Entity.handlePortal`: setPortalCooldown before the teleport, which
+        // restoreFrom copies to the arriving entity.
+        let cooldown = self.dimension_changing_delay(id);
         if let Some(i) = self.dropped.iter().position(|e| e.id == id) {
             let e = &self.dropped[i];
             let plan = self.entity_plan(entry, e.position, 0.25, 0.25, false);
@@ -1085,7 +1146,8 @@ impl Game<'_> {
                 return;
             }
             let uuid = self.uuid_for(id);
-            let tag = self.tridents[i].to_nbt(uuid, self.persist_raw(id));
+            let tag =
+                self.tridents[i].to_nbt(uuid, self.pack.assets.registry, self.persist_raw(id));
             self.tridents.remove(i);
             self.forget_entity(id);
             self.portals.arrivals.push(Arrival { plan, tag });
@@ -1219,6 +1281,13 @@ impl Game<'_> {
             self.portals.dirty = true;
         }
         if self.portals.arrivals.len() > arrivals {
+            if let Some(Arrival {
+                tag: Tag::Compound(c),
+                ..
+            }) = self.portals.arrivals.last_mut()
+            {
+                c.insert("PortalCooldown".into(), Tag::Int(cooldown));
+            }
             self.native_entity_portal(self.dim.id(), id, [entry.x, entry.y, entry.z]);
         }
     }
@@ -1306,20 +1375,7 @@ impl Game<'_> {
                 let (at, rotation) = self.arrival(&plan, exit);
                 (at, rotate_y(motion, -rotation), [yaw + rotation, pitch])
             };
-            let yaw_turn = yaw - was_yaw;
-            if let Some(was) = horizon_client::entity_nbt::position(&tag) {
-                move_passengers(&mut tag, at.subtract(was), yaw_turn);
-            }
-            if let Tag::Compound(c) = &mut tag {
-                c.insert("Pos".into(), doubles([at.x, at.y, at.z]));
-                c.insert("Motion".into(), doubles([motion.x, motion.y, motion.z]));
-                c.insert(
-                    "Rotation".into(),
-                    Tag::List(vec![Tag::Float(yaw.to_bits()), Tag::Float(pitch.to_bits())]),
-                );
-                // setPortalCooldown before the teleport, copied by restoreFrom.
-                c.insert("PortalCooldown".into(), Tag::Int(ENTITY_DELAY));
-            }
+            set_arrival_pose(&mut tag, at, motion, [yaw, pitch], yaw - was_yaw);
             // ServerLevel.addDuringTeleport: a fresh add, not loaded from disk.
             super::persist::mark_fresh(&mut tag);
             let key = ((at.x.floor() as i32) >> 4, (at.z.floor() as i32) >> 4);
@@ -1344,10 +1400,11 @@ impl Game<'_> {
         let mut sections = std::mem::take(&mut self.portals.sections);
         let entry = self.swept_portal(f.previous, f.position, 0.98, 0.98, &mut sections);
         self.portals.sections = sections;
+        let delay = self.dimension_changing_delay(f.id);
         if let Some(entry) = entry {
-            f.portal.set_inside(entry, ENTITY_DELAY);
+            f.portal.set_inside(entry, delay);
         }
-        let entry = f.portal.handle(true, 0, ENTITY_DELAY)?;
+        let entry = f.portal.handle(true, 0, delay)?;
         let plan = self.entity_plan(entry, f.position, 0.98, 0.98, false);
         // An untracked block (id 0) has no handle to ask about.
         let allowed = if f.id == 0 {
@@ -1382,7 +1439,7 @@ impl Game<'_> {
         );
         let mut tag = super::persist::with_raw(modelled, f.saved.as_ref().map(|s| &s.1));
         if let Tag::Compound(fields) = &mut tag {
-            fields.insert("PortalCooldown".into(), Tag::Int(ENTITY_DELAY));
+            fields.insert("PortalCooldown".into(), Tag::Int(f.portal.cooldown));
             if f.no_gravity {
                 fields.insert("NoGravity".into(), Tag::Byte(1));
             } else {
@@ -1549,6 +1606,114 @@ mod tests {
         });
     }
 
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn portal_cooldown_follows_the_class_then_the_first_passenger() {
+        crate::game::native_guest_turn_tests::with_guests(|game| {
+            game.boats.push(super::super::boats::Boat::new(
+                101,
+                Arc::from("oak"),
+                Vec3::ZERO,
+                0.0,
+            ));
+            game.carts.push(super::super::minecarts::Minecart::new(
+                103,
+                super::super::minecarts::CartKind::Rideable,
+                Vec3::ZERO,
+            ));
+            let mob = |name: &str, id| {
+                let kind = game.res.mob_types().get(name).unwrap().clone();
+                horizon_client::mobs::Mob::new(id, kind, Vec3::ZERO, 0.0)
+            };
+            let (cow, pig) = (mob("minecraft:cow", 102), mob("minecraft:pig", 104));
+            game.mobs.push(cow);
+            game.mobs.push(pig);
+            assert_eq!(game.dimension_changing_delay(12), 10);
+            let mut projectile = horizon_client::projectiles::Projectile::new(
+                horizon_client::projectiles::ProjectileKind::Snowball,
+                Vec3::ZERO,
+                None,
+            );
+            projectile.id = 106;
+            game.creatures.projectiles.push(projectile);
+            assert_eq!(game.dimension_changing_delay(106), 2);
+            let entry = BlockPos::new(0, 64, 0);
+            // Boats and minecarts (`VehicleEntity`) are 10 whoever rides them;
+            // a mob vehicle follows its first passenger. Riders: none, mob
+            // only, player first, player then mob, then mob first.
+            for (vehicle, by_class) in [(101, true), (103, true), (104, false)] {
+                for (player, mob_order, by_rider) in [
+                    (false, None, 300),
+                    (false, Some(20), 300),
+                    (true, None, 10),
+                    (true, Some(20), 10),
+                    (true, Some(-10), 300),
+                ] {
+                    let expected = if by_class { 10 } else { by_rider };
+                    game.lan.as_mut().unwrap().hub.update_guest(12, |g| {
+                        g.vehicle = player.then_some(vehicle);
+                        g.vehicle_order = 0;
+                    });
+                    game.mobs[0].extra.mount = mob_order.map(|_| vehicle);
+                    game.mobs[0].extra.vehicle_order = mob_order.unwrap_or_default();
+                    assert_eq!(
+                        game.dimension_changing_delay(vehicle),
+                        expected,
+                        "vehicle {vehicle}, player {player}, mob {mob_order:?}"
+                    );
+                    portal_cooldown_keeps_the_process(game, vehicle, entry, expected);
+                }
+            }
+        });
+    }
+
+    /// `Entity.setPortalCooldown` sets only the cooldown; the restart and
+    /// the portal process use the same delay.
+    fn portal_cooldown_keeps_the_process(
+        game: &mut Game<'_>,
+        id: u32,
+        entry: BlockPos,
+        expected: i32,
+    ) {
+        game.portals.entities.insert(
+            id,
+            PortalState {
+                cooldown: 0,
+                process: Some(horizon_client::nether_portal::Process {
+                    entry,
+                    time: 7,
+                    inside: true,
+                }),
+            },
+        );
+        game.set_portal_cooldown(id);
+        let state = game.portals.entities.get_mut(&id).unwrap();
+        assert_eq!(state.cooldown, expected);
+        let process = state.process.unwrap();
+        assert_eq!(process.entry, entry);
+        assert_eq!(process.time, 7);
+        assert!(process.inside);
+        state.cooldown = 1;
+        assert!(game.restart_portal_cooldown(id));
+        assert_eq!(game.portals.entities[&id].cooldown, expected);
+        let delay = game.dimension_changing_delay(id);
+        let state = game.portals.entities.get_mut(&id).unwrap();
+        assert_eq!(state.handle(true, 0, delay), Some(entry));
+        assert_eq!(state.cooldown, expected);
+        assert_eq!(state.handle(true, 0, delay), None);
+        assert_eq!(state.cooldown, expected - 1);
+    }
+
+    #[test]
+    fn resolved_arrival_keeps_source_cooldown() {
+        for cooldown in [2, 10, 300] {
+            let mut tag = Tag::compound([("PortalCooldown", Tag::Int(cooldown))]);
+            set_arrival_pose(&mut tag, Vec3::ZERO, Vec3::ZERO, [90.0, 0.0], 90.0);
+            assert_eq!(tag.get("PortalCooldown"), Some(&Tag::Int(cooldown)));
+            assert_eq!(horizon_client::entity_nbt::position(&tag), Some(Vec3::ZERO));
+        }
+    }
+
     /// `EntityTravelToDimensionEvent` for server players: both are asked with
     /// their own id, the target level and the cause; the spared one stays, the
     /// other may go.
@@ -1594,6 +1759,10 @@ mod tests {
             assert_eq!(left, [ids[0]]);
             assert_eq!(game.portals.arrivals.len(), 1);
             assert_eq!(game.portals.arrivals[0].plan.dim, Dim::Nether);
+            assert_eq!(
+                game.portals.arrivals[0].tag.get("PortalCooldown"),
+                Some(&Tag::Int(300))
+            );
             let nether = || "minecraft:the_nether".to_owned();
             let cause = || "nether_portal".to_owned();
             assert_eq!(

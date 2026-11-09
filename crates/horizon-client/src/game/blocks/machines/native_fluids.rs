@@ -108,7 +108,7 @@ fn side_tanks(tanks: &ModFluidTanks, side: Option<Direction>) -> impl Iterator<I
 
 /// Whether the tanks at `at` take `fluid`. A mod block's saved tanks keep an id and an amount,
 /// so they take vanilla's fluids and a mod's own, without components. A cauldron takes only
-/// water and lava, discarding their components as NeoForge's `CauldronFluidContent` does:
+/// water and lava, discarding their components:
 /// the one place a fluid's components are dropped, and what comes out of a cauldron is plain.
 fn game_holds(fluid: &FluidStack, at: &FluidAt) -> bool {
     match at {
@@ -359,8 +359,8 @@ impl Game<'_> {
     }
     /// Puts as much of `fluid` as tank `tank` of those `at`'s side reaches takes: a mod
     /// block's fillable tank, empty or holding that fluid, up to its capacity; a cauldron by
-    /// whole thirds, lava only whole into an empty one, discarding the fluid's components as
-    /// NeoForge's `CauldronFluidContent` does. What didn't fit. The write is kept by
+    /// whole thirds, lava only whole into an empty one, discarding the fluid's components.
+    /// What didn't fit. The write is kept by
     /// transaction `tx`.
     pub(in crate::game) fn fluid_tank_insert(
         &mut self,

@@ -19,13 +19,36 @@ jobs:
   fixture:
     # Drafts skip it: the shared runners go to ready PRs (CI rule, 2026-11-08).
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
-    runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'dyna-large' }}
+    runs-on: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name != github.repository && 'ubuntu-latest' || 'dyna-large' }}
     timeout-minutes: 120
     env:
       CARGO_INCREMENTAL: 0
-      CARGO_TARGET_DIR: ${{ github.workspace }}/target
     steps:
       - uses: actions/checkout@v4
+      - name: Configure persistent build targets
+        shell: bash
+        run: |
+          # Dyna supplies a persistent target mount; hosted runners use the checkout.
+          target="${CARGO_TARGET_DIR:-$GITHUB_WORKSPACE/target}"
+          mkdir -p "$target"
+          if [[ "$target" != "$GITHUB_WORKSPACE/target" ]]; then
+            ln -s "$target" "$GITHUB_WORKSPACE/target"
+          fi
+          echo "CARGO_TARGET_DIR=$target" >> "$GITHUB_ENV"
+          cache="$target/wasm-fixtures"
+          if [[ '${{ runner.environment }}' == 'github-hosted' ]]; then
+            cache="$GITHUB_WORKSPACE/.wasm-fixture-targets"
+          fi
+          # Keep generated workspaces real: Cargo cannot discover their members
+          # through a target symlink. Only independent compiler artifacts persist.
+          for member in fixture library-fixture/{library,observer,dependent} groups/{counter_lib,alpha,beta,gamma,hog}; do
+            root="$GITHUB_WORKSPACE/crates/horizon-mod-wasm/tests/$member/target/horizon-mod"
+            mkdir -p "$root"
+            for artifact in horizon-wasm wasm32-unknown-unknown std-artifacts; do
+              mkdir -p "$cache/$member/$artifact"
+              ln -s "$cache/$member/$artifact" "$root/$artifact"
+            done
+          done
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: 1.99.1
@@ -33,6 +56,9 @@ jobs:
           targets: wasm32-unknown-unknown
       - if: runner.environment == 'github-hosted'
         uses: Swatinem/rust-cache@v2
+        with:
+          # These custom-profile targets belong to staged, independent workspaces.
+          cache-directories: .wasm-fixture-targets
       - name: Compile and test emitted point records
         run: |
           manifest=crates/horizon-mod-point-shape/tests/record-wire/Cargo.toml

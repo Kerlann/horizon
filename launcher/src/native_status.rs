@@ -6,9 +6,6 @@ use std::fs;
 use std::path::Path;
 use std::sync::Arc;
 
-/// Shown once, before the first native mod is installed.
-pub const NOTICE: &str = "Native mods aren't sandboxed: they run with full access to your computer, like any program. Install only mods whose authors you trust. To play with one, build the game on the Mods page; a build may download Rust and other build tools.";
-
 /// A native mod: its id, its version and a digest of its files (None for a build from before
 /// `native-mods.json` kept them).
 pub type Mod = (String, String, Option<String>);
@@ -593,15 +590,14 @@ mod tests {
         assert!(!is_native_file("resourcepacks/x.zip"));
     }
 
-    /// Settings files from before native mods were on by default still read; their
-    /// `native_mods` key is ignored, and the notice stays read.
+    /// Old switches and notices never count as native-code consent.
     #[test]
     fn old_settings_with_the_native_mods_switch_still_read() {
         let s: backend::Settings =
             serde_json::from_str(r#"{"native_mods": true, "native_mods_noticed": true}"#).unwrap();
-        assert!(s.native_mods_noticed);
+        assert!(s.native_mods_allowed_at.is_none());
         let s: backend::Settings = serde_json::from_str(r#"{"native_mods": false}"#).unwrap();
-        assert!(!s.native_mods_noticed);
+        assert!(s.native_mods_allowed_at.is_none());
         let saved = serde_json::to_string(&s).unwrap();
         assert!(!saved.contains("native_mods"), "{saved}");
     }

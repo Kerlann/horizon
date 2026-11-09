@@ -319,10 +319,10 @@ fn fixture(window: Arc<Window>) -> Result<(), Box<dyn std::error::Error>> {
         None,
         GraphicsApi::Vulkan,
         false,
-        false,
         true,
-        false,
-        false,
+        &client::graphics::Graphics::default(),
+        Default::default(),
+        Default::default(),
     ))?;
     renderer.resize(320, 180);
     assert!(

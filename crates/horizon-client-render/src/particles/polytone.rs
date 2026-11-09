@@ -161,6 +161,29 @@ impl Registry {
         let mut modifiers = Vec::new();
         let mut entity_modifiers = Vec::new();
         let mut particle_modifiers = Vec::new();
+        // Custom colours' `particle.<id>`: a modifier that sets only the colour, below the files'.
+        for (id, color) in horizon_polytone::colors::PackColors::from_files(
+            pack_root.namespaces("assets").into_iter().map(|namespace| {
+                let base = format!("assets/{namespace}/polytone");
+                (
+                    pack_root
+                        .read_to_string(&format!("{base}/color.properties"))
+                        .ok(),
+                    pack_root
+                        .read_to_string(&format!("{base}/colors.json"))
+                        .ok(),
+                )
+            }),
+        )
+        .particles()
+        {
+            let json = serde_json::json!({"targets": [id], "color": color});
+            match ParticleModifier::parse(&json, None) {
+                Ok(Some(m)) => particle_modifiers.push((m, None, None)),
+                Ok(None) => {}
+                Err(e) => log::warn!("colors particle.{id}: {e}"),
+            }
+        }
         for namespace in pack_root.namespaces("assets") {
             let polytone = std::path::PathBuf::from(format!("assets/{namespace}/polytone"));
             for (relative, json) in json_files(pack_root, &polytone.join("custom_particles")) {
@@ -2189,6 +2212,27 @@ mod tests {
             (sounds[0].0, sounds[0].2, sounds[0].3),
             ("minecraft:block.note_block.harp", 0.5, 1.0)
         );
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn custom_colours_recolour_their_particle_type() {
+        let root = pack(&[(
+            "assets/obs/polytone/colors.json",
+            serde_json::json!({"particle": {"minecraft:flame": "0x0000ff"}}),
+        )]);
+        let registry = Registry::read(
+            &horizon_assets::resource_source::ResourceSource::directory(root.clone()),
+            Default::default(),
+            blocks(),
+        );
+        let colour = |kind: &str| {
+            let mut p = Particle::blank(ParticleType::Flame, [0.0; 3]);
+            modify(&registry, kind, None, &mut p);
+            p.rgba
+        };
+        assert_eq!(colour("minecraft:flame"), [0.0, 0.0, 1.0, 1.0]);
+        assert_eq!(colour("minecraft:smoke"), [1.0; 4]);
         std::fs::remove_dir_all(root).unwrap();
     }
 

@@ -149,7 +149,7 @@ fn providers_code(shapes: &[KeyShape]) -> String {
 }
 
 /// Every name a `use` tree brings in.
-fn use_names(tree: &syn::UseTree) -> Vec<String> {
+pub(crate) fn use_names(tree: &syn::UseTree) -> Vec<String> {
     match tree {
         syn::UseTree::Path(path) => use_names(&path.tree),
         syn::UseTree::Name(name) => vec![name.ident.to_string()],

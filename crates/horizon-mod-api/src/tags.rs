@@ -3,6 +3,7 @@ use crate::{BlockKey, FluidKey, Identifier, ItemKey};
 
 /// A process-lifetime tag name resolved once through [`Tags::key`].
 /// Membership belongs to the current authoritative data reload, not to the key.
+// no wire: decoding validates the u32 slot with TagKey::from_slot on the host; wasm carries the host-issued opaque token without consulting guest tables.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: the runtime alone creates name slots
 pub struct TagKey(pub(crate) u32);

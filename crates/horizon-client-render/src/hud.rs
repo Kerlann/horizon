@@ -13,7 +13,10 @@ use std::{
 use wgpu::util::DeviceExt;
 
 pub mod cit_glint;
+mod menu_pictures;
 mod pack_text;
+pub mod pictures;
+pub(crate) mod sprite_modifiers;
 
 /// A sprite's atlas region, and its size in GUI pixels: the size of the
 /// default resources' texture of that name, whatever the resolution of the
@@ -60,6 +63,7 @@ impl TextureFlags {
     }
 }
 pub struct HudAtlas {
+    pictures: std::sync::Mutex<pictures::Cache>,
     /// Identity of this packed atlas, used to invalidate cached model UV data
     /// even when a resource reload places sprites at the same coordinates.
     pub revision: u64,
@@ -104,6 +108,8 @@ pub struct HudAtlas {
     /// The packs' `core/sky` and `core/stars`, when a pack replaces them.
     pub sky_shader: Option<std::sync::Arc<horizon_shaders::CoreProgram>>,
     pub stars_shader: Option<std::sync::Arc<horizon_shaders::CoreProgram>>,
+    /// The packs' Polytone screen sprite modifiers.
+    pub sprite_modifiers: std::sync::Arc<sprite_modifiers::SpriteModifiers>,
     /// The packs' OptiFine random entity textures, whose variants this atlas packs.
     pub random_textures: horizon_optifine::random_textures::RandomTextures,
     /// Their emissive overlays (`_e`), packed here too.
@@ -113,7 +119,8 @@ pub struct HudAtlas {
     /// Of the shared atlas's textures, their LabPBR normal and specular maps as paged maps
     /// (`paged_maps.rs`), read while loading for shader packs (`sprites::labpbr_maps`).
     pub material_maps: std::sync::Arc<[Option<crate::paged_maps::PagedMap>; 2]>,
-    white: Rect,
+    /// The white texel flat fills sample (also `hud_kit::shapes`).
+    pub(crate) white: Rect,
 }
 /// Atlas rows reserved for glyphs rasterized at run time.
 pub const GLYPH_ROWS: u32 = 512;
@@ -869,18 +876,11 @@ impl HudAtlas {
         mod_image: bool,
     ) -> Result<Self> {
         let mut atlas = Self::pack(root, defaults, WALKED_TEXTURE_FOLDERS, true, mod_image)?;
-        atlas.text_shader = pack_text::load(root, defaults);
-        atlas.lines_shader = pack_text::load_core(
+        pack_text::load_shaders(&mut atlas, root, defaults);
+        atlas.sprite_modifiers = std::sync::Arc::new(sprite_modifiers::SpriteModifiers::read(
             root,
-            defaults,
-            "rendertype_lines",
-            &[],
-            &crate::gfx::core_lines::GLUE,
-        );
-        let sky =
-            |name| pack_text::load_core(root, defaults, name, &[], &crate::gfx::core_sky::GLUE);
-        atlas.sky_shader = sky("sky");
-        atlas.stars_shader = sky("stars");
+            atlas.sprites.keys(),
+        ));
         Ok(atlas)
     }
     /// Empty slots written at run time: map textures (game/blocks/maps/mod.rs), the
@@ -943,6 +943,7 @@ impl HudAtlas {
             h: 1,
         };
         Ok(Self {
+            pictures: Default::default(),
             revision: Self::next_revision(),
             pixels: Vec::new(),
             packed: None,
@@ -963,6 +964,7 @@ impl HudAtlas {
             lines_shader: None,
             sky_shader: None,
             stars_shader: None,
+            sprite_modifiers: Default::default(),
             random_textures: Default::default(),
             emissive: Arc::default(),
             blinks: Default::default(),
@@ -1002,6 +1004,7 @@ impl HudAtlas {
         );
         let white = sprites["horizon/white"];
         Self {
+            pictures: Default::default(),
             revision: Self::next_revision(),
             font: crate::font::Font::load(
                 &crate::resource_source::ResourceSource::default(),
@@ -1030,6 +1033,7 @@ impl HudAtlas {
             lines_shader: None,
             sky_shader: None,
             stars_shader: None,
+            sprite_modifiers: Default::default(),
             random_textures: Default::default(),
             emissive: Default::default(),
             blinks: Default::default(),
@@ -1155,17 +1159,7 @@ impl HudAtlas {
                 }
             }
         }
-        files.retain(|p| {
-            let slot_picture = [
-                "textures/gui/title/background/panorama_0.png",
-                "textures/gui/title/background/panorama_2.png",
-                "textures/gui/title/background/panorama_3.png",
-                "textures/gui/presets/isles.png",
-            ]
-            .iter()
-            .any(|kept| p.ends_with(kept));
-            slot_picture || (!p.contains("title/background") && !p.contains("presets"))
-        });
+        files.retain(|p| !menu_pictures::menu_picture_only(p));
         // OptiFine random entity variants, under the names their scan gives them (those
         // outside `textures/` are `<ns>:optifine/random/...`).
         let random_textures = if folders.contains(&"entity") {
@@ -1558,6 +1552,7 @@ impl HudAtlas {
             white,
         );
         Ok(Self {
+            pictures: std::sync::Mutex::new(pictures::Cache::new(root, defaults)),
             revision: Self::next_revision(),
             material_maps: std::sync::Arc::new(material_maps),
             galactic_widths: galactic_widths(&sprites, &pixels, width, height),
@@ -1577,6 +1572,7 @@ impl HudAtlas {
             lines_shader: None,
             sky_shader: None,
             stars_shader: None,
+            sprite_modifiers: Default::default(),
             random_textures,
             emissive,
             blinks,
@@ -1630,6 +1626,8 @@ fn clip_polygon(poly: &[HudVertex], axis: usize, limit: f32, keep_below: bool) -
         v.pos = [mix(a.pos[0], b.pos[0]), mix(a.pos[1], b.pos[1])];
         v.uv = [mix(a.uv[0], b.uv[0]), mix(a.uv[1], b.uv[1])];
         v.depth = mix(a.depth, b.depth);
+        // A shaded shape (a gradient, `hud_kit::shapes`) keeps its colours across the cut.
+        v.color = crate::hud_kit::shapes::mix_colour(a.color, b.color, t);
         v.glint_uv = [
             mix(a.glint_uv[0], b.glint_uv[0]),
             mix(a.glint_uv[1], b.glint_uv[1]),
@@ -1645,11 +1643,8 @@ fn clip_polygon(poly: &[HudVertex], axis: usize, limit: f32, keep_below: bool) -
             out.push(*a);
         }
         if ia != ib {
-            out.push(lerp(
-                a,
-                b,
-                (limit - a.pos[axis]) / (b.pos[axis] - a.pos[axis]),
-            ));
+            let t = (limit - a.pos[axis]) / (b.pos[axis] - a.pos[axis]);
+            out.push(lerp(a, b, t));
         }
     }
     out
@@ -1663,6 +1658,7 @@ pub struct GuiScale {
 
 /// One frame of overlay geometry in GUI pixels.
 pub struct HudBatch {
+    pub pictures: Vec<Arc<pictures::Picture>>,
     pub vertices: Vec<HudVertex>,
     pub scale: f32,
     pub width: f32,
@@ -1688,6 +1684,7 @@ pub struct HudBatch {
 /// How a run of HUD vertices blends and tests depth.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Blend {
+    Picture(u64),
     /// `BlendFunction.TRANSLUCENT`.
     Alpha,
     /// `BlendFunction.INVERT` (`RenderPipelines.CROSSHAIR`, `GUI_INVERT`).
@@ -1717,8 +1714,8 @@ pub struct EndPortalFill {
     pub sprites: [[f32; 4]; 2],
     pub game_time: f32,
 }
-pub fn rgba(r: u8, g: u8, b: u8, a: u8) -> u32 {
-    u32::from(a) << 24 | u32::from(b) << 16 | u32::from(g) << 8 | u32::from(r)
+pub const fn rgba(r: u8, g: u8, b: u8, a: u8) -> u32 {
+    (a as u32) << 24 | (b as u32) << 16 | (g as u32) << 8 | r as u32
 }
 impl HudBatch {
     /// Window.calculateScale: the largest scale keeping >= 320x240 GUI pixels,
@@ -1734,6 +1731,7 @@ impl HudBatch {
     }
     fn with_gui_size(gui: horizon_client_input::window::GuiSize) -> Self {
         Self {
+            pictures: Vec::new(),
             vertices: Vec::new(),
             scale: gui.scale as f32,
             width: gui.size[0] as f32,
@@ -2541,6 +2539,7 @@ impl HudUniform {
 use crate::gfx::hud_coverage::{self, Pipeline};
 
 pub struct HudRenderer {
+    pictures: HashMap<u64, (Arc<pictures::Picture>, wgpu::BindGroup)>,
     pub sprite_animations: Vec<(Rect, crate::sprites::SpriteAnimation, (usize, usize, u32))>,
     /// The shared atlas texture, for run-time glyph uploads.
     pub atlas_texture: Option<wgpu::Texture>,
@@ -2829,6 +2828,7 @@ impl HudRenderer {
             mapped_at_creation: false,
         });
         Ok(Self {
+            pictures: HashMap::new(),
             atlas_texture: None,
             sprite_animations: Vec::new(),
             pipeline,
@@ -2968,6 +2968,7 @@ impl HudRenderer {
         batch: &HudBatch,
         size: [u32; 2],
     ) {
+        self.prepare_pictures(device, uploads, encoder, batch);
         self.upload_patches(uploads, encoder, &batch.patches);
         if batch.vertices.is_empty() || size.contains(&0) {
             return;
@@ -3108,6 +3109,10 @@ impl HudRenderer {
             }
             for (range, blend) in &runs[at..end] {
                 let pipeline = match blend {
+                    Blend::Picture(id) => {
+                        self.draw_picture(&mut pass, *id, range.clone(), coverage.is_some());
+                        continue;
+                    }
                     Blend::Alpha => &self.pipeline,
                     Blend::Invert => &self.invert_pipeline,
                     Blend::Additive => &self.additive_pipeline,
@@ -5065,6 +5070,7 @@ texture=wide",
         // Odd scaled dimensions, odd image sizes and an oversized panel.
         for (width, height) in [(640, 360), (641, 361), (456, 256), (534, 300), (100, 100)] {
             let batch = HudBatch {
+                pictures: Vec::new(),
                 vertices: Vec::new(),
                 scale: 3.0,
                 width: width as f32,

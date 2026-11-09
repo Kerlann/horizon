@@ -76,7 +76,7 @@ struct Node {
     children: Vec<usize>,
     redirect: Option<Vec<String>>,
     parser: Option<(String, Value)>,
-    suggestions: Option<&'static str>,
+    suggestions: Option<String>,
 }
 
 /// PermissionLevel names in the report's requirements.
@@ -243,7 +243,7 @@ impl CommandTree {
                         let id = argument_types.and_then(|t| t.id(parser)).unwrap_or(0);
                         (id, properties(parser, props))
                     }),
-                    suggestions: node.suggestions.map(str::to_owned),
+                    suggestions: node.suggestions.clone(),
                 }
             })
             .collect();
@@ -318,7 +318,17 @@ fn fill(
                 )
             }),
             suggestions: if argument {
-                suggestions.get(path.join(" ").as_str()).copied()
+                // A mod's argument type the client does not know asks the server, like a vanilla
+                // argument whose provider is `ask_server`; vanilla's own providers are the
+                // static table by path.
+                child["suggestions"]
+                    .as_str()
+                    .map(str::to_owned)
+                    .or_else(|| {
+                        suggestions
+                            .get(path.join(" ").as_str())
+                            .map(|s| (*s).to_owned())
+                    })
             } else {
                 None
             },
@@ -562,6 +572,64 @@ mod tests {
                     .is_ok()
             );
         }
+    }
+
+    #[test]
+    fn a_mods_custom_argument_is_a_word_that_asks_the_server() {
+        let mut builtin = Builtin::default();
+        builtin.registries.insert(
+            "minecraft:command_argument_type".into(),
+            horizon_protocol::registry::Ids::from_names(
+                horizon_protocol::packets::play::ARGUMENT_TYPES
+                    .iter()
+                    .map(|name| (*name).to_owned())
+                    .collect(),
+            ),
+        );
+        let mods = serde_json::json!({"type": "root", "children": {
+            "machine": {"type": "literal", "children": {
+                "use": {"type": "literal", "children": {
+                    "mode": {"type": "argument", "parser": "brigadier:string",
+                        "properties": {"type": "word"}, "custom_argument": "test:machine",
+                        "suggestions": "minecraft:ask_server", "executable": true}
+                }}
+            }}
+        }});
+        let tree = CommandTree { root: Value::Null };
+        let packet = tree.packet_with(0, true, &builtin, &mods);
+        let mode_node = packet.nodes.iter().find(|n| n.name == "mode").unwrap();
+        assert_eq!(
+            mode_node.suggestions.as_deref(),
+            Some("minecraft:ask_server")
+        );
+        let (id, properties) = mode_node.parser.as_ref().unwrap();
+        assert_eq!(
+            horizon_protocol::packets::play::ARGUMENT_TYPES[*id as usize],
+            "brigadier:string"
+        );
+        let expected = horizon_protocol::packets::play::ArgumentProperties::String(0);
+        assert_eq!(
+            horizon_protocol::packets::play::ArgumentProperties::decode(*id, properties),
+            Ok(expected),
+            "a vanilla client reads the custom argument as one word"
+        );
+
+        let dispatcher =
+            crate::command::network::from_packet(&packet, &crate::command::Dispatcher::new());
+        let registries = crate::command::Registries::default();
+        assert!(
+            dispatcher
+                .parse("machine use press", &registries)
+                .executable()
+                .is_ok()
+        );
+        let typed = "machine use pr";
+        let (_, _, asks) = dispatcher.client_suggestions_asking(
+            &dispatcher.parse(typed, &registries),
+            typed.len(),
+            &registries,
+        );
+        assert!(asks, "the client asks the server for the type's values");
     }
 
     #[test]

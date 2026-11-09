@@ -19,7 +19,11 @@ beside `server.properties`), as Fabric and NeoForge mods' do: the mod picks its 
 bound to the calling mod and refuses any other mod's files. A mod that lists its files with
 `native_register_configs` gets them read for it, written from their defaults when missing, and handed over again
 when edited (`native_config_loading`, `native_config_reloading`, as NeoForge's `ModConfigEvent`), and a world can
-keep its own server config in `serverconfig/` ([native mods](../native-mods.md)). Settings kept with `set_setting` stay where they were, in `horizon-mods/.horizon-mod-data/<id>/`.
+keep its own server config in `serverconfig/` ([native mods](../native-mods.md)). Settings kept with `set_setting` stay in `horizon-mods/.horizon-mod-data/<id>/`.
+`setting` and `set_setting` are bound to the calling mod and its registered keys: naming another mod's ID or an unregistered key never reads or changes a file.
+Typed reads cache values by data folder and key; a successful `set_setting` invalidates that key, while a failed write leaves the cached value unchanged. Raw `setting` reads access the file.
+Register typed settings with `Registrar::register_setting` to put them on Options > Mods; edits persist before
+`setting_changed` runs, and only the owning mod receives that event.
 8c838a6b381b93150deaeed2057acd1
 
 For a client HUD's session information, use the read-only
@@ -44,7 +48,7 @@ Native mods are native code with the player's rights, not sandboxed. The first i
 and every build waits behind a red warning; the registry lists one only after a review (its later releases are
 checked by machine). They play in a game of their own, built for the instance they are installed in.
 
-The game's Mods screen only lists code mods (it has no switch, as NeoForge's has none). A code mod's settings page,
+The game's Mods screen only lists code mods (it has no switch). A code mod's settings page,
 when it has one, opens from the Config button. The launcher decides which mods are on. A browser install that
 finishes after a world opens waits until the world closes before activating its content.
 

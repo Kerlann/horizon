@@ -761,6 +761,7 @@ fn wire_loopback_optional_borrowed_render_record() {
                 mob: &mob,
                 who,
                 draw: &mut draw,
+                parts: None,
             },
         );
         assert_eq!(draw.0, if who.is_some() { 42 } else { 7 });

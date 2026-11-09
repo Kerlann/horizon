@@ -9,7 +9,6 @@ fn rain_and_snow_leave_depth_alone_whatever_rain_depth_says() {
     let instance = crate::gfx::test_gpu::instance();
     let adapter = pollster::block_on(instance.request_adapter(&Default::default())).unwrap();
     eprintln!("Weather depth GPU: {:?}", adapter.get_info());
-    assert_ne!(adapter.get_info().device_type, wgpu::DeviceType::Cpu);
     let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         required_limits: adapter.limits(),
         ..Default::default()

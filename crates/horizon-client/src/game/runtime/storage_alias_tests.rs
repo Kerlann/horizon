@@ -6,7 +6,7 @@
 use super::*;
 use horizon_core::nbt::{Tag, parse_snbt};
 
-fn game() -> Game<'static> {
+fn game(resources: &mut Option<std::sync::Arc<Resources>>) -> Game<'_> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -28,7 +28,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -65,7 +65,8 @@ fn writes(game: &mut Game<'_>, name: &str) -> bool {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_rejected_wildcard_set_keeps_the_storage_s_cleared_array() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     assert!(game.run_command("data merge storage h246:witness {v:123}"));
     for (kind, initial, cleared) in [
         ("byte", "[B;1b,2b]", "[B;]"),
@@ -132,7 +133,8 @@ fn saved(
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn the_failure_keeps_the_save_state_and_stores_nothing_new() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     // Already marked for saving: the failure leaves it so, and the save
     // writes the cleared array.
     assert!(game.run_command("data merge storage h246:dirty {value:[I;1,2]}"));

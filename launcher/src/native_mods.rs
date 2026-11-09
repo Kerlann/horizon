@@ -2559,9 +2559,8 @@ fn copy_runtime(from: &Path, to: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Installs `binary` as version `version`: a copy of installed version `base`'s folder (its
-/// resources included; cloned where the disk can) with the built binary, as `target` names it,
-/// in place of `base`'s.
+/// Installs `binary` as version `version`, retaining the base's runtime helpers. Clients
+/// reference the base's prepared resources; standalone server exports still carry their own.
 fn install(
     base: &str,
     version: &str,
@@ -2575,7 +2574,7 @@ fn install(
     let partial = target.directory(&format!(".{version}.partial"));
     let _ = fs::remove_dir_all(&partial);
     fs::create_dir_all(&partial).map_err(|e| e.to_string())?;
-    copy_base(&from, &partial, target)?;
+    copy_base(&from, &partial, target, target == Target::Client)?;
     let installed = partial.join(target.binary());
     fs::copy(binary, &installed).map_err(|e| format!("The built game: {e}"))?;
     // The prebuilt game's libraries load from beside the executable.
@@ -2604,10 +2603,15 @@ fn install(
 
 /// Copies version folder `from` into `to` but for what a new build of `target` makes its own
 /// ([`carried_over`]), cloned where the disk can. Also an imported build's start (`build_import`).
-pub(crate) fn copy_base(from: &Path, to: &Path, target: Target) -> Result<(), String> {
+pub(crate) fn copy_base(
+    from: &Path,
+    to: &Path,
+    target: Target,
+    share_resources: bool,
+) -> Result<(), String> {
     for entry in fs::read_dir(from).map_err(|e| e.to_string())?.flatten() {
         let name = entry.file_name();
-        if !carried_over(&name, target) {
+        if !carried_over(&name, target) || (share_resources && name == ".local") {
             continue;
         }
         let to = to.join(&name);
@@ -2833,6 +2837,27 @@ mod tests {
         )
         .is_err());
         assert!(windows_build_platform(0xa641, rust_toolchain::WINDOWS_ARM64_TARGET).is_err());
+    }
+
+    #[test]
+    fn client_runtime_reuses_base_resources_but_server_exports_remain_standalone() {
+        let source = dir("resource-base");
+        let client = dir("resource-client");
+        let server = dir("resource-server");
+        fs::create_dir_all(source.join(".local/horizon-client/26.3")).unwrap();
+        fs::write(source.join(".local/horizon-client/26.3/data"), b"prepared").unwrap();
+        fs::write(source.join("horizon-ctl"), b"control").unwrap();
+        copy_base(&source, &client, Target::Client, true).unwrap();
+        copy_base(&source, &server, Target::Server, false).unwrap();
+        assert!(!client.join(".local").exists());
+        assert_eq!(fs::read(client.join("horizon-ctl")).unwrap(), b"control");
+        assert_eq!(
+            fs::read(server.join(".local/horizon-client/26.3/data")).unwrap(),
+            b"prepared"
+        );
+        for path in [source, client, server] {
+            fs::remove_dir_all(path).unwrap();
+        }
     }
 
     #[test]

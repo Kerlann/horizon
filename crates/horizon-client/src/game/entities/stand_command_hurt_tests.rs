@@ -5,10 +5,11 @@
 //! (tools/test_stand_command_hurt_parity.py measures the same on vanilla 26.3).
 use super::*;
 use horizon_client::chunk::Chunk;
+use horizon_client::mobs::Who;
 use horizon_core::position::ChunkPos;
 use std::sync::Arc;
 
-fn game() -> Game<'static> {
+fn game(resources: &mut Option<std::sync::Arc<Resources>>) -> Game<'_> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -30,7 +31,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -78,7 +79,8 @@ fn summon(game: &mut Game<'_>, extra: &str) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_blast_from_damage_breaks_the_stand_though_the_command_fails() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     summon(
         &mut game,
         r#",equipment:{head:{id:"minecraft:diamond_helmet",count:1}}"#,
@@ -101,7 +103,8 @@ fn a_blast_from_damage_breaks_the_stand_though_the_command_fails() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn fire_from_damage_lights_or_burns_the_stand_though_the_command_fails() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     summon(&mut game, "");
     assert!(!game.run_command(&format!("damage {STAND} 1 minecraft:in_fire")));
     let (_, fire) = say(&mut game, &format!("data get entity {STAND} Fire"));
@@ -125,7 +128,8 @@ fn items(game: &mut Game<'_>) -> String {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn control_an_absent_or_removed_stand_is_not_broken_again() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     assert!(!game.run_command(&format!("damage {STAND} 1 minecraft:explosion")));
     assert_eq!(items(&mut game), "Test failed");
     summon(
@@ -141,7 +145,8 @@ fn control_an_absent_or_removed_stand_is_not_broken_again() {
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn control_invulnerable_and_marker_stands_refuse_the_blast() {
     for flag in ["Invulnerable:1b", "Marker:1b"] {
-        let mut game = game();
+        let mut game_resources = None;
+        let mut game = game(&mut game_resources);
         summon(
             &mut game,
             &format!(r#",{flag},equipment:{{head:{{id:"minecraft:diamond_helmet",count:1}}}}"#),
@@ -161,7 +166,8 @@ fn control_invulnerable_and_marker_stands_refuse_the_blast() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn control_repeated_burning_breaks_the_stand_once() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     summon(
         &mut game,
         r#",Fire:200s,equipment:{head:{id:"minecraft:diamond_helmet",count:1}}"#,
@@ -181,4 +187,167 @@ fn control_repeated_burning_breaks_the_stand_once() {
     assert!(!game.run_command(&format!("execute if entity {STAND}")));
     assert!(!game.run_command(&format!("damage {STAND} 1 minecraft:on_fire")));
     assert_eq!(items(&mut game), "Test passed. Count: 1");
+}
+
+// The sources that return true: `#can_break_armor_stand` and
+// `#always_kills_armor_stands` hurt the stand as a hit does, and the command
+// succeeds.
+
+fn with_player(game: &mut Game<'_>) {
+    game.player = Some(
+        horizon_client::motion::PlayerMotion::new(
+            game.motion,
+            horizon_core::geometry::Vec3::new(14.5, 100.0, 14.5),
+        )
+        .unwrap(),
+    );
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn a_player_attack_from_damage_wobbles_then_breaks_the_stand() {
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
+    summon(
+        &mut game,
+        r#",equipment:{head:{id:"minecraft:diamond_helmet",count:1}}"#,
+    );
+    assert!(game.run_command("summon pig 14.5 100 2.5 {NoAI:1b}"));
+    // First hit: hurtServer sets lastHit and returns true; the stand stays.
+    let (ok, said) = say(
+        &mut game,
+        &format!("damage {STAND} 1 minecraft:player_attack by @e[type=pig,limit=1]"),
+    );
+    assert!(ok, "hurtServer returns true: {said}");
+    assert!(said.starts_with("Applied"), "{said}");
+    assert!(game.run_command(&format!("execute if entity {STAND}")));
+    assert_eq!(items(&mut game), "Test failed");
+    assert_eq!(game.armor_stands[0].last_hit, game.world.game_time);
+    // A second hit within five ticks breaks it (brokenByPlayer): the stand
+    // item and its helmet drop.
+    assert!(game.run_command(&format!(
+        "damage {STAND} 1 minecraft:player_attack by @e[type=pig,limit=1]"
+    )));
+    assert!(!game.run_command(&format!("execute if entity {STAND}")));
+    assert_eq!(items(&mut game), "Test passed. Count: 2");
+    assert!(
+        game.run_command(
+            "execute if entity @e[type=item,nbt={Item:{id:\"minecraft:armor_stand\"}}]"
+        )
+    );
+    assert!(game.run_command(
+        "execute if entity @e[type=item,nbt={Item:{id:\"minecraft:diamond_helmet\"}}]"
+    ));
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn an_always_killing_source_breaks_the_stand_on_the_first_hit() {
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
+    summon(&mut game, "");
+    // minecraft:arrow is in #always_kills_armor_stands.
+    assert!(game.run_command(&format!("damage {STAND} 1 minecraft:arrow")));
+    assert!(!game.run_command(&format!("execute if entity {STAND}")));
+    assert_eq!(items(&mut game), "Test passed. Count: 1");
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn a_creative_player_breaks_the_stand_at_once_without_drops() {
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
+    with_player(&mut game);
+    summon(
+        &mut game,
+        r#",equipment:{head:{id:"minecraft:diamond_helmet",count:1}}"#,
+    );
+    assert!(game.run_command("gamemode creative @p"));
+    assert!(game.run_command(&format!("damage {STAND} 1 minecraft:player_attack by @p")));
+    assert!(!game.run_command(&format!("execute if entity {STAND}")));
+    assert_eq!(items(&mut game), "Test failed");
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn a_player_who_may_not_build_cannot_hurt_the_stand() {
+    for mode in ["adventure", "spectator"] {
+        let mut game_resources = None;
+        let mut game = game(&mut game_resources);
+        with_player(&mut game);
+        summon(&mut game, "");
+        assert!(game.run_command(&format!("gamemode {mode} @p")));
+        for _ in 0..2 {
+            assert!(
+                !game.run_command(&format!("damage {STAND} 1 minecraft:arrow by @p")),
+                "{mode}"
+            );
+        }
+        assert!(
+            game.run_command(&format!("execute if entity {STAND}")),
+            "{mode}"
+        );
+        assert_eq!(items(&mut game), "Test failed", "{mode}");
+    }
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn control_a_source_in_neither_tag_still_fails_without_a_hurt() {
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
+    summon(&mut game, "");
+    assert!(!game.run_command(&format!("damage {STAND} 1 minecraft:generic")));
+    assert!(game.run_command(&format!("execute if entity {STAND}")));
+}
+
+/// The game events (name, source) posted while `f` runs.
+fn events(game: &mut Game<'_>, f: impl FnOnce(&mut Game<'_>)) -> Vec<(&'static str, Option<Who>)> {
+    super::sculk::TEST_POSTED_EVENTS.with(|e| *e.borrow_mut() = Some(Vec::new()));
+    f(game);
+    super::sculk::TEST_POSTED_EVENTS.with(|e| {
+        e.borrow_mut()
+            .take()
+            .unwrap()
+            .into_iter()
+            .filter(|e| e.0 == "minecraft:entity_damage" || e.0 == "minecraft:entity_die")
+            .map(|e| (e.0, e.2))
+            .collect()
+    })
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn a_hit_from_damage_posts_entity_damage_then_entity_die_for_its_causing_entity() {
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
+    summon(&mut game, "");
+    assert!(game.run_command("summon pig 14.5 100 2.5 {NoAI:1b}"));
+    let by_pig = format!("damage {STAND} 1 minecraft:player_attack by @e[type=pig,limit=1]");
+    // hurtServer: the first hit gameEvent(ENTITY_DAMAGE, pig); the second,
+    // within five ticks, brokenByPlayer then kill: gameEvent(ENTITY_DIE, pig).
+    let first = events(&mut game, |g| assert!(g.run_command(&by_pig)));
+    assert!(matches!(
+        &first[..],
+        [("minecraft:entity_damage", Some(Who::Mob(_)))]
+    ));
+    let second = events(&mut game, |g| assert!(g.run_command(&by_pig)));
+    assert!(matches!(
+        &second[..],
+        [("minecraft:entity_die", Some(Who::Mob(_)))]
+    ));
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn an_always_killing_source_posts_only_entity_die_for_a_stand_without_a_cause() {
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
+    summon(&mut game, "");
+    // No causing entity: kill attributes the event to the stand itself, which
+    // the listeners see as no source. always_kills skips the wobble.
+    let posted = events(&mut game, |g| {
+        assert!(g.run_command(&format!("damage {STAND} 1 minecraft:arrow")));
+    });
+    assert!(matches!(&posted[..], [("minecraft:entity_die", None)]));
 }

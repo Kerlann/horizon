@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from tools.check_mod_api_wire import API_TEMPLATE_FILES, violations, wire_impls, template_violations
+from tools.check_mod_api_wire import API_TEMPLATE_FILES, violations, template_violations
 
 
 class WireGuardFixtures(unittest.TestCase):
@@ -30,6 +30,14 @@ class WireGuardFixtures(unittest.TestCase):
             api.write_text('#[derive(mod_api::Wire)] pub struct MissingType;')
             accepted = subprocess.run([sys.executable, str(script)], capture_output=True, text=True)
             self.assertEqual(accepted.returncode, 0, accepted.stderr)
+            api.write_text('mod checked; mod collision;')
+            (api.parent / 'checked.rs').write_text(
+                '// no wire: checked manual codec\npub struct Shared;\nimpl Wire for Shared {}')
+            (api.parent / 'collision.rs').write_text('pub struct Shared;')
+            collision = subprocess.run([sys.executable, str(script)], capture_output=True, text=True)
+            self.assertEqual(collision.returncode, 1)
+            self.assertIn('collision.rs:1: Shared', collision.stdout)
+            self.assertNotIn('checked.rs:', collision.stdout)
 
     def test_missing_declarations_include_aliases_and_generics(self):
         source = 'pub struct A<T>(T); pub enum B { A } pub type C<T> = Vec<T>;'
@@ -58,7 +66,7 @@ pub enum C {}
 '''
         self.assertEqual([n for _, n in violations(source)], ['B', 'C'])
 
-    def test_handwritten_generic_impl_and_macro_families(self):
+    def test_handwritten_generic_impl_and_macro_families_require_attached_policy(self):
         source = '''pub struct A<T>(T); pub struct Key; pub struct Handle;
 impl<T: Wire> crate::wire::Wire for A<T> {}
 macro_rules! slot_keys { ($repr:ty; $($key:ty),*) => { $(impl Wire for $key {})* }; }
@@ -66,11 +74,11 @@ slot_keys!(u32; crate::Key);
 macro_rules! entity_handles { ($($ty:ty),*) => { $(impl Wire for $ty {})* }; }
 entity_handles!(Handle);
 '''
-        self.assertEqual(violations(source, wire_impls([source])), [])
+        self.assertEqual([n for _, n in violations(source)], ['A', 'Key', 'Handle'])
 
     def test_macro_name_alone_is_not_an_exemption(self):
         source = 'pub struct Key; macro_rules! slot_keys { () => {} } slot_keys!(Key);'
-        self.assertEqual([n for _, n in violations(source, wire_impls([source]))], ['Key'])
+        self.assertEqual([n for _, n in violations(source)], ['Key'])
 
     def test_comments_strings_private_and_test_examples_are_not_api(self):
         source = '''/// pub struct DocExample;

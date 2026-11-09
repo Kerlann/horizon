@@ -28,7 +28,10 @@ pub fn main() -> horizon_client::Result<()> {
         &resources,
         &horizon_world::item_defaults::read(&resources)?,
     )?));
-    creative.set_permissions(args.get(5).is_some_and(|a| a == "permissions"), &names);
+    let permissions = args.get(5).is_some_and(|a| a == "permissions");
+    if creative.tabs_to_build(permissions).is_some() {
+        creative.build(permissions, Vec::new(), &names);
+    }
     let vanilla: Value = serde_json::from_slice(&fs::read(args.get(3).ok_or(usage)?)?)?;
     let tabs: Vec<Value> = creative
         .tabs

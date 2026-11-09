@@ -374,6 +374,7 @@ impl Game<'_> {
         // registering mod for crash attribution.
         let client_listeners = self.register_client_reload_listeners();
         let runtime_sprites = super::client_reload::collect_runtime_sprites();
+        let texture_atlases = super::client_reload::collect_texture_atlases();
         super::mods::register_fluid_models(self.options.execution_role);
         let stage = move |progress: &crate::game::Progress| {
             stage_pack(
@@ -383,6 +384,7 @@ impl Game<'_> {
                 &mod_sources,
                 client_listeners,
                 &runtime_sprites,
+                &texture_atlases,
                 &assets,
                 &res,
                 &context,
@@ -460,8 +462,12 @@ impl Game<'_> {
                     Some(textures),
                     self.settings.horizon.api,
                     self.settings.horizon.translucent_batching,
-                    self.settings.horizon.wide_frame(),
+                    &self.settings.horizon,
                     super::shader_packs::picked_pack_shape(&self.settings),
+                    self.renderer
+                        .as_ref()
+                        .map(|r| r.display_reading())
+                        .unwrap_or_default(),
                     (
                         self.settings.file.int("textureFiltering"),
                         self.settings.file.int("maxAnisotropyBit"),
@@ -592,8 +598,8 @@ impl Game<'_> {
             &mut self.native_shaders.picked,
         ));
         self.ui.chat.rescale(&self.gui.atlas);
-        // The creative screen survives the reload; item names may not.
-        self.creative_screen.forget_items();
+        // The screen survives reload, but names and mod-collected contents may change.
+        self.creative_screen.invalidate_build();
         super::client_reload::apply_client_reload(&self.mod_phase, client_applies);
         self.install_loop_context(loop_context);
         self.texture_atlases_stitched();
@@ -613,6 +619,7 @@ pub(super) fn stage_pack(
     mod_sources: &super::mods::ModsState,
     client_listeners: mod_api::ClientListenerRegistry,
     runtime_sprites: &[mod_api::RuntimeSprite],
+    texture_atlases: &[mod_api::TextureAtlasRegistration],
     assets: &Arc<Assets>,
     res: &Resources,
     context: &WorkerContext,
@@ -622,6 +629,7 @@ pub(super) fn stage_pack(
 ) -> horizon_client::Result<StagedPack> {
     let resource_root = startup_root(vanilla_root, selected, server, mod_sources)?;
     let resource_root = super::client_reload::stage_runtime_sprites(resource_root, runtime_sprites);
+    let resource_root = super::client_reload::stage_texture_atlases(resource_root, texture_atlases);
     let root = resource_root.prepared().to_path_buf();
     let source = resource_root.source().clone();
     progress.set(1);

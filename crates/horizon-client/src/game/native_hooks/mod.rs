@@ -50,7 +50,7 @@ use horizon_client::{
     lan::menu::Slots,
     merchant::MerchantOffer,
     mobs::{Damage, Who},
-    mod_list::{self, Installed, KeyMapping, NativePage},
+    mod_list::{self, Installed, KeyMapping, NativePage, NativeSetting, NativeSettingValue},
     music::{Music, MusicLayer},
     particles::{ParticleOptions, ParticleType},
     text::Text,
@@ -86,8 +86,8 @@ use mod_api::{
     NativeItemClick, NativeItemDrop, NativeTriState, NeighbourUpdate, TooltipElement, UsePhase,
 };
 use mod_api::{
-    BlockKey, DebugEntry, DebugRenderer, EffectKey, GuiLayer, MapDecorationType, RuntimeSprite,
-    TaskId,
+    BlockKey, DebugEntry, DebugRenderer, EffectKey, GuiLayer, HiddenParts, MapDecorationType,
+    PosedParts, RuntimeSprite, TaskId, TextureAtlasRegistration,
 };
 use mod_api::{
     CameraType, Identifier, MobRef, NativeDespawn, NativePermissionLevel, SoundPlay, SoundRef,

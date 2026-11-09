@@ -7,6 +7,7 @@ use horizon_mod_runtime::attachments::{self as runtime, index};
 /// unswept entities may appear, and stale writes fail. Native acquisition neither
 /// clones values nor decodes saved payloads; iteration decodes lazily.
 /// Codec-less attachment types are native-only; their rows do not cross to wasm.
+// no wire: transfers only saved rows as scoped tokens plus network NBT; decode requires a complete compound envelope and rebuilds runtime entries.
 #[derive(Clone)]
 #[non_exhaustive]
 pub struct AttachmentBatch(runtime::AttachmentBatch<AttachmentHolder>);
@@ -34,6 +35,7 @@ impl AttachmentBatch {
 pub type AttachmentQuery<'key, T> = runtime::AttachmentQuery<'key, AttachmentHolder, T>;
 
 /// A private-field scoped residency identity, not an access authorization token.
+// no wire: projects the runtime residency owner to holder/generation parts; decoding rebuilds an owner, not access authorization.
 #[derive(Clone)]
 #[non_exhaustive]
 pub struct AttachmentWriteToken(index::AttachmentOwner<AttachmentHolder>);
@@ -51,46 +53,6 @@ impl AttachmentWriteToken {
         index: &index::AttachmentIndex<AttachmentHolder>,
     ) -> Result<(), AttachmentRowError> {
         index.validate_owner(&self.0)
-    }
-}
-
-impl crate::wire::Wire for AttachmentHolder {
-    crate::wire::layout_fields!("tag" => u32, "0:Entity" => crate::EntityRef, "1:Player" => crate::PlayerRef, "2:BlockEntity" => crate::BlockEntityRef, "3:Chunk" => crate::ChunkRef, "4:Level" => crate::LevelRef);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(AttachmentHolder));
-    const MIN: usize = 4;
-    fn put(&self, out: &mut crate::wire::Writer) {
-        match self {
-            Self::Entity(v) => {
-                out.put(&0u32);
-                out.put(v);
-            }
-            Self::Player(v) => {
-                out.put(&1u32);
-                out.put(v);
-            }
-            Self::BlockEntity(v) => {
-                out.put(&2u32);
-                out.put(v);
-            }
-            Self::Chunk(v) => {
-                out.put(&3u32);
-                out.put(v);
-            }
-            Self::Level(v) => {
-                out.put(&4u32);
-                out.put(v);
-            }
-        }
-    }
-    fn take(input: &mut crate::wire::Reader<'_>) -> Result<Self, crate::wire::WireError> {
-        match input.take()? {
-            0u32 => Ok(Self::Entity(input.take()?)),
-            1 => Ok(Self::Player(input.take()?)),
-            2 => Ok(Self::BlockEntity(input.take()?)),
-            3 => Ok(Self::Chunk(input.take()?)),
-            4 => Ok(Self::Level(input.take()?)),
-            _ => Err(crate::wire::WireError::Invalid("invalid attachment holder")),
-        }
     }
 }
 

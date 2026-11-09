@@ -255,6 +255,8 @@ pub fn access_allowed(operation: &str, access: LoadAccess) -> bool {
 }
 
 /// Whether a package contains compiled code or content alone.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum PackageKind {
@@ -265,6 +267,8 @@ pub enum PackageKind {
 }
 
 /// Read-only package metadata available during registration.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
 #[derive(Clone)]
 #[non_exhaustive]
 pub struct PackageInfo {
@@ -467,6 +471,7 @@ pub fn install_registration_data(data: RegistrationData) {
 }
 
 /// Read-only view of the startup package inventory, shared: cloning it copies no package.
+// no wire: zero-byte phase token: decoding rebinds the installed package inventory rather than transferring entries.
 #[derive(Clone)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct LoadedMods {
@@ -556,6 +561,7 @@ impl std::error::Error for RegistrationReadError {}
 /// }
 /// ```
 // exhaustive: its fields are private, so mods cannot build or destructure it
+// no wire: zero-byte phase token: decoding rebinds installed packages and registration data, not the stored host tables.
 pub struct RegistrationContext {
     pub(crate) mods: LoadedMods,
     pub(crate) data: Option<RegistrationData>,

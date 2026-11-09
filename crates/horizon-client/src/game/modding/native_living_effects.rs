@@ -26,6 +26,7 @@ pub(super) fn active_effect(e: &EffectInstance) -> NativeActiveEffect {
         amplifier: e.amplifier,
         ambient: e.ambient,
         visible: e.visible,
+        show_icon: e.show_icon,
     })
 }
 
@@ -40,6 +41,7 @@ pub(super) fn mob_effect(m: &Mob, e: &horizon_client::mobs::StoredEffect) -> Nat
         amplifier: e.amplifier,
         ambient: m.extra.ambient_effects.contains(&e.id),
         visible: !m.extra.hidden_effects.contains(&e.id),
+        show_icon: e.show_icon,
     })
 }
 
@@ -110,6 +112,7 @@ impl Game<'_> {
         let mut instance = EffectInstance::from_def(def, effect.duration, amplifier);
         instance.ambient = effect.ambient;
         instance.visible = effect.visible;
+        instance.show_icon = effect.show_icon;
         match self.native_living_target(living) {
             Some(t @ (Target::Player | Target::Guest(_))) => self
                 .for_player(t, |g| g.add_player_effect(instance))
@@ -364,6 +367,7 @@ mod tests {
             amplifier,
             ambient: false,
             visible: true,
+            show_icon: true,
         })
     }
 
@@ -386,6 +390,7 @@ mod tests {
                 0,
                 false,
                 true,
+                true,
             );
             assert!(game.living_add_effect(zombie, &speed));
             let listed = game.living_effects(zombie).unwrap();
@@ -394,6 +399,33 @@ mod tests {
                 mod_api::__private::part_tests::effect_key("speed")
             );
             assert_eq!(listed[0].id.id(game), "minecraft:speed");
+        });
+    }
+
+    /// `MobEffectInstance.showIcon` crosses `add_effect` and the reads both ways, for a player and
+    /// a mob, apart from the particle flag; adding it again with the other value changes it.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn an_effects_icon_flag_is_written_and_read_for_players_and_mobs() {
+        use horizon_client::motion::PlayerMotion;
+        with_game(|game| {
+            let kind = game.res.mob_types().get("minecraft:cow").unwrap().clone();
+            game.mobs.push(Mob::new(23, kind, Vec3::ZERO, 0.0));
+            game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
+            game.player.as_mut().unwrap().entity_id = 20;
+            game.lan_acting_uuid = Some(123);
+            game.lan_acting_entity = Some(20);
+            let key = mod_api::__private::part_tests::effect_key("minecraft:speed");
+            for id in [23, 20] {
+                let living = game.living(game.entity(id).unwrap()).unwrap();
+                for show_icon in [false, true] {
+                    let given = NativeActiveEffect::new(key, 200, 0, false, true, show_icon);
+                    assert!(game.living_add_effect(living, &given), "{id} {show_icon}");
+                    let read = game.living_effect(living, key).unwrap();
+                    assert_eq!((read.show_icon, read.visible), (show_icon, true), "{id}");
+                    assert_eq!(game.living_effects(living).unwrap(), vec![read]);
+                }
+            }
         });
     }
 
