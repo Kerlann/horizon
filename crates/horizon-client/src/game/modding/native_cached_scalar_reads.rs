@@ -1592,6 +1592,7 @@ mod tests {
                     velocity: [0.0; 3],
                     on_ground: false,
                     bounding_box: [[-1.0, 12.0, 2.5], [0.0, 14.0, 3.5]],
+                    dimensions: [1.0, 2.0],
                     eye_height: 1.5,
                 },
                 BaseReadContext {
