@@ -1528,7 +1528,13 @@ mod tests {
             return;
         }
         let defaults = horizon_world::item_defaults::read(&root).unwrap();
-        let items = Items::tags_only(&root, &PackOverlay::NONE, &defaults).unwrap();
+        // Station rules read item prototypes (including durability), not just tags.
+        let (registry, _) = horizon_world::registry::BlockRegistry::from_facts_json_with_flags(
+            std::fs::File::open(root.join("facts.json")).unwrap(),
+        )
+        .unwrap();
+        let facts = crate::blocks::BlockFacts::load(&root, &registry).unwrap();
+        let items = Items::load(&root, &registry, &facts, &PackOverlay::NONE, &defaults).unwrap();
         let data = StationData::load(
             &root,
             &items,
@@ -1582,6 +1588,19 @@ mod tests {
         // default does not accept.
         let mut repairable = ItemStack::new("minecraft:diamond_sword", 1);
         repairable.damage = 100;
+        assert!(
+            anvil_result(
+                e,
+                &items,
+                Some(&repairable),
+                Some(&ItemStack::new("minecraft:stick", 1)),
+                None,
+                "Diamond Sword",
+                false,
+            )
+            .result
+            .is_none()
+        );
         repairable.data_mut().set_other(
             "minecraft:repairable",
             Some(Tag::compound([(
