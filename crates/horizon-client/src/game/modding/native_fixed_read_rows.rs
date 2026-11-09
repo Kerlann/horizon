@@ -10,6 +10,9 @@ impl Game<'_> {
     /// Source-lane projection for a mob that may currently be lifted from its list.
     /// Identity and cross-entity credit are resolved by the publication pass;
     /// item use is supplied from its already resolved held-stack projection.
+    /// Portal eligibility includes pre-indexed rider flags, supplied by the pass.
+    /// The caller must hold the mob's level in place: climbing samples that level's
+    /// blocks at the borrowed mob position, without resolving the mob from Game.
     pub(super) fn snapshot_mob_living_read_row(
         &self,
         capture: EntityReadCapture,
@@ -18,6 +21,7 @@ impl Game<'_> {
         kill_credit: Option<EntityRef>,
         last_attacker: Option<EntityRef>,
         item_use_remaining: i32,
+        can_use_portal: bool,
     ) -> Option<LivingReadRow> {
         if mob.removed {
             return None;
@@ -53,7 +57,7 @@ impl Game<'_> {
             } else {
                 Hand::Main
             }),
-            can_use_portal: Some(self.mob_portal_eligible(mob)),
+            can_use_portal: Some(can_use_portal),
             can_breathe_underwater: Some(mob.kind.flags.breathes_water),
             arrow_count: Some(mob.extra.stuck.arrows),
             stinger_count: Some(mob.extra.stuck.stingers),
@@ -442,7 +446,6 @@ impl NativeReadIdentifiers {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use horizon_core::nbt::{Compound, Tag};
 
     #[test]
     fn dimension_pool_preserves_unknown_dimensions_and_positions() {
