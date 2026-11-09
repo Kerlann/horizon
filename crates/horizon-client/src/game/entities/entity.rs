@@ -68,6 +68,10 @@ pub(super) struct Blast {
 }
 
 pub(super) trait Entity: EntityRules {
+    /// The kind's serializer overlays its object-owned attachments itself (for
+    /// recursive object trees); the common save walk must not encode them twice.
+    const SERIALIZES_ATTACHMENTS: bool = false;
+
     /// `Entity.getId`.
     fn id(&self) -> u32;
     fn position(&self) -> Vec3;
@@ -1019,8 +1023,10 @@ macro_rules! save_lists {
      $($kind:ident($ty:ty) $field:ident: $($list:ident).+,)*) => {
         $(for i in 0..$game$(.$list)+.len() {
             if let Some((key, mut tag)) = <$ty as $crate::game::entity::Entity>::save_nbt($game, i, $keys) {
-                $crate::game::persist::write_attachments(
-                    &mut tag, $game$(.$list)+[i].id(), &$game.entity_attachments);
+                if !<$ty as $crate::game::entity::Entity>::SERIALIZES_ATTACHMENTS {
+                    $crate::game::persist::write_attachments(
+                        &mut tag, $game$(.$list)+[i].id(), &$game.entity_attachments);
+                }
                 $out.entry(key).or_default().push((
                     $game$(.$list)+[i].join_seq(),
                     tag,
@@ -1186,6 +1192,8 @@ impl Game<'_> {
 }
 
 impl Entity for Mob {
+    const SERIALIZES_ATTACHMENTS: bool = true;
+
     fn reset_fall_distance(&mut self) {
         self.fall_distance = 0.0;
     }
