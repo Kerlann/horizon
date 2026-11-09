@@ -267,7 +267,7 @@ fn state_light_compiles_in_final_order_and_relights_across_a_chunk_boundary() {
     use std::collections::HashMap;
     let declaration = r#"{"template":"minecraft:test","item":false,"properties":{"light":3},
       "state_properties":{"mode":{"type":"enum","values":["off","dim","bright"]}},
-      "outline_context_shapes":{"item":{"property":"mode","values":{
+      "outline_context_shapes":{"item":{"properties":["mode"],"values":{
         "dim":[[0,0,0,0.5,1,1]]},"default":[]}},
       "state_light":{"properties":["mode","axis"],"values":{
         "dim,x":8,"dim,y":9,"bright,x":15,"bright,y":12},"default":0}}"#;
