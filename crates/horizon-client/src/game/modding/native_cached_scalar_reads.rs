@@ -1626,6 +1626,7 @@ mod tests {
                 details: NativeReadDetails::Base,
                 join_generation: 1,
                 target: Target::Mob(410),
+                mob_target_facts: None,
             };
             assert_eq!(
                 game.entity_residency

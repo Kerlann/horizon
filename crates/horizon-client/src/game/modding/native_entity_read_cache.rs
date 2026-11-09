@@ -22,6 +22,14 @@ pub(super) struct NativeReadState {
     pub(super) identities: HashSet<Arc<str>>,
     pub(super) player_identifiers: NativeReadIdentifiers,
     pub(super) raids: HashMap<RaidRef, RaidReadRow>,
+    pub(super) kind_pool: super::native_base_read_source::BaseReadKindPool,
+    pub(super) mob_relations: HashMap<LevelRef, NativeMobRelationPass>,
+}
+
+#[derive(Default)]
+pub(super) struct NativeMobRelationPass {
+    pub(super) tick: Option<NativeTickId>,
+    pub(super) index: super::native_mob_read_context::NativeMobRelations,
 }
 
 impl NativeReadState {
@@ -30,6 +38,8 @@ impl NativeReadState {
         self.identities.clear();
         self.player_identifiers = NativeReadIdentifiers::default();
         self.raids.clear();
+        self.kind_pool = Default::default();
+        self.mob_relations.clear();
     }
 }
 
@@ -39,6 +49,7 @@ pub(super) struct NativeReadPublication {
     pub(super) details: NativeReadDetails,
     pub(super) join_generation: u64,
     pub(super) target: super::commands::Target,
+    pub(super) mob_target_facts: Option<super::native_mob_read_context::NativeMobTargetFacts>,
 }
 
 pub(super) enum NativeReadDetails {
@@ -76,6 +87,46 @@ impl NativeReadDetails {
 }
 
 impl Game<'_> {
+    pub(super) fn with_mob_read_relations<R>(
+        &self,
+        level: LevelRef,
+        read: impl FnOnce(&super::native_mob_read_context::NativeMobRelations) -> R,
+    ) -> Option<R> {
+        if self.native_lifecycle.epoch() != Some(level.epoch()) {
+            return None;
+        }
+        let state = self.entity_read_state.borrow();
+        let pass = state.mob_relations.get(&level)?;
+        if pass.tick != self.native_lifecycle.capture_tick() {
+            return None;
+        }
+        Some(read(&pass.index))
+    }
+
+    pub(super) fn read_resident_identity(
+        &self,
+        id: u32,
+    ) -> Option<(EntityRef, horizon_client::join_seq::residency::Kind)> {
+        let epoch = self.native_lifecycle.epoch()?;
+        let mut table = self.entity_residency.borrow_mut();
+        let (state, cached) =
+            table.server_entity_read_lookup(id, |at| self.locate_server_resident_owner(at));
+        let kind = match state {
+            EntityLookup::Found {
+                location,
+                value: (_, true),
+            } => location.owner.kind,
+            EntityLookup::Taken => {
+                let row = cached?;
+                self.server_read_target_visible(row.base.level.dimension(), row.target)
+                    .then_some(())?;
+                super::entity_residency::target_residency_kind(row.target)?
+            }
+            _ => return None,
+        };
+        Some((EntityRef::new(epoch, id), kind))
+    }
+
     pub(super) fn with_entity_read_publication<R>(
         &self,
         entity: EntityRef,

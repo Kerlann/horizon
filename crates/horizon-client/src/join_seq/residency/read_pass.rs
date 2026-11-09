@@ -108,6 +108,24 @@ impl ReadPasses {
         Ok(Some((ReadPass(self.next), capture)))
     }
 
+    /// Stamp the current matching source pass without retaining a Game loan.
+    /// A different owner's callback must open its own nested scope instead.
+    pub fn stamp_active_owner(
+        &mut self,
+        owner: Owner,
+        phase: EntityReadCapturePhase,
+    ) -> Result<Option<EntityReadCapture>, ReadPassError> {
+        let Some(pass) = self
+            .frames
+            .last()
+            .filter(|frame| frame.owner == owner)
+            .map(|frame| frame.pass)
+        else {
+            return Ok(None);
+        };
+        self.stamp(pass, owner, phase).map(Some)
+    }
+
     /// Publish a new authoritative state, not a speculative command patch.
     pub fn stamp(
         &mut self,
