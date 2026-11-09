@@ -101,6 +101,16 @@ fn decode(p: [u8; 4]) -> f64 {
 #[test]
 fn the_sky_disc_reads_its_own_depth() {
     let Some(gpu) = Gpu::new() else { return };
+    // This oracle encodes full-float depth; the production half-float fallback
+    // cannot represent its expected values (#2400).
+    if !crate::gfx::test_gpu::supports_texture_usage(
+        &gpu.adapter,
+        T::Rgba32Float,
+        wgpu::TextureUsages::RENDER_ATTACHMENT,
+    ) {
+        return;
+    }
+
     let pixels = picture(&gpu, "gbuffers_skybasic", 1.0, &[]);
     for row in 0..4 {
         let along = 16.0 / (1.0 - (row as f64 + 0.5) / 8.0);
@@ -120,6 +130,16 @@ fn the_sky_disc_reads_its_own_depth() {
 #[test]
 fn the_sun_reads_its_own_depth() {
     let Some(gpu) = Gpu::new() else { return };
+    // This oracle encodes full-float depth; the production half-float fallback
+    // cannot represent its expected values (#2400).
+    if !crate::gfx::test_gpu::supports_texture_usage(
+        &gpu.adapter,
+        T::Rgba32Float,
+        wgpu::TextureUsages::RENDER_ATTACHMENT,
+    ) {
+        return;
+    }
+
     let quad = |z: f32| {
         [
             [-400.0, -400.0],

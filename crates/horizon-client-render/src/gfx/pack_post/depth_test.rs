@@ -6,13 +6,13 @@ use wgpu::{TextureFormat as T, util::DeviceExt};
 pub(super) const SIZE: [u32; 2] = [16, 16];
 
 pub(super) struct Gpu {
-    adapter: wgpu::Adapter,
+    pub(super) adapter: wgpu::Adapter,
     pub(super) device: wgpu::Device,
     pub(super) queue: wgpu::Queue,
 }
 impl Gpu {
     pub(super) fn new() -> Option<Self> {
-        let adapter = crate::gfx::pack_post::test_adapter()?;
+        let adapter = crate::gfx::test_gpu::adapter()?;
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             required_limits: adapter.limits(),
             required_features: adapter.features() & wgpu::Features::FLOAT32_FILTERABLE,
@@ -307,6 +307,10 @@ fn check(sampler: &str, stage: Stage, scene: Scene, expected: [u8; 4]) {
         eprintln!("DEPTH_FIXTURE_NO_ADAPTER");
         return;
     };
+    if !matches!(scene, Scene::World) && !crate::gfx::test_gpu::supports_depth_copies(&gpu.adapter)
+    {
+        return;
+    }
     let color = gpu.texture(T::Rgba8Unorm);
     let depth = gpu.texture(T::Depth32Float);
     // A seeded world depth of reverse-Z .3 is GL window depth .7.
@@ -685,6 +689,7 @@ fn shadow_depth_reads(nearest: &str, reads: &str) -> Option<Vec<[u8; 4]>> {
         reads,
         "#version 120\nvoid main(){gl_Position=vec4(gl_Vertex.xy,gl_Vertex.x,1.0);}",
         ramp,
+        true,
     )
 }
 
@@ -695,8 +700,12 @@ fn shadow_depth_map_reads(
     reads: &str,
     shadow_vsh: &str,
     positions: [[f32; 3]; 6],
+    copies_depth: bool,
 ) -> Option<Vec<[u8; 4]>> {
     let gpu = Gpu::new()?;
+    if copies_depth && !crate::gfx::test_gpu::supports_depth_copies(&gpu.adapter) {
+        return None;
+    }
     let color = gpu.texture(T::Rgba8Unorm);
     let depth = gpu.texture(T::Depth32Float);
     gpu.clear(&color, &depth, 0.0);
@@ -838,7 +847,7 @@ fn shadow_depth_filter_weights_are_256ths_as_in_our_iris_readings() {
         [0., 0.125, -1.],
     ];
     let vsh = "#version 120\nvoid main(){gl_Position=vec4(gl_Vertex.xyz,1.0);}";
-    if let Some(pixels) = shadow_depth_map_reads("", reads, vsh, bump) {
+    if let Some(pixels) = shadow_depth_map_reads("", reads, vsh, bump, false) {
         all_pixels(&pixels, [255, 255, 0, 255], "shadowtex filter weights");
     }
 }

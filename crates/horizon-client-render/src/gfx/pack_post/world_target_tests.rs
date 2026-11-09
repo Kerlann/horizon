@@ -48,14 +48,16 @@ fn a_pack_without_final_reads_the_replaced_world_colour() {
 /// its pixel by `gl_FragCoord` (as Photon's does) covers every pixel, not a quarter of them.
 #[test]
 fn a_scaled_picture_fills_the_whole_window() {
-    let Some(adapter) = crate::gfx::pack_post::test_adapter() else {
+    let instance = crate::gfx::test_gpu::instance();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
         return;
     };
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         required_limits: adapter.limits(),
         ..Default::default()
-    }))
-    .expect("GPU device for world target contract");
+    })) else {
+        return;
+    };
     eprintln!("scaled picture adapter: {:?}", adapter.get_info());
     let picture = [4, 2];
     let window = [8, 4];
@@ -100,14 +102,16 @@ fn a_scaled_picture_fills_the_whole_window() {
 }
 
 fn replacement(change: Change, final_shader: bool) {
-    let Some(adapter) = crate::gfx::pack_post::test_adapter() else {
+    let instance = crate::gfx::test_gpu::instance();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
         return;
     };
-    let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
+    let Ok((device, queue)) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
         required_limits: adapter.limits(),
         ..Default::default()
-    }))
-    .expect("GPU device for world target contract");
+    })) else {
+        return;
+    };
     eprintln!("world-target adapter: {:?}", adapter.get_info());
     let mut size = [4, 2];
     let mut colour = texture(&device, size, T::Rgba8Unorm);

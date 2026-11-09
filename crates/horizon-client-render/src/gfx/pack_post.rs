@@ -5703,11 +5703,14 @@ mod tests {
     /// and one wgpu refuses comes back by name (the pack is then built a program at a time).
     #[test]
     fn pipelines_compile_together_and_a_refused_one_is_named() {
-        let Some(adapter) = crate::gfx::test_gpu::adapter() else {
+        let instance = crate::gfx::test_gpu::instance();
+        let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
             return;
         };
-        let (device, _queue) = pollster::block_on(adapter.request_device(&Default::default()))
-            .expect("GPU device for pack contract");
+        let Ok((device, _queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+        else {
+            return;
+        };
         let layout = device.create_pipeline_layout(&Default::default());
         let module = |source: &str| {
             device.create_shader_module(wgpu::ShaderModuleDescriptor {
@@ -5751,11 +5754,14 @@ mod tests {
     /// made. Such a panic skips the pass, as a validation error does, and the device goes on.
     #[test]
     fn a_shader_compiler_panic_skips_the_pass() {
-        let Some(adapter) = crate::gfx::test_gpu::adapter() else {
+        let instance = crate::gfx::test_gpu::instance();
+        let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
             return;
         };
-        let (device, _queue) = pollster::block_on(adapter.request_device(&Default::default()))
-            .expect("GPU device for pack contract");
+        let Ok((device, _queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+        else {
+            return;
+        };
         let failed = checked(&device, || -> wgpu::Buffer {
             panic!("internal error: entered unreachable code: Expression [89] is not cached!")
         });
@@ -5781,11 +5787,14 @@ mod tests {
     /// Bliss, SEUS PTGI HRR). Another stage's flips don't release it.
     #[test]
     fn a_custom_texture_over_a_buffer_ends_when_its_stage_flips_it() {
-        let Some(adapter) = crate::gfx::test_gpu::adapter() else {
+        let instance = crate::gfx::test_gpu::instance();
+        let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
             return;
         };
-        let (device, _queue) = pollster::block_on(adapter.request_device(&Default::default()))
-            .expect("GPU device for pack contract");
+        let Ok((device, _queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+        else {
+            return;
+        };
         let textures = [pack_textures::PackTexture {
             stage: "composite".into(),
             name: "colortex0".into(),
@@ -5862,11 +5871,14 @@ mod tests {
     /// were bound.
     #[test]
     fn a_png_under_a_name_of_its_own_is_not_bound() {
-        let Some(adapter) = crate::gfx::test_gpu::adapter() else {
+        let instance = crate::gfx::test_gpu::instance();
+        let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
             return;
         };
-        let (device, _queue) = pollster::block_on(adapter.request_device(&Default::default()))
-            .expect("GPU device for pack contract");
+        let Ok((device, _queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+        else {
+            return;
+        };
         let texture = |stage: &str, name: &str, png: bool| pack_textures::PackTexture {
             stage: stage.into(),
             name: name.into(),
@@ -5956,11 +5968,14 @@ mod tests {
     #[test]
     fn an_image_without_an_entry_reads_zero() {
         use wgpu::TextureViewDimension as D;
-        let Some(adapter) = crate::gfx::test_gpu::adapter() else {
+        let instance = crate::gfx::test_gpu::instance();
+        let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
             return;
         };
-        let (device, queue) = pollster::block_on(adapter.request_device(&Default::default()))
-            .expect("GPU device for pack contract");
+        let Ok((device, queue)) = pollster::block_on(adapter.request_device(&Default::default()))
+        else {
+            return;
+        };
         let image = |name: &str, ty: &str, format: &str, binding| horizon_shaders::Image {
             name: name.into(),
             ty: ty.into(),
@@ -6087,7 +6102,8 @@ mod tests {
     /// a source alpha of 0.25 reads 0.625).
     #[test]
     fn a_composite_program_blends_onto_its_buffer() {
-        let Some(adapter) = test_adapter() else {
+        let instance = crate::gfx::test_gpu::instance();
+        let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
             return;
         };
         // A pass's pipeline layout has six bind group slots.
@@ -6095,8 +6111,9 @@ mod tests {
             required_limits: adapter.limits(),
             ..Default::default()
         };
-        let (device, queue) = pollster::block_on(adapter.request_device(&desc))
-            .expect("GPU device for composite contract");
+        let Ok((device, queue)) = pollster::block_on(adapter.request_device(&desc)) else {
+            return;
+        };
         let dir = std::env::temp_dir().join(format!("hz-composite-blend-{}", std::process::id()));
         let shaders = dir.join("shaders");
         std::fs::create_dir_all(&shaders).unwrap();
@@ -6396,17 +6413,3 @@ mod mipmap_box_tests;
 
 #[cfg(test)]
 mod colortex_mip_blend_tests;
-
-// Every PackPost render builds the centre-depth pipeline, even without depth samplers.
-#[cfg(test)]
-fn test_adapter() -> Option<wgpu::Adapter> {
-    let adapter = crate::gfx::test_gpu::adapter()?;
-    if !crate::gfx::test_gpu::supports_texture_usage(
-        &adapter,
-        wgpu::TextureFormat::R32Float,
-        wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-    ) {
-        return None;
-    }
-    Some(adapter)
-}

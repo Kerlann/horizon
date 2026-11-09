@@ -66,3 +66,13 @@ pub(crate) fn instance() -> wgpu::Instance {
     }
     wgpu::Instance::new(descriptor.with_env())
 }
+
+/// The GLES HAL currently attaches depth copy sources to COLOR_ATTACHMENT0 (#2400).
+pub(crate) fn supports_depth_copies(adapter: &wgpu::Adapter) -> bool {
+    let info = adapter.get_info();
+    if info.backend == wgpu::Backend::Gl {
+        eprintln!("skipped: {info:?} lacks depth texture copies");
+        return false;
+    }
+    true
+}

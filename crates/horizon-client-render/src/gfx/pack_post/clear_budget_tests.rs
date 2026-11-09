@@ -73,7 +73,9 @@ fn clear_fixture_loads_the_requested_formats_without_a_gpu() {
 }
 
 fn hdr_clear_case(sized: bool, attachment_limit: u32, byte_budget: u32, format: &str) {
-    let Some(adapter) = crate::gfx::pack_post::test_adapter() else {
+    let instance = crate::gfx::test_gpu::instance();
+    let Ok(adapter) = pollster::block_on(instance.request_adapter(&Default::default())) else {
+        eprintln!("HDR clear-budget test skipped: no GPU adapter");
         return;
     };
     let mut limits = adapter.limits();

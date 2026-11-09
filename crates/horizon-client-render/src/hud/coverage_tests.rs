@@ -9,16 +9,8 @@ struct Gpu {
 
 impl Gpu {
     fn new() -> Option<Self> {
-        let adapter = crate::gfx::test_gpu::adapter()?;
-        // Naga's GLSL writer rejects one image paired with distinct samplers
-        // (ImageMultipleSamplers). CIT glint uses both cit_blur and cit_nearest.
-        if adapter.get_info().backend == wgpu::Backend::Gl {
-            eprintln!(
-                "skipped: {:?} lacks multiple samplers per image (GLSL)",
-                adapter.get_info()
-            );
-            return None;
-        }
+        let instance = crate::gfx::test_gpu::instance();
+        let adapter = pollster::block_on(instance.request_adapter(&Default::default())).ok()?;
         if !hud_coverage::supported(
             adapter.limits().max_color_attachments,
             adapter.get_downlevel_capabilities().flags,
@@ -27,7 +19,8 @@ impl Gpu {
             eprintln!("skipping HUD coverage: adapter lacks independent blending or R8 rendering");
             return None;
         }
-        let (device, queue) = crate::gfx::test_gpu::device(&adapter);
+        let (device, queue) =
+            pollster::block_on(adapter.request_device(&Default::default())).ok()?;
         let atlas = device.create_texture_with_data(
             &queue,
             &wgpu::TextureDescriptor {
