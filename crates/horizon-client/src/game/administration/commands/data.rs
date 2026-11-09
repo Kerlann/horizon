@@ -223,10 +223,15 @@ impl Game<'_> {
                 let raw = self.persist.raw.get(&id);
                 // Projectile.addAdditionalSaveData stores the retained EntityReference,
                 // including an owner that is not currently resolved to a live entity.
-                entity_nbt::arrow_to_nbt(p, uuid, p.owner_uuid.or(owner), in_block, raw)
-                    .or_else(|| entity_nbt::fireball_to_nbt(p, uuid, owner, raw))
-                    .or_else(|| entity_nbt::throwable_to_nbt(p, uuid, owner, raw))
-                    .or_else(|| entity_nbt::spit_or_bullet_to_nbt(p, uuid, owner, target, raw))?
+                let mut tag =
+                    entity_nbt::arrow_to_nbt(p, uuid, p.owner_uuid.or(owner), in_block, raw)
+                        .or_else(|| entity_nbt::fireball_to_nbt(p, uuid, owner, raw))
+                        .or_else(|| entity_nbt::throwable_to_nbt(p, uuid, owner, raw))
+                        .or_else(|| {
+                            entity_nbt::spit_or_bullet_to_nbt(p, uuid, owner, target, raw)
+                        })?;
+                self.save_projectile_portal_cooldown(p, &mut tag);
+                tag
             }
             Target::Crystal(id) => {
                 let c = self.crystals.iter().find(|c| c.id == id)?;
@@ -265,6 +270,7 @@ impl Game<'_> {
                     f.drop_item,
                     f.damage,
                     f.fall_distance,
+                    f.on_ground,
                     f.rotation,
                     uuid,
                 );
@@ -350,6 +356,31 @@ impl Game<'_> {
                     s.raw.as_deref(),
                 )
             }
+            // LeashFenceKnotEntity saves nothing of its own: the common
+            // entity fields, as an explicitly summoned knot's.
+            Target::Knot(id) => {
+                let fence = self.natural_knot(id)?;
+                let uuid = *self.persist.uuids.get(&id)?;
+                let knot = super::OtherEntity {
+                    // A serialization view, not a second resident entity.
+                    join: horizon_client::join_seq::JoinSeq::UNJOINED,
+                    id,
+                    kind: "minecraft:leash_knot".into(),
+                    position: horizon_client::mobs::leash::knot_state(fence).position,
+                    yaw: 0.0,
+                    pitch: 0.0,
+                    item_transformation: None,
+                    interaction: None,
+                    knot_check: None,
+                    eye: None,
+                };
+                let mut tag = self.other_to_nbt(&knot, uuid);
+                // Entity.saveWithoutId writes `remainingFireTicks` always; the
+                // knot's never changes (BlockAttachedEntity.tick has no
+                // baseTick).
+                set_key(&mut tag, "Fire", Tag::Short(0));
+                tag
+            }
         })
     }
     /// `Entity.load` of new data (`EntityDataAccessor.setData`): the entity is
@@ -407,6 +438,7 @@ impl Game<'_> {
                         );
                     // Runtime identity and lifetime stay on the resident owner.
                     new.join = slot.join;
+                    new.random = slot.random.clone();
                     let old = horizon_client::join_seq::store_back(slot, new);
                     // Runtime-only state (AI, animation) carries over.
                     if keep_liked_player {
@@ -535,7 +567,7 @@ impl Game<'_> {
             }
             Target::Boat(id) => {
                 // AbstractBoat.readAdditionalSaveData over Entity.load: the
-                // position, rotation, motion, NoGravity, Fire and a chest boat's items.
+                // position, rotation, motion, ground and gravity flags, Fire and chest items.
                 let (position, velocity, yaw) =
                     entity_nbt::boat_from_nbt(&tag).ok_or_else(stale)?;
                 let uuid = self.uuid_for(id);
@@ -552,6 +584,7 @@ impl Game<'_> {
                     b.previous_yaw = yaw;
                     b.pitch = entity_nbt::rotation(&tag)[1];
                     b.no_gravity = entity_nbt::flag(&tag, "NoGravity");
+                    b.on_ground = entity_nbt::flag(&tag, "OnGround");
                     b.fire_ticks = crate::game::boats::saved_fire(&tag);
                     if b.chest {
                         b.items =
@@ -587,6 +620,7 @@ impl Game<'_> {
                     falling.no_gravity = no_gravity;
                     falling.drop_item = drop_item;
                     falling.fall_distance = fall_distance;
+                    falling.on_ground = entity_nbt::flag(&tag, "OnGround");
                     falling.damage = damage;
                     // Keep id/join, start_pos, portal state and stuck multiplier.
                     set_key(&mut tag, "UUID", Tag::IntArray(uuid.to_vec()));
@@ -615,12 +649,8 @@ impl Game<'_> {
                 tnt.previous = position;
                 tnt.velocity = entity_nbt::motion(&tag);
                 tnt.rotation = entity_nbt::rotation(&tag);
-                // Keep the existing loaded-fuse conversion policy (H090 is separate).
-                tnt.fuse = match tag.get("fuse") {
-                    Some(Tag::Short(fuse)) => i32::from(*fuse),
-                    _ => 80,
-                };
-                tnt.on_ground = matches!(tag.get("OnGround"), Some(Tag::Byte(1)));
+                tnt.fuse = super::super::persist::tnt_fuse(&tag);
+                tnt.on_ground = entity_nbt::flag(&tag, "OnGround");
                 tnt.fall_distance =
                     horizon_client::save::float(tag.get("fall_distance")).unwrap_or(0.0);
                 tnt.no_gravity = entity_nbt::flag(&tag, "NoGravity");
@@ -674,6 +704,18 @@ impl Game<'_> {
                     .load_nbt(loaded);
                 set_key(&mut tag, "UUID", Tag::IntArray(uuid.to_vec()));
             }
+            Target::Rocket(id) => {
+                let player = self.saved_player_uuid();
+                let loaded =
+                    entity_nbt::firework_rocket_from_nbt(&tag, player).ok_or_else(stale)?;
+                let uuid = self.uuid_for(id);
+                self.rockets
+                    .iter_mut()
+                    .find(|r| r.id == id)
+                    .ok_or_else(stale)?
+                    .load_nbt(loaded);
+                set_key(&mut tag, "UUID", Tag::IntArray(uuid.to_vec()));
+            }
             Target::Cart(id) => {
                 let uuid = self.uuid_for(id);
                 let i = self
@@ -710,6 +752,7 @@ impl Game<'_> {
                     p.yaw = yaw;
                     p.pitch = pitch;
                     p.no_gravity = entity_nbt::flag(&tag, "NoGravity");
+                    p.on_ground = entity_nbt::flag(&tag, "OnGround");
                 });
                 set_key(&mut tag, "UUID", Tag::IntArray(uuid.to_vec()));
             }
@@ -725,6 +768,7 @@ impl Game<'_> {
         | Target::Orb(id)
         | Target::Cushion(id)
         | Target::Trident(id)
+        | Target::Rocket(id)
         | Target::Other(id)
         | Target::Fangs(id)
         | Target::Projectile(id) = t
@@ -1359,6 +1403,12 @@ impl Game<'_> {
             name: String::new(),
             text: g.target_name(t),
             display: None,
+        };
+        // A natural knot is listed but keeps no tags yet: `tag add`/`remove` leave it out.
+        let targets = if matches!(id, "tag.add" | "tag.remove") {
+            super::without_knots(targets)?
+        } else {
+            targets
         };
         let mut all: Vec<String> = Vec::new();
         for &t in &targets {

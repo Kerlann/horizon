@@ -22,6 +22,21 @@ use horizon_core::nbt::{Compound, Tag};
 const RECHECK_TICKS: i64 = 5;
 
 impl Game<'_> {
+    /// `OfferFlowerGoal.stop` (`MobEvent::Gift`): the item on the target's
+    /// empty antenna, as a guaranteed drop.
+    pub(super) fn receive_gift(&mut self, target: u32, item: &'static str) {
+        if let Some(m) = self.mobs.iter_mut().find(|m| m.id == target)
+            && m.saddle_item().is_none()
+        {
+            m.set_saddle(Some(ItemStack::new(item, 1)));
+            // OfferFlowerGoal.stop: Mob.setGuaranteedDrop(antenna).
+            horizon_client::mobs::finalize::set_drop_chance(
+                m,
+                horizon_items::equipment::SADDLE,
+                2.0,
+            );
+        }
+    }
     /// A copper golem opened or closed a chest half: the counter changes, the
     /// first opener posts CONTAINER_OPEN and the last closer CONTAINER_CLOSE
     /// (`ContainerOpenersCounter.incrementOpeners` / `decrementOpeners`), and
@@ -470,3 +485,7 @@ impl Game<'_> {
 #[cfg(test)]
 #[path = "copper_golems/lifetime_tests.rs"]
 mod lifetime_tests;
+
+#[cfg(test)]
+#[path = "tests/golem_gift_tests.rs"]
+mod golem_gift_tests;

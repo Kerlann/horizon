@@ -1,5 +1,5 @@
 //! Run alone with private prepared resources: installs process-wide trait mods.
-use super::super::*;
+use crate::game::*;
 use horizon_client::chunk::Chunk;
 use mod_api::{Hooks, PlayerInventoryChangedEvent, ServerHost};
 use std::sync::Mutex;

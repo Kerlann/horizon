@@ -750,7 +750,7 @@ impl ItemRenderer {
         library: std::result::Result<Arc<ModelLibrary>, String>,
         item_data: &horizon_world::item_defaults::ItemData,
     ) -> crate::Result<Self> {
-        Self::load_tables(root, library, true, item_data)
+        Self::load_tables(root, library, true, item_data, None)
     }
     /// What a dedicated server reads: the item prototypes (the stacks'
     /// default components) and ids, without the client item definitions,
@@ -761,13 +761,22 @@ impl ItemRenderer {
         library: std::result::Result<Arc<ModelLibrary>, String>,
         item_data: &horizon_world::item_defaults::ItemData,
     ) -> crate::Result<Self> {
-        Self::load_tables(root, library, false, item_data)
+        Self::load_tables(root, library, false, item_data, None)
+    }
+    pub fn load_with_library_and_entity_models(
+        root: &horizon_assets::resource_source::ResourceRoot,
+        library: std::result::Result<Arc<ModelLibrary>, String>,
+        document: &crate::mobs::EntityModelDocument,
+        item_data: &horizon_world::item_defaults::ItemData,
+    ) -> crate::Result<Self> {
+        Self::load_tables(root, library, true, item_data, Some(document))
     }
     fn load_tables(
         root: &ResourceRoot,
         library: std::result::Result<Arc<ModelLibrary>, String>,
         drawn: bool,
         item_data: &horizon_world::item_defaults::ItemData,
+        entity_models: Option<&crate::mobs::EntityModelDocument>,
     ) -> crate::Result<Self> {
         let prototypes = Arc::clone(item_data.prototypes()?);
         let models = ItemModels {
@@ -792,7 +801,10 @@ impl ItemRenderer {
                 .unwrap_or_default(),
         );
         let parts = if drawn {
-            special::load_parts(root.prepared())
+            entity_models.map_or_else(
+                || special::load_parts(root.prepared()),
+                special::load_parts_from_document,
+            )
         } else {
             HashMap::new()
         };

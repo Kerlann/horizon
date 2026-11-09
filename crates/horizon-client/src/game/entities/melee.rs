@@ -205,3 +205,5 @@ impl Game<'_> {
         true
     }
 }
+
+impl Game<'_> {}

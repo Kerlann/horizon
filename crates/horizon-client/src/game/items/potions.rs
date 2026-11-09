@@ -256,7 +256,13 @@ pub(super) fn potion_cloud_to_nbt(c: &Breath, uuid: [i32; 4], raw: Option<&Tag>)
         "potion_duration_scale".into(),
         Tag::Float(potion.settings.duration_scale.to_bits()),
     );
-    map.insert("potion_contents".into(), Tag::Compound(contents));
+    // Vanilla writes the key only while the contents differ from
+    // PotionContents.EMPTY: no effects and the default water colour.
+    if !(potion.effects.is_empty()
+        && potion.color == horizon_client_core::potions::BASE_POTION_COLOR)
+    {
+        map.insert("potion_contents".into(), Tag::Compound(contents));
+    }
     tag
 }
 
@@ -2237,8 +2243,17 @@ impl Game<'_> {
                 (p.y + 0.2125).floor() as i32,
                 p.z.floor() as i32,
             );
+            // Frame generation and temporal upscaling follow its own flight; one not yet
+            // given an id (0) can't be told apart from another, so it keeps the camera's.
+            let motion = if t.id == 0 {
+                0
+            } else {
+                Self::MOTION_OBJECT | u64::from(t.id)
+            };
+            self.mark_motion(out.len(), motion);
             self.submit_item_world(&state, pose, vertex_light(light), out);
         }
+        self.mark_motion(out.len(), 0);
     }
     /// `HealOrHarmMobEffect.applyInstantaneousEffect` with a source (a
     /// potion or a cloud): indirectMagic, not plain magic, credited to the

@@ -622,26 +622,47 @@ pub struct MobTypes {
 }
 impl MobTypes {
     pub fn load(root: &Path) -> crate::Result<Self> {
-        Self::load_with_models(root, true, None)
+        Self::load_with_models(root, true, None, None)
+    }
+
+    /// Load client mob data using defaults already decoded by the resource
+    /// bootstrap. This avoids decoding `items.json` a second time for Allay
+    /// inventory limits.
+    pub fn load_with_defaults(
+        root: &Path,
+        defaults: &horizon_world::item_defaults::Defaults,
+    ) -> crate::Result<Self> {
+        Self::load_with_models(root, true, None, Some(defaults))
     }
 
     /// The dedicated server needs entity facts and AI, but never their render
     /// geometry. Keep one empty part for the fields shared with the client
     /// rather than parsing and retaining every entity-model layer.
     pub fn load_for_server(root: &Path) -> crate::Result<Self> {
-        Self::load_with_models(root, false, None)
+        Self::load_with_models(root, false, None, None)
     }
 
     /// The client startup already parsed `entity-models.json` for the handoff
     /// and the other model loaders; read the model layers from that copy.
     pub fn load_with_document(root: &Path, document: &EntityModelDocument) -> crate::Result<Self> {
-        Self::load_with_models(root, true, Some(document))
+        Self::load_with_models(root, true, Some(document), None)
+    }
+
+    /// The client startup already has both the entity model document and the
+    /// item defaults. Reuse both instead of decoding either file again.
+    pub fn load_with_document_and_defaults(
+        root: &Path,
+        document: &EntityModelDocument,
+        defaults: &horizon_world::item_defaults::Defaults,
+    ) -> crate::Result<Self> {
+        Self::load_with_models(root, true, Some(document), Some(defaults))
     }
 
     fn load_with_models(
         root: &Path,
         models_needed: bool,
         document: Option<&EntityModelDocument>,
+        item_defaults: Option<&horizon_world::item_defaults::Defaults>,
     ) -> crate::Result<Self> {
         let bytes = fs::read(root.join("entity-types.json"))?;
         let types: Value = serde_json::from_slice(&bytes)?;
@@ -671,24 +692,43 @@ impl MobTypes {
         };
         // The Allay's InventoryCarrier loading needs item limits before a
         // Game exists. Other mob-only resource sets need no item data.
-        let items: HashMap<String, Value> = if types.get("minecraft:allay").is_some() {
-            serde_json::from_slice(&fs::read(root.join("items.json"))?)?
-        } else {
-            HashMap::new()
-        };
-        let item_stack_limits: Arc<HashMap<String, u32>> = Arc::new(
-            items
-                .into_iter()
-                .map(|(id, components)| {
-                    (
-                        id,
-                        components["minecraft:max_stack_size"]
-                            .as_u64()
-                            .unwrap_or(64) as u32,
+        let item_stack_limits: Arc<HashMap<String, u32>> = if types.get("minecraft:allay").is_some()
+        {
+            match item_defaults {
+                Some(items) => Arc::new(
+                    items
+                        .iter()
+                        .map(|(id, components)| {
+                            (
+                                id.clone(),
+                                components["minecraft:max_stack_size"]
+                                    .as_u64()
+                                    .unwrap_or(64) as u32,
+                            )
+                        })
+                        .collect(),
+                ),
+                None => {
+                    let items: HashMap<String, Value> =
+                        serde_json::from_slice(&fs::read(root.join("items.json"))?)?;
+                    Arc::new(
+                        items
+                            .into_iter()
+                            .map(|(id, components)| {
+                                (
+                                    id,
+                                    components["minecraft:max_stack_size"]
+                                        .as_u64()
+                                        .unwrap_or(64) as u32,
+                                )
+                            })
+                            .collect(),
                     )
-                })
-                .collect(),
-        );
+                }
+            }
+        } else {
+            Arc::new(HashMap::new())
+        };
         let mut out = HashMap::new();
         // A content mod's living type (its row names a vanilla `template`) is
         // its template's mob under its own id: the template's model, sounds
@@ -2145,6 +2185,17 @@ pub enum MobEvent {
         event: &'static str,
         at: [f64; 3],
         source: u32,
+        state: horizon_world::registry::BlockStateId,
+    },
+    /// `Level.gameEvent` from the block a mob landed on (`FarmlandBlock.turnToBaseBlock`'s
+    /// BLOCK_CHANGE from the mob that trampled it, `TurtleEggBlock.decreaseEggs`' and
+    /// `Level.destroyBlock`'s BLOCK_DESTROY with no source): the game posts it, a
+    /// sculk sensor, a calibrated sensor and a warden hear it.
+    LandingGameEvent {
+        event: &'static str,
+        at: [i32; 3],
+        /// The entity that caused the change, `None` for a destroyed egg.
+        source: Option<u32>,
         state: horizon_world::registry::BlockStateId,
     },
     AttackPlayer(f32, [f64; 3]),
@@ -3904,13 +3955,32 @@ pub fn entity_random(id: u32, position: Vec3) -> LegacyRandom {
     let _ = random.next_int();
     random
 }
+/// The own random (`Entity.random`) of a living entity the server makes, as
+/// `LivingEntity.<init>` leaves it: its first two draws made the UUID
+/// (`Mth.createInsecureUUID`), returned here, and the next one the yaw, which
+/// every spawn path then replaces. Constructor draws of the kind come after.
+pub fn living_random() -> (LegacyRandom, [i32; 4]) {
+    let mut random = crate::random_source::entity();
+    let uuid = crate::save::insecure_uuid(&mut random);
+    let _yaw = random.next_float();
+    (random, uuid)
+}
 impl Mob {
     /// A mob as its authoritative side builds it — spawned, or loaded from a
     /// chunk (`Mob.finalizeSpawn` runs around it): the species' own goals, then
     /// the goals every mod part attached to its type (#1077), vanilla's
     /// `registerGoals` moment.
     pub fn new(id: u32, kind: Arc<MobType>, position: Vec3, yaw: f32) -> Self {
-        let mut mob = Self::new_remote(id, kind, position, yaw);
+        Self::with_random(id, kind, position, yaw, entity_random(id, position))
+    }
+    pub fn with_random(
+        id: u32,
+        kind: Arc<MobType>,
+        position: Vec3,
+        yaw: f32,
+        random: LegacyRandom,
+    ) -> Self {
+        let mut mob = Self::remote_with_random(id, kind, position, yaw, random);
         // The parts a mod attached to this entity type add their goals right
         // after the species' own (#1077): vanilla's `registerGoals` moment,
         // which belongs to the authoritative construction. A type with no
@@ -3927,7 +3997,15 @@ impl Mob {
     /// it for the mob itself, and a copy's would only allocate goal state no
     /// tick runs (#1077).
     pub fn new_remote(id: u32, kind: Arc<MobType>, position: Vec3, yaw: f32) -> Self {
-        let random = entity_random(id, position);
+        Self::remote_with_random(id, kind, position, yaw, entity_random(id, position))
+    }
+    fn remote_with_random(
+        id: u32,
+        kind: Arc<MobType>,
+        position: Vec3,
+        yaw: f32,
+        random: LegacyRandom,
+    ) -> Self {
         let mut mob = Self {
             attachment_lifetime: Default::default(),
             join: Default::default(),
@@ -5059,7 +5137,13 @@ impl Mob {
         ) {
             through = damage - taken;
         }
-        self.absorption = (self.absorption - (damage - through)).max(0.0);
+        let left = self.absorption - (damage - through);
+        // LivingEntity.setAbsorptionAmount clamps the remainder to the attribute maximum.
+        self.absorption = if left < 0.0 {
+            0.0
+        } else {
+            left.min(armor::max_absorption(self))
+        };
         through
     }
     /// `LivingEntity.checkTotemDeathProtection`: the first hand with a
@@ -5385,7 +5469,7 @@ impl EntityModelDocument {
     }
 
     /// The parsed document, for loaders that read several keys from it.
-    pub(crate) fn value(&self) -> &Value {
+    pub fn value(&self) -> &Value {
         &self.0
     }
 }
@@ -7623,6 +7707,8 @@ mod hurt_cooldown_incoming_tests {
         let mut test_level = crate::health::TestLevel::new(0);
         let level = &mut test_level.level();
         let mut m = mob(Species::Pig);
+        // Absorption I gives max_absorption 4, so the 1.5 remainder is valid.
+        m.add_effect("absorption", 600, 0);
         m.absorption = 1.5;
         assert!(m.damage(level, 1.0, Damage::of(DamageKind::Generic)));
         assert_eq!((m.health, m.absorption), (40.0, 0.5));

@@ -458,6 +458,19 @@ impl Game<'_> {
             && self.container_openers_changed(pos, false)
         {
             self.container_edge_sound(pos, false);
+            let post = |game: &mut Self| {
+                game.post_block_game_event(
+                    "minecraft:container_close",
+                    [pos.0, pos.1, pos.2],
+                    Some(horizon_client::mobs::Who::Player),
+                    None,
+                );
+            };
+            if self.lan_acting == Some(conn) {
+                post(self);
+            } else {
+                self.as_guest(conn, post);
+            }
         }
     }
 
