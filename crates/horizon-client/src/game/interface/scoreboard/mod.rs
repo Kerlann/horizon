@@ -561,6 +561,25 @@ impl Game<'_> {
         self.remote_player_name(id)
             .map_or_else(|| uuid_text(uuid), str::to_owned)
     }
+    /// Online profile identities stop owner traversal even when they have no
+    /// team. A saved NPC with the same UUID must not redirect that player.
+    pub(super) fn admitted_online_owner_name(&self, uuid: [i32; 4]) -> Option<&str> {
+        use horizon_client::join_seq::residency::Source;
+        if self.player.is_some() && !self.lan_acting_fake && self.acting_uuid() == uuid {
+            let id = u32::try_from(self.own_entity_id()).ok()?;
+            let source = self.lan_acting.map_or(Source::LocalPlayer, Source::Guest);
+            if self.admitted_profile_uuid(id, source, uuid) {
+                return Some(self.acting_player_name());
+            }
+        }
+        self.lan.as_ref()?.hub.online_players().find_map(|guest| {
+            let id = u32::try_from(guest.entity_id).ok()?;
+            (horizon_client::lan::playerdata::uuid_ints(guest.uuid) == uuid
+                && self.admitted_profile_uuid(id, Source::Guest(guest.conn), uuid))
+            .then_some(guest.name.as_str())
+        })
+    }
+
     /// `TamableAnimal.getTeam` of a mob or another player: its own team, else,
     /// when it is a tamed pet, its root owner's.
     pub(super) fn mob_team(&self, id: u32) -> Option<&sb::Team> {
@@ -592,49 +611,43 @@ impl Game<'_> {
         if self.score.board.teams.is_empty() {
             return None;
         }
-        let own_uuid = *self.persist.uuids.get(&m.id)?;
+        if m.removed {
+            return None;
+        }
+        let own_uuid = self.current_admitted_saved_uuid(m.id)?;
         let own = self.scoreboard_name(m.id, own_uuid);
         if let Some(team) = self.score.board.players_team(&own) {
             return Some(team);
         }
         let owner = tame_owner(m)?;
         let loaned = |uuid: [i32; 4]| {
-            self.persist
-                .uuids
-                .iter()
-                .filter(|(_, found)| **found == uuid)
-                .find_map(|(&id, _)| {
-                    if id == actor.id {
-                        (!actor.removed).then_some(actor)
-                    } else {
-                        world
-                            .live_mobs
-                            .and_then(|mobs| mobs.find(id))
-                            .filter(|mob| !mob.removed)
-                    }
-                })
+            let id = self.current_admitted_saved_id(uuid)?;
+            if id == actor.id {
+                (!actor.removed).then_some(actor)
+            } else {
+                world
+                    .live_mobs
+                    .and_then(|mobs| mobs.find(id))
+                    .filter(|mob| !mob.removed)
+            }
         };
         let root = root_owner(owner, |uuid| {
+            if self.admitted_online_owner_name(uuid).is_some() {
+                return None;
+            }
             if let Some(mob) = loaned(uuid) {
                 return tame_owner(mob);
             }
-            let Target::Mob(id) = self.target_by_uuid(ints_uuid(uuid))? else {
-                return None;
-            };
+            let id = self.current_admitted_saved_id(uuid)?;
             self.mobs
                 .iter()
-                .find(|mob| mob.id == id)
+                .find(|mob| mob.id == id && !mob.removed)
                 .and_then(tame_owner)
         });
-        let owner_name = if let Some(mob) = loaned(root) {
-            self.scoreboard_name(mob.id, root)
+        let owner_name = if let Some(name) = self.admitted_online_owner_name(root) {
+            name.to_owned()
         } else {
-            match self.target_by_uuid(ints_uuid(root))? {
-                Target::Player => self.acting_player_name().to_owned(),
-                Target::Guest(conn) => self.command_guest(conn)?.name.clone(),
-                Target::Mob(id) => self.scoreboard_name(id, root),
-                _ => uuid_text(root),
-            }
+            self.scoreboard_name(self.current_admitted_saved_id(root)?, root)
         };
         pet_team(&self.score.board, &own, Some(&owner_name))
     }
@@ -644,7 +657,7 @@ impl Game<'_> {
         id: u32,
         owner: impl FnOnce() -> Option<[i32; 4]>,
     ) -> Option<&sb::Team> {
-        let uuid = *self.persist.uuids.get(&id)?;
+        let uuid = self.current_admitted_saved_uuid(id)?;
         let own = self.scoreboard_name(id, uuid);
         if let Some(team) = self.score.board.players_team(&own) {
             return Some(team);
@@ -656,9 +669,10 @@ impl Game<'_> {
     /// owners that are tamed pets themselves.
     fn root_owner_name(&self, owner: [i32; 4]) -> Option<String> {
         let pet_owner = |uuid: [i32; 4]| {
-            let Target::Mob(pet) = self.target_by_uuid(ints_uuid(uuid))? else {
+            if self.admitted_online_owner_name(uuid).is_some() {
                 return None;
-            };
+            }
+            let pet = self.current_admitted_saved_id(uuid)?;
             self.mobs
                 .iter()
                 .find(|m| m.id == pet && m.extra.tame)?
@@ -666,12 +680,10 @@ impl Game<'_> {
                 .owner
         };
         let root = root_owner(owner, pet_owner);
-        Some(match self.target_by_uuid(ints_uuid(root))? {
-            Target::Player => self.acting_player_name().to_owned(),
-            Target::Guest(conn) => self.command_guest(conn)?.name.clone(),
-            Target::Mob(id) => self.scoreboard_name(id, root),
-            _ => uuid_text(root),
-        })
+        if let Some(name) = self.admitted_online_owner_name(root) {
+            return Some(name.to_owned());
+        }
+        Some(self.scoreboard_name(self.current_admitted_saved_id(root)?, root))
     }
     pub(super) fn player_team(&self) -> Option<&sb::Team> {
         self.score.board.players_team(self.acting_player_name())
@@ -746,16 +758,22 @@ impl Game<'_> {
         // Online player names have global precedence over saved entity names,
         // including a real guest currently placed in another dimension.
         let mut player_names: HashMap<_, _> = self
-            .command_players()
-            .map(|guest| {
-                (
-                    horizon_client::lan::playerdata::uuid_ints(guest.uuid),
-                    guest.name.as_str(),
+            .lan
+            .iter()
+            .flat_map(|host| host.hub.online_players())
+            .filter_map(|guest| {
+                let uuid = horizon_client::lan::playerdata::uuid_ints(guest.uuid);
+                let id = u32::try_from(guest.entity_id).ok()?;
+                self.admitted_profile_uuid(
+                    id,
+                    horizon_client::join_seq::residency::Source::Guest(guest.conn),
+                    uuid,
                 )
+                .then_some((uuid, guest.name.as_str()))
             })
             .collect();
-        if self.player.is_some() && !self.lan_acting_fake {
-            player_names.insert(self.acting_uuid(), self.acting_player_name());
+        if let Some(name) = self.admitted_online_owner_name(self.acting_uuid()) {
+            player_names.insert(self.acting_uuid(), name);
         }
         horizon_client::mobs::TeamRulesSnapshot {
             player: self.player_team().map(|team| shared[team.name.as_str()]),
@@ -765,8 +783,12 @@ impl Game<'_> {
                     let own = self.scoreboard_name(id, uuid);
                     let team = self.score.board.players_team(&own).or_else(|| {
                         let owner = *tame_owners.get(&id)?;
-                        let root =
-                            root_owner(owner, |uuid| tame_owners.get(by_uuid.get(&uuid)?).copied());
+                        let root = root_owner(owner, |uuid| {
+                            if player_names.contains_key(&uuid) {
+                                return None;
+                            }
+                            tame_owners.get(by_uuid.get(&uuid)?).copied()
+                        });
                         let owner_name = if let Some(name) = player_names.get(&root) {
                             (*name).to_owned()
                         } else {

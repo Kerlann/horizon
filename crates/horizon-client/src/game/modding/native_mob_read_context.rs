@@ -204,6 +204,55 @@ impl Game<'_> {
         Some((at, details, uuid))
     }
 
+    pub(super) fn current_admitted_saved_uuid(&self, id: u32) -> Option<[i32; 4]> {
+        self.admitted_saved_uuid_at(id, self.dim.key())
+            .map(|(_, _, uuid)| uuid)
+    }
+
+    pub(super) fn admitted_profile_uuid(&self, id: u32, source: Source, uuid: [i32; 4]) -> bool {
+        let mut table = self.entity_residency.borrow_mut();
+        table
+            .server_admitted_read_lookup(id, |at| self.locate_server_resident_owner(at))
+            .is_some_and(|(at, state, _, details)| {
+                at.source == source
+                    && details.known_uuid == Some(uuid)
+                    && matches!(
+                        state,
+                        EntityLookup::Taken
+                            | EntityLookup::Found {
+                                value: (_, true),
+                                ..
+                            }
+                    )
+            })
+    }
+
+    /// Reuse the once-per-pass relation index, then validate its candidate at
+    /// the primary table. Small writes update affected keys, not this population.
+    pub(super) fn current_admitted_saved_id(&self, uuid: [i32; 4]) -> Option<u32> {
+        let level = LevelRef::new(self.native_lifecycle.epoch()?, self.dim.key());
+        let tick = self.native_lifecycle.capture_tick()?;
+        let mut pass = {
+            let mut state = self.entity_read_state.borrow_mut();
+            let pass = state.mob_relations.entry(level).or_default();
+            if pass.tick == Some(tick) {
+                let id = *pass.index.saved_ids.get(&uuid)?;
+                drop(state);
+                return (self.read_saved_uuid(id, level)? == uuid).then_some(id);
+            }
+            std::mem::take(pass)
+        };
+        self.rebuild_mob_read_relations(level, &mut pass.index);
+        pass.tick = Some(tick);
+        let id = pass.index.saved_ids.get(&uuid).copied();
+        self.entity_read_state
+            .borrow_mut()
+            .mob_relations
+            .insert(level, pass);
+        let id = id?;
+        (self.read_saved_uuid(id, level)? == uuid).then_some(id)
+    }
+
     /// The primary table enumerates candidates only. Resolve each after dropping
     /// its iterator borrow, then require the same immutable admission. The reused
     /// scratch is returned empty; no second identity/facts authority is retained.
@@ -264,7 +313,10 @@ impl Game<'_> {
     ) -> Option<&'a horizon_client::lan::guest::Guest> {
         let guest = self.lan.as_ref()?.hub.guest(conn)?;
         let (uuid, id) = *index.guest_identities.get(&conn)?;
-        (guest.uuid == uuid && u32::try_from(guest.entity_id).ok() == Some(id)).then_some(guest)
+        (guest.participates_online()
+            && guest.uuid == uuid
+            && u32::try_from(guest.entity_id).ok() == Some(id))
+        .then_some(guest)
     }
     fn read_mob_facts(&self, id: u32, level: LevelRef) -> Option<NativeMobTargetFacts> {
         let mut table = self.entity_residency.borrow_mut();
@@ -306,9 +358,13 @@ impl Game<'_> {
         }
         let mut root = facts.owner?;
         for _ in 0..64 {
+            if let Some(name) = self.admitted_online_owner_name(root) {
+                return self.score.board.players_team(name);
+            }
             let next = index
                 .saved_ids
                 .get(&root)
+                .filter(|&&id| self.read_saved_uuid(id, level) == Some(root))
                 .and_then(|&id| self.read_mob_facts(id, level))
                 .and_then(|f| f.owner);
             match next {
@@ -316,15 +372,8 @@ impl Game<'_> {
                 None => break,
             }
         }
-        let uuid = horizon_client::lan::playerdata::ints_uuid(root);
-        if self.player.is_some() && root == self.acting_uuid() {
-            return self.score.board.players_team(self.acting_player_name());
-        }
-        if let Some(&conn) = index.players_by_uuid.get(&uuid) {
-            return self
-                .score
-                .board
-                .players_team(&self.read_guest(index, conn)?.name);
+        if let Some(name) = self.admitted_online_owner_name(root) {
+            return self.score.board.players_team(name);
         }
         let id = *index.saved_ids.get(&root)?;
         (self.read_saved_uuid(id, level)? == root).then_some(())?;
