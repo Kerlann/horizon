@@ -55,74 +55,61 @@ impl Game<'_> {
         &self,
         living: LivingRef,
         pose: Pose,
-    ) -> Option<[f64; 3]> {
+    ) -> Result<Option<[f64; 3]>, mod_api::EntityReadError> {
         self.read_living_dimensions_for_pose(None, living, pose)
     }
 
     pub(super) fn read_living_dimensions_for_pose(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         living: LivingRef,
         pose: Pose,
-    ) -> Option<[f64; 3]> {
-        let target = self.native_living_read_target(living)?;
-        // LivingEntity.getDimensions is final: sleeping wins over every
-        // species' default dimensions, but never makes a stale handle valid.
-        if pose == Pose::Sleeping {
-            return Some([f64::from(0.2_f32); 3]);
-        }
-        match target {
-            t @ (Target::Player | Target::Guest(_)) => {
-                // `Avatar.getDefaultDimensions(pose).scale(getScale())`.
-                let scale = self.native_target_attribute(
-                    t,
-                    "minecraft:scale",
-                    horizon_world::attribute_map::ValueKind::Computed,
-                )? as f32;
-                let d = crate::pose::Dimensions::avatar(pose, scale);
-                Some([
-                    f64::from(d.width),
-                    f64::from(d.height),
-                    f64::from(d.eye_height),
-                ])
+    ) -> Result<Option<[f64; 3]>, mod_api::EntityReadError> {
+        use super::{
+            native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        let Some(admission) = self.entity_read_admission(
+            EntityReadSubject::Living(living),
+            &[
+                EntityReadDependency::Geometry,
+                EntityReadDependency::Attributes,
+            ],
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(admission, provider, |source| {
+            if pose == Pose::Sleeping {
+                return Some([f64::from(0.2_f32); 3]);
             }
-            Target::Mob(id) => {
-                let (w, h, e) = self
-                    .mobs
-                    .iter()
-                    .find(|m| m.id == id && !m.removed)?
-                    .dims_in_pose(pose);
-                Some([w, h, e])
+            if let BaseReadSource::Mob(mob) = source.body {
+                let (width, height, eye) = mob.dims_in_pose(pose);
+                return Some([width, height, eye]);
             }
-            // ArmorStand.getDefaultDimensions ignores the pose: a marker's
-            // box is empty, a small stand's BABY_DIMENSIONS, else the type's.
-            Target::Stand(id) => {
-                let a = self.armor_stands.iter().find(|a| a.id == id)?;
-                let dims = if a.marker {
-                    (0.0, 0.0, 0.0)
-                } else {
-                    a.probe_dimensions()
-                };
-                let scale = self.native_target_attribute(
-                    target,
-                    "minecraft:scale",
-                    horizon_world::attribute_map::ValueKind::Computed,
-                )? as f32;
-                Some([dims.0, dims.1, dims.2].map(|v| f64::from(v as f32 * scale)))
+            let scale = self.native_source_attribute(
+                source.body,
+                "minecraft:scale",
+                horizon_world::attribute_map::ValueKind::Computed,
+            )? as f32;
+            match source.body {
+                BaseReadSource::Player(_) | BaseReadSource::Guest(_) => {
+                    let dims = crate::pose::Dimensions::avatar(pose, scale);
+                    Some([dims.width, dims.height, dims.eye_height].map(f64::from))
+                }
+                BaseReadSource::Stand(stand) => {
+                    let dims = if stand.marker {
+                        (0.0, 0.0, 0.0)
+                    } else {
+                        stand.probe_dimensions()
+                    };
+                    Some([dims.0, dims.1, dims.2].map(|value| f64::from(value as f32 * scale)))
+                }
+                BaseReadSource::Dragon(_) => {
+                    Some([16.0_f32, 8.0, 6.8].map(|value| f64::from(value * scale)))
+                }
+                _ => None,
             }
-            Target::Dragon(id) => {
-                self.dragon.as_ref().filter(|d| d.id == id)?;
-                // EntityTypes.ENDER_DRAGON: scalable(16, 8), default eye
-                // height 8 * 0.85. Dragons are not in the ordinary mob table.
-                let scale = self.native_target_attribute(
-                    target,
-                    "minecraft:scale",
-                    horizon_world::attribute_map::ValueKind::Computed,
-                )? as f32;
-                Some([16.0_f32, 8.0, 6.8].map(|v| f64::from(v * scale)))
-            }
-            _ => None,
-        }
+        })
     }
 
     /// `LivingEntity.randomTeleport(x, y, z, true, avoid)`: the point `at`
