@@ -154,10 +154,9 @@ impl Game<'_> {
                 value: (_, visible),
                 ..
             } => visible,
-            EntityLookup::Taken => self.server_read_target_visible(
-                location.owner.dimension,
-                super::entity_residency::residency_target_at(location, id),
-            ),
+            // A validated extraction retains immutable identity membership.
+            // Neither a physical body nor an R publication is needed to name it.
+            EntityLookup::Taken => true,
             EntityLookup::Missing => false,
         };
         visible.then_some((EntityRef::new(epoch, id), location.owner.kind))
