@@ -1420,6 +1420,13 @@ mod tests {
                     .is_none()
             );
             index.remove_guest(13);
+            assert!(
+                game.read_guest(&index, 13).is_some(),
+                "a candidate index is not identity authority"
+            );
+            let host = game.lan.as_mut().unwrap();
+            let slot = host.hub.guests.connection_index(13).unwrap();
+            let _removed = host.hub.guests.remove(slot);
             assert!(game.read_guest(&index, 13).is_none());
         });
     }
