@@ -6,6 +6,7 @@ pub(super) struct BorrowedMobTick<'a, 'p, F> {
     pub(super) mobs: &'a mut horizon_client::join_seq::JoinList<Mob>,
     pub(super) snapshot: &'a mut Vec<Seen>,
     pub(super) passenger_objects: &'a [Seen],
+    pub(super) blocked: &'a std::collections::HashSet<u32>,
     pub(super) events: &'a mut Vec<MobEvent>,
     pub(super) dead: &'a mut Vec<Mob>,
     pub(super) corpses: &'a mut Vec<Mob>,
@@ -39,6 +40,7 @@ impl Game<'_> {
             mobs,
             snapshot,
             passenger_objects,
+            blocked,
             events,
             dead,
             corpses,
@@ -101,6 +103,10 @@ impl Game<'_> {
         let mut cached_difficulty: Option<((i32, i32), spawning::LocalDifficulty)> = None;
         for i in 0..mobs.len() {
             let m = &mut mobs[i];
+            if blocked.contains(&m.id) {
+                keep.push(true);
+                continue;
+            }
             let (bx, bz) = (m.position.x.floor() as i32, m.position.z.floor() as i32);
             let seen_guest = if guests.is_empty() {
                 None
@@ -335,5 +341,83 @@ impl Game<'_> {
                 horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod off_level_tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn borrowed_tick_resolves_the_retained_controller() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            use horizon_client::mobs::goals::{JUMP, LOOK, MOVE};
+            game.options.dedicated = Some(Vec::new());
+            game.world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+            );
+            let spider = game
+                .res
+                .mob_types()
+                .get("minecraft:spider")
+                .unwrap()
+                .clone();
+            let skeleton = game
+                .res
+                .mob_types()
+                .get("minecraft:skeleton")
+                .unwrap()
+                .clone();
+            let at = Vec3::new(1.0, 80.0, 0.5);
+            let mut vehicle = Mob::new(71, spider, at, 0.0);
+            vehicle.extra.rider = Some(72);
+            let mut rider = Mob::new(72, skeleton, at, 0.0);
+            rider.extra.mount = Some(71);
+            rider.age = 19;
+            game.mobs.push(vehicle);
+            game.persist
+                .off_level
+                .insert(72, crate::game::persist::OffLevel::Mob(rider));
+            game.tick_creature_entities().unwrap();
+            assert_eq!(
+                game.mob_object(71).unwrap().ai.goals.disabled & (MOVE | JUMP | LOOK),
+                MOVE | JUMP | LOOK
+            );
+            assert_eq!(game.mob_object(72).unwrap().age, 19);
+            assert_eq!(game.mobs.len(), 1);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn resident_descendant_does_not_tick_until_detached() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            game.options.dedicated = Some(Vec::new());
+            game.world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+            );
+            let pig = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+            let mut parent = Mob::new(72, pig.clone(), Vec3::new(1.0, 80.0, 0.5), 0.0);
+            parent.extra.mount = Some(71);
+            let mut child = Mob::new(73, pig, parent.position, 0.0);
+            child.extra.mount = Some(72);
+            child.no_ai = true;
+            child.age = 19;
+            child.fire_ticks = 20;
+            game.persist
+                .off_level
+                .insert(72, crate::game::persist::OffLevel::Mob(parent));
+            game.mobs.push(child);
+            game.tick_creature_entities().unwrap();
+            let child = game.mob_object(73).unwrap();
+            assert_eq!(child.age, 19);
+            assert_eq!(child.fire_ticks, 20);
+            game.mob_object_mut(73).unwrap().extra.mount = None;
+            game.tick_creature_entities().unwrap();
+            assert_eq!(game.mob_object(73).unwrap().age, 20);
+        });
     }
 }

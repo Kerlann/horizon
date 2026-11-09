@@ -21,6 +21,29 @@ const TRAP_RANGE: f64 = 10.0;
 const TRAP_INVULNERABLE: i32 = 60;
 
 impl Game<'_> {
+    /// Resident passengers below an object that never joined cannot be reached
+    /// by ServerLevel's recursive passenger tick. Empty on the normal path.
+    pub(super) fn mobs_below_off_level(&self) -> std::collections::HashSet<u32> {
+        if self.persist.off_level.is_empty() {
+            return Default::default();
+        }
+        let mounts: HashMap<_, _> = self.mob_objects().map(|m| (m.id, m.extra.mount)).collect();
+        self.mobs
+            .iter()
+            .filter_map(|m| {
+                let mut mount = m.extra.mount;
+                for _ in 0..mounts.len() {
+                    let id = mount?;
+                    if self.persist.off_level.contains_key(&id) {
+                        return Some(m.id);
+                    }
+                    mount = mounts.get(&id).copied().flatten();
+                }
+                None
+            })
+            .collect()
+    }
+
     /// `Entity.startRiding` for two mobs.
     pub(super) fn mount_mob(&mut self, rider: u32, vehicle: u32) {
         self.try_mount_mob(rider, vehicle);

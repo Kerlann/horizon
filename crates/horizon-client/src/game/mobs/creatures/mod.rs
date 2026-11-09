@@ -1362,6 +1362,7 @@ impl Game<'_> {
     pub(super) fn tick_creature_entities(&mut self) -> Result<()> {
         // Its steps as spans for `horizon-report` (nothing is read while spans are off).
         let mut laps = horizon_client::spans::laps();
+        let blocked = self.mobs_below_off_level();
         // `EntityEvent.Size` for the sizes that changed outside the mob ticks (spawns,
         // commands, a player's interaction), before the ticks move by them.
         self.native_mob_sizes();
@@ -1389,7 +1390,7 @@ impl Game<'_> {
             let mut i = 0;
             while let Some(m) = self.mobs.get(i) {
                 let (x, z) = (m.position.x.floor() as i32, m.position.z.floor() as i32);
-                if self.world.loaded(x, z) && ticking(x, z) {
+                if !blocked.contains(&m.id) && self.world.loaded(x, z) && ticking(x, z) {
                     let (id, kind) = (m.id, super::native_ticks::TickKind::Mob(m.kind.clone()));
                     if self.native_tick_pre_batch(&mut round, id, kind) {
                         self.sync_sleeping_mob(i);
@@ -1464,6 +1465,7 @@ impl Game<'_> {
             mobs: &mut mobs,
             snapshot: &mut snapshot,
             passenger_objects: &passenger_objects,
+            blocked: &blocked,
             events: &mut events,
             dead: &mut dead,
             corpses: &mut corpses,
