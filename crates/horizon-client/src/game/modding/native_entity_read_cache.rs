@@ -147,22 +147,20 @@ impl Game<'_> {
     ) -> Option<(EntityRef, horizon_client::join_seq::residency::Kind)> {
         let epoch = self.native_lifecycle.epoch()?;
         let mut table = self.entity_residency.borrow_mut();
-        let (state, cached) =
-            table.server_entity_read_lookup(id, |at| self.locate_server_resident_owner(at));
-        let kind = match state {
+        let (location, state, _, _) =
+            table.server_admitted_read_lookup(id, |at| self.locate_server_resident_owner(at))?;
+        let visible = match state {
             EntityLookup::Found {
-                location,
-                value: (_, true),
-            } => location.owner.kind,
-            EntityLookup::Taken => {
-                let row = cached?;
-                self.server_read_target_visible(row.base.level.dimension(), row.target)
-                    .then_some(())?;
-                super::entity_residency::target_residency_kind(row.target)?
-            }
-            _ => return None,
+                value: (_, visible),
+                ..
+            } => visible,
+            EntityLookup::Taken => self.server_read_target_visible(
+                location.owner.dimension,
+                super::entity_residency::residency_target_at(location, id),
+            ),
+            EntityLookup::Missing => false,
         };
-        Some((EntityRef::new(epoch, id), kind))
+        visible.then_some((EntityRef::new(epoch, id), location.owner.kind))
     }
 
     pub(super) fn with_entity_read_publication<R>(
