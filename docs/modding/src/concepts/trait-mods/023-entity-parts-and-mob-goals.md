@@ -40,6 +40,22 @@ with its setter's side effects, and a brain-backed species refuses, since its ta
 memory that `MobRef::set_brain_target` writes from a server host). Writes to other entities
 are not part of a goal; the write handles a `ServerHost` takes do not exist in a goal tick.
 
+#### Read publication schema
+
+`EntityReadCapture` records a logical engine tick, owner pass and publication revision.
+Its phase (`PassStart`, `BeforeCallback`, `AfterEntityTick` or `AfterAppliedWrite`)
+describes applied engine state, not enqueue acceptance. A speculative light overlay
+is marked separately by `pending_overlay: Option<CommandId>`; the command id is
+identity, not authority or proof of completion. These are cached, potentially stale
+publications. Removal, physical lifting and retained output are separate states.
+
+`EntityReadError<E = core::convert::Infallible>` keeps one live-read refusal family:
+`Lifted` for a physically lifted foreign owner, or `Domain(E)` preserving the operation's
+typed error. Only the explicit nested callback actor is OWN. Cached scalar Option
+accessors do not gain this error. Native and wasm share the Wire form, and the default
+uninhabited Infallible domain always refuses decoding. This schema foundation does not
+implement the deferred heavy-read or queued-write routing.
+
 #### Brain behaviors
 
 Native mods only: entity parts do not cross to wasm yet.
