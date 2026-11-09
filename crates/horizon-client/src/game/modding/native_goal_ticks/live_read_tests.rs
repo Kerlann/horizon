@@ -1,6 +1,7 @@
 use super::*;
 use crate::game::native_entity_refs::tests::with_game;
 use horizon_core::geometry::Vec3;
+use mod_api::prelude::PlayersHost;
 
 struct OneMob<'a>(&'a Mob);
 impl mobs::LiveMobs for OneMob<'_> {
