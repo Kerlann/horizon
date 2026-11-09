@@ -48,7 +48,7 @@ FirstPersonHandsAndItemsRenderer.applyEatTransform	port	crates/horizon-client/sr
 FirstPersonHandsAndItemsRenderer.applyBrushTransform	port	crates/horizon-client/src/first_person.rs::brush_transform	the brush sweep while brushing, term for term
 FirstPersonHandsAndItemsRenderer.applyItemArmAttackTransform	port	crates/horizon-client/src/first_person.rs::item_pose	attack swing rotation in the Swing pose
 FirstPersonHandsAndItemsRenderer.applyItemArmTransform	port	crates/horizon-client/src/first_person.rs::item_pose	base item-in-arm translation
-FirstPersonHandsAndItemsRenderer.submitHandsWithItems	port	crates/horizon-client/src/game.rs::Game::hand_geometry	sway, both hands, empty-hand arm and item pose
+FirstPersonHandsAndItemsRenderer.submitHandsWithItems	port	crates/horizon-client/src/game/frame_geometry.rs::Game::hand_geometry	sway, both hands, empty-hand arm and item pose
 FirstPersonHandsAndItemsRenderer.swingArm	port	crates/horizon-client/src/first_person.rs::item_pose	attack swing translation and arm rotation
 GameRenderer.<init>	port	crates/horizon-client-render/src/gfx.rs::Renderer::new	lightmap, hand target, debug crosshair and screen effects are built here
 GameRenderer.close	skip:other		GPU resource teardown; wgpu drops the renderer's objects

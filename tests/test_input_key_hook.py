@@ -88,6 +88,7 @@ fn glfw_modifiers(bits: u32) -> u32 { bits }
 struct Game { window: Option<Window>, modifiers: u32, early: bool, input: bool,
               calls: Vec<&'static str>, observed: Vec<(&'static str, KeyAction, u32)> }
 impl Game {
+    fn scripted_run(&self) -> bool { false }
     fn with_user_input<R>(&mut self, input: bool, f: impl FnOnce(&mut Self) -> R) -> R {
         let was = std::mem::replace(&mut self.input, input);
         let result = f(self);
@@ -133,6 +134,7 @@ fn all_actions_consumption_and_window_gates() {
     let mut game = Game { window: Some(Window), modifiers: 5, early: false, input: false, calls: vec![], observed: vec![] };
     game.window_event(&ActiveEventLoop, 7, WindowEvent::Other);
     assert!(game.observed.is_empty());
+
 }
 """.replace("METHOD", actual)
         target = ROOT / "target"

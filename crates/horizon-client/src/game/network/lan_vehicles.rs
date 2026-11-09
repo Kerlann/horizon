@@ -395,7 +395,7 @@ impl Game<'_> {
             .and_then(|host| host.hub.guest(conn))
             .and_then(|g| g.vehicle)
             .is_none_or(|v| self.guest_controls_vehicle(conn, v));
-        let Some(host) = self.lan.as_mut() else {
+        let Some(host) = self.lan.as_ref() else {
             return;
         };
         let Some(gi) = host.hub.guests.iter().position(|g| g.conn == conn) else {
@@ -408,7 +408,7 @@ impl Game<'_> {
             || !p.yaw.is_finite()
             || !p.pitch.is_finite()
         {
-            host.hub.kick(
+            self.lan.as_mut().unwrap().hub.kick(
                 conn,
                 translatable("multiplayer.disconnect.invalid_vehicle_movement", &[]),
             );
@@ -424,6 +424,7 @@ impl Game<'_> {
             return;
         }
         let owner = host.hub.singleplayer_owner == Some(g.uuid);
+        let allow_flight = host.hub.config.allow_flight;
         let (vehicle, good) = (g.vehicle, g.vehicle_good);
         let back = |host: &mut LanHost, position: Vec3, yaw: f32| {
             let packet = play::MoveVehicle {
@@ -471,7 +472,7 @@ impl Game<'_> {
             if let Some(c) = vehicle.and_then(|v| self.carts.iter().find(|c| c.id == v))
                 && c.position.distance_squared(Vec3::new(x, y, z)) > 1.0
             {
-                back(host, c.position, c.yaw);
+                back(self.lan.as_mut().unwrap(), c.position, c.yaw);
             }
             return;
         };
@@ -485,8 +486,15 @@ impl Game<'_> {
         let moved = target.distance_squared(old) - velocity.length_squared();
         if moved > 100.0 && !owner {
             log::warn!("vehicle {id} moved too quickly! {moved}");
-            back(host, old, yaw);
+            back(self.lan.as_mut().unwrap(), old, yaw);
             return;
+        }
+        // A living mount on a climbable has no fall, before its move: a move
+        // put back below keeps that.
+        if let Some(i) = mount
+            && self.mobs[i].on_climbable(&self.mob_world_base(&[]))
+        {
+            self.mobs[i].fall_distance = 0.0;
         }
         // vehicle.move(PLAYER, target - lastGood) with the vehicle's
         // collisions: where it can't follow the client (a quarter block off,
@@ -510,7 +518,7 @@ impl Game<'_> {
             .unwrap_or(true);
         if free_before && (wrongly || !free_after) {
             log::warn!("vehicle {id} moved wrongly");
-            back(host, old, yaw);
+            back(self.lan.as_mut().unwrap(), old, yaw);
             return;
         }
         // clientVehicleIsFloating: the move didn't go down a step, the vehicle hadn't come down onto
@@ -528,8 +536,7 @@ impl Game<'_> {
             [Axis::X, Axis::Y, Axis::Z].map(|a| if max { around.max(a) } else { around.min(a) })
         };
         let no_blocks = no_blocks_in(&self.world, corner(false), corner(true));
-        let allow_flight = host.hub.config.allow_flight;
-        host.hub.guests.update(gi, |g| {
+        self.lan.as_mut().unwrap().hub.guests.update(gi, |g| {
             g.vehicle_good = Some([target.x, target.y, target.z]);
             let rested = std::mem::replace(
                 &mut g.vehicle_rests,
@@ -540,13 +547,79 @@ impl Game<'_> {
             g.vehicle_gravity = gravity;
         });
         if let Some(i) = mount {
-            // absSnapTo: where and how its rider's client turned it; the
-            // rider sits on it from its own ride tick.
-            let m = &mut self.mobs[i];
-            m.position = target;
-            m.yaw = p.yaw;
-            m.head_pitch = p.pitch;
-            m.on_ground = p.on_ground;
+            let mut m = self.mobs[i].clone();
+            let mut events = Vec::new();
+            let mut lent = horizon_client::health::LentLevel::take(&mut self.world);
+            let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                let w = self.mob_world_base(&[]);
+                // absSnapTo: where and how its rider's client turned it; the
+                // rider sits on it from its own ride tick.
+                let delta = target.subtract(m.position);
+                m.position = target;
+                m.yaw = p.yaw;
+                m.head_pitch = p.pitch;
+                // setOnGroundWithMovement and doCheckFallDamage with the client's
+                // ground and move: a landing hurts the horse and its riders.
+                let mut level = horizon_client::health::DamageLevel::lent(
+                    &self.world,
+                    self.pack.assets.registry,
+                    &mut lent,
+                    Some(self.items()),
+                    Some(&self.pack.block_registries),
+                    &self.damage_hooks,
+                );
+                m.client_moved_fall(&w, &mut level, delta, p.on_ground, &mut events);
+            }));
+            lent.give_back(&mut self.world);
+            if let Err(panic) = outcome {
+                std::panic::resume_unwind(panic);
+            }
+            self.mobs[i] = m;
+            // propagateFallToPassengers reaches the guests through `host`: it is out
+            // of `self.lan` while their packet is handled.
+            let falls: Vec<(u32, f64, f32)> = events
+                .iter()
+                .filter_map(|e| match *e {
+                    horizon_client::mobs::MobEvent::FallToPassengers {
+                        mob,
+                        distance,
+                        modifier,
+                    } => Some((mob, distance, modifier)),
+                    _ => None,
+                })
+                .collect();
+            // LivingEntity.checkFallDamage's landing crumbs go to every player
+            // (`sendParticles`), the guests too.
+            let (dust, events): (Vec<_>, Vec<_>) = events
+                .into_iter()
+                .partition(|e| matches!(e, horizon_client::mobs::MobEvent::LandingDust { .. }));
+            for e in dust {
+                if let horizon_client::mobs::MobEvent::LandingDust {
+                    state,
+                    at,
+                    count,
+                    speed,
+                } = e
+                {
+                    self.landing_dust(state, Vec3::new(at[0], at[1], at[2]), count, speed);
+                }
+            }
+            let _ = self.handle_mob_events(events);
+            for (mob, distance, modifier) in falls {
+                let riders: Vec<u32> = self
+                    .lan
+                    .as_ref()
+                    .unwrap()
+                    .hub
+                    .guests
+                    .iter()
+                    .filter(|g| g.vehicle == Some(mob))
+                    .map(|g| g.conn)
+                    .collect();
+                for conn in riders {
+                    self.guest_hit_by(conn, |g| g.rider_fall_damage(distance, modifier));
+                }
+            }
             return;
         }
         let Some(i) = boat else {
@@ -570,6 +643,9 @@ impl Game<'_> {
             .push_by_fluid(&self.world, &self.res.motion().fluids, &self.loop_context)
             .0
             > 0.0;
+        // Entity.move: a long move through water or a reset block resets it first.
+        let reset_fall = self.vehicle_fall_reset(self.boats[i].fall_distance, old, resolved);
+        self.boats.update(i, |boat| boat.fall_distance = reset_fall);
         let fall = if in_water {
             0.0
         } else {
@@ -640,7 +716,15 @@ mod controller_tests {
     use std::sync::{Arc, atomic::AtomicI32, mpsc};
 
     fn guest(conn: u32, uuid: u128) -> Guest {
-        let (tx, _rx) = mpsc::channel();
+        guest_with_packets(conn, uuid).0
+    }
+
+    /// A guest and what is sent to it.
+    fn guest_with_packets(
+        conn: u32,
+        uuid: u128,
+    ) -> (Guest, mpsc::Receiver<horizon_client::lan::Out>) {
+        let (tx, rx) = mpsc::channel();
         let mut g = Guest::new(
             Joined {
                 conn,
@@ -663,7 +747,7 @@ mod controller_tests {
         g.loaded = true;
         // PlayerLoaded came in: its moves count.
         g.load_timeout = 0;
-        g
+        (g, rx)
     }
 
     /// Two players in one boat: the one that got in first drives it
@@ -811,5 +895,160 @@ mod controller_tests {
             game.boats[0].fall_distance, 0.0,
             "a guest's boat on the ground"
         );
+    }
+
+    /// handleMoveVehicle for a horse its guest's client moves: `vehicle.move`
+    /// leaves the fall alone (the server isn't the mount's authority), then
+    /// `doCheckFallDamage` with the client's move and ground adds each drop and,
+    /// on the ground, lands the horse: `AbstractHorse.causeFallDamage` of the
+    /// whole fall. The horse used to keep no fall at all (#13042).
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_guests_horse_falls_and_lands() {
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            horizon_assets::resource_source::ResourceRoot::directory(root.clone()),
+            Vec::new(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            crate::game::execution_role::ExecutionRole::IntegratedServer,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        options.game_dir = Some(
+            std::env::temp_dir().join(format!("horizon-horse-fall-unit-{}", std::process::id())),
+        );
+        options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
+        let mut game = Game::new(
+            &loaded.resources,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&horizon_assets::resource_source::ResourceSource::directory(
+                root.clone(),
+            )),
+            None,
+        )
+        .unwrap();
+        game.build_registries();
+        game.set_allow_commands(true);
+        let stone = game
+            .pack
+            .assets
+            .registry
+            .default_state("minecraft:stone")
+            .unwrap()
+            .0;
+        let mut chunk = Chunk::empty(0, 0);
+        for x in 0..16 {
+            for z in 0..16 {
+                chunk.set(x, 199, z, stone);
+            }
+        }
+        game.world.chunks.insert((0, 0), Arc::new(chunk));
+        game.block_ticks
+            .add_empty_chunk(ChunkPos::new(0, 0))
+            .unwrap();
+        assert!(game.run_command("forceload add 0 0"));
+        assert!(game.run_command("summon minecraft:horse 4.5 210 4.5 {NoAI:1b,Tame:1b}"));
+        let horse = game.mobs[0].id;
+        game.mobs[0].extra.set_saddled(true);
+        game.mobs[0].rider = Some(horizon_client::mobs::equine::Rider {
+            client: true,
+            ..Default::default()
+        });
+        game.lan_host(
+            super::super::lan::LanSettings {
+                port: 0,
+                guest_commands: true,
+                force_game_mode: false,
+            },
+            NetConfig {
+                announce: false,
+                ..NetConfig::loopback(0, "horse-fall-test".into(), 3)
+            },
+            HubConfig {
+                default_game_mode: 0,
+                guest_commands: true,
+                force_game_mode: false,
+                hardcore: false,
+                view_distance: 2,
+                simulation_distance: 2,
+                dimension: "minecraft:overworld".into(),
+                allow_flight: false,
+                seed: 0,
+                max_players: 3,
+                integrated: false,
+                levels: Default::default(),
+            },
+        )
+        .unwrap();
+
+        let (mut rider, packets) = guest_with_packets(2, 21);
+        (rider.vehicle, rider.vehicle_order) = (Some(horse), 1);
+        game.lan.as_mut().unwrap().hub.guests.push(rider);
+        // What the landing should do: the horse's own fall damage for the whole drop.
+        let mut twin = game.mobs[0].clone();
+        twin.cause_fall_damage_from(
+            &game.loop_context,
+            &mut crate::health::TestLevel::new(0).level(),
+            10.0,
+            1.0,
+            &mut Vec::new(),
+        );
+        assert!(
+            twin.health < game.mobs[0].health,
+            "a 10-block fall hurts a horse"
+        );
+
+        let move_to = |y: f64, on_ground: bool| play::MoveVehicleRequest {
+            position: [4.5, y, 4.5],
+            yaw: 0.0,
+            pitch: 0.0,
+            on_ground,
+        };
+        for y in [209.0, 207.0, 204.0] {
+            game.guest_move_vehicle(2, &move_to(y, false));
+        }
+        assert_eq!(game.mobs[0].position.y, 204.0, "the guest moves the horse");
+        assert_eq!(
+            game.mobs[0].fall_distance, 6.0,
+            "each drop adds to the fall"
+        );
+        game.guest_move_vehicle(2, &move_to(200.0, true));
+        assert_eq!(game.mobs[0].fall_distance, 0.0, "the landing ends the fall");
+        assert_eq!(
+            game.mobs[0].health, twin.health,
+            "the landing hurts as the fall does"
+        );
+        // propagateFallToPassengers: the rider's own causeFallDamage of the fall,
+        // ceil((10 - 3) * 1) = 7.
+        assert_eq!(
+            game.lan.as_mut().unwrap().hub.guests[0].health,
+            13.0,
+            "the rider takes the fall too"
+        );
+        // LivingEntity.checkFallDamage sends the landing's block crumbs to every
+        // player near, the rider too.
+        let dust = packets.try_iter().any(|out| match out {
+            horizon_client::lan::Out::Packet(body) => {
+                let mut r = horizon_protocol::buf::Reader::new(&body);
+                let id = r.varint().unwrap();
+                matches!(
+                    play::Clientbound::decode(id, r.rest()),
+                    Ok(play::Clientbound::LevelParticles(_))
+                )
+            }
+            _ => false,
+        });
+        assert!(dust, "the guest sees the landing dust");
     }
 }

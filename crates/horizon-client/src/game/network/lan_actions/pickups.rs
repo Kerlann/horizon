@@ -20,6 +20,23 @@ impl Game<'_> {
         if mode == SPECTATOR || self.dropped.is_empty() {
             return;
         }
+        // The test below takes items whose position is less than 1.5 from
+        // the player's on x and z: their boxes reach these columns.
+        if let Some(columns) = self.pickup_columns.as_mut()
+            && !columns.may_reach_area(
+                &self.dropped,
+                (
+                    (position[0] - 1.5).floor() as i32,
+                    (position[0] + 1.5).floor() as i32,
+                ),
+                (
+                    (position[2] - 1.5).floor() as i32,
+                    (position[2] + 1.5).floor() as i32,
+                ),
+            )
+        {
+            return;
+        }
         let near: Vec<_> = self
             .dropped
             .iter()

@@ -1499,8 +1499,25 @@ impl BlockEntityRenderer {
         visibility: FaceVisibility,
         defaults: &horizon_world::item_defaults::ItemDefaults,
     ) -> Result<Self> {
-        let all: Value =
-            serde_json::from_slice(&std::fs::read(root.prepared().join("entity-models.json"))?)?;
+        Self::load_with_visibility_models_and_defaults(root, registry, visibility, None, defaults)
+    }
+
+    /// Reuse the startup batch's decoded entity models and shared item defaults.
+    pub fn load_with_visibility_models_and_defaults(
+        root: &ResourceRoot,
+        registry: &BlockRegistry,
+        visibility: FaceVisibility,
+        models: Option<&Value>,
+        defaults: &horizon_world::item_defaults::ItemDefaults,
+    ) -> Result<Self> {
+        let owned_models = if models.is_none() {
+            Some(serde_json::from_slice::<Value>(&std::fs::read(
+                root.prepared().join("entity-models.json"),
+            )?)?)
+        } else {
+            None
+        };
+        let all = models.or(owned_models.as_ref()).expect("entity models");
         let models = MODELS
             .iter()
             .filter_map(|(key, layer)| all.get(*layer).map(|v| (*key, ModelPart::parse(v))))

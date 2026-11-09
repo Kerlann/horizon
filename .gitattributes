@@ -5,3 +5,6 @@ docs/horizon-ctl-commands.md text eol=lf
 crates/horizon-theme/tokens.css text eol=lf
 docs/api/*-reference.md text eol=lf
 crates/horizon-mod-api-gen/crossing-foreign.json text eol=lf
+
+launcher/lang/*.json merge=horizon-lang
+crates/horizon-client/assets/horizon/lang/*.json merge=horizon-lang

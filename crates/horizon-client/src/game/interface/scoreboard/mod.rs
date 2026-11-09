@@ -236,6 +236,7 @@ impl Game<'_> {
             Target::Orb(id) => Some(uuid_text(self.uuid_for(id))),
             // Projectiles have no UUID here.
             Target::Projectile(_) | Target::DragonPart(_) => None,
+            Target::Knot(id) => self.persist.uuids.get(&id).map(|&u| uuid_text(u)),
         }
     }
     fn holder_for(&mut self, t: Target) -> Option<Holder> {
@@ -291,6 +292,8 @@ impl Game<'_> {
                 .iter()
                 .find(|f| f.id == id)
                 .and_then(|f| f.saved.as_ref().map(|s| &s.1)),
+            // A natural knot keeps no saved compound: it has no tags.
+            Target::Knot(_) => None,
         };
         match raw.and_then(|r| r.get("Tags")) {
             Some(Tag::List(l)) => l

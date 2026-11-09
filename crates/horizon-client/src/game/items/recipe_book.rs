@@ -580,6 +580,7 @@ impl Game<'_> {
                         stack,
                         self.items().get(&stack.item),
                         &crate::game::native_hooks::HookedAttributeTooltips::new(self, None),
+                        self.item_enchantments(),
                         &|k| self.pack.names.display_get(k),
                     )
                 })
@@ -1181,6 +1182,7 @@ impl Game<'_> {
         self.recipe_ui.ghost.clear();
         self.place_book_recipe(BookType::Crafting, index, all);
     }
+    /// A viewer's transfer of one set of ingredients.
     pub(super) fn transfer_viewer_recipe(&mut self, display_id: i32) {
         self.panel.transfer_warning = None;
         if !self.mod_recipe_screen()
@@ -1226,7 +1228,7 @@ impl Game<'_> {
         use horizon_client::menu::place::TransferError;
         let mut result = Err(TransferError::Unavailable);
         self.menu_session(|menu, env, _| {
-            result = menu.transfer_recipe(env, &id);
+            result = menu.transfer_recipe(env, &id, false);
             Some(result.is_ok())
         });
         self.show_transfer_result(match result {
