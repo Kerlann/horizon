@@ -359,21 +359,24 @@ impl Game<'_> {
             // It steers with the input `LocalPlayer.rideTick` latched on the
             // previous tick, so the paddle packet describes the motion the
             // server is sent; this tick's keys are latched after it ticked.
-            let mut b = self.boats[i].clone();
-            if self.controls_boat(id) {
-                self.tick_controlled_boat(&mut b);
-                b.input = [keys.left, keys.right, keys.forward, keys.backward];
-            }
-            // positionRider: the seat turns with the boat; clampRotation,
-            // which moves `yRotO` (the held lead's old look) with the view.
-            self.yaw += b.delta_rotation;
-            let delta = (self.yaw - b.yaw + 180.0).rem_euclid(360.0) - 180.0;
-            let clamped = delta.clamp(-105.0, 105.0) - delta;
-            self.yaw += clamped;
-            self.rope_rot_old.0 += clamped;
-            self.store_boat_back(i, b);
-            // In front of a mob that shares the boat.
-            Some(self.player_boat_seat(i))
+            let controls = self.controls_boat(id);
+            let join = self.boats[i].join;
+            self.with_boat_body(i, |game, actor| {
+                let b = actor.body_mut().expect("actual controlled Boat");
+                if controls {
+                    game.tick_controlled_boat(b);
+                    b.input = [keys.left, keys.right, keys.forward, keys.backward];
+                }
+                // positionRider: the seat turns with the boat; clampRotation,
+                // which moves `yRotO` (the held lead's old look) with the view.
+                game.yaw += b.delta_rotation;
+                let delta = (game.yaw - b.yaw + 180.0).rem_euclid(360.0) - 180.0;
+                let clamped = delta.clamp(-105.0, 105.0) - delta;
+                game.yaw += clamped;
+                game.rope_rot_old.0 += clamped;
+            });
+            // In front of a mob that shares the actual restored boat.
+            self.boats.locate(join).map(|at| self.player_boat_seat(at))
         } else if self.carts.iter().any(|c| c.id == id) {
             // Minecart.positionRider runs on the client after the cart tick.
             // The offset belongs to the cart, so switching vehicles cannot
@@ -717,6 +720,46 @@ mod tests {
 
     use super::*;
     use horizon_client::mobs::MobTypes;
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn controlled_boat_uses_actual_owner_and_keeps_previous_tick_input() {
+        crate::game::native_entity_refs::tests::with_client_game(|game| {
+            let at = Vec3::new(8.5, 80.0, 8.5);
+            game.world.chunks.insert(
+                (0, 0),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+            );
+            game.player = Some(horizon_client::motion::PlayerMotion::new(game.motion, at).unwrap());
+            let mut boat = super::super::boats::Boat::new(7101, "oak".into(), at, 0.0);
+            boat.velocity = Vec3::new(0.2, 0.3, 0.1);
+            game.boats.push(boat);
+            let join = game.boats[0].join;
+            game.riding = Some(7101);
+            let keys = Keys {
+                forward: true,
+                ..Default::default()
+            };
+            assert!(game.remote_ride(keys, 0).unwrap());
+            let drag = f64::from(0.9f32);
+            let boat = &game.boats[0];
+            assert_eq!(boat.join, join);
+            assert_eq!(
+                boat.position,
+                Vec3::new(8.5 + 0.2 * drag, 80.26, 8.5 + 0.1 * drag)
+            );
+            assert_eq!(boat.previous, at);
+            assert_eq!(boat.input, [false, false, true, false]);
+            assert!(game.remote_ride(keys, 0).unwrap());
+            let boat = &game.boats[0];
+            assert_eq!(boat.join, join);
+            assert_eq!(
+                boat.position.z,
+                8.5 + 0.1 * drag + (0.1 * drag * drag + f64::from(0.04f32))
+            );
+            assert!(game.held_out.is_empty());
+        });
+    }
 
     #[test]
     #[ignore = "requires prepared resources and the vanilla mount-control reference"]

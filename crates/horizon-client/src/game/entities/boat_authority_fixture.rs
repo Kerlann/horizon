@@ -114,9 +114,11 @@ impl Game<'_> {
                                 false,
                             ]
                         });
-                        let mut boat = self.boats[0].clone();
-                        self.tick_controlled_boat(&mut boat);
-                        self.store_boat_back(0, boat);
+                        self.with_boat_body(0, |game, actor| {
+                            game.tick_controlled_boat(
+                                actor.body_mut().expect("actual fixture Boat"),
+                            );
+                        });
                     }
                     self.tick_remote_boat_bubbles();
                     let boat = &self.boats[0];
@@ -134,9 +136,9 @@ impl Game<'_> {
             for owned in case.owned {
                 self.riding = owned.then_some(1);
                 if owned {
-                    let mut boat = self.boats.remove(0);
-                    self.tick_controlled_boat(&mut boat);
-                    self.boats.push(boat);
+                    self.with_boat_body(0, |game, actor| {
+                        game.tick_controlled_boat(actor.body_mut().expect("actual fixture Boat"));
+                    });
                 }
                 self.tick_remote_boat_bubbles();
                 let boat = &self.boats[0];

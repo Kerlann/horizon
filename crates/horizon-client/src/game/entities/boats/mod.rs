@@ -981,17 +981,6 @@ impl Game<'_> {
         }
     }
 
-    /// Refuse a removed tick target before carrying its slot into the body.
-    pub(super) fn store_boat_back(&mut self, index: usize, boat: Boat) -> bool {
-        if self
-            .persist
-            .removals
-            .contains(&super::commands::Target::Boat(boat.id))
-        {
-            return false;
-        }
-        self.boats.store_back(index, boat)
-    }
     /// Every boat but the ridden one (which ticks with its rider).
     pub(super) fn tick_boats(&mut self) {
         self.vehicles_ticking(true);
