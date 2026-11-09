@@ -28,7 +28,7 @@ impl BaseReadParts {
             len: parts.len() as u8,
         })
     }
-    fn materialize(&self) -> Vec<EntityRef> {
+    pub(super) fn materialize(&self) -> Vec<EntityRef> {
         self.entries[..usize::from(self.len)]
             .iter()
             .flatten()

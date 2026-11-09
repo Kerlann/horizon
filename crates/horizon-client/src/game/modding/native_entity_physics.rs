@@ -15,7 +15,7 @@ impl Game<'_> {
     /// `AbstractArrow.noPhysics`, set once a loyal trident turns back. The
     /// ender dragon, an area-effect cloud, an ominous item spawner and a
     /// shulker bullet set it in their constructors and never clear it.
-    pub(super) fn entity_no_physics(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_no_physics(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_target(entity)? {
             Target::Player => Some(self.player.as_ref()?.spectator),
             Target::Guest(conn) => Some(self.command_guest(conn)?.motion.as_deref()?.spectator),

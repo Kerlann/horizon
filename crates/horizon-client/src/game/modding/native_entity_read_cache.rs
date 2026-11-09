@@ -64,7 +64,7 @@ pub(super) enum NativeReadDetails {
 }
 
 impl NativeReadDetails {
-    fn living(&self) -> Option<&LivingReadRow> {
+    pub(super) fn living(&self) -> Option<&LivingReadRow> {
         match self {
             Self::Living(row)
             | Self::Mob { living: row, .. }
@@ -76,7 +76,7 @@ impl NativeReadDetails {
 }
 
 impl Game<'_> {
-    fn with_entity_read_publication<R>(
+    pub(super) fn with_entity_read_publication<R>(
         &self,
         entity: EntityRef,
         read: impl FnOnce(&NativeReadPublication) -> Option<R>,
@@ -132,7 +132,9 @@ impl Game<'_> {
 
     pub(super) fn player_cached_row(&self, entity: PlayerRef) -> Option<PlayerReadRow> {
         self.with_entity_read_publication(entity.entity(), |row| match &row.details {
-            NativeReadDetails::Player { player, .. } => Some(player.materialize()),
+            NativeReadDetails::Player { player, .. } if player.1 == entity => {
+                Some(player.materialize())
+            }
             _ => None,
         })
     }
