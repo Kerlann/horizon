@@ -21,8 +21,14 @@ pub(super) struct ItemPhysicsPass {
     pub(super) destroyed: Vec<(ItemStack, Vec3)>,
     pub(super) merging: bool,
     pub(super) capture_reads: bool,
+    pub(super) changes: Option<super::item_tick_driver::ItemChanges>,
 }
 impl ItemPhysicsPass {
+    pub(super) fn refresh(&mut self, game: &Game<'_>, actor: horizon_client::join_seq::JoinSeq) {
+        if let Some(changes) = &mut self.changes {
+            changes.refresh(game, &mut self.index, &mut self.obstacles, actor);
+        }
+    }
     pub(super) fn new(
         items: JoinList<ItemEntity>,
         obstacles: ObstacleGrid,
@@ -38,6 +44,7 @@ impl ItemPhysicsPass {
             destroyed: Vec::new(),
             merging,
             capture_reads,
+            changes: None,
         }
     }
 }
@@ -52,8 +59,10 @@ impl Game<'_> {
             destroyed,
             merging,
             capture_reads,
+            changes,
         } = pass;
         let (merging, capture_reads) = (*merging, *capture_reads);
+        let mut i = i;
         // Entity.baseTick: the entity-level invulnerability window of
         // the saved data counts down (#916) — only for an item that
         // really ticks in this pass.
@@ -76,10 +85,72 @@ impl Game<'_> {
             );
         let escape_speed = no_physics.then(|| item.random.next_float() * 0.2 + 0.1);
         let mut entered = Vec::new();
-        let (alive, discarded) =
-            self.tick_item_with_block_contacts(item, escape_speed, nearby, false, &mut |splash| {
+        let (alive, discarded) = if changes.is_some() {
+            let (join, id) = (item.join, item.id);
+            let step = self.prepare_item_motion(item, escape_speed, nearby, &mut |splash| {
                 entered.push(splash)
             });
+            if let Some((on, distance)) = step.landed() {
+                self.with_canonical_item_callback(items, index, obstacles, changes, join, |game| {
+                    game.item_fall_on(id, on, distance)
+                });
+            }
+            let Some(at) = items.locate(join) else {
+                return;
+            };
+            i = at;
+            if self
+                .persist
+                .removals
+                .contains(&super::commands::Target::Item(id))
+            {
+                index.remove_id(id);
+                return;
+            }
+            let mut discarded = false;
+            if let Some(pos) = step.vertical_contact {
+                if let Some(mut contact) = self.prepare_item_vertical_contact(&items[i], pos, false)
+                {
+                    self.with_canonical_item_callback(
+                        items,
+                        index,
+                        obstacles,
+                        changes,
+                        join,
+                        |game| game.dispatch_item_vertical_contact(&mut contact),
+                    );
+                    let Some(at) = items.locate(join) else {
+                        return;
+                    };
+                    i = at;
+                    if self
+                        .persist
+                        .removals
+                        .contains(&super::commands::Target::Item(id))
+                    {
+                        index.remove_id(id);
+                        return;
+                    }
+                    discarded = contact.apply(&mut items[i]);
+                }
+                discarded |= items[i].stack.count == 0;
+            }
+            if discarded {
+                (false, true)
+            } else {
+                (
+                    self.finish_item_motion(&mut items[i], no_physics, step, &mut |splash| {
+                        entered.push(splash)
+                    }),
+                    false,
+                )
+            }
+        } else {
+            self.tick_item_with_block_contacts(item, escape_speed, nearby, false, &mut |splash| {
+                entered.push(splash)
+            })
+        };
+        let item = &mut items[i];
         // Entity.doWaterSplashEffect: the server plays the sound (broadcast
         // to clients). Its addParticle is empty.
         for splash in entered {
@@ -90,7 +161,33 @@ impl Game<'_> {
             return;
         }
         if merging && !no_physics {
-            self.item_landing_event(item.id, item.previous, item.position, item.on_ground);
+            if changes.is_some() && item.on_ground {
+                let (id, join, previous, position, on_ground) = (
+                    item.id,
+                    item.join,
+                    item.previous,
+                    item.position,
+                    item.on_ground,
+                );
+                self.with_canonical_item_callback(items, index, obstacles, changes, join, |game| {
+                    game.item_landing_event(id, previous, position, on_ground)
+                });
+                let Some(at) = items.locate(join) else {
+                    return;
+                };
+                i = at;
+                if self
+                    .persist
+                    .removals
+                    .contains(&super::commands::Target::Item(id))
+                {
+                    index.remove_id(id);
+                    return;
+                }
+            } else {
+                self.item_landing_event(item.id, item.previous, item.position, item.on_ground);
+            }
+            let item = &mut items[i];
             self.entity_powder_snow_particles(
                 item.previous,
                 item.position,
@@ -99,6 +196,7 @@ impl Game<'_> {
                 false,
             );
         }
+        let item = &mut items[i];
         index.moved(i, item.join, item.previous, item.position);
         // Entity.handleOnAboveBubbleColumn: the server sends the particles of
         // the surface of a bubble column the item is at the top of.
@@ -133,20 +231,65 @@ impl Game<'_> {
             && item.age >= 6000
             && item.position.y > -128.0
         {
-            let mut extra_life = 0;
-            self.native_item_expire(item.id, &item.stack, &mut extra_life);
+            let (id, join) = (item.id, item.join);
+            let extra_life = if changes.is_some() {
+                let stack = item.stack.clone();
+                self.with_canonical_item_callback(items, index, obstacles, changes, join, |game| {
+                    let mut extra_life = 0;
+                    game.native_item_expire(id, &stack, &mut extra_life);
+                    extra_life
+                })
+            } else {
+                let mut extra_life = 0;
+                self.native_item_expire(id, &item.stack, &mut extra_life);
+                extra_life
+            };
+            let Some(at) = items.locate(join) else {
+                return;
+            };
+            i = at;
+            if self
+                .persist
+                .removals
+                .contains(&super::commands::Target::Item(id))
+            {
+                index.remove_id(id);
+                return;
+            }
+            let item = &mut items[i];
             if extra_life > 0 {
                 item.age = 6000 - extra_life.min(32766);
                 alive = true;
             } else if self.serving.is_some() || self.options.dedicated.is_some() {
-                self.native_item_despawn(
-                    item.id,
-                    &item.stack.item,
-                    item.stack.count as i32,
-                    [item.position.x, item.position.y, item.position.z],
-                );
+                if changes.is_some() {
+                    let (kind, count, position) = (
+                        item.stack.item.clone(),
+                        item.stack.count as i32,
+                        [item.position.x, item.position.y, item.position.z],
+                    );
+                    self.with_canonical_item_callback(
+                        items,
+                        index,
+                        obstacles,
+                        changes,
+                        join,
+                        |game| game.native_item_despawn(id, &kind, count, position),
+                    );
+                    let Some(at) = items.locate(join) else {
+                        return;
+                    };
+                    i = at;
+                } else {
+                    self.native_item_despawn(
+                        item.id,
+                        &item.stack.item,
+                        item.stack.count as i32,
+                        [item.position.x, item.position.y, item.position.z],
+                    );
+                }
             }
         }
+        let item = &mut items[i];
         if !alive || index.is_removed(i, item.join) {
             index.discard(i, item.join, item.position);
             return;
