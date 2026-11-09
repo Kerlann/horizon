@@ -1,10 +1,12 @@
 //! Evoker fangs (`EvokerFangs`): rising out of the floor after a delay,
 //! biting what stands on them for 6 damage, sinking back after 22 ticks.
-use super::Game;
+use super::{Game, native_base_read_rows::BaseReadSource};
+use horizon_client::join_seq::residency::Kind;
 use horizon_client::mobs::{Part, Species, anim::Poses};
 use horizon_client::particles::{ParticleOptions, ParticleType};
 use horizon_core::geometry::Vec3;
 use horizon_core::random::{LegacyRandom, RandomSource};
+use mod_api::EntityReadCapturePhase;
 use std::sync::Arc;
 
 #[derive(Clone, Debug)]
@@ -139,12 +141,19 @@ impl Game<'_> {
 
     /// `EvokerFangs.tick`.
     pub(super) fn tick_fangs(&mut self) {
+        let read_scope = self.begin_resident_read_pass(Kind::Fangs);
         let mut list = self.fangs.list.lift();
         #[cfg(test)]
         super::entity::taken_pass_tests::after_take(self);
         list.retain_mut(|f| {
             f.warmup = f.warmup.wrapping_sub(1);
             if f.warmup >= 0 {
+                if read_scope.is_some() {
+                    self.publish_resident_actor_reads(
+                        BaseReadSource::Fangs(f),
+                        EntityReadCapturePhase::AfterEntityTick,
+                    );
+                }
                 return true;
             }
             if f.warmup == -8 {
@@ -162,11 +171,23 @@ impl Game<'_> {
                 );
             }
             f.life -= 1;
+            if read_scope.is_some() {
+                self.publish_resident_actor_reads(
+                    BaseReadSource::Fangs(f),
+                    EntityReadCapturePhase::AfterEntityTick,
+                );
+            }
             f.life >= 0
         });
         self.fangs
             .list
             .restore(list, horizon_client::join_seq::RestoreOrder::SurvivorsFirst);
+        if read_scope.is_some() {
+            self.refresh_resident_owner_reads(
+                Kind::Fangs,
+                EntityReadCapturePhase::AfterAppliedWrite,
+            );
+        }
     }
     /// `dealDamageTo` everything alive in the fangs' box (0.5 x 0.8,
     /// inflated 0.2 sideways) but the evoker's allies.

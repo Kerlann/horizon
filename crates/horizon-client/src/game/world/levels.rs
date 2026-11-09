@@ -14,7 +14,6 @@
 
 use super::commands::Target;
 use super::entity_residency::{define_resident_access, resident_owners};
-use super::native_base_read_source::parked_base_read_access;
 use super::native_resident_read_publication::resident_read_access;
 use super::{
     Dim, ExperienceOrb, FallingBlock, Game, ItemEntity, Mob, boats, commands,
@@ -127,7 +126,6 @@ impl Parked {
     }
 
     resident_owners!(define_resident_access, self, projectiles);
-    resident_owners!(parked_base_read_access, self, projectiles);
     resident_owners!(resident_read_access, self, projectiles);
 }
 

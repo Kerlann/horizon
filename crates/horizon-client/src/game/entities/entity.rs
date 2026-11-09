@@ -729,6 +729,18 @@ macro_rules! direct_entity_edit {
 }
 pub(crate) use direct_entity_edit;
 
+// The mutable entity walk calls stands ArmorStand; the shared residency
+// binding and read-source enum use Stand. Every other walk name is identical.
+macro_rules! walk_read_source {
+    (ArmorStand, $source:expr) => {
+        $crate::game::native_base_read_rows::BaseReadSource::Stand($source)
+    };
+    ($kind:ident, $source:expr) => {
+        $crate::game::native_base_read_rows::BaseReadSource::$kind($source)
+    };
+}
+pub(crate) use walk_read_source;
+
 macro_rules! define_entity_handles {
     (() $($kind:ident($ty:ty) $field:ident: $($list:ident).+,)*) => {
         /// Every list, borrowed apart from the rest of `Game`, for
@@ -747,6 +759,7 @@ macro_rules! define_entity_handles {
         /// Every list moved out of `Game`, for [`for_each_entity_mut`]: the
         /// world stays readable while the entities change.
         pub(super) struct TakenEntities {
+            pub(super) read_scopes: $crate::game::native_resident_read_publication::ResidentReadScopes,
             $(pub(super) $field: horizon_client::join_seq::JoinList<$ty, { $crate::game::entity::direct_entity_edit!($kind) }>,)*
         }
 
@@ -789,15 +802,28 @@ macro_rules! define_entity_handles {
         impl Game<'_> {
             /// Moves every list out; give it back with `restore_entities`.
             pub(super) fn take_entities(&mut self) -> TakenEntities {
+                let mut read_scopes = $crate::game::native_resident_read_publication::ResidentReadScopes::default();
+                $(if let Some(source) = self$(.$list)+.first() {
+                    if let Some(scope) = self.begin_resident_source_read_pass($crate::game::entity::walk_read_source!($kind, source)) {
+                        read_scopes.0.push(scope);
+                    }
+                })*
                 TakenEntities {
+                    read_scopes,
                     $($field: self$(.$list)+.lift(),)*
                 }
             }
             pub(super) fn restore_entities(&mut self, taken: TakenEntities) {
+                let publish_reads = !taken.read_scopes.0.is_empty();
                 $({
                     let expected = self$(.$list)+.len() + taken.$field.len();
                     self$(.$list)+.restore(taken.$field, horizon_client::join_seq::RestoreOrder::SurvivorsFirst);
                     debug_assert_eq!(self$(.$list)+.len(), expected);
+                    if publish_reads {
+                        for source in self$(.$list)+.iter() {
+                            self.publish_resident_actor_reads($crate::game::entity::walk_read_source!($kind, source), mod_api::EntityReadCapturePhase::AfterAppliedWrite);
+                        }
+                    }
                 })*
             }
             /// Every entity's handle: lengths read now, nothing allocated, and
@@ -2417,6 +2443,7 @@ mod scoped_edit_tests {
     #[test]
     fn scoped_walk_skips_only_one_entity_and_keeps_later_kinds() {
         let mut lists = TakenEntities {
+            read_scopes: Default::default(),
             mobs: Default::default(),
             dropped: Default::default(),
             boats: Default::default(),
