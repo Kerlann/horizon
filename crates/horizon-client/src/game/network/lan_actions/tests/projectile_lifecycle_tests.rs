@@ -167,6 +167,16 @@ fn guest_arrow_pickup_keeps_actual_owner_and_retires_before_notice_even_on_panic
         ));
         let header = <dyn mod_api::Host>::entity(game, 7101).unwrap();
         assert_eq!(header.position(game), Some([3.0, 64.0, 5.0]));
+        let original = game
+            .creatures
+            .projectiles
+            .iter()
+            .position(|p| p.id == 7104)
+            .unwrap();
+        game.creatures.projectiles.remove(original);
+        assert!(<dyn mod_api::Host>::entity(game, 7104).is_none());
+        // Keep the population length unchanged: a compact ordinal budget would
+        // now admit the newborn in the removed original's position.
         let mut newborn = arrow(7103, [3.0, 64.0, 5.0]);
         let state = newborn.arrow.as_mut().unwrap();
         state.in_ground = true;
@@ -194,6 +204,11 @@ fn guest_arrow_pickup_keeps_actual_owner_and_retires_before_notice_even_on_panic
                     picked.arrow.as_mut().unwrap().in_ground = true;
                     picked.arrow.as_mut().unwrap().pickup = horizon_client::arrows::Pickup::Allowed;
                     game.creatures.projectiles.push(picked);
+                    let mut removed_original = arrow(7104, [3.0, 64.0, 5.0]);
+                    removed_original.arrow.as_mut().unwrap().in_ground = true;
+                    removed_original.arrow.as_mut().unwrap().pickup =
+                        horizon_client::arrows::Pickup::Allowed;
+                    game.creatures.projectiles.push(removed_original);
                     game.native_joins_skip();
                     let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                         crate::game::entity::taken_pass_tests::with_spawn(at_boundary, || {
