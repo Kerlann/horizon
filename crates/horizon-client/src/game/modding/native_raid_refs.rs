@@ -73,13 +73,13 @@ impl Game<'_> {
 
     /// `Raider.getCurrentRaid`: the raid a raider belongs to, even a stopped
     /// one. None for a mob that is no raider or in no raid.
-    pub(super) fn mob_raid(&self, mob: MobRef) -> Option<RaidRef> {
+    pub(super) fn uncached_mob_raid(&self, mob: MobRef) -> Option<RaidRef> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
         let raider = self.mobs.iter().find(|m| m.id == id && !m.removed)?;
         let id = horizon_client::mobs::raider::state(raider)?.raid_id?;
-        let level = self.entity_level(mob.entity())?;
+        let level = self.uncached_entity_level(mob.entity())?;
         self.level_raid(level, id)
     }
 
