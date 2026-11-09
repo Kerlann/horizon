@@ -6,9 +6,12 @@
 //! `hand_item`, `health`, `max_health`, `attribute_value`, `attribute_base`,
 //! `attributes` and `attribute_modifiers`), which on a client answer for the
 //! local player from the client's own copy; and `effect`/`effects`.
-use super::Game;
 use super::commands::{Target, items::Owner};
 use super::living_attributes::AttributeWrite;
+use super::{
+    Game, native_live_entity_reads::EntityReadSubject,
+    native_read_dependencies::EntityReadDependency,
+};
 use crate::mobs::Who;
 use horizon_client::items::ItemStack;
 use horizon_client::mobs::Mob;
@@ -158,18 +161,46 @@ impl Game<'_> {
     /// an armor stand and the dragon answer from their live attribute map: the
     /// type's defaults, the saved `attributes`, and the modifiers of what they
     /// wear or hold.
-    pub(super) fn living_attribute_value(&self, living: LivingRef, id: &str) -> Option<f64> {
-        self.native_living_attribute(
-            living,
+    pub(super) fn living_attribute_value(
+        &self,
+        living: LivingRef,
+        id: &str,
+    ) -> Result<Option<f64>, mod_api::EntityReadError> {
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Living(living),
+            &[
+                EntityReadDependency::Attributes,
+                EntityReadDependency::Equipment,
+            ],
+        ) {
+            Some(target) => target?,
+            None => return Ok(None),
+        };
+        Ok(self.native_target_attribute(
+            target,
             id,
             horizon_world::attribute_map::ValueKind::Computed,
-        )
+        ))
     }
 
     /// The base value of an attribute, before modifiers
     /// (`AttributeMap.getBaseValue`), read as the effective value is.
-    pub(super) fn living_attribute_base(&self, living: LivingRef, id: &str) -> Option<f64> {
-        self.native_living_attribute(living, id, horizon_world::attribute_map::ValueKind::Base)
+    pub(super) fn living_attribute_base(
+        &self,
+        living: LivingRef,
+        id: &str,
+    ) -> Result<Option<f64>, mod_api::EntityReadError> {
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Living(living),
+            &[
+                EntityReadDependency::Attributes,
+                EntityReadDependency::Equipment,
+            ],
+        ) {
+            Some(target) => target?,
+            None => return Ok(None),
+        };
+        Ok(self.native_target_attribute(target, id, horizon_world::attribute_map::ValueKind::Base))
     }
 
     /// The ids of the attributes the entity's type has
@@ -178,17 +209,32 @@ impl Game<'_> {
     /// unavailable entity; on a client, for any entity but the local player
     /// (the client keeps no attribute map of another entity's, only the few
     /// fields it draws).
-    pub(super) fn living_attributes(&self, living: LivingRef) -> Option<Vec<Identifier>> {
-        let catalog = &self.motion.attributes;
-        let entity = self.native_living_attribute_entity(living)?;
-        Some(
-            catalog
-                .attributes()
-                .filter(|(id, _)| catalog.default_base(entity, *id).is_some())
-                // The catalog's names are canonical, so none is dropped.
-                .filter_map(|(_, a)| Identifier::parse(&a.name).ok())
-                .collect(),
-        )
+    pub(super) fn living_attributes(
+        &self,
+        living: LivingRef,
+    ) -> Result<Option<Vec<Identifier>>, mod_api::EntityReadError> {
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Living(living),
+            &[
+                EntityReadDependency::Attributes,
+                EntityReadDependency::Equipment,
+            ],
+        ) {
+            Some(target) => target?,
+            None => return Ok(None),
+        };
+        Ok((|| {
+            let catalog = &self.motion.attributes;
+            let entity = self.native_target_attribute_entity(target)?;
+            Some(
+                catalog
+                    .attributes()
+                    .filter(|(id, _)| catalog.default_base(entity, *id).is_some())
+                    // The catalog's names are canonical, so none is dropped.
+                    .filter_map(|(_, a)| Identifier::parse(&a.name).ok())
+                    .collect(),
+            )
+        })())
     }
 
     /// The modifiers on the entity's attribute `id`
@@ -202,8 +248,18 @@ impl Game<'_> {
         &self,
         living: LivingRef,
         id: &str,
-    ) -> Option<Vec<AttributeModifier>> {
-        self.native_target_attribute_modifiers(self.native_living_read_target(living)?, id)
+    ) -> Result<Option<Vec<AttributeModifier>>, mod_api::EntityReadError> {
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Living(living),
+            &[
+                EntityReadDependency::Attributes,
+                EntityReadDependency::Equipment,
+            ],
+        ) {
+            Some(target) => target?,
+            None => return Ok(None),
+        };
+        Ok(self.native_target_attribute_modifiers(target, id))
     }
 
     /// Adds an attribute modifier (`AttributeInstance.addTransientModifier`
@@ -305,20 +361,11 @@ impl Game<'_> {
             .unwrap_or(false)
     }
 
-    fn native_living_attribute(
-        &self,
-        living: LivingRef,
-        name: &str,
-        kind: horizon_world::attribute_map::ValueKind,
-    ) -> Option<f64> {
-        self.native_target_attribute(self.native_living_read_target(living)?, name, kind)
-    }
-
     /// The entity's type key, for the catalog's attribute defaults: the same
     /// set the value and base reads answer for. On a client only the local
     /// player resolves (`native_living_read_target`).
-    fn native_living_attribute_entity(&self, living: LivingRef) -> Option<&str> {
-        match self.native_living_read_target(living)? {
+    fn native_target_attribute_entity(&self, target: Target) -> Option<&str> {
+        match target {
             Target::Player | Target::Guest(_) => Some("minecraft:player"),
             Target::Mob(id) => self
                 .mobs
@@ -748,8 +795,18 @@ impl Game<'_> {
         &self,
         living: LivingRef,
         slot: EquipmentSlot,
-    ) -> Option<ItemStack> {
-        match self.native_living_read_target(living)? {
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Living(living),
+            &[EntityReadDependency::Equipment],
+        ) {
+            Some(target) => target?,
+            None => return Ok(None),
+        };
+        Ok(self.raw_living_equipment(target, slot))
+    }
+    fn raw_living_equipment(&self, target: Target, slot: EquipmentSlot) -> Option<ItemStack> {
+        match target {
             Target::Player => player_slot(
                 &self.inventory,
                 self.selected,
@@ -802,12 +859,12 @@ impl Game<'_> {
                 .for_player(target, |game| game.damage_player_equipment(slot, amount))
                 .flatten();
         }
-        let stack = self.living_equipment(living, slot)?;
+        let stack = self.raw_living_equipment(target, slot)?;
         let (updated, broken) = self.damage_stack(&stack, amount, false);
         if updated.as_ref() == Some(&stack) {
             return None;
         }
-        if self.living_equipment(living, slot).as_ref() != Some(&stack) {
+        if self.raw_living_equipment(target, slot).as_ref() != Some(&stack) {
             return None;
         }
         match target {
@@ -889,7 +946,11 @@ impl Game<'_> {
     }
 
     /// The stack in hand `hand` (`LivingEntity.getItemInHand`). API 382.
-    pub(super) fn living_hand_item(&self, living: LivingRef, hand: Hand) -> Option<ItemStack> {
+    pub(super) fn living_hand_item(
+        &self,
+        living: LivingRef,
+        hand: Hand,
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
         self.living_equipment(living, hand_slot(hand))
     }
     /// Puts `stack` in hand `hand` (`LivingEntity.setItemInHand`): the main

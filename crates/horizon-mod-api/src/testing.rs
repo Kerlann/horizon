@@ -358,8 +358,11 @@ impl crate::prelude::PlayersBackend for FakeHost {
     fn player_selected_slot(&self, player: PlayerRef) -> Option<usize> {
         Some(self.players.get(player.uuid())?.selected_slot)
     }
-    fn player_name(&self, player: PlayerRef) -> Option<String> {
-        Some(self.players.get(player.uuid())?.name.clone())
+    fn player_name(&self, player: PlayerRef) -> Result<Option<String>, crate::EntityReadError> {
+        Ok(self
+            .players
+            .get(player.uuid())
+            .map(|player| player.name.clone()))
     }
 }
 crate::impl_backend_areas!(

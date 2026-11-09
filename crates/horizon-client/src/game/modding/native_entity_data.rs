@@ -4,7 +4,10 @@
 //! and whether it is in its level. They return `None` (or `false`) for a
 //! stale handle or on a client, which the server sends no saved data or tags;
 //! only the name reads there.
-use super::{Game, commands::Target};
+use super::{
+    Game, commands::Target, native_live_entity_reads::EntityReadSubject,
+    native_read_dependencies::EntityReadDependency,
+};
 use horizon_client::{entity_nbt::flag, scoreboard::json_to_tag, text::Text};
 use horizon_core::nbt::{Compound, Tag};
 use mod_api::{EntityRef, MobCategory};
@@ -58,11 +61,21 @@ impl Game<'_> {
     }
     /// The entity's tags (`Entity.getTags`), as `/tag <entity> list` shows
     /// them. API 386.
-    pub(super) fn entity_tags(&self, entity: EntityRef) -> Option<Vec<String>> {
+    pub(super) fn entity_tags(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<Vec<String>>, mod_api::EntityReadError> {
         if self.remote.is_some() {
-            return None;
+            return Ok(None);
         }
-        Some(self.tags_of(self.native_entity_target(entity)?))
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Entity(entity),
+            &[EntityReadDependency::Tags],
+        ) {
+            Some(target) => target?,
+            None => return Ok(None),
+        };
+        Ok(Some(self.tags_of(target)))
     }
     /// Adds tag `tag` (`Entity.addTag`): false when it has it already, holds
     /// 1024, its kind can't store tags yet, or the handle is stale. API 386.
@@ -101,24 +114,38 @@ impl Game<'_> {
     /// @API:client_entity_refs@), from the custom name the server synced
     /// (`Entity.DATA_CUSTOM_NAME`) and a player's profile name. API
     /// 386.
-    pub(super) fn entity_name(&self, entity: EntityRef) -> Option<String> {
-        let t = self.native_entity_read_target(entity)?;
-        if let Some(r) = &self.remote {
-            let id = i32::try_from(entity.id()).ok()?;
-            if let Some((_, Some(name))) = r.level_player(id) {
-                return Some(name.to_owned());
+    pub(super) fn entity_name(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Entity(entity),
+            &[
+                EntityReadDependency::Name,
+                EntityReadDependency::Teams,
+                EntityReadDependency::ItemStack,
+            ],
+        ) {
+            Some(target) => target?,
+            None => return Ok(None),
+        };
+        if let Some(remote) = &self.remote {
+            // The client boundary already admitted an i32 network id.
+            let id = entity.id() as i32;
+            if let Some((_, Some(name))) = remote.level_player(id) {
+                return Ok(Some(name.to_owned()));
             }
-            if let Target::Stand(id) = t
+            if let Target::Stand(id) = target
                 && let Some(name) = self
                     .armor_stands
                     .iter()
-                    .find(|a| a.id == id)
-                    .and_then(|a| a.custom_name.as_ref())
+                    .find(|stand| stand.id == id)
+                    .and_then(|stand| stand.custom_name.as_ref())
             {
-                return Some(name.plain());
+                return Ok(Some(name.plain()));
             }
         }
-        Some(self.target_name(t).plain())
+        Ok(Some(self.target_name(target).plain()))
     }
     /// Names the entity (`Entity.setCustomName`), or takes its name away
     /// with `None`: its name, its saved `CustomName` and, for a mob or an
