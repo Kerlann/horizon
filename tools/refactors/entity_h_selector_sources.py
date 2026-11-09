@@ -179,13 +179,19 @@ def split_fields(body):
 
 def apply():
     text = GOALS.read_text()
-    start = text.index("#[derive(Clone, Debug)]\nstruct Wrapped {")
-    end = text.index("// --- random positions", start)
-    text = text[:start] + SELECTOR + "\n" + text[end:]
-    text = text.replace("    pub events: &'a mut Vec<MobEvent>,", "    pub events: &'a mut Vec<MobEvent>,\n    pub selectors: GoalSelectorSources<'a>,", 1)
+    original = text
+    marker = "#[derive(Clone, Debug)]\nstruct Wrapped {"
+    if marker in text:
+        start = text.index(marker)
+        end = text.index("// --- random positions", start)
+        text = text[:start] + SELECTOR + "\n" + text[end:]
+    elif "struct GoalRegistration {" not in text:
+        raise RuntimeError("Unrecognized selector layout")
+    if "pub selectors: GoalSelectorSources<'a>" not in text:
+        text = text.replace("    pub events: &'a mut Vec<MobEvent>,", "    pub events: &'a mut Vec<MobEvent>,\n    pub selectors: GoalSelectorSources<'a>,", 1)
     text = text.replace("/// The goal's name for debugging (`Goal.toString`).", "/// The goal's registration name for debugging (`Goal.toString`).\n    /// A selector captures this identifier when the goal is added.", 1)
     GOALS.write_text(text)
-    changed = 1
+    changed = int(text != original)
     for path in (ROOT / "crates").rglob("*.rs"):
         text = path.read_text()
         old = text
