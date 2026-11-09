@@ -152,6 +152,14 @@ fn receives_cancelled(hook: HookId) -> bool {
 fn entered(hook_id: HookId, hook: &'static str) -> impl Iterator<Item = &'static dyn Hooks> {
     entered_with_id(hook_id, hook).map(|(_, hooks)| hooks)
 }
+// These dispatch-only fixtures install no command-recipient scope. Real native
+// and converted issuer routing is exercised by the Game command fixtures.
+fn entered_entity_command_recipient(
+    _hook_id: HookId,
+    _hook: &'static str,
+) -> std::iter::Empty<&'static dyn Hooks> {
+    std::iter::empty()
+}
 fn entered_with_id(
     hook_id: HookId,
     hook: &'static str,
@@ -624,6 +632,8 @@ mod stubs {
 }
 
 mod api {
+    #[derive(Clone)]
+    pub struct EntityWriteCompletion;
     // API values are deliberately distinct from the engine BlockStateId stub.
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     pub enum BlockKey {
