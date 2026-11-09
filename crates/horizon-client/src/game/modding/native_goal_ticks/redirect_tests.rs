@@ -37,6 +37,7 @@ fn redirect_to_another_guest_switches_view_and_tags_subsequent_events() {
 
             game.options.dedicated = Some(Vec::new());
             game.native_level_opened(game.dim);
+            game.reset_entity_residency();
             open_to_lan(game);
             for conn in [12, 13] {
                 let mut placed = guest(conn);
@@ -81,11 +82,17 @@ fn redirect_to_another_guest_switches_view_and_tags_subsequent_events() {
             // not unadmitted temporary Mob values or fabricated read rows.
             game.mobs.push(actor);
             game.mobs.push(other);
-            let mut held = game.mobs.extract_if(|m| matches!(m.id, 9001 | 9002));
-            let mut actor = held.next().unwrap();
-            let other = held.next().unwrap();
-            assert!(game.entity(actor.id).is_some());
-            assert!(game.entity(other.id).is_some());
+            let actor_join = game.mobs[0].join_seq();
+            let other_join = game.mobs[1].join_seq();
+            let mut actor = game.mobs.extract(actor_join).unwrap();
+            let other = game.mobs.extract(other_join).unwrap();
+            for id in [actor.id, other.id] {
+                assert!(matches!(
+                    game.server_resident_entity(id),
+                    horizon_client::join_seq::residency::table::EntityLookup::Taken
+                ));
+                assert!(game.entity(id).is_some());
+            }
             let mut world = game.mob_world_base(&[]);
             world.goal_host = Some(game);
             world.player_selection = Some(&selection);
