@@ -1026,3 +1026,209 @@ impl Game<'_> {
         self.read_relation_entity(u32::try_from(guest.entity_id).ok()?, level, index)
     }
 }
+
+#[cfg(test)]
+mod lent_tests {
+    use super::super::native_guest_turn_tests::with_guests;
+    use super::*;
+    use horizon_client::{
+        join_seq::RestoreOrder,
+        mobs::player_selection::{PlayerSelection, TickPlayer},
+    };
+    use horizon_core::geometry::Vec3;
+    use mod_api::EntityReadCapturePhase;
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn real_publications_resolve_lifted_targets_and_every_ordered_passenger() {
+        with_guests(|game| {
+            game.options.dedicated = Some(Vec::new());
+            for (id, kind) in [
+                (40, "minecraft:zombie"),
+                (41, "minecraft:cow"),
+                (42, "minecraft:pig"),
+                (43, "minecraft:sheep"),
+            ] {
+                game.mobs.push(Mob::new(
+                    id,
+                    game.res.mob_types().get(kind).unwrap().clone(),
+                    Vec3::new(0.0, 64.0, 0.0),
+                    0.0,
+                ));
+                assert!(game.entity(id).is_some());
+            }
+            game.mobs[0].ai.target = Some(Who::Mob(41));
+            game.mobs[2].extra.mount = Some(40);
+            game.mobs[2].extra.vehicle_order = 9;
+            game.mobs[3].extra.mount = Some(40);
+            game.mobs[3].extra.vehicle_order = 2;
+            game.lan.as_mut().unwrap().hub.update_guest(13, |guest| {
+                guest.vehicle = Some(40);
+                guest.vehicle_order = 5;
+            });
+            let epoch = game.native_lifecycle.epoch().unwrap();
+            let level = LevelRef::new(epoch, game.native_level_key());
+            {
+                let world = game.mob_world_base(&[]);
+                for source in game.mobs.iter() {
+                    assert!(game.publish_lent_mob_reads(
+                        source,
+                        &world,
+                        EntityReadCapturePhase::BeforeCallback
+                    ));
+                }
+            }
+            let mut sources = game.mobs.lift();
+            {
+                let world = game.mob_world_base(&[]);
+                assert!(world.live_mobs.is_none());
+                assert!(world.others.is_empty());
+                let target = LivingRef::new(EntityRef::new(epoch, 41));
+                assert_eq!(
+                    game.resolve_lent_mob_goal_target(&sources[0], &world, target, true),
+                    Some(Who::Mob(41))
+                );
+                assert_eq!(
+                    game.lent_mob_target(&sources[0], &sources[0], &world)
+                        .unwrap()
+                        .id(),
+                    41
+                );
+                assert_eq!(
+                    game.lent_mob_passengers(&sources[0])
+                        .unwrap()
+                        .iter()
+                        .map(|e| e.id())
+                        .collect::<Vec<_>>(),
+                    [43, 13, 42]
+                );
+                assert!(
+                    game.resolve_lent_mob_goal_target(
+                        &sources[0],
+                        &world,
+                        LivingRef::new(EntityRef::new(NativeWorldEpoch::new(epoch.get() + 1), 41)),
+                        false
+                    )
+                    .is_none()
+                );
+            }
+            sources[1].invulnerable_flag = true;
+            {
+                let world = game.mob_world_base(&[]);
+                assert!(game.publish_lent_mob_reads(
+                    &sources[1],
+                    &world,
+                    EntityReadCapturePhase::AfterAppliedWrite
+                ));
+                let target = LivingRef::new(EntityRef::new(epoch, 41));
+                assert!(
+                    game.resolve_lent_mob_goal_target(&sources[0], &world, target, true)
+                        .is_none()
+                );
+                assert_eq!(
+                    game.resolve_lent_mob_goal_target(&sources[0], &world, target, false),
+                    Some(Who::Mob(41))
+                );
+                assert!(
+                    game.lent_mob_target(&sources[0], &sources[0], &world)
+                        .is_none()
+                );
+            }
+            // Real retained pass freshness is part of the helper contract.
+            game.entity_read_state
+                .borrow_mut()
+                .mob_relations
+                .get_mut(&level)
+                .unwrap()
+                .tick = None;
+            assert!(game.lent_mob_passengers(&sources[0]).is_none());
+            game.mobs.restore(sources, RestoreOrder::SurvivorsFirst);
+        });
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn player_redirect_requires_exact_identity_and_selects_before_returning_who() {
+        with_guests(|game| {
+            game.options.dedicated = Some(Vec::new());
+            for conn in [12, 13] {
+                game.lan
+                    .as_mut()
+                    .unwrap()
+                    .hub
+                    .update_guest(conn, |guest| guest.loaded = true);
+            }
+            game.mobs.push(Mob::new(
+                40,
+                game.res
+                    .mob_types()
+                    .get("minecraft:zombie")
+                    .unwrap()
+                    .clone(),
+                Vec3::new(0.0, 64.0, 0.0),
+                0.0,
+            ));
+            assert!(game.entity(40).is_some());
+            let epoch = game.native_lifecycle.epoch().unwrap();
+            let level = LevelRef::new(epoch, game.native_level_key());
+            {
+                let world = game.mob_world_base(&[]);
+                assert!(game.publish_lent_mob_reads(
+                    &game.mobs[0],
+                    &world,
+                    EntityReadCapturePhase::BeforeCallback
+                ));
+            }
+            let players = game
+                .lan_guest_views()
+                .into_iter()
+                .filter_map(|(conn, view)| {
+                    let (_, entity_id) = game.guest_identity(conn)?;
+                    Some(TickPlayer {
+                        entity_id,
+                        connection: Some(conn),
+                        view,
+                    })
+                })
+                .collect();
+            let selection = PlayerSelection::new(players, Some(12)).unwrap();
+            let sources = game.mobs.lift();
+            let target = LivingRef::new(EntityRef::new(epoch, 13));
+            {
+                let mut world = game.mob_world_base(&[]);
+                world.player_identity = Some((horizon_client::lan::playerdata::uuid_ints(12), 12));
+                assert!(
+                    game.resolve_lent_mob_goal_target(&sources[0], &world, target, false)
+                        .is_none()
+                );
+                world.player_selection = Some(&selection);
+                assert_eq!(
+                    game.resolve_lent_mob_goal_target(&sources[0], &world, target, true),
+                    Some(Who::Player)
+                );
+                assert_eq!(selection.selected().unwrap().entity_id, 13);
+            }
+            let resolved = game
+                .with_mob_read_relations(level, |index| {
+                    game.resolve_mob_read_player(
+                        horizon_client::lan::playerdata::uuid_ints(13),
+                        level,
+                        index,
+                    )
+                })
+                .flatten();
+            assert_eq!(resolved.unwrap().id(), 13);
+            game.lan
+                .as_mut()
+                .unwrap()
+                .hub
+                .update_guest(13, |guest| guest.uuid = 999);
+            let world = game.mob_world_base(&[]);
+            assert!(
+                game.resolve_lent_mob_goal_target(&sources[0], &world, target, false)
+                    .is_none()
+            );
+            drop(world);
+            game.mobs.restore(sources, RestoreOrder::SurvivorsFirst);
+        });
+    }
+}
