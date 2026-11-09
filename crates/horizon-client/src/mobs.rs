@@ -3760,7 +3760,7 @@ pub struct MobWorld<'a> {
     pub sea_level: i32,
     /// The scoreboard teams of the player and the mobs (collision rules),
     /// shared: the mob ticks build them once a tick, not once a mob.
-    pub teams: std::sync::Arc<Teams<'a>>,
+    pub teams: std::sync::Arc<TeamRulesSnapshot>,
     /// Item data (max stack sizes), when the host has it.
     pub items: Option<&'a crate::items::Items>,
     /// `ChestBlockEntity.getOpenCount`: the players with each chest open.
@@ -3960,6 +3960,20 @@ pub trait WhoLookup {
 }
 /// `Entity.getTeam` of the player and of the mobs on a team.
 #[derive(Clone, Debug, Default)]
+pub struct TeamRulesSnapshot {
+    pub player: Option<crate::scoreboard::TeamRules<usize>>,
+    pub mobs: HashMap<u32, crate::scoreboard::TeamRules<usize>>,
+}
+impl TeamRulesSnapshot {
+    pub fn of(&self, who: Who) -> Option<&crate::scoreboard::TeamRules<usize>> {
+        match who {
+            Who::Player => self.player.as_ref(),
+            Who::Mob(id) => self.mobs.get(&id),
+        }
+    }
+}
+/// Borrowed authoritative teams for immediate non-mob gameplay reads.
+#[derive(Clone, Debug, Default)]
 pub struct Teams<'a> {
     pub player: Option<&'a crate::scoreboard::Team>,
     pub mobs: HashMap<u32, &'a crate::scoreboard::Team>,
@@ -3972,6 +3986,7 @@ impl<'a> Teams<'a> {
         }
     }
 }
+
 /// `InfestedMobEffect.onMobHurt`'s draws from the bearer's random
 /// (`mob.getRandom()`): a 10% chance of one or two silverfish, each thrown
 /// along `look` (`spawnSilverfish`). Their velocities; none when the chance
@@ -5931,25 +5946,77 @@ mod teams_tests {
             .filter_map(|(id, u)| Some((*id, board.players_team(&uuid_text(*u))?.clone())))
             .collect()
     }
-    fn borrowed<'a>(board: &'a Scoreboard, uuids: &HashMap<u32, [i32; 4]>) -> Teams<'a> {
-        Teams {
-            player: board.players_team("Steve"),
+    fn bounded(board: &Scoreboard, uuids: &HashMap<u32, [i32; 4]>) -> TeamRulesSnapshot {
+        let shared: HashMap<_, _> = board
+            .teams
+            .iter()
+            .enumerate()
+            .map(|(identity, team)| {
+                (
+                    team.name.as_str(),
+                    crate::scoreboard::TeamRules {
+                        identity,
+                        allow_friendly_fire: team.allow_friendly_fire,
+                        collision_rule: team.collision_rule,
+                    },
+                )
+            })
+            .collect();
+        TeamRulesSnapshot {
+            player: board
+                .players_team("Steve")
+                .map(|team| shared[team.name.as_str()]),
             mobs: uuids
                 .iter()
-                .filter_map(|(id, u)| Some((*id, board.players_team(&uuid_text(*u))?)))
+                .filter_map(|(id, u)| {
+                    Some((
+                        *id,
+                        shared[board.players_team(&uuid_text(*u))?.name.as_str()],
+                    ))
+                })
                 .collect(),
         }
     }
 
     #[test]
-    fn borrowed_teams_answer_as_the_clones() {
+    fn bounded_team_rules_match_authoritative_teams() {
         let (board, uuids) = board(40);
-        let teams = borrowed(&board, &uuids);
+        let teams = bounded(&board, &uuids);
         let old = owned(&board, &uuids);
         for id in 0..41 {
-            assert_eq!(teams.of(Who::Mob(id)), old.get(&id), "mob {id}");
+            let facts = teams.of(Who::Mob(id));
+            let expected = old.get(&id);
+            assert_eq!(
+                facts.map(|t| t.allow_friendly_fire),
+                expected.map(|t| t.allow_friendly_fire),
+                "mob {id}"
+            );
+            assert_eq!(
+                facts.map(|t| t.collision_rule),
+                expected.map(|t| t.collision_rule),
+                "mob {id}"
+            );
+            assert_eq!(facts.is_some(), expected.is_some());
         }
-        assert_eq!(teams.of(Who::Player).map(|t| t.name.as_str()), Some("red"));
+        assert!(teams.of(Who::Player).is_some());
+        for a in 0..41 {
+            for b in 0..41 {
+                let own = teams.of(Who::Mob(a));
+                let other = teams.of(Who::Mob(b));
+                assert_eq!(
+                    crate::scoreboard::TeamRules::allied(own, other),
+                    crate::scoreboard::teams_allied(old.get(&a), old.get(&b))
+                );
+                assert_eq!(
+                    crate::scoreboard::TeamRules::allows_damage(own, other),
+                    crate::scoreboard::teams_allow_damage(old.get(&a), old.get(&b))
+                );
+                assert_eq!(
+                    crate::scoreboard::TeamRules::pushable_by(own, other, true),
+                    crate::scoreboard::pushable_by(old.get(&a), old.get(&b), true)
+                );
+            }
+        }
     }
 
     /// One tick's worth of team building: once per mob (before) against once.
@@ -5966,7 +6033,7 @@ mod teams_tests {
             let t = std::time::Instant::now();
             let reps = 20;
             for _ in 0..reps {
-                std::hint::black_box(borrowed(&board, &uuids));
+                std::hint::black_box(bounded(&board, &uuids));
             }
             let after = t.elapsed() / reps;
             println!(
