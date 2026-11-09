@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use chrono::{DateTime, Local};
-use horizon_system::system::machine_arch;
+use horizon_system::system::{command_output, machine_arch};
 
 static REPORTED: AtomicBool = AtomicBool::new(false);
 
@@ -192,15 +192,6 @@ pub fn release_tag() -> Option<String> {
     let folder = exe.parent()?.file_name()?.to_str()?;
     (folder.starts_with('v') && folder[1..].starts_with(|c: char| c.is_ascii_digit()))
         .then(|| folder.to_owned())
-}
-
-fn command_output(program: &str, args: &[&str]) -> Option<String> {
-    let out = std::process::Command::new(program)
-        .args(args)
-        .output()
-        .ok()?;
-    let text = String::from_utf8_lossy(&out.stdout).trim().to_owned();
-    (out.status.success() && !text.is_empty()).then_some(text)
 }
 
 fn read(path: &str) -> Option<String> {

@@ -120,16 +120,21 @@ fn quiet_peer_times_out_and_a_second_connection_is_refused() {
         unsafe { libc::fcntl(stream.as_raw_fd(), libc::F_GETFD) } & libc::FD_CLOEXEC,
         0
     );
-    let short = Instant::now() + Duration::from_millis(20);
-    assert!(connect(&marker, short).is_err());
-    let result = Channel::authenticate(
-        stream,
-        &marker,
-        true,
-        Instant::now() + Duration::from_millis(20),
-    );
+    assert!(std::os::unix::net::UnixStream::connect(marker.directory.join("control")).is_err());
+    // Read the quiet socket once, then advance the injected clock to the
+    // deadline on WouldBlock. No real sleep or scheduler progress is needed.
+    let now = Instant::now();
+    let expiry = now + Duration::from_secs(1);
+    TEST_NOW.set(Some(now));
+    let result = Channel::authenticate(stream, &marker, true, expiry);
+    let observed_now = TEST_NOW.replace(None);
     let _ = finished.send(());
     assert!(closer.join().unwrap(), "authentication exceeded watchdog");
+    assert_eq!(
+        observed_now,
+        Some(expiry),
+        "quiet read never reached WouldBlock"
+    );
     assert_eq!(result.err().unwrap().kind(), io::ErrorKind::TimedOut);
 }
 

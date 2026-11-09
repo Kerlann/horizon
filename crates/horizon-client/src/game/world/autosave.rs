@@ -93,6 +93,12 @@ impl Game<'_> {
                 }
             });
         }
+        if self.options.dedicated.is_some()
+            && !self.options.execution_role.is_client()
+            && let Some(host) = self.lan.as_ref()
+        {
+            self.save_connected_guest_statistics(host);
+        }
         self.save_world_state();
         self.message = Some(("Saved the game".into(), Instant::now()));
         Ok(())

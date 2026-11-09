@@ -799,6 +799,7 @@ pub struct ProtoChunk {
     pub entities: Vec<horizon_core::nbt::Compound>,
     /// Unmodelled root keys retained from a saved proto chunk.
     pub saved_root: horizon_core::nbt::Compound,
+    full: bool,
 }
 impl ProtoChunk {
     /// Its own heap bytes by part (`horizon-ctl memory`): packed blocks,
@@ -872,6 +873,15 @@ impl ProtoChunk {
     /// Also restores a saved proto chunk that was decorated before it was saved.
     pub fn set_decorated(&mut self) {
         self.decorated = true;
+    }
+    /// Whether this stands for a full chunk in a decoration region ([`Self::set_full`]).
+    pub fn is_full(&self) -> bool {
+        self.full
+    }
+    /// Marks this as a full chunk standing in a decoration region (`ImposterProtoChunk`
+    /// with `allowWrites` false): ordinary feature writes leave it as it is.
+    pub fn set_full(&mut self) {
+        self.full = true;
     }
     /// Highest non-air block + 1 in the column (WORLD_SURFACE).
     pub fn surface_height(&self, x: i32, z: i32) -> i32 {
@@ -1659,6 +1669,7 @@ where
                 own_starts,
                 entities: Vec::new(),
                 saved_root: Default::default(),
+                full: false,
             });
         }
         let volume = DensityVolume::new(
@@ -1838,6 +1849,7 @@ where
             own_starts,
             entities: Vec::new(),
             saved_root: Default::default(),
+            full: false,
         })
     }
 }

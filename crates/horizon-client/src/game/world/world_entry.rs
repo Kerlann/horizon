@@ -3,6 +3,14 @@
 use super::*;
 
 impl Game<'_> {
+    /// The server's data-pack enchantments, or the local world's registry.
+    pub(super) fn item_enchantments(&self) -> &Arc<horizon_client::enchant::Enchantments> {
+        match self.remote.as_ref().and_then(|r| r.enchantments.as_ref()) {
+            Some(e) => e,
+            None => &self.stations().enchantments,
+        }
+    }
+
     pub(super) fn defer_world_entry(&mut self, entry: PendingWorldEntry) -> Result<bool> {
         self.poll_world_rest()?;
         if self.rest_loader.is_none() {

@@ -2276,7 +2276,7 @@ impl Hub {
                     } else {
                         play::ClockState {
                             clock: id,
-                            total_ticks: world.game_time,
+                            total_ticks: world.end_clock,
                             partial_tick: 0.0,
                             rate: if rate > 0.0 { 1.0 } else { 0.0 },
                         }
@@ -3780,6 +3780,7 @@ impl Hub {
             g.sleeping = false;
             g.sleep_timer = 100;
             if g.sent_bed.take().is_some() {
+                g.sent_pose = crate::pose::Pose::Standing;
                 g.send(&C::SetEntityData(play::SetEntityData {
                     id: g.entity_id,
                     values: vec![
@@ -3811,6 +3812,11 @@ impl Hub {
             if g.bed != g.sent_bed {
                 g.sent_bed = g.bed;
                 let pose = if g.bed.is_some() { 2 } else { 0 };
+                g.sent_pose = if g.bed.is_some() {
+                    crate::pose::Pose::Sleeping
+                } else {
+                    crate::pose::Pose::Standing
+                };
                 g.send(&C::SetEntityData(play::SetEntityData {
                     id: g.entity_id,
                     values: vec![
@@ -3924,6 +3930,18 @@ impl Hub {
                 g.send(&C::SetEntityData(play::SetEntityData {
                     id: g.entity_id,
                     values: vec![(0, serializer::BYTE, Value::Byte(shared))],
+                }));
+            }
+            let pose = g.pose();
+            if matches!(
+                pose,
+                crate::pose::Pose::Standing | crate::pose::Pose::Crouching
+            ) && pose != g.sent_pose
+            {
+                g.sent_pose = pose;
+                g.send(&C::SetEntityData(play::SetEntityData {
+                    id: g.entity_id,
+                    values: vec![(6, serializer::POSE, Value::Id(pose.id()))],
                 }));
             }
             // ServerEntity.sendDirtyEntityData: the parrots on the player's
@@ -5246,6 +5264,7 @@ impl Hub {
         });
         self.respawned(id);
         self.guests.update(i, |g| {
+            g.sent_pose = crate::pose::Pose::Standing;
             // ServerPlayer.restoreFrom: the game mode again (onUpdateAbilities).
             g.send(&g.abilities_packet());
             // The new player faces the level's respawn direction (snapTo), or

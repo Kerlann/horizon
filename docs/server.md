@@ -6,8 +6,9 @@ panel and a control API to manage it. At the same view and simulation distance a
 should beat vanilla, Paper and Fabric + Lithium on TPS/MSPT, RAM, CPU, chunk generation and start time.
 Gameplay stays vanilla: there are no Paper-style rule changes unless the owner turns one on.
 
-This page covers what the server does today (measured), the design of `horizon-server`, and what ships for the
-first working version (2026-10-23). The owner's guide is [docs/hosting.md](hosting.md).
+This page is the design of `horizon-server` and the engine it runs; the section numbers are cited from the code.
+The owner's guide is [hosting.md](hosting.md); every command, `server.toml` key and API route is in the generated
+[api/server-reference.md](api/server-reference.md).
 
 ## 1. Today
 
@@ -40,71 +41,13 @@ The dedicated server is the game itself, run headless:
   player of the lower-case name; an online server answers "That player does not exist".
   `tools/test_user_cache_parity.py` checks this against vanilla, with a mock profile service.
 
-### Measured (2026-10-16, Mac mini M4 Pro, main at bd8dff20, release build)
+### Scale
 
-The server ran in a scratch folder with `online-mode=false`, `level-seed=12345` and view and simulation
-distance 10. The vanilla server was the pinned 26.3 `server.jar` on Java 25 with `-Xmx4G`.
-
-| | Horizon (`horizon-client --dedicated`) | Vanilla 26.3 |
-|---|---|---|
-| Start, new world (wall clock, to `Done`) | 11.4 s (`Done (9.762s)`) | 12.5 s (`Done (2.066s)`, includes the bundler's first unpack) |
-| Start, existing world (wall clock) | **5.8 s** (resources load in 1.6 s) | 10.7 s (`Done (0.446s)`: the JVM and DataFixerUpper take the rest) |
-| RAM, idle with nobody online (RSS) | 1.40–1.51 GB | **0.93–0.97 GB** |
-| CPU, idle with nobody online | 1.2 % of one core | **0.6 %** |
-| `stop` to exit | 0.6 s | 0.6 s |
-| What has to be installed | one 46.8 MB binary + 589 MB of prepared resources | Java 25 + the 62 MB jar |
-| Crates linked | 384 (wgpu, winit, cpal, gilrs, arboard, naga…) | n/a |
-
-On Linux the full game loads `libasound.so.2` (cpal) and `libudev.so.1` (gilrs) at startup. wgpu, winit
-and the Wayland/X11 libraries are loaded only when a window opens. The server build (`horizon-engine`,
-section 3) is the same program built without its `audio` and `controllers` features, so it needs neither
-library, and a minimal server image runs it as it is.
-
-The two clear losses are RAM and idle CPU. The dedicated server loads everything the client needs to draw
-(the HUD atlas, item renderer, block-entity models, panorama, fog and music tables, entity models), and it
-builds the meshing tables at startup. None of these are used without a window. Loading them is startup work,
-not tick cost, so it is in scope here (see section 9).
-
-### Joining it
-
-- **Horizon client:** works. A headless Horizon client (`--server 127.0.0.1:PORT`, the harness mode) logged
-  in, received its 49 chunks at render distance 2, chatted, saw `/list`, and left. The server's log matched
-  vanilla's lines (`logged in with entity id`, `joined the game`, `[Not Secure] <Tester> …`, `lost connection:
-  Disconnected`, `left the game`).
-- **Vanilla 26.3 client:** checked by `tools/test_dedicated_server_parity.py`. VanillaProtocolClient, a
-  headless client built from vanilla's own codecs, pings and joins Horizon's server and vanilla's from the
-  same world copy. It compares every login, configuration and play packet up to the first chunk batch, the
-  chunk bytes, chat, `/list`, failing commands, the console lines and the files left behind. Result on main:
-  see "Harnesses on main" below.
-- **The real vanilla 26.3 client** (`tools/vanilla_client.py`, from the owner's own files, dev-only) joins
-  too. On 2026-10-18 it joined the server build of the game (`horizon-engine`, section 3) on the Mac mini:
-  `python3 tools/vanilla_client.py --name Vanilla --join localhost:PORT`. It logged in, drew the terrain
-  around spawn and stayed connected for four minutes, with no warning or error on the server. The tool
-  runs on Linux under vscreen and on macOS from the logged-in screen session, even a locked one, with vsync
-  off.
-
-### What fails or is missing
-
-| Area | Status |
-|---|---|
-| `online-mode=true` | **Works** (ServerLoginPacketListenerImpl): a 1024-bit RSA key pair at start ("Generating keypair"), the encryption request, the shared secret and challenge, AES/CFB8, and the session service's `hasJoined` check (with the address when `prevent-proxy-connections` is on), with vanilla's log lines and messages. `test_online_mode_parity.py` runs the same logins against vanilla's server and Horizon's with a mock session service. |
-| Secure chat | **Works** (`SignedMessageChain`, `LastSeenMessagesValidator`, `MessageSignatureCache`): the chat session update and its profile key, checked against the services' `playerCertificateKeys`; signed chat, `say`, `me` and `msg`, relayed with their signatures and last-seen lists; `enforce-secure-profile` (with `online-mode`) refuses unsigned chat; and vanilla's log lines (`[Not Secure]`, the decoder's warnings, the kicks). Offline servers and players without a chat session chat unsigned, as on vanilla. `test_secure_chat_parity.py` runs the same signed and unsigned players against vanilla's server and Horizon's, with test keys and a mock services server. |
-| Nether and End | **Works**: the server holds a level per dimension, and each player is in its own (portals, `execute in … tp`, respawn). `test_server_dimension_players_parity.py` checks it against vanilla. How it works, its cost and what's left: [server-levels.md](server-levels.md). |
-| Refused logins | Logged as vanilla does: `Disconnecting <name> (/address): <reason>`, then `<name> (/address) lost connection: <reason>`, and the session errors (`Username '<name>' tried to join with an invalid session`, `Couldn't verify username because servers are unavailable`). |
-| Gameplay for remote players | Checked against vanilla's server with a vanilla-codec client (#484, `tools/test_dedicated_server_parity.py`): a right click with an item on a block uses it once, a dead player's commands run, players on a team without friendly fire don't hurt each other, and a player's projectiles are theirs (their ender pearl takes them). A player's arrow, snowball or egg hits other players like vanilla's, refused by the `pvp` game rule and by teams without friendly fire (`tools/lan_e2e.py` `arrows`; also checked on a dedicated server with two protocol clients, #5785). The recipe book, status effects and block sync while digging (#500) work. Left: a mob a guest kills counts in the host's statistics and advancements, not the guest's (`mob_died` runs as the host). |
-| Defaults that surprise owners | `white-list=true` is vanilla 26.3's default, so a fresh server refuses everyone until they are added. That matches vanilla, so the first-run flow (section 3) asks about the whitelist up front. |
-| Management | Only stdin. There is no service, no backups, no status beyond `list`, no restart after a crash, and a server can't be managed while it runs in the background. |
-| Packaging | The server is the full game client. Resources come from `horizon-prepare`, which needs a JDK and the official launcher's client install, both awkward on a headless VPS. |
-| Tick times | The dedicated loop never recorded its tick times in the game clock (only the windowed loop did), so `/tick query` on a dedicated server reported 0 ms. Fixed in PR 2b, which the benchmark needs (section 9). |
-| Scale | Measured against vanilla on equal work (section 9, `benchmarks/server-equal-work-2026-10-17/`): 20 TPS up to 50 bots, 9 to 11 TPS at 100, where vanilla's watchdog stops it. Horizon is ahead with few players and when exploring; with 25 to 50 players near spawn vanilla's tick is shorter. |
-
-### Harnesses on main
-
-On the tip of the code PRs (2a to 3, rebased on b4ad6538), `tools/parity.py dedicated_server online_mode
-server_files server_player_combat server_player_damage` passed all five. That includes the vanilla protocol
-client joining Horizon's server and vanilla's from the same world. The full `--changed origin/main` set
-(309 harnesses, since the PRs touch the client crate) had passed 60 of 60 when it was stopped for disk
-space; CI runs it on every pull request.
+Measured against vanilla on equal work (section 9): 20 TPS up to 50 bots, 9 to 11 TPS at 100, where vanilla's
+watchdog stops it. Horizon is ahead with few players and when exploring; with 25 to 50 players near spawn
+vanilla's tick is shorter. What the dedicated server checks against vanilla (online mode, secure chat,
+dimensions, remote players' gameplay) is in its harnesses: `python3 tools/parity.py dedicated_server online_mode
+secure_chat server_dimension_players server_player_combat server_player_damage`.
 
 ## 2. Architecture: a supervisor and an engine
 

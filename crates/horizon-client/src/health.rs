@@ -2196,11 +2196,13 @@ mod tests {
         // goes on. The hearts would take their 1.5; half of it is 0.75, so 5.25 reaches the
         // health (10 - 5.25) and 0.75 hearts are left.
         let mut modified = mob(9005);
+        modified.add_effect("absorption", 600, 0);
         modified.absorption = 1.5;
         assert!(modified.damage(level, 8.0, hit));
         assert_eq!((modified.health, modified.absorption), (4.75, 0.75));
         // The same hit with no modifier: 8 less the 1.5 hearts.
         let mut plain = mob(9006);
+        plain.add_effect("absorption", 600, 0);
         plain.absorption = 1.5;
         assert!(plain.damage(level, 8.0, hit));
         assert_eq!((plain.health, plain.absorption), (3.5, 0.0));

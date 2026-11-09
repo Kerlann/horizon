@@ -2694,6 +2694,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "horizon-addresses"
+version = "0.1.0"
+
+[[package]]
 name = "horizon-anticheat"
 version = "0.1.0"
 dependencies = [
@@ -2747,6 +2751,7 @@ dependencies = [
  "chacha20poly1305",
  "getrandom 0.3.4",
  "hkdf",
+ "horizon-addresses",
  "if-addrs",
  "serde",
  "serde_json",
