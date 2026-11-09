@@ -135,6 +135,7 @@ impl Game<'_> {
         let other_boxes =
             self.lan_building_boxes
                 .for_turn(conn, Some(outer), building_players(host));
+        host.hub.guests[i].residency.extract();
         self.lan_guest_swaps.push(conn);
         // `ServerPlayer.permissions()`: the guest's own command level for its
         // turn, so game-master checks see it (not the host's).
@@ -188,6 +189,7 @@ impl Game<'_> {
             });
         }
         let mut play = host.play.remove(&conn).unwrap_or_default();
+        play.hook.begin_loan();
         if fresh {
             // A new body (joined, respawned, changed level): nothing on it yet,
             // its effects' modifiers and armor protection included.
@@ -240,6 +242,14 @@ impl Game<'_> {
         motion.health.food.food = g.food;
         motion.health.food.saturation = g.saturation;
         let mut player = Some(*motion);
+        match self.lan_acting {
+            Some(outer) => {
+                if let Some(guest) = host.hub.guest(outer) {
+                    guest.residency.extract();
+                }
+            }
+            None => self.local_player_residency.extract(),
+        }
         std::mem::swap(&mut self.player, &mut player);
         let eye = (g.eye_height() as f32, self.eye);
         self.eye = eye.0;
@@ -378,6 +388,7 @@ impl Game<'_> {
         );
         let g = &host.hub.guests[i];
         std::mem::swap(&mut self.stats, &mut play.stats);
+        self.hook.begin_loan();
         std::mem::swap(&mut self.hook, &mut play.hook);
         let adv_loaded = std::mem::replace(&mut self.adv.loaded, true);
         let last_inventory = std::mem::replace(&mut self.adv.last_inventory, play.last_inventory);
@@ -395,6 +406,9 @@ impl Game<'_> {
             std::mem::replace(&mut self.lan_acting_spawn_protection, spawn_protection),
         );
         let acting_fake = std::mem::replace(&mut self.lan_acting_fake, !g.participates_online());
+        g.residency.put_back();
+        self.hook.finish_loan();
+        self.bind_current_hook_residency();
         let packets = std::mem::take(&mut self.guest_packets);
         let entity_events = std::mem::take(&mut self.guest_entity_events);
         let cooldown_events = std::mem::take(&mut self.guest_cooldowns);
@@ -737,6 +751,8 @@ impl Game<'_> {
                 );
             }
         }
+        host.hub.guests[i].residency.extract();
+        self.hook.begin_loan();
         (
             self.lan_acting,
             self.lan_acting_name,
@@ -990,6 +1006,18 @@ impl Game<'_> {
         host.play.insert(conn, play);
         let finished = self.lan_guest_swaps.pop();
         debug_assert_eq!(finished, Some(conn));
+        host.hub.guests[i].residency.put_back();
+        host.play[&conn].hook.finish_loan();
+        match self.lan_acting {
+            Some(outer) => {
+                if let Some(guest) = host.hub.guest(outer) {
+                    guest.residency.put_back();
+                }
+            }
+            None => self.local_player_residency.put_back(),
+        }
+        self.hook.finish_loan();
+        self.bind_current_hook_residency();
         for event in turn_events {
             match event {
                 MotionEvent::Health(horizon_client::health::HealthEvent::DamageBroadcast {

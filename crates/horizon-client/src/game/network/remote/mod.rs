@@ -1081,7 +1081,7 @@ impl Game<'_> {
         self.armor = [None, None, None, None];
         self.craft_grid = vec![None; 9];
         self.craft_size = 2;
-        self.player = None;
+        self.remove_local_player_body();
         self.spawn = None;
         self.mobs.clear();
         self.clear_remote_objects();
@@ -1357,7 +1357,7 @@ impl Game<'_> {
         self.armor = [None, None, None, None];
         self.craft_grid = vec![None; 9];
         self.craft_size = 2;
-        self.player = None;
+        self.remove_local_player_body();
         self.spawn = None;
         self.mobs.clear();
         self.clear_remote_objects();
@@ -1624,7 +1624,7 @@ impl Game<'_> {
         self.streaming = Streaming::new(Arc::new(NoTerrain), self.worker_context(), 1);
         self.streaming.paused = true;
         self.world = World::new(self.res.facts().air, 0);
-        self.player = None;
+        self.remove_local_player_body();
         // The vehicle went with the level: an id kept here would seat the
         // next login on an entity that is not there.
         self.riding = None;
@@ -2406,7 +2406,7 @@ impl Game<'_> {
                     if let Some(remote) = &self.remote {
                         remote.session.reset_far_terrain();
                     }
-                    self.player = None;
+                    self.remove_local_player_body();
                     self.set_screen(Screen::Playing);
                     self.capture(false);
                     // clearClientLevel drops the client level now, so its
@@ -2853,7 +2853,7 @@ impl Game<'_> {
             .detach_tracking_target(TrackingTarget::LocalPlayer, || {
                 player.map(player_tracking_body)
             });
-        self.player = None;
+        self.remove_local_player_body();
         // handleLogin / handleRespawn: LocalPlayer.setPortalCooldown, so a
         // player who arrives standing in a portal gets no overlay from it.
         self.portals.player.cooldown = spawn.portal_cooldown;
@@ -3939,6 +3939,7 @@ impl Game<'_> {
                     r.reduced_debug_info = p.reduced_debug_info;
                     r.do_limited_crafting = p.limited_crafting;
                 }
+                self.bind_local_player_residency();
                 self.refresh_debug_renderers();
                 // LocalPlayer.setReducedDebugInfo always rebuilds, also on a second login.
                 self.debug_entries.invalidate();
@@ -4232,14 +4233,7 @@ impl Game<'_> {
                     (rotation[0], rotation[1]),
                     p.data,
                 ) {
-                    self.spawn_remote_projectile(
-                        p.id,
-                        &kind,
-                        p.position,
-                        (rotation[0], rotation[1]),
-                        p.velocity,
-                        p.data,
-                    );
+                    self.spawn_remote_projectile(&kind, &p, (rotation[0], rotation[1]));
                 }
                 // Entity.recreateFromPacket: objects must exist before applying motion.
                 self.remote_motion(p.id, p.velocity);
@@ -6694,7 +6688,11 @@ impl Game<'_> {
                 // Player.tick derives noPhysics from the current game mode.
                 player.spectator = self.spectator();
                 player.velocity = delta;
+                self.hook.discard();
+                self.player_attachments.retire();
+                self.local_player_residency.renew();
                 self.player = Some(player);
+                self.bind_local_player_residency();
                 self.pad.player_replaced();
                 self.sway = Default::default();
                 self.eye = 1.62;

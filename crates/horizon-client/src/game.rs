@@ -2507,6 +2507,7 @@ struct Game<'a> {
     view_arrival: horizon_client::streaming::ViewArrival,
     options: Options,
     player: Option<PlayerMotion>,
+    local_player_residency: horizon_client::join_seq::residency::member::Member,
     spawn: Option<Vec3>,
     clock: FixedStep,
     previous_position: Vec3,
@@ -3103,7 +3104,7 @@ struct Game<'a> {
     /// The horse inventory (game/interface/mount_menu.rs).
     mount_menu: mount_menu::MountMenu,
     /// The player's fishing hook.
-    hook: Option<fishing::Hook>,
+    hook: horizon_client::join_seq::ResidentSlot<fishing::Hook>,
     /// The other players' hooks a server tracks to this client.
     remote_hooks: Vec<fishing::RemoteHook>,
     tridents: horizon_client::join_seq::JoinList<trident::ThrownTrident>,
@@ -16807,6 +16808,7 @@ impl<'a> Game<'a> {
             view_arrival: Default::default(),
             options,
             player: None,
+            local_player_residency: Default::default(),
             spawn: None,
             clock: FixedStep::default(),
             previous_position: Vec3::ZERO,
@@ -17141,7 +17143,7 @@ impl<'a> Game<'a> {
             spill: Default::default(),
             recipe_ui: Default::default(),
             mount_menu: Default::default(),
-            hook: None,
+            hook: Default::default(),
             remote_hooks: Vec::new(),
             tridents: Default::default(),
             rockets: Default::default(),

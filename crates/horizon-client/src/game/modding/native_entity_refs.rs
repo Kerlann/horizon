@@ -105,38 +105,16 @@ impl Game<'_> {
         {
             return None;
         }
-        let id = i32::try_from(entity.id()).ok()?;
-        if id == 0 {
+        let horizon_client::join_seq::residency::table::EntityLookup::Found { location, value } =
+            self.server_resident_entity(entity.id())
+        else {
             return None;
-        }
-        // The acting guest's state is in place, not in their hub record.
-        if self.lan_acting_uuid.is_some()
-            && self.lan_acting_entity == Some(entity.id())
-            && self.player.is_some()
-        {
-            return Some(Target::Player);
-        }
-        let player = self
-            .lan
-            .iter()
-            .flat_map(|h| h.hub.guests.iter())
-            .find(|g| g.placed && g.entity_id == id);
-        if let Some(g) = player {
-            // An outer guest in a nested swap has a displaced record.
-            return (!self.lan_guest_swaps.contains(&g.conn)).then_some(Target::Guest(g.conn));
-        }
-        // Not in `level_entity`: packets and cameras never reach a hook.
-        if self.fishing_hook_by_id(entity.id()).is_some() {
-            return (!self.persist.removals.contains(&Target::Hook(entity.id())))
-                .then_some(Target::Hook(entity.id()));
-        }
-        if let Some(part) = self.level_dragon_part(entity.id()) {
-            return Some(part);
-        }
-        match self.level_entity(id)? {
-            Target::Mob(id) if !self.mobs.iter().any(|m| m.id == id && !m.removed) => None,
-            t => Some(t),
-        }
+        };
+        // Players are server-wide records. Ordinary body operations retain
+        // their existing current-level domain; source membership is global.
+        (matches!(value, Target::Player | Target::Guest(_))
+            || location.owner.dimension == self.dim.key())
+        .then_some(value)
     }
     /// What a handle names on a client: the local player, or an entity the
     /// server told this client of (`ClientLevel.getEntity`, whose entities are
@@ -194,7 +172,9 @@ impl Game<'_> {
         let Target::Dragon(id) = self.native_entity_read_target(entity)? else {
             return Some(Vec::new());
         };
-        (id + 1..=id + 8).map(|part| self.entity(part)).collect()
+        (1..=8)
+            .map(|offset| self.entity(id.checked_add(offset)?))
+            .collect()
     }
     /// The level `dimension` (`minecraft:the_nether`) as a handle: on a client,
     /// the level it shows, whatever the server calls it. None with no world
@@ -713,6 +693,11 @@ impl Game<'_> {
             {
                 return None;
             }
+            if let Some(words) =
+                self.known_resident_entity_uuid_at(self.native_level_key(), entity.id())
+            {
+                return Some(uuid_from_words(words));
+            }
             if let Some((uuid, _)) = r.level_player(id) {
                 return Some(uuid);
             }
@@ -724,7 +709,12 @@ impl Game<'_> {
                 .map(uuid_from_words);
         }
         let words = match self.native_entity_target(entity)? {
-            Target::Player => return self.lan_acting_uuid,
+            Target::Player => {
+                let dimension = self.current_player_resident_location()?.owner.dimension;
+                return self
+                    .known_resident_entity_uuid_at(dimension, entity.id())
+                    .map(uuid_from_words);
+            }
             Target::Guest(conn) => return self.command_guest(conn).map(|g| g.uuid),
             _ => self.uuid_for(entity.id()),
         };

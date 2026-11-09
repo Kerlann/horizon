@@ -1115,10 +1115,16 @@ impl Game<'_> {
     /// `Level.getEntity`: the entity of the level in place with a network
     /// id, players aside.
     pub(in crate::game) fn level_entity(&self, id: i32) -> Option<Target> {
-        let id = u32::try_from(id).ok()?;
+        let id = id as u32;
         match self.server_resident_entity(id) {
             horizon_client::join_seq::residency::table::EntityLookup::Found { location, value }
-                if location.owner.dimension == self.dim.key() =>
+                if location.owner.dimension == self.dim.key()
+                    && !matches!(
+                        location.owner.kind,
+                        horizon_client::join_seq::residency::Kind::Player
+                            | horizon_client::join_seq::residency::Kind::Hook
+                            | horizon_client::join_seq::residency::Kind::DragonPart
+                    ) =>
             {
                 Some(value)
             }
@@ -1135,39 +1141,17 @@ impl Game<'_> {
     /// `ServerLevel.getEntity`: whether the level in place still holds the
     /// entity a target names. Discard removes mobs from lookup immediately.
     fn level_holds(&self, t: Target) -> bool {
-        // Removed by a mod and waiting for the sweep: `isRemoved` from the call on.
-        if self.persist.removals.contains(&t) {
+        let Some(id) = self.resident_target_id(t) else {
             return false;
-        }
-        match t {
-            // A player is in no level of its own.
-            Target::Player | Target::Guest(_) => true,
-            Target::Mob(id) => self.mobs.iter().any(|m| m.id == id && !m.removed),
-            Target::Item(id) => self.dropped.iter().any(|i| i.id == id),
-            Target::Orb(id) => self.orbs.iter().any(|o| o.id == id),
-            Target::Projectile(id) => self.creatures.projectiles.iter().any(|p| p.id == id),
-            Target::Stand(id) => self.armor_stands.iter().any(|a| a.id == id),
-            Target::Frame(id) => self.item_frames.iter().any(|f| f.id == id),
-            Target::Painting(id) => self.paintings.iter().any(|p| p.id == id),
-            Target::Boat(id) => self.boats.iter().any(|b| b.id == id),
-            Target::Cart(id) => self.carts.iter().any(|c| c.id == id),
-            Target::Other(id) => self.others.iter().any(|o| o.id == id),
-            Target::Fangs(id) => self.fangs.list.iter().any(|f| f.id == id),
-            Target::Crystal(id) => self.crystals.iter().any(|c| c.id == id),
-            Target::Dragon(id) => self.dragon.as_ref().is_some_and(|d| d.id == id),
-            // A part is an entity for as long as its parent is, a removal included.
-            Target::DragonPart(id) => self
-                .resident_dragon_part(id)
-                .is_some_and(|(d, _)| !self.persist.removals.contains(&Target::Dragon(d.id))),
-            Target::Tnt(id) => self.tnts.iter().any(|t| t.id == id),
-            Target::Cushion(id) => self.cushions.iter().any(|c| c.id == id),
-            Target::Falling(id) => self.falling.iter().any(|f| f.id == id),
-            Target::Rocket(id) => self.rockets.iter().any(|r| r.id == id),
-            Target::Trident(id) => self.tridents.iter().any(|t| t.id == id),
-            Target::Spawner(id) => self.ominous_spawners.iter().any(|s| s.id == id),
-            Target::Cloud(id) => self.breath_clouds.iter().any(|c| c.id == id),
-            Target::Hook(id) => self.fishing_hook_by_id(id).is_some(),
-            Target::Knot(id) => self.natural_knot(id).is_some(),
+        };
+        match self.server_resident_entity(id) {
+            horizon_client::join_seq::residency::table::EntityLookup::Found { location, value }
+                if location.owner.dimension == self.dim.key() =>
+            {
+                value == t
+                    || matches!(t, Target::Guest(conn) if self.lan_acting == Some(conn) && value == Target::Player)
+            }
+            _ => false,
         }
     }
     /// Run `f` with the level that holds the entity a target names in place

@@ -307,14 +307,14 @@ impl Game<'_> {
     /// `handleAddEntity` for these types; false when `kind` isn't one.
     pub(super) fn spawn_remote_projectile(
         &mut self,
-        id: i32,
         kind: &str,
-        position: [f64; 3],
+        packet: &horizon_protocol::packets::play::AddEntity,
         rotation: (f32, f32),
-        velocity: [f64; 3],
-        data: i32,
     ) -> bool {
-        let id = id as u32;
+        let id = packet.id as u32;
+        let position = packet.position;
+        let velocity = packet.velocity;
+        let data = packet.data;
         let at = Vec3::new(position[0], position[1], position[2]);
         let velocity = Vec3::new(velocity[0], velocity[1], velocity[2]);
         let (yaw, pitch) = rotation;
@@ -388,7 +388,13 @@ impl Game<'_> {
                     .add_remote_eye(id, position, [velocity.x, velocity.y, velocity.z])
             }
             // FishingHook.recreateFromPacket: the owner's id is the data.
-            "minecraft:fishing_bobber" => self.spawn_remote_hook(id, at, velocity, data),
+            "minecraft:fishing_bobber" => self.spawn_remote_hook(
+                id,
+                horizon_client::lan::playerdata::uuid_ints(packet.uuid),
+                at,
+                velocity,
+                data,
+            ),
             "minecraft:end_crystal" => {
                 // EndCrystal's constructor starts `time` from the crystal's own
                 // random, so each placed crystal spins from its own phase. The id is the
@@ -1114,12 +1120,19 @@ mod nested_spawn_tests {
     }
     fn spawn(game: &mut Game<'_>, kind: &str, data: i32, id: u32) {
         assert!(game.spawn_remote_projectile(
-            id as i32,
             kind,
-            [AT.x, AT.y, AT.z],
+            &horizon_protocol::packets::play::AddEntity {
+                id: id as i32,
+                uuid: u128::from(id),
+                kind: 0,
+                position: [AT.x, AT.y, AT.z],
+                velocity: [1.0, 0.0, 0.0],
+                pitch: 0,
+                yaw: 0,
+                head_yaw: 0,
+                data
+            },
             (0.0, 0.0),
-            [1.0, 0.0, 0.0],
-            data
         ));
     }
     fn falling(game: &mut Game<'_>, id: u32) {

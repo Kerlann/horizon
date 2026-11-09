@@ -135,6 +135,8 @@ struct GuestInit {
 }
 
 pub struct Guest {
+    /// Identity generation and journal binding travel with the actual player record.
+    pub residency: crate::join_seq::residency::member::Member,
     pub kind: GuestKind,
     pub conn: u32,
     /// The client's address (IP bans, `list`).
@@ -595,6 +597,7 @@ impl Guest {
         view_distance: i32,
     ) -> Self {
         Self {
+            residency: Default::default(),
             kind,
             conn: j.conn,
             address: j.address,

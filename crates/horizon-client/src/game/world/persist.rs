@@ -1948,6 +1948,9 @@ impl Game<'_> {
         self.uuid_for(id)
     }
     pub(super) fn uuid_for(&mut self, id: u32) -> [i32; 4] {
+        if let Some(uuid) = self.known_resident_entity_uuid_at(self.dim.key(), id) {
+            return uuid;
+        }
         *self.persist.uuids.entry(id).or_insert_with(random_uuid)
     }
     /// `BlockState.CODEC`: a block name or `{id, properties}` (or legacy `{Name, Properties}`).

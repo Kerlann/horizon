@@ -39,6 +39,9 @@ pub enum Kind {
     Cloud,
     Cushion,
     Knot,
+    Player,
+    Hook,
+    DragonPart,
 }
 
 /// The dimension and family owning a list or singleton.

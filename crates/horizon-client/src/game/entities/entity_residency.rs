@@ -196,7 +196,7 @@ macro_rules! define_resident_access {
         pub(super) fn bind_resident_owners(&mut $this, journal: &Journal, dimension: DimensionKey) {
             $($crate::game::entity_residency::bind_resident_list!($kind, $this$(.$field)+, journal, Owner { dimension, kind: Kind::$kind });)*
             $this$(.$projectiles)+.bind_residency(journal, Owner { dimension, kind: Kind::Projectile }, |entity| (entity.id, entity.join_seq()));
-            $this.dragon.bind_residency(journal, Owner { dimension, kind: Kind::Dragon }, |entity| (entity.id, entity.join_seq()));
+            $this.dragon.bind_residency_specialized(journal, Owner { dimension, kind: Kind::Dragon }, |entity| (entity.id, entity.join_seq()), horizon_client::join_seq::residency::Source::Ordinary, Some((Kind::DragonPart, 8, |dragon, offset| dragon.part_uuids.get(usize::from(offset)).copied())), None);
         }
         pub(super) fn with_resident_owner_slot<R>(
             &mut $this,
@@ -208,6 +208,7 @@ macro_rules! define_resident_access {
                 $(Kind::$kind => $crate::game::entity_residency::resident_lifetime_slot!($kind, $this$(.$field)+, at.join, visit),)*
                 Kind::Projectile => $crate::game::entity_residency::resident_lifetime_slot!(Projectile, $this$(.$projectiles)+, at.join, visit),
                 Kind::Dragon => SlotAccess::UnsupportedKind(Kind::Dragon),
+                Kind::Player | Kind::Hook | Kind::DragonPart => SlotAccess::UnsupportedKind(at.owner.kind),
             }
         }
         pub(super) fn locate_resident_owner(&$this, at: Location) -> Option<SourceEntity<(Target, bool)>> {
@@ -229,6 +230,17 @@ macro_rules! define_resident_access {
                     let id = $this.dragon.as_ref()?.id;
                     Some(SourceEntity { id, value: (Target::Dragon(id), true) })
                 }
+                Kind::DragonPart => {
+                    let horizon_client::join_seq::residency::Source::DragonPart(offset) = at.source else { return None; };
+                    $this.dragon.locate(at.join)?;
+                    let dragon = $this.dragon.as_ref()?;
+                    if dragon.id == 0 { return None; }
+                    dragon.parts.get(usize::from(offset))?;
+                    let id = dragon.id.checked_add(u32::from(offset) + 1)?;
+                    let visible = !$this.persist.removals.contains(&Target::Dragon(dragon.id));
+                    Some(SourceEntity { id, value: (Target::DragonPart(id), visible) })
+                }
+                Kind::Player | Kind::Hook => None,
             };
             // Logical visibility is not physical absence: filtering here would
             // incorrectly evict reversible conversion rows or report Taken.
