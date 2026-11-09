@@ -123,7 +123,25 @@ impl<R> EntityTable<R> {
         id: u32,
         locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
     ) -> (EntityLookup<T>, Option<&R>) {
-        let result = self.lookup(Some(dimension), id, locate);
+        self.read_lookup(Some(dimension), id, locate)
+    }
+
+    /// Cached counterpart of server-wide validated lookup.
+    pub fn server_entity_read_lookup<T>(
+        &mut self,
+        id: u32,
+        locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
+    ) -> (EntityLookup<T>, Option<&R>) {
+        self.read_lookup(None, id, locate)
+    }
+
+    fn read_lookup<T>(
+        &mut self,
+        dimension: Option<&DimensionKey>,
+        id: u32,
+        locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
+    ) -> (EntityLookup<T>, Option<&R>) {
+        let result = self.lookup(dimension, id, locate);
         let cached = match &result {
             EntityLookup::Missing => None,
             _ => NonZeroU32::new(id)
@@ -149,6 +167,29 @@ impl<R> EntityTable<R> {
             }
         }
         published
+    }
+
+    /// Edit a publication only while its exact admitted generation still owns
+    /// the id. Used for dependent projections and pending light overlays; the
+    /// caller owns patch semantics and must not perform engine effects here.
+    pub fn edit_cached_row(
+        &mut self,
+        id: u32,
+        location: Location,
+        edit: impl FnOnce(&mut R),
+    ) -> bool {
+        self.drain();
+        let Some(row) = NonZeroU32::new(id).and_then(|id| self.rows.get_mut(&id)) else {
+            return false;
+        };
+        if row.location != location {
+            return false;
+        }
+        let Some(cached) = row.cached.as_mut() else {
+            return false;
+        };
+        edit(cached);
+        true
     }
 
     /// Apply pending operations in mutation order, reusing the event buffer.
@@ -323,7 +364,7 @@ mod tests {
                 .1,
             Some(&10)
         );
-        drop(list.remove(0));
+        list.remove(0);
         list.push(Stored(7, JoinSeq::UNJOINED));
         let replacement = Location {
             owner: HOME,
@@ -338,6 +379,10 @@ mod tests {
             None
         );
         assert_eq!(table.publish_rows([(7, replacement, 20)]), 1);
+        assert!(!table.edit_cached_row(7, old, |_| panic!(
+            "edited a replacement through its old generation"
+        )));
+        assert!(table.edit_cached_row(7, replacement, |row| *row += 1));
         table.producer().push(Event {
             owner: HOME,
             change: Change::Remove(Identity::new(7, old.join).unwrap()),
@@ -346,7 +391,7 @@ mod tests {
             table
                 .entity_read_lookup(&HOME.dimension, 7, |at| locate(&list, at))
                 .1,
-            Some(&20)
+            Some(&21)
         );
         table.end_tick().unwrap();
     }

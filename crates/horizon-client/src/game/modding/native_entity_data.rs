@@ -200,24 +200,21 @@ impl Game<'_> {
     /// leaves or a mod removes it. Players, and the kinds that hook doesn't
     /// tell (displays, markers, interactions, evoker fangs, area effect
     /// clouds, ominous item spawners), are in it while the handle names them.
-    /// False for a stale handle or on a client.
-    pub(super) fn entity_added_to_level(&self, entity: EntityRef) -> bool {
-        match self.native_entity_target(entity) {
-            None => false,
-            Some(
-                Target::Player
-                | Target::Guest(_)
-                | Target::Other(_)
-                | Target::Fangs(_)
-                | Target::Cloud(_)
-                | Target::Spawner(_),
-            ) => true,
-            Some(_) => self
+    /// None for a stale handle or unknown client data.
+    pub(super) fn entity_added_to_level(&self, entity: EntityRef) -> Option<bool> {
+        Some(match self.native_entity_target(entity)? {
+            Target::Player
+            | Target::Guest(_)
+            | Target::Other(_)
+            | Target::Fangs(_)
+            | Target::Cloud(_)
+            | Target::Spawner(_) => true,
+            _ => self
                 .persist
                 .live
                 .binary_search_by_key(&entity.id(), |l| l.0)
                 .is_ok(),
-        }
+        })
     }
     /// The id of the entity a custom-name write changes, or None for a kind
     /// that keeps no name, a stale handle or on a client.

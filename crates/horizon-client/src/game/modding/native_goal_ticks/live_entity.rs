@@ -24,11 +24,12 @@ impl GoalCx<'_, '_> {
         )
     }
 
-    pub(super) fn r_entity_added_to_level(&self, entity: EntityRef) -> bool {
-        match (self.w.goal_host, self.entity_mob(entity)) {
-            (Some(host), Some(mob)) => host.mob_added_to_level(mob),
-            _ => false,
-        }
+    pub(super) fn r_entity_added_to_level(&self, entity: EntityRef) -> Option<bool> {
+        Some(
+            self.w
+                .goal_host?
+                .mob_added_to_level(self.entity_mob(entity)?),
+        )
     }
 
     pub(super) fn r_entity_portal_cooldown(&self, entity: EntityRef) -> Option<i32> {
