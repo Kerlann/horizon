@@ -6,6 +6,14 @@ use crate::*;
 #[doc(hidden)]
 #[horizon_mod_api_macros::host_area]
 pub trait RaidsBackend {
+    /// Side: both.
+    /// Materializes the cached row and its capture metadata, possibly stale.
+    /// Physical lifting does not hide an existing row. None means no available
+    /// row for this validated identity, never a live-read Lifted refusal.
+    /// Owned payloads are materialized on request, not cloned every capture pass.
+    #[access(WorldOnly)]
+    fn raid_cached_row(&self, entity: RaidRef) -> Option<RaidReadRow>;
+
     /// Side: server.
     /// `Raid.getCenter`.
     #[access(WorldOnly)]
@@ -32,11 +40,11 @@ pub trait RaidsBackend {
     /// Side: server.
     /// `Raid.isStarted`.
     #[access(WorldOnly)]
-    fn raid_is_started(&self, raid: RaidRef) -> bool;
+    fn raid_is_started(&self, raid: RaidRef) -> Option<bool>;
     /// Side: server.
     /// `Raid.isActive`: false once stopped.
     #[access(WorldOnly)]
-    fn raid_is_active(&self, raid: RaidRef) -> bool;
+    fn raid_is_active(&self, raid: RaidRef) -> Option<bool>;
     /// Side: server.
     /// `Raid.RaidStatus`.
     #[access(WorldOnly)]

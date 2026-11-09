@@ -5,6 +5,7 @@ pub(crate) mod advancement_progress;
 #[doc(hidden)]
 pub mod biome;
 pub(crate) mod chunk_generator;
+pub(crate) mod command_id;
 pub(crate) mod criteria;
 pub(crate) mod custom_spawners;
 pub(crate) mod dimension;

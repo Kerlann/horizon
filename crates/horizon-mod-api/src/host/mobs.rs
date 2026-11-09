@@ -30,6 +30,22 @@ pub trait MobsServerHost {
 #[doc(hidden)]
 #[horizon_mod_api_macros::host_area]
 pub trait MobsBackend {
+    /// Side: both.
+    /// Materializes the cached row and its capture metadata, possibly stale.
+    /// Physical lifting does not hide an existing row. None means no available
+    /// row for this validated identity, never a live-read Lifted refusal.
+    /// Owned payloads are materialized on request, not cloned every capture pass.
+    #[access(WorldOnly)]
+    fn dragon_cached_row(&self, entity: DragonRef) -> Option<DragonReadRow>;
+
+    /// Side: both.
+    /// Materializes the cached row and its capture metadata, possibly stale.
+    /// Physical lifting does not hide an existing row. None means no available
+    /// row for this validated identity, never a live-read Lifted refusal.
+    /// Owned payloads are materialized on request, not cloned every capture pass.
+    #[access(WorldOnly)]
+    fn mob_cached_row(&self, entity: MobRef) -> Option<MobReadRow>;
+
     /// Side: server.
     /// `EnderDragonPhaseManager.getCurrentPhase`.
     #[access(WorldOnly)]

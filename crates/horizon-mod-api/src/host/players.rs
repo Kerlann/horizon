@@ -40,6 +40,14 @@ pub trait PlayersClientHost {
 #[doc(hidden)]
 #[horizon_mod_api_macros::host_area]
 pub trait PlayersBackend {
+    /// Side: both.
+    /// Materializes the cached row and its capture metadata, possibly stale.
+    /// Physical lifting does not hide an existing row. None means no available
+    /// row for this validated identity, never a live-read Lifted refusal.
+    /// Owned payloads are materialized on request, not cloned every capture pass.
+    #[access(WorldOnly)]
+    fn player_cached_row(&self, entity: PlayerRef) -> Option<PlayerReadRow>;
+
     /// Side: server.
     /// The IP address the player connects from, without the port (behind a
     /// Velocity proxy, the address the proxy forwards). Displaced connected

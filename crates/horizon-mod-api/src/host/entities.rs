@@ -79,6 +79,14 @@ pub trait EntitiesServerHost {
 #[doc(hidden)]
 #[horizon_mod_api_macros::host_area]
 pub trait EntitiesBackend {
+    /// Side: both.
+    /// Materializes the cached row and its capture metadata, possibly stale.
+    /// Physical lifting does not hide an existing row. None means no available
+    /// row for this validated identity, never a live-read Lifted refusal.
+    /// Owned payloads are materialized on request, not cloned every capture pass.
+    #[access(WorldOnly)]
+    fn entity_cached_row(&self, entity: EntityRef) -> Option<EntityReadRow>;
+
     /// Side: server.
     /// The entity's tags (`Entity.getTags`), as `/tag <entity> list` shows
     /// them. API 386.
@@ -108,9 +116,10 @@ pub trait EntitiesBackend {
     /// leaves or a mod removes it. Players, and the kinds that hook doesn't
     /// tell (displays, markers, interactions, evoker fangs, area effect
     /// clouds, ominous item spawners), are in it while the handle names them.
-    /// False for a stale handle or on a client.
+    /// None for a stale handle or genuinely unknown client data. False remains
+    /// a known negative answer; physical lifting does not hide a cached value.
     #[access(WorldOnly)]
-    fn entity_added_to_level(&self, entity: EntityRef) -> bool;
+    fn entity_added_to_level(&self, entity: EntityRef) -> Option<bool>;
     /// Side: both.
     /// The entity's position (`Entity.position`): its feet, the middle of
     /// its box for a painting or an item frame.

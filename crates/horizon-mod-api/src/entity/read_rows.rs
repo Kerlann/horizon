@@ -10,6 +10,8 @@ pub enum EntityReadCapturePhase {
     BeforeCallback,
     /// Capture after ticking the entity.
     AfterEntityTick,
+    /// Capture after an actually applied write, never enqueue acceptance.
+    AfterAppliedWrite,
 }
 
 /// Identifies the publication from which an owned cached row was materialized.
@@ -25,6 +27,10 @@ pub struct EntityReadCapture {
     pub revision: u64,
     /// When this publication was captured.
     pub phase: EntityReadCapturePhase,
+    /// Latest speculative light overlay included in this publication, if any.
+    /// The phase still describes the last engine-applied state, never the enqueue.
+    /// Completion or refusal clears or rebases this marker.
+    pub pending_overlay: Option<CommandId>,
 }
 
 /// Refusal of a foreign live entity read, or its unchanged typed domain error.
@@ -42,6 +48,41 @@ pub enum EntityReadError<E = core::convert::Infallible> {
 mod tests {
     use super::*;
     use crate::wire::{Reader, Wire, WireError, Writer, layout_name};
+
+    #[test]
+    fn cached_payload_keeps_pending_identity_domain_absence_and_typed_error() {
+        // Independent schema bytes: capture, optional overlay id, entity identity,
+        // then the five retained projectile fields. No row encoder builds this input.
+        let bytes = [
+            1u64.to_le_bytes().as_slice(),  // logical tick
+            2u64.to_le_bytes().as_slice(),  // pass
+            3u64.to_le_bytes().as_slice(),  // revision
+            &[1, 0, 0, 0], // BeforeCallback, not AfterEntityTick or AfterAppliedWrite
+            &[1],          // pending overlay present
+            7u64.to_le_bytes().as_slice(), // command epoch
+            9u64.to_le_bytes().as_slice(), // command sequence
+            7u64.to_le_bytes().as_slice(), // entity epoch
+            11u32.to_le_bytes().as_slice(), // entity id
+            &[0],          // no owner
+            &[0],          // unknown/unsupported pickup mode
+            &[1, 2, 0, 0, 0], // Err(PierceLevelError::NotArrow)
+            &[0],          // unknown/unsupported base damage
+            &[1, 0],       // known critical=false
+        ]
+        .concat();
+        let row: ProjectileReadRow = Reader::decode(&bytes).unwrap();
+        assert_eq!(row.capture.tick.get(), 1);
+        assert_eq!(row.capture.phase, EntityReadCapturePhase::BeforeCallback);
+        assert_eq!(row.capture.pending_overlay.unwrap().sequence, 9);
+        assert_eq!(row.entity.id(), 11);
+        assert_eq!(row.owner, None);
+        assert_eq!(row.pickup, None);
+        assert_eq!(row.pierce_level, Err(PierceLevelError::NotArrow));
+        assert_eq!(row.critical, Some(false));
+        let mut writer = Writer::new();
+        writer.put(&row);
+        assert_eq!(writer.bytes(), bytes);
+    }
 
     #[test]
     fn actual_generic_error_layout_and_uninhabited_domain() {

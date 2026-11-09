@@ -44,8 +44,12 @@ are not part of a goal; the write handles a `ServerHost` takes do not exist in a
 
 `EntityReadCapture` identifies a potentially stale publication using an engine `TickId`,
 an owner pass, a publication revision and `EntityReadCapturePhase` (`PassStart`,
-`BeforeCallback` or `AfterEntityTick`). It does not assert that the live owner is still
-resident or unchanged. Logical removal, physical lifting and retained output are distinct;
+`BeforeCallback`, `AfterEntityTick` or `AfterAppliedWrite`). The phase describes only
+engine-applied state. `pending_overlay: Option<CommandId>` explicitly marks speculative
+light patches with the latest command id; it never relabels an enqueue as an applied
+tick or write. `CommandId { epoch: WorldEpoch, sequence: u64 }` is identity, not authority
+or proof of completion. Publication metadata does not assert that the live owner is
+still resident or unchanged. Logical removal, physical lifting and retained output are distinct;
 removal and retained output never imply a lifted owner.
 
 Cached scalar reads keep their Option contracts. Live/heavy reads use one generic
@@ -55,6 +59,22 @@ Only the explicitly nested callback actor is OWN; an unrelated live loan is not 
 The error has the same Wire form for native and wasm. Its default `Infallible` domain
 cannot be constructed or decoded. These declarations are a schema foundation, not a
 claim that every deferred heavy read or write has acquired the new routing contract.
+
+Each retained entity family exposes `cached_row(&dyn Host) -> Option<...ReadRow>`;
+raid data uses a separate level-owned `RaidReadRow`. The outer Option is row availability,
+not physical lifting. A field's Option denotes documented domain absence, unsupported
+subkind or genuinely unknown client data. No live-read refusal is encoded as an absent
+field. Required base identity/position/geometry fields need no invented defaults. Existing
+scalar Option accessors keep their shapes; `added_to_level`, `is_started` and `is_active`
+now return Option<bool>. Projectile pierce level retains its domain-only `PierceLevelError`.
+
+Rows own their requested strings and vectors, but compact engine capture does not imply
+per-pass heap copies. Distance and restriction checks are projections of recorded position
+and center/radius, not function-valued fields. `pathfinding_malus` is a finite
+`Vec<(PathType, f32)>` table, and `can_eat` stores `[bool; 2]` indexed by `always`.
+Ray tracing needs a row-bounds/immutable-world proof in the engine; it adds no LevelReadRow.
+Minecart payloads, player/session strings, passengers, block transforms, melee range,
+heavy payload reads and queued-write surfaces are outside this read-schema foundation.
 
 #### Brain behaviors
 
