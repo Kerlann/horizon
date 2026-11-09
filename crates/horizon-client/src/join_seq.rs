@@ -233,14 +233,60 @@ impl<T> ResidentSlot<T> {
         owner: residency::Owner,
         identity: fn(&T) -> (u32, JoinSeq),
     ) {
+        self.bind_residency_specialized(
+            journal,
+            owner,
+            identity,
+            residency::Source::Ordinary,
+            None,
+            None,
+        );
+    }
+    /// Bind a real specialized singleton or its fixed semantic children. The
+    /// projection is part of every parent structural operation, not a second pass.
+    pub fn bind_residency_specialized(
+        &mut self,
+        journal: &residency::Journal,
+        owner: residency::Owner,
+        identity: fn(&T) -> (u32, JoinSeq),
+        source: residency::Source,
+        children: Option<(residency::Kind, u8, fn(&T, u8) -> Option<[i32; 4]>)>,
+        known_uuid: Option<fn(&T) -> Option<[i32; 4]>>,
+    ) {
+        let mut binding = journal.bind(owner, identity);
+        binding.source(source);
+        binding.known_uuid(known_uuid);
+        if let Some((kind, count, uuid)) = children {
+            binding.children(kind, count, uuid);
+        }
+        if self
+            .1
+            .as_ref()
+            .is_some_and(|current| current.same(&binding))
+        {
+            return;
+        }
         self.emit_current(residency::Change::Remove);
-        self.1 = Some(journal.bind(owner, identity));
+        self.1 = Some(binding);
         self.emit_current(residency::Change::Install);
     }
     fn emit_current(&self, change: fn(residency::Identity) -> residency::Change) {
         if let (Some(binding), Some(entity)) = (&self.1, &self.0) {
             binding.entity(entity, change);
         }
+    }
+    /// Canonical metadata travelling with this actual filled slot. This is not
+    /// a source lookup and carries no element position or reference to a Game.
+    pub fn resident_location(&self) -> Option<residency::table::Location> {
+        self.1.as_ref()?.location(self.0.as_ref()?)
+    }
+    /// The whole real slot is moving into a caller-held actor frame. Its
+    /// payload and binding travel together; only this identity is unavailable.
+    pub fn begin_loan(&self) {
+        self.emit_current(residency::Change::Extract);
+    }
+    pub fn finish_loan(&self) {
+        self.emit_current(residency::Change::PutBack);
     }
     /// Report the existing allocator's delayed zero-to-live id assignment.
     pub fn id_assigned(&self) {
@@ -362,6 +408,16 @@ impl<T: Joined> ResidentList<T> {
     ) {
         self.0.bind_residency(journal, owner, identity);
     }
+    pub fn bind_residency_with_subtype(
+        &mut self,
+        journal: &residency::Journal,
+        owner: residency::Owner,
+        identity: fn(&T) -> (u32, JoinSeq),
+        subtype: fn(&T) -> residency::EntitySubtype,
+    ) {
+        self.0
+            .bind_residency_with_subtype(journal, owner, identity, subtype);
+    }
     /// Report the existing allocator's delayed zero-to-live id assignment.
     pub fn id_assigned(&self, index: usize) {
         self.0.id_assigned(index);
@@ -470,6 +526,18 @@ impl<T, const DIRECT: bool> JoinList<T, DIRECT> {
     ) {
         self.written();
         self.bind_to(journal.bind(owner, identity));
+    }
+    /// Bind immutable receiver class from the same actual stored payload.
+    pub fn bind_residency_with_subtype(
+        &mut self,
+        journal: &residency::Journal,
+        owner: residency::Owner,
+        identity: fn(&T) -> (u32, JoinSeq),
+        subtype: fn(&T) -> residency::EntitySubtype,
+    ) {
+        let mut binding = journal.bind(owner, identity);
+        binding.subtype(subtype);
+        self.bind_to(binding);
     }
     fn bind_to(&mut self, binding: residency::Binding<T>) {
         self.written();
