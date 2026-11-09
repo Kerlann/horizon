@@ -108,11 +108,14 @@ fn saved_mob_binding_tracks_serialized_transfer_and_parked_levels() {
         game.enter_level(Dim::Overworld).unwrap();
         assert_eq!(VALUE.get(game, Holder::Entity(id)), Ok(11));
         // Serialized portals discard the source owner before destination load.
+        let state = game.take_transferred_entity_state(id);
         game.mobs.retain(|m| m.id != id);
         game.detach_entity(id);
         assert!(source.lock().unwrap().snapshot(&key).is_empty());
         game.enter_level(Dim::Nether).unwrap();
-        let moved = game.load_mob(mob(uuid), None).unwrap();
+        let moved = game
+            .load_mob_transferred(mob(uuid), None, Some(state))
+            .unwrap();
         assert_ne!(moved, id); // This route allocates; retained-id vehicles have their own arrival seam.
         assert_eq!(
             game.attachment_indexes[&Dim::Nether]

@@ -55,23 +55,28 @@ impl Game<'_> {
         found || self.entity_ids_off_walk().any(|e| e == id)
     }
 
+    /// Object ownership for persistence cleanup, never a level-query membership set.
+    pub(super) fn retained_entity_ids(&self) -> std::collections::HashSet<u32> {
+        let mut retained = self.live_entity_ids();
+        retained.extend(self.persist.off_level.keys().copied());
+        retained
+    }
+
     /// The attachments of entities that left the level, dropped: each tick
     /// while any entity has some. Only those entities are looked at, and
     /// nothing else of the entities' memory changes.
     pub(super) fn prune_entity_attachments(&mut self) {
-        let alive = self.live_entity_ids();
-        let gone: Vec<[i32; 4]> = self
+        let alive = self.retained_entity_ids();
+        let gone: Vec<u32> = self
             .persist
             .uuids
-            .iter()
-            .filter(|(id, uuid)| {
-                self.entity_attachments.contains_key(*uuid) && !alive.contains(*id)
-            })
-            .map(|(_, uuid)| *uuid)
+            .keys()
+            .copied()
+            .filter(|id| self.entity_attachments.contains_key(id) && !alive.contains(id))
             .collect();
-        for uuid in gone {
-            self.forget_entity_initialization(uuid);
-            self.entity_attachments.remove(&uuid);
+        for id in gone {
+            self.forget_entity_initialization(mod_api::Holder::Entity(id));
+            self.entity_attachments.remove(&id);
         }
     }
 
@@ -117,7 +122,7 @@ impl Game<'_> {
         self.attachment_slot(holder, access)
     }
 
-    /// Where `holder`'s attachment map lives now: an entity's by its UUID, a player's where
+    /// Where `holder`'s attachment map lives now: an entity's by its object ID, a player's where
     /// their state is (swapped in for a guest's turn, or kept beside), the world's others.
     pub(super) fn attachment_slot(
         &mut self,
@@ -152,8 +157,7 @@ impl Game<'_> {
                 return Err(AttachmentError::MissingHolder);
             }
             let level = painting.and_then(|_| self.level(self.dim.id()));
-            let uuid = self.uuid_for(id);
-            let map = self.entity_attachments.entry(uuid).or_default();
+            let map = self.entity_attachments.entry(id).or_default();
             if let Some(i) = painting {
                 let level = level.ok_or(AttachmentError::MissingHolder)?;
                 if !self.paintings[i].attachment_lifetime.is_bound() {

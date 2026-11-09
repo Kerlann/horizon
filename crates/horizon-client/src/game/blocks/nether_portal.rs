@@ -1392,15 +1392,7 @@ impl Game<'_> {
             .portals
             .arrivals
             .iter()
-            .map(|arrival| {
-                let mut tag = arrival_tag(arrival);
-                if let Tag::Compound(root) = &mut tag
-                    && let Some(entity) = root.get_mut(&"entity".into())
-                {
-                    super::persist::write_attachments(entity, &self.entity_attachments);
-                }
-                tag
-            })
+            .map(|arrival| arrival_tag(arrival))
             .collect();
         let root = Tag::compound([("arrivals", Tag::List(list))]);
         if horizon_client::save::write_dat(&self.arrivals_path(), root).is_ok() {

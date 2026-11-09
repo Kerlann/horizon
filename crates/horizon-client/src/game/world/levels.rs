@@ -968,8 +968,8 @@ impl Game<'_> {
             let chunks: Vec<_> = self.world.chunks.values().cloned().collect();
             self.native_chunks_unloaded(&chunks);
             // Its entities' attachments are saved with them; they leave memory too.
-            for uuid in self.persist.uuids.values() {
-                self.entity_attachments.remove(uuid);
+            for id in self.persist.uuids.keys() {
+                self.entity_attachments.remove(id);
             }
             self.enter_level(back)?;
             self.levels.parked.remove(&dim);
@@ -1069,7 +1069,7 @@ impl Game<'_> {
     /// Memory still belongs to the parked source until the caller moves it.
     pub(super) fn rebind_transferred_entity(
         &mut self,
-        source: super::Dim,
+        _source: super::Dim,
         id: u32,
         entity: &mut impl horizon_mod_runtime::attachments::HasAttachmentLifetime,
     ) {
@@ -1080,12 +1080,7 @@ impl Game<'_> {
         let Some(level) = self.level(self.dim.id()) else {
             return;
         };
-        let Some(map) = self
-            .levels
-            .parked_mut(source)
-            .and_then(|p| p.persist.uuids.get(&id))
-            .and_then(|uuid| self.entity_attachments.get_mut(uuid))
-        else {
+        let Some(map) = self.entity_attachments.get_mut(&id) else {
             return;
         };
         slot.bind(

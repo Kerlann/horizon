@@ -1623,7 +1623,7 @@ mod transfer_lifetime_tests {
                     let key = ("test".into(), "transfer".into());
                     let retained = source_index.lock().unwrap().snapshot(&key);
                     let mut stale_map = map.clone();
-                    game.entity_attachments.insert(uuid, map);
+                    game.entity_attachments.insert(id, map);
                     game.enter_level(Dim::Nether).unwrap();
                     let destination_ref =
                         mod_api::EntityRef::new(game.level(game.dim.id()).unwrap().epoch(), id);

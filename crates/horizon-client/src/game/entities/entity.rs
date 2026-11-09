@@ -1017,7 +1017,9 @@ macro_rules! save_lists {
     (($game:expr, $keys:expr, $out:expr)
      $($kind:ident($ty:ty) $field:ident: $($list:ident).+,)*) => {
         $(for i in 0..$game$(.$list)+.len() {
-            if let Some((key, tag)) = <$ty as $crate::game::entity::Entity>::save_nbt($game, i, $keys) {
+            if let Some((key, mut tag)) = <$ty as $crate::game::entity::Entity>::save_nbt($game, i, $keys) {
+                $crate::game::persist::write_attachments(
+                    &mut tag, $game$(.$list)+[i].id(), &$game.entity_attachments);
                 $out.entry(key).or_default().push((
                     $game$(.$list)+[i].join_seq(),
                     tag,

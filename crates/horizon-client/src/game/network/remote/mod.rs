@@ -3965,9 +3965,7 @@ impl Game<'_> {
                 self.debug_entries.invalidate();
                 let old_player = self.remote.as_ref().map(|r| (r.entity_id, r.profile));
                 if let Some((_, uuid)) = old_player {
-                    self.forget_entity_initialization(horizon_client::lan::playerdata::uuid_ints(
-                        uuid,
-                    ));
+                    self.forget_entity_initialization(Holder::Player(uuid));
                 }
                 if let Some(r) = self.remote.as_ref() {
                     self.audio.remove_sound_entity(r.entity_id as u32);
@@ -4252,8 +4250,14 @@ impl Game<'_> {
             }
             C::RemoveEntities(p) => {
                 for id in p.ids {
-                    if let Some(uuid) = self.persist.uuids.get(&(id as u32)).copied() {
-                        self.forget_entity_initialization(uuid);
+                    self.forget_entity_initialization(Holder::Entity(id as u32));
+                    if let Some(uuid) = self
+                        .remote
+                        .as_ref()
+                        .and_then(|r| r.level_players.get(&id))
+                        .copied()
+                    {
+                        self.forget_entity_initialization(Holder::Player(uuid));
                     }
                     if let Some(r) = self.remote.as_mut() {
                         if let Some(uuid) = r.level_players.remove(&id) {

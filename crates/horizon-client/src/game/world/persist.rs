@@ -235,18 +235,18 @@ pub(super) fn with_raw(modelled: Tag, raw: Option<&Tag>) -> Tag {
 
 fn read_attachments(
     tag: &Tag,
-    uuid: [i32; 4],
-    maps: &mut HashMap<[i32; 4], horizon_mod_runtime::attachments::Attachments>,
+    id: u32,
+    maps: &mut HashMap<u32, horizon_mod_runtime::attachments::Attachments>,
     live: bool,
 ) {
     if let Ok(Some(data)) = attachment_compound(tag.get(ATTACHMENTS_KEY)) {
-        match maps.get_mut(&uuid) {
+        match maps.get_mut(&id) {
             // Made by `entity_constructing` listeners just now: saved values win.
             Some(map) if !live => map.read_saved_over(data.clone()),
             Some(_) => {}
             None => {
                 maps.insert(
-                    uuid,
+                    id,
                     horizon_mod_runtime::attachments::Attachments::from_nbt(data.clone()),
                 );
             }
@@ -254,14 +254,14 @@ fn read_attachments(
     }
 }
 
-/// Overlay live attachment maps on entity tags, including passenger trees.
+/// Overlay one modeled object's contents. Raw passengers retain their own payload.
 pub(super) fn write_attachments(
     tag: &mut Tag,
-    maps: &HashMap<[i32; 4], horizon_mod_runtime::attachments::Attachments>,
+    id: u32,
+    maps: &HashMap<u32, horizon_mod_runtime::attachments::Attachments>,
 ) {
-    let uuid = entity_nbt::uuid(tag);
     if let Tag::Compound(root) = tag {
-        if let Some(map) = uuid.and_then(|id| maps.get(&id))
+        if let Some(map) = maps.get(&id)
             && attachment_compound(root.get(&ATTACHMENTS_KEY.into())).is_ok()
         {
             let data = map.to_nbt();
@@ -269,11 +269,6 @@ pub(super) fn write_attachments(
                 root.remove(&ATTACHMENTS_KEY.into());
             } else {
                 root.insert(ATTACHMENTS_KEY.into(), Tag::Compound(data));
-            }
-        }
-        if let Some(Tag::List(passengers)) = root.get_mut(&"Passengers".into()) {
-            for passenger in passengers {
-                write_attachments(passenger, maps);
             }
         }
     }
@@ -1028,6 +1023,16 @@ impl Game<'_> {
 
     /// A saved boat.
     pub(super) fn load_boat(&mut self, tag: Tag, uuid: Option<[i32; 4]>, k: &str) {
+        self.load_boat_transferred(tag, uuid, k, None);
+    }
+
+    pub(super) fn load_boat_transferred(
+        &mut self,
+        tag: Tag,
+        uuid: Option<[i32; 4]>,
+        k: &str,
+        transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) {
         if let Some((position, velocity, yaw)) = entity_nbt::boat_from_nbt(&tag) {
             let mut tag = tag;
             let riders = self.take_mob_passengers(&mut tag);
@@ -1046,6 +1051,9 @@ impl Game<'_> {
             b.velocity = velocity;
             // AbstractBoat.readAdditionalSaveData: the lead's holder.
             b.leash_pending = horizon_client::mobs::leash::pending_from_nbt(tag.get("leash"));
+            if let Some(state) = transferred {
+                self.adopt_transferred_entity_state(id, state);
+            }
             self.remember(id, uuid, tag);
             self.bind_saved_entity_attachments(id, &mut b.attachment_lifetime);
             self.boats.push(b);
@@ -1057,6 +1065,16 @@ impl Game<'_> {
 
     /// A saved minecart.
     pub(super) fn load_cart(&mut self, tag: Tag, uuid: Option<[i32; 4]>, k: &str) {
+        self.load_cart_transferred(tag, uuid, k, None);
+    }
+
+    pub(super) fn load_cart_transferred(
+        &mut self,
+        tag: Tag,
+        uuid: Option<[i32; 4]>,
+        k: &str,
+        transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) {
         let kind = super::minecarts::CartKind::from_id(k).unwrap();
         let mut tag = tag;
         let riders = self.take_mob_passengers(&mut tag);
@@ -1067,6 +1085,9 @@ impl Game<'_> {
             });
             self.roll_cart_loot(&mut c, &tag);
             self.next_entity = id;
+            if let Some(state) = transferred {
+                self.adopt_transferred_entity_state(id, state);
+            }
             self.remember(id, uuid, tag);
             self.bind_saved_entity_attachments(id, &mut c.attachment_lifetime);
             self.carts.push(c);
@@ -1201,6 +1222,15 @@ impl Game<'_> {
     }
     /// A saved mob and, under `Passengers`, the mobs riding it.
     pub(super) fn load_mob(&mut self, tag: Tag, mount: Option<u32>) -> Option<u32> {
+        self.load_mob_transferred(tag, mount, None)
+    }
+
+    pub(super) fn load_mob_transferred(
+        &mut self,
+        tag: Tag,
+        mount: Option<u32>,
+        transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) -> Option<u32> {
         let uuid = entity_nbt::uuid(&tag);
         if let Some(id) = uuid.and_then(|u| self.restored_vehicle(u)) {
             return Some(id);
@@ -1256,6 +1286,9 @@ impl Game<'_> {
             self.target_with_uuid(uuid)
                 .is_some_and(|target| target != super::commands::Target::Player)
         });
+        if let Some(state) = transferred {
+            self.adopt_transferred_entity_state(id, state);
+        }
         self.remember(id, uuid, tag);
         if refused {
             self.persist.off_level.insert(id, OffLevel::Mob(m));
@@ -1521,7 +1554,7 @@ impl Game<'_> {
         let vehicle = vehicle?;
         let root = parent_vehicle_root(vehicle, others, |id| self.vehicle_of(id))?;
         let mut entity = self.vehicle_tree_nbt(root)?;
-        write_attachments(&mut entity, &self.entity_attachments);
+        write_attachments(&mut entity, root, &self.entity_attachments);
         let attach = self.uuid_for(vehicle);
         Some((root_vehicle_tag(attach, entity), root, attach))
     }
@@ -1712,10 +1745,9 @@ impl Game<'_> {
     }
     /// Forget an entity that left the world (its UUID and loaded compound).
     pub(super) fn forget_entity(&mut self, id: u32) {
-        if let Some(uuid) = self.persist.uuids.remove(&id) {
-            self.forget_entity_initialization(uuid);
-            self.entity_attachments.remove(&uuid);
-        }
+        self.persist.uuids.remove(&id);
+        self.forget_entity_initialization(mod_api::Holder::Entity(id));
+        self.entity_attachments.remove(&id);
         self.persist.raw.remove(&id);
     }
     /// Detach a travelling entity without discarding its in-memory attachments.
@@ -1824,13 +1856,11 @@ impl Game<'_> {
         // `EntityType.create` then `Entity.load`: the constructing listeners set their
         // values first and the saved attachments are read over them. An entity whose map
         // is already live (told before) keeps it, as before.
-        let live = uuid.is_some_and(|u| self.entity_attachments.contains_key(&u));
+        let live = self.entity_attachments.contains_key(&id);
         if let Some(kind) = text(tag.get("id")) {
             self.initialize_entity(mod_api::Holder::Entity(id), &kind);
         }
-        if let Some(u) = uuid {
-            read_attachments(tag, u, &mut self.entity_attachments, live);
-        }
+        read_attachments(tag, id, &mut self.entity_attachments, live);
         self.join_saved_team(id, tag);
     }
     fn join_saved_team(&mut self, id: u32, tag: &Tag) {
@@ -1893,31 +1923,33 @@ impl Game<'_> {
                 .or_default()
                 // The fields kept with it (`remember_tags`: Silent, Tags, a
                 // name...) once it has flown from where it was loaded.
-                .push(with_raw(
-                    d.to_nbt(uuid, raw.as_ref()),
-                    self.persist.raw.get(&d.id),
-                ));
+                .push({
+                    let mut tag =
+                        with_raw(d.to_nbt(uuid, raw.as_ref()), self.persist.raw.get(&d.id));
+                    write_attachments(&mut tag, d.id, &self.entity_attachments);
+                    tag
+                });
         }
         for c in &self.crystals {
             if keys.contains(&chunk_of(c.position)) {
                 let raw = anon_raw(&self.persist, "minecraft:end_crystal", c.position);
                 let uuid = saved_uuid(&self.persist, c.id);
-                out.entry(chunk_of(c.position)).or_default().push(with_raw(
-                    c.to_nbt(uuid, raw.as_ref()),
-                    self.persist.raw.get(&c.id),
-                ));
+                let mut tag = with_raw(c.to_nbt(uuid, raw.as_ref()), self.persist.raw.get(&c.id));
+                write_attachments(&mut tag, c.id, &self.entity_attachments);
+                out.entry(chunk_of(c.position)).or_default().push(tag);
             }
         }
         for s in &self.ominous_spawners {
             let at = Vec3::new(s.position[0], s.position[1], s.position[2]);
             if keys.contains(&chunk_of(at)) {
-                let tag = entity_nbt::ominous_item_spawner_to_nbt(
+                let mut tag = entity_nbt::ominous_item_spawner_to_nbt(
                     &s.item,
                     at,
                     s.spawn_item_after,
                     self.persist.uuids.get(&s.id).copied().unwrap_or(s.uuid),
                     s.raw.as_deref(),
                 );
+                write_attachments(&mut tag, s.id, &self.entity_attachments);
                 out.entry(chunk_of(at)).or_default().push(tag);
             }
         }
@@ -1935,7 +1967,8 @@ impl Game<'_> {
                     .get(&f.id)
                     .copied()
                     .unwrap_or_else(random_uuid);
-                let tag = entity_nbt::item_frame_to_nbt(f, uuid, self.persist.raw.get(&f.id));
+                let mut tag = entity_nbt::item_frame_to_nbt(f, uuid, self.persist.raw.get(&f.id));
+                write_attachments(&mut tag, f.id, &self.entity_attachments);
                 out.entry(chunk_of(at)).or_default().push(tag);
             }
         }
@@ -1947,7 +1980,8 @@ impl Game<'_> {
                     .get(&c.id)
                     .copied()
                     .unwrap_or_else(random_uuid);
-                let tag = entity_nbt::cushion_to_nbt(c, uuid, self.persist.raw.get(&c.id));
+                let mut tag = entity_nbt::cushion_to_nbt(c, uuid, self.persist.raw.get(&c.id));
+                write_attachments(&mut tag, c.id, &self.entity_attachments);
                 out.entry(chunk_of(c.position)).or_default().push(tag);
             }
         }
@@ -1960,7 +1994,8 @@ impl Game<'_> {
                     .get(&p.id)
                     .copied()
                     .unwrap_or_else(random_uuid);
-                let tag = entity_nbt::painting_to_nbt(p, uuid, self.persist.raw.get(&p.id));
+                let mut tag = entity_nbt::painting_to_nbt(p, uuid, self.persist.raw.get(&p.id));
+                write_attachments(&mut tag, p.id, &self.entity_attachments);
                 out.entry(chunk_of(at)).or_default().push(tag);
             }
         }
@@ -1973,9 +2008,9 @@ impl Game<'_> {
                     .get(&f.id)
                     .copied()
                     .unwrap_or_else(random_uuid);
-                out.entry(chunk_of(at))
-                    .or_default()
-                    .push(self.fangs_to_nbt(f, uuid));
+                let mut tag = self.fangs_to_nbt(f, uuid);
+                write_attachments(&mut tag, f.id, &self.entity_attachments);
+                out.entry(chunk_of(at)).or_default().push(tag);
             }
         }
         // `AreaEffectCloud.addAdditionalSaveData`: a lingering potion's cloud is
@@ -1992,7 +2027,8 @@ impl Game<'_> {
                 .get(&c.id)
                 .copied()
                 .unwrap_or_else(random_uuid);
-            let tag = super::potions::potion_cloud_to_nbt(c, uuid, self.persist.raw.get(&c.id));
+            let mut tag = super::potions::potion_cloud_to_nbt(c, uuid, self.persist.raw.get(&c.id));
+            write_attachments(&mut tag, c.id, &self.entity_attachments);
             out.entry(chunk_of(at)).or_default().push(tag);
         }
         for o in &self.others {
@@ -2003,7 +2039,8 @@ impl Game<'_> {
                     .get(&o.id)
                     .copied()
                     .unwrap_or_else(random_uuid);
-                let tag = self.other_to_nbt(o, uuid);
+                let mut tag = self.other_to_nbt(o, uuid);
+                write_attachments(&mut tag, o.id, &self.entity_attachments);
                 out.entry(chunk_of(o.position)).or_default().push(tag);
             }
         }
@@ -2015,11 +2052,6 @@ impl Game<'_> {
             };
             if let Some(list) = unknown {
                 out.entry(*key).or_default().extend(list);
-            }
-        }
-        for tags in out.values_mut() {
-            for tag in tags {
-                write_attachments(tag, &self.entity_attachments);
             }
         }
         if remove {
@@ -2205,9 +2237,9 @@ impl Game<'_> {
     pub(super) fn prune_entity_memory(&mut self) {
         // Forget entities that no longer exist.
         let alive = self.live_entity_ids();
-        for (id, uuid) in &self.persist.uuids {
+        for id in self.persist.uuids.keys() {
             if !alive.contains(id) {
-                self.entity_attachments.remove(uuid);
+                self.entity_attachments.remove(id);
             }
         }
         self.persist.uuids.retain(|id, _| alive.contains(id));
@@ -3045,7 +3077,7 @@ mod tests {
     }
 
     #[test]
-    fn entity_attachment_boundary_includes_passengers() {
+    fn entity_attachment_boundary_does_not_alias_equal_uuid_passengers() {
         use horizon_mod_runtime::attachments::{
             AttachmentCodec, AttachmentError, AttachmentType, Attachments, Holder,
         };
@@ -3064,10 +3096,10 @@ mod tests {
             sync: false,
         };
         let root_id = [1, 2, 3, 4];
-        let child_id = [5, 6, 7, 8];
+        let child_id = root_id;
         let mut data = Attachments::default();
         key.set(&mut data, Holder::Level, 29).unwrap();
-        let maps = [(child_id, data)].into();
+        let maps = [(12, data)].into();
         let mut root = Tag::compound([
             ("UUID", Tag::IntArray(root_id.to_vec())),
             (
@@ -3078,16 +3110,14 @@ mod tests {
                 )])]),
             ),
         ]);
-        write_attachments(&mut root, &maps);
+        write_attachments(&mut root, 12, &maps);
         let Some(Tag::List(children)) = root.get("Passengers") else {
             panic!("passenger missing");
         };
+        assert!(children[0].get(ATTACHMENTS_KEY).is_none());
         let mut loaded = HashMap::new();
-        read_attachments(&children[0], child_id, &mut loaded, false);
-        assert_eq!(
-            key.get(loaded.get_mut(&child_id).unwrap(), Holder::Level),
-            Ok(29)
-        );
+        read_attachments(&root, 12, &mut loaded, false);
+        assert_eq!(key.get(loaded.get_mut(&12).unwrap(), Holder::Level), Ok(29));
     }
 
     /// `remember_uuid`'s read: a map an `entity_constructing` listener made just now takes the
@@ -3126,25 +3156,22 @@ mod tests {
             let mut map = Attachments::default();
             saved.set(&mut map, Holder::Level, 41).unwrap();
             unsaved.set(&mut map, Holder::Level, 41).unwrap();
-            HashMap::from([(uuid, map)])
+            HashMap::from([(12, map)])
         };
 
         let mut constructed = listener();
-        read_attachments(&tag, uuid, &mut constructed, false);
-        let map = constructed.get_mut(&uuid).unwrap();
+        read_attachments(&tag, 12, &mut constructed, false);
+        let map = constructed.get_mut(&12).unwrap();
         assert_eq!(saved.get(map, Holder::Level), Ok(7));
         assert_eq!(unsaved.get(map, Holder::Level), Ok(41));
 
         let mut live = listener();
-        read_attachments(&tag, uuid, &mut live, true);
-        assert_eq!(
-            saved.get(live.get_mut(&uuid).unwrap(), Holder::Level),
-            Ok(41)
-        );
+        read_attachments(&tag, 12, &mut live, true);
+        assert_eq!(saved.get(live.get_mut(&12).unwrap(), Holder::Level), Ok(41));
 
         let mut none = HashMap::new();
-        read_attachments(&tag, uuid, &mut none, false);
-        let map = none.get_mut(&uuid).unwrap();
+        read_attachments(&tag, 12, &mut none, false);
+        let map = none.get_mut(&12).unwrap();
         assert_eq!(saved.get(map, Holder::Level), Ok(7));
         assert_eq!(unsaved.get(map, Holder::Level), Ok(0));
     }
@@ -3288,7 +3315,11 @@ mod tests {
         game.mobs.retain(|mob| Some(mob.id) != zombie_id);
         game.prune_entity_attachments();
         for (kind, uuid, _) in uuids {
-            let kept = game.entity_attachments.contains_key(&uuid);
+            let kept = game
+                .persist
+                .uuids
+                .iter()
+                .any(|(id, u)| *u == uuid && game.entity_attachments.contains_key(id));
             assert_eq!(kept, uuid != zombie, "{kind}: pruned wrongly");
         }
     }
