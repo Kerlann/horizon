@@ -82,6 +82,7 @@ impl mod_api::Hooks for BeforeFirst {
     }
 }
 fn prepare(game: &mut Game<'_>) {
+    game.build_registries();
     game.options.dedicated = Some(Vec::new());
     game.ui.difficulty = 2;
     game.world.health_rules.difficulty = horizon_world::food::Difficulty::Normal;
@@ -281,7 +282,9 @@ fn repeated_small_team_and_owner_changes_have_population_independent_refresh_cou
             game.mobs[0].extra.owner = Some([0, 0, 0, 12]);
             game.mobs[1].extra.tame = true;
             game.mobs[1].extra.owner = Some([4, 0, 0, 10_000]);
-            let member = uuid_text([4, 0, 0, 10_002]);
+            game.persist.uuids.insert(10_002, [0, 0, 0, 12]);
+            game.persist.uuids.insert(10_003, [0, 0, 0, 13]);
+            let member = uuid_text([4, 0, 0, 10_004]);
             game.score.board.add_to_team(&member, "red");
             let teams = game.mob_team_backing_for(&game.mobs);
             game.score.board.begin_ai_changes();
@@ -297,7 +300,7 @@ fn repeated_small_team_and_owner_changes_have_population_independent_refresh_cou
                 assert!(game.score.board.add_to_team(&member, team));
                 member_refreshes += game.refresh_mob_team_deltas(&teams);
                 assert_eq!(
-                    teams.of(Who::Mob(10_002)).unwrap().identity,
+                    teams.of(Who::Mob(10_004)).unwrap().identity,
                     game.score.board.team(team).unwrap().ai_identity()
                 );
                 game.mobs[0].extra.owner = Some(owner);
@@ -316,5 +319,131 @@ fn repeated_small_team_and_owner_changes_have_population_independent_refresh_cou
             );
             game.score.board.end_ai_changes();
         }
+    });
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn canonical_player_writes_refresh_only_changed_projection_and_ignore_noops() {
+    with_guests(|game| {
+        prepare(game);
+        let teams = game.mob_team_backing_for(&game.mobs);
+        let mobs = game.mobs.lift();
+        let mut local = None;
+        let mut spare = None;
+        let mut guests: Vec<_> = [12, 13]
+            .into_iter()
+            .map(|conn| (conn, game.ai_guest_view(conn, &teams, &mobs).unwrap()))
+            .collect();
+        let untouched = guests[1].1.clone();
+        let mut guest_ids = vec![(12, 12), (13, 13)];
+        let mut players = game.level_players();
+        let mut nearest = crate::game::natural_spawning::NearestPlayers::new(&players);
+        let mut index = PlayerBackingIndex::new(&PlayerBackingLoans {
+            mobs: &mobs,
+            local: &mut local,
+            spare: &mut spare,
+            guests: &mut guests,
+            guest_ids: &mut guest_ids,
+            players: &mut players,
+            nearest: &mut nearest,
+        });
+        macro_rules! refresh {
+            () => {
+                game.refresh_mob_player_deltas(
+                    &teams,
+                    &mut index,
+                    PlayerBackingLoans {
+                        mobs: &mobs,
+                        local: &mut local,
+                        spare: &mut spare,
+                        guests: &mut guests,
+                        guest_ids: &mut guest_ids,
+                        players: &mut players,
+                        nearest: &mut nearest,
+                    },
+                )
+            };
+        }
+        game.score.board.begin_ai_changes();
+        for command in [
+            "item replace entity guest12 weapon.mainhand with minecraft:carrot",
+            "item replace entity guest12 armor.head with minecraft:creeper_head",
+            "effect give guest12 minecraft:invisibility 120 0 true",
+        ] {
+            assert!(
+                game.as_console(|game| game.run_command(command)),
+                "{command}: {:?}",
+                game.ui.chat.recent_lines(3)
+            );
+            assert_eq!(refresh!(), 1, "{command}");
+            let _ = game.as_console(|game| game.run_command(command));
+            assert_eq!(refresh!(), 0, "same represented facts: {command}");
+        }
+        assert_eq!(guests[0].1.main_hand.as_deref(), Some("minecraft:carrot"));
+        assert_eq!(guests[0].1.head.as_deref(), Some("minecraft:creeper_head"));
+        assert!(guests[0].1.invisible);
+        assert!(guests[0].1.effects.contains(&"invisibility"));
+        let entity = game.entity(12).unwrap();
+        let living = game.living(entity).unwrap();
+        let head = game
+            .pack
+            .assets
+            .registry
+            .resolve(&horizon_world::chunk::BlockState {
+                name: "minecraft:red_bed".into(),
+                properties: [("facing", "north"), ("occupied", "false"), ("part", "head")]
+                    .into_iter()
+                    .map(|(k, v)| (k.into(), v.into()))
+                    .collect(),
+            })
+            .unwrap();
+        game.world.set(5, 64, 5, head).unwrap();
+        let mut foot = game.pack.assets.registry.state(head).unwrap().clone();
+        foot.properties.insert("part".into(), "foot".into());
+        game.world
+            .set(5, 64, 6, game.pack.assets.registry.id(&foot).unwrap())
+            .unwrap();
+        assert!(game.living_start_sleeping(living, [5, 64, 5]));
+        assert_eq!(refresh!(), 1);
+        assert!(guests[0].1.sleeping);
+        assert!(game.living_stop_sleeping(living));
+        assert_eq!(refresh!(), 1);
+        assert!(!guests[0].1.sleeping);
+        let _ = game.living_stop_sleeping(living);
+        assert_eq!(refresh!(), 0);
+        assert!(game.as_console(|game| game.run_command("summon minecraft:oak_boat 3 64 5")));
+        let boat_id = game.boats.last().unwrap().id;
+        let command = format!("ride guest12 mount {}", uuid_text(game.uuid_for(boat_id)));
+        assert!(game.as_console(|game| game.run_command(&command)));
+        assert_eq!(refresh!(), 1);
+        assert_eq!(guests[0].1.riding_vehicle, Some(boat_id));
+        assert!(guests[0].1.vehicle.is_some());
+        let _ = game.as_console(|game| game.run_command(&command));
+        assert_eq!(refresh!(), 0);
+        assert!(game.as_console(|game| game.run_command("ride guest12 dismount")));
+        assert_eq!(refresh!(), 1);
+        assert!(!guests[0].1.passenger);
+        assert!(game.living_set_health(living, 18.0));
+        assert_eq!(refresh!(), 1);
+        assert!(game.living_set_health(living, 18.0));
+        assert!(!game.living_set_health(living, f32::NAN));
+        assert_eq!(refresh!(), 0);
+        assert!(game.entity_set_invulnerable(entity, true));
+        assert_eq!(refresh!(), 1);
+        assert!(guests[0].1.invulnerable);
+        assert!(game.entity_set_invulnerable(entity, true));
+        assert_eq!(refresh!(), 0);
+        assert_eq!(
+            guests[1].1, untouched,
+            "another guest's projection is untouched"
+        );
+        assert!(game.living_set_health(living, 0.0));
+        assert_eq!(refresh!(), 1);
+        assert!(!players.iter().find(|p| p.uuid == 12).unwrap().alive);
+        assert!(!guests.iter().find(|(conn, _)| *conn == 12).unwrap().1.alive);
+        game.score.board.end_ai_changes();
+        game.mobs
+            .restore(mobs, horizon_client::join_seq::RestoreOrder::SurvivorsFirst);
     });
 }

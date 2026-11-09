@@ -3972,14 +3972,35 @@ pub trait WhoLookup {
 #[derive(Debug, Default)]
 pub struct AiTeamFacts {
     pub identities: HashMap<u32, [i32; 4]>,
+    pub entity_uuids: HashMap<[i32; 4], usize>,
     pub names: HashMap<std::sync::Arc<str>, [i32; 4]>,
     pub player_names: HashMap<[i32; 4], std::sync::Arc<str>>,
     pub players: std::collections::HashSet<[i32; 4]>,
+    pub active_players: std::collections::HashSet<[i32; 4]>,
     pub members: HashMap<[i32; 4], usize>,
     pub owners: HashMap<[i32; 4], [i32; 4]>,
     pub rules: HashMap<usize, crate::scoreboard::TeamRules<usize>>,
 }
 impl AiTeamFacts {
+    /// Owned AI membership projection, populated only after canonical admission.
+    /// Counts preserve terminal existence if an imported source repeats a UUID.
+    pub fn set_identity(&mut self, id: u32, uuid: Option<[i32; 4]>) {
+        if let Some(old) = self.identities.remove(&id) {
+            self.owners.remove(&old);
+            let count = self
+                .entity_uuids
+                .get_mut(&old)
+                .expect("admitted identity count");
+            *count -= 1;
+            if *count == 0 {
+                self.entity_uuids.remove(&old);
+            }
+        }
+        if let Some(uuid) = uuid {
+            self.identities.insert(id, uuid);
+            *self.entity_uuids.entry(uuid).or_default() += 1;
+        }
+    }
     fn team(&self, uuid: [i32; 4]) -> Option<usize> {
         if let Some(&team) = self.members.get(&uuid) {
             return Some(team);
@@ -3991,6 +4012,9 @@ impl AiTeamFacts {
                 Some(next) => owner = *next,
                 None => break,
             }
+        }
+        if !self.players.contains(&owner) && !self.entity_uuids.contains_key(&owner) {
+            return None;
         }
         self.members.get(&owner).copied()
     }
@@ -6088,6 +6112,32 @@ mod teams_tests {
         }
     }
 
+    #[test]
+    fn inherited_team_requires_a_real_terminal_owner_not_a_uuid_text_member() {
+        let mut facts = AiTeamFacts::default();
+        let pet = [0, 0, 0, 1];
+        let owner = [0, 0, 0, 2];
+        facts.set_identity(1, Some(pet));
+        facts.owners.insert(pet, owner);
+        facts.members.insert(owner, 7);
+        assert_eq!(facts.team(pet), None);
+        facts.set_identity(2, Some(owner));
+        facts.set_identity(3, Some(owner));
+        assert_eq!(facts.team(pet), Some(7));
+        facts.set_identity(2, None);
+        assert_eq!(facts.team(pet), Some(7));
+        facts.set_identity(3, None);
+        assert_eq!(facts.team(pet), None);
+        facts.players.insert(owner); // A global online profile also resolves.
+        assert_eq!(facts.team(pet), Some(7));
+        facts.players.remove(&owner);
+        facts.members.insert(pet, 8);
+        assert_eq!(
+            facts.team(pet),
+            Some(8),
+            "own membership wins even with no owner"
+        );
+    }
     #[test]
     fn bounded_team_rules_match_authoritative_teams() {
         let (board, uuids) = board(40);

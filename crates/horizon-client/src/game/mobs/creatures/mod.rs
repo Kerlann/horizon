@@ -1569,6 +1569,9 @@ impl Game<'_> {
                 self.publish_mob_read_source(mob, mod_api::EntityReadCapturePhase::PassStart);
             }
         }
+        // Validate the canonical primary identities before lending source bodies.
+        // Later actor changes update only their bounded facts.
+        let teams = std::sync::Arc::new(self.mob_team_backing_for(&self.mobs));
         let mut mobs = self.mobs.lift();
         #[cfg(test)]
         super::entity::taken_pass_tests::after_take(self);
@@ -1610,6 +1613,7 @@ impl Game<'_> {
         // the random, and a hit's damage hooks get both) and taken back after their ticks.
         let lent = horizon_client::health::LentLevel::take(&mut self.world);
         let (lent, dispatch_panic) = self.tick_borrowed_creatures(borrowed_tick::BorrowedMobTick {
+            teams,
             mobs: &mut mobs,
             snapshot: &mut snapshot,
             events: &mut events,

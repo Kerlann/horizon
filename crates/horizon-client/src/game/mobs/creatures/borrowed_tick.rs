@@ -45,6 +45,7 @@ fn route_player_events(
 }
 
 pub(super) struct BorrowedMobTick<'a> {
+    pub(super) teams: std::sync::Arc<horizon_client::mobs::TeamRulesSnapshot>,
     pub(super) mobs: &'a mut horizon_client::join_seq::JoinList<Mob>,
     pub(super) snapshot: &'a mut Vec<Seen>,
     pub(super) events: &'a mut Vec<MobEvent>,
@@ -241,7 +242,7 @@ impl Game<'_> {
                 .map(|(slot, &join)| (join, slot))
                 .collect::<horizon_client::fast_hash::FxHashMap<_, _>>()
         });
-        let teams = std::sync::Arc::new(self.mob_team_backing_for(&mobs));
+        let teams = state.teams.clone();
         self.score.board.begin_ai_changes();
         let mut player_backing = self.ai_player_view(&teams, &mobs);
         let mut players = self.level_players();

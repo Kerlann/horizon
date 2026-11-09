@@ -730,33 +730,41 @@ impl Game<'_> {
         use horizon_client::mobs::TeamRulesSnapshot;
         let mut facts = shared.write().expect("AI team backing poisoned");
         facts.identities.clear();
+        facts.entity_uuids.clear();
         facts.names.clear();
         facts.player_names.clear();
         facts.players.clear();
+        facts.active_players.clear();
         facts.members.clear();
         facts.owners.clear();
         facts.rules.clear();
-        facts
-            .identities
-            .extend(self.persist.uuids.iter().map(|(&id, &uuid)| (id, uuid)));
+        for (&id, &uuid) in &self.persist.uuids {
+            facts.set_identity(id, Some(uuid));
+        }
         for guest in self.guests_placed_in(self.dim.id()) {
             if let Ok(id) = u32::try_from(guest.entity_id) {
-                facts
-                    .identities
-                    .insert(id, horizon_client::lan::playerdata::uuid_ints(guest.uuid));
+                let uuid = horizon_client::lan::playerdata::uuid_ints(guest.uuid);
+                facts.set_identity(id, Some(uuid));
+                facts.active_players.insert(uuid);
             }
         }
         let local = (self.player.is_some() && !self.lan_acting_fake)
             .then(|| (self.acting_player_name(), self.acting_uuid()));
-        for (name, uuid) in local
-            .into_iter()
-            .chain(self.guests_placed_in(self.dim.id()).map(|g| {
-                (
-                    g.name.as_str(),
-                    horizon_client::lan::playerdata::uuid_ints(g.uuid),
-                )
-            }))
-        {
+        if let Some((_, uuid)) = local {
+            facts.active_players.insert(uuid);
+        }
+        for (name, uuid) in local.into_iter().chain(
+            self.lan
+                .iter()
+                .flat_map(|host| host.hub.online_players())
+                .filter(|g| Some(g.conn) != self.lan_acting)
+                .map(|g| {
+                    (
+                        g.name.as_str(),
+                        horizon_client::lan::playerdata::uuid_ints(g.uuid),
+                    )
+                }),
+        ) {
             let mut state = self.entity_read_state.borrow_mut();
             let name = match state.identities.get(name) {
                 Some(name) => name.clone(),

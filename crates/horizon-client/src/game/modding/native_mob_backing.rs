@@ -43,7 +43,7 @@ impl Game<'_> {
             .mob_ai_teams
             .read()
             .expect("AI team backing poisoned")
-            .players
+            .active_players
             .contains(&key.uuid);
         let here = match key.conn {
             Some(conn) if self.lan_acting == Some(conn) => {
@@ -428,18 +428,21 @@ impl Game<'_> {
         let Some((shared, _)) = &teams.shared else {
             return;
         };
-        let name = present
-            .then(|| match key.conn {
-                Some(conn) => self
-                    .lan
-                    .as_ref()?
-                    .hub
-                    .guest(conn)
-                    .map(|guest| guest.name.as_str()),
-                None => Some(self.acting_player_name()),
-            })
-            .flatten();
+        let name = match key.conn {
+            Some(conn) => self
+                .lan
+                .as_ref()
+                .and_then(|host| host.hub.guest(conn))
+                .filter(|guest| guest.placed && guest.participates_online())
+                .map(|guest| guest.name.as_str()),
+            None => present.then(|| self.acting_player_name()),
+        };
         let mut facts = shared.write().expect("AI team backing poisoned");
+        if present {
+            facts.active_players.insert(key.uuid);
+        } else {
+            facts.active_players.remove(&key.uuid);
+        }
         if name == facts.player_names.get(&key.uuid).map(|name| name.as_ref()) {
             return;
         }
@@ -525,25 +528,18 @@ impl Game<'_> {
                 }
                 guest
                     .filter(|g| g.uuid == uuid128 && g.placed_in(self.dim.id()))
-                    .map(|g| super::natural_spawning::LevelPlayer {
-                        uuid: g.uuid,
-                        position: horizon_core::geometry::Vec3::new(
-                            g.position[0],
-                            g.position[1],
-                            g.position[2],
-                        ),
-                        bounds: super::lan_mobs::guest_bounds(g),
-                        alive: !g.dead,
-                        creative: g.creative(),
-                        spectator: g.spectator(),
-                    })
+                    .map(super::natural_spawning::LevelPlayer::guest)
             } else if self.acting_uuid() == uuid {
                 *loans.local = self.ai_player_view(teams, loans.mobs);
                 self.local_level_player()
             } else {
                 None
             };
-            self.sync_ai_player_team_binding(PlayerBackingKey { uuid, conn }, level.is_some(), teams);
+            self.sync_ai_player_team_binding(
+                PlayerBackingKey { uuid, conn },
+                level.is_some(),
+                teams,
+            );
             match (index.levels.get(&uuid128).copied(), level) {
                 (Some(slot), Some(level)) => {
                     debug_assert_eq!(loans.players[slot].uuid, uuid128);

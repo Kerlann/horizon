@@ -176,6 +176,20 @@ pub(super) struct LevelPlayer {
     pub(super) spectator: bool,
 }
 impl LevelPlayer {
+    pub(super) fn guest(g: &horizon_client::lan::guest::Guest) -> Self {
+        Self {
+            uuid: g.uuid,
+            position: Vec3::new(g.position[0], g.position[1], g.position[2]),
+            bounds: super::lan_mobs::guest_bounds(g),
+            alive: !g.dead
+                && g.motion
+                    .as_ref()
+                    .map_or(g.health > 0.0, |p| p.health.health() > 0.0),
+            creative: g.creative(),
+            spectator: g.spectator(),
+        }
+    }
+
     fn distance_sqr(&self, x: f64, y: f64, z: f64) -> f64 {
         (self.position.x - x).powi(2)
             + (self.position.y - y).powi(2)
@@ -1107,14 +1121,7 @@ impl<'a> Game<'a> {
     pub(super) fn level_players_iter(&self) -> impl Iterator<Item = LevelPlayer> + '_ {
         self.local_level_player()
             .into_iter()
-            .chain(self.level_guests().map(|g| LevelPlayer {
-                uuid: g.uuid,
-                position: Vec3::new(g.position[0], g.position[1], g.position[2]),
-                bounds: super::lan_mobs::guest_bounds(g),
-                alive: !g.dead,
-                creative: g.creative(),
-                spectator: g.spectator(),
-            }))
+            .chain(self.level_guests().map(LevelPlayer::guest))
     }
     pub(super) fn local_level_player(&self) -> Option<LevelPlayer> {
         if self.lan_acting_fake {
