@@ -174,6 +174,68 @@ fn borrowed_spawn_first_read_and_dimension_transfer_keep_one_initialization() {
             let replacement = game.load_mob(tag("minecraft:cow", uuid[0]), None).unwrap();
             assert_eq!(VALUE.get(game, Holder::Entity(replacement)), Ok(41));
             assert_eq!(calls.lock().unwrap().len(), 2);
+            // Non-Mob transfers must retain values that cannot be serialized at all.
+            for (n, kind) in [
+                "minecraft:item",
+                "minecraft:oak_boat",
+                "minecraft:minecart",
+                "minecraft:arrow",
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let uuid = [300 + n as i32, 2, 3, 4];
+                let mut data = tag(kind, uuid[0]);
+                if kind == "minecraft:item"
+                    && let Tag::Compound(c) = &mut data
+                {
+                    c.insert(
+                        "Item".into(),
+                        Tag::compound([
+                            ("id", Tag::String("minecraft:stone".into())),
+                            ("count", Tag::Int(1)),
+                        ]),
+                    );
+                }
+                game.load_listed(kind, Some(uuid), None, data.clone())
+                    .unwrap();
+                let source = *game
+                    .persist
+                    .uuids
+                    .iter()
+                    .find(|(_, u)| **u == uuid)
+                    .unwrap()
+                    .0;
+                VALUE.set(game, Holder::Entity(source), 73).unwrap();
+                let before = calls.lock().unwrap().len();
+                let state = game.take_transferred_entity_state(source);
+                let entity = game.entity(source).unwrap();
+                assert!(game.entity_discard(entity));
+                game.native_removals_flush();
+                game.forget_entity(source);
+                let destination = if game.dim == Dim::Nether {
+                    Dim::Overworld
+                } else {
+                    Dim::Nether
+                };
+                game.enter_level(destination).unwrap();
+                game.load_listed_transferred(kind, Some(uuid), None, data, state)
+                    .unwrap();
+                let arrived = *game
+                    .persist
+                    .uuids
+                    .iter()
+                    .find(|(_, u)| **u == uuid)
+                    .unwrap()
+                    .0;
+                assert_ne!(source, arrived);
+                assert_eq!(VALUE.get(game, Holder::Entity(arrived)), Ok(73), "{kind}");
+                assert_eq!(
+                    calls.lock().unwrap().len(),
+                    before,
+                    "{kind} transferred, not constructed"
+                );
+            }
         })
     });
 }

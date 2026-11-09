@@ -1183,13 +1183,13 @@ impl Game<'_> {
             return;
         };
         if let Some(mut b) = take_vehicle(&mut parked.boats, id, at, yaw, motion) {
-            self.rebind_transferred_entity(source, id, &mut b);
+            self.rebind_transferred_entity(id, &mut b);
             self.boats.push(b);
         } else if let Some(mut c) = take_vehicle(&mut parked.carts, id, at, yaw, motion) {
-            self.rebind_transferred_entity(source, id, &mut c);
+            self.rebind_transferred_entity(id, &mut c);
             self.carts.push(c);
         } else if let Some(mut m) = take_vehicle(&mut parked.mobs, id, at, yaw, motion) {
-            self.rebind_transferred_entity(source, id, &mut m);
+            self.rebind_transferred_entity(id, &mut m);
             self.mobs.push(m);
         } else {
             return;

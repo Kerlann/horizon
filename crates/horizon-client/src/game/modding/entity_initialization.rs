@@ -112,6 +112,7 @@ impl Game<'_> {
 
 /// Explicit ownership passed alongside one travelling object's NBT, never encoded in NBT.
 /// Not Clone: a transfer cannot install the same runtime state twice.
+#[derive(Debug)]
 pub(super) struct TransferredEntityState {
     attachments: Option<horizon_mod_runtime::attachments::Attachments>,
     initialized: bool,

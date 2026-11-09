@@ -654,83 +654,98 @@ impl Game<'_> {
     /// Spawn the entities of chunks that finished loading.
     pub(super) fn spawn_loaded_entities(&mut self) {
         let loaded = std::mem::take(&mut self.world.loaded_entities);
-        let player_uuid = self.level.player_uuid;
         for (key, tags) in loaded {
             let count = tags.len();
-            for mut tag in tags {
-                // A world older builds named by the offline profile names the player that
-                // way in its entities too: migrate them as they load, so the next save of
-                // the chunk keeps the account's UUID (`playerdata::migrate_owner`).
-                if let Some((old, new)) = self.owner_migration {
-                    entity_nbt::migrate_player_uuid(
-                        &mut tag,
-                        horizon_client::lan::playerdata::uuid_ints(old),
-                        horizon_client::lan::playerdata::uuid_ints(new),
-                    );
-                }
-                // PersistentEntitySectionManager.addEntity's `loaded`.
-                let from_disk = !take_fresh(&mut tag);
-                // An End gateway's traveller never left the level: nothing joins.
-                let moved = take_moved(&mut tag);
-                // Whatever was added since the last tick joins before this one.
-                self.native_joins_flush(false, 0);
-                let kind = entity_nbt::kind(&tag).unwrap_or_default();
-                let is_mob = self.res.mob_types().contains_key(kind.as_str());
-                drop_unleashable_leash(&mut tag, &kind, is_mob);
-                let uuid = entity_nbt::uuid(&tag);
-                if uuid.is_some_and(|u| self.restored_vehicle(u).is_some()) {
-                    continue;
-                }
-                if (matches!(
-                    kind.as_str(),
-                    "minecraft:experience_orb"
-                        | "minecraft:arrow"
-                        | "minecraft:spectral_arrow"
-                        | "minecraft:llama_spit"
-                        | "minecraft:shulker_bullet"
-                        | "minecraft:experience_bottle"
-                        | "minecraft:fireball"
-                        | "minecraft:small_fireball"
-                        | "minecraft:wind_charge"
-                        | "minecraft:breeze_wind_charge"
-                        | "minecraft:wither_skull"
-                        | "minecraft:snowball"
-                        | "minecraft:egg"
-                        | "minecraft:ender_pearl"
-                        | "minecraft:splash_potion"
-                        | "minecraft:lingering_potion"
-                        | "minecraft:falling_block"
-                        | "minecraft:firework_rocket"
-                        | "minecraft:trident"
-                        | "minecraft:end_crystal"
-                        | "minecraft:ender_dragon"
-                ) || horizon_client::projectiles::thrown_type(&kind).is_some())
-                    && let Some(at) = entity_nbt::position(&tag)
-                {
-                    self.persist
-                        .anon
-                        .insert(anon_key(&kind, at), (at, tag.clone()));
-                }
-                // Kinds outside `entity_lists!` first, then the listed kinds
-                // (`Entity::load_nbt`), then whatever else is a compound.
-                if let Err(tag) = self.load_unlisted(key, &kind, uuid, tag)
-                    && let Err(tag) = self.load_listed(&kind, uuid, player_uuid, tag)
-                {
-                    if !kind.is_empty() && entity_nbt::position(&tag).is_some() {
-                        self.load_other(tag, &kind);
-                    } else {
-                        self.persist.unknown.entry(key).or_default().push(tag);
-                    }
-                }
-                // PersistentEntitySectionManager.addEntity: every kind that
-                // just joined tells the mods; a moved one does not join.
-                if moved {
-                    self.native_joins_skip();
-                } else {
-                    self.native_joins_flush(from_disk, 0);
-                }
+            for tag in tags {
+                self.spawn_loaded_entity(key, tag, None);
             }
             self.native_entities_load(self.dim.id(), [key.0, key.1], count);
+        }
+    }
+
+    /// Install one disk record or explicitly owned live transfer through the same
+    /// metadata and join boundary. The transfer token belongs only to this call.
+    pub(super) fn spawn_loaded_entity(
+        &mut self,
+        key: ChunkKey,
+        mut tag: Tag,
+        transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) {
+        let player_uuid = self.level.player_uuid;
+        // A world older builds named by the offline profile names the player that
+        // way in its entities too: migrate them as they load, so the next save of
+        // the chunk keeps the account's UUID (`playerdata::migrate_owner`).
+        if let Some((old, new)) = self.owner_migration {
+            entity_nbt::migrate_player_uuid(
+                &mut tag,
+                horizon_client::lan::playerdata::uuid_ints(old),
+                horizon_client::lan::playerdata::uuid_ints(new),
+            );
+        }
+        // PersistentEntitySectionManager.addEntity's `loaded`.
+        let from_disk = !take_fresh(&mut tag);
+        // An End gateway's traveller never left the level: nothing joins.
+        let moved = take_moved(&mut tag);
+        // Whatever was added since the last tick joins before this one.
+        self.native_joins_flush(false, 0);
+        let kind = entity_nbt::kind(&tag).unwrap_or_default();
+        let is_mob = self.res.mob_types().contains_key(kind.as_str());
+        drop_unleashable_leash(&mut tag, &kind, is_mob);
+        let uuid = entity_nbt::uuid(&tag);
+        if uuid.is_some_and(|u| self.restored_vehicle(u).is_some()) {
+            return;
+        }
+        if (matches!(
+            kind.as_str(),
+            "minecraft:experience_orb"
+                | "minecraft:arrow"
+                | "minecraft:spectral_arrow"
+                | "minecraft:llama_spit"
+                | "minecraft:shulker_bullet"
+                | "minecraft:experience_bottle"
+                | "minecraft:fireball"
+                | "minecraft:small_fireball"
+                | "minecraft:wind_charge"
+                | "minecraft:breeze_wind_charge"
+                | "minecraft:wither_skull"
+                | "minecraft:snowball"
+                | "minecraft:egg"
+                | "minecraft:ender_pearl"
+                | "minecraft:splash_potion"
+                | "minecraft:lingering_potion"
+                | "minecraft:falling_block"
+                | "minecraft:firework_rocket"
+                | "minecraft:trident"
+                | "minecraft:end_crystal"
+                | "minecraft:ender_dragon"
+        ) || horizon_client::projectiles::thrown_type(&kind).is_some())
+            && let Some(at) = entity_nbt::position(&tag)
+        {
+            self.persist
+                .anon
+                .insert(anon_key(&kind, at), (at, tag.clone()));
+        }
+        // Kinds outside `entity_lists!` first, then the listed kinds
+        // (`Entity::load_nbt`), then whatever else is a compound.
+        let unloaded = if let Some(state) = transferred {
+            self.load_listed_transferred(&kind, uuid, player_uuid, tag, state)
+        } else {
+            self.load_unlisted(key, &kind, uuid, tag)
+                .or_else(|tag| self.load_listed(&kind, uuid, player_uuid, tag))
+        };
+        if let Err(tag) = unloaded {
+            if !kind.is_empty() && entity_nbt::position(&tag).is_some() {
+                self.load_other(tag, &kind);
+            } else {
+                self.persist.unknown.entry(key).or_default().push(tag);
+            }
+        }
+        // PersistentEntitySectionManager.addEntity: every kind that
+        // just joined tells the mods; a moved one does not join.
+        if moved {
+            self.native_joins_skip();
+        } else {
+            self.native_joins_flush(from_disk, 0);
         }
     }
     /// The kinds `entity_lists!` does not hold: `Err` hands the compound back
@@ -779,6 +794,15 @@ impl Game<'_> {
     }
     /// A saved dropped item.
     pub(super) fn load_item(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+        self.load_item_transferred(tag, uuid, None);
+    }
+
+    pub(super) fn load_item_transferred(
+        &mut self,
+        tag: Tag,
+        uuid: Option<[i32; 4]>,
+        transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) {
         self.next_entity += 1;
         // `ItemEntity(EntityType, Level)` before the load: the item's own random
         // makes its UUID (kept unless the tag has one) and bobOffs, not the level's.
@@ -787,6 +811,9 @@ impl Game<'_> {
         let fresh = horizon_client::save::insecure_uuid(&mut own);
         let bob = own.next_float() * std::f32::consts::PI * 2.0;
         if let Some(mut e) = entity_nbt::item_entity_from_nbt(&tag, self.next_entity, bob) {
+            if let Some(state) = transferred {
+                self.adopt_transferred_entity_state(e.id, state);
+            }
             self.remember(e.id, Some(uuid.unwrap_or(fresh)), tag);
             self.bind_saved_entity_attachments(e.id, &mut e.attachment_lifetime);
             self.dropped.push(e);
@@ -795,12 +822,24 @@ impl Game<'_> {
 
     /// A saved experience orb (or the orbs it stands for).
     pub(super) fn load_orb(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+        self.load_orb_transferred(tag, uuid, None);
+    }
+
+    pub(super) fn load_orb_transferred(
+        &mut self,
+        tag: Tag,
+        uuid: Option<[i32; 4]>,
+        mut transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) {
         for (i, mut orb) in entity_nbt::orbs_from_nbt(&tag).into_iter().enumerate() {
             self.next_entity += 1;
             orb.id = self.next_entity;
             let id = orb.id;
             // Horizon splits a saved `count` into orbs: the first is the saved one.
             if i == 0 {
+                if let Some(state) = transferred.take() {
+                    self.adopt_transferred_entity_state(id, state);
+                }
                 self.remember_uuid(id, uuid, &tag);
                 self.bind_saved_entity_attachments(id, &mut orb.attachment_lifetime);
             }
@@ -818,6 +857,16 @@ impl Game<'_> {
         uuid: Option<[i32; 4]>,
         player_uuid: Option<[i32; 4]>,
     ) {
+        self.load_arrow_transferred(tag, uuid, player_uuid, None);
+    }
+
+    pub(super) fn load_arrow_transferred(
+        &mut self,
+        tag: Tag,
+        uuid: Option<[i32; 4]>,
+        player_uuid: Option<[i32; 4]>,
+        transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) {
         if let Some((mut p, in_block)) =
             entity_nbt::arrow_from_nbt(&tag, player_uuid, super::dispenser::tipped_effect)
         {
@@ -831,6 +880,9 @@ impl Game<'_> {
             p.id = self.next_entity;
             self.restore_portal_cooldown(p.id, &tag);
             self.remember_tags(p.id, &tag);
+            if let Some(state) = transferred {
+                self.adopt_transferred_entity_state(p.id, state);
+            }
             self.remember_uuid(p.id, uuid, &tag);
             self.bind_saved_entity_attachments(p.id, &mut p.attachment_lifetime);
             self.add_projectile(p);
@@ -844,12 +896,25 @@ impl Game<'_> {
         uuid: Option<[i32; 4]>,
         player_uuid: Option<[i32; 4]>,
     ) {
+        self.load_spit_or_bullet_transferred(tag, uuid, player_uuid, None);
+    }
+
+    pub(super) fn load_spit_or_bullet_transferred(
+        &mut self,
+        tag: Tag,
+        uuid: Option<[i32; 4]>,
+        player_uuid: Option<[i32; 4]>,
+        transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) {
         let target = self.bullet_target(&tag);
         if let Some(mut p) = entity_nbt::spit_or_bullet_from_nbt(&tag, player_uuid, target) {
             self.claim_owner(&mut p);
             self.next_entity += 1;
             p.id = self.next_entity;
             self.restore_portal_cooldown(p.id, &tag);
+            if let Some(state) = transferred {
+                self.adopt_transferred_entity_state(p.id, state);
+            }
             self.remember_uuid(p.id, uuid, &tag);
             self.bind_saved_entity_attachments(p.id, &mut p.attachment_lifetime);
             self.add_projectile(p);
@@ -871,12 +936,25 @@ impl Game<'_> {
         uuid: Option<[i32; 4]>,
         player_uuid: Option<[i32; 4]>,
     ) {
+        self.load_fireball_transferred(tag, uuid, player_uuid, None);
+    }
+
+    pub(super) fn load_fireball_transferred(
+        &mut self,
+        tag: Tag,
+        uuid: Option<[i32; 4]>,
+        player_uuid: Option<[i32; 4]>,
+        transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) {
         if let Some(mut p) = entity_nbt::fireball_from_nbt(&tag, player_uuid) {
             self.claim_owner(&mut p);
             // A projectile that came through a portal keeps its cooldown.
             self.next_entity += 1;
             p.id = self.next_entity;
             self.restore_portal_cooldown(p.id, &tag);
+            if let Some(state) = transferred {
+                self.adopt_transferred_entity_state(p.id, state);
+            }
             self.remember_uuid(p.id, uuid, &tag);
             self.bind_saved_entity_attachments(p.id, &mut p.attachment_lifetime);
             self.add_projectile(p);
@@ -891,12 +969,25 @@ impl Game<'_> {
         uuid: Option<[i32; 4]>,
         player_uuid: Option<[i32; 4]>,
     ) {
+        self.load_throwable_transferred(tag, uuid, player_uuid, None);
+    }
+
+    pub(super) fn load_throwable_transferred(
+        &mut self,
+        tag: Tag,
+        uuid: Option<[i32; 4]>,
+        player_uuid: Option<[i32; 4]>,
+        transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) {
         if let Some(mut p) = entity_nbt::throwable_from_nbt(&tag, player_uuid) {
             self.claim_owner(&mut p);
             // A projectile that came through a portal keeps its cooldown.
             self.next_entity += 1;
             p.id = self.next_entity;
             self.restore_portal_cooldown(p.id, &tag);
+            if let Some(state) = transferred {
+                self.adopt_transferred_entity_state(p.id, state);
+            }
             self.remember_uuid(p.id, uuid, &tag);
             self.bind_saved_entity_attachments(p.id, &mut p.attachment_lifetime);
             self.add_projectile(p);
@@ -906,6 +997,15 @@ impl Game<'_> {
 
     /// A saved falling block.
     pub(super) fn load_falling(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+        self.load_falling_transferred(tag, uuid, None);
+    }
+
+    pub(super) fn load_falling_transferred(
+        &mut self,
+        tag: Tag,
+        uuid: Option<[i32; 4]>,
+        transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) {
         if let Some((state, position, velocity, age, fall_distance)) =
             entity_nbt::falling_block_from_nbt(&tag)
             && let Some(state) =
@@ -914,6 +1014,9 @@ impl Game<'_> {
             let (no_gravity, drop_item) = entity_nbt::falling_block_flags(&tag);
             self.next_entity += 1;
             // A summoned one has no UUID yet: `Entity` makes a random one.
+            if let Some(state) = transferred {
+                self.adopt_transferred_entity_state(self.next_entity, state);
+            }
             self.remember_uuid(self.next_entity, uuid, &tag);
             let uuid = self.uuid_for(self.next_entity);
             self.falling.push(FallingBlock {
@@ -948,12 +1051,24 @@ impl Game<'_> {
 
     /// A saved thrown trident.
     pub(super) fn load_trident(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+        self.load_trident_transferred(tag, uuid, None);
+    }
+
+    pub(super) fn load_trident_transferred(
+        &mut self,
+        tag: Tag,
+        uuid: Option<[i32; 4]>,
+        transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) {
         if let Some(n) = entity_nbt::trident_from_nbt(&tag) {
             let mut t = super::trident::ThrownTrident::from_nbt(n);
             t.id = self.take_entity_id();
             // One that came through a portal keeps its cooldown.
             let id = t.id;
             self.tridents.push(t);
+            if let Some(state) = transferred {
+                self.adopt_transferred_entity_state(id, state);
+            }
             self.remember(id, uuid, tag);
         }
     }
@@ -965,6 +1080,16 @@ impl Game<'_> {
         uuid: Option<[i32; 4]>,
         player_uuid: Option<[i32; 4]>,
     ) {
+        self.load_rocket_transferred(tag, uuid, player_uuid, None);
+    }
+
+    pub(super) fn load_rocket_transferred(
+        &mut self,
+        tag: Tag,
+        uuid: Option<[i32; 4]>,
+        player_uuid: Option<[i32; 4]>,
+        transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) {
         if let Some(r) = entity_nbt::firework_rocket_from_nbt(&tag, player_uuid) {
             let id = self.take_entity_id();
             let mut rocket = super::fireworks::Rocket::from_nbt(r);
@@ -972,6 +1097,9 @@ impl Game<'_> {
             // One that came through a portal keeps its cooldown.
             self.restore_portal_cooldown(id, &tag);
             self.rockets.push(rocket);
+            if let Some(state) = transferred {
+                self.adopt_transferred_entity_state(id, state);
+            }
             self.remember(id, uuid, tag);
         }
     }
@@ -979,6 +1107,15 @@ impl Game<'_> {
     /// `PrimedTnt.readAdditionalSaveData`: its numeric short fuse (80 when absent) and motion.
     // Its Passengers ride it (EntityType.loadEntityRecursive forces them on).
     pub(super) fn load_tnt(&mut self, tag: Tag, uuid: Option<[i32; 4]>) {
+        self.load_tnt_transferred(tag, uuid, None);
+    }
+
+    pub(super) fn load_tnt_transferred(
+        &mut self,
+        tag: Tag,
+        uuid: Option<[i32; 4]>,
+        transferred: Option<super::entity_initialization::TransferredEntityState>,
+    ) {
         let mut tag = tag;
         let riders = self.take_mob_passengers(&mut tag);
         if let Some(position) = entity_nbt::position(&tag) {
@@ -1014,6 +1151,9 @@ impl Game<'_> {
                     .and_then(|v| entity_nbt::state_from_nbt(self.pack.assets.registry, v)),
             });
             // `Entity.load`: the `PortalCooldown` of one that just came through.
+            if let Some(state) = transferred {
+                self.adopt_transferred_entity_state(id, state);
+            }
             self.remember(id, uuid, tag);
             for rider in riders {
                 self.load_mob(rider, Some(id));
@@ -1032,7 +1172,7 @@ impl Game<'_> {
         uuid: Option<[i32; 4]>,
         k: &str,
         transferred: Option<super::entity_initialization::TransferredEntityState>,
-    ) {
+    ) -> Option<u32> {
         if let Some((position, velocity, yaw)) = entity_nbt::boat_from_nbt(&tag) {
             let mut tag = tag;
             let riders = self.take_mob_passengers(&mut tag);
@@ -1060,7 +1200,9 @@ impl Game<'_> {
             for rider in riders {
                 self.load_mob(rider, Some(id));
             }
+            return Some(id);
         }
+        None
     }
 
     /// A saved minecart.
@@ -1074,7 +1216,7 @@ impl Game<'_> {
         uuid: Option<[i32; 4]>,
         k: &str,
         transferred: Option<super::entity_initialization::TransferredEntityState>,
-    ) {
+    ) -> Option<u32> {
         let kind = super::minecarts::CartKind::from_id(k).unwrap();
         let mut tag = tag;
         let riders = self.take_mob_passengers(&mut tag);
@@ -1094,7 +1236,9 @@ impl Game<'_> {
             for rider in riders {
                 self.load_mob(rider, Some(id));
             }
+            return Some(id);
         }
+        None
     }
 
     /// A saved armor stand.

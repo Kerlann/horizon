@@ -1069,7 +1069,6 @@ impl Game<'_> {
     /// Memory still belongs to the parked source until the caller moves it.
     pub(super) fn rebind_transferred_entity(
         &mut self,
-        _source: super::Dim,
         id: u32,
         entity: &mut impl horizon_mod_runtime::attachments::HasAttachmentLifetime,
     ) {

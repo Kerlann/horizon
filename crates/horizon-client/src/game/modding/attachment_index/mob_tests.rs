@@ -160,7 +160,7 @@ fn saved_mob_binding_rebinds_retained_id_with_a_new_generation() {
         owner.attachment_lifetime.retire();
         assert!(source.lock().unwrap().snapshot(&key).is_empty());
         game.enter_level(Dim::Nether).unwrap();
-        game.rebind_transferred_entity(Dim::Overworld, id, &mut owner);
+        game.rebind_transferred_entity(id, &mut owner);
         game.mobs.push(owner);
         let current = game.attachment_indexes[&Dim::Nether]
             .lock()

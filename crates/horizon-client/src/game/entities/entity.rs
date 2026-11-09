@@ -1104,6 +1104,56 @@ impl Game<'_> {
     ) -> Result<(), Tag> {
         load_entity_of_any_kind!(self, kind, uuid, player_uuid, tag)
     }
+    /// Restore a live portal object with its explicitly captured runtime ownership.
+    /// This dispatch covers only reconstructible portal kinds; ordinary disk loads
+    /// continue through the canonical kind walk without transfer state.
+    pub(super) fn load_listed_transferred(
+        &mut self,
+        kind: &str,
+        uuid: Option<[i32; 4]>,
+        player_uuid: Option<[i32; 4]>,
+        tag: Tag,
+        state: super::entity_initialization::TransferredEntityState,
+    ) -> Result<(), Tag> {
+        let state = Some(state);
+        match kind {
+            "minecraft:item" => self.load_item_transferred(tag, uuid, state),
+            "minecraft:experience_orb" => self.load_orb_transferred(tag, uuid, state),
+            "minecraft:tnt" => self.load_tnt_transferred(tag, uuid, state),
+            "minecraft:trident" => self.load_trident_transferred(tag, uuid, state),
+            "minecraft:firework_rocket" => {
+                self.load_rocket_transferred(tag, uuid, player_uuid, state)
+            }
+            "minecraft:falling_block" => self.load_falling_transferred(tag, uuid, state),
+            "minecraft:arrow" | "minecraft:spectral_arrow" => {
+                self.load_arrow_transferred(tag, uuid, player_uuid, state)
+            }
+            "minecraft:llama_spit" | "minecraft:shulker_bullet" => {
+                self.load_spit_or_bullet_transferred(tag, uuid, player_uuid, state)
+            }
+            "minecraft:fireball"
+            | "minecraft:small_fireball"
+            | "minecraft:wind_charge"
+            | "minecraft:breeze_wind_charge"
+            | "minecraft:wither_skull" => {
+                self.load_fireball_transferred(tag, uuid, player_uuid, state)
+            }
+            id if horizon_client::entity_nbt::throwable_kind(id).is_some() => {
+                self.load_throwable_transferred(tag, uuid, player_uuid, state)
+            }
+            id if self.loads_as_boat(id) => {
+                self.load_boat_transferred(tag, uuid, id, state);
+            }
+            id if loads_as_cart(id) => {
+                self.load_cart_transferred(tag, uuid, id, state);
+            }
+            id if self.loads_as_mob(id) => {
+                self.load_mob_transferred(tag, None, state);
+            }
+            _ => return Err(tag),
+        }
+        Ok(())
+    }
     /// The ids of the entities that are not on the walk of `entity_lists!`.
     pub(super) fn entity_ids_off_walk(&self) -> impl Iterator<Item = u32> + '_ {
         self.cushions

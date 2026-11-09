@@ -69,10 +69,16 @@ impl Plan {
 }
 
 /// An entity on its way to a dimension that isn't loaded.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
+enum TransferredArrivalState {
+    Entity(super::entity_initialization::TransferredEntityState),
+}
+
+#[derive(Debug)]
 struct Arrival {
     plan: Plan,
     tag: Tag,
+    transferred: Option<TransferredArrivalState>,
 }
 
 /// The nether portal state of the world (`Game::portals`).
@@ -252,6 +258,7 @@ fn arrival_from_tag(a: &Tag) -> Option<Arrival> {
         return None;
     };
     Some(Arrival {
+        transferred: None,
         plan: Plan {
             dim,
             approximate: BlockPos::new(x, y, z),
@@ -1028,9 +1035,16 @@ impl Game<'_> {
                 self.persist_raw(id),
                 self.items(),
             );
+            let mut tag = tag;
+            super::persist::write_attachments(&mut tag, id, &self.entity_attachments);
+            let state = self.take_transferred_entity_state(id);
             self.remove_dropped(i);
             self.detach_entity(id);
-            self.portals.arrivals.push(Arrival { plan, tag });
+            self.portals.arrivals.push(Arrival {
+                plan,
+                tag,
+                transferred: Some(TransferredArrivalState::Entity(state)),
+            });
             self.portals.dirty = true;
         } else if let Some(i) = self.tnts.iter().position(|t| t.id == id) {
             let t = &self.tnts[i];
@@ -1039,9 +1053,16 @@ impl Game<'_> {
                 return;
             }
             let tag = self.tnt_nbt(i);
+            let mut tag = tag;
+            super::persist::write_attachments(&mut tag, id, &self.entity_attachments);
+            let state = self.take_transferred_entity_state(id);
             self.tnts.remove(i);
             self.forget_entity(id);
-            self.portals.arrivals.push(Arrival { plan, tag });
+            self.portals.arrivals.push(Arrival {
+                plan,
+                tag,
+                transferred: Some(TransferredArrivalState::Entity(state)),
+            });
             self.portals.dirty = true;
         } else if let Some(i) = self.tridents.iter().position(|t| t.id == id) {
             let plan = self.entity_plan(entry, self.tridents[i].position, 0.5, 0.5, false);
@@ -1050,9 +1071,16 @@ impl Game<'_> {
             }
             let uuid = self.uuid_for(id);
             let tag = self.tridents[i].to_nbt(uuid, self.persist_raw(id));
+            let mut tag = tag;
+            super::persist::write_attachments(&mut tag, id, &self.entity_attachments);
+            let state = self.take_transferred_entity_state(id);
             self.tridents.remove(i);
             self.forget_entity(id);
-            self.portals.arrivals.push(Arrival { plan, tag });
+            self.portals.arrivals.push(Arrival {
+                plan,
+                tag,
+                transferred: Some(TransferredArrivalState::Entity(state)),
+            });
             self.portals.dirty = true;
         } else if let Some(i) = self.rockets.iter().position(|r| r.id == id) {
             let plan = self.entity_plan(entry, self.rockets[i].position, 0.25, 0.25, false);
@@ -1061,9 +1089,16 @@ impl Game<'_> {
             }
             let uuid = self.uuid_for(id);
             let tag = self.rockets[i].to_nbt(uuid, self.level.player_uuid, self.persist_raw(id));
+            let mut tag = tag;
+            super::persist::write_attachments(&mut tag, id, &self.entity_attachments);
+            let state = self.take_transferred_entity_state(id);
             self.rockets.remove(i);
             self.forget_entity(id);
-            self.portals.arrivals.push(Arrival { plan, tag });
+            self.portals.arrivals.push(Arrival {
+                plan,
+                tag,
+                transferred: Some(TransferredArrivalState::Entity(state)),
+            });
             self.portals.dirty = true;
         } else if let Some(i) = self.orbs.iter().position(|o| o.id == id) {
             let plan = self.entity_plan(entry, self.orbs[i].position, 0.5, 0.5, false);
@@ -1072,9 +1107,16 @@ impl Game<'_> {
             }
             let uuid = self.uuid_for(id);
             let tag = horizon_client::entity_nbt::orb_to_nbt(&self.orbs[i], uuid);
+            let mut tag = tag;
+            super::persist::write_attachments(&mut tag, id, &self.entity_attachments);
+            let state = self.take_transferred_entity_state(id);
             self.orbs.remove(i);
             self.forget_entity(id);
-            self.portals.arrivals.push(Arrival { plan, tag });
+            self.portals.arrivals.push(Arrival {
+                plan,
+                tag,
+                transferred: Some(TransferredArrivalState::Entity(state)),
+            });
             self.portals.dirty = true;
         } else if let Some(i) = self.mobs.iter().position(|m| m.id == id) {
             let m = &self.mobs[i];
@@ -1093,7 +1135,11 @@ impl Game<'_> {
             for g in gone {
                 self.detach_entity(g);
             }
-            self.portals.arrivals.push(Arrival { plan, tag });
+            self.portals.arrivals.push(Arrival {
+                plan,
+                tag,
+                transferred: None,
+            });
             self.portals.dirty = true;
         } else if let Some(i) = self.boats.iter().position(|b| b.id == id) {
             let b = &self.boats[i];
@@ -1113,7 +1159,11 @@ impl Game<'_> {
             }
             self.boats.remove(i);
             self.detach_entity(id);
-            self.portals.arrivals.push(Arrival { plan, tag });
+            self.portals.arrivals.push(Arrival {
+                plan,
+                tag,
+                transferred: None,
+            });
             self.portals.dirty = true;
         } else if let Some(i) = self.carts.iter().position(|c| c.id == id) {
             let c = &self.carts[i];
@@ -1144,7 +1194,11 @@ impl Game<'_> {
             }
             self.carts.remove(i);
             self.detach_entity(id);
-            self.portals.arrivals.push(Arrival { plan, tag });
+            self.portals.arrivals.push(Arrival {
+                plan,
+                tag,
+                transferred: None,
+            });
             self.portals.dirty = true;
         } else if let Some(i) = self
             .creatures
@@ -1177,9 +1231,16 @@ impl Game<'_> {
             else {
                 return;
             };
+            let mut tag = tag;
+            super::persist::write_attachments(&mut tag, id, &self.entity_attachments);
+            let state = self.take_transferred_entity_state(id);
             self.creatures.projectiles.remove(i);
             self.forget_entity(id);
-            self.portals.arrivals.push(Arrival { plan, tag });
+            self.portals.arrivals.push(Arrival {
+                plan,
+                tag,
+                transferred: Some(TransferredArrivalState::Entity(state)),
+            });
             self.portals.dirty = true;
         }
         if self.portals.arrivals.len() > arrivals {
@@ -1249,7 +1310,11 @@ impl Game<'_> {
                 i += 1;
                 continue;
             }
-            let Arrival { plan, mut tag } = self.portals.arrivals.remove(i);
+            let Arrival {
+                plan,
+                mut tag,
+                transferred,
+            } = self.portals.arrivals.remove(i);
             self.portals.dirty = true;
             let motion = horizon_client::entity_nbt::motion(&tag);
             let [yaw, pitch] = horizon_client::entity_nbt::rotation(&tag);
@@ -1287,6 +1352,11 @@ impl Game<'_> {
             // ServerLevel.addDuringTeleport: a fresh add, not loaded from disk.
             super::persist::mark_fresh(&mut tag);
             let key = ((at.x.floor() as i32) >> 4, (at.z.floor() as i32) >> 4);
+            if let Some(TransferredArrivalState::Entity(state)) = transferred {
+                self.spawn_loaded_entity(key, tag, Some(state));
+                self.native_entities_load(self.dim.id(), [key.0, key.1], 1);
+                continue;
+            }
             match self
                 .world
                 .loaded_entities
@@ -1352,10 +1422,19 @@ impl Game<'_> {
                 fields.remove(&"NoGravity".into());
             }
         }
-        if f.id != 0 {
+        let transferred = if f.id != 0 {
+            super::persist::write_attachments(&mut tag, f.id, &self.entity_attachments);
+            let state = self.take_transferred_entity_state(f.id);
             self.forget_entity(f.id);
-        }
-        self.portals.arrivals.push(Arrival { plan, tag });
+            Some(TransferredArrivalState::Entity(state))
+        } else {
+            None
+        };
+        self.portals.arrivals.push(Arrival {
+            plan,
+            tag,
+            transferred,
+        });
         self.portals.dirty = true;
         Some(plan.dim)
     }
@@ -1788,6 +1867,7 @@ mod tests {
         let tag = Tag::compound([("id", Tag::String("minecraft:cow".into()))]);
         for (from, dim) in [(Dim::Overworld, Dim::End), (Dim::End, Dim::Overworld)] {
             let arrival = Arrival {
+                transferred: None,
                 plan: Plan::end_portal(from, BlockPos::new(3, 64, -5), 0.9, 1.4),
                 tag: tag.clone(),
             };
@@ -1799,6 +1879,7 @@ mod tests {
         }
         // Arrivals saved before End portals were Nether portal plans.
         let mut old = arrival_tag(&Arrival {
+            transferred: None,
             plan: Plan::end_portal(Dim::End, BlockPos::new(0, 64, 0), 0.25, 0.25),
             tag,
         });
