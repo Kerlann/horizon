@@ -62,6 +62,11 @@ impl Game<'_> {
     /// Riders sit on their vehicles (`Entity.positionRider`), mobs or boats,
     /// and let go when the vehicle dies or is gone.
     pub(super) fn sync_riders(&mut self) {
+        if !self.persist.off_level.is_empty() {
+            self.sync_retained_riders();
+            self.position_riders();
+            return;
+        }
         // Entity.baseTick.
         for m in &mut self.mobs {
             if m.extra.boarding_cooldown > 0 {
@@ -124,15 +129,56 @@ impl Game<'_> {
         }
         self.position_riders();
     }
+    fn sync_retained_riders(&mut self) {
+        let blocked = self.mobs_below_off_level();
+        let ids: Vec<_> = self.mob_objects().map(|m| m.id).collect();
+        let mut first: HashMap<u32, (i64, u32)> = HashMap::new();
+        for &id in &ids {
+            let m = self.mob_object(id).unwrap();
+            let Some(v) = m.extra.mount else { continue };
+            let valid = m.alive()
+                && !m.removed
+                && (self.mob_object(v).is_some_and(|m| m.alive() && !m.removed)
+                    || self.boats.iter().any(|b| b.id == v)
+                    || self.carts.iter().any(|c| c.id == v)
+                    || self.cushions.iter().any(|c| c.id == v)
+                    || self.tnts.iter().any(|t| t.id == v && v != 0)
+                    || self.seat(v).is_some());
+            if valid {
+                let place = (m.extra.vehicle_order, id);
+                first
+                    .entry(v)
+                    .and_modify(|p| *p = (*p).min(place))
+                    .or_insert(place);
+            } else {
+                let m = self.mob_object_mut(id).unwrap();
+                m.extra.mount = None;
+                m.extra.passenger = false;
+            }
+        }
+        for id in ids {
+            self.mob_object_mut(id).unwrap().extra.rider = first.get(&id).map(|&(_, id)| id);
+        }
+        for m in &mut self.mobs {
+            if !blocked.contains(&m.id) && m.extra.boarding_cooldown > 0 {
+                m.extra.boarding_cooldown -= 1;
+            }
+        }
+    }
+
     /// `Entity.positionRider` for every mob passenger: in its boat, then on
     /// its mob. A server's client places them itself too, as the server sends
     /// no passenger's position.
     pub(super) fn position_riders(&mut self) {
+        let blocked = self.mobs_below_off_level();
         // Every vehicle's riders in one pass over the mobs, not one pass per
         // boat, minecart and primed TNT. Seating moves the riders but changes
         // no one's vehicle, so it holds for all three.
         let mut riders = Riders::default();
         for (j, m) in self.mobs.iter().enumerate() {
+            if blocked.contains(&m.id) {
+                continue;
+            }
             if let Some(v) = m.extra.mount {
                 riders.entry(v).or_default().push(j);
             }
@@ -151,6 +197,9 @@ impl Game<'_> {
         // Riders of riders settle over a few passes.
         for _ in 0..3 {
             for i in 0..self.mobs.len() {
+                if blocked.contains(&self.mobs[i].id) {
+                    continue;
+                }
                 let Some(v) = self.mobs[i].extra.mount else {
                     continue;
                 };
@@ -224,6 +273,18 @@ impl Game<'_> {
                         let seat = aboard.iter().position(|&k| k == i).unwrap_or(0);
                         (seat, aboard.len())
                     };
+                    let (seat, count) = if self.persist.off_level.is_empty() {
+                        (seat, count)
+                    } else {
+                        let seats = self.seated_passengers(v);
+                        (
+                            seats
+                                .iter()
+                                .position(|&(_, id, _)| id == self.mobs[i].id)
+                                .unwrap_or(seat),
+                            seats.len(),
+                        )
+                    };
                     let animal = horizon_client::mobs::drops::is_animal(self.mobs[i].species());
                     attach = horizon_client::mobs::camel::passenger_attachment_at(
                         vehicle, seat, count, animal,
@@ -236,6 +297,14 @@ impl Game<'_> {
                         .iter()
                         .filter(|r| r.extra.mount == Some(v))
                         .count();
+                    let seat = if self.persist.off_level.is_empty() {
+                        seat
+                    } else {
+                        self.seated_passengers(v)
+                            .iter()
+                            .position(|&(_, id, _)| id == self.mobs[i].id)
+                            .unwrap_or(seat)
+                    };
                     attach = riders::happy_ghast_attachment(seat);
                 }
                 let (pos, prev) = (vehicle.position, vehicle.previous);
@@ -493,7 +562,11 @@ impl Game<'_> {
             .map(|p| p.position)
             .collect();
         let mut sprung = Vec::new();
+        let blocked = self.mobs_below_off_level();
         for m in &mut self.mobs {
+            if blocked.contains(&m.id) {
+                continue;
+            }
             if m.species() != Species::SkeletonHorse || !m.extra.trap || !m.alive() {
                 continue;
             }
@@ -589,5 +662,42 @@ impl Game<'_> {
             }
         }
         Some(id)
+    }
+}
+
+#[cfg(test)]
+mod off_level_tests {
+    use super::*;
+    use horizon_client::mobs::Mob;
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn synchronization_preserves_retained_controller_and_frozen_descendant() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            let pig = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+            let mut root = Mob::new(71, pig.clone(), Vec3::new(1.0, 80.0, 0.5), 0.0);
+            root.extra.rider = Some(72);
+            let mut parent = Mob::new(72, pig.clone(), root.position, 0.0);
+            parent.extra.mount = Some(71);
+            parent.extra.rider = Some(73);
+            let mut child = Mob::new(73, pig, Vec3::new(7.0, 90.0, 4.0), 0.0);
+            child.extra.mount = Some(72);
+            child.extra.passenger = true;
+            child.extra.boarding_cooldown = 12;
+            let before = child.position;
+            game.mobs.push(root);
+            game.mobs.push(child);
+            game.persist
+                .off_level
+                .insert(72, crate::game::persist::OffLevel::Mob(parent));
+            game.sync_riders();
+            assert_eq!(game.mob_object(71).unwrap().extra.rider, Some(72));
+            assert_eq!(game.mob_object(72).unwrap().extra.rider, Some(73));
+            let child = game.mob_object(73).unwrap();
+            assert_eq!(child.extra.mount, Some(72));
+            assert!(child.extra.passenger);
+            assert_eq!(child.extra.boarding_cooldown, 12);
+            assert_eq!(child.position, before);
+        });
     }
 }
