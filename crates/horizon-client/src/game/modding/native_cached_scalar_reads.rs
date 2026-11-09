@@ -10,6 +10,266 @@ use horizon_world::registry::BlockStateId;
 use mod_api::*;
 
 impl Game<'_> {
+    // display
+    pub(super) fn display_kind(&self, display: DisplayRef) -> Option<NativeDisplayKind> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.kind,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_kind(display))
+    }
+
+    pub(super) fn display_transformation(
+        &self,
+        display: DisplayRef,
+    ) -> Option<NativeTransformation> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.transformation,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_transformation(display))
+    }
+
+    pub(super) fn display_billboard(&self, display: DisplayRef) -> Option<NativeBillboard> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.billboard,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_billboard(display))
+    }
+
+    pub(super) fn display_brightness(&self, display: DisplayRef) -> Option<(u8, u8)> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.brightness,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_brightness(display))
+    }
+
+    pub(super) fn display_view_range(&self, display: DisplayRef) -> Option<f32> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.view_range,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_view_range(display))
+    }
+
+    pub(super) fn display_shadow_radius(&self, display: DisplayRef) -> Option<f32> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.shadow_radius,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_shadow_radius(display))
+    }
+
+    pub(super) fn display_shadow_strength(&self, display: DisplayRef) -> Option<f32> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.shadow_strength,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_shadow_strength(display))
+    }
+
+    pub(super) fn display_width(&self, display: DisplayRef) -> Option<f32> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.width,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_width(display))
+    }
+
+    pub(super) fn display_height(&self, display: DisplayRef) -> Option<f32> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.height,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_height(display))
+    }
+
+    pub(super) fn display_glow_color_override(&self, display: DisplayRef) -> Option<i32> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.glow_color_override,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_glow_color_override(display))
+    }
+
+    pub(super) fn display_interpolation_duration(&self, display: DisplayRef) -> Option<i32> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.interpolation_duration,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_interpolation_duration(display))
+    }
+
+    pub(super) fn display_start_interpolation(&self, display: DisplayRef) -> Option<i32> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.start_interpolation,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_start_interpolation(display))
+    }
+
+    pub(super) fn display_teleport_duration(&self, display: DisplayRef) -> Option<i32> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.teleport_duration,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_teleport_duration(display))
+    }
+
+    pub(super) fn display_line_width(&self, display: DisplayRef) -> Option<i32> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.line_width,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_line_width(display))
+    }
+
+    pub(super) fn display_background(&self, display: DisplayRef) -> Option<i32> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.background,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_background(display))
+    }
+
+    pub(super) fn display_text_opacity(&self, display: DisplayRef) -> Option<i8> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.text_opacity,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_text_opacity(display))
+    }
+
+    pub(super) fn display_text_shadow(&self, display: DisplayRef) -> Option<bool> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.text_shadow,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_text_shadow(display))
+    }
+
+    pub(super) fn display_see_through(&self, display: DisplayRef) -> Option<bool> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.see_through,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_see_through(display))
+    }
+
+    pub(super) fn display_default_background(&self, display: DisplayRef) -> Option<bool> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.default_background,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_default_background(display))
+    }
+
+    pub(super) fn display_alignment(&self, display: DisplayRef) -> Option<NativeTextAlignment> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.alignment,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_alignment(display))
+    }
+
+    pub(super) fn display_block_state(&self, display: DisplayRef) -> Option<BlockStateId> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row
+                    .block_state
+                    .and_then(|state| state.try_into_engine(&()).ok()),
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_block_state(display))
+    }
+
+    pub(super) fn display_item_context(
+        &self,
+        display: DisplayRef,
+    ) -> Option<NativeItemDisplayContext> {
+        self.with_entity_read_publication(display.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Display(row) => row.item_context,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_display_item_context(display))
+    }
+
+    // dragon
+    pub(super) fn dragon_phase(&self, dragon: DragonRef) -> Option<NativeDragonPhase> {
+        self.with_entity_read_publication(dragon.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Dragon { dragon: row, .. } => row.phase,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_dragon_phase(dragon))
+    }
+
+    pub(super) fn dragon_alive_crystals(&self, dragon: DragonRef) -> Option<i32> {
+        self.with_entity_read_publication(dragon.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Dragon { dragon: row, .. } => row.alive_crystals,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_dragon_alive_crystals(dragon))
+    }
+
+    pub(super) fn dragon_previously_killed(&self, dragon: DragonRef) -> Option<bool> {
+        self.with_entity_read_publication(dragon.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Dragon { dragon: row, .. } => row.previously_killed,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_dragon_previously_killed(dragon))
+    }
+
     // entity
     pub(super) fn entity_custom_name_visible(&self, entity: EntityRef) -> Option<bool> {
         self.with_entity_read_publication(entity, |row| Some(row.base.custom_name_visible))
@@ -279,6 +539,78 @@ impl Game<'_> {
             })
         })
         .unwrap_or_else(|| self.uncached_entity_distance_to_sqr(entity, pos))
+    }
+
+    // fishing_hook
+    pub(super) fn fishing_hook_player_owner(&self, hook: FishingHookRef) -> Option<EntityRef> {
+        self.with_entity_read_publication(hook.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Hook(row) => row.player_owner,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_fishing_hook_player_owner(hook))
+    }
+
+    pub(super) fn fishing_hook_hooked_in(&self, hook: FishingHookRef) -> Option<EntityRef> {
+        self.with_entity_read_publication(hook.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Hook(row) => row.hooked_in,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_fishing_hook_hooked_in(hook))
+    }
+
+    pub(super) fn fishing_hook_open_water(&self, hook: FishingHookRef) -> Option<bool> {
+        self.with_entity_read_publication(hook.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Hook(row) => row.open_water,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_fishing_hook_open_water(hook))
+    }
+
+    // item_entity
+    pub(super) fn item_entity_pickup_delay(&self, item: ItemEntityRef) -> Option<i32> {
+        self.with_entity_read_publication(item.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Item(row) => row.pickup_delay,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_item_entity_pickup_delay(item))
+    }
+
+    pub(super) fn item_entity_age(&self, item: ItemEntityRef) -> Option<i32> {
+        self.with_entity_read_publication(item.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Item(row) => row.age,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_item_entity_age(item))
+    }
+
+    pub(super) fn item_entity_target(&self, item: ItemEntityRef) -> Option<u128> {
+        self.with_entity_read_publication(item.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Item(row) => row.target,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_item_entity_target(item))
+    }
+
+    pub(super) fn item_entity_owner(&self, item: ItemEntityRef) -> Option<EntityRef> {
+        self.with_entity_read_publication(item.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Item(row) => row.owner,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_item_entity_owner(item))
     }
 
     // living
@@ -1025,5 +1357,308 @@ impl Game<'_> {
         .unwrap_or_else(|| self.uncached_player_ambient_mood(player))
     }
 
+    // projectile
+    pub(super) fn projectile_owner(&self, projectile: ProjectileRef) -> Option<EntityRef> {
+        self.with_entity_read_publication(projectile.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Projectile(row) => row.owner,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_projectile_owner(projectile))
+    }
 
+    pub(super) fn projectile_pickup(&self, projectile: ProjectileRef) -> Option<NativeArrowPickup> {
+        self.with_entity_read_publication(projectile.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Projectile(row) => row.pickup,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_projectile_pickup(projectile))
+    }
+
+    pub(super) fn projectile_pierce_level(
+        &self,
+        projectile: ProjectileRef,
+    ) -> Result<i8, PierceLevelError> {
+        self.with_entity_read_publication(projectile.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Projectile(row) => row.pierce_level,
+                _ => Err(PierceLevelError::Stale),
+            })
+        })
+        .unwrap_or_else(|| self.uncached_projectile_pierce_level(projectile))
+    }
+
+    pub(super) fn projectile_base_damage(&self, projectile: ProjectileRef) -> Option<f64> {
+        self.with_entity_read_publication(projectile.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Projectile(row) => row.base_damage,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_projectile_base_damage(projectile))
+    }
+
+    pub(super) fn projectile_critical(&self, projectile: ProjectileRef) -> Option<bool> {
+        self.with_entity_read_publication(projectile.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Projectile(row) => row.critical,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_projectile_critical(projectile))
+    }
+
+    // raid
+    pub(super) fn raid_center(&self, raid: RaidRef) -> Option<[i32; 3]> {
+        if self.native_lifecycle.epoch() != Some(raid.level().epoch()) {
+            return None;
+        }
+        let cached = self
+            .entity_read_state
+            .borrow()
+            .raids
+            .get(&raid)
+            .map(|row| row.center);
+        cached.unwrap_or_else(|| self.uncached_raid_center(raid))
+    }
+
+    pub(super) fn raid_omen_level(&self, raid: RaidRef) -> Option<i32> {
+        if self.native_lifecycle.epoch() != Some(raid.level().epoch()) {
+            return None;
+        }
+        let cached = self
+            .entity_read_state
+            .borrow()
+            .raids
+            .get(&raid)
+            .map(|row| row.omen_level);
+        cached.unwrap_or_else(|| self.uncached_raid_omen_level(raid))
+    }
+
+    pub(super) fn raid_groups_spawned(&self, raid: RaidRef) -> Option<i32> {
+        if self.native_lifecycle.epoch() != Some(raid.level().epoch()) {
+            return None;
+        }
+        let cached = self
+            .entity_read_state
+            .borrow()
+            .raids
+            .get(&raid)
+            .map(|row| row.groups_spawned);
+        cached.unwrap_or_else(|| self.uncached_raid_groups_spawned(raid))
+    }
+
+    pub(super) fn raid_num_groups(&self, raid: RaidRef) -> Option<i32> {
+        if self.native_lifecycle.epoch() != Some(raid.level().epoch()) {
+            return None;
+        }
+        let cached = self
+            .entity_read_state
+            .borrow()
+            .raids
+            .get(&raid)
+            .map(|row| row.num_groups);
+        cached.unwrap_or_else(|| self.uncached_raid_num_groups(raid))
+    }
+
+    pub(super) fn raid_has_bonus_wave(&self, raid: RaidRef) -> Option<bool> {
+        if self.native_lifecycle.epoch() != Some(raid.level().epoch()) {
+            return None;
+        }
+        let cached = self
+            .entity_read_state
+            .borrow()
+            .raids
+            .get(&raid)
+            .map(|row| row.has_bonus_wave);
+        cached.unwrap_or_else(|| self.uncached_raid_has_bonus_wave(raid))
+    }
+
+    pub(super) fn raid_is_started(&self, raid: RaidRef) -> Option<bool> {
+        if self.native_lifecycle.epoch() != Some(raid.level().epoch()) {
+            return None;
+        }
+        let cached = self
+            .entity_read_state
+            .borrow()
+            .raids
+            .get(&raid)
+            .map(|row| row.is_started);
+        cached.unwrap_or_else(|| self.uncached_raid_is_started(raid))
+    }
+
+    pub(super) fn raid_is_active(&self, raid: RaidRef) -> Option<bool> {
+        if self.native_lifecycle.epoch() != Some(raid.level().epoch()) {
+            return None;
+        }
+        let cached = self
+            .entity_read_state
+            .borrow()
+            .raids
+            .get(&raid)
+            .map(|row| row.is_active);
+        cached.unwrap_or_else(|| self.uncached_raid_is_active(raid))
+    }
+
+    pub(super) fn raid_status(&self, raid: RaidRef) -> Option<NativeRaidStatus> {
+        if self.native_lifecycle.epoch() != Some(raid.level().epoch()) {
+            return None;
+        }
+        let cached = self
+            .entity_read_state
+            .borrow()
+            .raids
+            .get(&raid)
+            .map(|row| row.status);
+        cached.unwrap_or_else(|| self.uncached_raid_status(raid))
+    }
+
+    pub(super) fn raid_total_health(&self, raid: RaidRef) -> Option<f32> {
+        if self.native_lifecycle.epoch() != Some(raid.level().epoch()) {
+            return None;
+        }
+        let cached = self
+            .entity_read_state
+            .borrow()
+            .raids
+            .get(&raid)
+            .map(|row| row.total_health);
+        cached.unwrap_or_else(|| self.uncached_raid_total_health(raid))
+    }
+
+    pub(super) fn raid_living_health(&self, raid: RaidRef) -> Option<f32> {
+        if self.native_lifecycle.epoch() != Some(raid.level().epoch()) {
+            return None;
+        }
+        let cached = self
+            .entity_read_state
+            .borrow()
+            .raids
+            .get(&raid)
+            .map(|row| row.living_health);
+        cached.unwrap_or_else(|| self.uncached_raid_living_health(raid))
+    }
+
+    pub(super) fn raid_bar_progress(&self, raid: RaidRef) -> Option<f32> {
+        if self.native_lifecycle.epoch() != Some(raid.level().epoch()) {
+            return None;
+        }
+        let cached = self
+            .entity_read_state
+            .borrow()
+            .raids
+            .get(&raid)
+            .map(|row| row.bar_progress);
+        cached.unwrap_or_else(|| self.uncached_raid_bar_progress(raid))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::super::{
+        commands::Target,
+        native_base_read_rows::{
+            BaseReadContext, BaseReadGeometry, BaseReadSource, CompactEntityReadRow,
+        },
+        native_entity_read_cache::NativeReadPublication,
+        native_entity_refs::tests::with_game,
+    };
+    use super::*;
+    use horizon_client::{join_seq::residency::table::EntityLookup, mobs::Mob};
+    use horizon_core::geometry::Vec3;
+    use std::sync::Arc;
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn cached_scalars_keep_unknown_false_geometry_and_lifted_identity() {
+        with_game(|game| {
+            game.reset_entity_residency();
+            let kind = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+            game.mobs.push(Mob::new(410, kind, Vec3::ZERO, 0.0));
+            let EntityLookup::Found { location, .. } = game.server_resident_entity(410) else {
+                panic!("admitted mob");
+            };
+            let epoch = game.native_lifecycle.epoch().unwrap();
+            let entity = EntityRef::new(epoch, 410);
+            let level = LevelRef::new(epoch, game.dim.key());
+            let mut base = CompactEntityReadRow::capture(
+                BaseReadSource::Mob(&game.mobs[0]),
+                BaseReadGeometry {
+                    position: [-0.5, 12.0, 3.0],
+                    rotation: [0.0, 0.0],
+                    velocity: [0.0; 3],
+                    on_ground: false,
+                    bounding_box: [[-1.0, 12.0, 2.5], [0.0, 14.0, 3.5]],
+                    eye_height: 1.5,
+                },
+                BaseReadContext {
+                    level,
+                    logical_server: true,
+                    kind: Arc::from("minecraft:pig"),
+                    saved: None,
+                    added_to_level: Some(true),
+                    portal_cooldown: None,
+                    leash_holder: None,
+                    parts: None,
+                    head_yaw: 0.0,
+                    spectator: false,
+                    invisible: None,
+                    client_shift: None,
+                },
+            );
+            // The physical pig has a known name-visibility flag. A publication's
+            // unknown must not be replaced by that live resident value.
+            assert!(game.uncached_entity_custom_name_visible(entity).is_some());
+            base.custom_name_visible = None;
+            base.is_sprinting = Some(false);
+            let publication = NativeReadPublication {
+                capture: EntityReadCapture {
+                    tick: NativeTickId::new(1),
+                    pass: 2,
+                    revision: 0,
+                    phase: EntityReadCapturePhase::PassStart,
+                    pending_overlay: None,
+                },
+                base,
+                details: NativeReadDetails::Base,
+                join_generation: 1,
+                target: Target::Mob(410),
+            };
+            assert_eq!(
+                game.entity_residency
+                    .borrow_mut()
+                    .publish_rows([(410, location, publication)]),
+                1
+            );
+            assert_eq!(game.entity_custom_name_visible(entity), None);
+            assert_eq!(game.entity_is_sprinting(entity), Some(false));
+            assert_eq!(game.entity_position(entity), Some([-0.5, 12.0, 3.0]));
+            assert_eq!(game.entity_block_position(entity), Some([-1, 12, 3]));
+            assert_eq!(game.entity_eye_position(entity), Some([-0.5, 13.5, 3.0]));
+            assert_eq!(
+                game.entity_distance_to_sqr(entity, [-0.5, 12.0, 6.0]),
+                Some(9.0)
+            );
+            // A published subkind absence also must not fall back to a resident
+            // living projection, even though the physical pig has health.
+            assert_eq!(game.living_health(LivingRef::new(entity)), None);
+            let lifted = game.mobs.lift();
+            assert_eq!(game.uncached_entity_position(entity), None);
+            assert_eq!(game.entity_position(entity), Some([-0.5, 12.0, 3.0]));
+            assert_eq!(game.entity_is_sprinting(entity), Some(false));
+            assert_eq!(
+                game.entity_position(EntityRef::new(NativeWorldEpoch::new(epoch.get() + 1), 410)),
+                None
+            );
+            game.mobs.restore(
+                lifted,
+                horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
+            );
+            game.mobs.remove(0);
+            assert_eq!(game.entity_position(entity), None);
+        });
+    }
 }
