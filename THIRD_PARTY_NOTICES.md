@@ -56,7 +56,9 @@ developers, with upstream fixes applied
 [gfx-rs/wgpu#10714](https://github.com/gfx-rs/wgpu/pull/10714)). Its GL backend also reports
 the context's sampled textures and samplers per shader stage (usually 32 on desktop GL,
 where WebGL2's minimum 16 was reported before), so a pipeline layout the driver accepts is
-not refused. It is licensed under MIT or Apache-2.0; both licenses are in that folder
+not refused. Its GL backend copies depth and stencil textures with a framebuffer blit, where
+`glCopyTexSubImage` read only colour and left the copy empty. It is licensed under MIT or
+Apache-2.0; both licenses are in that folder
 (`LICENSE.MIT`, `LICENSE.APACHE`).
 
 ## naga
