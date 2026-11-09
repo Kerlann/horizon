@@ -135,6 +135,24 @@ impl<R> EntityTable<R> {
         self.read_lookup(None, id, locate)
     }
 
+    /// Resolve one admitted source and borrow its exact generation's read
+    /// metadata in the same lookup. Unlike a successful-source-only lookup,
+    /// this retains the admitted address when the source is physically taken.
+    /// Family/UUID and pending-dependency checks can then inspect the borrowed
+    /// metadata without resolving the identity or touching its storage again.
+    pub fn server_admitted_read_lookup<T>(
+        &mut self,
+        id: u32,
+        locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
+    ) -> Option<(Location, EntityLookup<T>, Option<&R>)> {
+        let state = self.lookup(None, id, locate);
+        if matches!(state, EntityLookup::Missing) {
+            return None;
+        }
+        let row = self.rows.get(&NonZeroU32::new(id)?)?;
+        Some((row.location, state, row.cached.as_ref()))
+    }
+
     fn read_lookup<T>(
         &mut self,
         dimension: Option<&DimensionKey>,
@@ -340,6 +358,66 @@ mod tests {
                 self.source.get(&location).copied()
             })
         }
+    }
+
+    #[test]
+    fn admitted_read_returns_taken_address_and_metadata_with_one_resolution() {
+        use std::cell::Cell;
+        let mut list = JoinList::default();
+        list.push(Stored(7, JoinSeq::UNJOINED));
+        let mut table = EntityTable::<u32>::new(Journal::default());
+        list.bind_residency(&table.producer(), HOME, |v| (v.0, v.1));
+        let address = Location {
+            owner: HOME,
+            join: list[0].1,
+        };
+        assert_eq!(table.publish_rows([(7, address, 19)]), 1);
+        let calls = Cell::new(0);
+        {
+            let (at, state, metadata) = table
+                .server_admitted_read_lookup(7, |at| {
+                    calls.set(calls.get() + 1);
+                    locate(&list, at)
+                })
+                .unwrap();
+            assert_eq!(at, address);
+            assert!(matches!(state, EntityLookup::Found { .. }));
+            assert_eq!(metadata, Some(&19));
+            assert_eq!(calls.get(), 1);
+        }
+        let held = list.lift();
+        calls.set(0);
+        let (at, state, metadata) = table
+            .server_admitted_read_lookup(7, |at| {
+                calls.set(calls.get() + 1);
+                locate(&list, at)
+            })
+            .unwrap();
+        assert_eq!(at, address);
+        assert_eq!(state, EntityLookup::Taken);
+        assert_eq!(metadata, Some(&19));
+        assert_eq!(calls.get(), 1);
+        list.restore(held, RestoreOrder::SurvivorsFirst);
+        assert!(
+            table
+                .server_admitted_read_lookup(7, |_| Some(SourceEntity {
+                    id: 8,
+                    value: 0usize
+                }))
+                .is_none()
+        );
+        assert!(
+            table
+                .server_admitted_read_lookup::<usize>(7, |_| panic!(
+                    "retired identity cannot resolve"
+                ))
+                .is_none()
+        );
+        assert!(
+            table
+                .server_admitted_read_lookup::<usize>(0, |_| panic!("zero cannot resolve"))
+                .is_none()
+        );
     }
 
     #[test]
