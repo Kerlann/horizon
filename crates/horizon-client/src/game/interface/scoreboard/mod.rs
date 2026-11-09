@@ -746,7 +746,7 @@ impl Game<'_> {
         // Online player names have global precedence over saved entity names,
         // including a real guest currently placed in another dimension.
         let mut player_names: HashMap<_, _> = self
-            .command_players()
+            .lan.iter().flat_map(|host| host.hub.online_players())
             .map(|guest| {
                 (
                     horizon_client::lan::playerdata::uuid_ints(guest.uuid),
