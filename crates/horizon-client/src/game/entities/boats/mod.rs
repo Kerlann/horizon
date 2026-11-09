@@ -6,9 +6,11 @@
 mod lifetime_tests;
 mod placement;
 
+use super::native_base_read_rows::BaseReadSource;
 use super::{Game, InteractTarget, entity::Entity, entity_culling::at, view_vector};
 use horizon_client::actions::Action;
 use horizon_client::entity_rules::EntityRules;
+use horizon_client::join_seq::residency::Kind;
 use horizon_client::{
     blocks::Fluid,
     collisions::{EntityCollisions, SceneCollisions},
@@ -29,6 +31,7 @@ use horizon_core::{
     random::{LegacyRandom, RandomSource},
 };
 use horizon_world::collision_context::CollisionContext;
+use mod_api::EntityReadCapturePhase;
 use std::{collections::HashMap, f32::consts::PI, sync::Arc};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -957,6 +960,7 @@ impl Game<'_> {
         self.vehicles_ticking(false);
     }
     fn tick_boats_now(&mut self) {
+        let read_scope = self.begin_resident_read_pass(Kind::Boat);
         // ServerLevel.tick: only entities in entity-ticking chunks tick.
         let ticking = self.entity_ticking_area();
         let mut round = self.native_tick_round();
@@ -971,6 +975,9 @@ impl Game<'_> {
         let mut i = 0;
         while i < self.boats.len() {
             let id = self.boats[i].id;
+            let join = self.boats[i].join;
+            let initial = self.boats[i].position;
+            let in_ticking_area = ticking(initial.x.floor() as i32, initial.z.floor() as i32);
 
             'boat: {
                 let p = self.boats[i].position;
@@ -1004,6 +1011,12 @@ impl Game<'_> {
                 } else {
                     String::new()
                 };
+                if read_scope.is_some() {
+                    self.publish_resident_actor_reads(
+                        BaseReadSource::Boat(&self.boats[i]),
+                        EntityReadCapturePhase::BeforeCallback,
+                    );
+                }
                 if !self.native_tick_pre_one(&mut round, id, &kind) {
                     self.boat_server_passes(id, &driven, &ticking, &round);
                     break 'boat;
@@ -1025,7 +1038,23 @@ impl Game<'_> {
                     });
                     self.boat_server_passes(id, &driven, &ticking, &round);
                 }
+                if read_scope.is_some() {
+                    if let Some(at) = self.boats.locate(join) {
+                        self.publish_resident_actor_reads(
+                            BaseReadSource::Boat(&self.boats[at]),
+                            EntityReadCapturePhase::AfterEntityTick,
+                        );
+                    }
+                }
                 self.native_tick_post_one(&round, id, &kind);
+            }
+            if read_scope.is_some() && in_ticking_area {
+                if let Some(at) = self.boats.locate(join) {
+                    self.publish_resident_actor_reads(
+                        BaseReadSource::Boat(&self.boats[at]),
+                        EntityReadCapturePhase::AfterAppliedWrite,
+                    );
+                }
             }
             i = match self.boats.get(i) {
                 Some(b) if b.id == id => i + 1,

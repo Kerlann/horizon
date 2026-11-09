@@ -8,10 +8,12 @@
 #[path = "minecarts/lifetime_tests.rs"]
 mod lifetime_tests;
 
+use super::native_base_read_rows::BaseReadSource;
 use super::{Game, Hit, InteractTarget, Keys, entity::Entity};
 use horizon_client::actions::Action;
 use horizon_client::entity_rules::EntityRules;
 use horizon_client::fast_hash::FxHashSet;
+use horizon_client::join_seq::residency::Kind;
 use horizon_client::join_seq::{JoinList, ListStamp};
 use horizon_client::mobs::{Mob, seen_grid::SeenGrid};
 use horizon_client::{
@@ -32,6 +34,7 @@ use horizon_core::{
     random::{LegacyRandom, RandomSource},
 };
 use horizon_world::registry::BlockStateId;
+use mod_api::EntityReadCapturePhase;
 use std::{collections::HashMap, sync::Arc};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -2065,6 +2068,7 @@ impl Game<'_> {
         self.vehicles_ticking(false);
     }
     fn tick_carts_now(&mut self) {
+        let read_scope = self.begin_resident_read_pass(Kind::Cart);
         self.push_carts();
         // ServerLevel.tick: only entities in entity-ticking chunks tick.
         let ticking = self.entity_ticking_area();
@@ -2088,6 +2092,13 @@ impl Game<'_> {
                 continue;
             }
             let kind = self.carts[i].kind.id();
+            let join = self.carts[i].join;
+            if read_scope.is_some() {
+                self.publish_resident_actor_reads(
+                    BaseReadSource::Cart(&self.carts[i]),
+                    EntityReadCapturePhase::BeforeCallback,
+                );
+            }
             if !self.native_tick_pre_one(&mut round, id, kind) {
                 continue;
             }
@@ -2125,8 +2136,25 @@ impl Game<'_> {
                 self.perform_cart_command(id);
                 index.forget_carts();
             }
-            // After the ticked cart is stored: a mod reads and changes the cart as it is now.
+            // Lava runs in the later pass below, so this is an applied storage
+            // write, not yet a completed EntityTick snapshot.
+            if read_scope.is_some() {
+                if let Some(at) = self.carts.locate(join) {
+                    self.publish_resident_actor_reads(
+                        BaseReadSource::Cart(&self.carts[at]),
+                        EntityReadCapturePhase::AfterAppliedWrite,
+                    );
+                }
+            }
             self.native_tick_post_one(&round, id, kind);
+            if read_scope.is_some() {
+                if let Some(at) = self.carts.locate(join) {
+                    self.publish_resident_actor_reads(
+                        BaseReadSource::Cart(&self.carts[at]),
+                        EntityReadCapturePhase::AfterAppliedWrite,
+                    );
+                }
+            }
         }
         // On the server for every cart, the ridden ones too.
         let mut hint = 0;
@@ -2138,7 +2166,16 @@ impl Game<'_> {
                 hint = i + 1;
                 let p = self.carts[i].position;
                 if ticking(p.x.floor() as i32, p.z.floor() as i32) {
+                    let join = self.carts[i].join;
                     self.cart_lava_tick(id, i);
+                    if read_scope.is_some() {
+                        if let Some(at) = self.carts.locate(join) {
+                            self.publish_resident_actor_reads(
+                                BaseReadSource::Cart(&self.carts[at]),
+                                EntityReadCapturePhase::AfterEntityTick,
+                            );
+                        }
+                    }
                 }
             }
         }

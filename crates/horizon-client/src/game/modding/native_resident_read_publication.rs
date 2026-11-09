@@ -32,7 +32,7 @@ macro_rules! resident_read_portals {
 pub(crate) use resident_read_portals;
 macro_rules! resident_read_identity {
     (($this:ident, $($projectiles:ident).+) $($kind:ident => $target:ident: $($field:ident).+,)*) => {
-        fn resident_source_identity(source: BaseReadSource<'_>) -> Option<(Kind, u32, JoinSeq)> {
+        pub(super) fn resident_source_identity(source: BaseReadSource<'_>) -> Option<(Kind, u32, JoinSeq)> {
             match source {
                 $(BaseReadSource::$kind(source) => Some((Kind::$kind, source.id, source.join_seq())),)*
                 BaseReadSource::Projectile(source) => Some((Kind::Projectile, source.id, source.join_seq())),

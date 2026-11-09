@@ -7,6 +7,9 @@ mod borrowed_tick;
 mod mob_dispatch_panic_tests;
 mod pufferfish_player;
 use super::api_values::{TryIntoApi, TryIntoEngine};
+use super::native_base_read_rows::BaseReadSource;
+use horizon_client::join_seq::residency::Kind;
+use mod_api::EntityReadCapturePhase;
 
 use super::level_sounds::LevelSound;
 use super::{
@@ -4849,6 +4852,7 @@ impl Game<'_> {
         .inflate(Vec3::new(1.0, 0.5, 1.0));
         // Player.hasInfiniteMaterials.
         let creative = self.creative;
+        let read_scope = self.begin_resident_read_pass(Kind::Projectile);
         let mut projectiles = self.creatures.projectiles.lift();
         #[cfg(test)]
         super::entity::taken_pass_tests::after_take(self);
@@ -4888,6 +4892,12 @@ impl Game<'_> {
             projectiles,
             horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
         );
+        if read_scope.is_some() {
+            self.refresh_resident_owner_reads(
+                Kind::Projectile,
+                EntityReadCapturePhase::AfterAppliedWrite,
+            );
+        }
         for shot in picked {
             self.add_pickup(
                 super::pickups::Taken::Arrow(Box::new(shot)),
@@ -4901,8 +4911,14 @@ impl Game<'_> {
             self.flush_lan_explosions();
             return self.flush_wind_bursts();
         }
+        let read_scope = self.begin_resident_read_pass(Kind::Projectile);
         let mut projectiles = self.creatures.projectiles.lift();
         let ticking = self.entity_ticking_area();
+        let mut ticked_joins = if read_scope.is_some() {
+            Vec::with_capacity(projectiles.len())
+        } else {
+            Vec::new()
+        };
         let mut hits = Vec::new();
         // The breezes that deflected a projectile, and where.
         let mut deflections: Vec<(u32, [f64; 3])> = Vec::new();
@@ -4991,6 +5007,7 @@ impl Game<'_> {
                     pickable_projectile_hitboxes_into(&projectiles, &keep_flags, i, &mut winds);
                 }
                 let mut redirect = None;
+                let mut stepped = false;
                 projectiles.update(i, |p| {
                     if vanish
                         && matches!(p.kind, ProjectileKind::EnderPearl)
@@ -5046,6 +5063,7 @@ impl Game<'_> {
                             })
                         }
                     };
+                    stepped = true;
                     if (p.is_thrown() && !matches!(p.kind, ProjectileKind::LlamaSpit))
                         || p.is_arrow() && p.arrow.as_ref().is_none_or(|a| !a.no_physics)
                     {
@@ -5164,10 +5182,23 @@ impl Game<'_> {
                         redirect = Some((j, (p.owner, p.owner_uuid, p.guest)));
                     }
                 });
+                if stepped && read_scope.is_some() {
+                    ticked_joins.push(projectiles[i].join);
+                    self.publish_resident_actor_reads(
+                        BaseReadSource::Projectile(&projectiles[i]),
+                        EntityReadCapturePhase::AfterAppliedWrite,
+                    );
+                }
                 if let Some((j, (owner, owner_uuid, guest))) = redirect {
                     let look = self.owner_look(owner, guest);
                     projectiles.update(j, |wind| {
                         super::deflect::aim_deflect(wind, look, owner, owner_uuid, guest);
+                        if read_scope.is_some() {
+                            self.publish_resident_actor_reads(
+                                BaseReadSource::Projectile(wind),
+                                EntityReadCapturePhase::AfterAppliedWrite,
+                            );
+                        }
                     });
                 }
             }
@@ -5202,6 +5233,14 @@ impl Game<'_> {
                 &mut arrow_events,
             );
         }
+        if read_scope.is_some() {
+            for source in projectiles.iter() {
+                self.publish_resident_actor_reads(
+                    BaseReadSource::Projectile(source),
+                    EntityReadCapturePhase::AfterAppliedWrite,
+                );
+            }
+        }
         for (owner, guest, at) in shoot_events {
             self.with_projectile_dispatch(&mut projectiles, |game| {
                 game.projectile_shoot_event(owner, guest, at);
@@ -5226,32 +5265,48 @@ impl Game<'_> {
             projectiles,
             horizon_client::join_seq::RestoreOrder::SpawnsFirst,
         );
-        for (p, hit) in hits {
-            // A player's arrow on another player lands as the victim's hurt.
-            if let Some(victim) = self.projectile_pvp_victim(&p, hit) {
-                self.projectile_hits_player(&p, hit, victim)?;
-                continue;
-            }
-            // A guest's projectile lands as theirs: a pearl takes them, what
-            // it hurts answers to them. One hitting the host (`Who::Player`
-            // here) stays the host's hit.
-            match p.guest {
-                Some(conn)
-                    if !matches!(
-                        hit,
-                        Hit::Entity {
-                            who: Who::Player,
-                            ..
-                        }
-                    ) =>
-                {
-                    self.guest_projectile_hit(conn, &p, hit)?;
+        let effects = (|| {
+            for (p, hit) in hits {
+                // A player's arrow on another player lands as the victim's hurt.
+                if let Some(victim) = self.projectile_pvp_victim(&p, hit) {
+                    self.projectile_hits_player(&p, hit, victim)?;
+                    continue;
                 }
-                _ => self.projectile_hit(&p, hit)?,
+                // A guest's projectile lands as theirs: a pearl takes them, what
+                // it hurts answers to them. One hitting the host (`Who::Player`
+                // here) stays the host's hit.
+                match p.guest {
+                    Some(conn)
+                        if !matches!(
+                            hit,
+                            Hit::Entity {
+                                who: Who::Player,
+                                ..
+                            }
+                        ) =>
+                    {
+                        self.guest_projectile_hit(conn, &p, hit)?;
+                    }
+                    _ => self.projectile_hit(&p, hit)?,
+                }
+            }
+            self.flush_lan_explosions();
+            self.flush_wind_bursts()
+        })();
+        let phase = if effects.is_ok() {
+            EntityReadCapturePhase::AfterEntityTick
+        } else {
+            EntityReadCapturePhase::AfterAppliedWrite
+        };
+        for join in ticked_joins {
+            if let Some(at) = self.creatures.projectiles.locate(join) {
+                self.publish_resident_actor_reads(
+                    BaseReadSource::Projectile(&self.creatures.projectiles[at]),
+                    phase,
+                );
             }
         }
-        self.flush_lan_explosions();
-        self.flush_wind_bursts()
+        effects
     }
     /// `LivingEntity.hurtServer`'s `setLastHurtByPlayer` for a projectile a
     /// player owns (a fireball they turned back): the kill is theirs, so a

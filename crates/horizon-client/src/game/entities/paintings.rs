@@ -2,6 +2,7 @@
 //! variant choice (or the stack's `painting/variant`), `HangingEntity.survives`
 //! checks every 100 ticks, breaking by attack (`dropItem`), saving, and
 //! `PaintingRenderer` quads.
+use super::native_base_read_rows::BaseReadSource;
 use super::{Game, Hit, entity_culling::default_range};
 use horizon_client::{
     entities::{ItemFrame, Painting},
@@ -13,6 +14,7 @@ use horizon_core::{
     geometry::{Aabb, Vec3},
     random::RandomSource,
 };
+use mod_api::EntityReadCapturePhase;
 use std::sync::Arc;
 
 /// A `painting_variant` and whether `#placeable` lists it (in tag order).
@@ -407,12 +409,23 @@ impl Game<'_> {
                 i += 1;
                 continue;
             }
+            let join = self.paintings[i].join;
+            let read_scope =
+                self.begin_resident_actor_read_pass(BaseReadSource::Painting(&self.paintings[i]));
             self.paintings[i].check_interval += 1;
             if self.paintings[i].check_interval >= 100 {
                 self.paintings[i].check_interval = 0;
                 let p = self.paintings[i].clone();
                 if !self.painting_survives(&p) && self.break_painting(i, false) {
                     continue;
+                }
+            }
+            if read_scope.is_some() {
+                if let Some(at) = self.paintings.locate(join) {
+                    self.publish_resident_actor_reads(
+                        BaseReadSource::Painting(&self.paintings[at]),
+                        EntityReadCapturePhase::AfterEntityTick,
+                    );
                 }
             }
             i += 1;
