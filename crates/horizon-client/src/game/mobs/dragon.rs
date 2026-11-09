@@ -1400,12 +1400,16 @@ impl Game<'_> {
         {
             super::entity::assign_stored_id(&mut self.next_entity, &mut d.id, None);
             self.next_entity += 8;
+            self.dragon.id_assigned();
         }
         // The spikes' crystals too (EndCrystal's constructor): an id whether
         // or not a client has tracked them yet, to be aimed at by it.
-        for c in self.crystals.iter_mut().filter(|c| c.id == 0) {
-            super::entity::assign_stored_id(&mut self.next_entity, &mut c.id, None);
-        }
+        super::entity_residency::assign_resident_ids!(
+            self.crystals,
+            c,
+            &mut self.next_entity,
+            None
+        );
     }
     /// EndSpikeFeature's crystals (with fire under them on the bedrock).
     fn place_spike_crystals(&mut self) {
@@ -4392,6 +4396,7 @@ impl Game<'_> {
             if let Some(d) = self.dragon.extract() {
                 // remove, then gameEvent(ENTITY_DIE), before the fight hears of it.
                 self.dragon_died_event(d.id, d.position, d.alive());
+                self.dragon.retire_extracted(d.id, d.join);
             }
             if fight {
                 self.dragon_killed();

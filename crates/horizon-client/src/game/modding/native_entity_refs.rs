@@ -1016,6 +1016,7 @@ pub(super) mod tests {
             None,
         )
         .unwrap();
+        game.reset_entity_residency();
         game.native_lifecycle
             .begin_open(NativeAuthority::IntegratedServer);
 

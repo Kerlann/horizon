@@ -1074,30 +1074,14 @@ impl Game<'_> {
     /// id, players aside.
     pub(in crate::game) fn level_entity(&self, id: i32) -> Option<Target> {
         let id = u32::try_from(id).ok()?;
-        [
-            Target::Mob(id),
-            Target::Item(id),
-            Target::Orb(id),
-            Target::Projectile(id),
-            Target::Stand(id),
-            Target::Frame(id),
-            Target::Painting(id),
-            Target::Boat(id),
-            Target::Cart(id),
-            Target::Other(id),
-            Target::Fangs(id),
-            Target::Crystal(id),
-            Target::Dragon(id),
-            Target::Tnt(id),
-            Target::Cushion(id),
-            Target::Falling(id),
-            Target::Rocket(id),
-            Target::Trident(id),
-            Target::Spawner(id),
-            Target::Cloud(id),
-        ]
-        .into_iter()
-        .find(|t| self.level_holds(*t))
+        match self.server_resident_entity(id) {
+            horizon_client::join_seq::residency::table::EntityLookup::Found { location, value }
+                if location.owner.dimension == self.dim.key() =>
+            {
+                Some(value)
+            }
+            _ => None,
+        }
     }
     /// `ServerLevel.getEntityOrPart` for a part: the `EnderDragonPart` of the
     /// level in place with this network id. `level_entity` does not find it,
@@ -1152,23 +1136,14 @@ impl Game<'_> {
         t: Target,
         f: impl FnOnce(&mut Self) -> R,
     ) -> Option<R> {
-        if self.level_holds(t) {
+        let dim = self.resident_target_dimension(t)?;
+        if dim == self.dim {
             return Some(f(self));
         }
-        for dim in self.levels.parked_dims() {
-            let back = self.enter_command_level(dim);
-            if self.level_holds(t) {
-                let r = f(self);
-                if let Some(back) = back {
-                    self.enter_command_level(back);
-                }
-                return Some(r);
-            }
-            if let Some(back) = back {
-                self.enter_command_level(back);
-            }
-        }
-        None
+        let back = self.enter_command_level(dim)?;
+        let result = f(self);
+        self.enter_command_level(back);
+        Some(result)
     }
     fn entity_tag_matches(&self, tag: &str, ty: &str) -> bool {
         let path = self.options.resources.join(format!(

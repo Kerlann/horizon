@@ -64,6 +64,23 @@ impl EntityTable {
         id: u32,
         locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
     ) -> EntityLookup<T> {
+        self.lookup(Some(dimension), id, locate)
+    }
+    /// Resolve an id across all loaded dimensions. The resolver still validates
+    /// exactly the named owner; it must not swap levels or search other owners.
+    pub fn server_entity_lookup<T>(
+        &mut self,
+        id: u32,
+        locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
+    ) -> EntityLookup<T> {
+        self.lookup(None, id, locate)
+    }
+    fn lookup<T>(
+        &mut self,
+        dimension: Option<&DimensionKey>,
+        id: u32,
+        locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
+    ) -> EntityLookup<T> {
         let Some(id) = NonZeroU32::new(id) else {
             return EntityLookup::Missing;
         };
@@ -71,7 +88,7 @@ impl EntityTable {
         let Some(&location) = self.rows.get(&id) else {
             return EntityLookup::Missing;
         };
-        if location.owner.dimension != *dimension {
+        if dimension.is_some_and(|dimension| location.owner.dimension != *dimension) {
             return EntityLookup::Missing;
         }
         if let Some(source) = locate(location) {
@@ -224,6 +241,41 @@ mod tests {
                 self.source.get(&location).copied()
             })
         }
+    }
+
+    #[test]
+    fn server_lookup_follows_a_transfer_without_a_dimension_scan() {
+        let mut f = Fixture::new();
+        let old = f.admit(7, HOME);
+        let away = Owner {
+            dimension: DimensionKey::NETHER,
+            kind: Kind::Boat,
+        };
+        f.emit(old, Change::Remove(Identity::new(7, old.join).unwrap()));
+        f.source.remove(&old);
+        let arrived = f.admit(7, away);
+        assert_eq!(f.entity_lookup(7), EntityLookup::Missing);
+        assert_eq!(
+            f.table.server_entity_lookup(7, |at| {
+                assert_eq!(at, arrived);
+                f.source.get(&at).copied()
+            }),
+            EntityLookup::Found {
+                location: arrived,
+                value: 42
+            }
+        );
+        f.emit(arrived, Change::Lifted);
+        f.source.remove(&arrived);
+        assert_eq!(
+            f.table.server_entity_lookup::<()>(7, |_| None),
+            EntityLookup::Taken
+        );
+        assert_eq!(
+            f.table
+                .server_entity_lookup::<()>(0, |_| panic!("zero reached storage")),
+            EntityLookup::Missing
+        );
     }
 
     struct Stored(u32, JoinSeq);
