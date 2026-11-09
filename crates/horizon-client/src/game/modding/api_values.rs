@@ -62,6 +62,7 @@ pub(crate) fn behavior_block(
 ) -> Option<horizon_world::level::states::BlockId> {
     Some(behaviours.block(default_state(block)?))
 }
+pub(crate) use super::native_ground::alter_ground;
 pub(in crate::game) use super::native_worldgen::prepare as prepare_block_states;
 pub(in crate::game) use block_state::install as install_block_states;
 #[path = "api_values/landing_write.rs"]
@@ -117,10 +118,8 @@ pub(in crate::game) fn resolve_block_definitions(
 fn bind_worker_blocks(registry: &horizon_world::registry::BlockRegistry) -> Result<(), String> {
     block_state::bind(registry)?;
     let index = block_state::current().map_err(|error| format!("worker index: {error:?}"))?;
-    let retained = super::native_worldgen::retain(registry, index).map_err(|error| {
-        block_state::clear();
-        error
-    })?;
+    let retained =
+        super::native_worldgen::retain(registry, index).inspect_err(|_| block_state::clear())?;
     block_state::install(retained);
     Ok(())
 }
@@ -2931,6 +2930,7 @@ impl<C: ?Sized> TryIntoEngine<C> for mod_api::hud_layout::GuiDraw {
 
 #[path = "api_values/text_boundary.rs"]
 mod text_boundary;
+pub(in crate::game) use text_boundary::style_hover;
 #[cfg(test)]
 mod gui_draw_boundary_tests {
     use super::{TryIntoApi, TryIntoEngine};

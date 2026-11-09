@@ -1661,7 +1661,7 @@ impl Game<'_> {
         let area = self.boats[i].bounds();
         // Player.attack's full damage against the boat's entity type.
         let (kind, id) = (self.boats[i].entity_type(), self.boats[i].id as i32);
-        let (damage, scale, _, magic) = self.melee_damage(&kind, false);
+        let (damage, scale, _, magic) = self.melee_damage(&kind, false, Some(id as u32));
         let sweep = self.sweep_before_hit(&kind, false);
         let chest = self.boats[i].chest;
         let hurt = self.hurt_boat_result(i, damage, self.creative);

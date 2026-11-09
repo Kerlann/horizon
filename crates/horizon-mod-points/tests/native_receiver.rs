@@ -1,3 +1,5 @@
+// Generated fixtures exercise every shape; TODO(#2273): make the generator emit clippy-clean code.
+#![allow(clippy::all, unused_comparisons, unreachable_patterns, dead_code)]
 #![cfg(feature = "wasm-guest")]
 
 //! A real catalog `&self` point on a stand-in receiver, generated through the whole-catalog

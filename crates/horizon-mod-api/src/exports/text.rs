@@ -1,3 +1,3 @@
 pub mod text;
-pub use text::Text;
 pub use text::TextFormError;
+pub use text::{Text, TextHover};

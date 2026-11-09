@@ -30,6 +30,8 @@ impl FunctionSource {
     /// Construct only during the marked call from the caller's `with_root` handle. Native
     /// values referenced by the callable and codec functions must remain valid until the value
     /// lease ends. The codecs must decode and encode the declared native types faithfully.
+    // TODO(#2273): a `new` that returns a shared trait object, not `Self`, by design.
+    #[allow(clippy::new_ret_no_self)]
     pub unsafe fn new<F, A, R>(
         root: &Root<'_, RefCell<F>>,
         decode: fn(&mut Reader<'_>) -> Result<A, WireError>,

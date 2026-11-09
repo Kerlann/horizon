@@ -364,6 +364,7 @@ impl Adapter {
 
 #[cfg(test)]
 #[path = "../../../../../docs/modding/examples/src/worldgen.rs"]
+#[allow(dead_code)] // The book example is compiled for its signatures only; TODO(#2273)
 mod book_example;
 #[cfg(test)]
 #[path = "native_structure_types/tests.rs"]

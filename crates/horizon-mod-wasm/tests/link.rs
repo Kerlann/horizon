@@ -1,5 +1,7 @@
 //! The group linker on small shared modules written by hand: one std, one library and one mod,
 //! the way `rust-lld --shared` lays them out.
+// Generated fixtures exercise every shape; TODO(#2273): make the generator emit clippy-clean code.
+#![allow(clippy::all, unused_comparisons, unreachable_patterns, dead_code)]
 use horizon_mod_wasm::link::{Group, LinkError, Member};
 use wasmtime::{Engine, Val};
 

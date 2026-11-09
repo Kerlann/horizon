@@ -66,6 +66,20 @@ impl Modifier {
         Arc::ptr_eq(&self.0, &other.0)
     }
 }
+/// An attribute's sentiment (`Attribute.Sentiment`): how a rising or falling
+/// value colors its tooltip line. Vanilla's own sentiments stay where the
+/// tooltip reads them; a mod's declared attribute carries its own.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Sentiment {
+    /// Rising blue, falling red.
+    #[default]
+    Positive,
+    /// Gray either way.
+    Neutral,
+    /// Rising red, falling blue.
+    Negative,
+}
+
 #[derive(Clone, Copy, Debug)]
 pub struct Definition {
     default: f64,

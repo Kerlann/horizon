@@ -1,5 +1,7 @@
 //! The registry's lifecycle, registering, sealing and stopping, on the real points: an integration
 //! test, so the generated points compile once for the tests.
+// Generated fixtures exercise every shape; TODO(#2273): make the generator emit clippy-clean code.
+#![allow(clippy::all, unused_comparisons, unreachable_patterns, dead_code)]
 use mod_points::__private::{POINTS, RawKind, SlotListener, seal};
 use mod_points::{PointId, RegisterError, register, stop};
 use std::sync::atomic::Ordering;

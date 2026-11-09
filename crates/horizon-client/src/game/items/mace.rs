@@ -687,7 +687,7 @@ impl Game<'_> {
             };
             let kind = self.mobs[i].kind.id.clone();
             let kind = format!("minecraft:{}", kind.trim_start_matches("minecraft:"));
-            let amount = self.enchanted_damage(&kind, base) * scale;
+            let amount = self.enchanted_damage(&kind, base, Some(id)) * scale;
             let source = self.attack_source(from);
             // hurtServer first; the knockback and post-attack effects follow
             // only when it landed.

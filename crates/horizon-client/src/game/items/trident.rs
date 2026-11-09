@@ -845,16 +845,14 @@ impl Game<'_> {
                             direct_attacker: Some("minecraft:trident"),
                             is_direct: true,
                             damage_type: Some("minecraft:trident"),
-                            items: Some(world_items!(self)),
+                            items: None,
                             ..Default::default()
                         };
-                        let damage = world_stations!(self).enchantments.modify_value(
-                            Some(&t.stack),
-                            "minecraft:damage",
-                            &ctx,
-                            &mut self.world.random,
-                            8.0,
-                        );
+                        let attacker = self
+                            .player_attacker(t.guest)
+                            .map_or(self.own_entity_id() as u32, |s| s.0);
+                        let damage =
+                            self.evaluate_weapon_damage(&t.stack, Some((attacker, id)), ctx, 8.0);
                         t.dealt_damage = true;
                         let mut hurt_at = None;
                         let aim = self.attacker_aim(Some(Who::Player));

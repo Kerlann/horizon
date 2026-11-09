@@ -43,6 +43,15 @@ pub(super) fn world_brightness(world: &World, layer: LightLayer, pos: [i32; 3]) 
     })
 }
 
+/// A mod's registry id or `#tag`, namespaced as a command argument is.
+fn normalized_selector(id: &str) -> String {
+    use horizon_client::command::args::normalized;
+    match id.strip_prefix('#') {
+        Some(tag) => format!("#{}", normalized(tag)),
+        None => normalized(id).into_owned(),
+    }
+}
+
 /// Bound the synchronous generator work before constructing its spiral or height vector.
 fn biome_search_within_budget(parameters: mod_api::BiomeSearch, height: i32) -> bool {
     if parameters.radius < 0
@@ -79,10 +88,7 @@ impl Game<'_> {
         } else {
             self.levels.parked_locator_of(level.dimension_id())
         }?;
-        let selector = match biome.strip_prefix('#') {
-            Some(tag) => format!("#{}", horizon_client::command::args::normalized(tag)),
-            None => horizon_client::command::args::normalized(biome).into_owned(),
-        };
+        let selector = normalized_selector(biome);
         let allowed = |name: &str| self.biome_matches(&selector, name);
         let query = horizon_world::worldgen::generator::BiomeSearch {
             allowed: &allowed,
@@ -98,6 +104,32 @@ impl Game<'_> {
         terrain
             .find_closest_biome(&query)
             .map(|(biome, position)| mod_api::BiomeSearchResult::new(biome, position))
+    }
+
+    /// `ServerLevel.findNearestMapStructure` without skipping known starts, through
+    /// the generator search `/locate structure` runs.
+    pub(super) fn level_find_nearest_structure(
+        &self,
+        level: LevelRef,
+        structure: &str,
+        parameters: mod_api::StructureSearch,
+    ) -> Option<mod_api::StructureSearchResult> {
+        self.native_level_world(level)?;
+        // Inside the world the placement cells' chunks stay far from overflowing.
+        if !(0..=mod_api::StructureSearch::MAX_RADIUS).contains(&parameters.radius)
+            || !horizontal_in_bounds(parameters.origin)
+        {
+            return None;
+        }
+        let terrain = if level.dimension() == self.dim.key() {
+            self.end.locator()
+        } else {
+            self.levels.parked_locator_of(level.dimension_id())
+        }?;
+        let names = self.structure_names(&normalized_selector(structure));
+        terrain
+            .locate(&names, parameters.origin, parameters.radius)
+            .map(|(structure, position)| mod_api::StructureSearchResult::new(structure, position))
     }
 
     /// `LevelReader.getBiome`: the noise cell selected by this level's BiomeManager zoom.
@@ -2594,6 +2626,106 @@ mod environment_read_tests {
             );
             assert_eq!(
                 stale.find_closest_biome(game, "#minecraft:is_nether", parameters),
+                None
+            );
+        });
+    }
+
+    /// The nearest stronghold lies on vanilla's first ring: 3 strongholds at
+    /// `4 * 32 + (nextDouble - 0.5) * 32 * 2.5` chunks from the origin, 88 to 168
+    /// (`ConcentricRingsStructurePlacement` with distance 32), each then moved
+    /// to a biome it may start in within 112 blocks.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn nearest_structure_uses_the_named_generator_without_loading_resident_chunks() {
+        use horizon_client::vanillagen::{TerrainResources, VanillaTerrain};
+        use mod_api::StructureSearch;
+
+        with_game(|game| {
+            let directory = game.options.resources.join("worldgen");
+            let terrain = VanillaTerrain::for_dimension(
+                TerrainResources {
+                    data: Some(&game.pack.data_changes),
+                    dir: &directory,
+                    registry: game.pack.assets.registry,
+                    biomes: world_biomes!(game),
+                    item_data: &game.res.core.item_data,
+                },
+                12345,
+                "minecraft:overworld",
+            )
+            .unwrap();
+            game.end.set_locator(Some(Arc::new(terrain)));
+            let overworld = game.level("minecraft:overworld").unwrap();
+            let before = (game.world.chunks.len(), game.streaming.pending());
+            let search = StructureSearch::new([0, 64, 0], 100);
+            let found = overworld
+                .find_nearest_structure(game, "minecraft:stronghold", search)
+                .expect("every Overworld has strongholds");
+            assert_eq!(found.structure, "minecraft:stronghold");
+            let [x, y, z] = found.position;
+            assert_eq!(y, 0, "the start chunk's corner at y 0");
+            assert_eq!((x.rem_euclid(16), z.rem_euclid(16)), (0, 0));
+            // `findBiomeHorizontal` then moves each ring position up to 112 blocks.
+            let chunks = f64::from(x.div_euclid(16)).hypot(f64::from(z.div_euclid(16)));
+            assert!((81.0..=175.0).contains(&chunks), "{chunks} chunks out");
+            assert_eq!(
+                overworld.find_nearest_structure(game, "stronghold", search),
+                Some(found.clone()),
+                "an id without a namespace is minecraft's"
+            );
+            assert_eq!(
+                overworld.find_nearest_structure(game, "#minecraft:eye_of_ender_located", search),
+                Some(found.clone()),
+                "a tag searches its members"
+            );
+            assert_eq!(
+                overworld.find_nearest_structure(
+                    game,
+                    "minecraft:stronghold",
+                    StructureSearch::new([x, 64, z], 0)
+                ),
+                Some(found.clone()),
+                "from the start itself"
+            );
+            for structure in ["minecraft:fortress", "minecraft:no_such_structure"] {
+                assert_eq!(
+                    overworld.find_nearest_structure(game, structure, search),
+                    None,
+                    "{structure} does not generate here"
+                );
+            }
+            for parameters in [
+                StructureSearch::new([0, 64, 0], -1),
+                StructureSearch::new([0, 64, 0], StructureSearch::MAX_RADIUS + 1),
+                StructureSearch::new([0, 64, 0], i32::MAX),
+                StructureSearch::new([i32::MAX, 64, 0], 100),
+                StructureSearch::new([0, 64, i32::MIN], 100),
+                StructureSearch::new([30_000_000, 64, 0], 0),
+            ] {
+                assert_eq!(
+                    overworld.find_nearest_structure(game, "minecraft:stronghold", parameters),
+                    None,
+                    "{parameters:?} is refused"
+                );
+            }
+            assert!(
+                overworld
+                    .find_nearest_structure(
+                        game,
+                        "minecraft:stronghold",
+                        StructureSearch::new([29_999_999, i32::MIN, -30_000_000], 0)
+                    )
+                    .is_some(),
+                "the world's edge and any height are searched"
+            );
+            assert_eq!(before, (game.world.chunks.len(), game.streaming.pending()));
+            let stale = LevelRef::new(
+                NativeWorldEpoch::new(overworld.epoch().get() + 1),
+                overworld.dimension(),
+            );
+            assert_eq!(
+                stale.find_nearest_structure(game, "minecraft:stronghold", search),
                 None
             );
         });

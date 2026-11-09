@@ -153,6 +153,7 @@ pub struct WasmMod {
     input: TypedFunc<u32, u32>,
     hook: TypedFunc<u32, u64>,
     pub subscribed: &'static [Option<HookId>],
+    pub(crate) listeners: &'static [mod_api::Listener],
     released: Arc<Releases>,
     subscriptions: Arc<Mutex<std::collections::HashMap<(Id, u32), &'static [Option<HookId>]>>>,
 }
@@ -164,6 +165,7 @@ pub(crate) struct WeakWasmMod {
     input: TypedFunc<u32, u32>,
     hook: TypedFunc<u32, u64>,
     subscribed: &'static [Option<HookId>],
+    pub(crate) listeners: &'static [mod_api::Listener],
     released: Arc<Releases>,
     subscriptions: Arc<Mutex<std::collections::HashMap<(Id, u32), &'static [Option<HookId>]>>>,
 }
@@ -192,6 +194,7 @@ impl WeakWasmMod {
             input: self.input.clone(),
             hook: self.hook.clone(),
             subscribed: self.subscribed,
+            listeners: self.listeners,
             released: self.released.clone(),
             subscriptions: self.subscriptions.clone(),
         };
@@ -414,6 +417,7 @@ impl WasmMod {
             input: self.input.clone(),
             hook: self.hook.clone(),
             subscribed: self.subscribed,
+            listeners: self.listeners,
             released: self.released.clone(),
             subscriptions: self.subscriptions.clone(),
         }
@@ -533,6 +537,7 @@ impl WasmMod {
                 input,
                 hook,
                 subscribed: &[],
+                listeners: &[],
                 released: Arc::default(),
                 subscriptions: Arc::default(),
             })

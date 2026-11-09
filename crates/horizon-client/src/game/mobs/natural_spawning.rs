@@ -24,12 +24,29 @@ use horizon_core::{
     random::{LegacyRandom, RandomSource, WorldgenRandom, XoroshiroRandom},
 };
 use horizon_world::dimension_type::DimensionFacts;
-use mod_api::NativeSpawnCheck;
+use mod_api::{NativeSpawnCheck, SpawnFlags, SpawnLimits};
 use std::collections::HashMap;
 use {
     horizon_core::nbt::{Compound, Tag},
     horizon_world::registry::BlockStateId,
 };
+
+/// A level's natural spawning policy, as mods set it through its `LevelRef`
+/// (`Game::spawn_policies`): the categories' caps and which may spawn.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct SpawnPolicy {
+    pub(super) limits: SpawnLimits,
+    pub(super) flags: SpawnFlags,
+}
+
+/// `ServerLevel.canSpawnEntitiesInChunk` of `world`: the chunk is loaded.
+pub(super) fn can_spawn_entities_in_chunk(
+    world: &horizon_client::world::World,
+    cx: i32,
+    cz: i32,
+) -> bool {
+    world.chunks.contains_key(&(cx, cz))
+}
 
 /// Natural spawning's candidate chunks (`ChunkMap.collectSpawningChunks`):
 /// the union of every player's 17×17 chunk square, in player then dx/dz
@@ -942,6 +959,14 @@ fn spawn_cost_types(biomes: &horizon_client::biome::Biomes) -> Vec<&str> {
     types
 }
 impl<'a> Game<'a> {
+    /// The natural spawning policy of the level `dimension`: vanilla's until a
+    /// mod sets one.
+    pub(super) fn spawn_policy(&self, dimension: mod_api::DimensionKey) -> SpawnPolicy {
+        self.spawn_policies
+            .get(&dimension)
+            .copied()
+            .unwrap_or_default()
+    }
     pub(super) fn natural_level(&self) -> GameLevel<'_, 'a> {
         let players = self.level_players();
         let nearest = players
@@ -1059,22 +1084,37 @@ impl<'a> Game<'a> {
         });
         local.into_iter().chain(guests)
     }
-    /// The UUIDs of `level_players`, in its order, for a query that only names
-    /// them: no `PlayerView`, so nothing is allocated per player.
-    #[cfg_attr(not(test), allow(dead_code))]
-    pub(super) fn level_player_uuids(&self) -> impl Iterator<Item = u128> + '_ {
-        let local = (self.player.is_some() && !self.lan_acting_fake)
+    /// The UUIDs of the players in level `dimension`, for a query that only
+    /// names them: no `PlayerView`, so nothing is allocated per player. For the
+    /// level in place they are `level_players`', in its order; a parked level
+    /// has only its guests.
+    pub(super) fn level_player_uuids<'s>(
+        &'s self,
+        dimension: &'s str,
+    ) -> impl Iterator<Item = u128> + 's {
+        let local = (dimension == self.dim.id() && self.player.is_some() && !self.lan_acting_fake)
             .then(|| horizon_client::lan::playerdata::ints_uuid(self.acting_uuid()));
-        local.into_iter().chain(self.level_guests().map(|g| g.uuid))
+        local
+            .into_iter()
+            .chain(self.guests_placed_in(dimension).map(|g| g.uuid))
     }
     /// The guests in the level in place, past the acting one: `player_view`
     /// already reads that guest's live body, and its record lags behind it.
     fn level_guests(&self) -> impl Iterator<Item = &horizon_client::lan::guest::Guest> + '_ {
-        self.lan.iter().flat_map(|h| {
+        self.lan
+            .iter()
+            .flat_map(|h| self.guests_placed_in(&h.hub.config.dimension))
+    }
+    /// The guests placed in level `dimension`, past the acting one.
+    fn guests_placed_in<'s>(
+        &'s self,
+        dimension: &'s str,
+    ) -> impl Iterator<Item = &'s horizon_client::lan::guest::Guest> + 's {
+        self.lan.iter().flat_map(move |h| {
             h.hub
                 .guests
                 .iter()
-                .filter(|g| h.hub.here(g) && self.lan_acting != Some(g.conn))
+                .filter(move |g| g.placed_in(dimension) && self.lan_acting != Some(g.conn))
         })
     }
     /// `Level.hasNearbyAlivePlayer` before a level is built for the spawn
@@ -1102,6 +1142,35 @@ impl<'a> Game<'a> {
             |(cx, cz)| levels.loaded_ticking(cx, cz) && super::ticking_chunk(&self.world, cx, cz),
         )
     }
+    /// `NaturalSpawner.createState` for a pass over the level in place, under
+    /// its spawn limits (`SpawnPolicy`).
+    pub(super) fn natural_spawn_state(
+        &self,
+        level: &GameLevel<'_, '_>,
+        spawnable: i32,
+        players: Vec<SpawnPlayer>,
+        counted: &[Counted],
+    ) -> SpawnState {
+        SpawnState::new(level, spawnable, players, counted, |cx, cz| {
+            self.world.chunks.contains_key(&(cx, cz))
+        })
+        .with_limits(self.spawn_policy(self.dim.key()).limits)
+    }
+    /// The categories a pass over the level in place tries: none with the
+    /// `spawn_mobs` rule off, else `getFilteredSpawningCategories` with the
+    /// `spawn_monsters` rule, the persistent ones every 400 ticks, and the
+    /// level's spawn flags (`SpawnPolicy`) taking away.
+    pub(super) fn natural_categories(&self, state: &SpawnState) -> Vec<Category> {
+        let rules = &self.ui.rules;
+        if !rules.bool_at(horizon_client::gamerules::vanilla::SPAWN_MOBS) {
+            return Vec::new();
+        }
+        state.policy_categories(
+            self.spawn_policy(self.dim.key()).flags,
+            rules.bool_at(horizon_client::gamerules::vanilla::SPAWN_MONSTERS),
+            self.world.game_time % 400 == 0,
+        )
+    }
     /// `ServerChunkCache.tickChunks`: the spawn state over the loaded mobs,
     /// the categories under their global caps (creatures every 400 ticks),
     /// then `tickSpawningChunk` in the shuffled spawning chunks of every
@@ -1123,14 +1192,6 @@ impl<'a> Game<'a> {
             *self.world.inhabited.entry(key).or_insert(0) += 1;
         }
         laps.lap("sn_inhabited");
-        let spawn_mobs = self
-            .ui
-            .rules
-            .bool_at(horizon_client::gamerules::vanilla::SPAWN_MOBS);
-        let spawn_enemies = self
-            .ui
-            .rules
-            .bool_at(horizon_client::gamerules::vanilla::SPAWN_MONSTERS);
         let mut random = std::mem::replace(&mut self.world.random, LegacyRandom::new(0));
         let mut pending = Vec::new();
         let last_state;
@@ -1161,16 +1222,10 @@ impl<'a> Game<'a> {
                 })
                 .collect();
             laps.lap("sn_materialize");
-            let mut state = SpawnState::new(&level, spawnable, players, &counted, |cx, cz| {
-                self.world.chunks.contains_key(&(cx, cz))
-            });
+            let mut state = self.natural_spawn_state(&level, spawnable, players, &counted);
             laps.lap("sn_state");
             last_state = state.counts();
-            let categories = if spawn_mobs {
-                state.filtered_categories(spawn_enemies, self.world.game_time % 400 == 0)
-            } else {
-                Vec::new()
-            };
+            let categories = self.natural_categories(&state);
             laps.lap("sn_categories");
             // Util.shuffle.
             for i in (1..scratch.candidates.len()).rev() {

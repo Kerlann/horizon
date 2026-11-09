@@ -957,7 +957,11 @@ pub(super) fn dispatch(types: &Types<'_>, methods: &[Method]) -> (String, Vec<St
             }
         }
         let call = format!("receiver.{}({})", m.name, args.join(", "));
-        let answer = if is_subscription(m) {
+        let answer = if m.owner == "Hooks" && m.name == "subscribed" {
+            format!(
+                "{call}.iter().flatten().map(|id| {{ let listener = receiver.listeners().iter().find(|l| l.hook.is_some_and(|h| h as usize == *id as usize)); (hook_name(*id).to_string(), listener.map_or(0, |l| l.priority), listener.is_some_and(|l| l.receive_cancelled)) }}).collect::<Vec<_>>()"
+            )
+        } else if is_subscription(m) {
             format!(
                 "{call}.iter().flatten().map(|id| hook_name(*id).to_string()).collect::<Vec<String>>()"
             )

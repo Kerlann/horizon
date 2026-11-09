@@ -9,6 +9,11 @@ console permission level 4 and the existing console command path, while
 `broadcast(text)` (including the broadcast hook and server log) and
 `text_allowed(text)` (the server chat filter).
 
+On the client, `host.chat_line(Text::literal("Local notice"))?` adds a line
+only to the local chat HUD and history, without sending a packet or firing
+`client_chat_received`. Handle its `Result<(), mod_api::TextFormError>`: text exceeding the
+boundary's size or nesting limits is refused before it reaches the HUD.
+
 `host.players().server_players()` returns `Vec<PlayerRef>` in connection order;
 `host.players().acting_player()` returns the optional `PlayerRef` whose state is
 swapped in for this hook. The online list includes connected players even during

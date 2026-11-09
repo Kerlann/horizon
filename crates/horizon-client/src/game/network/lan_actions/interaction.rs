@@ -564,7 +564,7 @@ impl Game<'_> {
             return Ok(false);
         }
         if let Some(victim) = self.pvp_victim(conn, id) {
-            if let Ok(Some(strike)) = self.as_guest_at(gi, conn, |g| g.pvp_strike())
+            if let Ok(Some(strike)) = self.as_guest_at(gi, conn, |g| g.pvp_strike(id as u32))
                 && self.pvp_land(victim, &strike)
             {
                 let on_ground = self.pvp_victim_on_ground(victim);

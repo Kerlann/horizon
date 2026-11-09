@@ -164,8 +164,9 @@ Head slots run before head source callbacks; return source callbacks run before 
 Slots run API listeners before internals listeners. Within each phase priority descends, then
 stable dependency/registration order; inject id breaks ties within one mod. A call wrapper may
 invoke the original zero, one or several times. A head cancellation skips the body; return
-listeners observe the result only after the body actually ran. Hook contracts determine their
-own cancellation and replacement rules.
+listeners observe the result only after the body actually ran. Trait-mod hooks run by `#[listener]`
+priority descending, then dependency order; a cancel skips later mods except those receiving cancelled
+events, which may undo it. Hook contracts determine their own cancellation and replacement rules.
 
 ## Make your injection convertible
 

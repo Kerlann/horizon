@@ -4127,6 +4127,126 @@ mod fake_action_tests {
         });
     }
 
+    /// A listener on `attack_entity` records the target's health where the hook
+    /// runs; with `cancel` set it vetoes the blow.
+    struct AttackWatcher {
+        seen: std::sync::Arc<std::sync::Mutex<Vec<f32>>>,
+        cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    }
+
+    #[mod_api::__subscriptions]
+    impl mod_api::Hooks for AttackWatcher {
+        fn attack_entity(
+            &self,
+            host: &mut dyn mod_api::ServerHost,
+            event: &mut mod_api::AttackEntityEvent<'_>,
+        ) -> mod_api::Flow {
+            let health = u32::try_from(event.entity)
+                .ok()
+                .and_then(|id| host.entity(id))
+                .and_then(|entity| host.living(entity))
+                .and_then(|living| living.health(host))
+                .expect("the watcher's target is a live zombie");
+            self.seen.lock().unwrap().push(health);
+            if self.cancel.load(std::sync::atomic::Ordering::Relaxed) {
+                return mod_api::Flow::Cancel;
+            }
+            mod_api::Flow::Continue
+        }
+    }
+
+    /// `attack_entity` runs at `Player.attack`'s start, before the blow and the
+    /// swing's attack-strength reset (vanilla's `getAttackStrengthScale(0.5)`
+    /// is read there too, and `onAttack` resets the ticker after it). The hook
+    /// sees the target untouched, the blow uses the charge that was there when
+    /// the hook ran, and a veto leaves both the target and the charge alone.
+    /// The charge itself is read through the damage it deals: the read a mod
+    /// gets in the hook is `PlayerRef::attack_strength_scale` (part of the same
+    /// issue, landed separately).
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn attack_entity_runs_before_the_blow_resets_the_attack_charge() {
+        use super::super::native_entity_refs::tests::with_game;
+        use std::sync::{
+            Arc, Mutex,
+            atomic::{AtomicBool, Ordering},
+        };
+
+        let seen = Arc::new(Mutex::new(Vec::new()));
+        let cancel = Arc::new(AtomicBool::new(false));
+        let mods: mod_api::Mods = vec![mod_api::ModEntry::new(
+            "attack-watcher",
+            Box::new(AttackWatcher {
+                seen: seen.clone(),
+                cancel: cancel.clone(),
+            }),
+        )]
+        .into();
+        mod_api::testing::with_mods(mods, || {
+            // Half a fist's cooldown (delay 5 ticks): the charge is (2 + 0.5) / 5 = 0.5.
+            with_game(|game| {
+                let (player, fake_conn, _) = fake(game, None, 0);
+                game.lan
+                    .as_mut()
+                    .unwrap()
+                    .hub
+                    .guests
+                    .update_all(|g| g.yaw = -90.0);
+                let near = zombie(game, 5000, [2.0, 64.0, 0.5]);
+                let full = health(game, 5000);
+                game.as_guest(fake_conn, |g| g.attack_ticks = 2).unwrap();
+                assert_eq!(
+                    game.player_perform_action(player, PlayerAction::Attack { target: near }),
+                    Ok(ActionOutcome::Consumed)
+                );
+                assert_eq!(
+                    *seen.lock().unwrap(),
+                    vec![full],
+                    "the hook runs before the blow lands"
+                );
+                // The hit then uses the charge that was there for the hook: 0.5 scales a fist's
+                // 1 to 0.4, and a zombie's 2 armour takes `getDamageAfterAbsorb`'s share.
+                let dealt = 0.4f32 * (1.0 - (2.0 - 0.4 / 2.0) / 25.0);
+                assert!(
+                    (full - health(game, 5000) - dealt).abs() < 1e-4,
+                    "the blow uses the pre-reset charge"
+                );
+                assert_eq!(
+                    game.as_guest(fake_conn, |g| g.attack_ticks).unwrap(),
+                    0,
+                    "the swing resets the charge after the hit"
+                );
+            });
+            // A veto at the hook leaves the target unhurt and the charge where it was: neither
+            // the hit nor the reset has run yet.
+            with_game(|game| {
+                let (player, fake_conn, _) = fake(game, None, 0);
+                game.lan
+                    .as_mut()
+                    .unwrap()
+                    .hub
+                    .guests
+                    .update_all(|g| g.yaw = -90.0);
+                let near = zombie(game, 5001, [2.0, 64.0, 0.5]);
+                let full = health(game, 5001);
+                seen.lock().unwrap().clear();
+                cancel.store(true, Ordering::Relaxed);
+                game.as_guest(fake_conn, |g| g.attack_ticks = 2).unwrap();
+                assert_eq!(
+                    game.player_perform_action(player, PlayerAction::Attack { target: near }),
+                    Ok(ActionOutcome::Passed)
+                );
+                assert_eq!(*seen.lock().unwrap(), vec![full]);
+                assert_eq!(health(game, 5001), full, "a veto stops the blow");
+                assert_eq!(
+                    game.as_guest(fake_conn, |g| g.attack_ticks).unwrap(),
+                    2,
+                    "and the swing that would reset the charge never starts"
+                );
+            });
+        });
+    }
+
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_fake_breaks_blocks_at_once_by_the_game_modes_rules() {

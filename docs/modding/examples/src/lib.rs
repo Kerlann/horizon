@@ -72,6 +72,9 @@ pub mod at_a_point {
 /// A mod screen built from `mod_api::widgets`.
 pub mod widget_screen;
 
+/// A mod's own tooltip for a text component's item hover.
+pub mod hover_tooltip;
+
 /// Reload-stable custom recipe definitions.
 pub mod reload_recipes;
 

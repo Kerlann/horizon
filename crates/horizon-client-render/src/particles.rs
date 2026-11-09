@@ -20,16 +20,18 @@ use horizon_core::{
 };
 use horizon_world::block_collision::BlockCollisionRegistry;
 mod options;
+use mod_api::ParticleProvider;
 pub use options::ParticleOptions;
 use std::{
     array,
-    collections::{HashMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
+    sync::Arc,
 };
 
 pub use horizon_client_core::particle_type::ParticleType;
 pub use horizon_items::firework::{DYE_FIREWORK_COLORS, FireworkExplosion, FireworkShape};
 mod native;
-pub use native::{ParticleController, ParticleUpdate};
+pub use native::{ParticleController, ParticleUpdate, register_particle_providers};
 
 #[derive(Clone, Debug)]
 enum Sprite {
@@ -321,6 +323,16 @@ impl ModBehaviour {
 fn mod_curve([start, end]: [f32; 2], age: i32, lifetime: i32) -> f32 {
     let progress = (age as f32 / lifetime.max(1) as f32).clamp(0.0, 1.0);
     start + (end - start) * progress
+}
+
+/// A native mod's sprite set: its handle in `set_sprites`, the behaviour its JSON declares
+/// and the provider that moves its particles, if a mod registered one. Resolved at load, so a
+/// spawn and a tick never look a provider up by name.
+#[derive(Clone)]
+struct ModSet {
+    set: u32,
+    behaviour: Option<ModBehaviour>,
+    provider: Option<Arc<dyn ParticleProvider>>,
 }
 
 /// One live particle (`Particle` + `SingleQuadParticle` state).
@@ -1138,7 +1150,10 @@ pub struct ParticleEngine {
     atlas: HashMap<String, (Rect, bool)>,
     sets: HashMap<ParticleType, u32>,
     /// A native mod's sprite sets, by namespaced particle name.
-    mod_sets: HashMap<String, (u32, Option<ModBehaviour>)>,
+    mod_sets: HashMap<String, ModSet>,
+    /// The code providers of mods' particle types, by name: `register_particle_providers`' registrations as
+    /// this engine was built, applied to `mod_sets` at every load.
+    providers: BTreeMap<String, Arc<dyn ParticleProvider>>,
     set_sprites: Vec<Vec<u32>>,
     /// `TrackingEmitter`s: particle type, entity feet position, width, height, ticks left.
     emitters: Vec<(ParticleOptions, [f64; 3], f64, f64, u32)>,
@@ -1339,6 +1354,7 @@ impl ParticleEngine {
             atlas: HashMap::new(),
             sets: HashMap::new(),
             mod_sets: HashMap::new(),
+            providers: native::registered().clone(),
             set_sprites: Vec::new(),
             emitters: Vec::new(),
             starters: Vec::new(),
@@ -1381,6 +1397,11 @@ impl ParticleEngine {
         self.set_sprites.clear();
         self.item_sprites.clear();
         self.load_sprites(root);
+        for name in self.providers.keys() {
+            if !self.mod_sets.contains_key(name) {
+                log::warn!("Particle provider {name} has no particles/<path>.json sprite set");
+            }
+        }
     }
     /// The sprite sets of every `particles/*.json` under `root`: vanilla's own
     /// and a native mod's (`assets/<namespace>/particles/<name>.json`).
@@ -1464,8 +1485,15 @@ impl ParticleEngine {
                 })
                 .unwrap_or_default();
             if !sprites.is_empty() {
-                self.mod_sets
-                    .insert(key, (self.set_sprites.len() as u32, behaviour));
+                let provider = self.providers.get(&key).cloned();
+                self.mod_sets.insert(
+                    key,
+                    ModSet {
+                        set: self.set_sprites.len() as u32,
+                        behaviour,
+                        provider,
+                    },
+                );
                 self.set_sprites.push(sprites);
             }
         }
@@ -1552,7 +1580,7 @@ impl ParticleEngine {
         if minimal || !distance.is_finite() || distance > 1024.0 {
             return None;
         }
-        let (set, _) = *self.mod_sets.get(name)?;
+        let set = self.mod_sets.get(name)?.set;
         let mut random = LegacyRandom::new(self.seeds.next_long());
         let mut particle = Particle::at(&mut random, ParticleType::Smoke, position);
         particle.random = random;
@@ -1966,7 +1994,8 @@ impl ParticleEngine {
         // A native mod's SimpleParticleType: vanilla's TextureSheetParticle with
         // the sprite set its particles/<name>.json names, no tint, 20..40 ticks.
         if let Some(name) = &o.mod_particle {
-            let (set, behaviour) = *self.mod_sets.get(name.as_ref())?;
+            let entry = self.mod_sets.get(name.as_ref())?;
+            let (set, behaviour, provider) = (entry.set, entry.behaviour, entry.provider.clone());
             let mut r = LegacyRandom::new(seed);
             let mut q = Particle::moving(&mut r, ParticleType::Smoke, p, v);
             q.ty = ParticleType::Smoke;
@@ -1986,6 +2015,17 @@ impl ParticleEngine {
                 ) {
                     q.sprite = Sprite::Index(sprites[0]);
                 }
+            }
+            if let Some(provider) = provider {
+                // The declared values seed the particle; the provider owns its tick from here.
+                // Its sprite is chosen by frame, so the set stays attached.
+                let frame = sprites
+                    .iter()
+                    .position(|&s| matches!(q.sprite, Sprite::Index(i) if i == s))
+                    .unwrap_or(0);
+                q.set = Some(set);
+                q.behaviour = Behaviour::Controlled { translucent: true };
+                q.controller = Some(Box::new(native::Provided::new(provider, frame as u32)));
             }
             return Some(q);
         }
@@ -5265,7 +5305,7 @@ mod tests {
             engine.names[engine.set_sprites[smoke as usize][0] as usize],
             "particle/smoke_0"
         );
-        let spark = engine.mod_sets["example:nested/spark"].0;
+        let spark = engine.mod_sets["example:nested/spark"].set;
         assert_eq!(engine.set_sprites[spark as usize].len(), 2);
         assert!(!engine.mod_sets.contains_key("example:broken"));
         engine.reload(
@@ -5295,10 +5335,11 @@ mod tests {
             &HashMap::new(),
             &HashSet::new(),
         );
-        let (set, _) = *engine
+        let set = engine
             .mod_sets
             .get("mymod:spark")
-            .expect("the set is loaded");
+            .expect("the set is loaded")
+            .set;
         assert_eq!(engine.set_sprites[set as usize].len(), 2);
         // The named option spawns a billboard from that set, not a vanilla type.
         let made = engine
@@ -5511,7 +5552,11 @@ mod tests {
                 }
                 engine.mod_sets.insert(
                     "mymod:spark".into(),
-                    (0, Some(ModBehaviour::parse(&declaration).unwrap())),
+                    ModSet {
+                        set: 0,
+                        behaviour: Some(ModBehaviour::parse(&declaration).unwrap()),
+                        provider: None,
+                    },
                 );
                 for seed in 0..16 {
                     let particle = engine

@@ -12,7 +12,6 @@ name = "mod_api"
 [dependencies]
 horizon-mod-runtime = { path = "../horizon-mod-runtime" }
 horizon-core = { path = "../horizon-core" }
-horizon-world = { path = "../horizon-world" }
 horizon-mod-package = { path = "../horizon-mod-package", default-features = false }
 horizon-mod-api-macros = { path = "../horizon-mod-api-macros" }
 serde = { version = "1", features = ["derive"] }

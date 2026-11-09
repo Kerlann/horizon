@@ -591,6 +591,93 @@ mod main_dimension_tests {
 }
 
 #[cfg(test)]
+mod rule_tests {
+    use super::*;
+
+    /// The day cycle names the timelines and the clock, and the game's facts read them back.
+    #[test]
+    fn the_day_cycle_reaches_the_games_facts() {
+        use horizon_world::dimension_type::DimensionFacts;
+        let facts = |cycle: &str| {
+            let settings = DimensionSettings {
+                day_cycle: cycle.into(),
+                ..Default::default()
+            };
+            assert_eq!(settings.invalid_field(), None);
+            DimensionFacts::patched(
+                DimensionFacts::overworld(),
+                "test:cycle",
+                &dimension_type(&settings),
+            )
+            .unwrap()
+        };
+        let overworld = facts("overworld");
+        assert!(overworld.has_timeline("minecraft:day"));
+        assert_eq!(
+            overworld.default_clock.as_deref(),
+            Some("minecraft:overworld")
+        );
+        let nether = facts("nether");
+        assert!(!nether.has_timeline("minecraft:day") && nether.default_clock.is_none());
+        let end = facts("end");
+        assert_eq!(end.default_clock.as_deref(), Some("minecraft:the_end"));
+        let none = facts("none");
+        assert!(none.timelines.is_empty() && none.default_clock.is_none());
+        let bad = DimensionSettings {
+            day_cycle: "forever".into(),
+            ..Default::default()
+        };
+        assert!(bad.invalid_field().unwrap().contains("day_cycle"));
+    }
+
+    /// The bed rule goes into the dimension type as vanilla's `bed_rule` attribute, and the game's
+    /// facts read it back from there.
+    #[test]
+    fn the_bed_rule_reaches_the_games_facts() {
+        use horizon_world::dimension_type::{BedRuleTest, DimensionFacts};
+        let settings = DimensionSettings {
+            bed_can_sleep: "never".into(),
+            bed_can_set_spawn: "when_dark".into(),
+            bed_destroy_on_use: true,
+            bed_destroy_on_leave: true,
+            ..Default::default()
+        };
+        assert_eq!(settings.invalid_field(), None);
+        let facts = DimensionFacts::patched(
+            DimensionFacts::overworld(),
+            "test:bedless",
+            &dimension_type(&settings),
+        )
+        .unwrap();
+        assert_eq!(facts.bed_rule.can_sleep, BedRuleTest::Never);
+        assert_eq!(facts.bed_rule.can_set_spawn, BedRuleTest::WhenDark);
+        assert!(facts.bed_rule.destroy_on_use && facts.bed_rule.destroy_on_leave);
+        // the straw bed has its own rule, vanilla's by default
+        assert_eq!(facts.straw_bed_rule.can_set_spawn, BedRuleTest::Never);
+        assert!(!facts.straw_bed_rule.destroy_on_use && facts.straw_bed_rule.destroy_on_leave);
+        let straw = DimensionSettings {
+            straw_bed_can_sleep: "always".into(),
+            straw_bed_destroy_on_use: true,
+            straw_bed_destroy_on_leave: false,
+            ..Default::default()
+        };
+        let facts = DimensionFacts::patched(
+            DimensionFacts::overworld(),
+            "test:straw",
+            &dimension_type(&straw),
+        )
+        .unwrap();
+        assert_eq!(facts.straw_bed_rule.can_sleep, BedRuleTest::Always);
+        assert!(facts.straw_bed_rule.destroy_on_use && !facts.straw_bed_rule.destroy_on_leave);
+        let bad = DimensionSettings {
+            bed_can_sleep: "sometimes".into(),
+            ..Default::default()
+        };
+        assert!(bad.invalid_field().unwrap().contains("bed_can_sleep"));
+    }
+}
+
+#[cfg(test)]
 mod biome_source_tests {
     use super::*;
 

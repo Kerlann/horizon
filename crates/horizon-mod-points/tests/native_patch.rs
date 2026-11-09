@@ -1,3 +1,5 @@
+// Generated fixtures exercise every shape; TODO(#2273): make the generator emit clippy-clean code.
+#![allow(clippy::all, unused_comparisons, unreachable_patterns, dead_code)]
 use mod_api::wire::{PatchPlan, RecordPatch, WireError};
 use mod_points::{
     locators::{Locators, Step},

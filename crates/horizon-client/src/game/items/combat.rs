@@ -132,6 +132,7 @@ pub(super) struct CombatTracker {
     /// host's own blast leaves it None.
     pub(super) blast_guest: Option<u32>,
     pub(super) projectile_attacker: Option<(u32, Text)>,
+    pub(super) enchantment_projectile_attacker: Option<u32>,
     /// The projectile hitting the player now is another player's that
     /// `ServerPlayer.canHarmPlayer` refuses (the `pvp` rule, an ally).
     pub(super) refuse_player_hit: bool,

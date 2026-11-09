@@ -16,6 +16,99 @@ use std::{
     },
 };
 
+/// Load-owned custom damage effect slots. Installed before resources load.
+static DAMAGE_EFFECT_IDS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+
+/// Publish registered identifiers before enchantment content is read.
+pub fn register_damage_effects(ids: Vec<String>) {
+    assert!(
+        DAMAGE_EFFECT_IDS.set(ids).is_ok(),
+        "damage effects already registered"
+    );
+}
+
+/// A value node compiled at content load. Slots never enter content JSON or network data.
+#[derive(Clone)]
+enum DamageValueEffect {
+    Builtin(Value),
+    AllOf(Vec<Self>),
+    Custom {
+        slot: usize,
+        config: horizon_core::nbt::Tag,
+    },
+}
+impl DamageValueEffect {
+    fn resolve(effect: &Value, ids: &[String]) -> Result<Self, String> {
+        match effect["type"].as_str().unwrap_or("") {
+            "minecraft:all_of" => effect["effects"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|effect| Self::resolve(effect, ids))
+                .collect::<Result<Vec<_>, _>>()
+                .map(Self::AllOf),
+            kind if kind.is_empty() || !kind.contains(':') || kind.starts_with("minecraft:") => {
+                Ok(Self::Builtin(effect.clone()))
+            }
+            kind => ids
+                .iter()
+                .position(|id| id == kind)
+                .ok_or_else(|| format!("unknown enchantment damage value effect {kind}"))
+                .and_then(|slot| {
+                    horizon_core::json_nbt::json_to_tag(effect)
+                        .map(|config| Self::Custom { slot, config })
+                        .map_err(|error| error.to_string())
+                }),
+        }
+    }
+    fn is_custom(&self) -> bool {
+        match self {
+            Self::Custom { .. } => true,
+            Self::AllOf(nodes) => nodes.iter().any(Self::is_custom),
+            Self::Builtin(_) => false,
+        }
+    }
+    fn apply(
+        &self,
+        level: u32,
+        random: &mut LegacyRandom,
+        value: f32,
+        custom: &mut impl FnMut(usize, &horizon_core::nbt::Tag, u32, f32) -> f32,
+    ) -> f32 {
+        match self {
+            Self::Builtin(effect) => apply_value_effect(effect, level, random, value),
+            Self::AllOf(nodes) => nodes.iter().fold(value, |value, node| {
+                node.apply(level, random, value, custom)
+            }),
+            Self::Custom { slot, config } => {
+                let result = custom(*slot, config, level, value);
+                // Bound mod output before a subsequent per-unit built-in effect.
+                if result.is_nan() {
+                    value
+                } else {
+                    result.clamp(0.0, 1024.0)
+                }
+            }
+        }
+    }
+}
+
+fn resolve_damage_effects(
+    effects: &Value,
+    ids: &[String],
+) -> Result<Option<Vec<DamageValueEffect>>, String> {
+    let nodes = effects["minecraft:damage"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .map(|entry| DamageValueEffect::resolve(&entry["effect"], ids))
+        .collect::<Result<Vec<_>, _>>()?;
+    Ok(nodes
+        .iter()
+        .any(DamageValueEffect::is_custom)
+        .then_some(nodes))
+}
+
 /// Levels as numbers in enchantment names ("Sharpness 5"): Horizon's PvP & HUD option, off by
 /// default (vanilla's numerals).
 static NUMERIC_LEVELS: AtomicBool = AtomicBool::new(false);
@@ -81,6 +174,7 @@ pub struct ItemProps {
 pub struct Enchantments {
     pub list: Vec<Enchantment>,
     index: HashMap<Arc<str>, usize>,
+    custom_damage: HashMap<Arc<str>, Vec<DamageValueEffect>>,
     /// Enchantment tags in vanilla `HolderSet` order (nested tags expanded in place).
     pub tags: HashMap<String, Vec<Arc<str>>>,
     pub entity_tags: HashMap<String, HashSet<String>>,
@@ -331,9 +425,25 @@ impl Enchantments {
                         || k.starts_with("recipe.toast.")
                 })
                 .collect();
+        let mut custom_damage = HashMap::new();
         let list = files
             .iter()
-            .map(|(id, v)| parse_entry(id, v, &tags, &lang))
+            .filter_map(|(id, v)| {
+                match resolve_damage_effects(
+                    &v["effects"],
+                    DAMAGE_EFFECT_IDS.get().map_or(&[], Vec::as_slice),
+                ) {
+                    Ok(Some(nodes)) => {
+                        custom_damage.insert(Arc::from(id.as_str()), nodes);
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        eprintln!("enchantment {id}: {error}");
+                        return None;
+                    }
+                }
+                Some(parse_entry(id, v, &tags, &lang))
+            })
             .collect::<crate::Result<Vec<_>>>()?;
         let index = list
             .iter()
@@ -362,6 +472,7 @@ impl Enchantments {
         Ok(Self {
             list,
             index,
+            custom_damage,
             tags,
             entity_tags,
             damage_tags,
@@ -385,8 +496,21 @@ impl Enchantments {
             if self.index.contains_key(id) {
                 continue;
             }
+            let nodes = match resolve_damage_effects(
+                &v["effects"],
+                DAMAGE_EFFECT_IDS.get().map_or(&[], Vec::as_slice),
+            ) {
+                Ok(nodes) => nodes,
+                Err(error) => {
+                    eprintln!("synced enchantment {id}: {error}; retaining display definition");
+                    None
+                }
+            };
             let t = table.get_or_insert_with(|| self.clone());
             let e = parse_entry(id, v, &t.tags, &t.lang)?;
+            if let Some(nodes) = nodes {
+                t.custom_damage.insert(e.id.clone(), nodes);
+            }
             t.index.insert(e.id.clone(), t.list.len());
             t.list.push(e);
         }
@@ -704,6 +828,50 @@ impl Enchantments {
         }
         value
     }
+    /// Evaluate damage with a gameplay-owned callback for resolved custom nodes.
+    pub fn modify_damage(
+        &self,
+        levels: &[(Arc<str>, u32)],
+        ctx: &EffectContext<'_>,
+        random: &mut LegacyRandom,
+        mut value: f32,
+        custom: &mut impl FnMut(usize, &horizon_core::nbt::Tag, u32, f32) -> f32,
+    ) -> f32 {
+        for (id, level) in levels.iter() {
+            let Some(nodes) = self.custom_damage.get(id.as_ref()) else {
+                value = self.modify_value_with(id, *level, "minecraft:damage", ctx, random, value);
+                continue;
+            };
+            let enchantment = self.get(id).expect("compiled enchantment exists");
+            for (entry, node) in enchantment.effects["minecraft:damage"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .zip(nodes)
+            {
+                if entry
+                    .get("requirements")
+                    .is_none_or(|req| self.condition(req, *level, ctx, random))
+                {
+                    value = node.apply(*level, random, value, custom);
+                }
+            }
+        }
+        value
+    }
+    /// Whether this stack needs the gameplay callback evaluator. Keys were resolved at load.
+    pub fn has_custom_damage(&self, levels: &[(Arc<str>, u32)]) -> bool {
+        if self.custom_damage.is_empty() {
+            return false;
+        }
+        levels
+            .iter()
+            .any(|(id, _)| self.custom_damage.contains_key(id.as_ref()))
+    }
+    /// Whether loaded content contains any custom damage nodes.
+    pub fn has_custom_damage_effects(&self) -> bool {
+        !self.custom_damage.is_empty()
+    }
     /// `EnchantmentHelper.has`: whether `stack` has any enchantment providing
     /// `component`. It reads the stack's own component, as NeoForge leaves it.
     pub fn has_component(&self, stack: &ItemStack, component: &str) -> bool {
@@ -997,6 +1165,167 @@ pub fn apply_value_effect(
 pub mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn custom_damage_output_is_bounded_before_builtin_nodes() {
+        let node = DamageValueEffect::resolve(
+            &json!({"type":"minecraft:all_of", "effects":[
+                {"type":"test:damage"}, {"type":"minecraft:remove_binomial","chance":0},
+                {"type":"minecraft:add","value":2}
+            ]}),
+            &["test:damage".into()],
+        )
+        .unwrap();
+        for (output, expected) in [
+            (f32::NAN, 9.0),
+            (f32::INFINITY, 1026.0),
+            (f32::NEG_INFINITY, 2.0),
+            (-1.0, 2.0),
+            (f32::MAX, 1026.0),
+        ] {
+            assert_eq!(
+                node.apply(1, &mut LegacyRandom::new(0), 7.0, &mut |_, _, _, _| output),
+                expected
+            );
+        }
+    }
+
+    #[test]
+    fn synced_unknown_damage_retains_enchantment_definition() {
+        let definition = json!({"description":"Remote", "effects":{"minecraft:damage":[
+            {"effect":{"type":"remote:damage"}}
+        ]}});
+        let table = sample()
+            .with_entries([("remote:enchantment", &definition)])
+            .unwrap()
+            .unwrap();
+        assert!(table.get("remote:enchantment").is_some());
+    }
+
+    #[test]
+    fn legacy_value_types_remain_noops() {
+        for kind in ["minecraft:exponential", "minecraft:unknown", "add", ""] {
+            let node = DamageValueEffect::resolve(&json!({"type":kind}), &[]).unwrap();
+            assert_eq!(
+                node.apply(1, &mut LegacyRandom::new(0), 7.0, &mut |_, _, _, _| panic!(
+                    "not custom"
+                )),
+                7.0
+            );
+        }
+    }
+
+    #[test]
+    fn custom_damage_nodes_compose_with_vanilla_in_order() {
+        let mut enchantments = sample();
+        let node = json!({"type":"minecraft:all_of", "effects":[
+            {"type":"minecraft:add", "value":2},
+            {"type":"test:scale", "factor":3},
+            {"type":"minecraft:all_of", "effects":[
+                {"type":"test:offset", "value":4},
+                {"type":"minecraft:multiply", "factor":2}
+            ]}
+        ]});
+        let compiled =
+            DamageValueEffect::resolve(&node, &["test:scale".into(), "test:offset".into()])
+                .unwrap();
+        enchantments
+            .custom_damage
+            .insert("minecraft:sharpness".into(), vec![compiled]);
+        let index = enchantments.index["minecraft:sharpness"];
+        enchantments.list[index].effects = json!({"minecraft:damage":[{"effect":node}]});
+        let mut stack = ItemStack::new("minecraft:diamond_sword", 1);
+        stack.data_mut().enchantments = vec![("minecraft:sharpness".into(), 2)];
+        let mut calls = Vec::new();
+        let result = enchantments.modify_damage(
+            &stack.all_enchantments(),
+            &EffectContext::default(),
+            &mut LegacyRandom::new(0),
+            5.0,
+            &mut |slot, config, level, value| {
+                calls.push((slot, level, value));
+                let config = horizon_core::json_nbt::tag_to_json(config).unwrap();
+                match slot {
+                    0 => value * config["factor"].as_f64().unwrap() as f32,
+                    1 => value + config["value"].as_f64().unwrap() as f32,
+                    _ => panic!("unresolved slot"),
+                }
+            },
+        );
+        // ((5 + 2) * 3 + 4) * 2, including both nested custom nodes.
+        assert_eq!(result, 50.0);
+        assert_eq!(calls, [(0, 2, 7.0), (1, 2, 21.0)]);
+    }
+
+    #[test]
+    fn custom_damage_requirements_skip_callbacks_and_keep_random_order() {
+        let mut enchantments = sample();
+        let effect = json!({"type":"test:damage"});
+        enchantments.custom_damage.insert(
+            "minecraft:sharpness".into(),
+            vec![DamageValueEffect::resolve(&effect, &["test:damage".into()]).unwrap()],
+        );
+        let index = enchantments.index["minecraft:sharpness"];
+        enchantments.list[index].effects = json!({"minecraft:damage":[{
+            "effect":effect, "requirements":{"condition":"minecraft:random_chance", "chance":0.0}
+        }]});
+        let mut stack = ItemStack::new("minecraft:diamond_sword", 1);
+        stack.data_mut().enchantments = vec![("minecraft:sharpness".into(), 1)];
+        let mut random = LegacyRandom::new(42);
+        let value = enchantments.modify_damage(
+            &stack.all_enchantments(),
+            &EffectContext::default(),
+            &mut random,
+            7.0,
+            &mut |_, _, _, _| panic!("a refused node must not run"),
+        );
+        assert_eq!(value, 7.0);
+        // java.util.Random(42): nextFloat for the condition, then nextInt.
+        assert_eq!(random.next_int(), 234_785_527);
+    }
+
+    #[test]
+    fn unknown_custom_damage_is_refused_with_its_identifier() {
+        let node = json!({"type":"minecraft:all_of", "effects":[{"type":"missing:damage"}]});
+        assert_eq!(
+            DamageValueEffect::resolve(&node, &[]).err().unwrap(),
+            "unknown enchantment damage value effect missing:damage"
+        );
+    }
+
+    #[test]
+    fn damage_without_custom_nodes_preserves_vanilla_values_and_random() {
+        let enchantments = sample();
+        let mut stack = ItemStack::new("minecraft:diamond_sword", 1);
+        let mut calls = 0;
+        for (levels, expected) in [
+            (vec![], 7.0),
+            (vec![("minecraft:sharpness".into(), 3)], 9.0),
+            (vec![("minecraft:smite".into(), 2)], 12.0),
+        ] {
+            stack.data_mut().enchantments = levels;
+            let context = EffectContext {
+                this: Some("minecraft:zombie"),
+                ..Default::default()
+            };
+            let mut random = LegacyRandom::new(42);
+            assert_eq!(
+                enchantments.modify_damage(
+                    &stack.all_enchantments(),
+                    &context,
+                    &mut random,
+                    7.0,
+                    &mut |_, _, _, value| {
+                        calls += 1;
+                        value
+                    }
+                ),
+                expected
+            );
+            assert_eq!(random.next_int(), -1_170_105_035);
+        }
+        assert_eq!(calls, 0);
+    }
 
     #[test]
     fn world_pack_definitions_join_catalog_in_overlay_priority() {
@@ -1316,6 +1645,7 @@ pub mod tests {
         Enchantments {
             list,
             index,
+            custom_damage: HashMap::new(),
             tags,
             entity_tags,
             damage_tags,

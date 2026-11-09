@@ -1,3 +1,5 @@
+// Generated fixtures exercise every shape; TODO(#2273): make the generator emit clippy-clean code.
+#![allow(clippy::all, unused_comparisons, unreachable_patterns, dead_code)]
 use mod_points::endpoint_policy::{
     EndpointPolicy, InternalDeclaration, InternalField, InternalsRefusal, PointSpec, SchemaCatalog,
 };

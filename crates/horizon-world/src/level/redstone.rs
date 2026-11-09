@@ -1031,29 +1031,22 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             {
                 return;
             }
-            // The block event's parameters carry a changed note to
-            // `triggerEvent` on the server and on its clients (vanilla's are
-            // 0, 0): the instrument's index plus one, and the note.
-            let (a, b0) = if (played, played_note) == (index, note) {
-                (0, 0)
-            } else {
-                (i32::from(played) + 1, played_note)
-            };
-            self.block_event(pos, b.block(state), a, b0);
+            // Hook-selected values are typed engine metadata, not raw event ints.
+            self.ticks
+                .queue_block_event(super::pistons::BlockEventData {
+                    pos,
+                    block: b.block(state),
+                    param_a: 0,
+                    param_b: 0,
+                    note_override: ((played, played_note) != (index, note))
+                        .then_some((played, played_note)),
+                });
             self.game_event(pos, "minecraft:note_block_play");
         }
     }
     /// `NoteBlock.triggerEvent`: the note's particle (tunable instruments)
-    /// and sound. `a` and `b` are the block event's parameters: a note the
-    /// mods changed (see `note_play`) plays in place of the block's.
-    pub(crate) fn note_trigger_event(
-        &mut self,
-        pos: BlockPos,
-        state: BlockStateId,
-        a: i32,
-        b: i32,
-    ) {
-        let state = self.note_played_state(state, a, b);
+    /// and sound. Raw block-event integers do not select the instrument or note.
+    pub(crate) fn note_trigger_event(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;
         let instrument = b.table.text(state, b.props.instrument).to_owned();
         let mob_head = super::data::INSTRUMENTS
@@ -1094,22 +1087,22 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
             pitch,
         });
     }
-    /// The note block `state` with the instrument and note a block event
-    /// carries (`a` the instrument's index plus one, `b` the note); a
-    /// parameter out of range, as vanilla's 0, 0, keeps the block's own.
-    fn note_played_state(&self, state: BlockStateId, a: i32, b: i32) -> BlockStateId {
+    /// Apply the typed values selected by the note-play hook.
+    pub(crate) fn note_played_state(
+        &self,
+        state: BlockStateId,
+        instrument: u8,
+        note: i32,
+    ) -> BlockStateId {
         let t = &self.b.table;
         let p = &self.b.props;
-        let Some(instrument) = usize::try_from(a - 1)
-            .ok()
-            .and_then(|i| super::data::INSTRUMENTS.get(i))
-        else {
+        let Some(instrument) = super::data::INSTRUMENTS.get(usize::from(instrument)) else {
             return state;
         };
         let state = t
             .with_text(state, p.instrument, instrument)
             .unwrap_or(state);
-        t.with_int(state, p.note, b).unwrap_or(state)
+        t.with_int(state, p.note, note).unwrap_or(state)
     }
     pub(crate) fn note_neighbor_changed(&mut self, pos: BlockPos, state: BlockStateId) {
         let b = self.b;

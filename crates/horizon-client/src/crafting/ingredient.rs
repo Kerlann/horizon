@@ -84,10 +84,10 @@ impl Ingredient {
                     }
                     Some(k) if is_custom(k) => {
                         let mut list = Vec::new();
-                        if mod_api::__private::listened(mod_api::HookId::Ingredient) {
-                            if let Ok(data) = crate::json_nbt::json_to_compound(o) {
-                                native_ingredient(context, k, &data, &mut list);
-                            }
+                        if mod_api::__private::listened(mod_api::HookId::Ingredient)
+                            && let Ok(data) = crate::json_nbt::json_to_compound(o)
+                        {
+                            native_ingredient(context, k, &data, &mut list);
                         }
                         dedup_keep_order(&mut list);
                         o.insert(RESOLVED_ITEMS.to_owned(), list.into());

@@ -2,6 +2,8 @@
 //! lists the expansion finds in `mod_points`, declared here in place of the crate's. The raw
 //! records and listener types are written out as the staging pass declares them beside each
 //! function.
+// Generated fixtures exercise every shape; TODO(#2273): make the generator emit clippy-clean code.
+#![allow(clippy::all, unused_comparisons, unreachable_patterns, dead_code)]
 use horizon_mod_api_macros::point;
 use mod_api::ServerHost;
 use std::sync::atomic::Ordering;

@@ -9,6 +9,8 @@ use mod_api::wire::Put;
 use mod_api::{Row, RowError, RowWindow};
 
 /// One live projection. Implementations must not mutate the native root during a read.
+// TODO(#2273): `len` counts declaration-order children; an emptiness query has no caller.
+#[allow(clippy::len_without_is_empty)]
 pub trait NativeNode {
     /// Canonical type identity key.
     fn key(&self) -> u64;

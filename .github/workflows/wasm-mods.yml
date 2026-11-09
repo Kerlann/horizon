@@ -3,6 +3,7 @@ on:
   push:
     branches: [main]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
     paths:
       - 'crates/cargo-horizon-mod/**'
       - 'crates/horizon-mod-*/**'
@@ -16,6 +17,8 @@ concurrency:
   cancel-in-progress: true
 jobs:
   fixture:
+    # Drafts skip it: the shared runners go to ready PRs (CI rule, 2026-11-08).
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ${{ github.event.pull_request.head.repo.fork && 'ubuntu-latest' || 'dyna-large' }}
     timeout-minutes: 120
     env:

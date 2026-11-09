@@ -72,9 +72,18 @@ fn modifier_line(
 
 /// `Attribute.getStyle`: the colour of a line for an attribute whose value
 /// rises or falls. Gravity, scale and the waypoint ranges are neutral, burning
-/// time and fall damage are negative, every other attribute is positive.
-fn attribute_color(attribute: &str, rises: bool) -> u32 {
-    let (blue, red) = (rgba(85, 85, 255, 255), rgba(255, 85, 85, 255));
+/// time and fall damage are negative, every other attribute is positive; a
+/// mod's declared attribute answers its own sentiment, positive by default.
+fn attribute_color(
+    attribute: &str,
+    rises: bool,
+    sentiment: Option<horizon_world::attributes::Sentiment>,
+) -> u32 {
+    let (blue, red, grey) = (
+        rgba(85, 85, 255, 255),
+        rgba(255, 85, 85, 255),
+        rgba(170, 170, 170, 255),
+    );
     match attribute {
         "burning_time" | "fall_damage_multiplier" => {
             if rises {
@@ -83,16 +92,24 @@ fn attribute_color(attribute: &str, rises: bool) -> u32 {
                 blue
             }
         }
-        "gravity" | "scale" | "waypoint_transmit_range" | "waypoint_receive_range" => {
-            rgba(170, 170, 170, 255)
-        }
-        _ => {
-            if rises {
-                blue
-            } else {
-                red
+        "gravity" | "scale" | "waypoint_transmit_range" | "waypoint_receive_range" => grey,
+        _ => match sentiment.unwrap_or_default() {
+            horizon_world::attributes::Sentiment::Positive => {
+                if rises {
+                    blue
+                } else {
+                    red
+                }
             }
-        }
+            horizon_world::attributes::Sentiment::Neutral => grey,
+            horizon_world::attributes::Sentiment::Negative => {
+                if rises {
+                    red
+                } else {
+                    blue
+                }
+            }
+        },
     }
 }
 
@@ -172,10 +189,11 @@ pub fn attribute_tooltip(
     shown: bool,
     listener: &dyn AttributeTooltipListener,
     translate: &dyn Fn(&str) -> Option<String>,
+    sentiment: &dyn Fn(&str) -> Option<horizon_world::attributes::Sentiment>,
 ) -> (Vec<(String, u32)>, Vec<(Text, u32)>) {
     let lines = if shown {
         let filter = listener.skipped(stack, ctx);
-        attribute_lines_filtered(modifiers, ctx.player_base, &filter, translate)
+        attribute_lines_filtered(modifiers, ctx.player_base, &filter, translate, sentiment)
     } else {
         Vec::new()
     };
@@ -194,6 +212,7 @@ pub fn attribute_lines(
         player_base,
         &AttributeFilter::default(),
         translate,
+        &|_| None,
     )
 }
 
@@ -204,6 +223,7 @@ pub fn attribute_lines_filtered(
     player_base: Option<[f64; 2]>,
     filter: &AttributeFilter,
     translate: &dyn Fn(&str) -> Option<String>,
+    sentiment: &dyn Fn(&str) -> Option<horizon_world::attributes::Sentiment>,
 ) -> Vec<(String, u32)> {
     let mut lines = Vec::new();
     for group in SLOT_GROUPS {
@@ -248,7 +268,10 @@ pub fn attribute_lines_filtered(
                 let (line, color) = if base.is_some() {
                     (format!(" {line}"), rgba(0, 170, 0, 255))
                 } else {
-                    (line, attribute_color(path, *amount > 0.0))
+                    (
+                        line,
+                        attribute_color(path, *amount > 0.0, sentiment(attribute)),
+                    )
                 };
                 lines.push((line, color));
             }
@@ -1180,9 +1203,16 @@ pub fn detail_lines(
         creative: false,
     };
     let (modifier_lines, added) = attribute_tooltip(
-        stack, &modifiers, &ctx,
+        stack,
+        &modifiers,
+        &ctx,
         // The search text lists attribute lines whatever the stack's display says, as before.
-        true, attributes, translate,
+        true,
+        attributes,
+        translate,
+        // The search text builds without a catalog: vanilla colors, positive
+        // for a mod attribute.
+        &|_| None,
     );
     lines.extend(modifier_lines.into_iter().map(|(line, _)| line));
     lines.extend(added.into_iter().map(|(text, _)| text.plain()));
@@ -2020,7 +2050,7 @@ mod tests {
         let rows = sword_rows();
         let lang = |key: &str| Some(key.to_owned());
         let text = |filter: &AttributeFilter| -> Vec<String> {
-            attribute_lines_filtered(&rows, None, filter, &lang)
+            attribute_lines_filtered(&rows, None, filter, &lang, &|_| None)
                 .into_iter()
                 .map(|(line, _)| line)
                 .collect()
@@ -2110,6 +2140,7 @@ mod tests {
                 vec![("Rune: fire", 7)],
             ),
             &lang,
+            &|_| None,
         );
         assert_eq!(lines.len(), 3, "only the head modifier is left");
         assert_eq!(added.len(), 1);
@@ -2122,6 +2153,7 @@ mod tests {
             false,
             &Hide(AttributeFilter::default(), vec![("note", u32::MAX)]),
             &lang,
+            &|_| None,
         );
         assert!(lines.is_empty());
         assert_eq!(added.len(), 1);

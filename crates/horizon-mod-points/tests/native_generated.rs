@@ -1,3 +1,5 @@
+// Generated fixtures exercise every shape; TODO(#2273): make the generator emit clippy-clean code.
+#![allow(clippy::all, unused_comparisons, unreachable_patterns, dead_code)]
 use mod_api::RowWindow;
 use mod_points::{
     locators::{Locators, Step},
@@ -11,6 +13,8 @@ enum Choice {
 }
 
 struct Pair {
+    // Generated fixtures exercise every shape; this projection selects only b.
+    #[allow(dead_code)]
     a: u32,
     b: u32,
 }
@@ -38,22 +42,59 @@ fn emitted_native_projections_compile_and_read() {
         depth: 3,
     };
     let value = vec![1u32, 2];
+    // Generated fixtures exercise every shape, including exhaustive fallbacks.
+    #[allow(unreachable_patterns, clippy::explicit_auto_deref)]
     let node = include!(concat!(env!("OUT_DIR"), "/native_window_vec.rs"));
     assert_eq!(read(&node, root, &mut paths, request).unwrap().len(), 3);
     let value = Some(String::from("x"));
+    // Generated fixtures exercise every shape, including exhaustive fallbacks.
+    #[allow(
+        unreachable_patterns,
+        clippy::explicit_auto_deref,
+        clippy::unneeded_struct_pattern,
+        clippy::absurd_extreme_comparisons
+    )]
     let node = include!(concat!(env!("OUT_DIR"), "/native_window_option.rs"));
     assert_eq!(read(&node, root, &mut paths, request).unwrap().len(), 4);
     let value = (1u32, String::from("x"));
+    // Generated fixtures exercise every shape, including exhaustive fallbacks.
+    #[allow(
+        unreachable_patterns,
+        clippy::explicit_auto_deref,
+        clippy::unneeded_struct_pattern,
+        clippy::absurd_extreme_comparisons
+    )]
     let node = include!(concat!(env!("OUT_DIR"), "/native_window_tuple.rs"));
     assert_eq!(read(&node, root, &mut paths, request).unwrap().len(), 4);
     let value = std::collections::BTreeMap::from([(1u32, String::from("x"))]);
+    // Generated fixtures exercise every shape, including exhaustive fallbacks.
+    #[allow(
+        unreachable_patterns,
+        clippy::explicit_auto_deref,
+        clippy::unneeded_struct_pattern,
+        clippy::absurd_extreme_comparisons
+    )]
     let node = include!(concat!(env!("OUT_DIR"), "/native_window_map.rs"));
     assert_eq!(read(&node, root, &mut paths, request).unwrap().len(), 5);
     let value = Choice::One(7);
+    // Generated fixtures exercise every shape, including exhaustive fallbacks.
+    #[allow(
+        unreachable_patterns,
+        clippy::explicit_auto_deref,
+        clippy::unneeded_struct_pattern,
+        clippy::absurd_extreme_comparisons
+    )]
     let node = include!(concat!(env!("OUT_DIR"), "/native_window_choice.rs"));
     let rows = read(&node, root, &mut paths, request).unwrap();
     let old_variant = rows[1].0;
     let value = Choice::Empty;
+    // Generated fixtures exercise every shape, including exhaustive fallbacks.
+    #[allow(
+        unreachable_patterns,
+        clippy::explicit_auto_deref,
+        clippy::unneeded_struct_pattern,
+        clippy::absurd_extreme_comparisons
+    )]
     let node = include!(concat!(env!("OUT_DIR"), "/native_window_choice.rs"));
     assert!(matches!(
         read(
@@ -72,10 +113,24 @@ fn emitted_native_projections_compile_and_read() {
         Choice::One(7),
         Choice::Named { value: "x".into() },
     ] {
+        // Generated fixtures exercise every shape, including exhaustive fallbacks.
+        #[allow(
+            unreachable_patterns,
+            clippy::explicit_auto_deref,
+            clippy::unneeded_struct_pattern,
+            clippy::absurd_extreme_comparisons
+        )]
         let node = include!(concat!(env!("OUT_DIR"), "/native_window_choice.rs"));
         assert!(read(&node, root, &mut paths, request).unwrap().len() >= 2);
     }
     let value = Pair { a: 1, b: 2 };
+    // Generated fixtures exercise every shape, including exhaustive fallbacks.
+    #[allow(
+        unreachable_patterns,
+        clippy::explicit_auto_deref,
+        clippy::unneeded_struct_pattern,
+        clippy::absurd_extreme_comparisons
+    )]
     let node = include!(concat!(env!("OUT_DIR"), "/native_window_pair.rs"));
     let by = |start| RowWindow { start, ..request };
     let rows = read(&node, root, &mut paths, by(1)).unwrap();
@@ -87,6 +142,13 @@ fn emitted_native_projections_compile_and_read() {
     );
     assert_eq!(read(&node, root, &mut paths, by(2)).unwrap().len(), 1);
     let value = Later::Both { a: 1, b: 2 };
+    // Generated fixtures exercise every shape, including exhaustive fallbacks.
+    #[allow(
+        unreachable_patterns,
+        clippy::explicit_auto_deref,
+        clippy::unneeded_struct_pattern,
+        clippy::absurd_extreme_comparisons
+    )]
     let node = include!(concat!(env!("OUT_DIR"), "/native_window_later.rs"));
     let rows = read(&node, root, &mut paths, request).unwrap();
     assert_eq!(rows.len(), 3);
@@ -99,6 +161,13 @@ fn emitted_native_projections_compile_and_read() {
         items: &ITEMS,
         shared: &LEAF,
     };
+    // Generated fixtures exercise every shape, including exhaustive fallbacks.
+    #[allow(
+        unreachable_patterns,
+        clippy::explicit_auto_deref,
+        clippy::unneeded_struct_pattern,
+        clippy::absurd_extreme_comparisons
+    )]
     let node = include!(concat!(env!("OUT_DIR"), "/native_window_holder.rs"));
     let deep = RowWindow {
         rows: 32,
@@ -114,9 +183,23 @@ fn emitted_native_projections_compile_and_read() {
     // child.n, items length is u64 (8 bytes, skipped), items elements, shared.n
     assert_eq!(nums, [7, 5, 6, 9]);
     let value = Box::new(vec![3u32]);
+    // Generated fixtures exercise every shape, including exhaustive fallbacks.
+    #[allow(
+        unreachable_patterns,
+        clippy::explicit_auto_deref,
+        clippy::unneeded_struct_pattern,
+        clippy::absurd_extreme_comparisons
+    )]
     let node = include!(concat!(env!("OUT_DIR"), "/native_window_boxed.rs"));
     assert_eq!(read(&node, root, &mut paths, request).unwrap().len(), 2);
     let value: &[u32] = &ITEMS;
+    // Generated fixtures exercise every shape, including exhaustive fallbacks.
+    #[allow(
+        unreachable_patterns,
+        clippy::explicit_auto_deref,
+        clippy::unneeded_struct_pattern,
+        clippy::absurd_extreme_comparisons
+    )]
     let node = include!(concat!(env!("OUT_DIR"), "/native_window_slice.rs"));
     assert_eq!(read(&node, root, &mut paths, request).unwrap().len(), 3);
 }

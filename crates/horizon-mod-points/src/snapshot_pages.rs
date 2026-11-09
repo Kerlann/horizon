@@ -123,6 +123,8 @@ impl PageSource {
     /// Construct during marked encoding, from a caller's `with_root` handle, not an encoder's
     /// temporary `&self`. The callback frame's private lease protects its value's shorter
     /// lifetime even if its public handle is forgotten. The call marker alone cannot do so.
+    // TODO(#2273): a `new` that returns a shared trait object, not `Self`, by design.
+    #[allow(clippy::new_ret_no_self)]
     pub unsafe fn new<T>(
         root: &Root<'_, T>,
         reader: fn(&T, Window) -> Result<Rows, RowError>,

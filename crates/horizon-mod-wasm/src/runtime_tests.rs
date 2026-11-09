@@ -327,7 +327,7 @@ fn guest_input_pool_stays_flat_for_100k_no_import_calls() {
     .unwrap()
     .pop()
     .unwrap();
-    let subscriptions: Vec<String> = module
+    let subscriptions: Vec<(String, i32, bool)> = module
         .call(
             CallClass::Load,
             Frame::default(),
@@ -337,7 +337,11 @@ fn guest_input_pool_stays_flat_for_100k_no_import_calls() {
             |r| r.take(),
         )
         .unwrap();
-    assert!(subscriptions.iter().any(|hook| hook == "server_stopped"));
+    assert!(
+        subscriptions
+            .iter()
+            .any(|(hook, _, _)| hook == "server_stopped")
+    );
     let id = crate::boundary::export_id("Hooks", "server_stopped").unwrap();
     let mut group = module.running.group.lock().unwrap();
     group.store.set_epoch_deadline(30_000);
@@ -396,7 +400,7 @@ fn real_members_link_when_built() {
     );
     let modules = modules.unwrap_or_else(|why| panic!("real shared members did not load: {why}"));
     assert_eq!(modules.len(), 1);
-    let subscriptions: Vec<String> = modules[0]
+    let subscriptions: Vec<(String, i32, bool)> = modules[0]
         .call(
             CallClass::Load,
             Frame::default(),
@@ -409,8 +413,28 @@ fn real_members_link_when_built() {
     assert!(
         subscriptions
             .iter()
-            .all(|name| crate::boundary::hook_id(name).is_some())
+            .all(|(name, _, _)| crate::boundary::hook_id(name).is_some())
     );
+    assert!(subscriptions.contains(&("server_stopped".into(), 37, false)));
+    assert!(subscriptions.contains(&("render_gui_pre".into(), -12, true)));
+    // A cancelled event enters the real guest; its receive-cancelled listener clears it.
+    let cancelled: mod_api::RenderGuiPreEvent = Reader::new(&[1]).take().unwrap();
+    assert!(cancelled.cancelled);
+    let pre = crate::boundary::export_id("Hooks", "render_gui_pre").unwrap();
+    let cleared = modules[0]
+        .call(
+            CallClass::Hook,
+            Frame::default(),
+            pre,
+            None,
+            |w| w.put(&cancelled),
+            |r| {
+                assert_eq!(r.take::<mod_api::Flow>()?, mod_api::Flow::Continue);
+                r.take::<mod_api::RenderGuiPreEvent>()
+            },
+        )
+        .expect("real guest cancellation writeback failed");
+    assert!(!cleared.cancelled);
     let event: mod_api::ClientTickPostEvent = Reader::new(&[]).take().unwrap();
     let tick = crate::boundary::export_id("Hooks", "client_tick_post").unwrap();
     assert_eq!(

@@ -23,7 +23,8 @@ pub enum Side {
 pub enum Contract {
     /// Told about a moment; nothing comes back.
     Listen,
-    /// May veto it; the first listener to cancel stops the rest.
+    /// May veto it; once cancelled, later listeners run only if they receive cancelled events,
+    /// and those may undo it.
     Cancel,
     /// Every listener adds to, changes or removes from one output.
     Collect,

@@ -641,7 +641,7 @@ fn entity_type(
 
 /// ChunkTrackingView.contains: the chunks a player at (cx, cz) with view
 /// distance `r` is sent (isWithinDistance with the neighbours' buffer).
-fn tracked(cx: i32, cz: i32, r: i32, x: i32, z: i32) -> bool {
+pub(super) fn tracked(cx: i32, cz: i32, r: i32, x: i32, z: i32) -> bool {
     let dx = i64::from(((x - cx).abs() - 2).max(0));
     let dz = i64::from(((z - cz).abs() - 2).max(0));
     dx * dx + dz * dz < i64::from(r) * i64::from(r)
@@ -1013,7 +1013,7 @@ impl Hub {
     }
     /// Whether an online guest is placed in the level in place (`config.dimension`).
     pub fn here(&self, g: &Guest) -> bool {
-        g.participates_online() && g.placed && g.dimension == self.config.dimension
+        g.placed_in(&self.config.dimension)
     }
     /// How many passes the level in place's entity tracking has run (None
     /// before its first).
@@ -1025,7 +1025,7 @@ impl Hub {
     /// Whether a guest is sent the level in place: the players placed in it, and
     /// the held ones, which look at it without being part of it.
     pub fn watches(&self, g: &Guest) -> bool {
-        g.participates_online() && (g.placed || g.held) && g.dimension == self.config.dimension
+        g.watches_level(&self.config.dimension)
     }
     /// The chunk under each player the level in place has to keep loaded: the players placed in
     /// it and the held ones, which are sent its chunks too ([`Self::watches`]), whose `loads`

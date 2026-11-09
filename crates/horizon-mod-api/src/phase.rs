@@ -804,14 +804,20 @@ pub trait WorldgenHost {
 #[doc(hidden)]
 // exhaustive: its fields are private; only the game builds it
 pub struct OwningWorldgen<'a> {
-    source: &'a horizon_world::native_load_context::WorldgenContext,
+    registry: &'a dyn Fn(&str) -> Option<Arc<[String]>>,
+    setting: &'a dyn Fn(&str, &str) -> Option<String>,
     mods: LoadedMods,
 }
 
 impl<'a> OwningWorldgen<'a> {
-    pub fn new(source: &'a horizon_world::native_load_context::WorldgenContext) -> Self {
+    /// The server's registries and mod settings, read through the game's worldgen context.
+    pub fn new(
+        registry: &'a dyn Fn(&str) -> Option<Arc<[String]>>,
+        setting: &'a dyn Fn(&str, &str) -> Option<String>,
+    ) -> Self {
         Self {
-            source,
+            registry,
+            setting,
             mods: LoadedMods::new(),
         }
     }
@@ -819,10 +825,10 @@ impl<'a> OwningWorldgen<'a> {
 
 impl WorldgenHost for OwningWorldgen<'_> {
     fn registry(&self, name: &str) -> Option<Arc<[String]>> {
-        self.source.registry(name)
+        (self.registry)(name)
     }
     fn setting(&self, mod_id: &str, key: &str) -> Option<String> {
-        self.source.setting(mod_id, key)
+        (self.setting)(mod_id, key)
     }
     fn mods(&self) -> LoadedMods {
         self.mods.clone()
@@ -1238,4 +1244,37 @@ impl LoopReader for TestReader {
     fn setting(&self, _: &str, _: &str) -> Option<String> {
         None
     }
+}
+
+#[test]
+fn client_only_attribute_does_not_shift_both_side_registry() {
+    use crate::Sentiment;
+    use crate::parts::{AttributesRegistrar, PartRegistrar};
+    let packages = [("alpha", crate::Side::Client), ("zeta", crate::Side::Both)]
+        .into_iter()
+        .map(|(id, side)| {
+            PackageInfo::new(
+                id.to_owned(),
+                "1".to_owned(),
+                PackageKind::Code,
+                side,
+                vec![id.to_owned()],
+                vec![],
+            )
+        })
+        .collect::<Vec<_>>();
+    TEST_PACKAGES.set(Some(packages.into()));
+    let mut alpha = PartRegistrar::new("alpha");
+    let mut zeta = PartRegistrar::new("zeta");
+    assert_eq!(
+        alpha.declare_attribute("decoration", 0.0, 0.0, 1.0, false, Sentiment::Neutral),
+        Err(crate::AttributeRegistrationError::WrongSide)
+    );
+    assert!(
+        zeta.declare_attribute("mana", 0.0, 0.0, 1.0, true, Sentiment::Positive)
+            .is_ok()
+    );
+    assert!(alpha.attributes.is_empty());
+    assert_eq!(zeta.attributes[0].id, "zeta:mana");
+    TEST_PACKAGES.set(None);
 }

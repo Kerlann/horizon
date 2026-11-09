@@ -153,7 +153,7 @@ jobs:
           # One snapshot every 6 hours: the repository's 10 GB cache budget can't hold one per main head.
           echo "slot=$(date -u +%Y%m%d)-$(( 10#$(date -u +%H) / 6 ))" >> "$GITHUB_OUTPUT"
       # rust-cache's default removes workspace artifacts. Those are the expensive part here,
-      # in two feature graphs; keep both, and publish a fresh snapshot from main every 6 hours.
+      # in two feature graphs; keep both. ci-cache.yml publishes a fresh snapshot from main every 6 hours.
       - uses: actions/cache/restore@v4
         if: steps.rust.outputs.required != 'false' && runner.environment == 'github-hosted'
         id: lint-cache
@@ -200,11 +200,11 @@ jobs:
           find crates/horizon-mod-api/src -name '*.rs' -print0 | xargs -0 rustup run stable rustfmt --edition 2024 --check --config skip_children=true
           find crates/horizon-client/src/game -name '*.rs' -print0 | xargs -0 rustup run stable rustfmt --edition 2024 --config skip_children=true --check
           rustup run stable rustfmt --edition 2024 --check crates/horizon-mod-api-gen/dispatch-tests/src/fixtures/*.rs
-          cargo +stable clippy $JOBS --workspace --all-targets -- -D warnings
+          cargo +stable clippy $JOBS --keep-going --workspace --all-targets -- -D warnings
       - name: Lint the server build without sound or controllers
         if: steps.rust.outputs.required != 'false'
         id: server-lint
-        run: cargo +stable clippy $JOBS -p horizon-client --all-targets --no-default-features -- -D warnings
+        run: cargo +stable clippy $JOBS --keep-going -p horizon-client --all-targets --no-default-features -- -D warnings
       - name: The mod API builds for wasm32
         if: steps.rust.outputs.required != 'false'
         run: cargo +stable check $JOBS -p horizon-mod-api --target wasm32-unknown-unknown --locked
@@ -284,12 +284,15 @@ jobs:
             export PATH="$CARGO_HOME/bin:$PATH"
           fi
           rustup toolchain install stable --profile minimal --component rustfmt --component clippy
-      # Dependency-only cache: a full workspace/test snapshot would compete with lint for the 10 GB budget.
+      # Workspace crates too: GitHub-hosted verify (outside contributors) otherwise rebuilt every workspace crate.
+      # ci-cache.yml publishes this snapshot from main every 6 hours; pull requests only read it.
       # Profile overrides in Cargo.toml are part of rust-cache's key; unchanged dependencies still restore.
       - uses: Swatinem/rust-cache@v2
         if: steps.rust.outputs.required != 'false' && runner.environment == 'github-hosted'
         with:
-          shared-key: verify
+          # A new key: the dependency-only snapshot under the old one blocked saving this one.
+          shared-key: verify-workspace
+          cache-workspace-crates: true
           save-if: ${{ github.ref == 'refs/heads/main' }}
       # A dyna-large runner has a hard 16 GiB limit and 8 CPUs; horizon-client rustc processes take about 2.6 GB
       # each, so Dyna runs build four crates at a time. Formatting and lint run in parallel on GitHub's

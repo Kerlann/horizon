@@ -1,4 +1,6 @@
 //! Real wasm capability providers within and across dependency groups.
+// Generated fixtures exercise every shape; TODO(#2273): make the generator emit clippy-clean code.
+#![allow(clippy::all, unused_comparisons, unreachable_patterns, dead_code)]
 use mod_api::__private::game::{BackendRefOf, Fields};
 use mod_api::{
     Backend, BackendRef, BlockEntityRef, BlockEntityTypeKey, BoolGameRuleKey, Host, LevelRef,
@@ -99,6 +101,7 @@ fn capability_is_answered_only_within_its_group() {
                 let mut message = Text::literal("");
                 let mut replies = Vec::new();
                 let mut event = ServerChatEvent {
+                    cancelled: false,
                     player_id: 1,
                     player: 1,
                     username: "tester",
@@ -150,6 +153,7 @@ fn capability_is_answered_only_within_its_group() {
                 let mut message = Text::literal("");
                 let mut replies = Vec::new();
                 let mut event = ServerChatEvent {
+                    cancelled: false,
                     player_id: 1,
                     player: 1,
                     username: "tester",
