@@ -35,6 +35,16 @@ pub(super) enum Planned {
     Loaded(Tag, Option<Tag>, u32),
 }
 
+/// Work applied once the completed spawner and its owner are canonical.
+pub(super) struct SpawnerTickCompletion {
+    key: Pos,
+    cart: Option<u32>,
+    planned: Vec<Planned>,
+    created: Vec<Mob>,
+    rides: Vec<(u32, u32)>,
+    events: Vec<SpawnerEvent>,
+}
+
 /// What the spawner code keeps between ticks.
 #[derive(Default)]
 pub(super) struct SpawnerState {
@@ -120,6 +130,17 @@ impl Game<'_> {
         spawner: &mut Spawner,
         cart: Option<u32>,
     ) -> Result<()> {
+        if let Some(work) = self.plan_server_tick_spawner_of(key, spawner, cart) {
+            self.complete_spawner_tick(work)?;
+        }
+        Ok(())
+    }
+    pub(super) fn plan_server_tick_spawner_of(
+        &mut self,
+        key: Pos,
+        spawner: &mut Spawner,
+        cart: Option<u32>,
+    ) -> Option<SpawnerTickCompletion> {
         // `BaseSpawner.serverTick` does nothing without an alive player in
         // range (`isNearPlayer`) or with the rule off: no level to build for it.
         let at = [key.0, key.1, key.2].map(|c| f64::from(c) + 0.5);
@@ -130,14 +151,14 @@ impl Game<'_> {
                 .rules
                 .bool_at(horizon_client::gamerules::vanilla::SPAWNER_BLOCKS_WORK)
         {
-            return Ok(());
+            return None;
         }
         // While its delay counts down, `serverTick` only takes one off it: no
         // level, random or event (a server with hundreds of dungeons near its
         // players built the level for every one of them, every tick).
         if spawner.spawn_delay > 0 {
             spawner.spawn_delay -= 1;
-            return Ok(());
+            return None;
         }
         let pos = [key.0, key.1, key.2];
         let mut random = std::mem::replace(
@@ -150,7 +171,7 @@ impl Game<'_> {
         let source = cart
             .is_none()
             .then(|| mod_api::NativeSpawner::Block(mod_api::BlockPos::new(key.0, key.1, key.2)));
-        let extras = {
+        let extras = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut level = self.natural_level();
             // A minecart spawner has no block to tell the spawn checks of.
             level.spawner = cart.is_none().then_some(mod_api::Spawner::Block {
@@ -166,9 +187,30 @@ impl Game<'_> {
                 std::mem::take(&mut *level.spawned.borrow_mut()),
                 std::mem::take(&mut *level.rides.borrow_mut()),
             )
-        };
+        }));
         self.world.random = random;
-        let (created, rides) = extras;
+        let (created, rides) = match extras {
+            Ok(extras) => extras,
+            Err(payload) => std::panic::resume_unwind(payload),
+        };
+        Some(SpawnerTickCompletion {
+            key,
+            cart,
+            planned,
+            created,
+            rides,
+            events,
+        })
+    }
+    pub(super) fn complete_spawner_tick(&mut self, work: SpawnerTickCompletion) -> Result<()> {
+        let SpawnerTickCompletion {
+            key,
+            cart,
+            planned,
+            created,
+            rides,
+            events,
+        } = work;
         let ids = self.add_planned(planned, created, rides);
         self.apply_spawner_events(key, events, &ids, cart)
     }

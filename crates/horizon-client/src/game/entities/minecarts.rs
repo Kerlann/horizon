@@ -1485,13 +1485,17 @@ impl Game<'_> {
         c.loot = loot;
     }
     /// `AbstractMinecart.tick` for one cart; returns false once it is gone.
-    /// `slot` is where the cart is stored (where to look first).
+    /// `slot` is where the cart is stored (where to look first). Spawner joins
+    /// and events return through `spawner_completion`: the caller applies them
+    /// immediately after returning this progressed body to canonical storage,
+    /// before continuing the turn. No later copy may overwrite listener writes.
     fn tick_cart(
         &mut self,
         c: &mut Minecart,
         intent: [f64; 2],
         slot: usize,
         index: &mut CartIndex,
+        spawner_completion: &mut Option<super::spawner::SpawnerTickCompletion>,
     ) -> bool {
         c.tick_count += 1;
         c.previous = c.position;
@@ -1627,8 +1631,14 @@ impl Game<'_> {
                         c.position.y.floor() as i32,
                         c.position.z.floor() as i32,
                     );
-                    let _ = self.server_tick_spawner_of(key, &mut spawner, Some(c.id));
+                    let planned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        self.plan_server_tick_spawner_of(key, &mut spawner, Some(c.id))
+                    }));
                     c.spawner = Some(spawner);
+                    match planned {
+                        Ok(work) => *spawner_completion = work,
+                        Err(payload) => std::panic::resume_unwind(payload),
+                    }
                 }
             }
             _ => {}
@@ -2148,8 +2158,12 @@ impl Game<'_> {
                     // opening the cart, a command or a save reads it, never a tick, and
                     // a mineshaft's chest cart carries its whole roll as NBT. The
                     // stored cart keeps its slots for whatever reads them meanwhile.
-                    let due = self.with_cart_body(i, |game, c| {
-                        let alive = game.tick_cart(c, [0.0; 2], i, &mut index);
+                    let mut completion = None;
+                    let mut due = self.with_cart_body(i, |game, c| {
+                        let alive = game.tick_cart(c, [0.0; 2], i, &mut index, &mut completion);
+                        if completion.is_some() {
+                            return false;
+                        }
                         if c.kind == CartKind::Hopper && c.enabled {
                             game.hopper_cart_suck(c);
                         }
@@ -2167,6 +2181,24 @@ impl Game<'_> {
                             false
                         }
                     });
+                    if let Some(work) = completion {
+                        let _ = self.complete_spawner_tick(work);
+                        if !CartIndex::usable() {
+                            index.forget_carts();
+                        }
+                        if let Some(at) = self.carts.locate(join) {
+                            index.moved(at, self.carts[at].bounds());
+                            if !self
+                                .persist
+                                .removals
+                                .contains(&super::commands::Target::Cart(id))
+                            {
+                                due = self
+                                    .carts
+                                    .update(at, |cart| std::mem::take(&mut cart.command_due));
+                            }
+                        }
+                    }
                     if due {
                         self.perform_cart_command(id);
                         index.forget_carts();
@@ -2322,8 +2354,14 @@ impl Game<'_> {
         let r = self.yaw.to_radians();
         let (s, co) = (f64::from(r.sin()), f64::from(r.cos()));
         let intent = [left * co - forward * s, forward * co + left * s];
+        let join = self.carts[i].join;
+        let id = self.carts[i].id;
+        let mut completion = None;
         let result = self.with_cart_body(i, |game, c| {
-            let alive = game.tick_cart(c, intent, i, &mut CartIndex::default());
+            let alive = game.tick_cart(c, intent, i, &mut CartIndex::default(), &mut completion);
+            if completion.is_some() {
+                return Some((i, alive));
+            }
             if let Some(p) = game.player.as_mut() {
                 game.previous_position = p.position;
                 p.position = Vec3::new(c.position.x, c.position.y + SEAT, c.position.z);
@@ -2342,6 +2380,30 @@ impl Game<'_> {
             }
             Some((i, alive))
         });
+        let result = if let Some(work) = completion {
+            let _ = self.complete_spawner_tick(work);
+            let at = self.carts.locate(join).filter(|_| {
+                !self
+                    .persist
+                    .removals
+                    .contains(&super::commands::Target::Cart(id))
+            });
+            if let Some(at) = at {
+                let position = self.carts[at].position;
+                if let Some(player) = self.player.as_mut() {
+                    self.previous_position = player.position;
+                    player.position = Vec3::new(position.x, position.y + SEAT, position.z);
+                    player.velocity = Vec3::ZERO;
+                    player.fall_distance = 0.0;
+                }
+                Some((at, true))
+            } else {
+                self.riding = None;
+                None
+            }
+        } else {
+            result
+        };
         let Some((i, alive)) = result else {
             return true;
         };
@@ -3559,7 +3621,7 @@ mod tests {
                 let mut cart = Minecart::new(1, kind, at);
                 cart.velocity = Vec3::new(0.0, 0.0, 1.0);
                 cart.first_tick = false;
-                game.tick_cart(&mut cart, [0.0; 2], 0, &mut CartIndex::default());
+                game.tick_cart(&mut cart, [0.0; 2], 0, &mut CartIndex::default(), &mut None);
                 cart.velocity.horizontal_distance()
             };
             // On a rail, the first iteration's cap.
@@ -4162,7 +4224,13 @@ mod tnt_impact_tests {
             let mut cart = Minecart::new(1, CartKind::Tnt, at);
             cart.velocity = velocity;
             for _ in 0..40 {
-                if !game.tick_cart(&mut cart, [0.0; 2], 0, &mut super::CartIndex::default()) {
+                if !game.tick_cart(
+                    &mut cart,
+                    [0.0; 2],
+                    0,
+                    &mut super::CartIndex::default(),
+                    &mut None,
+                ) {
                     result = true;
                     break;
                 }
@@ -4226,7 +4294,13 @@ mod tnt_impact_tests {
         let mut cart = Minecart::new(1, CartKind::Rideable, Vec3::new(5.5, 64.5, 8.5));
         cart.velocity = Vec3::new(0.4, 0.0, 0.0);
         game.carts.push(cart.clone());
-        assert!(game.tick_cart(&mut cart, [0.0; 2], 0, &mut super::CartIndex::default()));
+        assert!(game.tick_cart(
+            &mut cart,
+            [0.0; 2],
+            0,
+            &mut super::CartIndex::default(),
+            &mut None
+        ));
         let powered = registry
             .state(game.world.block(6, 65, 8))
             .unwrap()
