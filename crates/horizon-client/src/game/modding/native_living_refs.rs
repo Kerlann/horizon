@@ -434,7 +434,7 @@ impl Game<'_> {
     /// nothing, carrying no one this side holds back). None for a stale
     /// handle, an armor stand or the dragon: the portal walk carries
     /// neither as its own traveller.
-    pub(super) fn living_can_use_portal(&self, living: LivingRef) -> Option<bool> {
+    pub(super) fn uncached_living_can_use_portal(&self, living: LivingRef) -> Option<bool> {
         match self.native_living_read_target(living)? {
             // The engine's own gate, the one the client's portal entry runs
             // (`player_can_use_portal`, #943).
@@ -500,7 +500,7 @@ impl Game<'_> {
     /// Breathing, the conduit's power and a player's invulnerability,
     /// which this read does not carry. None for a stale handle, an armor
     /// stand or the dragon.
-    pub(super) fn living_can_breathe_underwater(&self, living: LivingRef) -> Option<bool> {
+    pub(super) fn uncached_living_can_breathe_underwater(&self, living: LivingRef) -> Option<bool> {
         match self.native_living_read_target(living)? {
             Target::Mob(id) => Some(
                 self.mobs
@@ -540,7 +540,7 @@ impl Game<'_> {
     /// `Damageable#getHealth`). During a player's turn only that player
     /// resolves: the hub is out for their action, and other players'
     /// handles read `None` until it is back.
-    pub(super) fn living_health(&self, living: LivingRef) -> Option<f32> {
+    pub(super) fn uncached_living_health(&self, living: LivingRef) -> Option<f32> {
         match self.native_living_read_target(living)? {
             Target::Player => Some(self.player.as_ref()?.health.health()),
             Target::Guest(conn) => Some(self.command_guest(conn)?.health),
@@ -569,7 +569,7 @@ impl Game<'_> {
     /// map; a mob, an armor stand and the dragon their own fields (the
     /// armor stand the fixed 20 the game seeds it with, the dragon its
     /// 200) until live attribute maps cover them.
-    pub(super) fn living_max_health(&self, living: LivingRef) -> Option<f32> {
+    pub(super) fn uncached_living_max_health(&self, living: LivingRef) -> Option<f32> {
         let target = self.native_living_read_target(living)?;
         match target {
             Target::Player | Target::Guest(_) => self
@@ -592,8 +592,8 @@ impl Game<'_> {
     /// Whether the entity is alive (`LivingEntity.isAlive`; Paper's
     /// `Entity#isDead` is its inverse). A dying mob, mid death
     /// animation, is not.
-    pub(super) fn living_alive(&self, living: LivingRef) -> Option<bool> {
-        self.living_health(living).map(alive_at)
+    pub(super) fn uncached_living_alive(&self, living: LivingRef) -> Option<bool> {
+        self.uncached_living_health(living).map(alive_at)
     }
 
     /// Sets the entity's health (`LivingEntity.setHealth`; Paper's
@@ -657,7 +657,7 @@ impl Game<'_> {
     /// `LivingEntity.getKillCredit`: the remembered player takes precedence,
     /// even if the player cannot be resolved; otherwise the last hurting mob.
     /// Unlike vanilla, a mob that changed dimension cannot be resolved.
-    pub(super) fn living_kill_credit(&self, living: LivingRef) -> Option<EntityRef> {
+    pub(super) fn uncached_living_kill_credit(&self, living: LivingRef) -> Option<EntityRef> {
         let credit = match self.native_living_target(living)? {
             Target::Player => self.combat.player_credit(self.world.game_time),
             Target::Guest(conn) => self
@@ -672,7 +672,7 @@ impl Game<'_> {
             let id = self.player_entity_id_by_connection(conn)?;
             return self.entity(u32::try_from(id).ok()?);
         }
-        self.living_last_attacker(living)
+        self.uncached_living_last_attacker(living)
     }
 
     /// `LivingEntity.getLastHurtByMob`: the entity that last hurt this one,
@@ -681,7 +681,7 @@ impl Game<'_> {
     /// `armadillo.rs` reads it). None for a stale handle, a window that has
     /// passed, an attacker that is gone, an armor stand, the dragon or a
     /// client.
-    pub(super) fn living_last_attacker(&self, living: LivingRef) -> Option<EntityRef> {
+    pub(super) fn uncached_living_last_attacker(&self, living: LivingRef) -> Option<EntityRef> {
         match self.native_living_target(living)? {
             Target::Player => self
                 .combat
@@ -1122,12 +1122,12 @@ impl Game<'_> {
     }
     /// `TamableAnimal.isTame`, `AbstractHorse.isTamed`: None for a kind that
     /// can't be tamed or a stale handle. API @API:living_refs@.
-    pub(super) fn living_is_tamed(&self, living: LivingRef) -> Option<bool> {
+    pub(super) fn uncached_living_is_tamed(&self, living: LivingRef) -> Option<bool> {
         self.native_tamable(living).map(|m| m.extra.tame)
     }
     /// The owner's UUID (`OwnableEntity.getOwnerReference`): None for a wild
     /// mob, a kind that can't be tamed, or a stale handle. API @API:living_refs@.
-    pub(super) fn living_owner(&self, living: LivingRef) -> Option<u128> {
+    pub(super) fn uncached_living_owner(&self, living: LivingRef) -> Option<u128> {
         let owner = self.native_tamable(living)?.extra.owner?;
         Some(horizon_client::lan::playerdata::ints_uuid(owner))
     }

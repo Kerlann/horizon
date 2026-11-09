@@ -26,19 +26,19 @@ impl Game<'_> {
     }
 
     /// `FoodData.needsFood`: the food level is below 20.
-    pub(super) fn player_needs_food(&self, player: PlayerRef) -> Option<bool> {
-        Some(self.player_food(player)?.level < 20)
+    pub(super) fn uncached_player_needs_food(&self, player: PlayerRef) -> Option<bool> {
+        Some(self.uncached_player_food(player)?.level < 20)
     }
     /// `FoodData.hasEnoughFood`: the food level is above 6, enough to
     /// sprint.
-    pub(super) fn player_has_enough_food(&self, player: PlayerRef) -> Option<bool> {
-        Some(self.player_food(player)?.level as f32 > 6.0)
+    pub(super) fn uncached_player_has_enough_food(&self, player: PlayerRef) -> Option<bool> {
+        Some(self.uncached_player_food(player)?.level as f32 > 6.0)
     }
     /// `Player.canEat(always)`: an invulnerable player (creative), `always`
     /// (food that can always be eaten) or a food level below 20.
-    pub(super) fn player_can_eat(&self, player: PlayerRef, always: bool) -> Option<bool> {
-        let invulnerable = self.player_abilities(player)?.invulnerable;
-        Some(invulnerable || always || self.player_needs_food(player)?)
+    pub(super) fn uncached_player_can_eat(&self, player: PlayerRef, always: bool) -> Option<bool> {
+        let invulnerable = self.uncached_player_abilities(player)?.invulnerable;
+        Some(invulnerable || always || self.uncached_player_needs_food(player)?)
     }
     /// `FoodData.eat(nutrition, saturationModifier)`: adds `nutrition` to
     /// the food level (0 to 20) and `nutrition * modifier * 2` to the
@@ -93,7 +93,10 @@ impl Game<'_> {
     }
 
     /// `Player.experienceLevel`, `experienceProgress` and `totalExperience`.
-    pub(super) fn player_experience(&self, player: PlayerRef) -> Option<NativePlayerExperience> {
+    pub(super) fn uncached_player_experience(
+        &self,
+        player: PlayerRef,
+    ) -> Option<NativePlayerExperience> {
         Some(match self.player_read_both(player)? {
             super::native_server::PlayerRead::Guest(g) => {
                 NativePlayerExperience::from(mod_api::__private::built::NativePlayerExperience {
@@ -113,8 +116,13 @@ impl Game<'_> {
     }
     /// `Player.getXpNeededForNextLevel`: the points the current level needs
     /// to fill.
-    pub(super) fn player_xp_needed_for_next_level(&self, player: PlayerRef) -> Option<i32> {
-        Some(Experience::needed(self.player_experience(player)?.level))
+    pub(super) fn uncached_player_xp_needed_for_next_level(
+        &self,
+        player: PlayerRef,
+    ) -> Option<i32> {
+        Some(Experience::needed(
+            self.uncached_player_experience(player)?.level,
+        ))
     }
     /// `ServerPlayer.setExperiencePoints`: sets the progress toward the next
     /// level to `points` of the points it needs, kept below a full bar. The
