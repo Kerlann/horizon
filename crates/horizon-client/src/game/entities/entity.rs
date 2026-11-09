@@ -1117,6 +1117,7 @@ impl Game<'_> {
             .chain(self.crystals.iter().map(|e| e.id))
             .chain(self.dragon.iter().map(|e| e.id))
             .chain(self.ominous_spawners.iter().map(|e| e.id))
+            .chain(self.knots.iter().map(|e| e.id))
             // Cast hooks live with their players, not in the saveable lists.
             // Keep both their identities and attachment holders until they leave.
             .chain(self.fishing_hooks_here().map(|(hook, _)| hook.id()))

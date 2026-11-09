@@ -1112,9 +1112,21 @@ impl Game<'_> {
         self.world.bottom_y()
     }
     pub(super) fn mob_world_base<'s>(&'s self, others: &'s [Seen]) -> MobWorld<'s> {
+        self.mob_world_reborrow(
+            others,
+            self.player_view(),
+            std::sync::Arc::new(self.mob_team_rules()),
+        )
+    }
+    /// Reborrow the live level without rebuilding the pass's owned player/team backing.
+    pub(super) fn mob_world_reborrow<'s>(
+        &'s self,
+        others: &'s [Seen],
+        player: Option<PlayerView>,
+        teams: std::sync::Arc<horizon_client::mobs::TeamRulesSnapshot>,
+    ) -> MobWorld<'s> {
         let (rain, thunder) = self.weather_levels(1.0);
         let weather = self.can_have_weather();
-        let player = self.player_view();
         MobWorld {
             loop_context: &self.loop_context,
             world: &self.world,
@@ -1170,7 +1182,7 @@ impl Game<'_> {
             dimension_type: self.dimension_type(),
             world_seed: self.level.seed,
             sea_level: self.dim.sea_level(),
-            teams: std::sync::Arc::new(self.mob_teams()),
+            teams,
             items: Some(self.items()),
             lid_openers: &self.lid_openers,
             mod_effects: if self.remote.is_none() {
@@ -1436,7 +1448,8 @@ impl Game<'_> {
         self.combat.charged_exploders.clear();
         self.combat.exploded.clear();
         self.combat.exploded_kinds.clear();
-        // EntityTickEvent.Pre for the mobs about to tick, before the loop holds them.
+        // Prepare sleeping state while resident. EntityTickEvent.Pre/Post run
+        // at each actor's real mutable boundary inside the borrowed loop.
         let mut round = self.native_tick_round();
         if round.listening() || mod_api::__private::listened(mod_api::HookId::CanContinueSleeping) {
             let ticking = self.entity_ticking_area();
@@ -1444,10 +1457,7 @@ impl Game<'_> {
             while let Some(m) = self.mobs.get(i) {
                 let (x, z) = (m.position.x.floor() as i32, m.position.z.floor() as i32);
                 if self.world.loaded(x, z) && ticking(x, z) {
-                    let (id, kind) = (m.id, super::native_ticks::TickKind::Mob(m.kind.clone()));
-                    if self.native_tick_pre_batch(&mut round, id, kind) {
-                        self.sync_sleeping_mob(i);
-                    }
+                    self.sync_sleeping_mob(i);
                 }
                 i += 1;
             }
@@ -1472,6 +1482,14 @@ impl Game<'_> {
         let mut events = std::mem::take(&mut self.creatures.event_buf);
         events.clear();
         let primable = self.sulfur_cubes_adopted_explosive();
+        // Capture every source while the canonical owner is still resident. The
+        // metadata guard owns no Game loan and survives consumption continuations.
+        let read_scope = self.begin_mob_read_pass();
+        if read_scope.is_some() {
+            for mob in &self.mobs {
+                self.publish_mob_read_source(mob, mod_api::EntityReadCapturePhase::PassStart);
+            }
+        }
         let mut mobs = self.mobs.lift();
         #[cfg(test)]
         super::entity::taken_pass_tests::after_take(self);
@@ -1532,7 +1550,8 @@ impl Game<'_> {
             laps: &mut laps,
             uuid,
             level_id,
-            round: &round,
+            round: &mut round,
+            publish_reads: read_scope.is_some(),
         });
         lent.give_back(&mut self.world);
         self.last_hurt_by_player = player_credit;
@@ -1569,6 +1588,9 @@ impl Game<'_> {
         if let Some(payload) = dispatch_panic {
             std::panic::resume_unwind(payload);
         }
+        drop(read_scope);
+        // Mob Pre/Post run around each actor in the borrowed loop, never as
+        // a family-wide batch. Return the reusable empty round buffer.
         self.native_tick_post_batch(round);
         // ... and entity event 60 goes out as it is: the poof.
         // 🤖 Agent: the split follows the poof, as `LivingEntity.tickDeath`

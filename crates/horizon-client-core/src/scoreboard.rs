@@ -568,29 +568,63 @@ pub fn teams_allied(own: Option<&Team>, other: Option<&Team>) -> bool {
 /// `Entity.doTeamsAllowDamage`: an entity may hurt another unless they are
 /// allies on a team without friendly fire (also `Player.canHarmPlayer`).
 pub fn teams_allow_damage(own: Option<&Team>, other: Option<&Team>) -> bool {
-    match own {
-        None => true,
-        Some(t) => !teams_allied(own, other) || t.allow_friendly_fire,
+    TeamRules::allows_damage(
+        own.map(Team::rules).as_ref(),
+        other.map(Team::rules).as_ref(),
+    )
+}
+
+/// Bounded gameplay facts, with identity chosen by the owning snapshot.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TeamRules<I> {
+    pub identity: I,
+    pub allow_friendly_fire: bool,
+    pub collision_rule: CollisionRule,
+}
+impl Team {
+    fn rules(&self) -> TeamRules<&str> {
+        TeamRules {
+            identity: &self.name,
+            allow_friendly_fire: self.allow_friendly_fire,
+            collision_rule: self.collision_rule,
+        }
+    }
+}
+impl<I: PartialEq> TeamRules<I> {
+    pub fn allied(own: Option<&Self>, other: Option<&Self>) -> bool {
+        matches!((own, other), (Some(a), Some(b)) if a.identity == b.identity)
+    }
+    pub fn allows_damage(own: Option<&Self>, other: Option<&Self>) -> bool {
+        own.is_none_or(|team| !Self::allied(own, other) || team.allow_friendly_fire)
+    }
+    pub fn pushable_by(own: Option<&Self>, their: Option<&Self>, their_pushable: bool) -> bool {
+        let own_rule = own.map_or(CollisionRule::Always, |t| t.collision_rule);
+        if own_rule == CollisionRule::Never || !their_pushable {
+            return false;
+        }
+        let their_rule = their.map_or(CollisionRule::Always, |t| t.collision_rule);
+        if their_rule == CollisionRule::Never {
+            return false;
+        }
+        let same = Self::allied(own, their);
+        if (own_rule == CollisionRule::PushOwnTeam || their_rule == CollisionRule::PushOwnTeam)
+            && same
+        {
+            return false;
+        }
+        own_rule != CollisionRule::PushOtherTeams && their_rule != CollisionRule::PushOtherTeams
+            || same
     }
 }
 /// `EntitySelector.pushableBy(entity).test(input)` on the server (or for the
 /// local player on the client): whether `entity` pushes `input`, which must
 /// be pushable and not a spectator.
 pub fn pushable_by(own: Option<&Team>, their: Option<&Team>, their_pushable: bool) -> bool {
-    let own_rule = own.map_or(CollisionRule::Always, |t| t.collision_rule);
-    if own_rule == CollisionRule::Never || !their_pushable {
-        return false;
-    }
-    let their_rule = their.map_or(CollisionRule::Always, |t| t.collision_rule);
-    if their_rule == CollisionRule::Never {
-        return false;
-    }
-    let same = teams_allied(own, their);
-    if (own_rule == CollisionRule::PushOwnTeam || their_rule == CollisionRule::PushOwnTeam) && same
-    {
-        return false;
-    }
-    own_rule != CollisionRule::PushOtherTeams && their_rule != CollisionRule::PushOtherTeams || same
+    TeamRules::pushable_by(
+        own.map(Team::rules).as_ref(),
+        their.map(Team::rules).as_ref(),
+        their_pushable,
+    )
 }
 /// `Entity.isInvisibleTo(player)`: invisible unless the viewer spectates or
 /// shares a team that sees friendly invisibles.

@@ -274,7 +274,7 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         && let Some(p) = w.selected_player()
         && p.alive
         && !p.creative
-        && crate::scoreboard::teams_allow_damage(
+        && crate::scoreboard::TeamRules::allows_damage(
             w.teams.of(Who::Mob(m.id)),
             w.teams.of(Who::Player),
         )
@@ -328,8 +328,8 @@ fn hurt_touching_golems(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
                 && o.alive
                 && o.bounds.intersects(bounds)
                 && m.melee_reaches(w, o.hitbox)
-                && crate::scoreboard::pushable_by(theirs, own, pushable)
-                && crate::scoreboard::teams_allow_damage(own, theirs)
+                && crate::scoreboard::TeamRules::pushable_by(theirs, own, pushable)
+                && crate::scoreboard::TeamRules::allows_damage(own, theirs)
         })
         .map(|o| o.id)
         .collect();

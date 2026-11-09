@@ -466,7 +466,7 @@ impl Game<'_> {
 }
 
 impl Game<'_> {
-    fn read_relation_entity(
+    pub(super) fn read_relation_entity(
         &self,
         id: u32,
         level: LevelRef,
@@ -566,208 +566,6 @@ impl Game<'_> {
                 source.extra.using_item.unsigned_abs() - 1,
             )
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::super::{
-        native_entity_refs::tests::with_game, native_guest_turn_tests::with_guests,
-    };
-    use super::*;
-    use horizon_core::geometry::Vec3;
-
-    fn mob(game: &Game<'_>, id: u32, name: &str) -> Mob {
-        Mob::new(
-            id,
-            game.res.mob_types().get(name).unwrap().clone(),
-            Vec3::new(0.0, 64.0, 0.0),
-            0.0,
-        )
-    }
-    #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
-    fn shared_rules_preserve_species_baby_and_player_boundaries() {
-        with_game(|game| {
-            let world = game.mob_world_base(&[]);
-            for (actor, target, baby, allowed) in [
-                ("minecraft:breeze", Species::IronGolem, false, true),
-                ("minecraft:breeze", Species::Cow, false, false),
-                ("minecraft:creeper", Species::Goat, false, false),
-                ("minecraft:creeper", Species::Cow, false, true),
-                ("minecraft:pillager", Species::Villager, true, false),
-                ("minecraft:pillager", Species::Villager, false, true),
-                ("minecraft:iron_golem", Species::Creeper, false, true),
-                ("minecraft:zombie", Species::Ghast, false, false),
-            ] {
-                let actor = mob(game, 40, actor);
-                let facts = mobs::goals::TargetFacts::Mob {
-                    id: 41,
-                    species: target,
-                    alive: true,
-                    invulnerable: false,
-                    baby,
-                };
-                // No Seen entry preserves the original wrapper's exact visibility contract.
-                assert_eq!(actor.valid_target(&world, &facts), allowed);
-                assert_eq!(
-                    actor.valid_target_facts(i32::from(world.difficulty.base), &facts, None),
-                    allowed
-                );
-                for (alive, invulnerable) in [(false, false), (true, true)] {
-                    let facts = mobs::goals::TargetFacts::Mob {
-                        id: 41,
-                        species: target,
-                        alive,
-                        invulnerable,
-                        baby,
-                    };
-                    assert!(!actor.valid_target(&world, &facts));
-                    assert!(!actor.valid_target_facts(2, &facts, None));
-                }
-            }
-            let golem = mob(game, 40, "minecraft:iron_golem");
-            let creeper = mob(game, 41, "minecraft:creeper");
-            let seen = [creeper.seen(None)];
-            let world = game.mob_world_base(&seen);
-            let facts = mobs::goals::TargetFacts::Mob {
-                id: 41,
-                species: Species::Creeper,
-                alive: true,
-                invulnerable: false,
-                baby: false,
-            };
-            assert!(!golem.valid_target(&world, &facts));
-            assert!(!golem.valid_target_facts(2, &facts, Some(Species::Creeper)));
-            let mut dolphin = mob(game, 40, "minecraft:dolphin");
-            dolphin.extra.age = -10;
-            let facts = mobs::goals::TargetFacts::Mob {
-                id: 41,
-                species: Species::Cow,
-                alive: true,
-                invulnerable: false,
-                baby: false,
-            };
-            assert!(!dolphin.valid_target(&world, &facts));
-            assert!(!dolphin.valid_target_facts(2, &facts, Some(Species::Cow)));
-            let zombie = mob(game, 40, "minecraft:zombie");
-            for (difficulty, creative, spectator, alive, invulnerable, expected) in [
-                (0, false, false, true, false, false),
-                (2, false, false, true, false, true),
-                (2, true, false, true, false, false),
-                (2, false, true, true, false, false),
-                (2, false, false, false, false, false),
-                (2, false, false, true, true, false),
-            ] {
-                let facts = mobs::goals::TargetFacts::Player {
-                    alive,
-                    invulnerable,
-                    creative,
-                    spectator,
-                    uuid: [0; 4],
-                };
-                assert_eq!(
-                    zombie.valid_target_facts(difficulty, &facts, None),
-                    expected
-                );
-                let mut world = game.mob_world_base(&[]);
-                world.difficulty.base = difficulty as u8;
-                assert_eq!(zombie.valid_target(&world, &facts), expected);
-            }
-        });
-    }
-    #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
-    fn context_resolves_resident_targets_and_indexed_trade_and_riders() {
-        with_guests(|game| {
-            let merchant =
-                super::super::native_merchant_refs::tests::spawn(game, 40, "minecraft:villager");
-            let level = game.entity_level(merchant.entity()).unwrap();
-            let mut actor = mob(game, 42, "minecraft:iron_golem");
-            actor.ai.target = Some(Who::Mob(40));
-            let mut index = NativeMobRelations::default();
-            game.rebuild_mob_read_relations(level, &mut index);
-            assert_eq!(
-                game.mob_read_context(&actor, level, &index)
-                    .target
-                    .unwrap()
-                    .id(),
-                40
-            );
-            game.mobs[0].invulnerable_flag = true;
-            assert!(
-                game.mob_read_context(&actor, level, &index)
-                    .target
-                    .is_none()
-            );
-            game.mobs[0].invulnerable_flag = false;
-            let warden = mob(game, 42, "minecraft:warden");
-            assert!(
-                game.read_mob_target(&warden, Who::Mob(40), level, &index)
-                    .is_some()
-            );
-            game.mobs[0].position.x = 40_000_000.0;
-            assert!(
-                game.read_mob_target(&warden, Who::Mob(40), level, &index)
-                    .is_none()
-            );
-            game.mobs[0].position.x = 0.0;
-            game.persist.uuids.insert(40, [0, 0, 0, 40]);
-            game.persist.uuids.insert(42, [0, 0, 0, 42]);
-            index.update_saved_uuid(40, None, Some([0, 0, 0, 40]));
-            index.update_saved_uuid(42, None, Some([0, 0, 0, 42]));
-            game.score.board.add_team("allies");
-            game.score
-                .board
-                .add_to_team(&horizon_client::save::uuid_text([0, 0, 0, 40]), "allies");
-            game.score
-                .board
-                .add_to_team(&horizon_client::save::uuid_text([0, 0, 0, 42]), "allies");
-            assert!(
-                game.read_mob_target(&warden, Who::Mob(40), level, &index)
-                    .is_none()
-            );
-            let mut session = horizon_client::merchant::Session::new(Vec::new(), true);
-            session.xp = 17;
-            session.level = 3;
-            game.lan_open_merchant(
-                13,
-                super::super::trading::MerchantState {
-                    session: Box::new(session),
-                    scroll: 0,
-                    dragging: false,
-                    focused: None,
-                    mob: Some(40),
-                    name: None,
-                },
-            );
-            index.update_merchant(13, Some(40));
-            let context = game.merchant_read_context(&game.mobs[0], level.epoch(), &index);
-            assert_eq!(context.session.unwrap().xp, 17);
-            assert_eq!(context.trading_player.unwrap().uuid(), 13);
-            game.lan
-                .as_mut()
-                .unwrap()
-                .hub
-                .update_guest(13, |guest| guest.vehicle = Some(42));
-            index.update_guest(game.lan.as_ref().unwrap().hub.guest(13).unwrap());
-            assert!(game.mob_read_context(&actor, level, &index).guest_riding);
-            game.lan
-                .as_mut()
-                .unwrap()
-                .hub
-                .update_guest(13, |guest| guest.vehicle = None);
-            index.update_guest(game.lan.as_ref().unwrap().hub.guest(13).unwrap());
-            assert!(!game.mob_read_context(&actor, level, &index).guest_riding);
-            index.update_merchant(13, None);
-            assert!(
-                game.merchant_read_context(&game.mobs[0], level.epoch(), &index)
-                    .session
-                    .is_none()
-            );
-            index.remove_guest(13);
-            assert!(game.read_guest(&index, 13).is_none());
-        });
     }
 }
 
@@ -1024,5 +822,447 @@ impl Game<'_> {
             return None;
         }
         self.read_relation_entity(u32::try_from(guest.entity_id).ok()?, level, index)
+    }
+}
+
+impl Game<'_> {
+    /// Saved UUID resolution uses the retained identity index but validates its
+    /// binding against the canonical level record before returning a handle.
+    pub(super) fn resolve_read_uuid(
+        &self,
+        uuid: [i32; 4],
+        level: LevelRef,
+        index: &NativeMobRelations,
+    ) -> Option<EntityRef> {
+        if self.native_lifecycle.epoch() != Some(level.epoch()) {
+            return None;
+        }
+        if let Some(player) = self.resolve_mob_read_player(uuid, level, index) {
+            return Some(player);
+        }
+        let id = *index.saved_ids.get(&uuid)?;
+        if self.read_saved_uuid(id, level) != Some(uuid) {
+            return None;
+        }
+        self.read_relation_entity(id, level, index)
+    }
+    pub(super) fn read_relation_guest(
+        &self,
+        conn: u32,
+        level: LevelRef,
+        index: &NativeMobRelations,
+    ) -> Option<EntityRef> {
+        let guest = self.read_guest(index, conn)?;
+        if !guest.participates_online() {
+            return None;
+        }
+        self.read_relation_entity(u32::try_from(guest.entity_id).ok()?, level, index)
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::super::{
+        native_entity_refs::tests::with_game, native_guest_turn_tests::with_guests,
+    };
+    use super::*;
+    use horizon_core::geometry::Vec3;
+
+    fn mob(game: &Game<'_>, id: u32, name: &str) -> Mob {
+        Mob::new(
+            id,
+            game.res.mob_types().get(name).unwrap().clone(),
+            Vec3::new(0.0, 64.0, 0.0),
+            0.0,
+        )
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn shared_rules_preserve_species_baby_and_player_boundaries() {
+        with_game(|game| {
+            let world = game.mob_world_base(&[]);
+            for (actor, target, baby, allowed) in [
+                ("minecraft:breeze", Species::IronGolem, false, true),
+                ("minecraft:breeze", Species::Cow, false, false),
+                ("minecraft:creeper", Species::Goat, false, false),
+                ("minecraft:creeper", Species::Cow, false, true),
+                ("minecraft:pillager", Species::Villager, true, false),
+                ("minecraft:pillager", Species::Villager, false, true),
+                ("minecraft:iron_golem", Species::Creeper, false, true),
+                ("minecraft:zombie", Species::Ghast, false, false),
+            ] {
+                let actor = mob(game, 40, actor);
+                let facts = mobs::goals::TargetFacts::Mob {
+                    id: 41,
+                    species: target,
+                    alive: true,
+                    invulnerable: false,
+                    baby,
+                };
+                // No Seen entry preserves the original wrapper's exact visibility contract.
+                assert_eq!(actor.valid_target(&world, &facts), allowed);
+                assert_eq!(
+                    actor.valid_target_facts(i32::from(world.difficulty.base), &facts, None),
+                    allowed
+                );
+                for (alive, invulnerable) in [(false, false), (true, true)] {
+                    let facts = mobs::goals::TargetFacts::Mob {
+                        id: 41,
+                        species: target,
+                        alive,
+                        invulnerable,
+                        baby,
+                    };
+                    assert!(!actor.valid_target(&world, &facts));
+                    assert!(!actor.valid_target_facts(2, &facts, None));
+                }
+            }
+            let golem = mob(game, 40, "minecraft:iron_golem");
+            let creeper = mob(game, 41, "minecraft:creeper");
+            let seen = [creeper.seen(None)];
+            let world = game.mob_world_base(&seen);
+            let facts = mobs::goals::TargetFacts::Mob {
+                id: 41,
+                species: Species::Creeper,
+                alive: true,
+                invulnerable: false,
+                baby: false,
+            };
+            assert!(!golem.valid_target(&world, &facts));
+            assert!(!golem.valid_target_facts(2, &facts, Some(Species::Creeper)));
+            let mut dolphin = mob(game, 40, "minecraft:dolphin");
+            dolphin.extra.age = -10;
+            let facts = mobs::goals::TargetFacts::Mob {
+                id: 41,
+                species: Species::Cow,
+                alive: true,
+                invulnerable: false,
+                baby: false,
+            };
+            assert!(!dolphin.valid_target(&world, &facts));
+            assert!(!dolphin.valid_target_facts(2, &facts, Some(Species::Cow)));
+            let zombie = mob(game, 40, "minecraft:zombie");
+            for (difficulty, creative, spectator, alive, invulnerable, expected) in [
+                (0, false, false, true, false, false),
+                (2, false, false, true, false, true),
+                (2, true, false, true, false, false),
+                (2, false, true, true, false, false),
+                (2, false, false, false, false, false),
+                (2, false, false, true, true, false),
+            ] {
+                let facts = mobs::goals::TargetFacts::Player {
+                    alive,
+                    invulnerable,
+                    creative,
+                    spectator,
+                    uuid: [0; 4],
+                };
+                assert_eq!(
+                    zombie.valid_target_facts(difficulty, &facts, None),
+                    expected
+                );
+                let mut world = game.mob_world_base(&[]);
+                world.difficulty.base = difficulty as u8;
+                assert_eq!(zombie.valid_target(&world, &facts), expected);
+            }
+        });
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn context_resolves_resident_targets_and_indexed_trade_and_riders() {
+        with_guests(|game| {
+            let merchant =
+                super::super::native_merchant_refs::tests::spawn(game, 40, "minecraft:villager");
+            let level = game.entity_level(merchant.entity()).unwrap();
+            let mut actor = mob(game, 42, "minecraft:iron_golem");
+            actor.ai.target = Some(Who::Mob(40));
+            let mut index = NativeMobRelations::default();
+            game.rebuild_mob_read_relations(level, &mut index);
+            assert_eq!(
+                game.mob_read_context(&actor, level, &index)
+                    .target
+                    .unwrap()
+                    .id(),
+                40
+            );
+            game.mobs[0].invulnerable_flag = true;
+            assert!(
+                game.mob_read_context(&actor, level, &index)
+                    .target
+                    .is_none()
+            );
+            game.mobs[0].invulnerable_flag = false;
+            let warden = mob(game, 42, "minecraft:warden");
+            assert!(
+                game.read_mob_target(&warden, Who::Mob(40), level, &index)
+                    .is_some()
+            );
+            game.mobs[0].position.x = 40_000_000.0;
+            assert!(
+                game.read_mob_target(&warden, Who::Mob(40), level, &index)
+                    .is_none()
+            );
+            game.mobs[0].position.x = 0.0;
+            game.persist.uuids.insert(40, [0, 0, 0, 40]);
+            game.persist.uuids.insert(42, [0, 0, 0, 42]);
+            index.update_saved_uuid(40, None, Some([0, 0, 0, 40]));
+            index.update_saved_uuid(42, None, Some([0, 0, 0, 42]));
+            game.score.board.add_team("allies");
+            game.score
+                .board
+                .add_to_team(&horizon_client::save::uuid_text([0, 0, 0, 40]), "allies");
+            game.score
+                .board
+                .add_to_team(&horizon_client::save::uuid_text([0, 0, 0, 42]), "allies");
+            assert!(
+                game.read_mob_target(&warden, Who::Mob(40), level, &index)
+                    .is_none()
+            );
+            let mut session = horizon_client::merchant::Session::new(Vec::new(), true);
+            session.xp = 17;
+            session.level = 3;
+            game.lan_open_merchant(
+                13,
+                super::super::trading::MerchantState {
+                    session: Box::new(session),
+                    scroll: 0,
+                    dragging: false,
+                    focused: None,
+                    mob: Some(40),
+                    name: None,
+                },
+            );
+            index.update_merchant(13, Some(40));
+            let context = game.merchant_read_context(&game.mobs[0], level.epoch(), &index);
+            assert_eq!(context.session.unwrap().xp, 17);
+            assert_eq!(context.trading_player.unwrap().uuid(), 13);
+            game.lan
+                .as_mut()
+                .unwrap()
+                .hub
+                .update_guest(13, |guest| guest.vehicle = Some(42));
+            index.update_guest(game.lan.as_ref().unwrap().hub.guest(13).unwrap());
+            assert!(game.mob_read_context(&actor, level, &index).guest_riding);
+            game.lan
+                .as_mut()
+                .unwrap()
+                .hub
+                .update_guest(13, |guest| guest.vehicle = None);
+            index.update_guest(game.lan.as_ref().unwrap().hub.guest(13).unwrap());
+            assert!(!game.mob_read_context(&actor, level, &index).guest_riding);
+            index.update_merchant(13, None);
+            assert!(
+                game.merchant_read_context(&game.mobs[0], level.epoch(), &index)
+                    .session
+                    .is_none()
+            );
+            index.remove_guest(13);
+            assert!(game.read_guest(&index, 13).is_none());
+        });
+    }
+}
+
+#[cfg(test)]
+mod lent_tests {
+    use super::super::native_guest_turn_tests::with_guests;
+    use super::*;
+    use horizon_client::{
+        join_seq::RestoreOrder,
+        mobs::player_selection::{PlayerSelection, TickPlayer},
+    };
+    use horizon_core::geometry::Vec3;
+    use mod_api::EntityReadCapturePhase;
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn real_publications_resolve_lifted_targets_and_every_ordered_passenger() {
+        with_guests(|game| {
+            game.options.dedicated = Some(Vec::new());
+            for (id, kind) in [
+                (40, "minecraft:zombie"),
+                (41, "minecraft:cow"),
+                (42, "minecraft:pig"),
+                (43, "minecraft:sheep"),
+            ] {
+                game.mobs.push(Mob::new(
+                    id,
+                    game.res.mob_types().get(kind).unwrap().clone(),
+                    Vec3::new(0.0, 64.0, 0.0),
+                    0.0,
+                ));
+                assert!(game.entity(id).is_some());
+            }
+            game.mobs[0].ai.target = Some(Who::Mob(41));
+            game.mobs[2].extra.mount = Some(40);
+            game.mobs[2].extra.vehicle_order = 9;
+            game.mobs[3].extra.mount = Some(40);
+            game.mobs[3].extra.vehicle_order = 2;
+            game.lan.as_mut().unwrap().hub.update_guest(13, |guest| {
+                guest.vehicle = Some(40);
+                guest.vehicle_order = 5;
+            });
+            let epoch = game.native_lifecycle.epoch().unwrap();
+            let level = LevelRef::new(epoch, game.native_level_key());
+            {
+                let world = game.mob_world_base(&[]);
+                for source in game.mobs.iter() {
+                    assert!(game.publish_lent_mob_reads(
+                        source,
+                        &world,
+                        EntityReadCapturePhase::BeforeCallback
+                    ));
+                }
+            }
+            let mut sources = game.mobs.lift();
+            {
+                let world = game.mob_world_base(&[]);
+                assert!(world.live_mobs.is_none());
+                assert!(world.others.is_empty());
+                let target = LivingRef::new(EntityRef::new(epoch, 41));
+                assert_eq!(
+                    game.resolve_lent_mob_goal_target(&sources[0], &world, target, true),
+                    Some(Who::Mob(41))
+                );
+                assert_eq!(
+                    game.lent_mob_target(&sources[0], &sources[0], &world)
+                        .unwrap()
+                        .id(),
+                    41
+                );
+                assert_eq!(
+                    game.lent_mob_passengers(&sources[0])
+                        .unwrap()
+                        .iter()
+                        .map(|e| e.id())
+                        .collect::<Vec<_>>(),
+                    [43, 13, 42]
+                );
+                assert!(
+                    game.resolve_lent_mob_goal_target(
+                        &sources[0],
+                        &world,
+                        LivingRef::new(EntityRef::new(NativeWorldEpoch::new(epoch.get() + 1), 41)),
+                        false
+                    )
+                    .is_none()
+                );
+            }
+            sources[1].invulnerable_flag = true;
+            {
+                let world = game.mob_world_base(&[]);
+                assert!(game.publish_lent_mob_reads(
+                    &sources[1],
+                    &world,
+                    EntityReadCapturePhase::AfterAppliedWrite
+                ));
+                let target = LivingRef::new(EntityRef::new(epoch, 41));
+                assert!(
+                    game.resolve_lent_mob_goal_target(&sources[0], &world, target, true)
+                        .is_none()
+                );
+                assert_eq!(
+                    game.resolve_lent_mob_goal_target(&sources[0], &world, target, false),
+                    Some(Who::Mob(41))
+                );
+                assert!(
+                    game.lent_mob_target(&sources[0], &sources[0], &world)
+                        .is_none()
+                );
+            }
+            // Real retained pass freshness is part of the helper contract.
+            game.entity_read_state
+                .borrow_mut()
+                .mob_relations
+                .get_mut(&level)
+                .unwrap()
+                .tick = None;
+            assert!(game.lent_mob_passengers(&sources[0]).is_none());
+            game.mobs.restore(sources, RestoreOrder::SurvivorsFirst);
+        });
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn player_redirect_requires_exact_identity_and_selects_before_returning_who() {
+        with_guests(|game| {
+            game.options.dedicated = Some(Vec::new());
+            for conn in [12, 13] {
+                game.lan
+                    .as_mut()
+                    .unwrap()
+                    .hub
+                    .update_guest(conn, |guest| guest.loaded = true);
+            }
+            game.mobs.push(Mob::new(
+                40,
+                game.res
+                    .mob_types()
+                    .get("minecraft:zombie")
+                    .unwrap()
+                    .clone(),
+                Vec3::new(0.0, 64.0, 0.0),
+                0.0,
+            ));
+            assert!(game.entity(40).is_some());
+            let epoch = game.native_lifecycle.epoch().unwrap();
+            let level = LevelRef::new(epoch, game.native_level_key());
+            {
+                let world = game.mob_world_base(&[]);
+                assert!(game.publish_lent_mob_reads(
+                    &game.mobs[0],
+                    &world,
+                    EntityReadCapturePhase::BeforeCallback
+                ));
+            }
+            let players = game
+                .lan_guest_views()
+                .into_iter()
+                .filter_map(|(conn, view)| {
+                    let (_, entity_id) = game.guest_identity(conn)?;
+                    Some(TickPlayer {
+                        entity_id,
+                        connection: Some(conn),
+                        view,
+                    })
+                })
+                .collect();
+            let selection = PlayerSelection::new(players, Some(12)).unwrap();
+            let sources = game.mobs.lift();
+            let target = LivingRef::new(EntityRef::new(epoch, 13));
+            {
+                let mut world = game.mob_world_base(&[]);
+                world.player_identity = Some((horizon_client::lan::playerdata::uuid_ints(12), 12));
+                assert!(
+                    game.resolve_lent_mob_goal_target(&sources[0], &world, target, false)
+                        .is_none()
+                );
+                world.player_selection = Some(&selection);
+                assert_eq!(
+                    game.resolve_lent_mob_goal_target(&sources[0], &world, target, true),
+                    Some(Who::Player)
+                );
+                assert_eq!(selection.selected().unwrap().entity_id, 13);
+            }
+            let resolved = game
+                .with_mob_read_relations(level, |index| {
+                    game.resolve_mob_read_player(
+                        horizon_client::lan::playerdata::uuid_ints(13),
+                        level,
+                        index,
+                    )
+                })
+                .flatten();
+            assert_eq!(resolved.unwrap().id(), 13);
+            game.lan
+                .as_mut()
+                .unwrap()
+                .hub
+                .update_guest(13, |guest| guest.uuid = 999);
+            let world = game.mob_world_base(&[]);
+            assert!(
+                game.resolve_lent_mob_goal_target(&sources[0], &world, target, false)
+                    .is_none()
+            );
+            drop(world);
+            game.mobs.restore(sources, RestoreOrder::SurvivorsFirst);
+        });
     }
 }
