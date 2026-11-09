@@ -8,6 +8,7 @@ use horizon_core::geometry::Vec3;
 fn no_r_roster_loans_and_canonical_relationship_writes_keep_candidates_complete() {
     with_guests(|game| {
         crate::game::native_mob_backing_tests::prepare(game);
+        let level = mod_api::LevelRef::new(game.native_lifecycle.epoch().unwrap(), game.dim.key());
         let kind = game.res.mob_types().get("minecraft:pig").unwrap().clone();
         for id in [40, 41, 42, 50] {
             game.mobs
@@ -65,11 +66,11 @@ fn no_r_roster_loans_and_canonical_relationship_writes_keep_candidates_complete(
 
         game.as_guest(12, |outer| {
             assert!(outer.start_riding_target(Target::Player, Target::Mob(40), true));
-            let riders = outer.mob_guest_rider_connections(40).unwrap();
+            let riders = outer.mob_guest_rider_connections(level, 40).unwrap();
             assert_eq!(riders, vec![12]);
             outer
                 .as_guest(13, |inner| {
-                    let riders = inner.mob_guest_rider_connections(40).unwrap();
+                    let riders = inner.mob_guest_rider_connections(level, 40).unwrap();
                     assert_eq!(
                         riders,
                         vec![12],
@@ -79,16 +80,16 @@ fn no_r_roster_loans_and_canonical_relationship_writes_keep_candidates_complete(
                 .unwrap();
         })
         .unwrap();
-        assert_eq!(game.mob_guest_rider_connections(40), Some(vec![12]));
+        assert_eq!(game.mob_guest_rider_connections(level, 40), Some(vec![12]));
         game.as_guest(12, |g| g.stop_riding()).unwrap();
-        assert_eq!(game.mob_guest_rider_connections(40), Some(vec![]));
+        assert_eq!(game.mob_guest_rider_connections(level, 40), Some(vec![]));
         game.lan
             .as_mut()
             .unwrap()
             .hub
             .update_guest(13, |guest| guest.vehicle = Some(50));
         assert_eq!(
-            game.mob_guest_rider_connections(50),
+            game.mob_guest_rider_connections(level, 50),
             Some(vec![13]),
             "source-owned changes outside a turn do not need AI/R refresh"
         );
@@ -97,7 +98,7 @@ fn no_r_roster_loans_and_canonical_relationship_writes_keep_candidates_complete(
             .unwrap()
             .hub
             .update_guest(13, |guest| guest.vehicle = None);
-        assert_eq!(game.mob_guest_rider_connections(50), Some(vec![]));
+        assert_eq!(game.mob_guest_rider_connections(level, 50), Some(vec![]));
         game.entity_read_state.borrow_mut().mob_relations.clear();
         let held = game.mobs.lift();
         assert_eq!(

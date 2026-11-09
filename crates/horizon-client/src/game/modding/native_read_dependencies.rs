@@ -42,4 +42,5 @@ pub(super) enum EntityReadDependency {
     MinecartFuse,
     MinecartHopper,
     MinecartCommand,
+    AiState,
 }

@@ -20,15 +20,19 @@ fn state(id: u32, xp: i32) -> MerchantState {
 fn canonical_no_r_session_open_change_close_removal_and_loans_keep_nominations() {
     with_guests(|game| {
         super::native_mob_backing_tests::prepare(game);
+        let level = mod_api::LevelRef::new(game.native_lifecycle.epoch().unwrap(), game.dim.key());
         super::native_merchant_refs::tests::spawn(game, 40, "minecraft:villager");
         super::native_merchant_refs::tests::spawn(game, 50, "minecraft:villager");
         assert!(
             game.begin_resident_read_pass(horizon_client::join_seq::residency::Kind::Boat)
                 .is_none()
         );
-        assert_eq!(game.merchant_customer_connections(40), Some(vec![]));
+        assert_eq!(game.merchant_customer_connections(level, 40), Some(vec![]));
         game.lan_open_merchant(13, state(40, 17));
-        assert_eq!(game.merchant_customer_connections(40), Some(vec![13]));
+        assert_eq!(
+            game.merchant_customer_connections(level, 40),
+            Some(vec![13])
+        );
         assert_eq!(game.lan_trade_session(13).unwrap().xp, 17);
         let window = game.lan.as_ref().unwrap().play[&13]
             .merchant
@@ -37,7 +41,7 @@ fn canonical_no_r_session_open_change_close_removal_and_loans_keep_nominations()
             .window;
         assert!(!game.lan_merchant_closed(13, Some(window + 1)));
         assert_eq!(
-            game.merchant_customer_connections(40),
+            game.merchant_customer_connections(level, 40),
             Some(vec![13]),
             "refused close did not change topology"
         );
@@ -47,10 +51,16 @@ fn canonical_no_r_session_open_change_close_removal_and_loans_keep_nominations()
                 selected.lan_trade_session(13).is_none(),
                 "actual GuestPlay is loaned"
             );
-            assert_eq!(selected.merchant_customer_connections(40), Some(vec![13]));
+            assert_eq!(
+                selected.merchant_customer_connections(level, 40),
+                Some(vec![13])
+            );
             selected
                 .as_guest(12, |nested| {
-                    assert_eq!(nested.merchant_customer_connections(40), Some(vec![13]));
+                    assert_eq!(
+                        nested.merchant_customer_connections(level, 40),
+                        Some(vec![13])
+                    );
                     assert!(nested.lan_trade_session(13).is_none());
                 })
                 .unwrap();
@@ -69,14 +79,17 @@ fn canonical_no_r_session_open_change_close_removal_and_loans_keep_nominations()
                 .merchant
                 .take()
                 .unwrap();
-            assert_eq!(game.merchant_customer_connections(40), Some(vec![13]));
+            assert_eq!(
+                game.merchant_customer_connections(level, 40),
+                Some(vec![13])
+            );
             assert!(
                 game.lan_trade_session(13).is_none(),
                 "nomination is not a session payload"
             );
             game.entity_read_state.borrow_mut().mob_relations.clear();
             assert_eq!(
-                game.merchant_customer_connections(40),
+                game.merchant_customer_connections(level, 40),
                 None,
                 "an unprepared session loan is not no customer"
             );
@@ -90,19 +103,25 @@ fn canonical_no_r_session_open_change_close_removal_and_loans_keep_nominations()
             drop(loan);
         }
         game.entity_read_state.borrow_mut().mob_relations.clear();
-        assert_eq!(game.merchant_customer_connections(40), Some(vec![13]));
+        assert_eq!(
+            game.merchant_customer_connections(level, 40),
+            Some(vec![13])
+        );
         super::native_mob_read_context::record_backing_work(|work| *work = Default::default());
         game.lan_open_merchant(13, state(50, 29));
-        assert_eq!(game.merchant_customer_connections(40), Some(vec![]));
-        assert_eq!(game.merchant_customer_connections(50), Some(vec![13]));
+        assert_eq!(game.merchant_customer_connections(level, 40), Some(vec![]));
+        assert_eq!(
+            game.merchant_customer_connections(level, 50),
+            Some(vec![13])
+        );
         assert_eq!(game.lan_trade_session(13).unwrap().xp, 29);
         assert!(game.lan_merchant_closed(13, None));
-        assert_eq!(game.merchant_customer_connections(50), Some(vec![]));
+        assert_eq!(game.merchant_customer_connections(level, 50), Some(vec![]));
         assert!(game.lan_trade_session(13).is_none());
         assert!(!game.lan_merchant_closed(13, None));
         game.lan_open_merchant(13, state(40, 31));
         game.guest_disconnected(13);
-        assert_eq!(game.merchant_customer_connections(40), Some(vec![]));
+        assert_eq!(game.merchant_customer_connections(level, 40), Some(vec![]));
         assert!(game.lan_trade_session(13).is_none());
         game.lan_open_merchant(13, state(40, 37));
         let host = game.lan.as_mut().unwrap();
@@ -114,7 +133,7 @@ fn canonical_no_r_session_open_change_close_removal_and_loans_keep_nominations()
         );
         assert!(game.lan_trade_session(13).is_none());
         assert_eq!(
-            game.merchant_customer_connections(40),
+            game.merchant_customer_connections(level, 40),
             Some(vec![]),
             "permanent source removal retires the nomination even on a refused window operation"
         );

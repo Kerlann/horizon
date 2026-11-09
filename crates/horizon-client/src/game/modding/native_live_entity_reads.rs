@@ -78,9 +78,21 @@ pub(super) struct EntityReadAdmission {
     pending: Option<CommandId>,
     known_uuid: Option<[i32; 4]>,
 }
-impl EntityReadAdmission {
-    /// Choose pending only after the caller selected every actual source part.
-    pub(super) fn project_actual<R, E>(
+/// A call-local dependency choice, never a retained entity value or R row.
+/// Physical selection may discover more sources; pending wins only at the end.
+#[derive(Default)]
+pub(super) struct EntityReadSelection {
+    pending: Option<CommandId>,
+}
+impl EntityReadSelection {
+    pub(super) fn include(&mut self, admission: EntityReadAdmission) {
+        self.pending = self
+            .pending
+            .into_iter()
+            .chain(admission.pending)
+            .max_by_key(|id| id.sequence);
+    }
+    pub(super) fn project<R, E>(
         self,
         project: impl FnOnce() -> R,
     ) -> Result<R, EntityReadError<E>> {
@@ -89,8 +101,24 @@ impl EntityReadAdmission {
         }
         Ok(project())
     }
+}
+
+impl EntityReadAdmission {
+    /// Choose pending only after the caller selected every actual source part.
+    pub(super) fn project_actual<R, E>(
+        self,
+        project: impl FnOnce() -> R,
+    ) -> Result<R, EntityReadError<E>> {
+        EntityReadSelection {
+            pending: self.pending,
+        }
+        .project(project)
+    }
     pub(super) fn known_uuid(self) -> Option<[i32; 4]> {
         self.known_uuid
+    }
+    pub(super) fn entity(self) -> EntityRef {
+        self.read.entity
     }
     pub(super) fn target(self) -> Target {
         self.read.target
@@ -110,6 +138,26 @@ impl EntityReadAdmission {
 }
 
 impl Game<'_> {
+    /// Extend a call's dependency choice after an actual relational source has
+    /// selected its inputs. The admitted address is reused without revalidation.
+    pub(super) fn entity_read_add_dependencies(
+        &self,
+        mut admission: EntityReadAdmission,
+        dependencies: &[EntityReadDependency],
+    ) -> EntityReadAdmission {
+        let pending = self
+            .entity_residency
+            .borrow_mut()
+            .cached_row_at(admission.entity().id(), admission.location())
+            .and_then(|row| row.pending_dependency(dependencies));
+        admission.pending = admission
+            .pending
+            .into_iter()
+            .chain(pending)
+            .max_by_key(|id| id.sequence);
+        admission
+    }
+
     /// Select a real body before choosing pending work. Actor permission alone
     /// cannot turn a missing OWN loan into a Pending error or payload absence.
     pub(super) fn with_admitted_entity_source<R, E>(

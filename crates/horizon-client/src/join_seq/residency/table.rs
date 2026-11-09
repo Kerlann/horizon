@@ -224,6 +224,16 @@ impl<R> EntityTable<R> {
         published
     }
 
+    /// Select dependency metadata at an already admitted storage address.
+    /// This does not admit a handle or require a populated read publication.
+    pub fn cached_row_at(&mut self, id: u32, location: Location) -> Option<&R> {
+        self.drain();
+        let row = self.rows.get(&NonZeroU32::new(id)?)?;
+        (row.location == location)
+            .then_some(row.cached.as_ref())
+            .flatten()
+    }
+
     /// Edit a publication only while its exact admitted generation still owns
     /// the id. Used for dependent projections and pending light overlays; the
     /// caller owns patch semantics and must not perform engine effects here.

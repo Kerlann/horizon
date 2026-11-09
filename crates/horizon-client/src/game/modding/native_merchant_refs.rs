@@ -181,19 +181,62 @@ impl Game<'_> {
         };
         self.with_entity_read_storage(admitted, provider, |source| {
             let BaseReadSource::Mob(mob) = source.body else {
-                return Ok(None);
+                return Err(mod_api::EntityReadError::Lifted);
             };
-            let session = self
-                .lan_trade_conn(mob.id)
-                .and_then(|conn| self.lan_trade_session(conn));
-            // An open menu owns the newer offers. A temporarily extracted
-            // session must not fall back to the mob's older saved offers.
+            let mut selection = super::native_live_entity_reads::EntityReadSelection::default();
+            selection.include(admitted);
+            let level = mod_api::LevelRef::new(
+                merchant.entity().epoch(),
+                admitted.location().owner.dimension,
+            );
             let jobless =
                 mob.species() == Species::Villager && mob.extra.profession.index().is_none();
-            if !jobless && mob.extra.flag2 && session.is_none() {
-                return Err(mod_api::EntityReadError::Lifted);
+            let mut session = None;
+            if !jobless {
+                let connections = self
+                    .merchant_customer_connections(level, mob.id)
+                    .ok_or(mod_api::EntityReadError::Lifted)?;
+                for conn in connections {
+                    let Some(guest) = self.lan.as_ref().and_then(|host| host.hub.guest(conn))
+                    else {
+                        continue;
+                    };
+                    let entity = EntityRef::new(merchant.entity().epoch(), guest.entity_id as u32);
+                    let Some(customer) = self.entity_read_admission(
+                        EntityReadSubject::Player(mod_api::__private::game::player_ref(
+                            entity, guest.uuid,
+                        )),
+                        &[EntityReadDependency::Session, EntityReadDependency::Offers],
+                    ) else {
+                        continue;
+                    };
+                    if customer.location().source
+                        != horizon_client::join_seq::residency::Source::Guest(conn)
+                    {
+                        continue;
+                    }
+                    self.with_entity_read_storage(customer, provider, |_| ())
+                        .ok_or(mod_api::EntityReadError::Lifted)?;
+                    let menu = self
+                        .lan
+                        .as_ref()
+                        .and_then(|host| host.play.get(&conn))
+                        .and_then(|play| play.merchant.as_ref())
+                        .ok_or(mod_api::EntityReadError::Lifted)?;
+                    if menu.merchant.mob != Some(mob.id) {
+                        continue;
+                    }
+                    selection.include(customer);
+                    if session.is_none() {
+                        session = Some(menu.merchant.session.as_ref());
+                    }
+                }
+                // A missing actual session is not the mob's older saved offers.
+                if mob.extra.flag2 && session.is_none() {
+                    return Err(mod_api::EntityReadError::Lifted);
+                }
             }
-            admitted.project_actual(|| {
+            selection.project(|| {
                 Some(Self::merchant_read_sources(mob, session, |offers, _, _| {
                     offers.to_vec()
                 }))

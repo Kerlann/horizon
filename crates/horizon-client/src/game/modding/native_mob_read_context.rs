@@ -393,17 +393,27 @@ impl Game<'_> {
     }
     /// None is incomplete, not no customer. Values nominate connections only;
     /// H must validate each actual guest and actual merchant session itself.
-    pub(super) fn merchant_customer_connections(&self, mob_id: u32) -> Option<Vec<u32>> {
-        self.with_prepared_mob_relations(|index| {
-            index
-                .merchant_connections(mob_id)
-                .map(|customers| customers.collect())
-        })?
+    pub(super) fn merchant_customer_connections(
+        &self,
+        level: LevelRef,
+        mob_id: u32,
+    ) -> Option<Vec<u32>> {
+        self.entity_read_state
+            .borrow()
+            .mob_relations
+            .get(&level)?
+            .index
+            .merchant_connections(mob_id)
+            .map(|customers| customers.collect())
     }
 
     /// Canonical GuestList nominations plus only the explicit selected-body
     /// loan edges. Neither branch supplies identity proof or H data.
-    pub(super) fn mob_guest_rider_connections(&self, vehicle: u32) -> Option<Vec<u32>> {
+    pub(super) fn mob_guest_rider_connections(
+        &self,
+        level: LevelRef,
+        vehicle: u32,
+    ) -> Option<Vec<u32>> {
         let mut candidates = self
             .lan
             .as_ref()
@@ -412,14 +422,13 @@ impl Game<'_> {
             .filter(|conn| !self.lan_guest_swaps.contains(conn))
             .collect::<Vec<_>>();
         if !self.lan_guest_swaps.is_empty() {
-            let level = LevelRef::new(self.native_lifecycle.epoch()?, self.dim.key());
-            self.with_mob_read_relations(level, |index| {
-                candidates.extend(
-                    index
-                        .guest_riders_of(vehicle)
-                        .filter(|conn| self.lan_guest_swaps.contains(conn)),
-                );
-            })?;
+            let state = self.entity_read_state.borrow();
+            let index = &state.mob_relations.get(&level)?.index;
+            candidates.extend(
+                index
+                    .guest_riders_of(vehicle)
+                    .filter(|conn| self.lan_guest_swaps.contains(conn)),
+            );
         }
         Some(candidates)
     }
@@ -1117,7 +1126,7 @@ impl Game<'_> {
                 _ => return None,
             }
         };
-        let guest_candidates = self.mob_guest_rider_connections(actor.id)?;
+        let guest_candidates = self.mob_guest_rider_connections(level, actor.id)?;
         self.with_mob_read_relations(level, |index| {
             self.read_relation_entity(actor.id, level, index)?;
             let mut seats = Vec::new();
