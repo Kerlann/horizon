@@ -6405,8 +6405,7 @@ fn test_adapter() -> Option<wgpu::Adapter> {
         &adapter,
         T::R32Float,
         wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::TEXTURE_BINDING,
-    ) || !crate::gfx::test_gpu::supports_depth_load(&adapter)
-    {
+    ) {
         return None;
     }
     Some(adapter)
