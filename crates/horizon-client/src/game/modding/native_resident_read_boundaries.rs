@@ -8,6 +8,55 @@ use horizon_client::join_seq::residency::{Kind, Owner, read_pass::ReadScope, tab
 use mod_api::EntityReadCapturePhase;
 
 impl Game<'_> {
+    /// The caller has restored its owner and world before invoking this seam.
+    /// Accepted work finishes even after a body panic. Completion faults never
+    /// replace that original payload; the caller can refresh outputs before
+    /// resuming the selected panic.
+    pub(super) fn finish_resident_actor_turn<R>(
+        &mut self,
+        writer: Option<&super::native_entity_commands::EntityWriterScope>,
+        body: std::thread::Result<R>,
+    ) -> std::thread::Result<R> {
+        let completion = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            if let Some(writer) = writer {
+                self.publish_resident_read_location(
+                    writer.frame.actor.location,
+                    EntityReadCapturePhase::AfterAppliedWrite,
+                );
+                self.drain_entity_commands(writer.frame.turn);
+            }
+        }));
+        match body {
+            Err(original) => {
+                if completion.is_err() {
+                    log::error!("entity completion also panicked while finishing an actor panic");
+                }
+                Err(original)
+            }
+            Ok(value) => completion.map(|()| value),
+        }
+    }
+
+    pub(super) fn begin_resident_actor_writer(
+        &self,
+        source: BaseReadSource<'_>,
+    ) -> Option<super::native_entity_commands::EntityWriterScope> {
+        let (kind, id, join) = resident_source_identity(source)?;
+        if kind == Kind::Mob || id == 0 {
+            return None;
+        }
+        self.begin_entity_writer(horizon_client::join_seq::residency::write_queue::Target {
+            runtime_id: id,
+            location: Location {
+                owner: Owner {
+                    dimension: self.dim.key(),
+                    kind,
+                },
+                join,
+            },
+        })
+    }
+
     pub(super) fn begin_resident_actor_read_pass(
         &self,
         source: BaseReadSource<'_>,
@@ -48,6 +97,7 @@ mod tests {
     use mod_api::{EntityRef, HookId, Hooks, ModEntry};
     struct VehicleObserver {
         mode: u8,
+        terminals: std::sync::Arc<std::sync::Mutex<usize>>,
         events: std::sync::Arc<std::sync::Mutex<Vec<(bool, u32)>>>,
         before_second: std::sync::Arc<std::sync::Mutex<Vec<Option<mod_api::EntityReadRow>>>>,
     }
@@ -67,12 +117,23 @@ mod tests {
         ) -> mod_api::Flow {
             self.events.lock().unwrap().push((true, event.entity));
             if event.entity == 72 {
+                assert_eq!(*self.terminals.lock().unwrap(), 2);
                 self.before_second
                     .lock()
                     .unwrap()
                     .push(host.entity(71).and_then(|actor| actor.cached_row(host)));
             }
             if event.entity == 71 {
+                let other = host.entity(73).unwrap();
+                for silent in [true, false] {
+                    assert!(matches!(
+                        other.set_silent(host, silent),
+                        mod_api::WriteReceipt::Pending(_)
+                    ));
+                }
+                if self.mode == 3 {
+                    panic!("vehicle actor panic");
+                }
                 if self.mode == 1 {
                     return mod_api::Flow::Cancel;
                 }
@@ -81,6 +142,18 @@ mod tests {
                 }
             }
             mod_api::Flow::Continue
+        }
+        fn entity_command_completed(
+            &self,
+            _: &mut dyn mod_api::ServerHost,
+            event: &mut mod_api::EntityCommandCompletedEvent<'_>,
+        ) {
+            let mod_api::EntityWriteCompletion::EntitySetSilent(done) = event.completion;
+            assert_eq!(done.outcome, Ok(true));
+            *self.terminals.lock().unwrap() += 1;
+            if self.mode == 3 {
+                panic!("secondary completion panic");
+            }
         }
         fn entity_tick_post(
             &self,
@@ -95,14 +168,16 @@ mod tests {
     fn vehicle_next_pre_reads_applied_prior_actor_and_respects_cancel_and_removal() {
         use horizon_core::geometry::Vec3;
         for cart in [false, true] {
-            for mode in 0..3 {
+            for mode in 0..4 {
                 let events = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
+                let terminals = std::sync::Arc::new(std::sync::Mutex::new(0));
                 let before_second = std::sync::Arc::new(std::sync::Mutex::new(Vec::new()));
                 mod_api::testing::with_mods(
                     vec![ModEntry::new(
                         "vehicle-observer",
                         Box::new(VehicleObserver {
                             mode,
+                            terminals: terminals.clone(),
                             events: events.clone(),
                             before_second: before_second.clone(),
                         }),
@@ -136,12 +211,35 @@ mod tests {
                                     game.boats.push(actor);
                                 }
                             }
+                            let kind = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+                            game.mobs.push(horizon_client::mobs::Mob::new(
+                                73,
+                                kind,
+                                Vec3::new(12.0, 80.0, 0.5),
+                                0.0,
+                            ));
                             game.native_joins_skip();
-                            if cart {
-                                game.tick_carts();
-                            } else {
-                                game.tick_boats();
+                            let result =
+                                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                    if cart {
+                                        game.tick_carts();
+                                    } else {
+                                        game.tick_boats();
+                                    }
+                                }));
+                            assert_eq!(*terminals.lock().unwrap(), 2);
+                            assert!(!game.mobs[0].silent);
+                            if mode == 3 {
+                                let payload = result.expect_err("actor panic was swallowed");
+                                assert_eq!(
+                                    payload.downcast_ref::<&str>(),
+                                    Some(&"vehicle actor panic")
+                                );
+                                assert_eq!(*events.lock().unwrap(), vec![(true, 71)]);
+                                assert!(game.held_out.is_empty());
+                                return;
                             }
+                            result.unwrap();
                             // Vehicle discard is logical/deferred in this engine;
                             // preserve its existing Post rather than silently
                             // changing storage or tick semantics in this layer.
@@ -243,6 +341,53 @@ mod tests {
                         horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
                     );
                     drop(scope);
+                })
+            },
+        );
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn vehicle_body_unwind_keeps_progress_and_clears_only_its_hold() {
+        use horizon_core::geometry::Vec3;
+        mod_api::testing::with_mods(
+            vec![ModEntry::new("reader", Box::new(Reader))].into(),
+            || {
+                with_game(|game| {
+                    game.boats.push(super::super::boats::Boat::new(
+                        71,
+                        "oak".into(),
+                        Vec3::new(1.0, 80.0, 0.5),
+                        0.0,
+                    ));
+                    game.carts.push(super::super::minecarts::Minecart::new(
+                        72,
+                        super::super::minecarts::CartKind::Rideable,
+                        Vec3::new(2.0, 80.0, 0.5),
+                    ));
+                    game.native_joins_skip();
+                    let joins = (game.boats[0].join, game.carts[0].join);
+                    game.held_out.push(999);
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        game.with_boat_body(0, |_, body| {
+                            body.position.x = 7.0;
+                            panic!("boat physics panic");
+                        })
+                    }));
+                    assert!(result.is_err());
+                    assert_eq!(game.boats[0].position.x, 7.0);
+                    assert_eq!(game.boats[0].join, joins.0);
+                    assert_eq!(game.held_out, [999]);
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        game.with_cart_body(0, |_, body| {
+                            body.position.x = 9.0;
+                            panic!("cart physics panic");
+                        })
+                    }));
+                    assert!(result.is_err());
+                    assert_eq!(game.carts[0].position.x, 9.0);
+                    assert_eq!(game.carts[0].join, joins.1);
+                    assert_eq!(game.held_out, [999]);
+                    game.held_out.clear();
                 })
             },
         );

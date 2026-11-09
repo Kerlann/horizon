@@ -572,13 +572,13 @@ impl Game<'_> {
                     continue;
                 }
             }
-            if read_scope.is_some() {
-                if let Some(at) = self.item_frames.locate(join) {
-                    self.publish_resident_actor_reads(
-                        BaseReadSource::Frame(&self.item_frames[at]),
-                        EntityReadCapturePhase::AfterEntityTick,
-                    );
-                }
+            if read_scope.is_some()
+                && let Some(at) = self.item_frames.locate(join)
+            {
+                self.publish_resident_actor_reads(
+                    BaseReadSource::Frame(&self.item_frames[at]),
+                    EntityReadCapturePhase::AfterEntityTick,
+                );
             }
             i += 1;
         }

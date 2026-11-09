@@ -2049,6 +2049,41 @@ impl Game<'_> {
             self.mobs[j].previous = at;
         }
     }
+    /// Keep the progressed body and its unique loot roll through an unwind.
+    /// The existing collision backing remains resident until store-back.
+    pub(super) fn with_cart_body<R>(
+        &mut self,
+        index: usize,
+        action: impl FnOnce(&mut Self, &mut Minecart) -> R,
+    ) -> R {
+        let loot = self.carts.update(index, |cart| cart.loot.take());
+        let mut body = self.carts[index].clone();
+        body.loot = loot;
+        let join = body.join;
+        let held_out_len = self.held_out.len();
+        if !mod_api::__private::mods().is_empty() {
+            self.held_out.push(body.id);
+        }
+        let result =
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| action(self, &mut body)));
+        if let Some(at) = self.carts.locate(join) {
+            self.store_cart_back(at, body);
+        }
+        self.held_out.truncate(held_out_len);
+        if mod_api::__private::entity_reads_listened()
+            && let Some(at) = self.carts.locate(join)
+        {
+            self.publish_resident_actor_reads(
+                BaseReadSource::Cart(&self.carts[at]),
+                EntityReadCapturePhase::AfterAppliedWrite,
+            );
+        }
+        match result {
+            Ok(value) => value,
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
+    }
+
     /// Refuse a removed target before carrying its owning slot into a tick clone.
     pub(super) fn store_cart_back(&mut self, index: usize, cart: Minecart) -> bool {
         if self
@@ -2091,69 +2126,75 @@ impl Game<'_> {
             {
                 continue;
             }
-            let kind = self.carts[i].kind.id();
             let join = self.carts[i].join;
-            if read_scope.is_some() {
+            let writer_scope =
+                self.begin_resident_actor_writer(BaseReadSource::Cart(&self.carts[i]));
+            let body_result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                'cart_turn: {
+                    let kind = self.carts[i].kind.id();
+                    if read_scope.is_some() {
+                        self.publish_resident_actor_reads(
+                            BaseReadSource::Cart(&self.carts[i]),
+                            EntityReadCapturePhase::BeforeCallback,
+                        );
+                    }
+                    if !self.native_tick_pre_one(&mut round, id, kind) {
+                        break 'cart_turn;
+                    }
+                    let Some(i) = cart_at(&self.carts, id, i) else {
+                        break 'cart_turn;
+                    };
+                    // The ticked copy takes the loot roll instead of copying it: only
+                    // opening the cart, a command or a save reads it, never a tick, and
+                    // a mineshaft's chest cart carries its whole roll as NBT. The
+                    // stored cart keeps its slots for whatever reads them meanwhile.
+                    let due = self.with_cart_body(i, |game, c| {
+                        let alive = game.tick_cart(c, [0.0; 2], i, &mut index);
+                        if c.kind == CartKind::Hopper && c.enabled {
+                            game.hopper_cart_suck(c);
+                        }
+                        let Some(i) = cart_at(&game.carts, id, i) else {
+                            return false;
+                        };
+                        if alive {
+                            let due = std::mem::take(&mut c.command_due);
+                            index.moved(i, c.bounds());
+                            due
+                        } else {
+                            game.eject_cart_mobs(i);
+                            game.release_vehicle_container(id);
+                            game.carts.remove(i);
+                            false
+                        }
+                    });
+                    if due {
+                        self.perform_cart_command(id);
+                        index.forget_carts();
+                    }
+                    // Lava runs in the later pass below, so this is an applied storage
+                    // write, not yet a completed EntityTick snapshot.
+                    if read_scope.is_some()
+                        && let Some(at) = self.carts.locate(join)
+                    {
+                        self.publish_resident_actor_reads(
+                            BaseReadSource::Cart(&self.carts[at]),
+                            EntityReadCapturePhase::AfterAppliedWrite,
+                        );
+                    }
+                    self.native_tick_post_one(&round, id, kind);
+                }
+            }));
+            let finish = self.finish_resident_actor_turn(writer_scope.as_ref(), body_result);
+            if read_scope.is_some()
+                && let Some(at) = self.carts.locate(join)
+            {
                 self.publish_resident_actor_reads(
-                    BaseReadSource::Cart(&self.carts[i]),
-                    EntityReadCapturePhase::BeforeCallback,
+                    BaseReadSource::Cart(&self.carts[at]),
+                    EntityReadCapturePhase::AfterAppliedWrite,
                 );
             }
-            if !self.native_tick_pre_one(&mut round, id, kind) {
-                continue;
-            }
-            let Some(i) = cart_at(&self.carts, id, i) else {
-                continue;
-            };
-            // The ticked copy takes the loot roll instead of copying it: only
-            // opening the cart, a command or a save reads it, never a tick, and
-            // a mineshaft's chest cart carries its whole roll as NBT. The
-            // stored cart keeps its slots for whatever reads them meanwhile.
-            let due = self.with_entity_held_out(id, |game| {
-                let loot = game.carts.update(i, |c| c.loot.take());
-                let mut c = game.carts[i].clone();
-                c.loot = loot;
-                let alive = game.tick_cart(&mut c, [0.0; 2], i, &mut index);
-                if c.kind == CartKind::Hopper && c.enabled {
-                    game.hopper_cart_suck(&mut c);
-                }
-                let Some(i) = cart_at(&game.carts, id, i) else {
-                    return false;
-                };
-                if alive {
-                    let due = std::mem::take(&mut c.command_due);
-                    index.moved(i, c.bounds());
-                    game.store_cart_back(i, c);
-                    due
-                } else {
-                    game.eject_cart_mobs(i);
-                    game.release_vehicle_container(id);
-                    game.carts.remove(i);
-                    false
-                }
-            });
-            if due {
-                self.perform_cart_command(id);
-                index.forget_carts();
-            }
-            // Lava runs in the later pass below, so this is an applied storage
-            // write, not yet a completed EntityTick snapshot.
-            if read_scope.is_some() {
-                if let Some(at) = self.carts.locate(join) {
-                    self.publish_resident_actor_reads(
-                        BaseReadSource::Cart(&self.carts[at]),
-                        EntityReadCapturePhase::AfterAppliedWrite,
-                    );
-                }
-            }
-            self.native_tick_post_one(&round, id, kind);
-            if read_scope.is_some() {
-                if let Some(at) = self.carts.locate(join) {
-                    self.publish_resident_actor_reads(
-                        BaseReadSource::Cart(&self.carts[at]),
-                        EntityReadCapturePhase::AfterAppliedWrite,
-                    );
-                }
+            if let Err(payload) = finish {
+                std::panic::resume_unwind(payload);
             }
         }
         // On the server for every cart, the ridden ones too.
@@ -2167,14 +2208,19 @@ impl Game<'_> {
                 let p = self.carts[i].position;
                 if ticking(p.x.floor() as i32, p.z.floor() as i32) {
                     let join = self.carts[i].join;
+                    let writer_scope =
+                        self.begin_resident_actor_writer(BaseReadSource::Cart(&self.carts[i]));
                     self.cart_lava_tick(id, i);
-                    if read_scope.is_some() {
-                        if let Some(at) = self.carts.locate(join) {
-                            self.publish_resident_actor_reads(
-                                BaseReadSource::Cart(&self.carts[at]),
-                                EntityReadCapturePhase::AfterEntityTick,
-                            );
-                        }
+                    if let Some(writer) = &writer_scope {
+                        self.drain_entity_commands(writer.frame.turn);
+                    }
+                    if read_scope.is_some()
+                        && let Some(at) = self.carts.locate(join)
+                    {
+                        self.publish_resident_actor_reads(
+                            BaseReadSource::Cart(&self.carts[at]),
+                            EntityReadCapturePhase::AfterEntityTick,
+                        );
                     }
                 }
             }
@@ -2276,10 +2322,8 @@ impl Game<'_> {
         let r = self.yaw.to_radians();
         let (s, co) = (f64::from(r.sin()), f64::from(r.cos()));
         let intent = [left * co - forward * s, forward * co + left * s];
-        let id = self.carts[i].id;
-        let result = self.with_entity_held_out(id, |game| {
-            let mut c = game.carts[i].clone();
-            let alive = game.tick_cart(&mut c, intent, i, &mut CartIndex::default());
+        let result = self.with_cart_body(i, |game, c| {
+            let alive = game.tick_cart(c, intent, i, &mut CartIndex::default());
             if let Some(p) = game.player.as_mut() {
                 game.previous_position = p.position;
                 p.position = Vec3::new(c.position.x, c.position.y + SEAT, c.position.z);
@@ -2290,9 +2334,7 @@ impl Game<'_> {
                 game.riding = None;
                 return None;
             };
-            if alive {
-                game.store_cart_back(i, c);
-            } else {
+            if !alive {
                 game.eject_cart_mobs(i);
                 game.release_vehicle_container(c.id);
                 game.carts.remove(i);

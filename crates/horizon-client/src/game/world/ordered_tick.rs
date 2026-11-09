@@ -163,13 +163,13 @@ impl Game<'_> {
                         } else {
                             EntityReadCapturePhase::AfterEntityTick
                         };
-                        if read_scope.is_some() {
-                            if let Some(at) = self.tnts.locate(join) {
-                                self.publish_resident_actor_reads(
-                                    BaseReadSource::Tnt(&self.tnts[at]),
-                                    phase,
-                                );
-                            }
+                        if read_scope.is_some()
+                            && let Some(at) = self.tnts.locate(join)
+                        {
+                            self.publish_resident_actor_reads(
+                                BaseReadSource::Tnt(&self.tnts[at]),
+                                phase,
+                            );
                         }
                         if self.tnts.len() < count {
                             obstacles = None;
@@ -201,13 +201,13 @@ impl Game<'_> {
                         } else if read_scope.is_some() {
                             completed_falling.push(join);
                         }
-                        if read_scope.is_some() {
-                            if let Some(at) = self.falling.locate(join) {
-                                self.publish_resident_actor_reads(
-                                    BaseReadSource::Falling(&self.falling[at]),
-                                    EntityReadCapturePhase::AfterAppliedWrite,
-                                );
-                            }
+                        if read_scope.is_some()
+                            && let Some(at) = self.falling.locate(join)
+                        {
+                            self.publish_resident_actor_reads(
+                                BaseReadSource::Falling(&self.falling[at]),
+                                EntityReadCapturePhase::AfterAppliedWrite,
+                            );
                         }
                     }
                 }
