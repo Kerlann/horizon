@@ -1299,43 +1299,108 @@ impl ObstacleGrid {
     }
 }
 
-/// Dropped items by block cell, for `ItemEntity.mergeWithNeighbours`'s
-/// search around an item. Holds indexes into the tick's item list.
-#[derive(Default)]
-pub struct ItemCells {
-    cells: crate::fast_hash::FxHashMap<(i32, i32, i32), Vec<u32>>,
+/// Dropped items by block cell. Keys describe ordering and identity, never
+/// retained element addresses. The ordinary physics pass uses compact indices;
+/// callback-driven passes can use stable joins and incrementally track cells.
+pub struct ItemCells<K = u32> {
+    cells: crate::fast_hash::FxHashMap<(i32, i32, i32), Vec<K>>,
+    locations: Option<crate::fast_hash::FxHashMap<K, (i32, i32, i32)>>,
+}
+impl<K> Default for ItemCells<K> {
+    fn default() -> Self {
+        Self {
+            cells: Default::default(),
+            locations: None,
+        }
+    }
 }
 impl ItemCells {
     pub fn new(items: &[ItemEntity]) -> Self {
         let mut cells = Self::default();
-        for (i, item) in items.iter().enumerate() {
-            cells.add(i, item.position);
+        for (index, item) in items.iter().enumerate() {
+            cells.add(index as u32, item.position);
         }
+        cells
+    }
+    pub fn remove(&mut self, index: usize, at: Vec3) {
+        self.remove_at(index as u32, at);
+    }
+    pub fn moved(&mut self, index: usize, from: Vec3, to: Vec3) {
+        self.moved_key(index as u32, from, to);
+    }
+}
+impl<K: Copy + Eq + Ord + std::hash::Hash> ItemCells<K> {
+    /// Build the one initial grid and its reverse cell index for stable keys.
+    pub fn with_keys(items: &[ItemEntity], mut key: impl FnMut(usize, &ItemEntity) -> K) -> Self {
+        let mut cells = Self::default();
+        let mut locations = crate::fast_hash::FxHashMap::default();
+        locations.reserve(items.len());
+        for (index, item) in items.iter().enumerate() {
+            let key = key(index, item);
+            cells.add(key, item.position);
+            locations.insert(key, Self::cell(item.position));
+        }
+        cells.locations = Some(locations);
         cells
     }
     fn cell(p: Vec3) -> (i32, i32, i32) {
         (p.x.floor() as i32, p.y.floor() as i32, p.z.floor() as i32)
     }
-    fn add(&mut self, i: usize, at: Vec3) {
-        self.cells.entry(Self::cell(at)).or_default().push(i as u32);
-    }
-    pub fn remove(&mut self, i: usize, at: Vec3) {
-        if let Some(list) = self.cells.get_mut(&Self::cell(at)) {
-            list.retain(|&j| j as usize != i);
+    fn add(&mut self, key: K, at: Vec3) {
+        let cell = Self::cell(at);
+        self.cells.entry(cell).or_default().push(key);
+        if let Some(locations) = &mut self.locations {
+            locations.insert(key, cell);
         }
     }
-    pub fn moved(&mut self, i: usize, from: Vec3, to: Vec3) {
+    fn remove_at(&mut self, key: K, at: Vec3) {
+        let cell = self
+            .locations
+            .as_mut()
+            .and_then(|locations| locations.remove(&key))
+            .unwrap_or_else(|| Self::cell(at));
+        if let Some(list) = self.cells.get_mut(&cell) {
+            list.retain(|&other| other != key);
+        }
+    }
+    pub fn moved_key(&mut self, key: K, from: Vec3, to: Vec3) {
         if Self::cell(from) != Self::cell(to) {
-            self.remove(i, from);
-            self.add(i, to);
+            self.remove_at(key, from);
+            self.add(key, to);
         }
     }
-    /// The items whose cells could hold a box meeting `area`, in the order
-    /// they were added (vanilla lists a section's entities in the order they
-    /// entered it).
-    fn near(&self, area: Aabb, out: &mut Vec<u32>) {
+    fn tracked_locations(&mut self) -> &mut crate::fast_hash::FxHashMap<K, (i32, i32, i32)> {
+        self.locations.get_or_insert_with(|| {
+            self.cells
+                .iter()
+                .flat_map(|(&cell, keys)| keys.iter().map(move |&key| (key, cell)))
+                .collect()
+        })
+    }
+    /// Refresh one actual touched/new source, without examining other sources.
+    pub fn refresh_key(&mut self, key: K, at: Vec3) {
+        let cell = Self::cell(at);
+        let old = self.tracked_locations().insert(key, cell);
+        if old == Some(cell) {
+            return;
+        }
+        if let Some(old) = old
+            && let Some(list) = self.cells.get_mut(&old)
+        {
+            list.retain(|&other| other != key);
+        }
+        self.cells.entry(cell).or_default().push(key);
+    }
+    /// Remove an absent source using only its reverse spatial-cell membership.
+    pub fn forget_key(&mut self, key: K) {
+        if let Some(cell) = self.tracked_locations().remove(&key)
+            && let Some(list) = self.cells.get_mut(&cell)
+        {
+            list.retain(|&other| other != key);
+        }
+    }
+    fn near(&self, area: Aabb, out: &mut Vec<K>) {
         out.clear();
-        // An item's box reaches 0.125 sideways and 0.25 up from its position.
         let (min, max) = (area.min_position(), area.max_position());
         let (lo, hi) = (
             Self::cell(Vec3::new(min.x - 0.125, min.y - 0.25, min.z - 0.125)),
@@ -1353,6 +1418,20 @@ impl ItemCells {
         out.sort_unstable();
     }
 }
+
+/// Removal state follows the same key as the spatial index.
+pub trait ItemMergeRemovals<K> {
+    fn is_removed(&self, key: K) -> bool;
+    fn mark_removed(&mut self, key: K);
+}
+impl ItemMergeRemovals<u32> for [bool] {
+    fn is_removed(&self, key: u32) -> bool {
+        self[key as usize]
+    }
+    fn mark_removed(&mut self, key: u32) {
+        self[key as usize] = true;
+    }
+}
 /// `ItemEntity.mergeWithNeighbours` for `items[i]`, which has just moved in
 /// its tick (its `age` already counts this tick; vanilla's doesn't yet): each
 /// mergeable item whose box meets this one's grown by 0.5 sideways takes this
@@ -1368,6 +1447,36 @@ pub fn merge_with_neighbours<I>(
 ) where
     I: AsRef<[ItemEntity]> + std::ops::IndexMut<usize, Output = ItemEntity> + ?Sized,
 {
+    merge_with_neighbours_keyed(
+        items,
+        removed,
+        cells,
+        i as u32,
+        |items, key| {
+            let index = key as usize;
+            (index < items.as_ref().len()).then_some(index)
+        },
+        max_stack,
+    );
+}
+
+/// The same merge arithmetic with keys resolved against current storage.
+/// `locate` must not invoke callbacks or retain an element position.
+pub fn merge_with_neighbours_keyed<I, K, R>(
+    items: &mut I,
+    removed: &mut R,
+    cells: &mut ItemCells<K>,
+    key: K,
+    locate: impl Fn(&I, K) -> Option<usize>,
+    max_stack: &dyn Fn(&ItemStack) -> u32,
+) where
+    I: AsRef<[ItemEntity]> + std::ops::IndexMut<usize, Output = ItemEntity> + ?Sized,
+    K: Copy + Eq + Ord + std::hash::Hash,
+    R: ItemMergeRemovals<K> + ?Sized,
+{
+    let Some(i) = locate(items, key) else {
+        return;
+    };
     let age = |items: &[ItemEntity], j: usize| {
         if j == i && items[j].age != i16::MIN as i32 {
             items[j].age - 1
@@ -1375,16 +1484,20 @@ pub fn merge_with_neighbours<I>(
             items[j].age
         }
     };
-    if removed[i] || !items[i].mergeable(age(items.as_ref(), i), max_stack(&items[i].stack)) {
+    if removed.is_removed(key)
+        || !items[i].mergeable(age(items.as_ref(), i), max_stack(&items[i].stack))
+    {
         return;
     }
     let area = items[i].bounds().inflate(Vec3::new(0.5, 0.0, 0.5));
     let mut near = Vec::new();
     cells.near(area, &mut near);
-    for j in near {
-        let j = j as usize;
+    for other_key in near {
+        let Some(j) = locate(items, other_key) else {
+            continue;
+        };
         if j == i
-            || removed[j]
+            || removed.is_removed(other_key)
             || !items[j].bounds().intersects(area)
             || !items[j].mergeable(age(items.as_ref(), j), max_stack(&items[j].stack))
         {
@@ -1421,10 +1534,11 @@ pub fn merge_with_neighbours<I>(
         // This item's age goes up once its tick ends.
         to_item.age = to_age.min(from_age) + i32::from(to == i);
         if items[from].stack.count == 0 {
-            removed[from] = true;
-            cells.remove(from, items[from].position);
+            let from_key = if from == i { key } else { other_key };
+            removed.mark_removed(from_key);
+            cells.remove_at(from_key, items[from].position);
         }
-        if removed[i] {
+        if removed.is_removed(key) {
             return;
         }
     }
@@ -3557,6 +3671,89 @@ mod merge_tests {
             items.iter().map(|item| item.join).collect::<Vec<_>>(),
             joins[1..]
         );
+    }
+
+    #[test]
+    fn stable_merge_keys_revalidate_compacted_sources_and_preserve_initial_order() {
+        use crate::join_seq::{JoinList, JoinSeq};
+        #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+        struct Key {
+            order: u32,
+            join: JoinSeq,
+        }
+        #[derive(Default)]
+        struct Removed(std::collections::HashSet<Key>);
+        impl ItemMergeRemovals<Key> for Removed {
+            fn is_removed(&self, key: Key) -> bool {
+                self.0.contains(&key)
+            }
+            fn mark_removed(&mut self, key: Key) {
+                self.0.insert(key);
+            }
+        }
+        // Birth order deliberately differs from the established merge order.
+        let old: JoinList<_> = [
+            item("minecraft:sand", 1, 8.0, 0),
+            item("minecraft:sand", 5, 9.0, 7),
+            item("minecraft:sand", 3, 0.5, 41),
+            item("minecraft:gravel", 1, 20.0, 0),
+        ]
+        .into_iter()
+        .collect();
+        let mut old = old.into_iter();
+        let d = old.next().unwrap();
+        let c = old.next().unwrap();
+        let a = old.next().unwrap();
+        let b = old.next().unwrap();
+        let mut items: JoinList<_> = [a, b, c, d].into_iter().collect();
+        let keys: Vec<_> = items
+            .iter()
+            .enumerate()
+            .map(|(order, item)| Key {
+                order: order as u32,
+                join: item.join,
+            })
+            .collect();
+        let mut cells = ItemCells::with_keys(&items, |index, _| keys[index]);
+        items.remove(1);
+        cells.forget_key(keys[1]);
+        for (key, x) in [(keys[2], 1.2), (keys[3], 1.3)] {
+            let index = items.locate(key.join).unwrap();
+            items.update(index, |item| item.position.x = x);
+            cells.refresh_key(key, items[index].position);
+        }
+        items.push(item("minecraft:gravel", 1, 1.4, 0));
+        let fresh = Key {
+            order: 4,
+            join: items.last().unwrap().join,
+        };
+        cells.refresh_key(fresh, items.last().unwrap().position);
+        let mut removed = Removed::default();
+        merge_with_neighbours_keyed(
+            &mut items,
+            &mut removed,
+            &mut cells,
+            keys[1],
+            |items, key| items.locate(key.join),
+            &max_stack,
+        );
+        merge_with_neighbours_keyed(
+            &mut items,
+            &mut removed,
+            &mut cells,
+            keys[0],
+            |items, key| items.locate(key.join),
+            &max_stack,
+        );
+        assert_eq!(
+            items
+                .iter()
+                .map(|item| item.stack.count)
+                .collect::<Vec<_>>(),
+            [0, 8, 1, 1]
+        );
+        assert_eq!(items[1].age, 7);
+        assert_eq!(removed.0, std::collections::HashSet::from([keys[0]]));
     }
 
     #[test]
