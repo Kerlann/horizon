@@ -251,6 +251,7 @@ impl Game<'_> {
         let Some(h) = self.native_walk_entity(entity.id()) else {
             return false;
         };
+        let before = self.capture_ai_vehicle(target);
         let [x, y, z] = delta;
         with_entity_mut!(self, h, e => {
             let v = e.velocity_mut();
@@ -259,6 +260,7 @@ impl Game<'_> {
         if let EntityHandle::Mob(i) = h {
             self.mobs[i].needs_sync = true;
         }
+        self.ai_vehicle_applied(before);
         true
     }
 }

@@ -169,7 +169,7 @@ impl Game<'_> {
             .hub
             .guests
             .iter()
-            .filter(|g| host.hub.here(g) && g.loaded && !g.dead && !g.is_fake())
+            .filter(|g| host.hub.here(g) && g.loaded && !g.dead && !g.is_fake() && !g.released)
             .map(|g| {
                 let moved = [0, 1, 2].map(|k| g.position[k] - g.previous_position[k]);
                 (g.conn, g.uuid, moved)
@@ -193,7 +193,12 @@ impl Game<'_> {
         let (uuid, moved) = {
             let host = self.lan.as_ref()?;
             let guest = host.hub.guest(conn)?;
-            if !host.hub.here(guest) || !guest.loaded || guest.dead || guest.is_fake() {
+            if !host.hub.here(guest)
+                || !guest.loaded
+                || guest.dead
+                || guest.is_fake()
+                || guest.released
+            {
                 return None;
             }
             (

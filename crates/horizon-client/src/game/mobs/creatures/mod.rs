@@ -546,6 +546,8 @@ impl Game<'_> {
     /// AI asks canonical teams on demand; projecting one player must not scan
     /// every entity just to materialize an ally set.
     pub(super) fn ai_player_view(&self) -> Option<PlayerView> {
+        #[cfg(test)]
+        super::native_mob_read_context::record_backing_work(|work| work.player_projections += 1);
         self.player_view_with_allies(false)
     }
 

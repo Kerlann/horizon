@@ -17,6 +17,31 @@ use horizon_core::geometry::{Aabb, Axis};
 use mod_api::{EntityRef, LevelRef, LivingRef, WorldEpoch};
 use std::collections::HashMap;
 
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct BackingWork {
+    pub(super) population_visits: usize,
+    pub(super) source_lookups: usize,
+    pub(super) owner_changes: usize,
+    pub(super) player_projections: usize,
+}
+#[cfg(test)]
+thread_local! {
+    static BACKING_WORK: std::cell::Cell<BackingWork> = Default::default();
+}
+#[cfg(test)]
+pub(super) fn record_backing_work(update: impl FnOnce(&mut BackingWork)) {
+    BACKING_WORK.with(|work| {
+        let mut value = work.get();
+        update(&mut value);
+        work.set(value);
+    });
+}
+#[cfg(test)]
+pub(super) fn backing_work() -> BackingWork {
+    BACKING_WORK.with(std::cell::Cell::get)
+}
+
 /// The minimal extra mob facts retained on the authoritative publication.
 #[derive(Clone, Copy)]
 pub(super) struct NativeMobTargetFacts {
@@ -49,11 +74,8 @@ impl NativeMobTargetFacts {
 }
 #[derive(Default)]
 pub(super) struct NativeMobRelations {
-    players_by_uuid: HashMap<u128, u32>,
-    players_by_id: HashMap<u32, u32>,
     guest_riders: HashMap<u32, std::collections::HashSet<u32>>,
     guest_vehicles: HashMap<u32, u32>,
-    guest_identities: HashMap<u32, (u128, u32)>,
     merchant_by_conn: HashMap<u32, u32>,
     merchants: HashMap<u32, u32>,
     saved_ids: HashMap<[i32; 4], u32>,
@@ -66,13 +88,10 @@ pub(super) struct NativeMobRelations {
 }
 impl NativeMobRelations {
     pub(super) fn clear(&mut self) {
-        self.players_by_uuid.clear();
-        self.players_by_id.clear();
         for riders in self.guest_riders.values_mut() {
             riders.clear();
         }
         self.guest_vehicles.clear();
-        self.guest_identities.clear();
         self.merchants.clear();
         self.merchant_by_conn.clear();
         self.saved_ids.clear();
@@ -83,16 +102,18 @@ impl NativeMobRelations {
         }
         self.rider_vehicles.clear();
     }
-    /// Call at guest insert and identity/placement/vehicle writes.
+    pub(super) fn guest_riders_of(&self, vehicle: u32) -> impl Iterator<Item = u32> + '_ {
+        self.guest_riders
+            .get(&vehicle)
+            .into_iter()
+            .flat_map(|riders| riders.iter().copied())
+    }
+    /// Call after canonical guest vehicle commits. Identity belongs to GuestList.
     pub(super) fn update_guest(&mut self, guest: &horizon_client::lan::guest::Guest) {
+        if self.guest_vehicles.get(&guest.conn).copied() == guest.vehicle {
+            return;
+        }
         self.remove_guest(guest.conn);
-        if guest.placed {
-            self.players_by_uuid.insert(guest.uuid, guest.conn);
-        }
-        if let Ok(id) = u32::try_from(guest.entity_id) {
-            self.players_by_id.insert(id, guest.conn);
-            self.guest_identities.insert(guest.conn, (guest.uuid, id));
-        }
         if let Some(id) = guest.vehicle {
             self.guest_vehicles.insert(guest.conn, id);
             self.guest_riders.entry(id).or_default().insert(guest.conn);
@@ -100,14 +121,6 @@ impl NativeMobRelations {
     }
     /// Call before guest removal. Hub owns positional indexing.
     pub(super) fn remove_guest(&mut self, conn: u32) {
-        if let Some((uuid, id)) = self.guest_identities.remove(&conn) {
-            if self.players_by_uuid.get(&uuid) == Some(&conn) {
-                self.players_by_uuid.remove(&uuid);
-            }
-            if self.players_by_id.get(&id) == Some(&conn) {
-                self.players_by_id.remove(&id);
-            }
-        }
         if let Some(id) = self.guest_vehicles.remove(&conn)
             && let Some(count) = self.guest_riders.get_mut(&id)
         {
@@ -137,6 +150,8 @@ impl NativeMobRelations {
         if self.tame_owners.get(&id).copied() == owner {
             return;
         }
+        #[cfg(test)]
+        record_backing_work(|work| work.owner_changes += 1);
         if let Some(owner) = owner {
             self.tame_owners.insert(id, owner);
         } else {
@@ -226,6 +241,8 @@ impl Game<'_> {
         id: u32,
         dimension: mod_api::DimensionKey,
     ) -> Option<(Location, IdentityDetails, [i32; 4])> {
+        #[cfg(test)]
+        record_backing_work(|work| work.source_lookups += 1);
         let (at, state, details) = {
             let mut table = self.entity_residency.borrow_mut();
             let (at, state, _, details) = table
@@ -264,6 +281,8 @@ impl Game<'_> {
         let level = LevelRef::new(self.native_lifecycle.epoch().unwrap(), self.dim.key());
         let mut state = self.entity_read_state.borrow_mut();
         let pass = state.mob_relations.get_mut(&level).unwrap();
+        #[cfg(test)]
+        record_backing_work(|work| work.population_visits += mobs.len());
         for source in mobs {
             pass.index.update_mob_owner(source);
         }
@@ -314,6 +333,8 @@ impl Game<'_> {
     }
 
     pub(super) fn admitted_profile_uuid(&self, id: u32, source: Source, uuid: [i32; 4]) -> bool {
+        #[cfg(test)]
+        record_backing_work(|work| work.source_lookups += 1);
         let mut table = self.entity_residency.borrow_mut();
         table
             .server_admitted_read_lookup(id, |at| self.locate_server_resident_owner(at))
@@ -352,6 +373,8 @@ impl Game<'_> {
     ) {
         candidates.clear();
         candidates.extend(self.entity_residency.borrow_mut().admitted_metadata());
+        #[cfg(test)]
+        record_backing_work(|work| work.population_visits += candidates.len());
         for &(id, expected, expected_details) in candidates.iter() {
             if expected.owner.dimension != dimension {
                 continue;
@@ -382,6 +405,23 @@ impl Game<'_> {
                 index.update_merchant(conn, play.merchant.as_ref().and_then(|m| m.merchant.mob));
             }
         }
+        // Saved keys are only candidates, never admission proof. Preserve keys
+        // whose real source arrives later in this same pass; each lookup still
+        // resolves the exact primary member and rereads its canonical UUID.
+        let mut seed = |id, uuid| {
+            #[cfg(test)]
+            record_backing_work(|work| work.population_visits += 1);
+            index.saved_ids.insert(uuid, id);
+        };
+        if level.dimension() == self.dim.key() {
+            for (&id, &uuid) in &self.persist.uuids {
+                seed(id, uuid);
+            }
+        } else if let Some(parked) = self.levels.parked_of(level.dimension_id()) {
+            for (id, uuid) in parked.saved_entity_uuids() {
+                seed(id, uuid);
+            }
+        }
         self.for_admitted_saved_uuids(
             level.dimension(),
             &mut index.identity_candidates,
@@ -399,14 +439,17 @@ impl Game<'_> {
     }
     fn read_guest<'a>(
         &'a self,
-        index: &NativeMobRelations,
+        _index: &NativeMobRelations,
         conn: u32,
     ) -> Option<&'a horizon_client::lan::guest::Guest> {
         let guest = self.lan.as_ref()?.hub.guest(conn)?;
-        let (uuid, id) = *index.guest_identities.get(&conn)?;
+        let id = u32::try_from(guest.entity_id).ok()?;
         (guest.participates_online()
-            && guest.uuid == uuid
-            && u32::try_from(guest.entity_id).ok() == Some(id))
+            && self.admitted_profile_uuid(
+                id,
+                Source::Guest(conn),
+                horizon_client::lan::playerdata::uuid_ints(guest.uuid),
+            ))
         .then_some(guest)
     }
     fn read_mob_facts(&self, id: u32, level: LevelRef) -> Option<NativeMobTargetFacts> {
@@ -439,7 +482,7 @@ impl Game<'_> {
     pub(super) fn indexed_online_owner_name<'a>(
         &'a self,
         uuid: [i32; 4],
-        index: &NativeMobRelations,
+        _index: &NativeMobRelations,
     ) -> Option<&'a str> {
         if self.player.is_some() && !self.lan_acting_fake && self.acting_uuid() == uuid {
             let id = u32::try_from(self.own_entity_id()).ok()?;
@@ -448,12 +491,14 @@ impl Game<'_> {
                 return Some(self.acting_player_name());
             }
         }
-        let conn = *index
-            .players_by_uuid
-            .get(&horizon_client::lan::playerdata::ints_uuid(uuid))?;
-        let guest = self.read_guest(index, conn)?;
+        let guest = self
+            .lan
+            .as_ref()?
+            .hub
+            .guests
+            .online_profile(horizon_client::lan::playerdata::ints_uuid(uuid))?;
         let id = u32::try_from(guest.entity_id).ok()?;
-        self.admitted_profile_uuid(id, Source::Guest(conn), uuid)
+        self.admitted_profile_uuid(id, Source::Guest(guest.conn), uuid)
             .then_some(guest.name.as_str())
     }
 
@@ -474,34 +519,40 @@ impl Game<'_> {
         index: &NativeMobRelations,
     ) -> Option<&'a horizon_client::scoreboard::Team> {
         let uuid = self.read_saved_uuid(id, level)?;
-        let own = horizon_client::save::uuid_text(uuid);
-        if let Some(team) = self.score.board.players_team(&own) {
+        let mut text = [0; 36];
+        let own = horizon_client_core::uuid::uuid_text_into(uuid, &mut text);
+        if let Some(team) = self.score.board.players_team(own) {
             return Some(team);
         }
+        let next_owner = |uuid| {
+            if self.indexed_online_owner_name(uuid, index).is_some() {
+                return None;
+            }
+            let id = *index.saved_ids.get(&uuid)?;
+            (self.read_saved_uuid(id, level)? == uuid).then_some(())?;
+            index.tame_owners.get(&id).copied()
+        };
         let mut root = owner?;
-        for _ in 0..64 {
+        let mut fast = Some(root);
+        loop {
             if let Some(name) = self.indexed_online_owner_name(root, index) {
                 return self.score.board.players_team(name);
             }
-            let next = index
-                .saved_ids
-                .get(&root)
-                .filter(|&&id| self.read_saved_uuid(id, level) == Some(root))
-                .and_then(|id| index.tame_owners.get(id))
-                .copied();
-            match next {
-                Some(next) => root = next,
-                None => break,
+            let id = *index.saved_ids.get(&root)?;
+            (self.read_saved_uuid(id, level)? == root).then_some(())?;
+            let Some(&next) = index.tame_owners.get(&id) else {
+                return self
+                    .score
+                    .board
+                    .players_team(horizon_client_core::uuid::uuid_text_into(root, &mut text));
+            };
+            root = next;
+            // Floyd's guard needs no allocation or arbitrary chain-length limit.
+            fast = fast.and_then(next_owner).and_then(next_owner);
+            if fast == Some(root) {
+                return None;
             }
         }
-        if let Some(name) = self.indexed_online_owner_name(root, index) {
-            return self.score.board.players_team(name);
-        }
-        let id = *index.saved_ids.get(&root)?;
-        (self.read_saved_uuid(id, level)? == root).then_some(())?;
-        self.score
-            .board
-            .players_team(&horizon_client::save::uuid_text(root))
     }
     pub(super) fn mob_read_context(
         &self,
@@ -702,21 +753,8 @@ impl Game<'_> {
         &self,
         id: u32,
         level: LevelRef,
-        index: &NativeMobRelations,
+        _index: &NativeMobRelations,
     ) -> Option<EntityRef> {
-        // Players are not JoinList owners: validate against the authoritative
-        // Hub identity index, or the acting player body, not the entity table.
-        if self.player.is_some() && u32::try_from(self.own_entity_id()).ok() == Some(id) {
-            return (level.dimension() == self.dim.key())
-                .then(|| EntityRef::new(level.epoch(), id));
-        }
-        if let Some(&conn) = index.players_by_id.get(&id) {
-            let guest = self.read_guest(index, conn)?;
-            return (guest.placed
-                && guest.dimension == level.dimension_id()
-                && !self.lan_guest_swaps.contains(&conn))
-            .then(|| EntityRef::new(level.epoch(), id));
-        }
         let mut table = self.entity_residency.borrow_mut();
         let (at, state, _, _) =
             table.server_admitted_read_lookup(id, |at| self.locate_server_resident_owner(at))?;
@@ -728,9 +766,14 @@ impl Game<'_> {
                 location.owner.dimension == level.dimension()
                     && self.server_read_target_visible(level.dimension(), target)
             }
-            EntityLookup::Taken => at.owner.dimension == level.dimension()
-                && self.server_read_target_visible(level.dimension(),
-                    super::entity_residency::residency_target_at(at, id)),
+            EntityLookup::Taken => {
+                at.owner.dimension == level.dimension()
+                    && !matches!(at.source, Source::DragonPart(_))
+                    && self.server_read_target_visible(
+                        level.dimension(),
+                        super::entity_residency::residency_target_at(at, id),
+                    )
+            }
             _ => false,
         };
         visible.then(|| EntityRef::new(level.epoch(), id))
@@ -748,7 +791,7 @@ impl Game<'_> {
             }
             return u32::try_from(self.own_entity_id()).ok();
         }
-        let conn = *index.players_by_uuid.get(&credit.0)?;
+        let conn = self.lan.as_ref()?.hub.guests.online_profile(credit.0)?.conn;
         if self.lan_acting == Some(conn) {
             return self.lan_acting_entity;
         }
@@ -854,7 +897,16 @@ impl Game<'_> {
                         );
                     (uuid, valid)
                 } else {
-                    let conn = *index.players_by_id.get(&id)?;
+                    let conn = {
+                        let mut table = self.entity_residency.borrow_mut();
+                        let (at, _, _, _) = table.server_admitted_read_lookup(id, |at| {
+                            self.locate_server_resident_owner(at)
+                        })?;
+                        let Source::Guest(conn) = at.source else {
+                            return None;
+                        };
+                        conn
+                    };
                     let guest = self.read_guest(index, conn)?;
                     self.read_relation_entity(id, level, index)?;
                     if guest.is_fake() {
@@ -1043,10 +1095,12 @@ impl Game<'_> {
                 index,
             );
         }
-        let conn = *index
-            .players_by_uuid
-            .get(&horizon_client::lan::playerdata::ints_uuid(uuid))?;
-        let guest = self.read_guest(index, conn)?;
+        let guest = self
+            .lan
+            .as_ref()?
+            .hub
+            .guests
+            .online_profile(horizon_client::lan::playerdata::ints_uuid(uuid))?;
         if !guest.participates_online()
             || horizon_client::lan::playerdata::uuid_ints(guest.uuid) != uuid
         {

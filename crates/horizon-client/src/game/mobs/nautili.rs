@@ -90,6 +90,7 @@ impl Game<'_> {
                     m.nav_stop();
                 }
                 if tamed {
+                    self.record_ai_mob_owner_id(self.mobs[index].id);
                     self.set_event_ai_target(self.mobs[index].id, None, self.lan_acting);
                 }
                 let sound = nautilus::eat_sound(&self.mobs[index]);

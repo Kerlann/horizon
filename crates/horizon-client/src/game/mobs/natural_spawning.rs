@@ -1201,10 +1201,9 @@ impl<'a> Game<'a> {
         dimension: &'s str,
     ) -> impl Iterator<Item = &'s horizon_client::lan::guest::Guest> + 's {
         self.lan.iter().flat_map(move |h| {
-            h.hub
-                .guests
-                .iter()
-                .filter(move |g| g.placed_in(dimension) && self.lan_acting != Some(g.conn))
+            h.hub.guests.iter().filter(move |g| {
+                !g.released && g.placed_in(dimension) && self.lan_acting != Some(g.conn)
+            })
         })
     }
     /// `Level.hasNearbyAlivePlayer` before a level is built for the spawn
@@ -1821,8 +1820,10 @@ mod tests {
         players.push(player(300.0, 64.0, 0.0, false));
         players.push(player(-300.0, 64.0, 0.0, false));
         players.push(player(0.0, 64.0, 300.0, false));
+        // These are distinct canonical players, not several poses for UUID 0.
+        for (i, player) in players.iter_mut().enumerate() { player.uuid = i as u128 + 1; }
         let grid = NearestPlayers::new(&players);
-        let index = |p: Option<&LevelPlayer>| p.map(|p| std::ptr::from_ref(p) as usize);
+        let index = |p: Option<&LevelPlayer>| p.map(|p| p.uuid);
         let mut probes: Vec<(f64, f64, f64)> = (0..400)
             .map(|_| (next(3_000.0), next(100.0), next(3_000.0)))
             .collect();
@@ -1854,7 +1855,7 @@ mod tests {
     }
 
     /// Answers both spawn checks with one fixed result.
-    struct ChecksMod(NativeSpawnCheck);
+    struct ChecksMod(SpawnCheck);
     #[mod_api::__subscriptions]
     impl mod_api::Hooks for ChecksMod {
         fn mob_spawn_placement_check(

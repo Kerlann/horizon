@@ -1950,15 +1950,8 @@ impl Game<'_> {
         self.uuid_for(id)
     }
     pub(super) fn uuid_for(&mut self, id: u32) -> [i32; 4] {
-        if let Some(uuid) = self.known_resident_entity_uuid_at(self.dim.key(), id) {
-            return uuid;
-        }
-        if let Some(&uuid) = self.persist.uuids.get(&id) {
-            return uuid;
-        }
-        let uuid = random_uuid();
-        self.set_saved_entity_uuid(id, uuid);
-        uuid
+        self.uuid_for_at(self.dim.key(), id)
+            .expect("the current level is always present")
     }
     /// Assign lazily in the admitted owner level, without swapping Game dimensions.
     pub(super) fn uuid_for_at(
@@ -1970,7 +1963,12 @@ impl Game<'_> {
             return Some(uuid);
         }
         if dimension == self.dim.key() {
-            return Some(self.uuid_for(id));
+            if let Some(&uuid) = self.persist.uuids.get(&id) {
+                return Some(uuid);
+            }
+            let uuid = random_uuid();
+            self.set_saved_entity_uuid(id, uuid);
+            return Some(uuid);
         }
         let level = mod_api::LevelRef::new(self.native_lifecycle.epoch()?, dimension);
         let parked = self.levels.parked_mut_of(level.dimension_id())?;

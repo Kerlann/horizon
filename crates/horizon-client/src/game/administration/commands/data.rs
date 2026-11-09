@@ -391,6 +391,7 @@ impl Game<'_> {
     /// rebuilt from its compound, keeping its id and UUID. Also what
     /// `TypedEntityData.loadInto` is: a spawn egg's data on the mob it spawned.
     pub(in crate::game) fn apply_entity_nbt(&mut self, t: Target, mut tag: Tag) -> R<()> {
+        let before_vehicle = self.capture_ai_vehicle(t);
         let stale = || err("commands.data.merge.failed", &[]);
         // Entity.load does not read Passengers: the riders stay, and so do the
         // passengers the load kept raw (none, when it kept none).
@@ -795,6 +796,7 @@ impl Game<'_> {
         if let Target::Mob(id) = t {
             self.record_ai_mob_owner_id(id);
         }
+        self.ai_vehicle_applied(before_vehicle);
         Ok(())
     }
     /// The block entity part of `BlockInput.place`: load the block entity

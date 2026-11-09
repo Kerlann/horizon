@@ -150,20 +150,22 @@ impl Game<'_> {
     /// it), an entity Horizon doesn't simulate, a value that isn't finite,
     /// or on a client. API 379.
     pub(super) fn entity_set_velocity(&mut self, entity: EntityRef, velocity: [f64; 3]) -> bool {
-        if self.remote.is_some()
-            || !velocity.iter().all(|v| v.is_finite())
-            || self.native_entity_target(entity).is_none()
-        {
+        if self.remote.is_some() || !velocity.iter().all(|v| v.is_finite()) {
             return false;
         }
+        let Some(target) = self.native_entity_target(entity) else {
+            return false;
+        };
         let Some(h) = self.native_walk_entity(entity.id()) else {
             return false;
         };
+        let before = self.capture_ai_vehicle(target);
         let [x, y, z] = velocity;
         with_entity_mut!(self, h, e => *e.velocity_mut() = Vec3::new(x, y, z));
         if let EntityHandle::Mob(i) = h {
             self.mobs[i].needs_sync = true;
         }
+        self.ai_vehicle_applied(before);
         true
     }
     /// `Entity.resetFallDistance`: how far the entity has fallen is forgotten, so its next

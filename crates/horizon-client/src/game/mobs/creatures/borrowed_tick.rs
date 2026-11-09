@@ -765,6 +765,12 @@ impl Game<'_> {
                     // ServerLevel ticks entities one after another: the ones
                     // after this mob see it as it is now.
                     self.record_ai_mob_owner(m);
+                    if matches!(m.species(), Species::Nautilus | Species::ZombieNautilus)
+                        && (snapshot[slot].bounds != m.bounds()
+                            || snapshot[slot].velocity != m.velocity)
+                    {
+                        self.mark_ai_vehicle_riders_changed(m.id);
+                    }
                     snapshot[slot] = seen(m, uuid);
                     snapshot[slot].alive &= kept;
                     grid.update(slot, snapshot[slot].bounds);

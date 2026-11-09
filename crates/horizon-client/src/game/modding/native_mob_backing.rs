@@ -8,7 +8,6 @@ use super::Game;
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub(super) struct MobBackingRevision {
     pub(super) players: u64,
-    pub(super) teams: u64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -32,9 +31,16 @@ impl Game<'_> {
         &self,
         mobs: &horizon_client::join_seq::JoinList<horizon_client::mobs::Mob>,
     ) -> Option<horizon_client::mobs::Vehicle> {
+        self.ai_vehicle_view(self.riding?, mobs)
+    }
+
+    fn ai_vehicle_view(
+        &self,
+        id: u32,
+        mobs: &horizon_client::join_seq::JoinList<horizon_client::mobs::Mob>,
+    ) -> Option<horizon_client::mobs::Vehicle> {
         use horizon_client::join_seq::residency::Kind;
         use horizon_core::geometry::{Aabb, Vec3};
-        let id = self.riding?;
         let (at, state, _) = self
             .entity_residency
             .borrow_mut()
@@ -72,7 +78,14 @@ impl Game<'_> {
                 })
             }
             Kind::Mob => {
-                let mob = &mobs[mobs.locate(at.join)?];
+                let mob = if matches!(
+                    state,
+                    horizon_client::join_seq::residency::table::EntityLookup::Found { .. }
+                ) {
+                    &self.mobs[self.mobs.locate(at.join)?]
+                } else {
+                    &mobs[mobs.locate(at.join)?]
+                };
                 matches!(
                     mob.species(),
                     horizon_client::mobs::Species::Nautilus
@@ -86,6 +99,74 @@ impl Game<'_> {
             }
             _ => None,
         }
+    }
+
+    pub(super) fn capture_ai_vehicle(
+        &self,
+        target: super::commands::Target,
+    ) -> Option<(u32, horizon_client::mobs::Vehicle)> {
+        self.entity_read_state.borrow().mob_ai_level?;
+        let id = match target {
+            super::commands::Target::Boat(id) | super::commands::Target::Mob(id) => id,
+            _ => return None,
+        };
+        Some((id, self.ai_vehicle_view(id, &self.mobs)?))
+    }
+
+    pub(super) fn ai_vehicle_applied(&self, before: Option<(u32, horizon_client::mobs::Vehicle)>) {
+        let Some((id, before)) = before else {
+            return;
+        };
+        if self.ai_vehicle_view(id, &self.mobs) != Some(before) {
+            self.mark_ai_vehicle_riders_changed(id);
+        }
+    }
+
+    pub(super) fn mark_ai_vehicle_riders_changed(&self, id: u32) {
+        let Some(epoch) = self.native_lifecycle.epoch() else {
+            return;
+        };
+        let mut state = self.entity_read_state.borrow_mut();
+        let Some(dimension) = state.mob_ai_level else {
+            return;
+        };
+        let super::native_entity_read_cache::NativeReadState {
+            mob_relations,
+            mob_player_writes,
+            mob_backing,
+            ..
+        } = &mut *state;
+        let mut inserted = 0;
+        if let Some(pass) = mob_relations.get(&mod_api::LevelRef::new(epoch, dimension)) {
+            for conn in pass.index.guest_riders_of(id) {
+                let Some(g) = self.lan.as_ref().and_then(|h| h.hub.guest(conn)) else {
+                    continue;
+                };
+                if g.participates_online()
+                    && !g.released
+                    && g.vehicle == Some(id)
+                    && super::Dim::from_id(&g.dimension).key() == dimension
+                {
+                    inserted += usize::from(mob_player_writes.insert(PlayerBackingKey {
+                        uuid: horizon_client::lan::playerdata::uuid_ints(g.uuid),
+                        conn: Some(conn),
+                        dimension,
+                    }));
+                }
+            }
+        }
+        if self.dim.key() == dimension
+            && self.player.is_some()
+            && !self.lan_acting_fake
+            && self.riding == Some(id)
+        {
+            inserted += usize::from(mob_player_writes.insert(PlayerBackingKey {
+                uuid: self.acting_uuid(),
+                conn: self.lan_acting,
+                dimension,
+            }));
+        }
+        mob_backing.players += inserted as u64;
     }
 
     pub(super) fn ai_player_view_for_pass(
@@ -172,7 +253,9 @@ impl Game<'_> {
         if state.mob_ai_level != Some(key.dimension) {
             return;
         }
-        state.mob_player_writes.insert(key);
+        if !state.mob_player_writes.insert(key) {
+            return;
+        }
         state.mob_backing.players = state
             .mob_backing
             .players
@@ -262,6 +345,18 @@ impl Game<'_> {
                 }
                 let guest = self.lan.as_ref().and_then(|h| h.hub.guest(conn));
                 if let Some(guest) = guest {
+                    let level = mod_api::LevelRef::new(
+                        self.native_lifecycle.epoch().unwrap(),
+                        key.dimension,
+                    );
+                    if let Some(pass) = self
+                        .entity_read_state
+                        .borrow_mut()
+                        .mob_relations
+                        .get_mut(&level)
+                    {
+                        pass.index.update_guest(guest);
+                    }
                     if let Some(&slot) = index.guest_ids.get(&conn) {
                         loans.guest_ids[slot].1 = guest.entity_id as u32;
                     } else {
@@ -278,7 +373,7 @@ impl Game<'_> {
                         .collect();
                 }
                 guest
-                    .filter(|g| g.uuid == uuid && g.placed_in(self.dim.id()))
+                    .filter(|g| !g.released && g.uuid == uuid && g.placed_in(self.dim.id()))
                     .map(super::natural_spawning::LevelPlayer::guest)
             } else {
                 None
