@@ -123,3 +123,118 @@ fn projectile_restore_entries_keep_the_bound_arrow() {
         }
     }
 }
+
+struct CanonicalPickupObserver {
+    panic: bool,
+    seen: Arc<std::sync::atomic::AtomicUsize>,
+}
+#[mod_api::__subscriptions]
+impl mod_api::Hooks for CanonicalPickupObserver {
+    fn player_pickup_arrow(
+        &self,
+        host: &mut dyn mod_api::ServerHost,
+        event: &mut mod_api::PlayerPickupArrowEvent<'_>,
+    ) {
+        assert_eq!(event.entity_id, 7102);
+        assert_eq!(event.item, "minecraft:arrow");
+        assert!(
+            host.entity(7102).is_none(),
+            "pickup notice follows actual retirement"
+        );
+        assert_eq!(
+            host.entity(7101).unwrap().position(host),
+            Some([3.0, 64.0, 5.0])
+        );
+        assert_eq!(
+            host.entity(7103).unwrap().position(host),
+            Some([3.0, 64.0, 5.0])
+        );
+        self.seen.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        if self.panic {
+            panic!("primary guest pickup notice panic");
+        }
+    }
+}
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn guest_arrow_pickup_keeps_actual_owner_and_retires_before_notice_even_on_panic() {
+    fn at_boundary(game: &mut Game<'_>) {
+        // This runs at the actual initial schedule boundary, before inventory
+        // borrowing. A lifted owner must not satisfy it.
+        assert!(matches!(
+            game.server_resident_entity(7101),
+            horizon_client::join_seq::residency::table::EntityLookup::Found { .. }
+        ));
+        let header = <dyn mod_api::Host>::entity(game, 7101).unwrap();
+        assert_eq!(header.position(game), Some([3.0, 64.0, 5.0]));
+        let mut newborn = arrow(7103, [3.0, 64.0, 5.0]);
+        let state = newborn.arrow.as_mut().unwrap();
+        state.in_ground = true;
+        state.pickup = horizon_client::arrows::Pickup::Allowed;
+        game.creatures.projectiles.push(newborn);
+    }
+    for panic in [false, true] {
+        let seen = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        mod_api::testing::with_mods(
+            vec![mod_api::ModEntry::new(
+                "guest_pickup_observer",
+                Box::new(CanonicalPickupObserver {
+                    panic,
+                    seen: seen.clone(),
+                }),
+            )]
+            .into(),
+            || {
+                crate::game::native_guest_turn_tests::with_guests(|game| {
+                    game.options.dedicated = Some(Vec::new());
+                    game.creatures
+                        .projectiles
+                        .push(arrow(7101, [3.0, 64.0, 5.0]));
+                    let mut picked = arrow(7102, [3.0, 64.0, 5.0]);
+                    picked.arrow.as_mut().unwrap().in_ground = true;
+                    picked.arrow.as_mut().unwrap().pickup = horizon_client::arrows::Pickup::Allowed;
+                    game.creatures.projectiles.push(picked);
+                    game.native_joins_skip();
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        crate::game::entity::taken_pass_tests::with_spawn(at_boundary, || {
+                            game.guest_arrows(0)
+                        });
+                    }));
+                    assert_eq!(seen.load(std::sync::atomic::Ordering::SeqCst), 1);
+                    if panic {
+                        assert_eq!(
+                            result.unwrap_err().downcast_ref::<&str>(),
+                            Some(&"primary guest pickup notice panic")
+                        );
+                    } else {
+                        result.unwrap();
+                    }
+                    assert_eq!(
+                        game.creatures
+                            .projectiles
+                            .iter()
+                            .map(|p| p.id)
+                            .collect::<Vec<_>>(),
+                        [7101, 7103]
+                    );
+                    assert!(matches!(
+                        game.server_resident_entity(7102),
+                        horizon_client::join_seq::residency::table::EntityLookup::Missing
+                    ));
+                    assert_eq!(game.creatures.projectiles[1].age, 0);
+                    let guest = &game.lan.as_ref().unwrap().hub.guests[0];
+                    assert_eq!(
+                        guest
+                            .inventory
+                            .iter()
+                            .flatten()
+                            .filter(|s| s.item.as_ref() == "minecraft:arrow")
+                            .map(|s| s.count)
+                            .sum::<u32>(),
+                        1
+                    );
+                });
+            },
+        );
+    }
+}
