@@ -10,13 +10,15 @@ use horizon_client::join_seq::residency::read_pass::ReadPasses;
 use horizon_client::join_seq::residency::table::EntityLookup;
 use mod_api::*;
 use std::{
+    cell::RefCell,
     collections::{HashMap, HashSet},
+    rc::Rc,
     sync::Arc,
 };
 
 #[derive(Default)]
 pub(super) struct NativeReadState {
-    pub(super) passes: ReadPasses,
+    pub(super) passes: Rc<RefCell<ReadPasses>>,
     pub(super) identities: HashSet<Arc<str>>,
     pub(super) player_identifiers: NativeReadIdentifiers,
     pub(super) raids: HashMap<RaidRef, RaidReadRow>,
@@ -24,7 +26,7 @@ pub(super) struct NativeReadState {
 
 impl NativeReadState {
     pub(super) fn reset(&mut self) {
-        self.passes.reset();
+        self.passes.borrow_mut().reset();
         self.identities.clear();
         self.player_identifiers = NativeReadIdentifiers::default();
         self.raids.clear();

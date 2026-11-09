@@ -2,6 +2,7 @@
 //! a pass never scans or clears the population it captured.
 use super::Owner;
 use mod_api::{EntityReadCapture, EntityReadCapturePhase, NativeTickId};
+use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ReadPass(u64);
@@ -18,6 +19,57 @@ struct Frame {
     owner: Owner,
     tick: NativeTickId,
     revision: u64,
+}
+
+/// Owns only a capture clock, never Game or an entity reference. Unwinding a
+/// callback closes its metadata frame without replacing the original panic.
+pub struct ReadScope {
+    clock: Rc<RefCell<ReadPasses>>,
+    pass: ReadPass,
+    owner: Owner,
+    start: EntityReadCapture,
+}
+
+impl ReadScope {
+    pub fn begin(
+        clock: Rc<RefCell<ReadPasses>>,
+        enabled: bool,
+        owner: Owner,
+        tick: NativeTickId,
+    ) -> Result<Option<Self>, ReadPassError> {
+        let started = clock.borrow_mut().begin(enabled, owner, tick)?;
+        Ok(started.map(|(pass, start)| Self {
+            clock,
+            pass,
+            owner,
+            start,
+        }))
+    }
+
+    pub fn start(&self) -> EntityReadCapture {
+        self.start
+    }
+
+    pub fn stamp(&self, phase: EntityReadCapturePhase) -> Result<EntityReadCapture, ReadPassError> {
+        self.clock.borrow_mut().stamp(self.pass, self.owner, phase)
+    }
+}
+
+impl Drop for ReadScope {
+    fn drop(&mut self) {
+        let mut clock = self.clock.borrow_mut();
+        if clock.finish(self.pass).is_err()
+            && let Some(index) = clock
+                .frames
+                .iter()
+                .position(|frame| frame.pass == self.pass)
+        {
+            // An out-of-order active guard is an engine error. Invalidate that
+            // suffix, but do not touch a newer epoch when this token is stale.
+            log::error!("entity read capture scope closed out of order");
+            clock.frames.truncate(index);
+        }
+    }
 }
 
 #[derive(Default)]
@@ -148,6 +200,46 @@ mod tests {
         assert_eq!(resumed.tick, NativeTickId::new(9));
         assert_eq!(resumed.pending_overlay, None);
         passes.finish(outer).unwrap();
+    }
+
+    #[test]
+    fn callback_unwind_closes_only_its_nested_capture_frame() {
+        use std::panic::{AssertUnwindSafe, catch_unwind};
+        let clock = Rc::new(RefCell::new(ReadPasses::default()));
+        let outer = ReadScope::begin(clock.clone(), true, MOB, NativeTickId::new(9))
+            .unwrap()
+            .unwrap();
+        let panic = catch_unwind(AssertUnwindSafe(|| {
+            let _inner = ReadScope::begin(clock.clone(), true, TNT, NativeTickId::new(9))
+                .unwrap()
+                .unwrap();
+            panic!("original callback failure");
+        }))
+        .unwrap_err();
+        assert_eq!(
+            panic.downcast_ref::<&str>(),
+            Some(&"original callback failure")
+        );
+        assert_eq!(
+            outer
+                .stamp(EntityReadCapturePhase::AfterEntityTick)
+                .unwrap()
+                .pass,
+            outer.start().pass
+        );
+        clock.borrow_mut().reset();
+        let new = ReadScope::begin(clock.clone(), true, TNT, NativeTickId::new(10))
+            .unwrap()
+            .unwrap();
+        drop(outer);
+        assert_eq!(
+            new.stamp(EntityReadCapturePhase::BeforeCallback)
+                .unwrap()
+                .tick,
+            NativeTickId::new(10)
+        );
+        drop(new);
+        assert!(clock.borrow().frames.is_empty());
     }
 
     #[test]
