@@ -40,7 +40,6 @@ impl NativeMobTargetFacts {
 }
 #[derive(Default)]
 pub(super) struct NativeMobRelations {
-    guests: HashMap<u32, usize>,
     players_by_uuid: HashMap<u128, u32>,
     players_by_id: HashMap<u32, u32>,
     guest_riders: HashMap<u32, usize>,
@@ -52,7 +51,6 @@ pub(super) struct NativeMobRelations {
 }
 impl NativeMobRelations {
     pub(super) fn clear(&mut self) {
-        self.guests.clear();
         self.players_by_uuid.clear();
         self.players_by_id.clear();
         self.guest_riders.clear();
@@ -62,10 +60,9 @@ impl NativeMobRelations {
         self.merchant_by_conn.clear();
         self.saved_ids.clear();
     }
-    /// Call at guest insert, identity/placement/vehicle writes and slot moves.
-    pub(super) fn update_guest(&mut self, at: usize, guest: &horizon_client::lan::guest::Guest) {
+    /// Call at guest insert and identity/placement/vehicle writes.
+    pub(super) fn update_guest(&mut self, guest: &horizon_client::lan::guest::Guest) {
         self.remove_guest(guest.conn);
-        self.guests.insert(guest.conn, at);
         if guest.placed {
             self.players_by_uuid.insert(guest.uuid, guest.conn);
         }
@@ -78,9 +75,8 @@ impl NativeMobRelations {
             *self.guest_riders.entry(id).or_default() += 1;
         }
     }
-    /// Call before guest removal; update a swap-moved guest's slot afterwards.
+    /// Call before guest removal. Hub owns positional indexing.
     pub(super) fn remove_guest(&mut self, conn: u32) {
-        self.guests.remove(&conn);
         if let Some((uuid, id)) = self.guest_identities.remove(&conn) {
             if self.players_by_uuid.get(&uuid) == Some(&conn) {
                 self.players_by_uuid.remove(&uuid);
@@ -137,8 +133,8 @@ impl Game<'_> {
     ) {
         index.clear();
         if let Some(host) = &self.lan {
-            for (at, guest) in host.hub.guests.iter().enumerate() {
-                index.update_guest(at, guest);
+            for guest in host.hub.guests.iter() {
+                index.update_guest(guest);
             }
             for (&conn, play) in &host.play {
                 index.update_merchant(conn, play.merchant.as_ref().and_then(|m| m.merchant.mob));
@@ -168,13 +164,9 @@ impl Game<'_> {
         index: &NativeMobRelations,
         conn: u32,
     ) -> Option<&'a horizon_client::lan::guest::Guest> {
-        let guest = self
-            .lan
-            .as_ref()?
-            .hub
-            .guests
-            .get(*index.guests.get(&conn)?)?;
-        (guest.conn == conn).then_some(guest)
+        let guest = self.lan.as_ref()?.hub.guest(conn)?;
+        let (uuid, id) = *index.guest_identities.get(&conn)?;
+        (guest.uuid == uuid && u32::try_from(guest.entity_id).ok() == Some(id)).then_some(guest)
     }
     fn read_mob_facts(&self, id: u32, level: LevelRef) -> Option<NativeMobTargetFacts> {
         let mut table = self.entity_residency.borrow_mut();
@@ -236,7 +228,7 @@ impl Game<'_> {
                 .board
                 .players_team(&self.read_guest(index, conn)?.name);
         }
-        index.saved_ids.get(&root)?;
+        self.read_relation_entity(*index.saved_ids.get(&root)?, level, index)?;
         self.score
             .board
             .players_team(&horizon_client::save::uuid_text(root))
@@ -298,6 +290,9 @@ impl Game<'_> {
             Who::Player => {
                 let conn = *self.lan.as_ref()?.mob_players.get(&source.id)?;
                 let guest = self.read_guest(index, conn)?;
+                if !guest.placed || self.lan_guest_swaps.contains(&conn) {
+                    return None;
+                }
                 let id = u32::try_from(guest.entity_id).ok()?;
                 let valid = if source.species() == Species::Warden {
                     guest.dimension == level.dimension_id()
@@ -358,13 +353,23 @@ impl Game<'_> {
         epoch: NativeWorldEpoch,
         index: &NativeMobRelations,
     ) -> MerchantReadContext<'a> {
-        let conn = index.merchants.get(&source.id).copied();
+        let conn = index.merchants.get(&source.id).copied().filter(|conn| {
+            self.lan
+                .as_ref()
+                .and_then(|host| host.play.get(conn))
+                .and_then(|play| play.merchant.as_ref())
+                .is_some_and(|m| m.merchant.mob == Some(source.id))
+        });
         let session = conn
             .and_then(|conn| self.lan.as_ref()?.play.get(&conn)?.merchant.as_ref())
+            .filter(|m| m.merchant.mob == Some(source.id))
             .map(|m| m.merchant.session.as_ref());
         let trading_player = conn
             .and_then(|conn| self.read_guest(index, conn))
             .and_then(|g| {
+                if !g.placed || !g.participates_online() || self.lan_guest_swaps.contains(&g.conn) {
+                    return None;
+                }
                 Some(mod_api::__private::game::player_ref(
                     EntityRef::new(epoch, u32::try_from(g.entity_id).ok()?),
                     g.uuid,
@@ -378,7 +383,25 @@ impl Game<'_> {
 }
 
 impl Game<'_> {
-    fn read_relation_entity(&self, id: u32, level: LevelRef) -> Option<EntityRef> {
+    fn read_relation_entity(
+        &self,
+        id: u32,
+        level: LevelRef,
+        index: &NativeMobRelations,
+    ) -> Option<EntityRef> {
+        // Players are not JoinList owners: validate against the authoritative
+        // Hub identity index, or the acting player body, not the entity table.
+        if let Some(&conn) = index.players_by_id.get(&id) {
+            let guest = self.read_guest(index, conn)?;
+            return (guest.placed
+                && guest.dimension == level.dimension_id()
+                && !self.lan_guest_swaps.contains(&conn))
+            .then(|| EntityRef::new(level.epoch(), id));
+        }
+        if self.player.is_some() && u32::try_from(self.own_entity_id()).ok() == Some(id) {
+            return (level.dimension() == self.dim.key())
+                .then(|| EntityRef::new(level.epoch(), id));
+        }
         let mut table = self.entity_residency.borrow_mut();
         let (state, cached) =
             table.server_entity_read_lookup(id, |at| self.locate_server_resident_owner(at));
@@ -434,11 +457,11 @@ impl Game<'_> {
                 Who::Mob(id) => Some(id),
                 Who::Player => self.read_credit_id(credit?, index, true),
             })
-            .and_then(|id| self.read_relation_entity(id, level));
+            .and_then(|id| self.read_relation_entity(id, level, index));
         let kill_credit = match credit {
             Some(credit) => self
                 .read_credit_id(credit, index, false)
-                .and_then(|id| self.read_relation_entity(id, level)),
+                .and_then(|id| self.read_relation_entity(id, level, index)),
             None => last_attacker,
         };
         (kill_credit, last_attacker)
@@ -639,14 +662,19 @@ mod tests {
             let context = game.merchant_read_context(&game.mobs[0], level.epoch(), &index);
             assert_eq!(context.session.unwrap().xp, 17);
             assert_eq!(context.trading_player.unwrap().uuid(), 13);
-            let at = *index.guests.get(&13).unwrap();
-            let guest = &mut game.lan.as_mut().unwrap().hub.guests[at];
-            guest.vehicle = Some(42);
-            index.update_guest(at, guest);
+            game.lan
+                .as_mut()
+                .unwrap()
+                .hub
+                .update_guest(13, |guest| guest.vehicle = Some(42));
+            index.update_guest(game.lan.as_ref().unwrap().hub.guest(13).unwrap());
             assert!(game.mob_read_context(&actor, level, &index).guest_riding);
-            let guest = &mut game.lan.as_mut().unwrap().hub.guests[at];
-            guest.vehicle = None;
-            index.update_guest(at, guest);
+            game.lan
+                .as_mut()
+                .unwrap()
+                .hub
+                .update_guest(13, |guest| guest.vehicle = None);
+            index.update_guest(game.lan.as_ref().unwrap().hub.guest(13).unwrap());
             assert!(!game.mob_read_context(&actor, level, &index).guest_riding);
             index.update_merchant(13, None);
             assert!(
