@@ -40,6 +40,22 @@ with its setter's side effects, and a brain-backed species refuses, since its ta
 memory that `MobRef::set_brain_target` writes from a server host). Writes to other entities
 are not part of a goal; the write handles a `ServerHost` takes do not exist in a goal tick.
 
+#### Cached read publication metadata
+
+`EntityReadCapture` identifies a potentially stale publication using an engine `TickId`,
+an owner pass, a publication revision and `EntityReadCapturePhase` (`PassStart`,
+`BeforeCallback` or `AfterEntityTick`). It does not assert that the live owner is still
+resident or unchanged. Logical removal, physical lifting and retained output are distinct;
+removal and retained output never imply a lifted owner.
+
+Cached scalar reads keep their Option contracts. Live/heavy reads use one generic
+`EntityReadError<E = core::convert::Infallible>`: `Lifted` refuses a physically lifted
+foreign owner, while `Domain(E)` preserves an existing typed error without flattening it.
+Only the explicitly nested callback actor is OWN; an unrelated live loan is not OWN.
+The error has the same Wire form for native and wasm. Its default `Infallible` domain
+cannot be constructed or decoded. These declarations are a schema foundation, not a
+claim that every deferred heavy read or write has acquired the new routing contract.
+
 #### Brain behaviors
 
 Native mods only: entity parts do not cross to wasm yet.

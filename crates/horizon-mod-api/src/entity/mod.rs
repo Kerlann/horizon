@@ -14,5 +14,6 @@ pub mod health;
 #[doc(hidden)]
 pub mod mobs;
 pub(crate) mod player_bots;
+pub(crate) mod read_rows;
 pub(crate) mod types;
 pub(crate) mod unspawned_mob;
