@@ -11,6 +11,8 @@ use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub(super) struct Fangs {
+    /// Entity-owned registration metadata; content clones are detached.
+    pub(super) attachment_lifetime: horizon_mod_runtime::attachments::AttachmentLifetime,
     pub(in crate::game) join: horizon_client::join_seq::JoinSeq,
     pub id: u32,
     pub pos: [f64; 3],
@@ -24,6 +26,7 @@ pub(super) struct Fangs {
 }
 
 horizon_client::impl_joined!(Fangs);
+horizon_mod_runtime::impl_attachment_lifetime!(Fangs);
 
 /// `EvokerFangs.handleEntityEvent`: `nextFloat() * 0.2 + 0.85`.
 pub(super) fn fang_attack_pitch(random: &mut impl RandomSource) -> f32 {
@@ -57,6 +60,7 @@ impl Game<'_> {
             self.fangs.model = self.entity_models.evoker_fangs.clone();
         }
         self.fangs.list.push(Fangs {
+            attachment_lifetime: Default::default(),
             join: Default::default(),
             id,
             pos: at,

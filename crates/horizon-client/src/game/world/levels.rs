@@ -172,7 +172,8 @@ impl Game<'_> {
     /// Visit exactly the actual physical lifetime slot. Resolution releases the
     /// table and its journal before lending storage; no lift, swap or replacement
     /// occurs, including when the visitor unwinds. Logical visibility is a caller
-    /// policy, just as for the underlying owner resolver.
+    /// policy, just as for the underlying owner resolver. The visitor must not
+    /// call entity lookup or recursively enter this seam.
     pub(super) fn with_resident_slot<R>(
         &mut self,
         dimension: &mod_api::DimensionKey,

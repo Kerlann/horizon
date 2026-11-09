@@ -458,6 +458,7 @@ mod tests {
     #[test]
     fn interaction_uses_current_source_dimensions_not_registry_defaults() {
         let mut source = super::super::commands::OtherEntity {
+            attachment_lifetime: Default::default(),
             join: horizon_client::join_seq::JoinSeq::next(),
             id: 31,
             kind: "minecraft:interaction".into(),
@@ -496,6 +497,7 @@ mod tests {
     #[test]
     fn bound_knot_capture_uses_fence_geometry_without_persist_membership() {
         let knot = super::super::leads::Knot {
+            attachment_lifetime: Default::default(),
             id: 43,
             join: horizon_client::join_seq::JoinSeq::next(),
             fence: [-2, 64, 4],
@@ -554,6 +556,7 @@ mod tests {
     fn lifted_source_capture_does_not_require_list_residency() {
         let epoch = NativeWorldEpoch::new(3);
         let source = super::super::commands::OtherEntity {
+            attachment_lifetime: Default::default(),
             join: horizon_client::join_seq::JoinSeq::next(),
             id: 31,
             kind: "minecraft:marker".into(),
