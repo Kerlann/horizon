@@ -116,7 +116,7 @@ fn resolve_pending_leash(
 }
 
 /// Write a mob's `leash` NBT entry into `tag`.
-fn write_mob_leash_tag(
+pub(super) fn write_mob_leash_tag(
     tag: &mut Tag,
     holder: Option<Holder>,
     pending: Option<Pending>,

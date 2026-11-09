@@ -135,6 +135,45 @@ impl Parked {
 }
 
 impl Game<'_> {
+    /// Serialize the actual parked Mob owner without placing its level in Game.
+    /// Explicit UUID insertions are published after releasing the storage loan,
+    /// including when serialization unwinds; no roster reconciliation is needed.
+    pub(super) fn parked_mob_tree_nbt(
+        &mut self,
+        location: Location,
+    ) -> Option<horizon_core::nbt::Tag> {
+        use super::native_mob_nbt_save::{MobNbtOwner, ParkedMobNbt};
+        let dimension = location.owner.dimension;
+        let dim = match dimension {
+            DimensionKey::OVERWORLD => Dim::Overworld,
+            DimensionKey::NETHER => Dim::Nether,
+            DimensionKey::END => Dim::End,
+            key => Dim::Extra(key),
+        };
+        let (result, assignments) = {
+            let parked = self.levels.parked.get_mut(&dim)?;
+            let index = parked.mobs.locate(location.join)?;
+            let mut owner = ParkedMobNbt::new(
+                &mut parked.mobs,
+                &mut parked.persist,
+                parked.world.game_time,
+                self.pack.assets.registry,
+                self.level.player_uuid,
+            );
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                owner.mob_tree_nbt(index)
+            }));
+            (result, owner.into_assignments())
+        };
+        for (id, uuid) in assignments {
+            self.saved_entity_uuid_changed(dimension, id, None, Some(uuid));
+        }
+        match result {
+            Ok(tag) => Some(tag),
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
+    }
+
     /// Logical retirement is independent of physical lifting. Cached rows of
     /// a lifted owner still observe removals made before a lifecycle callback.
     pub(super) fn server_read_target_visible(

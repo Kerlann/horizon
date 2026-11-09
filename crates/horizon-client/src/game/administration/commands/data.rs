@@ -65,6 +65,9 @@ impl Game<'_> {
     /// `NbtPredicate.getEntityTagToCompare`: the entity as saved. An entity
     /// in another level is read in the level that holds it.
     pub(in crate::game) fn command_target_nbt(&mut self, t: Target) -> Option<Tag> {
+        if let Target::Mob(id) = t {
+            return self.mob_owner_nbt(id);
+        }
         self.in_target_level(t, |g| g.entity_nbt_in_level(t))
             .flatten()
     }
@@ -113,27 +116,7 @@ impl Game<'_> {
                     .flatten();
             }
             Target::Player => return self.player_nbt(),
-            Target::Mob(id) => {
-                // `saveWithoutId` writes the entity as saved, riders under
-                // `Passengers`: `/data get` reads the same tree persistence does (#1519).
-                let i = self.mobs.iter().position(|m| m.id == id)?;
-                let mut tag = self.mob_tree_nbt(i);
-                let session = self
-                    .lan_trade_conn(id)
-                    .and_then(|conn| self.lan_trade_session(conn))
-                    .or_else(|| {
-                        self.station
-                            .as_ref()
-                            .and_then(|s| s.merchant.as_ref())
-                            .filter(|m| m.mob == Some(id))
-                            .map(|m| &*m.session)
-                    });
-                if let (Some(session), Tag::Compound(data)) = (session, &mut tag) {
-                    data.insert("Offers".into(), entity_nbt::offers_to_nbt(&session.offers));
-                    data.insert("Xp".into(), Tag::Int(session.xp));
-                }
-                tag
-            }
+            Target::Mob(id) => self.mob_owner_nbt(id)?,
             Target::Item(id) => {
                 let uuid = self.uuid_for(id);
                 let e = self.dropped.iter().find(|e| e.id == id)?;
