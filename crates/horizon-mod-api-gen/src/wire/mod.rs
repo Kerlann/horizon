@@ -403,8 +403,8 @@ pub(super) fn surface<'a>(
     let target = root.join("target");
     std::fs::create_dir_all(&target).map_err(|e| format!("creating wire report directory: {e}"))?;
     let dropped = excused_methods;
-    // The type emitter respects checked, hand-written Wire impls even when a shape
-    // becomes derivable after a new generic borrowing/resource rule is added.
+    // Track the source of checked codecs as a build-script dependency. Module
+    // lookup loads it into Index even though call generation never parses its fields.
     types.index.module("mod_api", &["wire_types".into()])?;
     for owner in exports() {
         let (path, _) = owner_parts(owner)?;
@@ -601,109 +601,31 @@ pub(crate) fn owned_types(
     let mut with_providers = included.to_vec();
     with_providers.push(("capability_providers_generated.rs", providers.as_str()));
     let mut surface = surface(root, &with_providers)?;
-    // Public source declarations extend the signature inventory only with proof
-    // of Wire support. Clone alone is not enough (for example EnchantmentEffect).
-    let api = surface.types.index.module("mod_api", &[])?;
-    let mut modules = vec![api];
-    let mut visited = std::collections::HashSet::new();
-    let mut candidates = Vec::new();
-    fn exposed(index: &Index<'_>, module: usize, name: &str) -> String {
-        std::iter::once("mod_api")
-            .chain(index.modules[module].path.iter().map(String::as_str))
-            .chain(std::iter::once(name))
-            .collect::<Vec<_>>()
-            .join("::")
-    }
-    while let Some(module) = modules.pop() {
-        if !visited.insert(module) {
-            continue;
-        }
-        let items = surface.types.index.modules[module].items.clone();
-        for (item, declaration) in items.into_iter().enumerate() {
-            if let Item::Use(reexport) = &declaration {
-                if matches!(reexport.vis, syn::Visibility::Public(_)) {
-                    for name in crate::capability_providers::use_names(&reexport.tree) {
-                        let Ok(Found::Item(id)) = surface.types.index.resolve(module, &name) else {
-                            continue;
-                        };
-                        let declaration = surface.types.index.item(id);
-                        let parameters = match declaration {
-                            Item::Struct(item) => &item.generics,
-                            Item::Enum(item) => &item.generics,
-                            _ => continue,
-                        };
-                        if parameters.params.is_empty() {
-                            candidates.push((
-                                id,
-                                exposed(&surface.types.index, module, &name),
-                                ty::derives(declaration, "Wire"),
-                            ));
-                        }
-                    }
-                }
-                continue;
-            }
-            if let Item::Mod(child) = &declaration {
-                if matches!(child.vis, syn::Visibility::Public(_)) {
-                    let mut path = surface.types.index.modules[module].path.clone();
-                    path.push(child.ident.to_string());
-                    modules.push(surface.types.index.module("mod_api", &path)?);
-                }
-                continue;
-            }
-            let (name, parameters, visibility) = match &declaration {
-                Item::Struct(item) => (&item.ident, &item.generics, &item.vis),
-                Item::Enum(item) => (&item.ident, &item.generics, &item.vis),
-                _ => continue,
-            };
-            if matches!(visibility, syn::Visibility::Public(_)) && parameters.params.is_empty() {
-                candidates.push((
-                    crate::index::ItemId { module, item },
-                    exposed(&surface.types.index, module, &name.to_string()),
-                    ty::derives(&declaration, "Wire"),
-                ));
-            }
-        }
-    }
-    let mut implemented = std::collections::HashSet::new();
-    let mut clone_impls = std::collections::HashSet::new();
-    let _codec = surface
-        .types
-        .index
-        .module("mod_api", &["wire_types".into()])?;
-    let items = surface
+    // Every owned signature def appears in generated WIRE_LAYOUT with a Wire bound.
+    // That compile-time guarantee covers macro-generated slot keys/handle codecs too;
+    // no owned field traversal or second Wire-implementation discovery is needed.
+    let mut clones = std::collections::HashSet::new();
+    let implementations = surface
         .types
         .index
         .modules
         .iter()
         .enumerate()
-        .flat_map(|(module, m)| m.items.iter().cloned().map(move |item| (module, item)))
+        .flat_map(|(module, source)| {
+            source.items.iter().filter_map(move |item| match item {
+                Item::Impl(item)
+                    if item.trait_.as_ref().is_some_and(|(_, path, _)| {
+                        path.segments.last().is_some_and(|s| s.ident == "Clone")
+                    }) =>
+                {
+                    Some((module, item.self_ty.clone()))
+                }
+                _ => None,
+            })
+        })
         .collect::<Vec<_>>();
-    let wire_module = surface.types.index.module("mod_api", &["wire".into()])?;
-    let Found::Item(wire_trait) = surface.types.index.resolve(wire_module, "Wire")? else {
-        return Err("Wire trait is not defined in mod_api::wire".into());
-    };
-    for (module, item) in items {
-        let Item::Impl(item) = item else {
-            continue;
-        };
-        let Some((_, implemented_trait, _)) = &item.trait_ else {
-            continue;
-        };
-        let trait_path = implemented_trait
-            .segments
-            .iter()
-            .map(|s| s.ident.to_string())
-            .collect::<Vec<_>>();
-        let clone_impl = implemented_trait
-            .segments
-            .last()
-            .is_some_and(|s| s.ident == "Clone");
-        let wire_impl = matches!(surface.types.index.resolve_path(module, &trait_path), Ok(Found::Item(id)) if id == wire_trait);
-        if !wire_impl && !clone_impl {
-            continue;
-        }
-        let syn::Type::Path(path) = &*item.self_ty else {
+    for (module, ty) in implementations {
+        let syn::Type::Path(path) = *ty else {
             continue;
         };
         let path = path
@@ -713,22 +635,12 @@ pub(crate) fn owned_types(
             .map(|s| s.ident.to_string())
             .collect::<Vec<_>>();
         if let Ok(Found::Item(id)) = surface.types.index.resolve_path(module, &path) {
-            if wire_impl {
-                implemented.insert(id);
-            }
-            if clone_impl {
-                clone_impls.insert(id);
-            }
+            clones.insert(id);
         }
     }
+    let cloned =
+        |index: &Index<'_>, id| ty::derives(index.item(id), "Clone") || clones.contains(&id);
     let mut allowed = std::collections::BTreeSet::new();
-    for (id, path, derived) in candidates {
-        if (derived || implemented.contains(&id))
-            && (ty::derives(surface.types.index.item(id), "Clone") || clone_impls.contains(&id))
-        {
-            allowed.insert(path);
-        }
-    }
     for (def, value) in surface
         .types
         .defs
@@ -742,12 +654,105 @@ pub(crate) fn owned_types(
             .iter()
             .find_map(|(item, d)| (*d == def).then_some(*item));
         if item.map_or(value.rust.starts_with("serde_json::"), |id| {
-            ty::derives(surface.types.index.item(id), "Clone") || clone_impls.contains(&id)
+            cloned(&surface.types.index, id)
         }) {
             allowed.insert(value.rust.replace(' ', ""));
         }
     }
+    // Index both the public boundary reexports and checked codec declarations.
+    // These lookups load source files; they do not classify any owned fields.
+    surface.types.index.module("mod_api", &["wire".into()])?;
+    let codec = surface
+        .types
+        .index
+        .module("mod_api", &["wire_types".into()])?;
+    let mut codecs = std::collections::HashSet::new();
+    for item in surface.types.index.modules[codec].items.clone() {
+        let Item::Impl(item) = item else {
+            continue;
+        };
+        // wire_types imports precisely crate::wire::Wire. Its direct impl targets
+        // include foreign reexports such as ConnectionKind, which cannot derive here.
+        if !item
+            .trait_
+            .as_ref()
+            .is_some_and(|(_, p, _)| p.segments.last().is_some_and(|s| s.ident == "Wire"))
+        {
+            continue;
+        }
+        let syn::Type::Path(path) = &*item.self_ty else {
+            continue;
+        };
+        let path = path
+            .path
+            .segments
+            .iter()
+            .map(|s| s.ident.to_string())
+            .collect::<Vec<_>>();
+        if let Ok(Found::Item(id)) = surface.types.index.resolve_path(codec, &path) {
+            codecs.insert(id);
+        }
+    }
+    // Reuse the parsed module inventory. Extra declarations need an explicit
+    // derive or checked codec; Clone alone (or a no-Wire reason) is never proof.
+    let modules = surface
+        .types
+        .index
+        .modules
+        .iter()
+        .enumerate()
+        .filter(|(_, m)| m.krate == "mod_api")
+        .map(|(module, m)| (module, m.path.clone(), m.items.clone()))
+        .collect::<Vec<_>>();
+    for (module, prefix, items) in modules {
+        for item in items {
+            let names = match item {
+                Item::Use(item) if matches!(item.vis, syn::Visibility::Public(_)) => {
+                    crate::capability_providers::use_names(&item.tree)
+                }
+                Item::Struct(item) if matches!(item.vis, syn::Visibility::Public(_)) => {
+                    vec![item.ident.to_string()]
+                }
+                Item::Enum(item) if matches!(item.vis, syn::Visibility::Public(_)) => {
+                    vec![item.ident.to_string()]
+                }
+                _ => continue,
+            };
+            for name in names {
+                let Ok(Found::Item(id)) = surface.types.index.resolve(module, &name) else {
+                    continue;
+                };
+                let declaration = surface.types.index.item(id);
+                let generics = match declaration {
+                    Item::Struct(item) => &item.generics,
+                    Item::Enum(item) => &item.generics,
+                    _ => continue,
+                };
+                if generics.params.is_empty()
+                    && (ty::derives(declaration, "Wire") || codecs.contains(&id))
+                    && cloned(&surface.types.index, id)
+                {
+                    let path = std::iter::once("mod_api")
+                        .chain(prefix.iter().map(String::as_str))
+                        .chain(std::iter::once(name.as_str()))
+                        .collect::<Vec<_>>()
+                        .join("::");
+                    if public_path(&surface.types.index, &path) {
+                        allowed.insert(path);
+                    }
+                }
+            }
+        }
+    }
     Ok(allowed)
+}
+
+/// A defining path is usable by generated records only through public modules.
+fn public_path(index: &Index<'_>, path: &str) -> bool {
+    let segments = path.split("::").skip(1).collect::<Vec<_>>();
+    (0..segments.len().saturating_sub(1)).all(|depth| {
+        index.modules.iter().find(|m| m.krate == "mod_api" && m.path.iter().map(String::as_str).eq(segments[..depth].iter().copied())).is_some_and(|m| m.items.iter().any(|item| matches!(item, Item::Mod(child) if child.ident == segments[depth] && matches!(child.vis, syn::Visibility::Public(_)))))
+    })
 }
 
 /// A hash of everything the two sides must agree on: every method's id and signature, and
