@@ -1,18 +1,14 @@
-//! Reads of live mobs lent to the target-hook context during a mob tick.
+//! Reads of the explicit mob actor lent to the goal or target-hook callback.
 //!
 //! These use the same mob state and methods as the game's ordinary host. A
 //! snapshot is intentionally not accepted: it cannot answer these reads.
-use super::{GoalCx, Resolved};
+use super::GoalCx;
 use crate::mobs::{self, Mob};
 use mod_api::{LivingRef, MobRef, NativeMobGoalEntry, PathType, RaidRef};
 
 impl GoalCx<'_, '_> {
     fn live_mob(&self, mob: MobRef) -> Option<&Mob> {
-        match self.resolve(mob.entity())? {
-            Resolved::Own if !self.m.removed => Some(self.m),
-            Resolved::Live(mob) if !mob.removed => Some(mob),
-            _ => None,
-        }
+        self.entity_mob(mob.entity())
     }
 
     pub(super) fn r_mob_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>> {
