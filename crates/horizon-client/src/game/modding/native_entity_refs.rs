@@ -708,17 +708,35 @@ impl Game<'_> {
                 .copied()
                 .map(uuid_from_words);
         }
-        let words = match self.native_entity_target(entity)? {
-            Target::Player => {
-                let dimension = self.current_player_resident_location()?.owner.dimension;
-                return self
-                    .known_resident_entity_uuid_at(dimension, entity.id())
-                    .map(uuid_from_words);
+        if !self.is_logical_server() || self.native_lifecycle.epoch() != Some(entity.epoch()) {
+            return None;
+        }
+        use horizon_client::join_seq::residency::{Source, table::EntityLookup};
+        let (location, details) = {
+            let mut table = self.entity_residency.borrow_mut();
+            let (location, state, _, details) = table
+                .server_admitted_read_lookup(entity.id(), |at| {
+                    self.locate_server_resident_owner(at)
+                })?;
+            match state {
+                EntityLookup::Found {
+                    value: (_, true), ..
+                }
+                | EntityLookup::Taken => (location, details),
+                EntityLookup::Found {
+                    value: (_, false), ..
+                }
+                | EntityLookup::Missing => return None,
             }
-            Target::Guest(conn) => return self.command_guest(conn).map(|g| g.uuid),
-            _ => self.uuid_for(entity.id()),
         };
-        Some(uuid_from_words(words))
+        if let Some(uuid) = details.known_uuid {
+            return Some(uuid_from_words(uuid));
+        }
+        if location.source != Source::Ordinary {
+            return None;
+        }
+        let level = LevelRef::new(entity.epoch(), location.owner.dimension);
+        self.uuid_for_at(level, entity.id()).map(uuid_from_words)
     }
     /// The level the entity is in (`Entity.level`): on a client, the
     /// client's level. API 373.

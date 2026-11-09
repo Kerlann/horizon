@@ -425,7 +425,7 @@ mod tests {
                 at,
                 mod_api::EntityReadCapturePhase::PassStart
             ));
-            let uuid = game.uuid_for_at(at.owner.dimension, entity.id()).unwrap();
+            let uuid = game.uuid_for_at(level, entity.id()).unwrap();
             assert_eq!(game.dim.key(), dimension);
             assert!(!game.persist.uuids.contains_key(&entity.id()));
             assert_eq!(
@@ -441,10 +441,7 @@ mod tests {
                 }),
                 Some(Some(entity))
             );
-            assert_eq!(
-                game.uuid_for_at(at.owner.dimension, entity.id()),
-                Some(uuid)
-            );
+            assert_eq!(game.uuid_for_at(level, entity.id()), Some(uuid));
         });
     }
 

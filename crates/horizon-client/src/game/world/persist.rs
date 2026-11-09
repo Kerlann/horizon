@@ -1960,19 +1960,19 @@ impl Game<'_> {
         self.set_saved_entity_uuid(id, uuid);
         uuid
     }
-    /// Assign lazily in the admitted owner level, without swapping Game dimensions.
-    pub(super) fn uuid_for_at(
-        &mut self,
-        dimension: mod_api::DimensionKey,
-        id: u32,
-    ) -> Option<[i32; 4]> {
-        if let Some(uuid) = self.known_resident_entity_uuid_at(dimension, id) {
+    /// Saved UUID storage for an already admitted ordinary member. The caller
+    /// owns epoch/source validation and handles specialized known UUIDs first.
+    /// No body lookup, second admission or dimension swap happens here.
+    pub(super) fn uuid_for_at(&mut self, level: mod_api::LevelRef, id: u32) -> Option<[i32; 4]> {
+        let dimension = level.dimension();
+        if dimension == self.dim.key() {
+            if let Some(&uuid) = self.persist.uuids.get(&id) {
+                return Some(uuid);
+            }
+            let uuid = random_uuid();
+            self.set_saved_entity_uuid(id, uuid);
             return Some(uuid);
         }
-        if dimension == self.dim.key() {
-            return Some(self.uuid_for(id));
-        }
-        let level = mod_api::LevelRef::new(self.native_lifecycle.epoch()?, dimension);
         let parked = self.levels.parked_mut_of(level.dimension_id())?;
         if let Some(uuid) = parked.saved_entity_uuid(id) {
             return Some(uuid);
