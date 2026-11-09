@@ -72,10 +72,11 @@ pub fn main() -> Result<()> {
         let mut board = Scoreboard::default();
         for t in c["teams"].as_array().into_iter().flatten() {
             let name = t["name"].as_str().unwrap_or("");
-            let team = board.add_team(name);
+            let mut team = board.add_team(name);
             team.color = t["color"].as_str().map(str::to_owned);
             team.prefix = t["prefix"].clone();
             team.suffix = t["suffix"].clone();
+            drop(team);
             for m in t["members"].as_array().into_iter().flatten() {
                 board.add_to_team(m.as_str().unwrap_or(""), name);
             }

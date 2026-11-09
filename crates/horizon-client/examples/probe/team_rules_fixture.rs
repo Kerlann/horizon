@@ -16,7 +16,7 @@ pub fn main() {
         let mut board = Scoreboard::default();
         for name in ["A", "B"] {
             let o = &c[name];
-            let t = board.add_team(name);
+            let mut t = board.add_team(name);
             t.allow_friendly_fire = o["ff"].as_bool().unwrap_or(true);
             t.see_friendly_invisibles = o["si"].as_bool().unwrap_or(true);
             t.collision_rule =

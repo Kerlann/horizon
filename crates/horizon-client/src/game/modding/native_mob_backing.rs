@@ -30,6 +30,30 @@ pub(super) struct MobOwnerFact {
     uuid: [i32; 4],
     owner: Option<[i32; 4]>,
 }
+/// Entity scoreboard names are UUID.toString(), not every spelling accepted
+/// by a UUID argument parser. Other spellings remain ordinary literal holders.
+pub(super) fn canonical_scoreboard_uuid(name: &str) -> Option<[i32; 4]> {
+    if name.len() != 36 {
+        return None;
+    }
+    let mut value = 0u128;
+    for (offset, byte) in name.bytes().enumerate() {
+        if matches!(offset, 8 | 13 | 18 | 23) {
+            if byte != b'-' {
+                return None;
+            }
+        } else {
+            let digit = match byte {
+                b'0'..=b'9' => byte - b'0',
+                b'a'..=b'f' => byte - b'a' + 10,
+                _ => return None,
+            };
+            value = (value << 4) | u128::from(digit);
+        }
+    }
+    Some(horizon_client::lan::playerdata::uuid_ints(value))
+}
+
 impl Game<'_> {
     pub(super) fn mark_mob_player_backing_dirty(&self, key: PlayerBackingKey) {
         if !self.score.board.is_ai_tracking() {
@@ -268,8 +292,7 @@ impl Game<'_> {
                 match change {
                     TeamAiChange::Member { member, team } => {
                         let uuid = facts.names.get(member).copied().or_else(|| {
-                            horizon_client::lan::arrivals::parse_uuid(member)
-                                .map(horizon_client::lan::playerdata::uuid_ints)
+                            canonical_scoreboard_uuid(member)
                                 .filter(|uuid| !facts.players.contains(uuid))
                         });
                         if let Some(uuid) = uuid {
@@ -296,14 +319,9 @@ impl Game<'_> {
             }
             let mut state = self.entity_read_state.borrow_mut();
             for (id, owner) in state.mob_owner_writes.drain() {
-                if let Some(old) = facts.identities.remove(&id) {
-                    facts.owners.remove(&old);
-                }
-                if let Some(MobOwnerFact { uuid, owner }) = owner {
-                    facts.identities.insert(id, uuid);
-                    if let Some(owner) = owner {
-                        facts.owners.insert(uuid, owner);
-                    }
+                facts.set_identity(id, owner.map(|fact| fact.uuid));
+                if let Some(MobOwnerFact { uuid, owner: Some(owner) }) = owner {
+                    facts.owners.insert(uuid, owner);
                 }
                 applied += 1;
             }
@@ -423,6 +441,7 @@ impl Game<'_> {
         &self,
         key: PlayerBackingKey,
         present: bool,
+        source_id: Option<u32>,
         teams: &horizon_client::mobs::TeamRulesSnapshot,
     ) {
         let Some((shared, _)) = &teams.shared else {
@@ -438,6 +457,9 @@ impl Game<'_> {
             None => present.then(|| self.acting_player_name()),
         };
         let mut facts = shared.write().expect("AI team backing poisoned");
+        if let Some(id) = source_id {
+            facts.set_identity(id, present.then_some(key.uuid));
+        }
         if present {
             facts.active_players.insert(key.uuid);
         } else {
@@ -535,9 +557,16 @@ impl Game<'_> {
             } else {
                 None
             };
+            let source_id = conn.and_then(|conn| {
+                index
+                    .guest_ids
+                    .get(&conn)
+                    .map(|&slot| loans.guest_ids[slot].1)
+            });
             self.sync_ai_player_team_binding(
                 PlayerBackingKey { uuid, conn },
                 level.is_some(),
+                source_id,
                 teams,
             );
             match (index.levels.get(&uuid128).copied(), level) {

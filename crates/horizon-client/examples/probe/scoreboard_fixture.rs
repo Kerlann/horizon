@@ -330,7 +330,7 @@ impl Fixture {
             }
             "leave" => json!(b.remove_from_team(holder)),
             "team_set" => {
-                let Some(t) = b.team_mut(s(op, "name")) else {
+                let Some(mut t) = b.team_mut(s(op, "name")) else {
                     return json!("missing");
                 };
                 let v = &op["value"];

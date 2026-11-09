@@ -1999,6 +1999,7 @@ impl Game<'_> {
         let Some(epoch) = self.native_lifecycle.epoch() else {
             return;
         };
+        self.mark_mob_saved_identity_changed(dimension, id, old, new);
         let level = mod_api::LevelRef::new(epoch, dimension);
         if let Some(pass) = self
             .entity_read_state

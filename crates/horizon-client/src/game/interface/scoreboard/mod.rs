@@ -782,8 +782,7 @@ impl Game<'_> {
             facts.rules.insert(team.ai_identity(), team.ai_rules());
             for member in team.players.iter() {
                 let uuid = facts.names.get(member.as_str()).copied().or_else(|| {
-                    horizon_client::lan::arrivals::parse_uuid(member)
-                        .map(horizon_client::lan::playerdata::uuid_ints)
+                    super::native_mob_backing::canonical_scoreboard_uuid(member)
                         .filter(|uuid| !facts.players.contains(uuid))
                 });
                 if let Some(uuid) = uuid {

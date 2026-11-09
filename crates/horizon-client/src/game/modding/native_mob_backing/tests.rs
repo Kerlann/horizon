@@ -447,3 +447,88 @@ fn canonical_player_writes_refresh_only_changed_projection_and_ignore_noops() {
             .restore(mobs, horizon_client::join_seq::RestoreOrder::SurvivorsFirst);
     });
 }
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn real_saved_uuid_path_tracks_active_backing_not_temporary_game_dimension() {
+    crate::game::native_entity_refs::tests::with_game(|game| {
+        game.native_lifecycle.world_open_ready().unwrap();
+        game.native_lifecycle.server_tick_start(true).unwrap();
+        game.build_registries();
+        game.enter_level(crate::game::Dim::Nether).unwrap();
+        add(game, 73, "minecraft:wolf", Vec3::new(1.0, 70.0, 1.0), true);
+        game.remove_saved_entity_uuid(73);
+        game.enter_level(crate::game::Dim::Overworld).unwrap();
+        add(game, 71, "minecraft:wolf", Vec3::new(1.0, 70.0, 1.0), true);
+        add(game, 72, "minecraft:wolf", Vec3::new(2.0, 70.0, 1.0), true);
+        game.remove_saved_entity_uuid(71);
+        game.score.board.add_team("red");
+        game.score.board.add_team("blue");
+        let teams = game.mob_team_backing_for(&game.mobs);
+        game.score.board.begin_ai_changes();
+        let overworld = game.dim.key();
+        let nether = mod_api::DimensionKey::NETHER;
+        let parked = game.uuid_for_at(nether, 73).unwrap();
+        assert_eq!(game.dim.key(), overworld);
+        assert!(!game.persist.uuids.contains_key(&73));
+        assert_eq!(game.refresh_mob_team_deltas(&teams), 0);
+        game.enter_level(crate::game::Dim::Nether).unwrap();
+        let first = game.uuid_for_at(overworld, 71).unwrap();
+        game.score.board.add_to_team(&uuid_text(first), "red");
+        assert_eq!(game.refresh_mob_team_deltas(&teams), 2);
+        assert_eq!(
+            teams.of(Who::Mob(71)).unwrap().identity,
+            game.score.board.team("red").unwrap().ai_identity()
+        );
+        assert_eq!(game.uuid_for_at(nether, 73), Some(parked));
+        assert_eq!(game.refresh_mob_team_deltas(&teams), 0);
+        game.enter_level(crate::game::Dim::Overworld).unwrap();
+        let command = format!(
+            "data merge entity {} {{Owner:[I;{}]}}",
+            uuid_text([4, 0, 0, 72]),
+            first
+                .iter()
+                .map(i32::to_string)
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        assert!(game.as_console(|game| game.run_command(&command)));
+        assert_eq!(game.refresh_mob_team_deltas(&teams), 1);
+
+        assert_eq!(
+            teams.of(Who::Mob(72)).unwrap().identity,
+            game.score.board.team("red").unwrap().ai_identity()
+        );
+        let second = [0xabcd, 0, 0, 71];
+        game.score.board.add_to_team(&uuid_text(second), "blue");
+        assert_eq!(game.set_saved_entity_uuid(71, second), Some(first));
+        assert_eq!(game.refresh_mob_team_deltas(&teams), 2);
+        assert_eq!(
+            teams.of(Who::Mob(71)).unwrap().identity,
+            game.score.board.team("blue").unwrap().ai_identity()
+        );
+        assert!(
+            teams.of(Who::Mob(72)).is_none(),
+            "old UUID-text membership is not an existing terminal owner"
+        );
+        let uppercase = uuid_text(second).to_ascii_uppercase();
+        assert!(game.score.board.add_to_team(&uppercase, "red"));
+        assert_eq!(
+            game.refresh_mob_team_deltas(&teams),
+            0,
+            "noncanonical UUID spelling is a different literal score holder"
+        );
+        assert_eq!(
+            teams.of(Who::Mob(71)).unwrap().identity,
+            game.score.board.team("blue").unwrap().ai_identity()
+        );
+        assert_eq!(game.set_saved_entity_uuid(71, second), Some(second));
+        assert_eq!(game.refresh_mob_team_deltas(&teams), 0);
+        assert_eq!(game.remove_saved_entity_uuid(71), Some(second));
+        assert_eq!(game.refresh_mob_team_deltas(&teams), 1);
+        assert!(teams.of(Who::Mob(71)).is_none());
+        assert_eq!(game.remove_saved_entity_uuid(71), None);
+        assert_eq!(game.refresh_mob_team_deltas(&teams), 0);
+        game.score.board.end_ai_changes();
+    });
+}

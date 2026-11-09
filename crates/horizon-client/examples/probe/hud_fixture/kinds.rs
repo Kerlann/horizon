@@ -178,10 +178,11 @@ fn sidebar(c: &Value, w: i32, h: i32, atlas: &HudAtlas) -> Vec<GuiDraw> {
     }
     for t in c["teams"].as_array().into_iter().flatten() {
         let name = t["name"].as_str().unwrap_or("");
-        let team = board.add_team(name);
+        let mut team = board.add_team(name);
         team.prefix = t["prefix"].clone();
         team.suffix = t["suffix"].clone();
         team.color = t["color"].as_str().map(str::to_owned);
+        drop(team);
         for m in t["members"].as_array().into_iter().flatten() {
             board.add_to_team(m.as_str().unwrap_or(""), name);
         }
