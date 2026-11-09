@@ -86,6 +86,7 @@ pub(super) struct Parked {
     pub(super) mobs: horizon_client::join_seq::JoinList<Mob>,
     /// The entity ids of the level's fence knots (`knot_ids`).
     knot_ids: HashMap<[i32; 3], u32>,
+    knots: horizon_client::join_seq::JoinList<super::leads::Knot>,
     projectiles: horizon_client::join_seq::JoinList<horizon_client::projectiles::Projectile, false>,
     dropped: horizon_client::join_seq::JoinList<ItemEntity>,
     orbs: horizon_client::join_seq::JoinList<ExperienceOrb>,
@@ -470,6 +471,7 @@ impl Game<'_> {
             hoppers: HashMap::new(),
             mobs: Default::default(),
             knot_ids: HashMap::new(),
+            knots: Default::default(),
             projectiles: Default::default(),
             dropped: Default::default(),
             orbs: Default::default(),
@@ -619,6 +621,7 @@ impl Game<'_> {
         swap(&mut self.hoppers, &mut p.hoppers);
         swap(&mut self.mobs, &mut p.mobs);
         swap(&mut self.knot_ids, &mut p.knot_ids);
+        swap(&mut self.knots, &mut p.knots);
         swap(&mut self.creatures.projectiles, &mut p.projectiles);
         swap(&mut self.dropped, &mut p.dropped);
         swap(&mut self.orbs, &mut p.orbs);

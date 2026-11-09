@@ -56,6 +56,7 @@ macro_rules! resident_owners {
             Crystal => Crystal: crystals,
             Tnt => Tnt: tnts,
             Cushion => Cushion: cushions,
+            Knot => Knot: knots,
             Falling => Falling: falling,
             Rocket => Rocket: rockets,
             Trident => Trident: tridents,
