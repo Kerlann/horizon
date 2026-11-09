@@ -2105,9 +2105,9 @@ fn push_entities(
         }
     }
     // EntitySelector.pushableBy(this): the teams' collision rules.
-    let own = w.teams.of(Who::Mob(m.id));
+    let own = w.team_of(Who::Mob(m.id));
     targets.retain(|(who, ..)| {
-        crate::scoreboard::TeamRules::pushable_by(own.as_ref(), w.teams.of(*who).as_ref(), true)
+        crate::scoreboard::TeamRules::pushable_by(own.as_ref(), w.team_of(*who).as_ref(), true)
     });
     // Cramming: a quarter of the ticks spent with `maxEntityCramming` or more
     // others around that are not riding anything hurts it by 6.

@@ -215,7 +215,8 @@ impl Game<'_> {
             let Some(host) = self.lan.as_mut() else {
                 return false;
             };
-            return host
+            let mut changed = false;
+            let result = host
                 .hub
                 .update_guest(conn, |g| {
                     let motion = if matches!(target, Target::Player) {
@@ -226,9 +227,11 @@ impl Game<'_> {
                     let Some(motion) = motion else {
                         return false;
                     };
-                    let v = motion.velocity;
+                    let before = motion.velocity;
+                    let v = before;
                     motion.velocity = Vec3::new(v.x + delta[0], v.y + delta[1], v.z + delta[2]);
                     let v = motion.velocity;
+                    changed = v != before;
                     g.send(
                         &horizon_protocol::packets::play::Clientbound::SetEntityMotion(
                             horizon_protocol::packets::play::SetEntityMotion {
@@ -240,6 +243,10 @@ impl Game<'_> {
                     true
                 })
                 .unwrap_or(false);
+            if changed {
+                self.mark_player_target_backing_changed(target);
+            }
+            return result;
         }
         let Some(h) = self.native_walk_entity(entity.id()) else {
             return false;

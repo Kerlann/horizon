@@ -189,6 +189,7 @@ impl Game<'_> {
         &mut self,
         conn: u32,
         teams: &horizon_client::mobs::TeamRulesSnapshot,
+        mobs: &horizon_client::join_seq::JoinList<Mob>,
     ) -> Option<PlayerView> {
         let (uuid, moved) = {
             let host = self.lan.as_ref()?;
@@ -201,7 +202,7 @@ impl Game<'_> {
                 [0, 1, 2].map(|k| guest.position[k] - guest.previous_position[k]),
             )
         };
-        let view = self.as_guest(conn, |game| game.ai_player_view(teams))??;
+        let view = self.as_guest(conn, |game| game.ai_player_view(teams, mobs))??;
         Some(guest_view(view, uuid, moved))
     }
 

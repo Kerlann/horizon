@@ -715,7 +715,11 @@ impl Game<'_> {
         &self,
         mobs: &[horizon_client::mobs::Mob],
     ) -> horizon_client::mobs::TeamRulesSnapshot {
-        let shared = self.entity_read_state.borrow().mob_ai_teams.clone();
+        let shared = {
+            let mut state = self.entity_read_state.borrow_mut();
+            state.mob_ai_level = Some(self.dim.key());
+            state.mob_ai_teams.clone()
+        };
         self.capture_mob_team_backing(mobs, shared)
     }
     fn capture_mob_team_backing(
@@ -727,6 +731,7 @@ impl Game<'_> {
         let mut facts = shared.write().expect("AI team backing poisoned");
         facts.identities.clear();
         facts.names.clear();
+        facts.player_names.clear();
         facts.players.clear();
         facts.members.clear();
         facts.owners.clear();
@@ -761,6 +766,7 @@ impl Game<'_> {
                     name
                 }
             };
+            facts.player_names.insert(uuid, name.clone());
             facts.names.insert(name, uuid);
             facts.players.insert(uuid);
         }

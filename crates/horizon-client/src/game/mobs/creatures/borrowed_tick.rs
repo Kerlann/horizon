@@ -243,7 +243,7 @@ impl Game<'_> {
         });
         let teams = std::sync::Arc::new(self.mob_team_backing_for(&mobs));
         self.score.board.begin_ai_changes();
-        let mut player_backing = self.ai_player_view(&teams);
+        let mut player_backing = self.ai_player_view(&teams, &mobs);
         let mut players = self.level_players();
         let mut nearest = super::super::natural_spawning::NearestPlayers::new(&players);
         let mut backing_revision = self.entity_read_state.borrow().mob_backing;
@@ -257,6 +257,7 @@ impl Game<'_> {
         }
         let mut player_index = super::super::native_mob_backing::PlayerBackingIndex::new(
             &super::super::native_mob_backing::PlayerBackingLoans {
+                mobs: &mobs,
                 local: &mut player_backing,
                 players: &mut players,
                 nearest: &mut nearest,
@@ -265,10 +266,11 @@ impl Game<'_> {
                 guest_ids: &mut guest_ids,
             },
         );
-        self.entity_read_state
-            .borrow_mut()
-            .mob_player_writes
-            .clear();
+        {
+            let mut state = self.entity_read_state.borrow_mut();
+            state.mob_player_writes.clear();
+            state.mob_owner_writes.clear();
+        }
         let mut writer_scope = None;
         self.leash_boats = self
             .boats
@@ -356,6 +358,7 @@ impl Game<'_> {
                     &teams,
                     &mut player_index,
                     super::super::native_mob_backing::PlayerBackingLoans {
+                        mobs: &mobs,
                         local: &mut player_backing,
                         players: &mut players,
                         nearest: &mut nearest,
@@ -780,6 +783,11 @@ impl Game<'_> {
                     if !kept {
                         died.remove(&m.id);
                     }
+                    if kept {
+                        self.sync_mob_owner_backing(m);
+                    } else {
+                        self.sync_mob_owner_fact(m.id, None);
+                    }
                     keep[slot] = kept;
                     // ServerLevel ticks entities one after another: the ones
                     // after this mob see it as it is now.
@@ -950,6 +958,7 @@ impl Game<'_> {
                     let slot = snapshot.len();
                     entry.insert(slot as u32);
                     snapshot.push(seen(m, uuid));
+                    self.sync_mob_owner_backing(m);
                 }
             }
             villager_slots.clear();
@@ -977,6 +986,7 @@ impl Game<'_> {
                     &teams,
                     &mut player_index,
                     super::super::native_mob_backing::PlayerBackingLoans {
+                        mobs: &mobs,
                         local: &mut player_backing,
                         players: &mut players,
                         nearest: &mut nearest,
@@ -1070,6 +1080,7 @@ impl Game<'_> {
         *state.path_writes = path_writes;
         *state.gone = gone;
         self.score.board.end_ai_changes();
+        self.entity_read_state.borrow_mut().mob_ai_level = None;
         (lent, dispatch_panic)
     }
 }

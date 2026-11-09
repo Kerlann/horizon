@@ -1,16 +1,9 @@
-//! Invalidation of owned AI player/team projections between mutable mob hooks.
+//! Applied AI backing changes between mutable mob hooks.
 //!
-//! Mutation owners must mark AFTER actual apply, including synchronous writes;
-//! enqueue acceptance must not mark. `mark_mob_player_backing_dirty` covers player
-//! position, visibility, inventory/equipment/effects, mode, lifecycle and guest
-//! membership changes represented by PlayerView or LevelPlayer. Team membership,
-//! collision/friendly-fire rules and tame/root-owner relationship changes use
-//! `mark_mob_team_backing_dirty` (which also invalidates player allies). Canonical
-//! scoreboard mutation and command paths must use that team marker too. Chat,
-//! sounds and unrelated scalar entity writes such as set_silent mark neither.
-//!
-//! These are integration seams, not a claim all mutation paths are instrumented.
-//! The loop compares revisions before each reborrow, retaining unchanged backing.
+//! Canonical Player turns compare represented facts after apply. Core scoreboard
+//! mutations emit changed-only rule/member deltas; tame/identity owners enqueue
+//! bounded UUID edges. Shared ally/rule backing follows those deltas without a
+//! population rebuild. Unrelated writes (chat, sounds, Silent) mark neither.
 use super::Game;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -32,17 +25,46 @@ impl MobBackingRevision {
             .expect("mob team backing revision exhausted");
     }
 }
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct MobOwnerFact {
+    uuid: [i32; 4],
+    owner: Option<[i32; 4]>,
+}
 impl Game<'_> {
     pub(super) fn mark_mob_player_backing_dirty(&self, key: PlayerBackingKey) {
+        if !self.score.board.is_ai_tracking() {
+            return;
+        }
         let mut state = self.entity_read_state.borrow_mut();
+        let Some(level) = state.mob_ai_level else {
+            return;
+        };
+        let was_here = state
+            .mob_ai_teams
+            .read()
+            .expect("AI team backing poisoned")
+            .players
+            .contains(&key.uuid);
+        let here = match key.conn {
+            Some(conn) if self.lan_acting == Some(conn) => {
+                self.dim.key() == level && self.player.is_some() && !self.lan_acting_fake
+            }
+            Some(conn) => self
+                .lan
+                .as_ref()
+                .and_then(|host| host.hub.guest(conn))
+                .is_some_and(|guest| {
+                    guest.participates_online()
+                        && guest.placed
+                        && super::Dim::from_id(&guest.dimension).key() == level
+                }),
+            None => self.dim.key() == level && self.player.is_some() && !self.lan_acting_fake,
+        };
+        if !was_here && !here {
+            return;
+        }
         state.mob_player_writes.insert(key.uuid, key.conn);
         state.mob_backing.players_changed();
-    }
-    pub(super) fn mark_mob_team_backing_dirty(&self) {
-        self.entity_read_state
-            .borrow_mut()
-            .mob_backing
-            .teams_changed();
     }
 }
 
@@ -50,20 +72,180 @@ impl Game<'_> {
     pub(super) fn ai_player_view(
         &self,
         teams: &horizon_client::mobs::TeamRulesSnapshot,
+        mobs: &horizon_client::join_seq::JoinList<horizon_client::mobs::Mob>,
     ) -> Option<horizon_client::mobs::PlayerView> {
         let Some((facts, _)) = &teams.shared else {
             return self.player_view();
         };
-        self.player_view_with_allies(std::sync::Arc::new(
+        let mut view = self.player_view_with_allies(std::sync::Arc::new(
             horizon_client::mobs::PlayerAllies::shared(facts.clone(), self.acting_uuid()),
-        ))
+        ))?;
+        view.vehicle = view
+            .riding_vehicle
+            .and_then(|id| self.player_vehicle_view(id, mobs));
+        Some(view)
     }
-    /// A canonical tame/root-owner write emits identities only, after apply.
-    pub(super) fn mark_mob_owner_backing_changed(
+    /// Resolve a vehicle through its exact owning join, including the actual
+    /// mob loan. This never scans mobs/boats or retains a source element offset.
+    pub(super) fn player_vehicle_view(
         &self,
         id: u32,
-        owner: Option<([i32; 4], Option<[i32; 4]>)>,
+        mobs: &horizon_client::join_seq::JoinList<horizon_client::mobs::Mob>,
+    ) -> Option<horizon_client::mobs::Vehicle> {
+        use horizon_client::join_seq::residency::{
+            Kind,
+            table::{EntityLookup, SourceEntity},
+        };
+        let result = self
+            .entity_residency
+            .borrow_mut()
+            .server_entity_lookup(id, |at| {
+                if at.owner.dimension == self.dim.key() {
+                    match at.owner.kind {
+                        Kind::Boat => {
+                            let boat = &self.boats[self.boats.locate(at.join)?];
+                            let p = boat.position;
+                            return Some(SourceEntity {
+                                id: boat.id,
+                                value: Some(horizon_client::mobs::Vehicle {
+                                    nautilus: false,
+                                    bounds: horizon_core::geometry::Aabb::new(
+                                        horizon_core::geometry::Vec3::new(
+                                            p.x - 0.6875,
+                                            p.y,
+                                            p.z - 0.6875,
+                                        ),
+                                        horizon_core::geometry::Vec3::new(
+                                            p.x + 0.6875,
+                                            p.y + 0.5625,
+                                            p.z + 0.6875,
+                                        ),
+                                    ),
+                                    velocity: boat.velocity,
+                                }),
+                            });
+                        }
+                        Kind::Mob => {
+                            let mob = &mobs[mobs.locate(at.join)?];
+                            let value = (!mob.removed
+                                && matches!(
+                                    mob.species(),
+                                    horizon_client::mobs::Species::Nautilus
+                                        | horizon_client::mobs::Species::ZombieNautilus
+                                ))
+                            .then(|| {
+                                horizon_client::mobs::Vehicle {
+                                    nautilus: true,
+                                    bounds: mob.bounds(),
+                                    velocity: mob.velocity,
+                                }
+                            });
+                            return Some(SourceEntity { id: mob.id, value });
+                        }
+                        _ => {}
+                    }
+                }
+                self.locate_server_resident_owner(at)
+                    .map(|source| SourceEntity {
+                        id: source.id,
+                        value: None,
+                    })
+            });
+        match result {
+            EntityLookup::Found { value, .. } => value,
+            _ => None,
+        }
+    }
+    pub(super) fn mob_owner_fact(
+        &self,
+        source: &horizon_client::mobs::Mob,
+    ) -> Option<MobOwnerFact> {
+        if source.removed {
+            return None;
+        }
+        Some(MobOwnerFact {
+            uuid: *self.persist.uuids.get(&source.id)?,
+            owner: source.extra.tame.then_some(source.extra.owner).flatten(),
+        })
+    }
+    pub(super) fn mob_owner_fact_at(&self, id: u32) -> Option<MobOwnerFact> {
+        use horizon_client::join_seq::residency::{Kind, table::EntityLookup};
+        let EntityLookup::Found { location, .. } = self.server_resident_entity(id) else {
+            return None;
+        };
+        if location.owner.dimension != self.dim.key() || location.owner.kind != Kind::Mob {
+            return None;
+        }
+        self.mob_owner_fact(&self.mobs[self.mobs.locate(location.join)?])
+    }
+    /// Compare a canonical source mutation with its pending/current bounded
+    /// relation fact. A rejected/no-op tame operation cannot enqueue a refresh.
+    pub(super) fn sync_mob_owner_backing(&self, source: &horizon_client::mobs::Mob) {
+        if !self.score.board.is_ai_tracking() {
+            return;
+        }
+        self.sync_mob_owner_fact(source.id, self.mob_owner_fact(source));
+    }
+    pub(super) fn sync_mob_owner_fact(&self, id: u32, after: Option<MobOwnerFact>) {
+        self.sync_mob_owner_fact_in(self.dim.key(), id, after);
+    }
+    fn sync_mob_owner_fact_in(
+        &self,
+        dimension: mod_api::DimensionKey,
+        id: u32,
+        after: Option<MobOwnerFact>,
     ) {
+        if !self.score.board.is_ai_tracking() {
+            return;
+        }
+        let state = self.entity_read_state.borrow();
+        if state.mob_ai_level != Some(dimension) {
+            return;
+        }
+        let before = state.mob_owner_writes.get(&id).copied().unwrap_or_else(|| {
+            let facts = state.mob_ai_teams.read().expect("AI team backing poisoned");
+            facts.identities.get(&id).map(|uuid| MobOwnerFact {
+                uuid: *uuid,
+                owner: facts.owners.get(uuid).copied(),
+            })
+        });
+        drop(state);
+        if before != after {
+            self.mark_mob_owner_backing_changed(id, after);
+        }
+    }
+    pub(super) fn mark_mob_saved_identity_changed(
+        &self,
+        dimension: mod_api::DimensionKey,
+        id: u32,
+        old: Option<[i32; 4]>,
+        new: Option<[i32; 4]>,
+    ) {
+        if self.entity_read_state.borrow().mob_ai_level != Some(dimension)
+            || old == new
+            || !self.score.board.is_ai_tracking()
+        {
+            return;
+        }
+        let owner = self
+            .mob_owner_fact_at(id)
+            .map(|fact| fact.owner)
+            .unwrap_or_else(|| {
+                let state = self.entity_read_state.borrow();
+                if let Some(pending) = state.mob_owner_writes.get(&id) {
+                    return pending.and_then(|fact| fact.owner);
+                }
+                let facts = state.mob_ai_teams.read().expect("AI team backing poisoned");
+                facts
+                    .identities
+                    .get(&id)
+                    .and_then(|uuid| facts.owners.get(uuid))
+                    .copied()
+            });
+        self.sync_mob_owner_fact_in(dimension, id, new.map(|uuid| MobOwnerFact { uuid, owner }));
+    }
+    /// A canonical tame/root-owner write emits identities only, after apply.
+    pub(super) fn mark_mob_owner_backing_changed(&self, id: u32, owner: Option<MobOwnerFact>) {
         if self.score.board.is_ai_tracking() {
             self.entity_read_state
                 .borrow_mut()
@@ -117,7 +299,7 @@ impl Game<'_> {
                 if let Some(old) = facts.identities.remove(&id) {
                     facts.owners.remove(&old);
                 }
-                if let Some((uuid, owner)) = owner {
+                if let Some(MobOwnerFact { uuid, owner }) = owner {
                     facts.identities.insert(id, uuid);
                     if let Some(owner) = owner {
                         facts.owners.insert(uuid, owner);
@@ -200,6 +382,7 @@ pub(super) struct PlayerBackingIndex {
     pending: std::collections::HashMap<[i32; 4], Option<u32>>,
 }
 pub(super) struct PlayerBackingLoans<'a> {
+    pub(super) mobs: &'a horizon_client::join_seq::JoinList<horizon_client::mobs::Mob>,
     pub(super) local: &'a mut Option<horizon_client::mobs::PlayerView>,
     pub(super) players: &'a mut Vec<super::natural_spawning::LevelPlayer>,
     pub(super) nearest: &'a mut super::natural_spawning::NearestPlayers,
@@ -236,6 +419,55 @@ impl Game<'_> {
     /// Refresh changed bodies only. Ordinary writes update a single owned
     /// player and a single nearest-cell entry, independent of mob/player count.
     /// Membership removal/insertion alone rebuilds the affected owned ordering.
+    fn sync_ai_player_team_binding(
+        &self,
+        key: PlayerBackingKey,
+        present: bool,
+        teams: &horizon_client::mobs::TeamRulesSnapshot,
+    ) {
+        let Some((shared, _)) = &teams.shared else {
+            return;
+        };
+        let name = present
+            .then(|| match key.conn {
+                Some(conn) => self
+                    .lan
+                    .as_ref()?
+                    .hub
+                    .guest(conn)
+                    .map(|guest| guest.name.as_str()),
+                None => Some(self.acting_player_name()),
+            })
+            .flatten();
+        let mut facts = shared.write().expect("AI team backing poisoned");
+        if name == facts.player_names.get(&key.uuid).map(|name| name.as_ref()) {
+            return;
+        }
+        if let Some(old) = facts.player_names.remove(&key.uuid) {
+            facts.names.remove(&old);
+        }
+        facts.players.remove(&key.uuid);
+        let team = if let Some(name) = name {
+            let name: std::sync::Arc<str> = name.into();
+            facts.names.insert(name.clone(), key.uuid);
+            facts.player_names.insert(key.uuid, name.clone());
+            facts.players.insert(key.uuid);
+            self.score
+                .board
+                .players_team(&name)
+                .map(|team| team.ai_identity())
+        } else {
+            self.score
+                .board
+                .players_team(&horizon_client::save::uuid_text(key.uuid))
+                .map(|team| team.ai_identity())
+        };
+        if let Some(team) = team {
+            facts.members.insert(key.uuid, team);
+        } else {
+            facts.members.remove(&key.uuid);
+        }
+    }
     pub(super) fn refresh_mob_player_deltas(
         &mut self,
         teams: &horizon_client::mobs::TeamRulesSnapshot,
@@ -255,7 +487,7 @@ impl Game<'_> {
         for (uuid, conn) in index.pending.drain() {
             let uuid128 = horizon_client::lan::playerdata::ints_uuid(uuid);
             let level = if let Some(conn) = conn {
-                let view = self.ai_guest_view(conn, teams);
+                let view = self.ai_guest_view(conn, teams, loans.mobs);
                 match (index.guests.get(&conn).copied(), view) {
                     (Some(slot), Some(view)) => {
                         debug_assert_eq!(loans.guests[slot].0, conn);
@@ -306,11 +538,12 @@ impl Game<'_> {
                         spectator: g.spectator(),
                     })
             } else if self.acting_uuid() == uuid {
-                *loans.local = self.ai_player_view(teams);
+                *loans.local = self.ai_player_view(teams, loans.mobs);
                 self.local_level_player()
             } else {
                 None
             };
+            self.sync_ai_player_team_binding(PlayerBackingKey { uuid, conn }, level.is_some(), teams);
             match (index.levels.get(&uuid128).copied(), level) {
                 (Some(slot), Some(level)) => {
                     debug_assert_eq!(loans.players[slot].uuid, uuid128);
@@ -337,27 +570,39 @@ impl Game<'_> {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn dirty_masks_invalidate_only_the_required_backing() {
-        let mut revision = MobBackingRevision::default();
-        revision.players_changed();
-        assert_eq!(
-            revision,
-            MobBackingRevision {
-                players: 1,
-                teams: 0
+impl Game<'_> {
+    /// A direct inactive-body mutator already owns its resolved target. Record
+    /// that identity only after its represented scalar actually changed.
+    pub(super) fn mark_player_target_backing_changed(&self, target: super::commands::Target) {
+        use super::commands::Target;
+        let key = match target {
+            Target::Player => {
+                if self.lan_acting_fake {
+                    return;
+                }
+                PlayerBackingKey {
+                    uuid: self.acting_uuid(),
+                    conn: self.lan_acting,
+                }
             }
-        );
-        revision.teams_changed();
-        assert_eq!(
-            revision,
-            MobBackingRevision {
-                players: 1,
-                teams: 1
+            Target::Guest(conn) => {
+                let Some(guest) = self.lan.as_ref().and_then(|host| host.hub.guest(conn)) else {
+                    return;
+                };
+                if guest.is_fake() {
+                    return;
+                }
+                PlayerBackingKey {
+                    uuid: horizon_client::lan::playerdata::uuid_ints(guest.uuid),
+                    conn: Some(conn),
+                }
             }
-        );
+            _ => return,
+        };
+        self.mark_mob_player_backing_dirty(key);
     }
 }
+
+#[cfg(test)]
+#[path = "native_mob_backing/tests.rs"]
+mod tests;

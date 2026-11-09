@@ -2801,6 +2801,7 @@ impl Game<'_> {
     }
     /// `entity_tame` for the pet at `index`, just tamed by its owner.
     pub(super) fn pet_tamed(&mut self, index: usize) {
+        self.sync_mob_owner_backing(&self.mobs[index]);
         let m = &self.mobs[index];
         let (entity, kind) = (m.id, mob_kind(m));
         let owner = m

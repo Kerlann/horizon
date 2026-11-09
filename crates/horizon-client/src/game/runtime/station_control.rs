@@ -227,6 +227,7 @@ impl Game<'_> {
                     .ok_or("no horse around")?;
                 if flag("tame") {
                     self.mobs[index].extra.tame = true;
+                    self.sync_mob_owner_backing(&self.mobs[index]);
                 }
                 if flag("chest") {
                     self.mobs[index].extra.chested = true;

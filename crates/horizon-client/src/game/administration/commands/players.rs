@@ -190,8 +190,18 @@ impl Game<'_> {
         f: impl FnOnce(&mut Self) -> T,
     ) -> Option<T> {
         let conn = match t {
-            Target::Player => return Some(f(self)),
-            Target::Guest(conn) if self.lan_acting == Some(conn) => return Some(f(self)),
+            Target::Player => {
+                let before = self.player_ai_facts();
+                let result = f(self);
+                self.player_ai_facts_applied(before);
+                return Some(result);
+            }
+            Target::Guest(conn) if self.lan_acting == Some(conn) => {
+                let before = self.player_ai_facts();
+                let result = f(self);
+                self.player_ai_facts_applied(before);
+                return Some(result);
+            }
             Target::Guest(conn) => conn,
             _ => return None,
         };

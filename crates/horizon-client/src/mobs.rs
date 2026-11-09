@@ -3973,6 +3973,7 @@ pub trait WhoLookup {
 pub struct AiTeamFacts {
     pub identities: HashMap<u32, [i32; 4]>,
     pub names: HashMap<std::sync::Arc<str>, [i32; 4]>,
+    pub player_names: HashMap<[i32; 4], std::sync::Arc<str>>,
     pub players: std::collections::HashSet<[i32; 4]>,
     pub members: HashMap<[i32; 4], usize>,
     pub owners: HashMap<[i32; 4], [i32; 4]>,
@@ -4054,10 +4055,17 @@ pub struct TeamRulesSnapshot {
 }
 impl TeamRulesSnapshot {
     pub fn of(&self, who: Who) -> Option<crate::scoreboard::TeamRules<usize>> {
+        self.of_for_player(who, None)
+    }
+    pub fn of_for_player(
+        &self,
+        who: Who,
+        selected: Option<[i32; 4]>,
+    ) -> Option<crate::scoreboard::TeamRules<usize>> {
         if let Some((shared, player)) = &self.shared {
             let facts = shared.read().expect("AI team backing poisoned");
             let uuid = match who {
-                Who::Player => *player,
+                Who::Player => selected.unwrap_or(*player),
                 Who::Mob(id) => *facts.identities.get(&id)?,
             };
             return facts.rules.get(&facts.team(uuid)?).copied();

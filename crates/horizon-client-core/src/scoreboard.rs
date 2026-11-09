@@ -864,6 +864,7 @@ pub struct Scoreboard {
     team_of: BTreeMap<Arc<str>, String>,
     next_team_identity: usize,
     ai_changes: Option<Vec<TeamAiChange>>,
+    ai_spare_changes: Vec<TeamAiChange>,
 }
 impl PartialEq for Scoreboard {
     fn eq(&self, other: &Self) -> bool {
@@ -892,6 +893,7 @@ impl Default for Scoreboard {
             team_of: BTreeMap::new(),
             next_team_identity: 0,
             ai_changes: None,
+            ai_spare_changes: Vec::new(),
         }
     }
 }
@@ -1122,7 +1124,8 @@ impl Scoreboard {
         self.ai_changes.is_some()
     }
     pub fn begin_ai_changes(&mut self) {
-        self.ai_changes = Some(Vec::new());
+        self.ai_spare_changes.clear();
+        self.ai_changes = Some(std::mem::take(&mut self.ai_spare_changes));
     }
     pub fn take_ai_changes(&mut self) -> Vec<TeamAiChange> {
         self.ai_changes
@@ -1137,7 +1140,10 @@ impl Scoreboard {
         }
     }
     pub fn end_ai_changes(&mut self) {
-        self.ai_changes = None;
+        if let Some(mut changes) = self.ai_changes.take() {
+            changes.clear();
+            self.ai_spare_changes = changes;
+        }
     }
     /// `getPlayerTeams().stream()` (what saving uses).
     pub fn teams_streamed(&self) -> Vec<&Team> {
@@ -1164,6 +1170,18 @@ impl Scoreboard {
         }
         self.team_order.remove(name);
         self.reorder();
+    }
+    /// Empty a team's canonical membership without cloning its member set.
+    pub fn empty_team(&mut self, name: &str) -> usize {
+        let Some(mut team) = self.team_mut(name) else {
+            return 0;
+        };
+        let members = std::mem::take(&mut team.players);
+        drop(team);
+        for member in members.iter() {
+            self.remove_from_team(member);
+        }
+        members.len()
     }
     pub fn players_team(&self, player: &str) -> Option<&Team> {
         self.team(self.team_of.get(player)?)

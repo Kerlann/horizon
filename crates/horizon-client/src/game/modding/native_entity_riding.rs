@@ -358,6 +358,16 @@ impl Game<'_> {
         vehicle: Target,
         force: bool,
     ) -> bool {
+        let before = if rider == Target::Player {
+            self.player_ai_facts()
+        } else {
+            None
+        };
+        let result = self.apply_start_riding_target(rider, vehicle, force);
+        self.player_ai_facts_applied(before);
+        result
+    }
+    fn apply_start_riding_target(&mut self, rider: Target, vehicle: Target, force: bool) -> bool {
         if let Target::Guest(conn) = rider {
             if self
                 .command_guest(conn)

@@ -767,6 +767,9 @@ impl Game<'_> {
             // AbstractHorse.tameWithName: entity event 7, spawnTamingParticles(true).
             self.mob_event_particles(mob, 7);
         }
+        if let Some(fact) = self.mob_owner_fact_at(mob) {
+            self.sync_mob_owner_fact(mob, Some(fact));
+        }
         if let Some(view) = self
             .mobs
             .iter()

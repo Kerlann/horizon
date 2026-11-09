@@ -94,10 +94,20 @@ impl Game<'_> {
                 None => false,
             },
             Some(t @ (Target::Player | Target::Guest(_))) => {
-                self.native_player_body_mut(t).is_some_and(|p| {
-                    p.health.permanently_invulnerable = invulnerable;
-                    true
-                })
+                let Some(p) = self.native_player_body_mut(t) else {
+                    return false;
+                };
+                let before = p.invulnerable
+                    || p.health.permanently_invulnerable
+                    || p.health.invulnerable_time > 0;
+                p.health.permanently_invulnerable = invulnerable;
+                let after = p.invulnerable
+                    || p.health.permanently_invulnerable
+                    || p.health.invulnerable_time > 0;
+                if before != after {
+                    self.mark_player_target_backing_changed(t);
+                }
+                true
             }
             Some(t) => self.set_saved_invulnerable_flag(t, invulnerable),
             None => false,
@@ -159,10 +169,20 @@ impl Game<'_> {
                 None => false,
             },
             Some(t @ (Target::Player | Target::Guest(_))) => {
-                self.native_player_body_mut(t).is_some_and(|p| {
-                    p.health.invulnerable_time = ticks;
-                    true
-                })
+                let Some(p) = self.native_player_body_mut(t) else {
+                    return false;
+                };
+                let before = p.invulnerable
+                    || p.health.permanently_invulnerable
+                    || p.health.invulnerable_time > 0;
+                p.health.invulnerable_time = ticks;
+                let after = p.invulnerable
+                    || p.health.permanently_invulnerable
+                    || p.health.invulnerable_time > 0;
+                if before != after {
+                    self.mark_player_target_backing_changed(t);
+                }
+                true
             }
             Some(t) => self.set_saved_invulnerable_time(t, ticks),
             None => false,

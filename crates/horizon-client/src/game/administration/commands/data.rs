@@ -489,6 +489,9 @@ impl Game<'_> {
                         );
                     }
                 }
+                if let Some(fact) = self.mob_owner_fact_at(id) {
+                    self.sync_mob_owner_fact(id, Some(fact));
+                }
                 if unresolved {
                     self.close_opaque_merchant(id);
                 }

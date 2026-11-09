@@ -31,6 +31,13 @@ pub struct TargetInfo {
     pub passenger: bool,
 }
 impl MobWorld<'_> {
+    /// The selected real player supplies Who::Player's team, including guests
+    /// and target redirects; no new team snapshot is allocated for selection.
+    pub fn team_of(&self, who: Who) -> Option<crate::scoreboard::TeamRules<usize>> {
+        self.teams
+            .of_for_player(who, self.selected_player().map(|player| player.uuid))
+    }
+
     /// `Level.getEntity(uuid)`: the entity a UUID a mob stored names, while it
     /// is in the level. Nothing when this world keeps no entity UUIDs, or when
     /// nothing loaded answers to it.

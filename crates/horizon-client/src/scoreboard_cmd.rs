@@ -884,23 +884,13 @@ fn team(id: &str, ctx: &Context, env: &mut dyn Env) -> CmdResult<i32> {
         }
         "team.empty" => {
             let name = team_name(ctx, env, "team")?;
-            let members: Vec<String> = env
-                .sb()
-                .team(&name)
-                .map(|t| t.players.iter().cloned().collect())
-                .unwrap_or_default();
-            if members.is_empty() {
+            let count = env.sb_mut().empty_team(&name);
+            if count == 0 {
                 return Err(err("commands.team.empty.unchanged", &[]));
             }
-            for m in &members {
-                env.sb_mut().remove_from_team(m);
-            }
             let shown = formatted(env, &name);
-            env.feedback(tr(
-                "commands.team.empty.success",
-                &[num(members.len()), shown],
-            ));
-            Ok(members.len() as i32)
+            env.feedback(tr("commands.team.empty.success", &[num(count), shown]));
+            Ok(count as i32)
         }
         "team.join" => {
             let name = team_name(ctx, env, "team")?;

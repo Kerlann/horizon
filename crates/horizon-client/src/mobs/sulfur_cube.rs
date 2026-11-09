@@ -1205,7 +1205,7 @@ pub fn mob_contacts(m: &Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         return;
     };
     let bounds = m.bounds();
-    let own_team = w.teams.of(super::Who::Mob(m.id));
+    let own_team = w.team_of(super::Who::Mob(m.id));
     for other in w.others_near(bounds) {
         if other.id != m.id
             && other.alive
@@ -1213,7 +1213,7 @@ pub fn mob_contacts(m: &Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
             && other.bounds.intersects(bounds)
             && crate::scoreboard::TeamRules::pushable_by(
                 own_team.as_ref(),
-                w.teams.of(super::Who::Mob(other.id)).as_ref(),
+                w.team_of(super::Who::Mob(other.id)).as_ref(),
                 true,
             )
         {

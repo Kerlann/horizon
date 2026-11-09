@@ -275,8 +275,8 @@ pub fn ai_step(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         && p.alive
         && !p.creative
         && crate::scoreboard::TeamRules::allows_damage(
-            w.teams.of(Who::Mob(m.id)).as_ref(),
-            w.teams.of(Who::Player).as_ref(),
+            w.team_of(Who::Mob(m.id)).as_ref(),
+            w.team_of(Who::Player).as_ref(),
         )
         // Player.touch: entities within the player's box grown by (1, 0.5, 1).
         && m.bounds().intersects(p.bounds.inflate(Vec3::new(1.0, 0.5, 1.0)))
@@ -317,12 +317,12 @@ fn hurt_touching_golems(m: &mut Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
         return;
     }
     let bounds = m.bounds();
-    let own = w.teams.of(Who::Mob(m.id));
+    let own = w.team_of(Who::Mob(m.id));
     let pushable = m.pushable();
     let golems: Vec<u32> = w
         .others_near(bounds)
         .filter(|o| {
-            let theirs = w.teams.of(Who::Mob(o.id));
+            let theirs = w.team_of(Who::Mob(o.id));
             o.id != m.id
                 && o.species == Species::IronGolem
                 && o.alive

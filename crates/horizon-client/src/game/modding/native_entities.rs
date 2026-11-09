@@ -274,6 +274,9 @@ impl Game<'_> {
             .binary_search_by_key(&id, |entry| entry.0)
             .unwrap_or_else(|i| i);
         self.persist.live.insert(index, (id, kind, true));
+        if let Some(fact) = self.mob_owner_fact_at(id) {
+            self.sync_mob_owner_fact(id, Some(fact));
+        }
     }
     /// The type id and position a mod is told of.
     fn slot_kind_and_position(&self, slot: Slot) -> (std::borrow::Cow<'static, str>, Vec3) {
@@ -344,6 +347,7 @@ impl Game<'_> {
     pub(super) fn native_leave_skip(&mut self, id: u32) {
         if let Ok(i) = self.persist.live.binary_search_by_key(&id, |l| l.0) {
             self.persist.live.remove(i);
+            self.sync_mob_owner_fact(id, None);
         }
     }
     /// Entity `id` has left the level: told once, if mods were told it joined.
@@ -353,6 +357,7 @@ impl Game<'_> {
         }
         if let Ok(i) = self.persist.live.binary_search_by_key(&id, |l| l.0) {
             let (id, kind, _) = self.persist.live.remove(i);
+            self.sync_mob_owner_fact(id, None);
             let dimension = self.dim.id();
             self.native_entity_leave_level(dimension, id, &kind);
         }
