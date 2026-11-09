@@ -658,7 +658,7 @@ mod tests {
             table::{EntityLookup, EntityTable},
         };
         let mut list = GuestList::default();
-        let mut table = EntityTable::new(Journal::default());
+        let mut table = EntityTable::<()>::new(Journal::default());
         list.bind_residency(&table.producer(), |_| mod_api::DimensionKey::OVERWORLD);
         list.extend([guest(1), guest(2)]);
         list.update(1, |g| g.kind = crate::lan::guest::GuestKind::Fake);
@@ -720,7 +720,7 @@ mod tests {
         let mut pending = guest(1);
         pending.entity_id = 0;
         let join = pending.residency.join();
-        let mut table = EntityTable::new(Journal::default());
+        let mut table = EntityTable::<()>::new(Journal::default());
         list.bind_residency(&table.producer(), |_| mod_api::DimensionKey::OVERWORLD);
         list.push(pending);
         assert_eq!(
