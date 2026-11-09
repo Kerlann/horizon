@@ -37,7 +37,6 @@ fn redirect_to_another_guest_switches_view_and_tags_subsequent_events() {
 
             game.options.dedicated = Some(Vec::new());
             game.native_level_opened(game.dim);
-            game.reset_entity_residency();
             open_to_lan(game);
             for conn in [12, 13] {
                 let mut placed = guest(conn);
@@ -80,15 +79,18 @@ fn redirect_to_another_guest_switches_view_and_tags_subsequent_events() {
             game.lan.as_mut().unwrap().mob_players.insert(other.id, 12);
             // The callback actors are real members lent by the owning roster,
             // not unadmitted temporary Mob values or fabricated read rows.
+            game.reset_entity_residency();
             game.mobs.push(actor);
+            let actor_join = horizon_client::join_seq::Joined::join_seq(game.mobs.last().unwrap());
             game.mobs.push(other);
-            let actor_join = game.mobs[0].join_seq();
-            let other_join = game.mobs[1].join_seq();
+            let other_join = horizon_client::join_seq::Joined::join_seq(game.mobs.last().unwrap());
             let mut actor = game.mobs.extract(actor_join).unwrap();
             let other = game.mobs.extract(other_join).unwrap();
             for id in [actor.id, other.id] {
                 assert!(matches!(
-                    game.server_resident_entity(id),
+                    game.entity_residency
+                        .borrow_mut()
+                        .server_entity_lookup(id, |at| game.locate_server_resident_owner(at)),
                     horizon_client::join_seq::residency::table::EntityLookup::Taken
                 ));
                 assert!(game.entity(id).is_some());
@@ -129,6 +131,10 @@ fn redirect_to_another_guest_switches_view_and_tags_subsequent_events() {
                 );
                 assert_eq!(world.selected_player_identity().unwrap().1, second_id);
             }
+            drop(world);
+            let index = game.mobs.len();
+            game.mobs.put_back(index, actor);
+            game.mobs.put_back(index + 1, other);
         });
     });
 }

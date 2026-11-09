@@ -1,4 +1,5 @@
 use super::*;
+use horizon_client::join_seq::Joined as _;
 use crate::game::native_entity_refs::tests::with_game;
 use horizon_client::mobs::part_goals::GoalHost;
 use horizon_core::geometry::Vec3;
