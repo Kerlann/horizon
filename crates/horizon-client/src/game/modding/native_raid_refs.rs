@@ -268,7 +268,7 @@ mod tests {
                 assert!(raid.stop(game));
                 assert_eq!(raid.omen_level(game), Some(17));
                 assert_eq!(other.omen_level(game), before);
-                assert!(other.is_active(game));
+                assert_eq!(other.is_active(game), Some(true));
                 game.raid_command_stop(id);
                 let tick_id = game
                     .raiding
@@ -462,7 +462,7 @@ mod tests {
             assert_eq!(raid.num_groups(game), groups);
             assert_eq!(raid.has_bonus_wave(game), Some(true));
             assert_eq!(raid.is_started(game), started);
-            assert!(raid.is_active(game));
+            assert_eq!(raid.is_active(game), Some(true));
             assert_eq!(raid.status(game), Some(NativeRaidStatus::Ongoing));
             assert_eq!(raid.total_health(game), total);
             assert_eq!(raid.living_health(game), Some(12.0));
@@ -481,8 +481,8 @@ mod tests {
             assert!(raid.stop(game));
             assert!(!raid.stop(game));
             assert_eq!(raid.status(game), Some(NativeRaidStatus::Stopped));
-            assert!(!raid.is_active(game));
-            assert!(other.is_active(game));
+            assert_eq!(raid.is_active(game), Some(false));
+            assert_eq!(other.is_active(game), Some(true));
             assert_eq!(game.dim, super::super::Dim::Nether);
             assert_eq!(level.raid_at(game, [10, 70, 10]), None);
             assert_eq!(level.raid(game, raid.id()), Some(raid));
@@ -508,6 +508,8 @@ mod tests {
                     .is_some()
             );
             game.levels.clear();
+            assert_eq!(raid.is_active(game), None);
+            assert_eq!(raid.is_started(game), None);
             assert_eq!(raid.center(game), None);
             assert_eq!(raid.raiders(game), None);
             assert!(!raid.set_omen_level(game, 1));
@@ -530,6 +532,7 @@ mod tests {
             let stale = RaidRef::new(later, raid.id());
             assert_eq!(game.raid_center(stale), None);
             assert_eq!(game.raid_is_active(stale), None);
+            assert_eq!(game.raid_is_started(stale), None);
             assert!(!game.raid_stop(stale));
             assert!(!game.raid_set_omen_level(stale, 2));
             assert_eq!(game.level_raids(later), None);
@@ -540,6 +543,8 @@ mod tests {
             assert_eq!(game.raid_status(raid), Some(NativeRaidStatus::Ongoing));
 
             game.options.execution_role = ExecutionRole::Client;
+            assert_eq!(game.raid_is_active(raid), None);
+            assert_eq!(game.raid_is_started(raid), None);
             assert_eq!(game.raid_center(raid), None);
             assert_eq!(game.level_raid_at(level, [10, 70, 10]), None);
             assert_eq!(game.level_raids(level), None);

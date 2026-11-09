@@ -159,7 +159,7 @@ fn shoot_listener_panic_after_admission_preserves_owned_rows() {
                     before,
                     "panic changed survivor identity or spawn admission order"
                 );
-                let mut table = EntityTable::new(journal);
+                let mut table = EntityTable::<()>::new(journal);
                 for expected in restored {
                     let found = table.entity_lookup(&owner.dimension, expected.0, |at| {
                         let list = &game.creatures.projectiles;
@@ -239,7 +239,7 @@ fn normal_dispatch_returns_the_owned_pass_for_explicit_restore() {
                     .collect::<Vec<_>>(),
                 [child_identity, identity]
             );
-            EntityTable::new(journal)
+            EntityTable::<()>::new(journal)
                 .end_tick()
                 .expect("normal dispatch changed the lift depth");
         });

@@ -389,7 +389,7 @@ mod tests {
         use std::sync::{Arc, Mutex};
 
         /// Whether the joining entity was in its level while the hook ran.
-        struct Observer(Arc<Mutex<Vec<bool>>>);
+        struct Observer(Arc<Mutex<Vec<Option<bool>>>>);
         #[mod_api::__subscriptions]
         impl Hooks for Observer {
             fn entity_join_level(
@@ -415,13 +415,13 @@ mod tests {
                 game.next_entity += 1;
                 let id = game.next_entity;
                 let cow = push_mob(game, id, "minecraft:cow");
-                // In the lists, but not yet let in.
-                assert!(!cow.added_to_level(game));
+                // In the lists, but not yet let in: known false, not stale.
+                assert_eq!(cow.added_to_level(game), Some(false));
                 game.native_joins_flush(false, 0);
-                assert_eq!(*during.lock().unwrap(), [false]);
-                assert!(cow.added_to_level(game));
+                assert_eq!(*during.lock().unwrap(), [Some(false)]);
+                assert_eq!(cow.added_to_level(game), Some(true));
                 assert!(cow.discard(game));
-                assert!(!cow.added_to_level(game));
+                assert_eq!(cow.added_to_level(game), None);
             });
         });
     }
