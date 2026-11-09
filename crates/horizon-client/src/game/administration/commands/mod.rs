@@ -1691,6 +1691,7 @@ impl Game<'_> {
     /// (An end gateway's or a vehicle's transition carries its motion.)
     pub(super) fn teleport_stops(&mut self, t: Target) {
         let _ = self.in_target_level(t, |g| {
+            let before = g.capture_ai_vehicle(t);
             target_entity_mut!(g, t, e => *e.velocity_mut() = Vec3::ZERO);
             // The dragon's flight builds on the motion it carries.
             if let Target::Dragon(id) = t
@@ -1698,6 +1699,7 @@ impl Game<'_> {
             {
                 d.stop();
             }
+            g.ai_vehicle_applied(before);
         });
     }
     /// `TeleportCommand.performTeleport` after a successful `teleportTo` in
@@ -1772,6 +1774,7 @@ impl Game<'_> {
         turn_riders: bool,
     ) -> Option<[f64; 3]> {
         use super::entity::Entity;
+        let before_vehicle = self.capture_ai_vehicle(t);
         let from = self.target_position(t);
         // Entity.calculatePassengerTransition compares a rider's angle with the
         // vehicle's own, so the vehicle's angles are read before the teleport,
@@ -2052,6 +2055,7 @@ impl Game<'_> {
             });
             self.teleport_passengers(t, from, to, placed);
         }
+        self.ai_vehicle_applied(before_vehicle);
         from
     }
 

@@ -227,6 +227,7 @@ impl Game<'_> {
                     .ok_or("no horse around")?;
                 if flag("tame") {
                     self.mobs[index].extra.tame = true;
+                    self.record_ai_mob_owner_id(self.mobs[index].id);
                 }
                 if flag("chest") {
                     self.mobs[index].extra.chested = true;

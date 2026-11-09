@@ -764,6 +764,7 @@ impl Game<'_> {
             m.extra.tame = true;
             m.extra.owner = Some(owner);
             m.persistent = true;
+            self.record_ai_mob_owner_id(mob);
             // AbstractHorse.tameWithName: entity event 7, spawnTamingParticles(true).
             self.mob_event_particles(mob, 7);
         }

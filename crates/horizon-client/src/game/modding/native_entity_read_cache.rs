@@ -20,6 +20,8 @@ use std::{
 pub(super) struct NativeReadState {
     pub(super) passes: Rc<RefCell<ReadPasses>>,
     pub(super) mob_backing: super::native_mob_backing::MobBackingRevision,
+    pub(super) mob_ai_level: Option<DimensionKey>,
+    pub(super) mob_player_writes: HashSet<super::native_mob_backing::PlayerBackingKey>,
     pub(super) commands: Option<super::native_entity_commands::EntityCommands>,
     pub(super) identities: HashSet<Arc<str>>,
     pub(super) player_identifiers: NativeReadIdentifiers,
@@ -38,6 +40,8 @@ impl NativeReadState {
     pub(super) fn reset(&mut self) {
         self.passes.borrow_mut().reset();
         self.mob_backing = Default::default();
+        self.mob_ai_level = None;
+        self.mob_player_writes.clear();
         self.commands = None;
         self.identities.clear();
         self.player_identifiers = NativeReadIdentifiers::default();
@@ -92,6 +96,35 @@ impl NativeReadDetails {
 }
 
 impl Game<'_> {
+    /// Prepare once on the logical capture clock, releasing the state borrow
+    /// before source resolution. Canonical changes update individual keys.
+    pub(super) fn with_prepared_mob_relations<R>(
+        &self,
+        read: impl FnOnce(&super::native_mob_read_context::NativeMobRelations) -> R,
+    ) -> Option<R> {
+        let level = LevelRef::new(self.native_lifecycle.epoch()?, self.dim.key());
+        let tick = self.native_lifecycle.capture_tick()?;
+        let needs_build = self
+            .entity_read_state
+            .borrow()
+            .mob_relations
+            .get(&level)
+            .is_none_or(|pass| pass.tick != Some(tick));
+        if needs_build {
+            let mut pass = {
+                let mut state = self.entity_read_state.borrow_mut();
+                std::mem::take(state.mob_relations.entry(level).or_default())
+            };
+            self.rebuild_mob_read_relations(level, &mut pass.index);
+            pass.tick = Some(tick);
+            self.entity_read_state
+                .borrow_mut()
+                .mob_relations
+                .insert(level, pass);
+        }
+        self.with_mob_read_relations(level, read)
+    }
+
     pub(super) fn with_mob_read_relations<R>(
         &self,
         level: LevelRef,

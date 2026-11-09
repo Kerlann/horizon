@@ -12,6 +12,7 @@ pub struct GuestList {
     simulation: Vec<usize>,
     connections: FxHashMap<u32, usize>,
     identities: FxHashMap<(u128, u32), usize>,
+    online_profiles: FxHashMap<u128, usize>,
     residency: Option<(
         crate::join_seq::residency::Journal,
         fn(&str) -> mod_api::DimensionKey,
@@ -209,6 +210,13 @@ impl GuestList {
     pub fn identity_index(&self, uuid: u128, entity: u32) -> Option<usize> {
         self.identities.get(&(uuid, entity)).copied()
     }
+    /// Current online profile, maintained by this collection's mutation guard.
+    /// The returned record still needs admission validation at a mod read boundary.
+    pub fn online_profile(&self, uuid: u128) -> Option<&Guest> {
+        self.online_profiles
+            .get(&uuid)
+            .map(|&index| &self.rows[index])
+    }
     /// Material player bodies in join order, without visiting connectionless actors.
     pub fn simulation_iter(&self) -> impl Iterator<Item = &Guest> {
         self.simulation_indexed_iter().map(|(_, guest)| guest)
@@ -230,6 +238,9 @@ impl GuestList {
             .or_insert(index);
         if guest.participates_in_player_simulation() {
             self.simulation.push(index);
+        }
+        if let Some(uuid) = online_profile_uuid(&guest) {
+            self.online_profiles.entry(uuid).or_insert(index);
         }
         self.rows.push(guest);
         if !self.bind_guest(index) {
@@ -286,6 +297,7 @@ impl GuestList {
         self.simulation.clear();
         self.connections.clear();
         self.identities.clear();
+        self.online_profiles.clear();
     }
     pub fn reverse(&mut self) {
         self.rows.reverse();
@@ -295,9 +307,13 @@ impl GuestList {
         self.simulation.clear();
         self.connections.clear();
         self.identities.clear();
+        self.online_profiles.clear();
         for (index, guest) in self.rows.iter().enumerate() {
             if guest.participates_in_player_simulation() {
                 self.simulation.push(index);
+            }
+            if let Some(uuid) = online_profile_uuid(guest) {
+                self.online_profiles.entry(uuid).or_insert(index);
             }
             self.connections.entry(guest.conn).or_insert(index);
             self.identities
@@ -335,17 +351,21 @@ impl Drop for Reindex<'_> {
 struct Edit<'a> {
     list: &'a mut GuestList,
     index: usize,
-    before: (u32, u128, i32, bool),
+    before: (u32, u128, i32, bool, bool),
     registration: Option<horizon_mod_runtime::attachments::AttachmentRegistration>,
     dimension: Option<mod_api::DimensionKey>,
     released: bool,
 }
-fn index_fields(guest: &Guest) -> (u32, u128, i32, bool) {
+fn online_profile_uuid(guest: &Guest) -> Option<u128> {
+    (guest.placed && !guest.released && guest.participates_online()).then_some(guest.uuid)
+}
+fn index_fields(guest: &Guest) -> (u32, u128, i32, bool, bool) {
     (
         guest.conn,
         guest.uuid,
         guest.entity_id,
         guest.participates_in_player_simulation(),
+        online_profile_uuid(guest).is_some(),
     )
 }
 impl Drop for Edit<'_> {
@@ -658,7 +678,7 @@ mod tests {
             table::{EntityLookup, EntityTable},
         };
         let mut list = GuestList::default();
-        let mut table = EntityTable::new(Journal::default());
+        let mut table = EntityTable::<()>::new(Journal::default());
         list.bind_residency(&table.producer(), |_| mod_api::DimensionKey::OVERWORLD);
         list.extend([guest(1), guest(2)]);
         list.update(1, |g| g.kind = crate::lan::guest::GuestKind::Fake);
@@ -720,7 +740,7 @@ mod tests {
         let mut pending = guest(1);
         pending.entity_id = 0;
         let join = pending.residency.join();
-        let mut table = EntityTable::new(Journal::default());
+        let mut table = EntityTable::<()>::new(Journal::default());
         list.bind_residency(&table.producer(), |_| mod_api::DimensionKey::OVERWORLD);
         list.push(pending);
         assert_eq!(
