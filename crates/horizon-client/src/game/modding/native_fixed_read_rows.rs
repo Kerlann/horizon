@@ -380,48 +380,51 @@ impl Game<'_> {
                 forced,
             }))
         });
-        Some(NativePlayerReadSnapshot(PlayerReadRow {
-            capture,
-            entity: player.entity(),
-            selected_slot: self.player_selected_slot(player),
-            container_menu: self.player_container_menu(player),
-            exp_cooldown: self.player_exp_cooldown(player),
-            last_death_location: last_death_location,
-            needs_food: self.player_needs_food(player),
-            has_enough_food: self.player_has_enough_food(player),
-            can_eat: [
-                self.player_can_eat(player, false)?,
-                self.player_can_eat(player, true)?,
-            ],
-            experience: self.player_experience(player),
-            xp_needed_for_next_level: self.player_xp_needed_for_next_level(player),
-            permission_level: self.player_permission_level(player),
-            has_infinite_materials: self.player_has_infinite_materials(player),
-            can_use_game_master_blocks: self.player_can_use_game_master_blocks(player),
-            previous_game_mode: self.player_previous_game_mode(player),
-            is_secondary_use_active: self.player_is_secondary_use_active(player),
-            is_fake: self.player_is_fake(player),
-            respawn_config: respawn_config,
-            text_filtering: self.player_text_filtering(player),
-            sleep_ignored: self.player_sleep_ignored(player),
-            counts_for_sleep: self.player_counts_for_sleep(player),
-            sleep_timer: self.player_sleep_timer(player),
-            game_mode: self.player_game_mode(player),
-            is_creative: self.player_is_creative(player),
-            is_spectator: self.player_is_spectator(player),
-            may_build: self.player_may_build(player),
-            food: self.player_food(player),
-            abilities: self.player_abilities(player),
-            block_breaking: self.player_block_breaking(player),
-            ambient_mood: self.player_ambient_mood(player),
-        }))
+        Some(NativePlayerReadSnapshot(
+            PlayerReadRow {
+                capture,
+                entity: player.entity(),
+                selected_slot: self.player_selected_slot(player),
+                container_menu: self.player_container_menu(player),
+                exp_cooldown: self.player_exp_cooldown(player),
+                last_death_location: last_death_location,
+                needs_food: self.player_needs_food(player),
+                has_enough_food: self.player_has_enough_food(player),
+                can_eat: [
+                    self.player_can_eat(player, false)?,
+                    self.player_can_eat(player, true)?,
+                ],
+                experience: self.player_experience(player),
+                xp_needed_for_next_level: self.player_xp_needed_for_next_level(player),
+                permission_level: self.player_permission_level(player),
+                has_infinite_materials: self.player_has_infinite_materials(player),
+                can_use_game_master_blocks: self.player_can_use_game_master_blocks(player),
+                previous_game_mode: self.player_previous_game_mode(player),
+                is_secondary_use_active: self.player_is_secondary_use_active(player),
+                is_fake: self.player_is_fake(player),
+                respawn_config: respawn_config,
+                text_filtering: self.player_text_filtering(player),
+                sleep_ignored: self.player_sleep_ignored(player),
+                counts_for_sleep: self.player_counts_for_sleep(player),
+                sleep_timer: self.player_sleep_timer(player),
+                game_mode: self.player_game_mode(player),
+                is_creative: self.player_is_creative(player),
+                is_spectator: self.player_is_spectator(player),
+                may_build: self.player_may_build(player),
+                food: self.player_food(player),
+                abilities: self.player_abilities(player),
+                block_breaking: self.player_block_breaking(player),
+                ambient_mood: self.player_ambient_mood(player),
+            },
+            player,
+        ))
     }
 }
 
 /// Retained player fields have no per-pass owning clones: Identifier is Arc-backed.
 /// Keep the row private so owned public materialization stays explicit.
 #[derive(Clone)]
-pub(super) struct NativePlayerReadSnapshot(PlayerReadRow);
+pub(super) struct NativePlayerReadSnapshot(pub(super) PlayerReadRow, pub(super) PlayerRef);
 impl NativePlayerReadSnapshot {
     pub(super) fn materialize(&self) -> PlayerReadRow {
         self.0.clone()

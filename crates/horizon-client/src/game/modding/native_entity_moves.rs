@@ -138,7 +138,7 @@ impl Game<'_> {
     }
     /// The yaw of the entity's head (`Entity.getYHeadRot`): a mob's or a
     /// player's own, zero for the kinds without a head.
-    pub(super) fn entity_head_yaw(&self, entity: EntityRef) -> Option<f32> {
+    pub(super) fn uncached_entity_head_yaw(&self, entity: EntityRef) -> Option<f32> {
         let t = self.native_entity_target(entity)?;
         if let Some(g) = self.native_target_guest(t) {
             return Some(g.head_yaw);
@@ -183,14 +183,14 @@ impl Game<'_> {
     }
     /// The horizontal direction the entity faces (`Entity.getDirection`):
     /// `north`, `south`, `east` or `west`.
-    pub(super) fn entity_direction(&self, entity: EntityRef) -> Option<&'static str> {
+    pub(super) fn uncached_entity_direction(&self, entity: EntityRef) -> Option<&'static str> {
         let t = self.native_entity_target(entity)?;
         Some(facing(self.target_rotation(t)[0]))
     }
     /// The entity's width and height (`Entity.getBbWidth`, `getBbHeight`):
     /// its box's, so a baby's or a scaled entity's own.
-    pub(super) fn entity_dimensions(&self, entity: EntityRef) -> Option<[f64; 2]> {
-        let [min, max] = self.entity_bounding_box(entity)?;
+    pub(super) fn uncached_entity_dimensions(&self, entity: EntityRef) -> Option<[f64; 2]> {
+        let [min, max] = self.uncached_entity_bounding_box(entity)?;
         Some([max[0] - min[0], max[1] - min[1]])
     }
     /// Adds `delta` to the entity's velocity (`Entity.push`,

@@ -46,24 +46,24 @@ const PATH_TYPES: [PathType; PathType::COUNT] = [
 
 #[derive(Clone)]
 pub(super) struct NativeMobReadRow {
-    capture: EntityReadCapture,
-    entity: EntityRef,
-    is_done: Option<bool>,
-    navigation_speed: Option<f64>,
-    pathfinding_malus: [(PathType, f32); PathType::COUNT],
-    can_use_portal: Option<bool>,
-    target: Option<LivingRef>,
-    is_aggressive: Option<bool>,
-    persistence_required: Option<bool>,
-    requires_custom_persistence: Option<bool>,
-    no_ai: Option<bool>,
-    restrict_center: Option<[i32; 3]>,
-    restrict_radius: Option<i32>,
-    has_restriction: Option<bool>,
-    left_handed: Option<bool>,
-    can_pick_up_loot: Option<bool>,
-    no_action_time: Option<i32>,
-    raid: Option<RaidRef>,
+    pub(super) capture: EntityReadCapture,
+    pub(super) entity: EntityRef,
+    pub(super) is_done: Option<bool>,
+    pub(super) navigation_speed: Option<f64>,
+    pub(super) pathfinding_malus: [(PathType, f32); PathType::COUNT],
+    pub(super) can_use_portal: Option<bool>,
+    pub(super) target: Option<LivingRef>,
+    pub(super) is_aggressive: Option<bool>,
+    pub(super) persistence_required: Option<bool>,
+    pub(super) requires_custom_persistence: Option<bool>,
+    pub(super) no_ai: Option<bool>,
+    pub(super) restrict_center: Option<[i32; 3]>,
+    pub(super) restrict_radius: Option<i32>,
+    pub(super) has_restriction: Option<bool>,
+    pub(super) left_handed: Option<bool>,
+    pub(super) can_pick_up_loot: Option<bool>,
+    pub(super) no_action_time: Option<i32>,
+    pub(super) raid: Option<RaidRef>,
 }
 impl NativeMobReadRow {
     pub(super) fn materialize(&self) -> MobReadRow {
@@ -92,16 +92,16 @@ impl NativeMobReadRow {
 
 #[derive(Clone)]
 pub(super) struct NativeMerchantReadRow {
-    capture: EntityReadCapture,
-    entity: EntityRef,
-    trading_player: Option<PlayerRef>,
-    profession: Option<RetainedProfession>,
-    villager_type: Option<&'static str>,
-    level: Option<i32>,
-    xp: Option<i32>,
+    pub(super) capture: EntityReadCapture,
+    pub(super) entity: EntityRef,
+    pub(super) trading_player: Option<PlayerRef>,
+    pub(super) profession: Option<RetainedProfession>,
+    pub(super) villager_type: Option<&'static str>,
+    pub(super) level: Option<i32>,
+    pub(super) xp: Option<i32>,
 }
 #[derive(Clone)]
-enum RetainedProfession {
+pub(super) enum RetainedProfession {
     Vanilla(u8),
     Unresolved(Arc<str>),
 }
