@@ -700,6 +700,19 @@ impl Wire for char {
     }
 }
 
+// The foreign uninhabited type cannot derive our codec. No input can
+// construct an inhabited Domain value, and there is no value to serialize.
+impl Wire for core::convert::Infallible {
+    const LAYOUT_SEED: u64 = layout_name("core::convert::Infallible");
+    const MIN: usize = 0;
+    fn put(&self, _: &mut Writer) {
+        match *self {}
+    }
+    fn take(_: &mut Reader<'_>) -> Result<Self, WireError> {
+        Err(WireError::Invalid("uninhabited Infallible"))
+    }
+}
+
 impl Wire for () {
     const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(()));
     const MIN: usize = 0;
