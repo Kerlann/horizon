@@ -175,7 +175,7 @@ macro_rules! server_ctx {
 /// the blocks of the level the guest arrives in.
 fn drop_hook(host: &mut LanHost, conn: u32) {
     if let Some(play) = host.play.get_mut(&conn) {
-        play.hook = None;
+        play.hook.discard();
     }
 }
 

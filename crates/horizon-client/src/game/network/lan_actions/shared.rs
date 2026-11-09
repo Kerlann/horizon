@@ -106,7 +106,7 @@ pub(super) struct GuestPlay {
     equipped: Option<Vec<Option<ItemStack>>>,
     craft_grid: Vec<Option<ItemStack>>,
     /// The guest's cast fishing hook (`Player.fishing`).
-    pub(super) hook: Option<super::fishing::Hook>,
+    pub(super) hook: horizon_client::join_seq::ResidentSlot<super::fishing::Hook>,
     sculk: super::sculk::PlayerEvents,
     /// What `ServerPlayer` last recorded for the guest's scoreboard criteria
     /// (`lastRecordedHealthAndAbsorption` and the others).

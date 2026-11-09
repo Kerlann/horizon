@@ -62,9 +62,9 @@ fn game() -> Game<'static> {
 /// A bobber at `from` flying east at 0.5 a tick, ticked until the custom
 /// statistic `stat` counts its first hit (or 20 ticks).
 fn cast_east(game: &mut Game<'_>, from: Vec3, stat: &str) {
-    let mut hook = Hook::remote(7, from);
+    let mut hook = Hook::remote(7, from, [0, 0, 0, 7]);
     hook.velocity = Vec3::new(0.5, 0.0, 0.0);
-    game.hook = Some(hook);
+    game.install_fishing_hook(hook);
     for _ in 0..20 {
         game.tick_fishing();
         if game.stats.get("custom", stat) > 0 {

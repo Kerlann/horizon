@@ -44,6 +44,12 @@ impl ResidentAttachments {
     }
 }
 
+impl super::HasAttachmentLifetime for ResidentAttachments {
+    fn attachment_lifetime(&mut self) -> &mut AttachmentLifetime {
+        &mut self.lifetime
+    }
+}
+
 impl Drop for ResidentAttachments {
     fn drop(&mut self) {
         self.retire();
@@ -70,5 +76,41 @@ impl AttachmentHost for ResidentAttachments {
         _: AttachmentAccess,
     ) -> Result<&mut Attachments, AttachmentError> {
         Ok(&mut self.contents)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::attachments::{AttachmentType, HasAttachmentLifetime, index::AttachmentIndex};
+
+    #[test]
+    fn real_wrapper_lifetime_owns_external_store_registration_through_moves_and_clones() {
+        static VALUE: AttachmentType<i32> = AttachmentType {
+            namespace: "test",
+            name: "resident_lifetime",
+            default: || 0,
+            codec: None,
+            copy_on_death: false,
+            sync: false,
+        };
+        let index = Arc::new(Mutex::new(AttachmentIndex::<u32>::default()));
+        let mut map = Attachments::default();
+        VALUE.set(&mut map, Holder::Level, 7).unwrap();
+        let mut owner = ResidentAttachments::default();
+        owner.attachment_lifetime().bind(&mut map, &index, 19);
+        let key = ("test".into(), "resident_lifetime".into());
+        let rows = index.lock().unwrap().snapshot(&key);
+        assert_eq!(rows[0].holder, 19);
+        assert_eq!(rows[0].entry.read(&VALUE), Ok(&7));
+        drop(owner.clone());
+        let moved = vec![owner];
+        assert_eq!(index.lock().unwrap().snapshot(&key).len(), 1);
+        drop(moved);
+        assert!(index.lock().unwrap().snapshot(&key).is_empty());
+        VALUE.set(&mut map, Holder::Level, 23).unwrap();
+        assert!(index.lock().unwrap().snapshot(&key).is_empty());
+        assert_eq!(VALUE.get(&mut map, Holder::Level), Ok(23));
+        assert_eq!(rows[0].entry.read(&VALUE), Ok(&7));
     }
 }

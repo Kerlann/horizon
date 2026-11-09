@@ -437,6 +437,7 @@ pub(in crate::game) struct Dragon {
     head: usize,
     /// head, neck, body, tail1-3, wing1-2.
     pub parts: [(Vec3, Vec3); 8],
+    pub(super) part_uuids: [[i32; 4]; 8],
     nodes: Option<[[i32; 3]; 24]>,
     nearest_crystal: Option<usize>,
     /// The player a crystal destroyed while it held its pattern sends it
@@ -651,6 +652,11 @@ impl Dragon {
             // The parts are entities of their own, at the origin until the first
             // `aiStep` places them (`tickPart`).
             parts: [(Vec3::ZERO, Vec3::ZERO); 8],
+            // Parts construct their own entity random; these UUID draws never
+            // advance the level's or dragon's ongoing stream.
+            part_uuids: std::array::from_fn(|_| {
+                horizon_client::save::insecure_uuid(&mut random_source::entity())
+            }),
             nodes: None,
             nearest_crystal: None,
             strafe_request: None,
@@ -1606,10 +1612,21 @@ impl Game<'_> {
     /// its part with that entity id, while the dragon is there, dying or
     /// not: a part is an entity for as long as its parent is.
     pub(super) fn resident_dragon_part(&self, id: u32) -> Option<(&Dragon, usize)> {
-        let d = self.dragon.as_ref().filter(|d| d.id != 0)?;
-        (d.id + 1..=d.id + 8)
-            .contains(&id)
-            .then(|| (d, (id - d.id - 1) as usize))
+        use horizon_client::join_seq::residency::{Source, table::EntityLookup};
+        let EntityLookup::Found {
+            location,
+            value: Target::DragonPart(_),
+        } = self.server_resident_entity(id)
+        else {
+            return None;
+        };
+        if location.owner.dimension != self.dim.key() {
+            return None;
+        }
+        let Source::DragonPart(offset) = location.source else {
+            return None;
+        };
+        Some((self.dragon.as_ref()?, usize::from(offset)))
     }
     /// Damage to a special id (from projectiles and melee): what the
     /// dragon part or crystal made of it. `direct` is the projectile that hit.

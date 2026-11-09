@@ -83,7 +83,7 @@ mod tests {
         with_game(|game| {
             game.options.dedicated = Some(Vec::new());
             let id = game.take_entity_id();
-            game.hook = Some(Hook::remote(id, Vec3::ZERO));
+            game.install_fishing_hook(Hook::remote(id, Vec3::ZERO, [1, 2, 3, 4]));
             let entity = game.entity(id).unwrap();
             let index = Arc::new(Mutex::new(AttachmentIndex::<u32>::default()));
             let mut map = Attachments::default();
@@ -97,9 +97,9 @@ mod tests {
             let retained = index.lock().unwrap().snapshot(&key);
             assert_eq!(retained[0].holder, id);
             assert_eq!(retained[0].entry.read(&VALUE), Ok(&7));
-            let held = game.hook.take().unwrap();
+            let held = game.hook.extract().unwrap();
             assert_eq!(index.lock().unwrap().snapshot(&key).len(), 1);
-            game.hook = Some(held);
+            game.hook.put_back(held);
             assert!(entity.discard(game));
             assert!(game.hook.is_some());
             assert_eq!(index.lock().unwrap().snapshot(&key).len(), 1);
@@ -129,7 +129,11 @@ mod tests {
             assert!(game.fishing_hook(mob).is_none());
 
             let id = game.take_entity_id();
-            game.hook = Some(Hook::remote(id, Vec3::new(3.0, 64.0, 3.0)));
+            game.install_fishing_hook(Hook::remote(
+                id,
+                Vec3::new(3.0, 64.0, 3.0),
+                [0, 0, 0, id as i32],
+            ));
             let entity = game.entity(id).unwrap();
             let hook = game.fishing_hook(entity).unwrap();
             assert_eq!(hook.entity(), entity);
@@ -167,7 +171,7 @@ mod tests {
         with_game(|game| {
             game.options.dedicated = Some(Vec::new());
             let id = game.take_entity_id();
-            game.hook = Some(Hook::remote(id, Vec3::ZERO));
+            game.install_fishing_hook(Hook::remote(id, Vec3::ZERO, [0, 0, 0, id as i32]));
             let entity = game.entity(id).unwrap();
             let before = game.entity_uuid(entity).unwrap();
             game.prune_entity_memory();
@@ -187,7 +191,7 @@ mod tests {
             game.lan_acting_entity = Some(20);
             let player = game.entity(20).unwrap();
             let id = game.take_entity_id();
-            game.hook = Some(Hook::remote(id, Vec3::ZERO));
+            game.install_fishing_hook(Hook::remote(id, Vec3::ZERO, [0, 0, 0, id as i32]));
             let hook = game.fishing_hook(game.entity(id).unwrap()).unwrap();
             assert_eq!(hook.player_owner(game), Some(player));
             assert_eq!(hook.open_water(game), Some(true));

@@ -69,24 +69,30 @@ pub(crate) use resident_owners;
 
 macro_rules! define_resident_targets {
     (($this:ident, $($projectiles:ident).+) $($kind:ident => $target:ident: $($field:ident).+,)*) => {
-        pub(super) fn target_residency_kind(target: Target) -> Option<Kind> {
-            match target {
-                $(Target::$target(_) => Some(Kind::$kind),)*
-                Target::Projectile(_) => Some(Kind::Projectile),
-                Target::Dragon(_) => Some(Kind::Dragon),
-                _ => None,
-            }
-        }
         pub(super) fn residency_target(kind: Kind, id: u32) -> Target {
             match kind {
                 $(Kind::$kind => Target::$target(id),)*
                 Kind::Projectile => Target::Projectile(id),
                 Kind::Dragon => Target::Dragon(id),
+                Kind::Player => Target::Player,
+                Kind::Hook => Target::Hook(id),
+                Kind::DragonPart => Target::DragonPart(id),
             }
         }
     };
 }
 resident_owners!(define_resident_targets, unused, unused);
+
+pub(super) fn residency_target_at(at: Location, id: u32) -> Target {
+    use horizon_client::join_seq::residency::Source;
+    match at.source {
+        Source::Ordinary => residency_target(at.owner.kind, id),
+        Source::LocalPlayer => Target::Player,
+        Source::Guest(conn) => Target::Guest(conn),
+        Source::Hook { .. } => Target::Hook(id),
+        Source::DragonPart(_) => Target::DragonPart(id),
+    }
+}
 
 macro_rules! resident_visible {
     (Mob, $entity:expr) => {
@@ -188,7 +194,7 @@ macro_rules! define_resident_access {
         pub(super) fn bind_resident_owners(&mut $this, journal: &Journal, dimension: DimensionKey) {
             $($crate::game::entity_residency::bind_resident_list!($kind, $this$(.$field)+, journal, Owner { dimension, kind: Kind::$kind });)*
             $this$(.$projectiles)+.bind_residency(journal, Owner { dimension, kind: Kind::Projectile }, |entity| (entity.id, entity.join_seq()));
-            $this.dragon.bind_residency(journal, Owner { dimension, kind: Kind::Dragon }, |entity| (entity.id, entity.join_seq()));
+            $this.dragon.bind_residency_specialized(journal, Owner { dimension, kind: Kind::Dragon }, |entity| (entity.id, entity.join_seq()), horizon_client::join_seq::residency::Source::Ordinary, Some((Kind::DragonPart, 8, |dragon, offset| dragon.part_uuids.get(usize::from(offset)).copied())), None);
         }
         pub(super) fn with_resident_owner_slot<R>(
             &mut $this,
@@ -205,6 +211,7 @@ macro_rules! define_resident_access {
                         SlotAccess::Done(visit($this.dragon.as_mut().unwrap().attachment_lifetime()))
                     })
                 },
+                Kind::Player | Kind::Hook | Kind::DragonPart => SlotAccess::UnsupportedKind(at.owner.kind),
             }
         }
         pub(super) fn locate_resident_owner(&$this, at: Location) -> Option<SourceEntity<(Target, bool)>> {
@@ -226,6 +233,17 @@ macro_rules! define_resident_access {
                     let id = $this.dragon.as_ref()?.id;
                     Some(SourceEntity { id, value: (Target::Dragon(id), true) })
                 }
+                Kind::DragonPart => {
+                    let horizon_client::join_seq::residency::Source::DragonPart(offset) = at.source else { return None; };
+                    $this.dragon.locate(at.join)?;
+                    let dragon = $this.dragon.as_ref()?;
+                    if dragon.id == 0 { return None; }
+                    dragon.parts.get(usize::from(offset))?;
+                    let id = dragon.id.checked_add(u32::from(offset) + 1)?;
+                    let visible = !$this.persist.removals.contains(&Target::Dragon(dragon.id));
+                    Some(SourceEntity { id, value: (Target::DragonPart(id), visible) })
+                }
+                Kind::Player | Kind::Hook => None,
             };
             // Logical visibility is not physical absence: filtering here would
             // incorrectly evict reversible conversion rows or report Taken.

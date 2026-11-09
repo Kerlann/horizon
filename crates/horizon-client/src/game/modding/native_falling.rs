@@ -119,12 +119,19 @@ mod tests {
     fn falling_tick_preserves_its_owner_on_success_and_collision_error() {
         bound_falling_case(false, |game, _| {
             assert!(game.spawn_remote_projectile(
-                72,
                 "minecraft:falling_block",
-                [4.5, 70.0, 0.5],
+                &horizon_protocol::packets::play::AddEntity {
+                    id: 72,
+                    uuid: 72,
+                    kind: 0,
+                    position: [4.5, 70.0, 0.5],
+                    velocity: [0.0; 3],
+                    pitch: 0,
+                    yaw: 0,
+                    head_yaw: 0,
+                    data: game.falling[0].state.0 as i32
+                },
                 (0.0, 0.0),
-                [0.0; 3],
-                game.falling[0].state.0 as i32,
             ));
             let expected: Vec<_> = game.falling.iter().map(|f| (f.id, f.join)).collect();
             game.tick_one_falling(0, &[]).unwrap();
@@ -230,12 +237,19 @@ mod tests {
                     .unwrap();
                 for &(id, at) in entries {
                     assert!(game.spawn_remote_projectile(
-                        id as i32,
                         "minecraft:falling_block",
-                        at,
+                        &horizon_protocol::packets::play::AddEntity {
+                            id: id as i32,
+                            uuid: u128::from(id),
+                            kind: 0,
+                            position: at,
+                            velocity: [0.0; 3],
+                            pitch: 0,
+                            yaw: 0,
+                            head_yaw: 0,
+                            data: state.0 as i32
+                        },
                         (0.0, 0.0),
-                        [0.0; 3],
-                        state.0 as i32
                     ));
                 }
             },

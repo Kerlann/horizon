@@ -111,7 +111,11 @@ impl Game<'_> {
             // level (Minecraft.setLevel), which stops every sound.
             self.stop_sounds_for_new_level();
         }
+        self.hook.discard();
+        self.player_attachments.retire();
+        self.local_player_residency.renew();
         self.player = Some(player);
+        self.bind_local_player_residency();
         self.pad.player_replaced();
         self.sway = Default::default();
         self.apply_equipment();
