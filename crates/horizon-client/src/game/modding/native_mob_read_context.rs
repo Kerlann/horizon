@@ -24,6 +24,9 @@ pub(super) struct NativeMobTargetFacts {
     baby: bool,
     bounds: Aabb,
     owner: Option<[i32; 4]>,
+    mount: Option<u32>,
+    vehicle_order: i64,
+    join: horizon_client::join_seq::JoinSeq,
 }
 impl NativeMobTargetFacts {
     pub(super) fn capture(source: &Mob) -> Self {
@@ -35,6 +38,9 @@ impl NativeMobTargetFacts {
             baby: source.is_baby(),
             bounds: source.bounds(),
             owner: source.extra.tame.then_some(source.extra.owner).flatten(),
+            mount: source.extra.mount,
+            vehicle_order: source.extra.vehicle_order,
+            join: horizon_client::join_seq::Joined::join_seq(source),
         }
     }
 }
@@ -42,23 +48,31 @@ impl NativeMobTargetFacts {
 pub(super) struct NativeMobRelations {
     players_by_uuid: HashMap<u128, u32>,
     players_by_id: HashMap<u32, u32>,
-    guest_riders: HashMap<u32, usize>,
+    guest_riders: HashMap<u32, std::collections::HashSet<u32>>,
     guest_vehicles: HashMap<u32, u32>,
     guest_identities: HashMap<u32, (u128, u32)>,
     merchant_by_conn: HashMap<u32, u32>,
     merchants: HashMap<u32, u32>,
     saved_ids: HashMap<[i32; 4], u32>,
+    mob_riders: HashMap<u32, std::collections::HashSet<u32>>,
+    rider_vehicles: HashMap<u32, u32>,
 }
 impl NativeMobRelations {
     pub(super) fn clear(&mut self) {
         self.players_by_uuid.clear();
         self.players_by_id.clear();
-        self.guest_riders.clear();
+        for riders in self.guest_riders.values_mut() {
+            riders.clear();
+        }
         self.guest_vehicles.clear();
         self.guest_identities.clear();
         self.merchants.clear();
         self.merchant_by_conn.clear();
         self.saved_ids.clear();
+        for riders in self.mob_riders.values_mut() {
+            riders.clear();
+        }
+        self.rider_vehicles.clear();
     }
     /// Call at guest insert and identity/placement/vehicle writes.
     pub(super) fn update_guest(&mut self, guest: &horizon_client::lan::guest::Guest) {
@@ -72,7 +86,7 @@ impl NativeMobRelations {
         }
         if let Some(id) = guest.vehicle {
             self.guest_vehicles.insert(guest.conn, id);
-            *self.guest_riders.entry(id).or_default() += 1;
+            self.guest_riders.entry(id).or_default().insert(guest.conn);
         }
     }
     /// Call before guest removal. Hub owns positional indexing.
@@ -88,10 +102,7 @@ impl NativeMobRelations {
         if let Some(id) = self.guest_vehicles.remove(&conn)
             && let Some(count) = self.guest_riders.get_mut(&id)
         {
-            *count -= 1;
-            if *count == 0 {
-                self.guest_riders.remove(&id);
-            }
+            count.remove(&conn);
         }
     }
     /// Call at merchant session open/close/rebinding, including disconnect.
@@ -104,6 +115,28 @@ impl NativeMobRelations {
         if let Some(id) = mob {
             self.merchant_by_conn.insert(conn, id);
             self.merchants.insert(id, conn);
+        }
+    }
+    /// Call in source publication order and at canonical mount/remove boundaries.
+    /// The relation index contains identities only; current facts stay in the row.
+    pub(super) fn update_mob_rider(&mut self, source: &Mob) {
+        self.remove_mob_rider(source.id);
+        if !source.removed
+            && source.alive()
+            && let Some(vehicle) = source.extra.mount
+        {
+            self.rider_vehicles.insert(source.id, vehicle);
+            self.mob_riders
+                .entry(vehicle)
+                .or_default()
+                .insert(source.id);
+        }
+    }
+    pub(super) fn remove_mob_rider(&mut self, id: u32) {
+        if let Some(vehicle) = self.rider_vehicles.remove(&id)
+            && let Some(riders) = self.mob_riders.get_mut(&vehicle)
+        {
+            riders.remove(&id);
         }
     }
     /// Canonical persisted UUID assignment/removal/travel must update both levels.
@@ -122,6 +155,12 @@ impl NativeMobRelations {
             self.saved_ids.insert(new, id);
         }
     }
+}
+struct PlayerTargetSource<'a> {
+    facts: super::native_mob_refs::PlayerFacts,
+    warden_invulnerable: bool,
+    bounds: Aabb,
+    team: Option<&'a horizon_client::scoreboard::Team>,
 }
 impl Game<'_> {
     /// Rebuild once per pass, preserving allocation capacity. This is not a
@@ -245,7 +284,10 @@ impl Game<'_> {
         MobReadContext {
             target,
             local_player_riding: self.riding == Some(source.id),
-            guest_riding: index.guest_riders.contains_key(&source.id),
+            guest_riding: index
+                .guest_riders
+                .get(&source.id)
+                .is_some_and(|riders| !riders.is_empty()),
             carries_riders: self.options.dedicated.is_some(),
             raid: mobs::raider::state(source)
                 .and_then(|s| s.raid_id)
@@ -263,28 +305,7 @@ impl Game<'_> {
         match who {
             Who::Mob(id) => {
                 let facts = self.read_mob_facts(id, level)?;
-                let valid = if source.species() == Species::Warden {
-                    facts.alive
-                        && !facts.invulnerable
-                        && facts.species != Species::Warden
-                        && !horizon_client::scoreboard::teams_allied(
-                            self.read_mob_team(NativeMobTargetFacts::capture(source), level, index),
-                            self.read_mob_team(facts, level, index),
-                        )
-                        && self.read_target_in_border(facts.bounds, level)
-                } else {
-                    source.valid_target_facts(
-                        self.difficulty_id(),
-                        &mobs::goals::TargetFacts::Mob {
-                            id,
-                            species: facts.species,
-                            alive: facts.alive,
-                            invulnerable: facts.invulnerable,
-                            baby: facts.baby,
-                        },
-                        Some(facts.species),
-                    )
-                };
+                let valid = self.read_mob_target_valid(source, facts, level, index);
                 valid.then(|| LivingRef::new(EntityRef::new(epoch, id)))
             }
             Who::Player => {
@@ -294,37 +315,99 @@ impl Game<'_> {
                     return None;
                 }
                 let id = u32::try_from(guest.entity_id).ok()?;
-                let valid = if source.species() == Species::Warden {
-                    guest.dimension == level.dimension_id()
-                        && !guest.dead
-                        && guest.health > 0.0
-                        && !matches!(guest.game_mode, 1 | 3)
-                        && !guest.motion.as_ref().is_some_and(|p| p.invulnerable)
-                        && !horizon_client::scoreboard::teams_allied(
-                            self.read_mob_team(NativeMobTargetFacts::capture(source), level, index),
-                            self.score.board.players_team(&guest.name),
-                        )
-                        && self.read_target_in_border(guest.bounds(), level)
-                } else {
-                    !guest.is_fake()
-                        && source.valid_target_facts(
-                            self.difficulty_id(),
-                            &mobs::goals::TargetFacts::Player {
-                                alive: !guest.dead && guest.health > 0.0,
-                                invulnerable: guest.motion.as_ref().is_some_and(|p| {
-                                    p.invulnerable
-                                        || p.health.permanently_invulnerable
-                                        || p.health.invulnerable_time > 0
-                                }),
-                                creative: guest.game_mode == 1,
-                                spectator: guest.game_mode == 3,
-                                uuid: horizon_client::lan::playerdata::uuid_ints(guest.uuid),
-                            },
-                            None,
-                        )
-                };
+                if guest.dimension != level.dimension_id() {
+                    return None;
+                }
+                let valid = (source.species() == Species::Warden || !guest.is_fake())
+                    && self.read_player_target_valid(
+                        source,
+                        self.guest_target_source(guest),
+                        level,
+                        index,
+                    );
                 valid.then(|| LivingRef::new(EntityRef::new(epoch, id)))
             }
+        }
+    }
+    fn guest_target_source<'a>(
+        &'a self,
+        guest: &horizon_client::lan::guest::Guest,
+    ) -> PlayerTargetSource<'a> {
+        PlayerTargetSource {
+            facts: super::native_mob_refs::PlayerFacts {
+                mode: guest.game_mode,
+                alive: !guest.dead && guest.health > 0.0,
+                invulnerable: guest.motion.as_ref().is_some_and(|p| {
+                    p.invulnerable
+                        || p.health.permanently_invulnerable
+                        || p.health.invulnerable_time > 0
+                }),
+                uuid: horizon_client::lan::playerdata::uuid_ints(guest.uuid),
+            },
+            warden_invulnerable: guest.motion.as_ref().is_some_and(|p| p.invulnerable),
+            bounds: guest.bounds(),
+            team: self.score.board.players_team(&guest.name),
+        }
+    }
+    fn read_player_target_valid(
+        &self,
+        source: &Mob,
+        player: PlayerTargetSource<'_>,
+        level: LevelRef,
+        index: &NativeMobRelations,
+    ) -> bool {
+        let facts = player.facts;
+        if source.species() == Species::Warden {
+            !matches!(facts.mode, 1 | 3)
+                && facts.alive
+                && !player.warden_invulnerable
+                && !horizon_client::scoreboard::teams_allied(
+                    self.read_mob_team(NativeMobTargetFacts::capture(source), level, index),
+                    player.team,
+                )
+                && self.read_target_in_border(player.bounds, level)
+        } else {
+            source.valid_target_facts(
+                self.difficulty_id(),
+                &mobs::goals::TargetFacts::Player {
+                    alive: facts.alive,
+                    invulnerable: facts.invulnerable,
+                    creative: facts.mode == 1,
+                    spectator: facts.mode == 3,
+                    uuid: facts.uuid,
+                },
+                None,
+            )
+        }
+    }
+    fn read_mob_target_valid(
+        &self,
+        source: &Mob,
+        facts: NativeMobTargetFacts,
+        level: LevelRef,
+        index: &NativeMobRelations,
+    ) -> bool {
+        if source.species() == Species::Warden {
+            facts.alive
+                && !facts.invulnerable
+                && facts.species != Species::Warden
+                && !horizon_client::scoreboard::teams_allied(
+                    self.read_mob_team(NativeMobTargetFacts::capture(source), level, index),
+                    self.read_mob_team(facts, level, index),
+                )
+                && self.read_target_in_border(facts.bounds, level)
+        } else {
+            source.valid_target_facts(
+                self.difficulty_id(),
+                &mobs::goals::TargetFacts::Mob {
+                    id: facts.id,
+                    species: facts.species,
+                    alive: facts.alive,
+                    invulnerable: facts.invulnerable,
+                    baby: facts.baby,
+                },
+                Some(facts.species),
+            )
         }
     }
     fn read_target_in_border(&self, bounds: Aabb, level: LevelRef) -> bool {
@@ -391,16 +474,16 @@ impl Game<'_> {
     ) -> Option<EntityRef> {
         // Players are not JoinList owners: validate against the authoritative
         // Hub identity index, or the acting player body, not the entity table.
+        if self.player.is_some() && u32::try_from(self.own_entity_id()).ok() == Some(id) {
+            return (level.dimension() == self.dim.key())
+                .then(|| EntityRef::new(level.epoch(), id));
+        }
         if let Some(&conn) = index.players_by_id.get(&id) {
             let guest = self.read_guest(index, conn)?;
             return (guest.placed
                 && guest.dimension == level.dimension_id()
                 && !self.lan_guest_swaps.contains(&conn))
             .then(|| EntityRef::new(level.epoch(), id));
-        }
-        if self.player.is_some() && u32::try_from(self.own_entity_id()).ok() == Some(id) {
-            return (level.dimension() == self.dim.key())
-                .then(|| EntityRef::new(level.epoch(), id));
         }
         let mut table = self.entity_residency.borrow_mut();
         let (state, cached) =
@@ -685,5 +768,261 @@ mod tests {
             index.remove_guest(13);
             assert!(game.read_guest(&index, 13).is_none());
         });
+    }
+}
+
+impl Game<'_> {
+    pub(super) fn resolve_lent_mob_goal_target(
+        &self,
+        actor: &Mob,
+        world: &mobs::MobWorld<'_>,
+        target: LivingRef,
+        validate: bool,
+    ) -> Option<Who> {
+        let epoch = self.native_lifecycle.epoch()?;
+        let entity = target.entity();
+        if actor.removed || entity.epoch() != epoch {
+            return None;
+        }
+        let level = LevelRef::new(epoch, mod_api::__private::dimension_key(world.level.id()));
+        self.with_mob_read_relations(level, |index| {
+            self.read_relation_entity(actor.id, level, index)?;
+            let id = entity.id();
+            if id == actor.id {
+                return (!validate
+                    || self.read_mob_target_valid(
+                        actor,
+                        NativeMobTargetFacts::capture(actor),
+                        level,
+                        index,
+                    ))
+                .then_some(Who::Mob(id));
+            }
+            if let Some(facts) = self.read_mob_facts(id, level) {
+                return (!validate || self.read_mob_target_valid(actor, facts, level, index))
+                    .then_some(Who::Mob(id));
+            }
+            // Player identity comes from the current source, not the goal's Seen
+            // or Live view. Selection only binds Who after validation succeeds.
+            let (uuid, valid) =
+                if self.player.is_some() && u32::try_from(self.own_entity_id()).ok() == Some(id) {
+                    if level.dimension() != self.dim.key() || self.lan_acting_fake {
+                        return None;
+                    }
+                    let facts = self.native_player_facts(Target::Player)?;
+                    let uuid = facts.uuid;
+                    let valid = !validate
+                        || self.read_player_target_valid(
+                            actor,
+                            PlayerTargetSource {
+                                facts,
+                                warden_invulnerable: self.player.as_ref()?.invulnerable,
+                                bounds: self.player.as_ref()?.bounds(),
+                                team: self.player_team(),
+                            },
+                            level,
+                            index,
+                        );
+                    (uuid, valid)
+                } else {
+                    let conn = *index.players_by_id.get(&id)?;
+                    let guest = self.read_guest(index, conn)?;
+                    self.read_relation_entity(id, level, index)?;
+                    if guest.is_fake() {
+                        return None;
+                    }
+                    let uuid = horizon_client::lan::playerdata::uuid_ints(guest.uuid);
+                    let valid = !validate
+                        || self.read_player_target_valid(
+                            actor,
+                            self.guest_target_source(guest),
+                            level,
+                            index,
+                        );
+                    (uuid, valid)
+                };
+            if validate && !valid {
+                return None;
+            }
+            match world.player_selection {
+                Some(selection) => {
+                    let player = selection.get(id)?;
+                    if player.view.uuid != uuid || !selection.select(id) {
+                        return None;
+                    }
+                }
+                None if world.selected_player_identity() != Some((uuid, id)) => return None,
+                None => {}
+            }
+            Some(Who::Player)
+        })?
+    }
+    /// Read passengers from authoritative rider relations. An unavailable lifted
+    /// rider publication refuses the whole heavy read rather than dropping it.
+    pub(super) fn lent_mob_passengers(&self, actor: &Mob) -> Option<Vec<EntityRef>> {
+        if actor.removed {
+            return None;
+        }
+        let epoch = self.native_lifecycle.epoch()?;
+        let level = {
+            let mut table = self.entity_residency.borrow_mut();
+            let (state, cached) = table
+                .server_entity_read_lookup(actor.id, |at| self.locate_server_resident_owner(at));
+            match state {
+                EntityLookup::Found {
+                    location,
+                    value: (Target::Mob(_), true),
+                } => LevelRef::new(epoch, location.owner.dimension),
+                EntityLookup::Taken => cached?.base.level,
+                _ => return None,
+            }
+        };
+        self.with_mob_read_relations(level, |index| {
+            self.read_relation_entity(actor.id, level, index)?;
+            let mut seats = Vec::new();
+            let acting = self.lan_acting.filter(|_| self.player.is_some());
+            if let Some(riders) = index.guest_riders.get(&actor.id) {
+                for &conn in riders {
+                    if acting == Some(conn) {
+                        continue;
+                    }
+                    let Some(guest) = self.read_guest(index, conn) else {
+                        continue;
+                    };
+                    if guest.placed
+                        && guest.dimension == level.dimension_id()
+                        && guest.vehicle == Some(actor.id)
+                    {
+                        let id = u32::try_from(guest.entity_id).ok()?;
+                        if let Some(entity) = self.read_relation_entity(id, level, index) {
+                            seats.push((
+                                guest.vehicle_order,
+                                false,
+                                self.lan.as_ref()?.hub.guests.connection_index(conn)? as u64,
+                                entity,
+                            ));
+                        }
+                    }
+                }
+            }
+            let acting_guest = acting
+                .and_then(|conn| self.lan.as_ref()?.hub.guest(conn))
+                .filter(|g| g.placed && g.dimension == level.dimension_id());
+            if self.riding == Some(actor.id) {
+                if let Some(guest) = acting_guest {
+                    seats.push((
+                        guest.vehicle_order,
+                        false,
+                        self.lan.as_ref()?.hub.guests.connection_index(guest.conn)? as u64,
+                        EntityRef::new(epoch, u32::try_from(guest.entity_id).ok()?),
+                    ));
+                } else if self.lan_acting_uuid.is_some() && self.player.is_some() {
+                    seats.push((
+                        i64::MIN,
+                        false,
+                        0,
+                        EntityRef::new(epoch, self.lan_acting_entity?),
+                    ));
+                }
+            }
+            if let Some(riders) = index.mob_riders.get(&actor.id) {
+                for &id in riders {
+                    let facts = if id == actor.id {
+                        NativeMobTargetFacts::capture(actor)
+                    } else {
+                        self.read_mob_facts(id, level)?
+                    };
+                    if facts.alive && facts.mount == Some(actor.id) {
+                        let entity = self.read_relation_entity(id, level, index)?;
+                        seats.push((facts.vehicle_order, true, facts.join.get(), entity));
+                    }
+                }
+            }
+            seats.sort_by_key(|&(order, mob, tie, _)| (order, mob, tie));
+            Some(seats.into_iter().map(|(_, _, _, entity)| entity).collect())
+        })?
+    }
+}
+
+impl Game<'_> {
+    pub(super) fn lent_mob_target(
+        &self,
+        mob: &Mob,
+        actor: &Mob,
+        world: &mobs::MobWorld<'_>,
+    ) -> Option<LivingRef> {
+        if mob.removed {
+            return None;
+        }
+        let epoch = self.native_lifecycle.epoch()?;
+        let level = LevelRef::new(epoch, mod_api::__private::dimension_key(world.level.id()));
+        let who = brain_target(mob).unwrap_or(mob.ai.target)?;
+        if who == Who::Player
+            && mob.id == actor.id
+            && let Some(selection) = world
+                .player_selection
+                .filter(|selection| selection.has_switched())
+        {
+            let player = selection.selected()?;
+            let entity = EntityRef::new(epoch, player.entity_id);
+            return self
+                .resolve_lent_mob_goal_target(mob, world, LivingRef::new(entity), true)
+                .map(|_| LivingRef::new(entity));
+        }
+        self.with_mob_read_relations(level, |index| {
+            self.read_relation_entity(mob.id, level, index)?;
+            if let Who::Mob(id) = who {
+                let facts = if id == mob.id {
+                    Some(NativeMobTargetFacts::capture(mob))
+                } else if id == actor.id {
+                    Some(NativeMobTargetFacts::capture(actor))
+                } else {
+                    None
+                };
+                if let Some(facts) = facts {
+                    self.read_relation_entity(id, level, index)?;
+                    return self
+                        .read_mob_target_valid(mob, facts, level, index)
+                        .then(|| LivingRef::new(EntityRef::new(epoch, id)));
+                }
+            }
+            self.read_mob_target(mob, who, level, index)
+        })?
+    }
+}
+
+impl Game<'_> {
+    /// Resolve a saved player UUID through canonical current identity, never by
+    /// generating an entity UUID or scanning player/session populations.
+    pub(super) fn resolve_mob_read_player(
+        &self,
+        uuid: [i32; 4],
+        level: LevelRef,
+        index: &NativeMobRelations,
+    ) -> Option<EntityRef> {
+        if self.native_lifecycle.epoch() != Some(level.epoch()) {
+            return None;
+        }
+        let acting_uuid = self
+            .lan_acting_uuid
+            .map(horizon_client::lan::playerdata::uuid_ints)
+            .or(self.level.player_uuid);
+        if self.player.is_some() && !self.lan_acting_fake && acting_uuid == Some(uuid) {
+            return self.read_relation_entity(
+                u32::try_from(self.own_entity_id()).ok()?,
+                level,
+                index,
+            );
+        }
+        let conn = *index
+            .players_by_uuid
+            .get(&horizon_client::lan::playerdata::ints_uuid(uuid))?;
+        let guest = self.read_guest(index, conn)?;
+        if !guest.participates_online()
+            || horizon_client::lan::playerdata::uuid_ints(guest.uuid) != uuid
+        {
+            return None;
+        }
+        self.read_relation_entity(u32::try_from(guest.entity_id).ok()?, level, index)
     }
 }
