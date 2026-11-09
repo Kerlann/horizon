@@ -153,7 +153,9 @@ pub struct ConvertedPackages {
 
 impl ConvertedPackages {
     /// Declares `packages` as the ones `runtime` (its `[mod] id`) loaded. Ids read from
-    /// manifests or module bytes are stored here. Entering clones an owned id on each call.
+    /// manifests or module bytes are interned here once. Entering preserves static
+    /// ids and shares owned ids without copying their text. The public crash-call
+    /// snapshot materializes owned text only when explicitly requested.
     pub fn new<I>(runtime: &'static str, packages: I) -> Self
     where
         I: IntoIterator,

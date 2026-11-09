@@ -1,0 +1,7 @@
+id = "entity_silent_fixture"
+name = "Entity silent command fixture"
+version = "0.1.0"
+description = "Real Game writer and issuer-only completion boundary fixture."
+api = "0.2"
+side = "both"
+capabilities = ["registries"]

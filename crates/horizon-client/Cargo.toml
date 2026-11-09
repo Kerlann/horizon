@@ -174,6 +174,9 @@ path = "examples/wind_burst_hook_probe.rs"
 workspace = true
 
 [dev-dependencies]
+# Allocation assertions run with the existing system-allocator feature, so this
+# test-only counter never competes with the game's normal mimalloc allocator.
+allocation-counter = "0.8.1"
 horizon-mod-runtime = { path = "../horizon-mod-runtime", features = ["test-work-count"] }
 horizon-mod-api = { path = "../horizon-mod-api", features = ["testing"] }
 horizon-client-render = { path = "../horizon-client-render", features = ["test-support"] }

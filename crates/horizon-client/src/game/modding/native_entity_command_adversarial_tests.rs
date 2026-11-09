@@ -115,10 +115,7 @@ impl Hooks for Budget {
         } else {
             let mut state = self.0.lock().unwrap();
             assert!(state.refused);
-            assert_eq!(
-                state.completed,
-                super::native_entity_commands::MAX_ENTITY_COMMANDS_PER_TURN
-            );
+            assert_eq!(state.completed, 256);
             state.b_pre = true;
         }
         Flow::Continue
@@ -137,6 +134,12 @@ impl Hooks for Budget {
         let target = host.entity(72).unwrap();
         let mut state = self.0.lock().unwrap();
         state.completed += 1;
+        // Independently bound a broken executor so this test fails promptly
+        // rather than hanging or exhausting memory when the budget is removed.
+        assert!(
+            state.completed <= 256,
+            "completion chain escaped cumulative budget"
+        );
         match target.set_silent(host, true) {
             WriteReceipt::Pending(id) => {
                 assert_eq!(id.sequence as usize, state.completed);
@@ -165,10 +168,7 @@ fn silent_completion_append_has_cumulative_budget_and_reaches_next_actor() {
                 let state = state.lock().unwrap();
                 assert!(state.b_pre);
                 assert!(state.refused);
-                assert_eq!(
-                    state.ids.len(),
-                    super::native_entity_commands::MAX_ENTITY_COMMANDS_PER_TURN
-                );
+                assert_eq!(state.ids.len(), 256);
                 assert_eq!(
                     state.completed,
                     state.ids.len(),
