@@ -110,6 +110,7 @@ pub(super) trait Entity: EntityRules {
         uuid: Option<[i32; 4]>,
         player_uuid: Option<[i32; 4]>,
         tag: Tag,
+        transferred: &mut Option<super::entity_initialization::TransferredEntityState>,
     ) -> Result<(), Tag>;
 
     fn on_ground(&self) -> bool {
@@ -1041,11 +1042,22 @@ macro_rules! save_entities_of_every_kind {
     };
 }
 
+/// A matched kind consumes only its own explicit token; failed kind probes never do.
+macro_rules! load_with_transfer {
+    ($game:expr, $state:expr, $ordinary:ident, $transfer:ident, $($arg:expr),+ $(,)?) => {{
+        if let Some(state) = $state.take() {
+            $game.$transfer($($arg),+, Some(state));
+        } else {
+            $game.$ordinary($($arg),+);
+        }
+    }};
+}
+
 macro_rules! load_lists {
-    (($game:expr, $kind:expr, $uuid:expr, $player:expr, $tag:expr)
+    (($game:expr, $kind:expr, $uuid:expr, $player:expr, $tag:expr, $transferred:expr)
      $($kind_name:ident($ty:ty) $field:ident: $($list:ident).+,)*) => {{
         let mut tag = $tag;
-        $(match <$ty as $crate::game::entity::Entity>::load_nbt($game, $kind, $uuid, $player, tag) {
+        $(match <$ty as $crate::game::entity::Entity>::load_nbt($game, $kind, $uuid, $player, tag, $transferred) {
             Ok(()) => return Ok(()),
             Err(back) => tag = back,
         })*
@@ -1061,8 +1073,16 @@ pub(crate) use load_lists;
 /// otherwise. A kind added to the lists cannot be left out, since `load_nbt`
 /// has no default.
 macro_rules! load_entity_of_any_kind {
-    ($game:expr, $kind:expr, $uuid:expr, $player:expr, $tag:expr) => {
-        $crate::game::entity::entity_lists!(load_lists, $game, $kind, $uuid, $player, $tag)
+    ($game:expr, $kind:expr, $uuid:expr, $player:expr, $tag:expr, $transferred:expr) => {
+        $crate::game::entity::entity_lists!(
+            load_lists,
+            $game,
+            $kind,
+            $uuid,
+            $player,
+            $tag,
+            $transferred
+        )
     };
 }
 
@@ -1102,7 +1122,7 @@ impl Game<'_> {
         player_uuid: Option<[i32; 4]>,
         tag: Tag,
     ) -> Result<(), Tag> {
-        load_entity_of_any_kind!(self, kind, uuid, player_uuid, tag)
+        load_entity_of_any_kind!(self, kind, uuid, player_uuid, tag, &mut None)
     }
     /// Restore a live portal object with its explicitly captured runtime ownership.
     /// This dispatch covers only reconstructible portal kinds; ordinary disk loads
@@ -1115,45 +1135,10 @@ impl Game<'_> {
         tag: Tag,
         state: super::entity_initialization::TransferredEntityState,
     ) -> Result<(), Tag> {
-        let state = Some(state);
-        match kind {
-            "minecraft:item" => self.load_item_transferred(tag, uuid, state),
-            "minecraft:experience_orb" => self.load_orb_transferred(tag, uuid, state),
-            "minecraft:tnt" => self.load_tnt_transferred(tag, uuid, state),
-            "minecraft:trident" => self.load_trident_transferred(tag, uuid, state),
-            "minecraft:firework_rocket" => {
-                self.load_rocket_transferred(tag, uuid, player_uuid, state)
-            }
-            "minecraft:falling_block" => self.load_falling_transferred(tag, uuid, state),
-            "minecraft:arrow" | "minecraft:spectral_arrow" => {
-                self.load_arrow_transferred(tag, uuid, player_uuid, state)
-            }
-            "minecraft:llama_spit" | "minecraft:shulker_bullet" => {
-                self.load_spit_or_bullet_transferred(tag, uuid, player_uuid, state)
-            }
-            "minecraft:fireball"
-            | "minecraft:small_fireball"
-            | "minecraft:wind_charge"
-            | "minecraft:breeze_wind_charge"
-            | "minecraft:wither_skull" => {
-                self.load_fireball_transferred(tag, uuid, player_uuid, state)
-            }
-            id if horizon_client::entity_nbt::throwable_kind(id).is_some() => {
-                self.load_throwable_transferred(tag, uuid, player_uuid, state)
-            }
-            id if self.loads_as_boat(id) => {
-                self.load_boat_transferred(tag, uuid, id, state);
-            }
-            id if loads_as_cart(id) => {
-                self.load_cart_transferred(tag, uuid, id, state);
-            }
-            id if self.loads_as_mob(id) => {
-                self.load_mob_transferred(tag, None, state);
-            }
-            _ => return Err(tag),
-        }
-        Ok(())
+        let mut state = Some(state);
+        load_entity_of_any_kind!(self, kind, uuid, player_uuid, tag, &mut state)
     }
+
     /// The ids of the entities that are not on the walk of `entity_lists!`.
     pub(super) fn entity_ids_off_walk(&self) -> impl Iterator<Item = u32> + '_ {
         self.cushions
@@ -1245,11 +1230,12 @@ impl Entity for Mob {
         _uuid: Option<[i32; 4]>,
         _player_uuid: Option<[i32; 4]>,
         tag: Tag,
+        transferred: &mut Option<super::entity_initialization::TransferredEntityState>,
     ) -> Result<(), Tag> {
         if !game.loads_as_mob(kind) {
             return Err(tag);
         }
-        game.load_mob(tag, None);
+        load_with_transfer!(game, transferred, load_mob, load_mob_transferred, tag, None);
         Ok(())
     }
     stored_motion!();
@@ -1360,11 +1346,19 @@ impl Entity for ItemEntity {
         uuid: Option<[i32; 4]>,
         _player_uuid: Option<[i32; 4]>,
         tag: Tag,
+        transferred: &mut Option<super::entity_initialization::TransferredEntityState>,
     ) -> Result<(), Tag> {
         if !(kind == "minecraft:item") {
             return Err(tag);
         }
-        game.load_item(tag, uuid);
+        load_with_transfer!(
+            game,
+            transferred,
+            load_item,
+            load_item_transferred,
+            tag,
+            uuid
+        );
         Ok(())
     }
     stored_motion!();
@@ -1429,11 +1423,12 @@ impl Entity for ExperienceOrb {
         uuid: Option<[i32; 4]>,
         _player_uuid: Option<[i32; 4]>,
         tag: Tag,
+        transferred: &mut Option<super::entity_initialization::TransferredEntityState>,
     ) -> Result<(), Tag> {
         if !(kind == "minecraft:experience_orb") {
             return Err(tag);
         }
-        game.load_orb(tag, uuid);
+        load_with_transfer!(game, transferred, load_orb, load_orb_transferred, tag, uuid);
         Ok(())
     }
     stored_motion!();
@@ -1494,11 +1489,20 @@ impl Entity for Boat {
         uuid: Option<[i32; 4]>,
         _player_uuid: Option<[i32; 4]>,
         tag: Tag,
+        transferred: &mut Option<super::entity_initialization::TransferredEntityState>,
     ) -> Result<(), Tag> {
         if !game.loads_as_boat(kind) {
             return Err(tag);
         }
-        game.load_boat(tag, uuid, kind);
+        load_with_transfer!(
+            game,
+            transferred,
+            load_boat,
+            load_boat_transferred,
+            tag,
+            uuid,
+            kind
+        );
         Ok(())
     }
     stored_motion!();
@@ -1566,11 +1570,20 @@ impl Entity for Minecart {
         uuid: Option<[i32; 4]>,
         _player_uuid: Option<[i32; 4]>,
         tag: Tag,
+        transferred: &mut Option<super::entity_initialization::TransferredEntityState>,
     ) -> Result<(), Tag> {
         if !loads_as_cart(kind) {
             return Err(tag);
         }
-        game.load_cart(tag, uuid, kind);
+        load_with_transfer!(
+            game,
+            transferred,
+            load_cart,
+            load_cart_transferred,
+            tag,
+            uuid,
+            kind
+        );
         Ok(())
     }
     stored_motion!();
@@ -1652,8 +1665,12 @@ impl Entity for ArmorStand {
         uuid: Option<[i32; 4]>,
         _player_uuid: Option<[i32; 4]>,
         tag: Tag,
+        transferred: &mut Option<super::entity_initialization::TransferredEntityState>,
     ) -> Result<(), Tag> {
         if !(kind == "minecraft:armor_stand") {
+            return Err(tag);
+        }
+        if transferred.is_some() {
             return Err(tag);
         }
         game.load_armor_stand(tag, uuid);
@@ -1760,11 +1777,12 @@ impl Entity for PrimedTnt {
         uuid: Option<[i32; 4]>,
         _player_uuid: Option<[i32; 4]>,
         tag: Tag,
+        transferred: &mut Option<super::entity_initialization::TransferredEntityState>,
     ) -> Result<(), Tag> {
         if !loads_as_tnt(kind) {
             return Err(tag);
         }
-        game.load_tnt(tag, uuid);
+        load_with_transfer!(game, transferred, load_tnt, load_tnt_transferred, tag, uuid);
         Ok(())
     }
     stored_motion!();
@@ -1836,11 +1854,19 @@ impl Entity for FallingBlock {
         uuid: Option<[i32; 4]>,
         _player_uuid: Option<[i32; 4]>,
         tag: Tag,
+        transferred: &mut Option<super::entity_initialization::TransferredEntityState>,
     ) -> Result<(), Tag> {
         if !(kind == "minecraft:falling_block") {
             return Err(tag);
         }
-        game.load_falling(tag, uuid);
+        load_with_transfer!(
+            game,
+            transferred,
+            load_falling,
+            load_falling_transferred,
+            tag,
+            uuid
+        );
         Ok(())
     }
     stored_motion!();
@@ -1886,21 +1912,54 @@ impl Entity for Projectile {
         uuid: Option<[i32; 4]>,
         player_uuid: Option<[i32; 4]>,
         tag: Tag,
+        transferred: &mut Option<super::entity_initialization::TransferredEntityState>,
     ) -> Result<(), Tag> {
         match kind {
             "minecraft:arrow" | "minecraft:spectral_arrow" => {
-                game.load_arrow(tag, uuid, player_uuid)
+                load_with_transfer!(
+                    game,
+                    transferred,
+                    load_arrow,
+                    load_arrow_transferred,
+                    tag,
+                    uuid,
+                    player_uuid
+                )
             }
             "minecraft:llama_spit" | "minecraft:shulker_bullet" => {
-                game.load_spit_or_bullet(tag, uuid, player_uuid)
+                load_with_transfer!(
+                    game,
+                    transferred,
+                    load_spit_or_bullet,
+                    load_spit_or_bullet_transferred,
+                    tag,
+                    uuid,
+                    player_uuid
+                )
             }
             "minecraft:fireball"
             | "minecraft:small_fireball"
             | "minecraft:wind_charge"
             | "minecraft:breeze_wind_charge"
-            | "minecraft:wither_skull" => game.load_fireball(tag, uuid, player_uuid),
+            | "minecraft:wither_skull" => load_with_transfer!(
+                game,
+                transferred,
+                load_fireball,
+                load_fireball_transferred,
+                tag,
+                uuid,
+                player_uuid
+            ),
             id if horizon_client::entity_nbt::throwable_kind(id).is_some() => {
-                game.load_throwable(tag, uuid, player_uuid)
+                load_with_transfer!(
+                    game,
+                    transferred,
+                    load_throwable,
+                    load_throwable_transferred,
+                    tag,
+                    uuid,
+                    player_uuid
+                )
             }
             _ => return Err(tag),
         }
@@ -1987,11 +2046,20 @@ impl Entity for Rocket {
         uuid: Option<[i32; 4]>,
         player_uuid: Option<[i32; 4]>,
         tag: Tag,
+        transferred: &mut Option<super::entity_initialization::TransferredEntityState>,
     ) -> Result<(), Tag> {
         if !(kind == "minecraft:firework_rocket") {
             return Err(tag);
         }
-        game.load_rocket(tag, uuid, player_uuid);
+        load_with_transfer!(
+            game,
+            transferred,
+            load_rocket,
+            load_rocket_transferred,
+            tag,
+            uuid,
+            player_uuid
+        );
         Ok(())
     }
     stored_motion!();
@@ -2048,11 +2116,19 @@ impl Entity for ThrownTrident {
         uuid: Option<[i32; 4]>,
         _player_uuid: Option<[i32; 4]>,
         tag: Tag,
+        transferred: &mut Option<super::entity_initialization::TransferredEntityState>,
     ) -> Result<(), Tag> {
         if !(kind == "minecraft:trident") {
             return Err(tag);
         }
-        game.load_trident(tag, uuid);
+        load_with_transfer!(
+            game,
+            transferred,
+            load_trident,
+            load_trident_transferred,
+            tag,
+            uuid
+        );
         Ok(())
     }
     stored_motion!();

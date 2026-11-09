@@ -727,6 +727,7 @@ impl Game<'_> {
         }
         // Kinds outside `entity_lists!` first, then the listed kinds
         // (`Entity::load_nbt`), then whatever else is a compound.
+        let transferring = transferred.is_some();
         let unloaded = if let Some(state) = transferred {
             self.load_listed_transferred(&kind, uuid, player_uuid, tag, state)
         } else {
@@ -734,6 +735,10 @@ impl Game<'_> {
                 .or_else(|tag| self.load_listed(&kind, uuid, player_uuid, tag))
         };
         if let Err(tag) = unloaded {
+            if transferring {
+                log::warn!("refusing unsupported transferred entity kind {kind}");
+                return;
+            }
             if !kind.is_empty() && entity_nbt::position(&tag).is_some() {
                 self.load_other(tag, &kind);
             } else {

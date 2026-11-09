@@ -236,6 +236,23 @@ fn borrowed_spawn_first_read_and_dimension_transfer_keep_one_initialization() {
                     "{kind} transferred, not constructed"
                 );
             }
+            let count = calls.lock().unwrap().len();
+            let state = game.take_transferred_entity_state(replacement);
+            assert!(
+                game.load_listed_transferred(
+                    "minecraft:armor_stand",
+                    Some([900, 2, 3, 4]),
+                    None,
+                    tag("minecraft:armor_stand", 900),
+                    state,
+                )
+                .is_err()
+            );
+            assert!(
+                game.armor_stands.is_empty(),
+                "unsupported transfer never constructs a fallback"
+            );
+            assert_eq!(calls.lock().unwrap().len(), count);
         })
     });
 }
