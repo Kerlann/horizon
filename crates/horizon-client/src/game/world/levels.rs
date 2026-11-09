@@ -196,6 +196,13 @@ impl Game<'_> {
         &self,
         at: Location,
     ) -> Option<SourceEntity<(Target, bool)>> {
+        if matches!(
+            at.owner.kind,
+            horizon_client::join_seq::residency::Kind::Player
+                | horizon_client::join_seq::residency::Kind::Hook
+        ) {
+            return self.locate_specialized_resident_owner(at);
+        }
         if at.owner.dimension == self.dim.key() {
             return self.locate_resident_owner(at);
         }
@@ -206,6 +213,26 @@ impl Game<'_> {
             key => Dim::Extra(key),
         };
         self.levels.parked.get(&dim)?.locate_resident_owner(at)
+    }
+
+    pub(super) fn resident_source_target_visible(
+        &self,
+        dimension: DimensionKey,
+        target: Target,
+    ) -> bool {
+        if dimension == self.dim.key() {
+            return !self.persist.removals.contains(&target);
+        }
+        let dim = match dimension {
+            DimensionKey::OVERWORLD => Dim::Overworld,
+            DimensionKey::NETHER => Dim::Nether,
+            DimensionKey::END => Dim::End,
+            key => Dim::Extra(key),
+        };
+        self.levels
+            .parked
+            .get(&dim)
+            .is_none_or(|parked| !parked.persist.removals.contains(&target))
     }
 
     /// Visit exactly the actual physical lifetime slot. Resolution releases the
@@ -233,6 +260,24 @@ impl Game<'_> {
             EntityLookup::Missing => return SlotAccess::Missing,
         };
         debug_assert!(self.entity_residency.try_borrow_mut().is_ok());
+        if matches!(
+            location.owner.kind,
+            horizon_client::join_seq::residency::Kind::Player
+                | horizon_client::join_seq::residency::Kind::Hook
+        ) {
+            if *dimension != self.dim.key() {
+                let dim = match *dimension {
+                    DimensionKey::OVERWORLD => Dim::Overworld,
+                    DimensionKey::NETHER => Dim::Nether,
+                    DimensionKey::END => Dim::End,
+                    key => Dim::Extra(key),
+                };
+                if !self.levels.parked.contains_key(&dim) {
+                    return SlotAccess::Missing;
+                }
+            }
+            return self.with_specialized_resident_slot(location, visit);
+        }
         if *dimension == self.dim.key() {
             self.with_resident_owner_slot(location, visit)
         } else {
@@ -268,52 +313,20 @@ impl Game<'_> {
             EntityLookup::Taken => EntityLookup::Taken,
         }
     }
-    /// Find the level of a target without swapping or scanning entity lists.
-    /// Fishing hooks still live in per-player slots: this one named exception
-    /// costs O(players), not O(entities) or O(dimensions).
+    /// Find the canonical level without swapping or probing physical families.
     pub(super) fn resident_target_dimension(&self, target: Target) -> Option<Dim> {
-        if matches!(target, Target::Player | Target::Guest(_)) {
-            return Some(self.dim);
-        }
-        let id = super::native_entities::target_id(target)?;
-        if matches!(target, Target::Hook(_)) {
-            if self.fishing_hook_by_id(id).is_some() {
-                return (!self.persist.removals.contains(&target)).then_some(self.dim);
+        let id = self.resident_target_id(target)?;
+        let found = match self.server_resident_entity(id) {
+            EntityLookup::Found { location, value }
+                if value == target
+                    || matches!(
+                        (value, target),
+                        (Target::Player, Target::Guest(_)) | (Target::Guest(_), Target::Player)
+                    ) =>
+            {
+                location
             }
-            let host = self.lan.as_ref()?;
-            return host.hub.guests.iter().find_map(|guest| {
-                (guest.placed
-                    && self.lan_acting != Some(guest.conn)
-                    && !self.lan_guest_swaps.contains(&guest.conn)
-                    && host.play.get(&guest.conn)?.hook.as_ref()?.id() == id)
-                    .then(|| Dim::from_id(&guest.dimension))
-                    .filter(|dim| {
-                        if *dim == self.dim {
-                            !self.persist.removals.contains(&target)
-                        } else {
-                            self.levels
-                                .parked
-                                .get(dim)
-                                .is_some_and(|level| !level.persist.removals.contains(&target))
-                        }
-                    })
-            });
-        }
-        let found = if matches!(target, Target::DragonPart(_)) {
-            (1..=8)
-                .filter_map(|offset| id.checked_sub(offset))
-                .find_map(|parent| match self.server_resident_entity(parent) {
-                    EntityLookup::Found {
-                        location,
-                        value: Target::Dragon(_),
-                    } => Some(location),
-                    _ => None,
-                })?
-        } else {
-            match self.server_resident_entity(id) {
-                EntityLookup::Found { location, value } if value == target => location,
-                _ => return None,
-            }
+            _ => return None,
         };
         Some(match found.owner.dimension {
             DimensionKey::OVERWORLD => Dim::Overworld,
@@ -330,6 +343,7 @@ impl Game<'_> {
         table.reset();
         let journal = table.producer();
         self.bind_resident_owners(&journal, self.dim.key());
+        self.bind_specialized_resident_owners(&journal);
         for (dim, parked) in &mut self.levels.parked {
             parked.bind_resident_owners(&journal, dim.key());
         }

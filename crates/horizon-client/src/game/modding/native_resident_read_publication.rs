@@ -48,13 +48,32 @@ macro_rules! resident_read_owner_locations {
         fn resident_owner_read_locations(&$this, kind: Kind) -> Vec<Location> {
             let owner = Owner { dimension: $this.dim.key(), kind };
             match kind {
-                $(Kind::$kind => $this$(.$field)+.iter().map(|source| Location { owner, join: source.join_seq(), source: Default::default() }).collect(),)*
-                Kind::Projectile => $this$(.$projectiles)+.iter().map(|source| Location { owner, join: source.join_seq(), source: Default::default() }).collect(),
-                Kind::Dragon => $this.dragon.iter().map(|source| Location { owner, join: source.join_seq(), source: Default::default() }).collect(),
+                $(Kind::$kind => $this$(.$field)+.iter().map(|source| Location { source: Default::default(), owner, join: source.join_seq() }).collect(),)*
+                Kind::Projectile => $this$(.$projectiles)+.iter().map(|source| Location { source: Default::default(), owner, join: source.join_seq() }).collect(),
+                Kind::Dragon => $this.dragon.iter().map(|source| Location { source: Default::default(), owner, join: source.join_seq() }).collect(),
+                Kind::Player | Kind::Hook | Kind::DragonPart => $this.specialized_read_locations(kind),
             }
         }
     };
 }
+macro_rules! resident_special_read_source {
+    ($this:ident, creatures.projectiles, $at:expr) => {
+        $this.specialized_resident_source($at).map(|entry| {
+            use $crate::game::player_residency::SpecializedSource;
+            let source = match entry.value.0 {
+                SpecializedSource::Player(player) => BaseReadSource::Player(player),
+                SpecializedSource::Guest(guest) => BaseReadSource::Guest(guest),
+                SpecializedSource::Hook(hook) => BaseReadSource::Hook(hook),
+            };
+            (source, entry.id)
+        })
+    };
+    ($this:ident, projectiles, $at:expr) => {
+        None
+    };
+}
+pub(crate) use resident_special_read_source;
+
 macro_rules! resident_read_access {
     (($this:ident, $($projectiles:ident).+) $($kind:ident => $target:ident: $($field:ident).+,)*) => {
         pub(super) fn resident_read_source(&$this, at: horizon_client::join_seq::residency::table::Location)
@@ -68,6 +87,15 @@ macro_rules! resident_read_access {
                     let source = &$this$(.$projectiles)+[i]; (BaseReadSource::Projectile(source), source.id) },
                 Kind::Dragon => { $this.dragon.locate(at.join)?; let source = $this.dragon.as_ref()?;
                     (BaseReadSource::Dragon(source), source.id) },
+                Kind::DragonPart => {
+                    let horizon_client::join_seq::residency::Source::DragonPart(offset) = at.source else { return None; };
+                    $this.dragon.locate(at.join)?;
+                    let dragon = $this.dragon.as_ref()?;
+                    let index = usize::from(offset);
+                    dragon.parts.get(index)?;
+                    (BaseReadSource::DragonPart(dragon, index), dragon.id.checked_add(u32::from(offset) + 1)?)
+                },
+                Kind::Player | Kind::Hook => $crate::game::native_resident_read_publication::resident_special_read_source!($this, $($projectiles).+, at)?,
             };
             Some($crate::game::native_resident_read_publication::ResidentReadSource { source, id, persist: &$this.persist, portals: $crate::game::native_resident_read_publication::resident_read_portals!($this, $($projectiles).+) })
         }
@@ -235,7 +263,7 @@ impl Game<'_> {
             return false;
         };
         let level = LevelRef::new(epoch, at.owner.dimension);
-        let target = super::entity_residency::residency_target(at.owner.kind, raw.id);
+        let target = super::entity_residency::residency_target_at(at, raw.id);
         if raw.id == 0 || !self.server_read_target_visible(at.owner.dimension, target) {
             return false;
         }
