@@ -5,6 +5,7 @@ use super::*;
 pub(super) struct BorrowedMobTick<'a, 'p, F> {
     pub(super) mobs: &'a mut horizon_client::join_seq::JoinList<Mob>,
     pub(super) snapshot: &'a mut Vec<Seen>,
+    pub(super) passenger_objects: &'a [Seen],
     pub(super) events: &'a mut Vec<MobEvent>,
     pub(super) dead: &'a mut Vec<Mob>,
     pub(super) corpses: &'a mut Vec<Mob>,
@@ -37,6 +38,7 @@ impl Game<'_> {
         let BorrowedMobTick {
             mobs,
             snapshot,
+            passenger_objects,
             events,
             dead,
             corpses,
@@ -71,6 +73,7 @@ impl Game<'_> {
             .map(super::super::boat_leads::boat_state)
             .collect();
         let mut base = self.mob_world_base(&[]);
+        base.passenger_objects = passenger_objects;
         let mut level = horizon_client::health::DamageLevel::lent(
             &self.world,
             self.pack.assets.registry,

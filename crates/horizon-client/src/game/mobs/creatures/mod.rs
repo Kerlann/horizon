@@ -1068,6 +1068,7 @@ impl Game<'_> {
             leash_boats: &self.leash_boats,
             others_grid: None,
             others_index: None,
+            passenger_objects: &[],
             others_villagers: None,
             others_solid: None,
             daylight: self.dim != Dim::Nether && self.sky_darken() < 4,
@@ -1404,6 +1405,17 @@ impl Game<'_> {
         snapshot.extend(self.mobs.iter().map(|m| seen(m, uuid)));
         let mut events = std::mem::take(&mut self.creatures.event_buf);
         events.clear();
+        let passenger_objects: Vec<_> = if self.persist.off_level.is_empty() {
+            Vec::new()
+        } else {
+            self.persist
+                .off_level
+                .values()
+                .map(|object| match object {
+                    super::persist::OffLevel::Mob(m) => seen(m, uuid),
+                })
+                .collect()
+        };
         let mut mobs = self.mobs.lift();
         #[cfg(test)]
         super::entity::taken_pass_tests::after_take(self);
@@ -1451,6 +1463,7 @@ impl Game<'_> {
         self.tick_borrowed_creatures(borrowed_tick::BorrowedMobTick {
             mobs: &mut mobs,
             snapshot: &mut snapshot,
+            passenger_objects: &passenger_objects,
             events: &mut events,
             dead: &mut dead,
             corpses: &mut corpses,
@@ -11256,6 +11269,7 @@ mod pearl_tests {
             who_lookup: None,
             others_grid: None,
             others_index: None,
+            passenger_objects: &[],
             others_villagers: None,
             others_solid: None,
             daylight: true,
