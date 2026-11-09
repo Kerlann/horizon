@@ -1,4 +1,5 @@
 mod entity_write_receipts;
 pub use entity_write_receipts::{
-    CommandCompleted, CommandQueryError, EntityWriteError, WriteReceipt,
+    CommandCompleted, CommandQueryError, EntityCommandStatus, EntityWriteCompletion,
+    EntityWriteError, WriteReceipt,
 };

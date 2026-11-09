@@ -34,6 +34,25 @@ impl Game<'_> {
         source: &Mob,
         phase: EntityReadCapturePhase,
     ) -> bool {
+        self.publish_mob_read_source_at(
+            source,
+            Location {
+                owner: Owner {
+                    dimension: self.dim.key(),
+                    kind: Kind::Mob,
+                },
+                join: source.join_seq(),
+            },
+            phase,
+        )
+    }
+
+    pub(super) fn publish_mob_read_source_at(
+        &self,
+        source: &Mob,
+        location: Location,
+        phase: EntityReadCapturePhase,
+    ) -> bool {
         if source.removed || !self.is_logical_server() {
             return false;
         }
@@ -43,14 +62,26 @@ impl Game<'_> {
         ) else {
             return false;
         };
-        let level = LevelRef::new(epoch, self.dim.key());
-        let owner = Owner {
-            dimension: self.dim.key(),
-            kind: Kind::Mob,
+        let level = LevelRef::new(epoch, location.owner.dimension);
+        let owner = location.owner;
+        if owner.kind != Kind::Mob || location.join != source.join_seq() {
+            return false;
+        }
+        let parked = if owner.dimension == self.dim.key() {
+            None
+        } else {
+            let Some(parked) = self.levels.parked_of(level.dimension_id()) else {
+                return false;
+            };
+            Some(parked)
         };
-        let location = Location {
-            owner,
-            join: source.join_seq(),
+        let source_world = if parked.is_some() {
+            let Some(world) = self.levels.parked_world_of(level.dimension_id()) else {
+                return false;
+            };
+            world
+        } else {
+            &self.world
         };
         let clock = self.entity_read_state.borrow().passes.clone();
         let current = clock.borrow_mut().stamp_active_owner(owner, phase);
@@ -116,14 +147,30 @@ impl Game<'_> {
                 client_shift: None,
                 player_portal_cooldown: None,
             };
-            let Some(base) = snapshot_base_read_source(
-                BaseReadSource::Mob(source),
-                source.id,
-                &self.persist,
-                &self.portals.entities,
-                &mut state.kind_pool,
-                &context,
-            ) else {
+            let base = match parked {
+                Some(parked) => {
+                    let Some(raw) = parked.resident_read_source(location) else {
+                        return false;
+                    };
+                    snapshot_base_read_source(
+                        raw.source,
+                        raw.id,
+                        raw.persist,
+                        raw.portals,
+                        &mut state.kind_pool,
+                        &context,
+                    )
+                }
+                None => snapshot_base_read_source(
+                    BaseReadSource::Mob(source),
+                    source.id,
+                    &self.persist,
+                    &self.portals.entities,
+                    &mut state.kind_pool,
+                    &context,
+                ),
+            };
+            let Some(base) = base else {
                 return false;
             };
             let mob_context = self.mob_read_context(source, level, &relations.index);
@@ -137,7 +184,7 @@ impl Game<'_> {
             let Some(living) = self.snapshot_mob_living_read_row(
                 capture,
                 LivingRef::new(entity),
-                source,
+                (source, source_world),
                 kill_credit,
                 last_attacker,
                 self.raw_mob_item_use_remaining(source),
@@ -155,6 +202,7 @@ impl Game<'_> {
                 &mut state.identities,
             );
             NativeReadPublication {
+                silent_overlay: Default::default(),
                 capture,
                 base,
                 details: NativeReadDetails::Mob {
@@ -167,11 +215,10 @@ impl Game<'_> {
                 mob_target_facts: Some(NativeMobTargetFacts::capture(source)),
             }
         };
-        let published =
-            self.entity_residency
-                .borrow_mut()
-                .publish_rows([(source.id, location, publication)])
-                == 1;
+        let published = self.entity_residency.borrow_mut().publish_rows_merging(
+            [(source.id, location, publication)],
+            NativeReadPublication::merge_pending_silent,
+        ) == 1;
         drop(scope);
         published
     }

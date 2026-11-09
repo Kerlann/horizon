@@ -267,7 +267,7 @@ pub(super) fn base_read_source_geometry(
 }
 
 use super::native_base_read_rows::{BaseReadContext, BaseReadParts, CompactEntityReadRow};
-use horizon_client::join_seq::residency::{Kind, table::Location};
+use horizon_client::join_seq::residency::Kind;
 use horizon_client::mobs::leash::Holder;
 use mod_api::{EntityRef, LeashHolder, LevelRef, NativeWorldEpoch};
 
@@ -416,78 +416,6 @@ pub(super) fn snapshot_base_read_source(
             client_shift: owner.client_shift,
         },
     ))
-}
-
-// Expanded inside the storage-owning module so Parked's private list fields
-// remain private. The located join is consumed once; no element index survives.
-macro_rules! define_base_read_access {
-    (($this:ident, $($projectiles:ident).+, $($portals:ident).+, $method:ident) $($kind:ident => $target:ident: $($field:ident).+,)*) => {
-        pub(super) fn $method(
-            &$this, at: horizon_client::join_seq::residency::table::Location,
-            pool: &mut $crate::game::native_base_read_source::BaseReadKindPool,
-            owner: $crate::game::native_base_read_source::BaseReadOwner<'_>,
-        ) -> Option<$crate::game::native_base_read_rows::CompactEntityReadRow> {
-            if at.owner.dimension != owner.level.dimension() { return None; }
-            use horizon_client::join_seq::residency::Kind;
-            use $crate::game::native_base_read_rows::BaseReadSource;
-            let (source,id) = match at.owner.kind {
-                $(Kind::$kind => {
-                    let index = $this$(.$field)+.locate(at.join)?;
-                    let source = &$this$(.$field)+[index];
-                    (BaseReadSource::$kind(source),source.id)
-                },)*
-                Kind::Projectile => {
-                    let index = $this$(.$projectiles)+.locate(at.join)?;
-                    let source = &$this$(.$projectiles)+[index];
-                    (BaseReadSource::Projectile(source),source.id)
-                },
-                Kind::Dragon => {
-                    $this.dragon.locate(at.join)?;
-                    let source = $this.dragon.as_ref()?;
-                    (BaseReadSource::Dragon(source),source.id)
-                },
-            };
-            $crate::game::native_base_read_source::snapshot_base_read_source(source,id,&$this.persist,&$this$(.$portals)+,pool,&owner)
-        }
-    };
-}
-pub(crate) use define_base_read_access;
-
-macro_rules! game_base_read_access {
-    (($this:ident, $($projectiles:ident).+) $($rest:tt)*) => {
-        $crate::game::native_base_read_source::define_base_read_access! {
-            ($this, $($projectiles).+, portals.entities, snapshot_base_read_from_location) $($rest)*
-        }
-    };
-}
-impl super::Game<'_> {
-    super::entity_residency::resident_owners!(game_base_read_access, self, creatures.projectiles);
-}
-
-macro_rules! parked_base_read_access {
-    (($this:ident, $($projectiles:ident).+) $($rest:tt)*) => {
-        $crate::game::native_base_read_source::define_base_read_access! {
-            ($this, $($projectiles).+, portal_states, snapshot_base_read_at) $($rest)*
-        }
-    };
-}
-pub(crate) use parked_base_read_access;
-
-impl super::Game<'_> {
-    pub(super) fn snapshot_base_read_at(
-        &self,
-        at: Location,
-        pool: &mut BaseReadKindPool,
-        mut owner: BaseReadOwner<'_>,
-    ) -> Option<CompactEntityReadRow> {
-        if at.owner.dimension != self.dim.key() {
-            return None;
-        }
-        owner.epoch = self.native_lifecycle.epoch()?;
-        owner.level = LevelRef::new(owner.epoch, self.dim.key());
-        owner.logical_server = self.is_logical_server();
-        self.snapshot_base_read_from_location(at, pool, owner)
-    }
 }
 
 #[cfg(test)]

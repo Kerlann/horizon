@@ -343,8 +343,16 @@ impl Game<'_> {
     }
     /// The climbing decision for a mob currently lent out of the game's list.
     pub(super) fn native_mob_is_climbing(&self, mob: &horizon_client::mobs::Mob) -> bool {
+        self.native_mob_is_climbing_in(mob, &self.world)
+    }
+
+    pub(super) fn native_mob_is_climbing_in(
+        &self,
+        mob: &horizon_client::mobs::Mob,
+        source_world: &horizon_client::world::World,
+    ) -> bool {
         let mut world = FlagClimbing {
-            world: &self.world,
+            world: source_world,
             position: BlockPos::containing(mob.position),
             spectator: false,
             gliding: mob.extra.fall_flying,

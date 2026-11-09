@@ -151,6 +151,7 @@ pub(crate) struct Types<'a> {
     pub(super) index: Index<'a>,
     pub(super) defs: Vec<Def>,
     by_item: HashMap<ItemId, usize>,
+    instances: Vec<(ItemId, Vec<Ty>, usize)>,
     /// The `mod_api` root module, where re-exported names are looked up.
     api_root: usize,
     /// Each exported trait with the exported traits its handlers answer as (`super::views`).
@@ -168,6 +169,7 @@ impl<'a> Types<'a> {
             current: None,
             defs: Vec::new(),
             by_item: HashMap::new(),
+            instances: Vec::new(),
             api_root,
         })
     }
@@ -376,10 +378,29 @@ impl<'a> Types<'a> {
         if let Item::Trait(_) = item {
             return Err(format!("trait {name} used as a type"));
         }
-        if let Some(&def) = self.by_item.get(&id) {
-            return Ok(Ty::Named(def));
+        if args.is_empty() {
+            if let Some(&def) = self.by_item.get(&id) {
+                return Ok(Ty::Named(def));
+            }
+        } else if let Some((_, _, def)) = self
+            .instances
+            .iter()
+            .find(|(item, supplied, _)| *item == id && *supplied == args)
+        {
+            return Ok(Ty::Named(*def));
         }
-        let rust = self.public_path(id, name);
+        let mut rust = self.public_path(id, name);
+        if !args.is_empty() {
+            rust.push('<');
+            rust.push_str(
+                &args
+                    .iter()
+                    .map(|arg| super::calls::rust_ty(self, arg, false))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            );
+            rust.push('>');
+        }
         let lifetimes = generics(&item).lifetimes().count();
         let krate = self.index.modules[id.module].krate;
         let clone = derives(&item, "Clone")
@@ -398,7 +419,11 @@ impl<'a> Types<'a> {
             clone,
             kind: Kind::Opaque,
         });
-        self.by_item.insert(id, def);
+        if args.is_empty() {
+            self.by_item.insert(id, def);
+        } else {
+            self.instances.push((id, args, def));
+        }
         let outer = self.current.replace(def);
         let kind = self.kind(id, &item, name);
         self.current = outer;

@@ -4085,8 +4085,12 @@ impl ModEntry {
 /// The ordered list of named mods shared by the client and server.
 pub type Mods = Arc<[ModEntry]>;
 
+mod entity_command_dispatch;
+use entity_command_dispatch::entered_entity_command_recipient;
+
 pub(crate) struct Installed {
     entity_reads: bool,
+    by_id: std::collections::HashMap<&'static str, usize>,
     mods: Mods,
     subscribers: horizon_mod_runtime::subscribers::Subscribers,
     disabled: Box<[std::sync::atomic::AtomicBool]>,
@@ -4129,6 +4133,11 @@ impl Installed {
             .collect();
         Self {
             entity_reads,
+            by_id: mods
+                .iter()
+                .enumerate()
+                .map(|(index, entry)| (entry.id, index))
+                .collect(),
             mods,
             subscribers,
             disabled,

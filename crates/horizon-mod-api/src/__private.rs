@@ -3,6 +3,17 @@
 //! (`game`). None of it is part of the API a mod is written against.
 use crate::*;
 
+/// Deliver a terminal only to its captured issuing mod/package. Generated
+/// dispatch selects this recipient before entering any native/crash scope.
+/// Scope restoration is RAII, including callback panic and nested delivery.
+pub fn with_entity_command_recipient<R>(
+    native: &'static str,
+    package: Option<std::sync::Arc<str>>,
+    f: impl FnOnce() -> R,
+) -> R {
+    crate::entity_command_dispatch::with_recipient(native, package, f)
+}
+
 /// The game's profiler control and reports, not a mod-facing API contract.
 #[path = "profiler.rs"]
 pub mod profiler;

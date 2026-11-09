@@ -84,24 +84,37 @@ acceptance. `EntityWriteError<E>` keeps authority, epoch, generation, removal an
 work-limit refusals separate from the operation's original `Domain(E)` error.
 
 `CommandCompleted<R, E> { id, outcome: Result<R, E> }` is terminal: Pending cannot
-be represented in it. Each implemented queued domain supplies its concrete typed
-operation variant and the same result to the issuing mod's
-`entity_command_completed` event and `CommandId::query(&dyn Host)`. No placeholder
-operation or unsupported event/query route is introduced by these carrier types.
-The real route lands with its first converted operation, then grows by domain.
+be represented in it. `EntityRef::set_silent` is the first implemented queued
+domain: `EntityWriteCompletion::EntitySetSilent` carries the actual boolean result
+or typed apply-time refusal. `CommandId::query(&dyn Host)` returns
+`EntityCommandStatus::Pending` or `Completed(the_same_completion)`. Only the issuing
+native mod or wasm package receives `entity_command_completed`; converted packages
+hosted by one native runtime retain distinct issuer identities.
 
 Completion is published after authoritative apply/refusal and row refresh. Events
 are the primary path; terminal query results remain through the end of the following
 logical engine tick. Queries do not consume results. Pending records do not silently
 expire. `CommandQueryError::StaleEpoch` is distinct from `UnknownOrExpired`, which
 also covers commands inaccessible to the calling mod without disclosing another
-mod's work. Each converted domain must specify its transaction acceptance, commit
-and rollback rules before exposing queued writes inside a transaction.
+mod's work.
 
-These declarations do not convert the deferred write methods by themselves. The
-18 RNG/veto/callback/lifecycle methods remain synchronous; 109 deterministic edits
-and 19 heavy-dependent edits require their actual ordered implementations. The
-heavy-dependent group has no speculative heavy payload overlay. Synchronous live
+For `set_silent`, an explicit OWN actor or a call outside a writer turn applies
+immediately and returns `Applied(true)`. A foreign target queues during a writer
+turn even when it is resident. Acceptance validates epoch, authority and admitted
+identity; application rechecks its exact generation, so removal or id reuse never
+retargets the write. The latest ordered silent value overlays authoritative light
+rows, including every materialized family header's `pending_overlay`. A source
+recapture preserves that overlay until completion. Only full entity NBT serialization
+depends on this pending silent patch; names, tags and unrelated heavy reads do not.
+
+An active item transaction refuses a foreign write that would enqueue with
+`EntityWriteError::TransactionActive`, before creating an id, overlay or event.
+Retry after committing the transaction. Immediate OWN/direct entity edits are not
+promised item-transaction rollback. Completion callbacks keep the enclosing writer
+turn and append to its FIFO without recursively draining it.
+
+Other deferred write methods still require their own ordered implementations.
+The heavy-dependent group has no speculative heavy payload overlay. Synchronous live
 operations preserve the typed refusal order after scope/identity validation: explicit
 OWN first, physically lifted foreign source as `Lifted`, resident foreign source with
 a relevant pending dependency as `Pending(CommandId)`, otherwise the live operation.

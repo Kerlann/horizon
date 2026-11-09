@@ -7,7 +7,10 @@ use super::{
     native_entity_read_cache::{NativeReadDetails, NativeReadPublication},
     native_mob_read_context::NativeMobRelations,
 };
-use horizon_client::join_seq::residency::{Kind, read_pass::ReadScope, table::Location};
+use horizon_client::join_seq::{
+    JoinSeq, Joined,
+    residency::{Kind, Owner, read_pass::ReadScope, table::Location},
+};
 use mod_api::*;
 
 /// Borrowed once by generation, including inside Parked's private storage.
@@ -15,6 +18,42 @@ pub(super) struct ResidentReadSource<'a> {
     pub(super) source: BaseReadSource<'a>,
     pub(super) id: u32,
     pub(super) persist: &'a super::persist::EntityMemory,
+    pub(super) portals:
+        &'a std::collections::HashMap<u32, horizon_client::nether_portal::PortalState>,
+}
+macro_rules! resident_read_portals {
+    ($this:ident, creatures.projectiles) => {
+        &$this.portals.entities
+    };
+    ($this:ident, projectiles) => {
+        &$this.portal_states
+    };
+}
+pub(crate) use resident_read_portals;
+macro_rules! resident_read_identity {
+    (($this:ident, $($projectiles:ident).+) $($kind:ident => $target:ident: $($field:ident).+,)*) => {
+        fn resident_source_identity(source: BaseReadSource<'_>) -> Option<(Kind, u32, JoinSeq)> {
+            match source {
+                $(BaseReadSource::$kind(source) => Some((Kind::$kind, source.id, source.join_seq())),)*
+                BaseReadSource::Projectile(source) => Some((Kind::Projectile, source.id, source.join_seq())),
+                BaseReadSource::Dragon(source) => Some((Kind::Dragon, source.id, source.join_seq())),
+                _ => None,
+            }
+        }
+    };
+}
+super::entity_residency::resident_owners!(resident_read_identity, unused, creatures.projectiles);
+macro_rules! resident_read_owner_locations {
+    (($this:ident, $($projectiles:ident).+) $($kind:ident => $target:ident: $($field:ident).+,)*) => {
+        fn resident_owner_read_locations(&$this, kind: Kind) -> Vec<Location> {
+            let owner = Owner { dimension: $this.dim.key(), kind };
+            match kind {
+                $(Kind::$kind => $this$(.$field)+.iter().map(|source| Location { owner, join: source.join_seq() }).collect(),)*
+                Kind::Projectile => $this$(.$projectiles)+.iter().map(|source| Location { owner, join: source.join_seq() }).collect(),
+                Kind::Dragon => $this.dragon.iter().map(|source| Location { owner, join: source.join_seq() }).collect(),
+            }
+        }
+    };
 }
 macro_rules! resident_read_access {
     (($this:ident, $($projectiles:ident).+) $($kind:ident => $target:ident: $($field:ident).+,)*) => {
@@ -30,29 +69,138 @@ macro_rules! resident_read_access {
                 Kind::Dragon => { $this.dragon.locate(at.join)?; let source = $this.dragon.as_ref()?;
                     (BaseReadSource::Dragon(source), source.id) },
             };
-            Some($crate::game::native_resident_read_publication::ResidentReadSource { source, id, persist: &$this.persist })
+            Some($crate::game::native_resident_read_publication::ResidentReadSource { source, id, persist: &$this.persist, portals: $crate::game::native_resident_read_publication::resident_read_portals!($this, $($projectiles).+) })
         }
     };
 }
 pub(crate) use resident_read_access;
+
+/// Several owners can be physically lent together. Close their clocks in
+/// reverse nesting order, including while the original callback unwinds.
+#[derive(Default)]
+pub(super) struct ResidentReadScopes(pub(super) Vec<ReadScope>);
+impl Drop for ResidentReadScopes {
+    fn drop(&mut self) {
+        while let Some(scope) = self.0.pop() {
+            drop(scope);
+        }
+    }
+}
+
 impl Game<'_> {
     super::entity_residency::resident_owners!(resident_read_access, self, creatures.projectiles);
+    super::entity_residency::resident_owners!(
+        resident_read_owner_locations,
+        self,
+        creatures.projectiles
+    );
+
+    /// Open before lifting an owner. The guard owns only the shared clock;
+    /// no storage or Game borrow survives the call.
+    pub(super) fn begin_resident_read_pass(&self, kind: Kind) -> Option<ReadScope> {
+        if kind == Kind::Mob
+            || !self.is_logical_server()
+            || !mod_api::__private::entity_reads_listened()
+        {
+            return None;
+        }
+        let tick = self.native_lifecycle.capture_tick()?;
+        let clock = self.entity_read_state.borrow().passes.clone();
+        let scope = match ReadScope::begin(
+            clock,
+            true,
+            Owner {
+                dimension: self.dim.key(),
+                kind,
+            },
+            tick,
+        ) {
+            Ok(scope) => scope?,
+            Err(error) => {
+                log::error!("cannot open resident owner read pass: {error:?}");
+                return None;
+            }
+        };
+        for at in self.resident_owner_read_locations(kind) {
+            self.publish_resident_read_location(at, EntityReadCapturePhase::PassStart);
+        }
+        Some(scope)
+    }
+
+    pub(super) fn refresh_resident_owner_reads(&self, kind: Kind, phase: EntityReadCapturePhase) {
+        if kind == Kind::Mob
+            || !self.is_logical_server()
+            || !mod_api::__private::entity_reads_listened()
+        {
+            return;
+        }
+        for at in self.resident_owner_read_locations(kind) {
+            self.publish_resident_read_location(at, phase);
+        }
+    }
+
+    pub(super) fn begin_resident_source_read_pass(
+        &self,
+        source: BaseReadSource<'_>,
+    ) -> Option<ReadScope> {
+        self.begin_resident_read_pass(resident_source_identity(source)?.0)
+    }
+
+    pub(super) fn publish_resident_actor_reads(
+        &self,
+        source: BaseReadSource<'_>,
+        phase: EntityReadCapturePhase,
+    ) -> bool {
+        let Some((kind, _, join)) = resident_source_identity(source) else {
+            return false;
+        };
+        self.publish_lent_resident_reads(
+            Location {
+                owner: Owner {
+                    dimension: self.dim.key(),
+                    kind,
+                },
+                join,
+            },
+            source,
+            phase,
+        )
+    }
+
+    /// Refresh an actual lent actor without looking in its now-empty owner.
+    pub(super) fn publish_lent_resident_reads(
+        &self,
+        at: Location,
+        source: BaseReadSource<'_>,
+        phase: EntityReadCapturePhase,
+    ) -> bool {
+        let Some((kind, id, join)) = resident_source_identity(source) else {
+            return false;
+        };
+        if at.owner.dimension != self.dim.key() || at.owner.kind != kind || at.join != join {
+            return false;
+        }
+        let raw = ResidentReadSource {
+            source,
+            id,
+            persist: &self.persist,
+            portals: &self.portals.entities,
+        };
+        self.publish_resident_read_source(at, &raw, phase)
+    }
 
     pub(super) fn publish_resident_read_location(
         &self,
         at: Location,
         phase: EntityReadCapturePhase,
     ) -> bool {
-        if !self.is_logical_server() || at.owner.kind == Kind::Mob {
-            return false;
-        }
-        let (Some(epoch), Some(tick)) = (
-            self.native_lifecycle.epoch(),
-            self.native_lifecycle.capture_tick(),
-        ) else {
-            return false;
-        };
-        let level = LevelRef::new(epoch, at.owner.dimension);
+        let level = LevelRef::new(
+            match self.native_lifecycle.epoch() {
+                Some(epoch) => epoch,
+                None => return false,
+            },
+            at.owner.dimension,
+        );
         let parked = if at.owner.dimension == self.dim.key() {
             None
         } else {
@@ -67,6 +215,25 @@ impl Game<'_> {
         }) else {
             return false;
         };
+        self.publish_resident_read_source(at, &raw, phase)
+    }
+
+    fn publish_resident_read_source(
+        &self,
+        at: Location,
+        raw: &ResidentReadSource<'_>,
+        phase: EntityReadCapturePhase,
+    ) -> bool {
+        if !self.is_logical_server() || at.owner.kind == Kind::Mob {
+            return false;
+        }
+        let (Some(epoch), Some(tick)) = (
+            self.native_lifecycle.epoch(),
+            self.native_lifecycle.capture_tick(),
+        ) else {
+            return false;
+        };
+        let level = LevelRef::new(epoch, at.owner.dimension);
         let target = super::entity_residency::residency_target(at.owner.kind, raw.id);
         if raw.id == 0 || !self.server_read_target_visible(at.owner.dimension, target) {
             return false;
@@ -123,18 +290,23 @@ impl Game<'_> {
                 client_shift: None,
                 player_portal_cooldown: None,
             };
-            let base = match parked {
-                Some(p) => p.snapshot_base_read_at(at, &mut state.kind_pool, owner),
-                None => self.snapshot_base_read_at(at, &mut state.kind_pool, owner),
-            };
+            let base = super::native_base_read_source::snapshot_base_read_source(
+                raw.source,
+                raw.id,
+                raw.persist,
+                raw.portals,
+                &mut state.kind_pool,
+                &owner,
+            );
             let Some(base) = base else {
                 return false;
             };
-            let Some(details) = self.resident_read_details(capture, entity, level, &raw, index)
+            let Some(details) = self.resident_read_details(capture, entity, level, raw, index)
             else {
                 return false;
             };
             NativeReadPublication {
+                silent_overlay: Default::default(),
                 capture,
                 base,
                 details,
@@ -143,11 +315,10 @@ impl Game<'_> {
                 mob_target_facts: None,
             }
         };
-        let published =
-            self.entity_residency
-                .borrow_mut()
-                .publish_rows([(raw.id, at, publication)])
-                == 1;
+        let published = self.entity_residency.borrow_mut().publish_rows_merging(
+            [(raw.id, at, publication)],
+            NativeReadPublication::merge_pending_silent,
+        ) == 1;
         drop(scope);
         published
     }
@@ -285,6 +456,215 @@ mod tests {
         };
         location
     }
+    struct Reader;
+    impl Hooks for Reader {
+        fn subscribed(&self) -> &'static [Option<HookId>] {
+            &[Some(HookId::ClientTickPre)]
+        }
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn owner_scope_captures_before_lift_and_lent_refresh_preserves_identity() {
+        mod_api::testing::with_mods(
+            vec![ModEntry::new("reader", Box::new(Reader))].into(),
+            || {
+                with_game(|game| {
+                    game.summon_with_nbt(
+                        "minecraft:item",
+                        [1.0, 70.0, 1.0],
+                        "{Item:{id:\"minecraft:stone\",count:1}}",
+                    )
+                    .unwrap();
+                    game.summon_with_nbt(
+                        "minecraft:item",
+                        [4.0, 70.0, 1.0],
+                        "{Item:{id:\"minecraft:dirt\",count:1}}",
+                    )
+                    .unwrap();
+                    game.native_joins_skip();
+                    let epoch = game.native_lifecycle.epoch().unwrap();
+                    let ids = [game.dropped[0].id, game.dropped[1].id];
+                    let at = location(game, ids[0]);
+                    let scope = game.begin_resident_read_pass(Kind::Item).unwrap();
+                    let first = game
+                        .entity_cached_row(EntityRef::new(epoch, ids[0]))
+                        .unwrap();
+                    let next = game
+                        .entity_cached_row(EntityRef::new(epoch, ids[1]))
+                        .unwrap();
+                    assert_eq!(first.capture.phase, EntityReadCapturePhase::PassStart);
+                    assert_eq!(next.capture.pass, first.capture.pass);
+                    let mut taken = game.dropped.lift();
+                    assert_eq!(
+                        game.entity_cached_row(EntityRef::new(epoch, ids[0]))
+                            .unwrap()
+                            .position,
+                        [1.0, 70.0, 1.0]
+                    );
+                    taken[0].position.x = 8.0;
+                    assert!(game.publish_lent_resident_reads(
+                        at,
+                        BaseReadSource::Item(&taken[0]),
+                        EntityReadCapturePhase::AfterEntityTick
+                    ));
+                    let refreshed = game
+                        .entity_cached_row(EntityRef::new(epoch, ids[0]))
+                        .unwrap();
+                    assert_eq!(refreshed.position, [8.0, 70.0, 1.0]);
+                    assert_eq!(
+                        refreshed.capture.phase,
+                        EntityReadCapturePhase::AfterEntityTick
+                    );
+                    assert_eq!(refreshed.capture.pass, first.capture.pass);
+                    assert!(refreshed.capture.revision > first.capture.revision);
+                    assert!(!game.publish_lent_resident_reads(
+                        at,
+                        BaseReadSource::Item(&taken[1]),
+                        EntityReadCapturePhase::AfterEntityTick
+                    ));
+                    assert_eq!(
+                        game.entity_cached_row(EntityRef::new(epoch, ids[0]))
+                            .unwrap()
+                            .position,
+                        [8.0, 70.0, 1.0]
+                    );
+                    game.dropped.restore(taken, RestoreOrder::SurvivorsFirst);
+                    assert!(game.publish_resident_read_location(
+                        at,
+                        EntityReadCapturePhase::AfterAppliedWrite
+                    ));
+                    let applied = game
+                        .entity_cached_row(EntityRef::new(epoch, ids[0]))
+                        .unwrap();
+                    assert_eq!(
+                        applied.capture.phase,
+                        EntityReadCapturePhase::AfterAppliedWrite
+                    );
+                    assert_eq!(applied.capture.pass, first.capture.pass);
+                    drop(scope);
+                    assert_eq!(
+                        game.entity_read_state
+                            .borrow()
+                            .passes
+                            .borrow_mut()
+                            .stamp_active_owner(at.owner, EntityReadCapturePhase::BeforeCallback),
+                        Ok(None)
+                    );
+                })
+            },
+        );
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn bulk_take_captures_before_lift_and_refreshes_after_restore() {
+        mod_api::testing::with_mods(
+            vec![ModEntry::new("reader", Box::new(Reader))].into(),
+            || {
+                with_game(|game| {
+                    game.summon_with_nbt(
+                        "minecraft:item",
+                        [1.0, 70.0, 1.0],
+                        "{Item:{id:\"minecraft:stone\",count:1}}",
+                    )
+                    .unwrap();
+                    game.summon_with_nbt("minecraft:armor_stand", [4.0, 70.0, 1.0], "{}")
+                        .unwrap();
+                    game.native_joins_skip();
+                    let epoch = game.native_lifecycle.epoch().unwrap();
+                    let id = game.dropped[0].id;
+                    let at = location(game, id);
+                    let mut taken = game.take_entities();
+                    assert!(game.dropped.is_empty());
+                    assert_eq!(
+                        game.entity_cached_row(EntityRef::new(epoch, id))
+                            .unwrap()
+                            .capture
+                            .phase,
+                        EntityReadCapturePhase::PassStart
+                    );
+                    taken.dropped[0].position.x = 11.0;
+                    game.restore_entities(taken);
+                    let restored = game.entity_cached_row(EntityRef::new(epoch, id)).unwrap();
+                    assert_eq!(restored.position, [11.0, 70.0, 1.0]);
+                    assert_eq!(
+                        restored.capture.phase,
+                        EntityReadCapturePhase::AfterAppliedWrite
+                    );
+                    assert_eq!(
+                        game.entity_read_state
+                            .borrow()
+                            .passes
+                            .borrow_mut()
+                            .stamp_active_owner(at.owner, EntityReadCapturePhase::BeforeCallback),
+                        Ok(None)
+                    );
+                })
+            },
+        );
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn owner_scope_unwind_keeps_original_panic_and_closes_clock() {
+        mod_api::testing::with_mods(
+            vec![ModEntry::new("reader", Box::new(Reader))].into(),
+            || {
+                with_game(|game| {
+                    game.summon_with_nbt(
+                        "minecraft:item",
+                        [1.0, 70.0, 1.0],
+                        "{Item:{id:\"minecraft:stone\",count:1}}",
+                    )
+                    .unwrap();
+                    game.native_joins_skip();
+                    let at = location(game, game.dropped[0].id);
+                    let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        let _scope = game.begin_resident_read_pass(Kind::Item).unwrap();
+                        panic!("original resident callback panic");
+                    }));
+                    assert_eq!(
+                        result.unwrap_err().downcast_ref::<&str>(),
+                        Some(&"original resident callback panic")
+                    );
+                    assert_eq!(
+                        game.entity_read_state
+                            .borrow()
+                            .passes
+                            .borrow_mut()
+                            .stamp_active_owner(at.owner, EntityReadCapturePhase::BeforeCallback),
+                        Ok(None)
+                    );
+                })
+            },
+        );
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn disabled_owner_scope_does_not_publish() {
+        mod_api::testing::with_mods(Vec::<ModEntry>::new().into(), || {
+            with_game(|game| {
+                game.summon_with_nbt(
+                    "minecraft:item",
+                    [1.0, 70.0, 1.0],
+                    "{Item:{id:\"minecraft:stone\",count:1}}",
+                )
+                .unwrap();
+                game.native_joins_skip();
+                let entity =
+                    EntityRef::new(game.native_lifecycle.epoch().unwrap(), game.dropped[0].id);
+                assert!(game.begin_resident_read_pass(Kind::Item).is_none());
+                let taken = game.take_entities();
+                assert!(taken.read_scopes.0.is_empty());
+                assert!(game.entity_cached_row(entity).is_none());
+                game.restore_entities(taken);
+                assert!(game.entity_cached_row(entity).is_none());
+            })
+        });
+    }
+
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn every_nonmob_family_composes_from_source_and_survives_owner_lift() {

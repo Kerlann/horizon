@@ -768,6 +768,7 @@ fn refusal(sig: &syn::Signature, name: &str) -> Result<Option<&'static str>, Str
         Some("bool") => Some("false"),
         // A read that answers `Result`: its refusal is the error a host without a backend answers.
         Some("Result") => Some("Err(mod_api::NoBackend::no_backend())"),
+        Some("WriteReceipt") => Some("mod_api::NoBackend::no_backend()"),
         Some("u32" | "i32" | "u16" | "u8" | "usize") => Some("0"),
         // A registry key's metadata: a read the goal view only forwards.
         Some("String") => None,
@@ -857,6 +858,10 @@ fn handle_method(
         format!("{backend}(host).map(|backend| backend.{call}).unwrap_or(false)")
     } else if let Some(unavailable) = entity_read_unavailable(&sig) {
         format!("{backend}(host).map_or_else(|| {unavailable}, |backend| backend.{call})")
+    } else if returns("WriteReceipt") {
+        format!(
+            "{backend}(host).map_or_else(crate::NoBackend::no_backend, |backend| backend.{call})"
+        )
     } else if returns("Result") {
         format!(
             "{backend}(host).map_or_else(|| Err(crate::NoBackend::no_backend()), |backend| backend.{call})"
