@@ -6,11 +6,13 @@ use super::{
     Game, Screen,
     dragon::{Breath, FightPlayer, FightWho},
     item_draw::owner_at,
+    native_base_read_rows::BaseReadSource,
     remote_projectiles::cloud_client_tick,
     splash_water::thrown_block_hit,
 };
 use horizon_assets::item_model::DisplayContext;
 use horizon_client::health::DamageLevel;
+use horizon_client::join_seq::residency::Kind;
 use horizon_client::{
     block_entity_render::vertex_light,
     brewing,
@@ -29,6 +31,7 @@ use horizon_core::{
     geometry::{Aabb, Axis, Direction, Vec3},
     random::{LegacyRandom, RandomSource},
 };
+use mod_api::EntityReadCapturePhase;
 use mod_api::{EffectApplicable, EffectTickChange, EntityRef, LivingRef, NativePlayerFood};
 
 /// Per-cloud settings; natural lingering clouds keep their creation defaults.
@@ -1889,17 +1892,32 @@ impl Game<'_> {
             .into_iter()
             .filter(|p| p.alive)
             .collect();
+        let read_scope = self.begin_resident_read_pass(Kind::Cloud);
         let mut clouds = self.breath_clouds.lift();
         #[cfg(test)]
         super::entity::taken_pass_tests::after_take(self);
         let ticking = self.entity_ticking_area();
         clouds.retain_mut(|c| {
-            c.potion.is_none()
-                || !ticking(c.at[0].floor() as i32, c.at[2].floor() as i32)
-                || self.tick_potion_cloud(c, &players)
+            if c.potion.is_none() || !ticking(c.at[0].floor() as i32, c.at[2].floor() as i32) {
+                return true;
+            }
+            let alive = self.tick_potion_cloud(c, &players);
+            if read_scope.is_some() {
+                self.publish_resident_actor_reads(
+                    BaseReadSource::Cloud(c),
+                    EntityReadCapturePhase::AfterEntityTick,
+                );
+            }
+            alive
         });
         self.breath_clouds
             .restore(clouds, horizon_client::join_seq::RestoreOrder::SpawnsFirst);
+        if read_scope.is_some() {
+            self.refresh_resident_owner_reads(
+                Kind::Cloud,
+                EntityReadCapturePhase::AfterAppliedWrite,
+            );
+        }
     }
     /// `AreaEffectCloud.serverTick`: configured lifetime/radius changes and
     /// five-tick doses, with each victim's configured reapplication delay.
