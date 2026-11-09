@@ -65,9 +65,97 @@ pub(super) struct BorrowedMobTick<'a> {
     pub(super) laps: &'a mut horizon_client::spans::Laps,
     pub(super) uuid: Option<[i32; 4]>,
     pub(super) level_id: &'static str,
-    pub(super) round: &'a super::super::native_ticks::TickRound,
+    pub(super) round: &'a mut super::super::native_ticks::TickRound,
+    pub(super) publish_reads: bool,
 }
+struct TickHookLoans<'a> {
+    credit: &'a mut std::collections::HashMap<u32, super::super::combat::PlayerCredit>,
+    died: &'a mut horizon_client::fast_hash::FxHashSet<u32>,
+    ticked: &'a mut horizon_client::fast_hash::FxHashSet<u32>,
+    bindings: &'a mut horizon_client::fast_hash::FxHashMap<u32, u32>,
+}
+
 impl Game<'_> {
+    pub(super) fn begin_mob_read_pass(
+        &self,
+    ) -> Option<horizon_client::join_seq::residency::read_pass::ReadScope> {
+        use horizon_client::join_seq::residency::{Kind, Owner, read_pass::ReadScope};
+        if !mod_api::__private::entity_reads_listened() || !self.is_logical_server() {
+            return None;
+        }
+        let tick = self.native_lifecycle.capture_tick()?;
+        let clock = self.entity_read_state.borrow().passes.clone();
+        match ReadScope::begin(
+            clock,
+            true,
+            Owner {
+                dimension: self.dim.key(),
+                kind: Kind::Mob,
+            },
+            tick,
+        ) {
+            Ok(scope) => scope,
+            Err(error) => {
+                log::error!("cannot open mob owner read pass: {error:?}");
+                None
+            }
+        }
+    }
+
+    /// No world or AI backing borrow crosses this full mutable Host boundary.
+    fn mob_tick_hook_boundary(
+        &mut self,
+        mobs: &mut horizon_client::join_seq::JoinList<Mob>,
+        lent: horizon_client::health::LentLevel,
+        round: &mut super::super::native_ticks::TickRound,
+        (join, pre, publish): (horizon_client::join_seq::JoinSeq, bool, bool),
+        loans: TickHookLoans<'_>,
+    ) -> (
+        horizon_client::health::LentLevel,
+        std::result::Result<bool, Box<dyn std::any::Any + Send>>,
+    ) {
+        lent.give_back(&mut self.world);
+        self.mobs.restore(
+            mobs.take_owned_pass(),
+            horizon_client::join_seq::RestoreOrder::SpawnsFirst,
+        );
+        std::mem::swap(&mut self.last_hurt_by_player, loans.credit);
+        std::mem::swap(&mut self.died, loans.died);
+        std::mem::swap(&mut self.creatures.ticked, loans.ticked);
+        if let Some(host) = self.lan.as_mut() {
+            std::mem::swap(&mut host.mob_players, loans.bindings);
+        }
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let Some(i) = self.mobs.locate(join) else {
+                return false;
+            };
+            let actor = &self.mobs[i];
+            if publish {
+                self.publish_mob_read_source(
+                    actor,
+                    mod_api::EntityReadCapturePhase::BeforeCallback,
+                );
+            }
+            let id = actor.id;
+            let kind = actor.kind.clone();
+            if pre {
+                self.native_tick_pre_one(round, id, &kind.id)
+            } else {
+                self.native_tick_post_one(round, id, &kind.id);
+                true
+            }
+        }));
+        *mobs = self.mobs.lift();
+        std::mem::swap(&mut self.last_hurt_by_player, loans.credit);
+        std::mem::swap(&mut self.died, loans.died);
+        std::mem::swap(&mut self.creatures.ticked, loans.ticked);
+        if let Some(host) = self.lan.as_mut() {
+            std::mem::swap(&mut host.mob_players, loans.bindings);
+        }
+        let lent = horizon_client::health::LentLevel::take(&mut self.world);
+        (lent, result)
+    }
+
     pub(super) fn tick_borrowed_creatures(
         &mut self,
         state: BorrowedMobTick<'_>,
@@ -124,20 +212,108 @@ impl Game<'_> {
         let mut resume_was_on_fire = false;
         let mut resume_sampled = None;
         let mut resume_guest = None;
+        let mut cached_difficulty: Option<((i32, i32), spawning::LocalDifficulty)> = None;
+        let schedule = (round.listening() || state.publish_reads)
+            .then(|| mobs.iter().map(|mob| mob.join).collect::<Vec<_>>());
+        let schedule_slots = schedule.as_ref().map(|schedule| {
+            schedule
+                .iter()
+                .enumerate()
+                .map(|(slot, &join)| (join, slot))
+                .collect::<horizon_client::fast_hash::FxHashMap<_, _>>()
+        });
+        let mut teams = std::sync::Arc::new(self.mob_team_rules_for(&mobs));
+        let mut player_backing = self.player_view();
+        let mut players = self.level_players();
+        let mut nearest = super::super::natural_spawning::NearestPlayers::new(&players);
+        let mut backing_revision = self.entity_read_state.borrow().mob_backing;
+        self.leash_boats = self
+            .boats
+            .iter()
+            .map(super::super::boat_leads::boat_state)
+            .collect();
+        let mut path_changes = {
+            let base = self.mob_world_reborrow(&[], None, teams.clone());
+            horizon_client::mobs::collision_changes(&base, &path_writes)
+        };
         loop {
+            if cursor >= original_len {
+                break;
+            }
+            let scheduled = schedule.as_ref().and_then(|s| s.get(cursor)).copied();
+            if !resuming
+                && round.listening()
+                && let Some(join) = scheduled
+            {
+                let Some(i) = mobs.locate(join) else {
+                    keep[cursor] = false;
+                    snapshot[cursor].alive = false;
+                    cursor += 1;
+                    continue;
+                };
+                let actor = &mobs[i];
+                let (x, z) = (
+                    actor.position.x.floor() as i32,
+                    actor.position.z.floor() as i32,
+                );
+                if !actor.removed && self.world.loaded(x, z) && self.entity_ticking_area()(x, z) {
+                    let (returned, result) = self.mob_tick_hook_boundary(
+                        &mut mobs,
+                        lent,
+                        round,
+                        (join, true, state.publish_reads),
+                        TickHookLoans {
+                            credit: &mut player_credit,
+                            died: &mut died,
+                            ticked: &mut ticked,
+                            bindings: &mut bindings,
+                        },
+                    );
+                    lent = returned;
+                    match result {
+                        // Cancellation still permits the original despawn
+                        // check; the existing canceled branch skips the tick
+                        // and its Post after that check.
+                        Ok(_) => {}
+                        Err(payload) => {
+                            dispatch_panic = Some(payload);
+                            break;
+                        }
+                    }
+                }
+            }
+            // Exactly one dirtiness check before reborrowing this actor's
+            // world. Mutation owners bump only the affected projection after
+            // real apply; unrelated callbacks reuse every owned index.
+            let revision = self.entity_read_state.borrow().mob_backing;
+            if revision.teams != backing_revision.teams {
+                teams = std::sync::Arc::new(self.mob_team_rules_for(&mobs));
+            }
+            if revision.players != backing_revision.players {
+                player_backing = self.player_view();
+                drop(nearest);
+                players = self.level_players();
+                nearest = super::super::natural_spawning::NearestPlayers::new(&players);
+                guests = self.lan_guest_views();
+                spare = guests.first().map(|g| g.1.clone());
+                guest_ids = self
+                    .lan
+                    .as_ref()
+                    .map(|host| {
+                        host.hub
+                            .guests
+                            .iter()
+                            .map(|g| (g.conn, g.entity_id as u32))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+            }
+            backing_revision = revision;
+            let mut post = None;
             let mut pause = None;
             {
                 let ticking = self.entity_ticking_area();
-                let players = self.level_players();
-                let nearest = super::super::natural_spawning::NearestPlayers::new(&players);
-                // All but the snapshot is the same for every mob of the tick, so
-                // build it once: the player view and the teams scan every UUID.
-                self.leash_boats = self
-                    .boats
-                    .iter()
-                    .map(super::super::boat_leads::boat_state)
-                    .collect();
-                let mut base = self.mob_world_base(&[]);
+                let mut base = self.mob_world_reborrow(&[], player_backing.take(), teams.clone());
                 let mut level = horizon_client::health::DamageLevel::lent(
                     &self.world,
                     self.pack.assets.registry,
@@ -146,23 +322,33 @@ impl Game<'_> {
                     Some(&self.pack.block_registries),
                     &self.damage_hooks,
                 );
-                let path_changes = horizon_client::mobs::collision_changes(&base, &path_writes);
                 laps.lap("creature_prepare");
-                let mut cached_difficulty: Option<((i32, i32), spawning::LocalDifficulty)> = None;
-                while cursor < original_len {
+                'actor: {
                     let slot = cursor;
-                    let i = match &positions {
-                        None => slot,
-                        Some(positions) => {
-                            let Some(&i) = positions.get(&snapshot[slot].id) else {
-                                keep[slot] = false;
-                                snapshot[slot].alive = false;
-                                resuming = false;
-                                resume_sampled = None;
-                                cursor += 1;
-                                continue;
-                            };
-                            i
+                    let i = if let Some(join) = scheduled {
+                        let Some(i) = mobs.locate(join) else {
+                            keep[slot] = false;
+                            snapshot[slot].alive = false;
+                            resuming = false;
+                            resume_sampled = None;
+                            cursor += 1;
+                            break 'actor;
+                        };
+                        i
+                    } else {
+                        match &positions {
+                            None => slot,
+                            Some(positions) => {
+                                let Some(&i) = positions.get(&snapshot[slot].id) else {
+                                    keep[slot] = false;
+                                    snapshot[slot].alive = false;
+                                    resuming = false;
+                                    resume_sampled = None;
+                                    cursor += 1;
+                                    break 'actor;
+                                };
+                                i
+                            }
                         }
                     };
                     let m = &mut mobs[i];
@@ -170,7 +356,7 @@ impl Game<'_> {
                         keep[slot] = false;
                         snapshot[slot].alive = false;
                         cursor += 1;
-                        continue;
+                        break 'actor;
                     }
                     let (bx, bz) = (m.position.x.floor() as i32, m.position.z.floor() as i32);
                     let seen_guest = if resuming {
@@ -198,7 +384,7 @@ impl Game<'_> {
                     if !resuming && !base.world.loaded(bx, bz) {
                         keep[slot] = !m.hostile() || m.persistent;
                         cursor += 1;
-                        continue;
+                        break 'actor;
                     }
                     let nearest_player = nearest
                         .nearest(m.position.x, m.position.y, m.position.z)
@@ -218,6 +404,12 @@ impl Game<'_> {
                         && let Some(epoch) = self.native_lifecycle.epoch()
                         && let Err(payload) =
                             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                                if state.publish_reads {
+                                    self.publish_mob_read_source(
+                                        m,
+                                        mod_api::EntityReadCapturePhase::BeforeCallback,
+                                    );
+                                }
                                 self.native_mob_despawn(
                                     self.dim.id(),
                                     mod_api::MobRef::new(mod_api::EntityRef::new(epoch, m.id)),
@@ -229,7 +421,7 @@ impl Game<'_> {
                     {
                         m.despawn = mod_api::NativeDespawn::default();
                         dispatch_panic = Some(payload);
-                        break;
+                        break 'actor;
                     }
                     // ServerLevel.tick: every loaded entity checks despawning, but
                     // only those in entity-ticking chunks (within the simulation
@@ -254,8 +446,14 @@ impl Game<'_> {
                             snapshot[slot].alive = false;
                         }
                         keep[slot] = kept;
+                        if state.publish_reads {
+                            self.publish_mob_read_source(
+                                m,
+                                mod_api::EntityReadCapturePhase::AfterEntityTick,
+                            );
+                        }
                         cursor += 1;
-                        continue;
+                        break 'actor;
                     }
                     let controlling_player_movement = horizon_client::mobs::equine::controlled(m)
                         .then(|| {
@@ -275,7 +473,7 @@ impl Game<'_> {
                     if !resuming && round.canceled(m.id) {
                         m.despawn = mod_api::NativeDespawn::default();
                         cursor += 1;
-                        continue;
+                        break 'actor;
                     }
                     // getCurrentDifficultyAt(blockPosition()): the mob's own chunk,
                     // not the local player's (a server thread has no player).
@@ -289,7 +487,13 @@ impl Game<'_> {
                             difficulty
                         }
                     };
-                    horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+                    let applied = horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+                    if applied && state.publish_reads {
+                        self.publish_mob_read_source(
+                            m,
+                            mod_api::EntityReadCapturePhase::AfterAppliedWrite,
+                        );
+                    }
                     horizon_client::mobs::blocks_changed(m, &path_changes);
                     let from = if resuming { resume_from } else { events.len() };
                     // The guest's view is lent to the mob for its tick, not copied:
@@ -417,7 +621,7 @@ impl Game<'_> {
                                         w.player.map(|v| std::mem::replace(&mut guests[k].1, v));
                                 }
                                 dispatch_panic = Some(payload);
-                                break;
+                                break 'actor;
                             }
                         };
                     let kept = match progress {
@@ -440,7 +644,7 @@ impl Game<'_> {
                             resume_sampled = sampled;
                             resume_guest = seen_guest;
                             pause = Some(decision);
-                            break;
+                            break 'actor;
                         }
                     };
                     if let Some((started, kind)) = sampled {
@@ -518,10 +722,53 @@ impl Game<'_> {
                         &mut events,
                         from,
                     );
+                    if state.publish_reads {
+                        self.publish_mob_read_source(
+                            &mobs[i],
+                            mod_api::EntityReadCapturePhase::AfterEntityTick,
+                        );
+                    }
+                    // Future after-writer drain belongs here: actor state and
+                    // brain effects are stored in this same owned JoinList;
+                    // locate(target.location.join) can validate generation
+                    // without a population scan or stale cached array position.
+                    post = round.listening().then_some(scheduled).flatten();
                     cursor += 1;
+                    break 'actor;
+                }
+                player_backing = base.player;
+            }
+            if dispatch_panic.is_some() {
+                break;
+            }
+            if let Some(join) = post {
+                let (returned, result) = self.mob_tick_hook_boundary(
+                    &mut mobs,
+                    lent,
+                    round,
+                    (join, false, state.publish_reads),
+                    TickHookLoans {
+                        credit: &mut player_credit,
+                        died: &mut died,
+                        ticked: &mut ticked,
+                        bindings: &mut bindings,
+                    },
+                );
+                lent = returned;
+                if let Err(payload) = result {
+                    dispatch_panic = Some(payload);
+                    break;
+                }
+                if state.publish_reads
+                    && let Some(i) = mobs.locate(join)
+                {
+                    self.publish_mob_read_source(
+                        &mobs[i],
+                        mod_api::EntityReadCapturePhase::AfterEntityTick,
+                    );
                 }
             }
-            let Some(decision) = pause else { break };
+            let Some(decision) = pause else { continue };
             // No MobWorld, DamageLevel or navigation loan crosses this boundary.
             // The callback sees the real owning rows and level RNG/attachments,
             // and its writes are the state the continuation will resume from.
@@ -530,14 +777,28 @@ impl Game<'_> {
             // or replace another actor's velocity. Departed rows must no longer
             // resolve as live handles while the batch is temporarily installed.
             for m in &mut mobs {
-                horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+                let applied = horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+                if applied && state.publish_reads {
+                    self.publish_mob_read_source(
+                        m,
+                        mod_api::EntityReadCapturePhase::AfterAppliedWrite,
+                    );
+                }
             }
             mobs.retain(|m| {
-                index
-                    .get(&m.id)
-                    .and_then(|&slot| keep.get(slot as usize))
-                    .copied()
-                    .unwrap_or(true)
+                if let Some(slots) = &schedule_slots {
+                    slots
+                        .get(&m.join)
+                        .and_then(|&slot| keep.get(slot))
+                        .copied()
+                        .unwrap_or(true)
+                } else {
+                    index
+                        .get(&m.id)
+                        .and_then(|&slot| keep.get(slot as usize))
+                        .copied()
+                        .unwrap_or(true)
+                }
             });
             self.mobs
                 .restore(mobs, horizon_client::join_seq::RestoreOrder::SpawnsFirst);
@@ -610,11 +871,32 @@ impl Game<'_> {
                 path_writes.append(writes);
             }
             lent = horizon_client::health::LentLevel::take(&mut self.world);
+            // A full-host consumption callback can edit player/team state. This
+            // is the explicit refresh seam for those owned AI projections.
+            teams = std::sync::Arc::new(self.mob_team_rules_for(&mobs));
+            player_backing = self.player_view();
+            drop(nearest);
+            players = self.level_players();
+            nearest = super::super::natural_spawning::NearestPlayers::new(&players);
+            path_changes = {
+                let base = self.mob_world_reborrow(&[], None, teams.clone());
+                horizon_client::mobs::collision_changes(&base, &path_writes)
+            };
+            backing_revision = self.entity_read_state.borrow().mob_backing;
+            cached_difficulty = None;
             resuming = true;
         }
         laps.lap("creature_loop");
         if dispatch_panic.is_none() {
-            if positions.is_none() {
+            if let Some(slots) = &schedule_slots {
+                mobs.retain(|m| {
+                    slots
+                        .get(&m.join)
+                        .and_then(|&slot| keep.get(slot))
+                        .copied()
+                        .unwrap_or(true)
+                });
+            } else if positions.is_none() {
                 let mut flags = keep.into_iter();
                 mobs.retain(|_| flags.next().unwrap_or(true));
             } else {
@@ -627,7 +909,13 @@ impl Game<'_> {
                 });
             }
             for m in &mut mobs {
-                horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+                let applied = horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
+                if applied && state.publish_reads {
+                    self.publish_mob_read_source(
+                        m,
+                        mod_api::EntityReadCapturePhase::AfterAppliedWrite,
+                    );
+                }
             }
         }
         *state.mobs = mobs;

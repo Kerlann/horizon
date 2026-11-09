@@ -95,12 +95,17 @@ are the primary path; terminal query results remain through the end of the follo
 logical engine tick. Queries do not consume results. Pending records do not silently
 expire. `CommandQueryError::StaleEpoch` is distinct from `UnknownOrExpired`, which
 also covers commands inaccessible to the calling mod without disclosing another
-mod's work. Transactions discard their accepted commands and overlays on rollback.
+mod's work. Each converted domain must specify its transaction acceptance, commit
+and rollback rules before exposing queued writes inside a transaction.
 
 These declarations do not convert the deferred write methods by themselves. The
 18 RNG/veto/callback/lifecycle methods remain synchronous; 109 deterministic edits
 and 19 heavy-dependent edits require their actual ordered implementations. The
-heavy-dependent group has no speculative heavy payload overlay.
+heavy-dependent group has no speculative heavy payload overlay. Synchronous live
+operations preserve the typed refusal order after scope/identity validation: explicit
+OWN first, physically lifted foreign source as `Lifted`, resident foreign source with
+a relevant pending dependency as `Pending(CommandId)`, otherwise the live operation.
+An unrelated light overlay does not make every heavy operation Pending.
 
 #### Brain behaviors
 

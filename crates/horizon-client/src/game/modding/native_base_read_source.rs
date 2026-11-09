@@ -82,6 +82,7 @@ pub(super) fn base_read_source_kind(
         Cloud(_) => "minecraft:area_effect_cloud",
         Other(o) => &o.kind,
         Hook(_) => "minecraft:fishing_bobber",
+        Knot(_) => "minecraft:leash_knot",
         Player(_) | Guest(_) => "minecraft:player",
     };
     pool.intern(name)
@@ -175,6 +176,18 @@ pub(super) fn base_read_source_geometry(
                     (p, bounds)
                 }
                 Hook(h) => (array(h.position), corners(h.bounds())),
+                Knot(k) => {
+                    // LeashFenceKnotEntity.recalculateBoundingBox computes its
+                    // own fence-relative position and divides type width as a
+                    // double, rather than EntityDimensions' float division.
+                    let p = horizon_client::mobs::leash::knot_state(k.fence).position;
+                    let half = facts.width / 2.0;
+                    let bounds = Aabb::new(
+                        Vec3::new(p.x - half, p.y, p.z - half),
+                        Vec3::new(p.x + half, p.y + facts.height, p.z + half),
+                    );
+                    (array(p), corners(bounds))
+                }
                 Player(p) => (array(p.position), corners(p.bounds())),
                 Guest(g) => (g.position, corners(g.bounds())),
                 _ => unreachable!("walked sources handled above"),
@@ -337,7 +350,7 @@ pub(super) fn snapshot_base_read_source(
     }
     let added = matches!(
         source,
-        Player(_) | Guest(_) | Other(_) | Fangs(_) | Cloud(_) | Spawner(_)
+        Player(_) | Guest(_) | Other(_) | Fangs(_) | Cloud(_) | Spawner(_) | Knot(_)
     ) || persist
         .live
         .binary_search_by_key(&id, |entry| entry.0)
@@ -550,6 +563,63 @@ mod tests {
             [[-2.25, 5.0, 7.75], [-1.75, 5.0, 8.25]]
         );
         assert_eq!(first.bounding_box, [[-3.5, 5.0, 6.5], [-0.5, 9.0, 9.5]]);
+    }
+
+    #[test]
+    fn bound_knot_capture_uses_fence_geometry_without_persist_membership() {
+        let knot = super::super::leads::Knot {
+            id: 43,
+            join: horizon_client::join_seq::JoinSeq::next(),
+            fence: [-2, 64, 4],
+        };
+        let epoch = NativeWorldEpoch::new(9);
+        let owner = BaseReadOwner {
+            level: LevelRef::new(epoch, mod_api::DimensionKey::OVERWORLD),
+            epoch,
+            logical_server: true,
+            resolve: &|_| None,
+            player_leash: &|_| None,
+            pearl_cooldown: &|_| 0,
+            type_facts: &|_| {
+                Some(EntityTypeGeometry {
+                    width: 0.375,
+                    height: 0.5,
+                    eye_height: f64::from(0.425f32),
+                })
+            },
+            default_player_uuid: None,
+            local_rotation: [0.0; 2],
+            local_head_yaw: 0.0,
+            local_spectator: false,
+            local_invisible: None,
+            client_shift: None,
+            player_portal_cooldown: None,
+        };
+        let mut pool = BaseReadKindPool::default();
+        let row = snapshot_base_read_source(
+            BaseReadSource::Knot(&knot),
+            43,
+            &super::super::persist::EntityMemory::default(),
+            &HashMap::new(),
+            &mut pool,
+            &owner,
+        )
+        .unwrap();
+        assert_eq!(row.position, [-1.5, 64.375, 4.5]);
+        assert_eq!(
+            row.bounding_box,
+            [[-1.6875, 64.375, 4.3125], [-1.3125, 64.875, 4.6875]]
+        );
+        assert_eq!(row.dimensions, [0.375, 0.5]);
+        assert_eq!(row.kind.as_deref(), Some("minecraft:leash_knot"));
+        assert_eq!(row.added_to_level, Some(true));
+        assert_eq!(row.classification, Some(mod_api::MobCategory::Misc));
+        assert_eq!(row.sound_source, Some(mod_api::SoundSource::Neutral));
+        assert_eq!(row.pose, Some("standing"));
+        assert_eq!(row.permanently_invulnerable, None);
+        assert_eq!(row.portal_cooldown, None);
+        assert_eq!(row.leash_holder, None);
+        assert_eq!(row.is_shift_key_down, Some(false));
     }
 
     #[test]

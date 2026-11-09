@@ -19,6 +19,7 @@ use std::{
 #[derive(Default)]
 pub(super) struct NativeReadState {
     pub(super) passes: Rc<RefCell<ReadPasses>>,
+    pub(super) mob_backing: super::native_mob_backing::MobBackingRevision,
     pub(super) identities: HashSet<Arc<str>>,
     pub(super) player_identifiers: NativeReadIdentifiers,
     pub(super) raids: HashMap<RaidRef, RaidReadRow>,
@@ -35,6 +36,7 @@ pub(super) struct NativeMobRelationPass {
 impl NativeReadState {
     pub(super) fn reset(&mut self) {
         self.passes.borrow_mut().reset();
+        self.mob_backing = Default::default();
         self.identities.clear();
         self.player_identifiers = NativeReadIdentifiers::default();
         self.raids.clear();

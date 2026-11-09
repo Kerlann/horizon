@@ -1196,7 +1196,11 @@ pub fn mob_contacts(m: &Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
             && other.alive
             && other.pushable
             && other.bounds.intersects(bounds)
-            && crate::scoreboard::pushable_by(own_team, w.teams.of(super::Who::Mob(other.id)), true)
+            && crate::scoreboard::TeamRules::pushable_by(
+                own_team,
+                w.teams.of(super::Who::Mob(other.id)),
+                true,
+            )
         {
             events.push(MobEvent::DamageMob {
                 target: other.id,

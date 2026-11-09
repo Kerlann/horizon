@@ -258,6 +258,7 @@ pub(super) enum BaseReadSource<'a> {
     Cloud(&'a super::dragon::Breath),
     Other(&'a super::commands::OtherEntity),
     Hook(&'a super::fishing::Hook),
+    Knot(&'a super::leads::Knot),
     Player(&'a horizon_client::motion::PlayerMotion),
     Guest(&'a horizon_client::lan::guest::Guest),
 }
@@ -504,7 +505,7 @@ impl CompactEntityReadRow {
             fire_ticks: mob
                 .map(|m| m.fire_ticks)
                 .or_else(|| player.map(|p| p.fire_ticks))
-                .or_else(|| match source {
+                .or(match source {
                     Stand(s) => Some(s.fire_ticks),
                     Item(i) => Some(i.fire_ticks),
                     _ => None,

@@ -112,6 +112,7 @@ fn with_mob_world(
     drive: impl FnOnce(&mut Mob, &MobWorld<'_>, &mut DamageLevel<'_>),
 ) {
     game.options.dedicated = Some(Vec::new());
+    super::tests::publish_mob_rows(game);
     let mut mobs = game.mobs.lift();
     let snapshot: Vec<_> = mobs
         .iter()
@@ -394,6 +395,7 @@ fn with_villager_tick(
     game.options.dedicated = Some(Vec::new());
     game.world.game_time = game_time;
     game.world.day_time = day_time;
+    super::tests::publish_mob_rows(game);
     let mut mobs = game.mobs.lift();
     let snapshot: Vec<_> = mobs
         .iter()
@@ -434,6 +436,7 @@ fn random_states(
     id: u32,
     level: &mut DamageLevel<'_>,
 ) -> ((u64, Option<f64>), (u64, Option<f64>)) {
+    super::tests::publish_mob_rows(game);
     let mobs = game.mobs.lift();
     let mob = mobs.iter().find(|m| m.id == id).unwrap();
     let mob_state = (&mob.random).into();
@@ -844,6 +847,7 @@ fn grown_up_stops_a_running_ghastling_behavior() {
     with_game(|game| {
         mob_of(game, "minecraft:happy_ghast", 8, [3.5, 70.0, 3.5]);
         {
+            super::tests::publish_mob_rows(game);
             let mut mobs = game.mobs.lift();
             mobs::finalize::set_baby(&mut mobs[0], true);
             game.mobs = mobs;
@@ -973,6 +977,7 @@ fn warden_behaviors_join_after_vanilla_of_their_priority() {
         with_game(|game| {
             mob_of(game, "minecraft:warden", 8, [3.5, 65.0, 3.5]);
             {
+                super::tests::publish_mob_rows(game);
                 let mut mobs = game.mobs.lift();
                 mobs::warden::register(&mut mobs[0]);
                 game.mobs = mobs;
@@ -992,6 +997,7 @@ fn warden_behaviors_join_after_vanilla_of_their_priority() {
     with_game(|game| {
         mob_of(game, "minecraft:warden", 8, [3.5, 65.0, 3.5]);
         {
+            super::tests::publish_mob_rows(game);
             let mut mobs = game.mobs.lift();
             mobs::warden::register(&mut mobs[0]);
             game.mobs = mobs;

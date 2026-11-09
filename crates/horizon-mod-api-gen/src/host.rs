@@ -13,8 +13,6 @@ pub(super) const GOAL_VIEW_READS: &[&str] = &[
     "living_cached_row",
     "mob_cached_row",
     "merchant_cached_row",
-    "living_arrow_count",
-    "living_stinger_count",
     "living_item_use_remaining",
     "entity_position",
     "entity_block_position",

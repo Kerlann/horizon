@@ -178,19 +178,26 @@ impl Game<'_> {
     }
 
     fn release_boat_leash(&mut self, b: &mut Boat, drop: bool) {
-        if let Some(at) = Self::take_boat_leash(b, drop) {
+        let holder = b.leash;
+        let at = Self::take_boat_leash(b, drop);
+        self.notify_knot_leashee_removed(holder, b.id);
+        if let Some(at) = at {
             self.drop_lead_item(at);
         }
     }
 
     pub(super) fn release_stored_boat_leash(&mut self, i: usize, drop: bool) {
-        if let Some(at) = self.boats.update(i, |b| Self::take_boat_leash(b, drop)) {
+        let (holder, id) = (self.boats[i].leash, self.boats[i].id);
+        let at = self.boats.update(i, |b| Self::take_boat_leash(b, drop));
+        self.notify_knot_leashee_removed(holder, id);
+        if let Some(at) = at {
             self.drop_lead_item(at);
         }
     }
 
     /// `AbstractBoat.remove`: a boat that is destroyed drops its lead.
     pub(super) fn boat_removed(&mut self, b: &Boat) {
+        self.notify_knot_leashee_removed(b.leash, b.id);
         let mut b = b.clone();
         let pending = b.leash_pending.take().is_some();
         if b.leash.is_some() || pending {
@@ -428,6 +435,7 @@ impl Game<'_> {
                 any = true;
             }
         }
+        self.notify_knot_leashee_removed(Some(Holder::Knot(knot)), 0);
         any
     }
 
