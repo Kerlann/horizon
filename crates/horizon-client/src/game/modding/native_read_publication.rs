@@ -26,6 +26,14 @@ impl Game<'_> {
         _world: &MobWorld<'_>,
         phase: EntityReadCapturePhase,
     ) -> bool {
+        self.publish_mob_read_source(source, phase)
+    }
+
+    pub(super) fn publish_mob_read_source(
+        &self,
+        source: &Mob,
+        phase: EntityReadCapturePhase,
+    ) -> bool {
         if source.removed || !self.is_logical_server() {
             return false;
         }
