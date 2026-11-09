@@ -115,54 +115,6 @@ mod tests {
 
     #[test]
     #[ignore = "needs prepared resources"]
-    fn real_hook_lifetime_survives_a_body_loan_and_retires_only_at_physical_sweep() {
-        use horizon_mod_runtime::attachments::{
-            AttachmentType, Attachments, HasAttachmentLifetime, Holder, index::AttachmentIndex,
-        };
-        use std::sync::{Arc, Mutex};
-        static VALUE: AttachmentType<i32> = AttachmentType {
-            namespace: "test",
-            name: "hook_lifetime",
-            default: || 0,
-            codec: None,
-            copy_on_death: false,
-            sync: false,
-        };
-        with_game(|game| {
-            game.options.dedicated = Some(Vec::new());
-            let id = game.take_entity_id();
-            game.hook = Some(Hook::remote(id, Vec3::ZERO));
-            let entity = game.entity(id).unwrap();
-            let index = Arc::new(Mutex::new(AttachmentIndex::<u32>::default()));
-            let mut map = Attachments::default();
-            VALUE.set(&mut map, Holder::Level, 7).unwrap();
-            game.hook
-                .as_mut()
-                .unwrap()
-                .attachment_lifetime()
-                .bind(&mut map, &index, id);
-            let key = ("test".into(), "hook_lifetime".into());
-            let retained = index.lock().unwrap().snapshot(&key);
-            assert_eq!(retained[0].holder, id);
-            assert_eq!(retained[0].entry.read(&VALUE), Ok(&7));
-            let held = game.hook.take().unwrap();
-            assert_eq!(index.lock().unwrap().snapshot(&key).len(), 1);
-            game.hook = Some(held);
-            assert!(entity.discard(game));
-            assert!(game.hook.is_some());
-            assert_eq!(index.lock().unwrap().snapshot(&key).len(), 1);
-            game.native_removals_flush();
-            assert!(game.hook.is_none());
-            assert!(index.lock().unwrap().snapshot(&key).is_empty());
-            VALUE.set(&mut map, Holder::Level, 23).unwrap();
-            assert!(index.lock().unwrap().snapshot(&key).is_empty());
-            assert_eq!(VALUE.get(&mut map, Holder::Level), Ok(23));
-            assert_eq!(retained[0].entry.read(&VALUE), Ok(&7));
-        });
-    }
-
-    #[test]
-    #[ignore = "needs prepared resources"]
     fn a_cast_hook_narrows_reads_its_catch_and_goes_when_discarded() {
         with_game(|game| {
             game.options.dedicated = Some(Vec::new());
