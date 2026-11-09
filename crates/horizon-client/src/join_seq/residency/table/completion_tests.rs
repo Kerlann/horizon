@@ -40,7 +40,7 @@ fn abandoned_resident_wrapper_passes_are_expired_and_logged_even_in_release() {
         for extraction in [false, true] {
             DIAGNOSTICS.with_borrow_mut(Vec::clear);
             let journal = Journal::default();
-            let mut table = EntityTable::new(journal.clone());
+            let mut table = EntityTable::<()>::new(journal.clone());
             let owner = Owner {
                 dimension,
                 kind: Kind::Projectile,
