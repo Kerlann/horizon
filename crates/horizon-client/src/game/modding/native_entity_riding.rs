@@ -46,12 +46,12 @@ impl Game<'_> {
     }
 
     /// Follow full object links, returning no root for a cycle. Only mobs can
-    /// be intermediate vehicles, so their object count bounds the walk without
-    /// truncating valid deep trees or allocating a visited set.
+    /// be intermediate vehicles. Their object count plus the non-Mob endpoints
+    /// bounds the walk without truncating valid trees or allocating a visited set.
     fn native_root_vehicle_id(&self, id: u32, target: Target) -> Option<u32> {
         let mut root = id;
         let mut next = self.native_vehicle_id(target);
-        for _ in 0..=self.mobs.len() + self.persist.off_level.len() {
+        for _ in 0..=self.mobs.len() + self.persist.off_level.len() + 1 {
             let Some(vehicle) = next else {
                 return Some(root);
             };
@@ -1272,6 +1272,11 @@ mod tests {
             assert_eq!(ghast.controlling_passenger(game), steered);
             game.mobs[index].extra.counter = 10;
             assert_eq!(ghast.controlling_passenger(game), None);
+            // Both endpoints can be non-Mobs: even with no Mob objects, the
+            // root walk must visit the player's boat before its terminal step.
+            game.mobs.clear();
+            ride(game, 95);
+            assert_eq!(player.root_vehicle(game), Some(boat));
         });
     }
 
