@@ -268,7 +268,7 @@ impl Game<'_> {
     /// The live holder of a mob's or boat's lead (`Leashable.getLeashHolder`), or `Unleashed`
     /// when no lead exists. `None` means an entity that takes no lead, or that the entity,
     /// holder or saved holder is unavailable, stale or in a parked level. Does not load a level.
-    pub(super) fn entity_leash_holder(&self, entity: EntityRef) -> Option<LeashHolder> {
+    pub(super) fn uncached_entity_leash_holder(&self, entity: EntityRef) -> Option<LeashHolder> {
         match self.native_entity_target(entity)? {
             Target::Mob(id) => {
                 let mob = self.mobs.iter().find(|m| m.id == id)?;

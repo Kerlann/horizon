@@ -203,6 +203,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::boss_bar_max` | crosses | Wire call |
 | `Backend::boss_bar_visible` | crosses | Wire call |
 | `Backend::boss_bar_players` | crosses | Wire call |
+| `Backend::display_cached_row` | crosses | Wire call |
 | `Backend::display_kind` | crosses | Wire call |
 | `Backend::display_transformation` | crosses | Wire call |
 | `Backend::display_billboard` | crosses | Wire call |
@@ -230,6 +231,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::sound_state` | crosses | Wire call |
 | `Backend::sound_stop` | crosses | Wire call |
 | `Backend::sound_fade` | crosses | Wire call |
+| `Backend::entity_cached_row` | crosses | Wire call |
 | `Backend::entity_tags` | crosses | Wire call |
 | `Backend::entity_name` | crosses | Wire call |
 | `Backend::entity_custom_name_visible` | crosses | Wire call |
@@ -296,6 +298,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::fluid_tank_count` | crosses | Wire call |
 | `Backend::fluid_tank` | crosses | Wire call |
 | `Backend::fluid_tank_capacity` | crosses | Wire call |
+| `Backend::item_entity_cached_row` | crosses | Wire call |
 | `Backend::item_entity_stack` | crosses | Wire call |
 | `Backend::item_entity_pickup_delay` | crosses | Wire call |
 | `Backend::item_entity_age` | crosses | Wire call |
@@ -407,6 +410,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::level_spawn_limits` | crosses | Wire call |
 | `Backend::level_spawn_flags` | crosses | Wire call |
 | `Backend::level_can_spawn_entities_in_chunk` | crosses | Wire call |
+| `Backend::living_cached_row` | crosses | Wire call |
 | `Backend::living_effect` | crosses | Wire call |
 | `Backend::living_effects` | crosses | Wire call |
 | `Backend::living_potion_affected` | crosses | Wire call |
@@ -449,6 +453,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::menu_slot_holds` | crosses | Wire call |
 | `Backend::menu_slot_gives` | crosses | Wire call |
 | `Backend::menu_slot_boxes` | crosses | Wire call |
+| `Backend::merchant_cached_row` | crosses | Wire call |
 | `Backend::merchant_offers` | crosses | Wire call |
 | `Backend::merchant_trading_player` | crosses | Wire call |
 | `Backend::merchant_profession` | crosses | Wire call |
@@ -468,6 +473,8 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::minecart_fuse` | crosses | Wire call |
 | `Backend::minecart_hopper_enabled` | crosses | Wire call |
 | `Backend::minecart_command` | crosses | Wire call |
+| `Backend::dragon_cached_row` | crosses | Wire call |
+| `Backend::mob_cached_row` | crosses | Wire call |
 | `Backend::dragon_phase` | crosses | Wire call |
 | `Backend::dragon_alive_crystals` | crosses | Wire call |
 | `Backend::dragon_previously_killed` | crosses | Wire call |
@@ -497,6 +504,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::unspawned_mob_attribute_value` | crosses | Wire call |
 | `Backend::unspawned_mob_tags` | crosses | Wire call |
 | `Backend::unspawned_mob_custom_name` | crosses | Wire call |
+| `Backend::player_cached_row` | crosses | Wire call |
 | `Backend::player_address` | crosses | Wire call |
 | `Backend::player_name` | crosses | Wire call |
 | `Backend::player_selected_slot` | crosses | Wire call |
@@ -538,6 +546,8 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::player_client_brand` | crosses | Wire call |
 | `Backend::player_block_breaking` | crosses | Wire call |
 | `Backend::player_ambient_mood` | crosses | Wire call |
+| `Backend::fishing_hook_cached_row` | crosses | Wire call |
+| `Backend::projectile_cached_row` | crosses | Wire call |
 | `Backend::projectile_owner` | crosses | Wire call |
 | `Backend::projectile_pickup` | crosses | Wire call |
 | `Backend::projectile_pierce_level` | crosses | Wire call |
@@ -546,6 +556,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::fishing_hook_player_owner` | crosses | Wire call |
 | `Backend::fishing_hook_hooked_in` | crosses | Wire call |
 | `Backend::fishing_hook_open_water` | crosses | Wire call |
+| `Backend::raid_cached_row` | crosses | Wire call |
 | `Backend::raid_center` | crosses | Wire call |
 | `Backend::raid_omen_level` | crosses | Wire call |
 | `Backend::raid_groups_spawned` | crosses | Wire call |

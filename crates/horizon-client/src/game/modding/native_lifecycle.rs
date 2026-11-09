@@ -86,6 +86,11 @@ impl NativeLifecycle {
         self.attempt.map(|a| NativeWorldEpoch::new(a.epoch))
     }
 
+    /// Logical capture clock, including tick zero during opening callbacks.
+    pub(super) fn capture_tick(&self) -> Option<NativeTickId> {
+        self.attempt.map(|a| NativeTickId::new(a.ticks))
+    }
+
     /// The open starts: a fresh process-wide epoch, never reused.
     pub(super) fn begin_open(&mut self, authority: NativeAuthority) {
         let epoch = fresh_epoch().get();
@@ -238,6 +243,7 @@ impl Game<'_> {
             self.native_world_lifecycle(&context, WorldPhase::WorldOpenFailed, error_text);
         }
         self.attachment_indexes.clear();
+        self.entity_read_state.get_mut().reset();
         self.entity_residency.get_mut().reset();
     }
 
@@ -250,6 +256,7 @@ impl Game<'_> {
             self.native_world_lifecycle(&context, WorldPhase::WorldCloseFailed, error_text);
         }
         self.attachment_indexes.clear();
+        self.entity_read_state.get_mut().reset();
         self.entity_residency.get_mut().reset();
     }
 
@@ -265,6 +272,7 @@ impl Game<'_> {
             self.native_world_lifecycle(&context, WorldPhase::WorldCloseFinal, "");
         }
         self.attachment_indexes.clear();
+        self.entity_read_state.get_mut().reset();
         self.entity_residency.get_mut().reset();
         mod_api::__private::clear_game_parts();
     }

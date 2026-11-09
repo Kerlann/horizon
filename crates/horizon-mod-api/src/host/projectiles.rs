@@ -21,6 +21,22 @@ pub trait ProjectilesServerHost {
 #[doc(hidden)]
 #[horizon_mod_api_macros::host_area]
 pub trait ProjectilesBackend {
+    /// Side: both.
+    /// Materializes the cached row and its capture metadata, possibly stale.
+    /// Physical lifting does not hide an existing row. None means no available
+    /// row for this validated identity, never a live-read Lifted refusal.
+    /// Owned payloads are materialized on request, not cloned every capture pass.
+    #[access(WorldOnly)]
+    fn fishing_hook_cached_row(&self, entity: FishingHookRef) -> Option<FishingHookReadRow>;
+
+    /// Side: both.
+    /// Materializes the cached row and its capture metadata, possibly stale.
+    /// Physical lifting does not hide an existing row. None means no available
+    /// row for this validated identity, never a live-read Lifted refusal.
+    /// Owned payloads are materialized on request, not cloned every capture pass.
+    #[access(WorldOnly)]
+    fn projectile_cached_row(&self, entity: ProjectileRef) -> Option<ProjectileReadRow>;
+
     /// Side: server.
     /// `Projectile.getOwner`: the owner as a resolved entity. None for no
     /// owner, one that is gone or in another level, or a stale handle.

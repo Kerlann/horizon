@@ -1,6 +1,6 @@
-//! Reads from the actual mob loaned to the active goal, or a disjoint live mob.
+//! Reads only from the explicit mob actor loaned to the active goal.
 use super::super::api_values::TryIntoApi;
-use super::{GoalCx, Resolved};
+use super::GoalCx;
 use crate::mobs::Mob;
 use horizon_client::mobs::villager;
 use mod_api::ItemStack;
@@ -8,11 +8,7 @@ use mod_api::{EffectKey, EquipmentSlot, Hand, LivingRef, NativeActiveEffect, Pos
 
 impl GoalCx<'_, '_> {
     fn live_living_mob(&self, living: LivingRef) -> Option<&Mob> {
-        match self.resolve(living.entity())? {
-            Resolved::Own => Some(self.m),
-            Resolved::Live(mob) => Some(mob),
-            _ => None,
-        }
+        self.entity_mob(living.entity())
     }
 
     pub(super) fn r_living_effect(
@@ -137,8 +133,22 @@ impl GoalCx<'_, '_> {
         living: LivingRef,
         target: mod_api::EntityRef,
     ) -> Option<bool> {
+        let own_level = self.r_entity_level(self.mob_handle().entity())?;
+        let level = |entity: mod_api::EntityRef| {
+            if self.is_own_entity(entity) {
+                Some(own_level)
+            } else {
+                entity.level(self.host)
+            }
+        };
+        if level(living.entity())? != own_level {
+            return None;
+        }
+        if level(target)? != own_level {
+            return Some(false);
+        }
         let read_eye = |entity| {
-            if self.is_game_entity(entity) {
+            if !self.is_own_entity(entity) {
                 mod_api::__private::backend_read(self.host, |backend| {
                     backend.entity_eye_position(entity)
                 })
@@ -148,7 +158,7 @@ impl GoalCx<'_, '_> {
             }
         };
         let from_entity = living.entity();
-        let feet = if self.is_game_entity(from_entity) {
+        let feet = if !self.is_own_entity(from_entity) {
             mod_api::__private::backend_read(self.host, |backend| {
                 backend.entity_position(from_entity)
             })
@@ -171,7 +181,7 @@ impl GoalCx<'_, '_> {
         target: mod_api::EntityRef,
     ) -> Option<bool> {
         let mob = self.live_living_mob(living)?;
-        let [min, max] = if self.is_game_entity(target) {
+        let [min, max] = if !self.is_own_entity(target) {
             mod_api::__private::backend_read(self.host, |backend| {
                 backend.entity_bounding_box(target)
             })
@@ -319,5 +329,10 @@ impl GoalCx<'_, '_> {
                 .goal_host?
                 .mob_can_use_portal(self.live_living_mob(living)?),
         )
+    }
+    pub(super) fn r_living_item_use_remaining(&self, living: LivingRef) -> Option<i32> {
+        self.w
+            .goal_host?
+            .mob_item_use_remaining_lent(self.live_living_mob(living)?)
     }
 }

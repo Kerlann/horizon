@@ -1,23 +1,19 @@
 //! Entities ticking for native mods (`native_entity_tick_pre`, `native_entity_tick_post`:
 //! NeoForge's `EntityTickEvent.Pre` and `.Post`). A family of entities ticks in its own loop,
-//! and the loops of the mobs and the items hold their lists out of `Game`, so a family hands
-//! its ticking entities to a `TickRound` before the loop and hears the Posts after it; the
-//! minecarts and boats, whose loops can call the hooks, ask for each one in turn.
+//! and items still batch their hooks while their list is lifted. Mobs temporarily
+//! restore their owner at each actor boundary, so their Pre and Post use the real
+//! mutable Host in actor order, as minecarts and boats already do.
 use super::Game;
-use horizon_client::mobs::MobType;
-use std::sync::Arc;
 
 /// The type of an entity in a round, as the hooks name it.
 pub(super) enum TickKind {
     Fixed(&'static str),
-    Mob(Arc<MobType>),
 }
 
 impl TickKind {
     fn id(&self) -> &str {
         match self {
             Self::Fixed(id) => id,
-            Self::Mob(kind) => &kind.id,
         }
     }
 }

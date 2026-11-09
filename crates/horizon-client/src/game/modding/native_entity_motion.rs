@@ -69,7 +69,7 @@ impl Game<'_> {
     /// entity Horizon doesn't simulate (a display, a painting) has none, so
     /// zero. On a client, another entity's is the motion the server last
     /// sent it (`Entity.lerpMotion`). API 379.
-    pub(super) fn entity_velocity(&self, entity: EntityRef) -> Option<[f64; 3]> {
+    pub(super) fn uncached_entity_velocity(&self, entity: EntityRef) -> Option<[f64; 3]> {
         let t = self.native_entity_read_target(entity)?;
         if !self.is_logical_server() {
             // The client's copy: its own player's motion, and the motion the
@@ -198,7 +198,7 @@ impl Game<'_> {
     /// Whether the entity stands on a block (`Entity.onGround`).
     /// Whether the entity stands on a block (`Entity.onGround`). API
     /// 379.
-    pub(super) fn entity_on_ground(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_on_ground(&self, entity: EntityRef) -> Option<bool> {
         let t = self.native_entity_target(entity)?;
         if let Some(p) = self.native_client_player(t) {
             return Some(p.ground.on_ground);
@@ -214,7 +214,7 @@ impl Game<'_> {
     /// The entity's box (`Entity.getBoundingBox`): its lowest and highest
     /// corner. None for the kinds whose box Horizon doesn't keep (displays,
     /// markers, End crystals, the dragon); a dragon part's is its own. API 379.
-    pub(super) fn entity_bounding_box(&self, entity: EntityRef) -> Option<[[f64; 3]; 2]> {
+    pub(super) fn uncached_entity_bounding_box(&self, entity: EntityRef) -> Option<[[f64; 3]; 2]> {
         let t = self.native_entity_read_target(entity)?;
         if let Some(p) = self.native_client_player(t) {
             return Some(corners(p.bounds()));
@@ -238,26 +238,26 @@ impl Game<'_> {
     }
     /// The height of the entity's eyes above its feet (`Entity.getEyeHeight`).
     /// API 379.
-    pub(super) fn entity_eye_height(&self, entity: EntityRef) -> Option<f64> {
+    pub(super) fn uncached_entity_eye_height(&self, entity: EntityRef) -> Option<f64> {
         Some(self.target_eye_height(self.native_entity_target(entity)?))
     }
     /// Where the entity's eyes are (`Entity.getEyePosition`). API
     /// 379.
-    pub(super) fn entity_eye_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
-        let [x, y, z] = self.entity_position(entity)?;
-        Some([x, y + self.entity_eye_height(entity)?, z])
+    pub(super) fn uncached_entity_eye_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
+        let [x, y, z] = self.uncached_entity_position(entity)?;
+        Some([x, y + self.uncached_entity_eye_height(entity)?, z])
     }
     /// The unit vector the entity looks along (`Entity.getViewVector`, from
     /// its pitch and yaw). API 379.
-    pub(super) fn entity_view_vector(&self, entity: EntityRef) -> Option<[f64; 3]> {
-        let [yaw, pitch] = self.entity_rotation(entity)?;
+    pub(super) fn uncached_entity_view_vector(&self, entity: EntityRef) -> Option<[f64; 3]> {
+        let [yaw, pitch] = self.uncached_entity_rotation(entity)?;
         Some(turned_view_vector(yaw, pitch, 0.0))
     }
     /// The unit vector that points up out of the entity's head
     /// (`Entity.getUpVector`): its view vector turned a quarter of a turn
     /// toward the zenith.
-    pub(super) fn entity_up_vector(&self, entity: EntityRef) -> Option<[f64; 3]> {
-        let [yaw, pitch] = self.entity_rotation(entity)?;
+    pub(super) fn uncached_entity_up_vector(&self, entity: EntityRef) -> Option<[f64; 3]> {
+        let [yaw, pitch] = self.uncached_entity_rotation(entity)?;
         Some(turned_view_vector(yaw, pitch, -90.0))
     }
     /// `Entity.mainSupportingBlockPos` of an entity on the ground: the player's own, kept
@@ -310,8 +310,12 @@ impl Game<'_> {
     }
     /// The square of the distance from the entity's feet to `pos`
     /// (`Entity.distanceToSqr`). API 379.
-    pub(super) fn entity_distance_to_sqr(&self, entity: EntityRef, pos: [f64; 3]) -> Option<f64> {
-        let p = self.entity_position(entity)?;
+    pub(super) fn uncached_entity_distance_to_sqr(
+        &self,
+        entity: EntityRef,
+        pos: [f64; 3],
+    ) -> Option<f64> {
+        let p = self.uncached_entity_position(entity)?;
         let [dx, dy, dz] = std::array::from_fn(|i| p[i] - pos[i]);
         Some(dx * dx + dy * dy + dz * dz)
     }

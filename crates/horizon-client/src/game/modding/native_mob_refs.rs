@@ -209,6 +209,17 @@ impl Game<'_> {
     /// stands, stale handles and clients are rejected. Mobs taken out for
     /// ticking are unavailable (a #29 follow-up).
     pub(super) fn mob(&self, entity: EntityRef) -> Option<MobRef> {
+        if self.is_logical_server()
+            && let Some(available) = self.with_entity_read_publication(entity, |row| {
+                Some(matches!(
+                    row.details,
+                    super::native_entity_read_cache::NativeReadDetails::Mob { .. }
+                        | super::native_entity_read_cache::NativeReadDetails::Dragon { .. }
+                ))
+            })
+        {
+            return available.then(|| MobRef::new(entity));
+        }
         match self.native_entity_target(entity)? {
             Target::Mob(_) | Target::Dragon(_) => Some(MobRef::new(entity)),
             _ => None,
@@ -216,7 +227,7 @@ impl Game<'_> {
     }
 
     /// The existing portal decision for an available mob in the current level.
-    pub(super) fn mob_can_use_portal(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn uncached_mob_can_use_portal(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -229,7 +240,7 @@ impl Game<'_> {
     /// unavailable mob or player binding, or a target without a living handle
     /// read as None. The dragon reads what a mod set, while it stays a valid
     /// target (`EnderDragon.canAttack`); its flight never sets one.
-    pub(super) fn mob_target(&self, mob: MobRef) -> Option<LivingRef> {
+    pub(super) fn uncached_mob_target(&self, mob: MobRef) -> Option<LivingRef> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return self.native_dragon_target(mob.entity());
         };
@@ -441,7 +452,7 @@ impl Game<'_> {
 
     /// `Mob.isAggressive`, the synced mob flag (the dragon's reaches its
     /// clients as `DATA_MOB_FLAGS_ID`).
-    pub(super) fn mob_is_aggressive(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn uncached_mob_is_aggressive(&self, mob: MobRef) -> Option<bool> {
         self.native_mob_flag(mob, MobFlag::Aggressive)
     }
 
@@ -453,7 +464,7 @@ impl Game<'_> {
     /// `Mob.isPersistenceRequired`. The dragon never despawns
     /// (`EnderDragon.checkDespawn` is empty), but keeps and saves the flag
     /// (`PersistenceRequired`).
-    pub(super) fn mob_persistence_required(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn uncached_mob_persistence_required(&self, mob: MobRef) -> Option<bool> {
         self.native_mob_flag(mob, MobFlag::Persistent)
     }
 
@@ -467,7 +478,7 @@ impl Game<'_> {
     /// leashed mobs and species-specific reasons to stay, such as an enderman
     /// carrying a block. Independent of `PersistenceRequired` and `NoAI`.
     /// None for an unavailable mob or the separately modeled dragon.
-    pub(super) fn mob_requires_custom_persistence(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn uncached_mob_requires_custom_persistence(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -481,7 +492,7 @@ impl Game<'_> {
     /// while what NoAI keeps running in vanilla (the daylight burn of the
     /// undead, a horse's tail) still does. Saved with it as `NoAI`. None
     /// for anything but a mob.
-    pub(super) fn mob_no_ai(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn uncached_mob_no_ai(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -506,7 +517,7 @@ impl Game<'_> {
     /// reason to stay (a player near, a hit). Despawning and a raid's
     /// recruiting read it. None for a stale or unavailable mob, the dragon,
     /// or on a client.
-    pub(super) fn mob_no_action_time(&self, mob: MobRef) -> Option<i32> {
+    pub(super) fn uncached_mob_no_action_time(&self, mob: MobRef) -> Option<i32> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -616,7 +627,7 @@ impl Game<'_> {
     /// after `clear_restriction` and after a load (`[0, 0, 0]` for a mob
     /// that never had one, vanilla's `ZERO`). None for a stale or
     /// unavailable mob, a client, and the dragon.
-    pub(super) fn mob_restrict_center(&self, mob: MobRef) -> Option<[i32; 3]> {
+    pub(super) fn uncached_mob_restrict_center(&self, mob: MobRef) -> Option<[i32; 3]> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -631,7 +642,7 @@ impl Game<'_> {
 
     /// `Mob.getRestrictRadius`: `-1` while the mob has no restriction.
     /// None for a stale or unavailable mob, a client, and the dragon.
-    pub(super) fn mob_restrict_radius(&self, mob: MobRef) -> Option<i32> {
+    pub(super) fn uncached_mob_restrict_radius(&self, mob: MobRef) -> Option<i32> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -647,7 +658,7 @@ impl Game<'_> {
 
     /// `Mob.hasRestriction`. None for a stale or unavailable mob, a client,
     /// and the dragon.
-    pub(super) fn mob_has_restriction(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn uncached_mob_has_restriction(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -679,7 +690,11 @@ impl Game<'_> {
     /// the home area; a mob without a restriction is within everywhere, as
     /// in vanilla. None for a stale or unavailable mob, a client, and the
     /// dragon.
-    pub(super) fn mob_is_within_restriction(&self, mob: MobRef, at: [i32; 3]) -> Option<bool> {
+    pub(super) fn uncached_mob_is_within_restriction(
+        &self,
+        mob: MobRef,
+        at: [i32; 3],
+    ) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -694,7 +709,7 @@ impl Game<'_> {
 
     /// `Mob.isLeftHanded`: whether the mob holds things in its left hand
     /// (the mob flags in its entity data). None for anything but a mob.
-    pub(super) fn mob_left_handed(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn uncached_mob_left_handed(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -724,7 +739,7 @@ impl Game<'_> {
     /// `Mob.canPickUpLoot`, with the overrides of an allay (holding
     /// something) and a sulfur cube (with no block). None for anything but
     /// a mob.
-    pub(super) fn mob_can_pick_up_loot(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn uncached_mob_can_pick_up_loot(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };

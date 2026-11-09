@@ -2170,6 +2170,7 @@ struct WorldRest {
     recipes: Recipes,
     transformers: horizon_client::block_transform::Transformers,
     mob_types: HashMap<String, Arc<MobType>>,
+    entity_type_geometry: horizon_client::mobs::EntityTypeGeometries,
     mob_data: horizon_client::mobs::MobData,
     providers: Providers,
     block_entity_render: BlockEntityRenderer,
@@ -3175,7 +3176,14 @@ struct Game<'a> {
     /// The native lifecycle bookkeeping.
     native_lifecycle: native_lifecycle::NativeLifecycle,
     /// Journal-fed residency across active and parked server dimensions.
-    entity_residency: Box<RefCell<horizon_client::join_seq::residency::table::EntityTable>>,
+    entity_residency: Box<
+        RefCell<
+            horizon_client::join_seq::residency::table::EntityTable<
+                native_entity_read_cache::NativeReadPublication,
+            >,
+        >,
+    >,
+    entity_read_state: Box<RefCell<native_entity_read_cache::NativeReadState>>,
     /// The mobs lent to the hook calls running now, before they join a level
     /// (game/modding/native_unspawned_mob.rs).
     lent_mobs: RefCell<native_unspawned_mob::LentMobs>,
@@ -17207,6 +17215,7 @@ impl<'a> Game<'a> {
             entity_residency: Box::new(RefCell::new(
                 horizon_client::join_seq::residency::table::EntityTable::new(Default::default()),
             )),
+            entity_read_state: Default::default(),
             lent_mobs: Default::default(),
             held_out: Vec::with_capacity(4),
             native_configs: Default::default(),
@@ -17792,7 +17801,7 @@ fn load_world_rest(
             horizon_client::mobs::cem::CemModels::default()
         }));
         horizon_client::mobs::trial_spawner::load_registry(root);
-        Ok((mob_types, mob_data))
+        Ok((mob_types, mob_data, types.geometry))
     };
     let load_transformers = || -> Result<_> {
         let _step = startup::step("rest.transformers_models");
@@ -17918,7 +17927,7 @@ fn load_world_rest(
     };
     let (items, recipes, stations) = items?;
     let (animate, fog) = animate?;
-    let (mob_types, mob_data) = mobs?;
+    let (mob_types, mob_data, entity_type_geometry) = mobs?;
     let (transformers, (player_type, player_arm, player_arm_slim, spin_attack)) = transformers?;
     let nether_environment = nether_environment?;
     let end_environment = end_environment?;
@@ -17946,6 +17955,7 @@ fn load_world_rest(
         end_environment,
         behaviours: behaviours?,
         mob_types,
+        entity_type_geometry,
         mob_data,
         player_type,
         player_arm,

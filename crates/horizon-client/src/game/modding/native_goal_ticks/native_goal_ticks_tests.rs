@@ -25,9 +25,10 @@ fn install_game_mods() {
 static EVENTS: Mutex<Vec<(u32, &'static str)>> = Mutex::new(Vec::new());
 /// The other mob a tick reads through the view, as a handle.
 static OTHER: Mutex<Option<EntityRef>> = Mutex::new(None);
-/// What the last tick read of `OTHER`: its health, position and a refused
-/// read (a potion check, which the snapshot does not carry).
-static READS: Mutex<Vec<(Option<f32>, Option<[f64; 3]>, bool)>> = Mutex::new(Vec::new());
+/// What the last tick read of OTHER through its shared publication: health,
+/// position and rotation.
+static READS: Mutex<Vec<(Option<f32>, Option<[f64; 3]>, Option<[f32; 2]>)>> =
+    Mutex::new(Vec::new());
 
 fn record(id: u32, call: &'static str) {
     EVENTS.lock().unwrap().push((id, call));
@@ -66,10 +67,8 @@ impl Goal for Counter {
         if let Some(other) = OTHER.lock().unwrap().as_ref().copied() {
             let health = LivingRef::new(other).health(cx.host());
             let position = other.position(cx.host());
-            // A read the view refuses: the snapshot carries no rotation of
-            // another mob (only the ticking mob's own answers).
-            let refused = other.rotation(cx.host()).is_some();
-            READS.lock().unwrap().push((health, position, refused));
+            let rotation = other.rotation(cx.host());
+            READS.lock().unwrap().push((health, position, rotation));
         }
     }
     fn stop(&mut self, cx: &mut GoalContext<'_>) {
@@ -144,6 +143,7 @@ fn tick_goals_as(
 ) {
     // The native-authoritative side, whose mob tick builds the goal host.
     game.options.dedicated = Some(Vec::new());
+    publish_mob_rows(game);
     let mut mobs = game.mobs.lift();
     let snapshot: Vec<_> = mobs
         .iter()
@@ -171,6 +171,47 @@ fn tick_goals_as(
         mobs[index].ai.goals = selector;
     }
     game.mobs = mobs;
+}
+
+/// Explicit source preparation for synthetic lifted-list fixtures. This tests
+/// published reads, not production owner-pass ordering.
+pub(in crate::game) fn publish_mob_rows(game: &super::super::Game<'_>) {
+    game.entity_read_state.borrow_mut().mob_relations.clear();
+    for mob in game.mobs.iter() {
+        assert!(game.publish_mob_read_source(mob, mod_api::EntityReadCapturePhase::PassStart));
+    }
+}
+
+/// Real shared-Host player source behind the fixture's selected engine view.
+fn selected_guest(
+    game: &mut super::super::Game<'_>,
+) -> std::sync::mpsc::Receiver<horizon_client::lan::Out> {
+    use horizon_client::lan::{Joined, PlayerSender, guest::Guest};
+    use std::sync::{Arc, atomic::AtomicUsize};
+    super::super::native_living_flags::tests::guest_server(game, false, true);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut guest = Guest::new(
+        Joined {
+            conn: 5000,
+            uuid: horizon_client::lan::playerdata::ints_uuid([1, 2, 3, 4]),
+            name: "selected".into(),
+            properties: Vec::new(),
+            info: horizon_protocol::packets::configuration::ClientInformation::new(8),
+            brand: String::new(),
+            sender: PlayerSender::new(tx, Arc::new(AtomicUsize::new(0))),
+            latency: Arc::new(std::sync::atomic::AtomicI32::new(0)),
+            address: "127.0.0.1:1".parse().unwrap(),
+            expected: false,
+        },
+        5000,
+        [9.5, 65.0, 9.5],
+        10,
+    );
+    guest.placed = true;
+    guest.loaded = true;
+    guest.dimension = game.dim.id().to_owned();
+    game.lan.as_mut().unwrap().hub.guests.push(guest);
+    rx
 }
 
 /// The events of one mob's goal, in order.
@@ -258,7 +299,7 @@ fn two_mobs_keep_independent_state_and_random_streams() {
 
 #[test]
 #[ignore = "needs prepared resources"]
-fn reads_answer_the_tick_view_and_refuse_what_it_lacks() {
+fn foreign_reads_use_shared_published_health_position_and_rotation() {
     EVENTS.lock().unwrap().clear();
     READS.lock().unwrap().clear();
     install_game_mods();
@@ -270,16 +311,17 @@ fn reads_answer_the_tick_view_and_refuse_what_it_lacks() {
         set_other(other);
         tick_goals(game, 0);
         let reads = READS.lock().unwrap();
-        let (health, position, refused) = reads.last().copied().unwrap();
-        assert_eq!(health, Some(12.5), "the other mob's snapshot health");
+        let (health, position, rotation) = reads.last().copied().unwrap();
+        assert_eq!(health, Some(12.5), "the other mob's published health");
         assert_eq!(
             position,
             Some([13.5, 65.0, 13.5]),
-            "the other mob's snapshot position"
+            "the other mob's published position"
         );
-        assert!(
-            !refused,
-            "a read the view refuses: not carried by the snapshot"
+        assert_eq!(
+            rotation,
+            Some([0.0, 0.0]),
+            "retained foreign rotation is published too"
         );
     });
 }
@@ -746,6 +788,7 @@ fn set_target_refuses_what_the_write_handle_refuses() {
         let epoch = game.entity(91).unwrap().epoch();
         let player = EntityRef::new(epoch, 5000);
         *TARGET.lock().unwrap() = Some(player);
+        let _guest_rx = selected_guest(game);
         let view = view_player([9.5, 65.0, 9.5]);
         tick_goals_as(game, 0, Some(view.clone()), Some(([1, 2, 3, 4], 5000)));
         assert_eq!(
@@ -892,6 +935,7 @@ fn the_player_the_tick_sees_resolves_by_its_captured_identity() {
         mobs::part_goals::attach(&mut game.mobs[0]);
         // A server's tick lends a guest's view, with the guest's real
         // identity captured beside it — no player of the game's own exists.
+        let _guest_rx = selected_guest(game);
         let view = view_player([9.5, 65.0, 9.5]);
         tick_goals_as(game, 0, Some(view), Some(([1, 2, 3, 4], 5000)));
         let reads = READS.lock().unwrap();
@@ -903,6 +947,7 @@ fn the_player_the_tick_sees_resolves_by_its_captured_identity() {
         drop(reads);
         // A view with no identity behind it — a fake player's — resolves as
         // no player at all.
+        game.lan.as_mut().unwrap().hub.guests.clear();
         let fake = view_player([9.5, 65.0, 9.5]);
         tick_goals_as(game, 0, Some(fake), None);
         let reads = READS.lock().unwrap();
@@ -945,6 +990,7 @@ fn mod_goal_tick_cost() {
     install_game_mods();
     with_game(|game| {
         zombie(game, 60, [3.5, 65.0, 3.5]);
+        publish_mob_rows(game);
         let mut mobs = game.mobs.lift();
         let snapshot: Vec<_> = mobs
             .iter()

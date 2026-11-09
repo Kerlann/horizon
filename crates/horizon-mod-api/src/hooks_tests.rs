@@ -2,6 +2,49 @@ use super::*;
 use crate::testing::FakeHost;
 
 #[test]
+fn entity_read_interest_is_load_time_and_includes_custom_points() {
+    struct Quiet;
+    impl Hooks for Quiet {
+        fn subscribed(&self) -> &'static [Option<HookId>] {
+            &[]
+        }
+    }
+    struct Point;
+    impl Hooks for Point {
+        fn subscribed(&self) -> &'static [Option<HookId>] {
+            &[]
+        }
+        fn listeners(&self) -> &'static [Listener] {
+            &[Listener {
+                hook: None,
+                priority: 0,
+                receive_cancelled: false,
+            }]
+        }
+    }
+    struct Builtin;
+    impl Hooks for Builtin {
+        fn subscribed(&self) -> &'static [Option<HookId>] {
+            &[Some(HookId::ClientTickPre)]
+        }
+    }
+    testing::with_mods(vec![ModEntry::new("quiet", Box::new(Quiet))].into(), || {
+        assert!(!__private::entity_reads_listened());
+    });
+    for entry in [
+        ModEntry::new("point", Box::new(Point)),
+        ModEntry::new("builtin", Box::new(Builtin)),
+    ] {
+        let id = entry.id;
+        testing::with_mods(vec![entry].into(), || {
+            assert!(__private::entity_reads_listened());
+            assert!(set_mod_enabled(id, false));
+            assert!(__private::entity_reads_listened());
+        });
+    }
+}
+
+#[test]
 fn chat_line_exposes_text_conversion_failure() {
     // This function must type-check for every client host, so callers can
     // propagate a refused text conversion instead of losing the error.

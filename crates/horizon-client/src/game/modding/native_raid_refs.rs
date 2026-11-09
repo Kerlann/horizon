@@ -73,23 +73,23 @@ impl Game<'_> {
 
     /// `Raider.getCurrentRaid`: the raid a raider belongs to, even a stopped
     /// one. None for a mob that is no raider or in no raid.
-    pub(super) fn mob_raid(&self, mob: MobRef) -> Option<RaidRef> {
+    pub(super) fn uncached_mob_raid(&self, mob: MobRef) -> Option<RaidRef> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
         let raider = self.mobs.iter().find(|m| m.id == id && !m.removed)?;
         let id = horizon_client::mobs::raider::state(raider)?.raid_id?;
-        let level = self.entity_level(mob.entity())?;
+        let level = self.uncached_entity_level(mob.entity())?;
         self.level_raid(level, id)
     }
 
     /// `Raid.getCenter`.
-    pub(super) fn raid_center(&self, raid: RaidRef) -> Option<[i32; 3]> {
+    pub(super) fn uncached_raid_center(&self, raid: RaidRef) -> Option<[i32; 3]> {
         Some(self.native_raid_data(raid)?.center)
     }
 
     /// `Raid.getRaidOmenLevel`: 0 to 5 in play, any value a mod set.
-    pub(super) fn raid_omen_level(&self, raid: RaidRef) -> Option<i32> {
+    pub(super) fn uncached_raid_omen_level(&self, raid: RaidRef) -> Option<i32> {
         Some(self.native_raid_data(raid)?.omen_level)
     }
 
@@ -102,35 +102,35 @@ impl Game<'_> {
     }
 
     /// `Raid.getGroupsSpawned`: the waves spawned so far.
-    pub(super) fn raid_groups_spawned(&self, raid: RaidRef) -> Option<i32> {
+    pub(super) fn uncached_raid_groups_spawned(&self, raid: RaidRef) -> Option<i32> {
         Some(self.native_raid_data(raid)?.groups_spawned)
     }
 
     /// `Raid.numGroups`, set from `getNumGroups(difficulty)` when the raid
     /// began: 0, 3, 5 or 7. A raid of omen level 2 or more adds a bonus wave
     /// (`hasBonusWave`).
-    pub(super) fn raid_num_groups(&self, raid: RaidRef) -> Option<i32> {
+    pub(super) fn uncached_raid_num_groups(&self, raid: RaidRef) -> Option<i32> {
         Some(self.native_raid_data(raid)?.num_groups)
     }
 
     /// Whether the omen level is above 1, which adds a wave after the last
     /// (`Raid.hasBonusWave`).
-    pub(super) fn raid_has_bonus_wave(&self, raid: RaidRef) -> Option<bool> {
+    pub(super) fn uncached_raid_has_bonus_wave(&self, raid: RaidRef) -> Option<bool> {
         Some(self.native_raid_data(raid)?.omen_level > 1)
     }
 
     /// `Raid.isStarted`.
-    pub(super) fn raid_is_started(&self, raid: RaidRef) -> bool {
-        self.native_raid_data(raid).is_some_and(|r| r.started)
+    pub(super) fn uncached_raid_is_started(&self, raid: RaidRef) -> Option<bool> {
+        Some(self.native_raid_data(raid)?.started)
     }
 
     /// `Raid.isActive`: false once stopped.
-    pub(super) fn raid_is_active(&self, raid: RaidRef) -> bool {
-        self.native_raid_data(raid).is_some_and(|r| r.active)
+    pub(super) fn uncached_raid_is_active(&self, raid: RaidRef) -> Option<bool> {
+        Some(self.native_raid_data(raid)?.active)
     }
 
     /// `Raid.RaidStatus`.
-    pub(super) fn raid_status(&self, raid: RaidRef) -> Option<NativeRaidStatus> {
+    pub(super) fn uncached_raid_status(&self, raid: RaidRef) -> Option<NativeRaidStatus> {
         Some(match self.native_raid_data(raid)?.status {
             Status::Ongoing => NativeRaidStatus::Ongoing,
             Status::Victory => NativeRaidStatus::Victory,
@@ -141,12 +141,12 @@ impl Game<'_> {
 
     /// `Raid.getTotalHealth`: the health of every raider that joined, which
     /// the boss bar divides by.
-    pub(super) fn raid_total_health(&self, raid: RaidRef) -> Option<f32> {
+    pub(super) fn uncached_raid_total_health(&self, raid: RaidRef) -> Option<f32> {
         Some(self.native_raid_data(raid)?.total_health)
     }
 
     /// `Raid.getHealthOfLivingRaiders`.
-    pub(super) fn raid_living_health(&self, raid: RaidRef) -> Option<f32> {
+    pub(super) fn uncached_raid_living_health(&self, raid: RaidRef) -> Option<f32> {
         Some(
             self.native_raid_members(raid)?
                 .fold(0.0, |a, m| a + m.health),
@@ -154,7 +154,7 @@ impl Game<'_> {
     }
 
     /// The boss bar's progress, 0 to 1 (`Raid.raidEvent.getProgress`).
-    pub(super) fn raid_bar_progress(&self, raid: RaidRef) -> Option<f32> {
+    pub(super) fn uncached_raid_bar_progress(&self, raid: RaidRef) -> Option<f32> {
         Some(self.native_raid_data(raid)?.bar.progress)
     }
 
@@ -268,7 +268,7 @@ mod tests {
                 assert!(raid.stop(game));
                 assert_eq!(raid.omen_level(game), Some(17));
                 assert_eq!(other.omen_level(game), before);
-                assert!(other.is_active(game));
+                assert_eq!(other.is_active(game), Some(true));
                 game.raid_command_stop(id);
                 let tick_id = game
                     .raiding
@@ -382,8 +382,8 @@ mod tests {
                 game.raid_num_groups(raid),
                 Some(horizon_client::raid::num_groups(game.difficulty_id()))
             );
-            assert!(!game.raid_is_started(raid));
-            assert!(game.raid_is_active(raid));
+            assert_eq!(game.raid_is_started(raid), Some(false));
+            assert_eq!(game.raid_is_active(raid), Some(true));
             assert_eq!(game.raid_status(raid), Some(NativeRaidStatus::Ongoing));
             assert_eq!(game.raid_total_health(raid), Some(0.0));
             assert_eq!(game.raid_bar_progress(raid), Some(0.0));
@@ -414,7 +414,7 @@ mod tests {
 
             assert!(game.raid_stop(raid));
             assert_eq!(game.raid_status(raid), Some(NativeRaidStatus::Stopped));
-            assert!(!game.raid_is_active(raid));
+            assert_eq!(game.raid_is_active(raid), Some(false));
             assert!(!game.raid_stop(raid));
             assert_eq!(game.level_raid_at(level, [10, 70, 10]), None);
         });
@@ -462,7 +462,7 @@ mod tests {
             assert_eq!(raid.num_groups(game), groups);
             assert_eq!(raid.has_bonus_wave(game), Some(true));
             assert_eq!(raid.is_started(game), started);
-            assert!(raid.is_active(game));
+            assert_eq!(raid.is_active(game), Some(true));
             assert_eq!(raid.status(game), Some(NativeRaidStatus::Ongoing));
             assert_eq!(raid.total_health(game), total);
             assert_eq!(raid.living_health(game), Some(12.0));
@@ -481,8 +481,8 @@ mod tests {
             assert!(raid.stop(game));
             assert!(!raid.stop(game));
             assert_eq!(raid.status(game), Some(NativeRaidStatus::Stopped));
-            assert!(!raid.is_active(game));
-            assert!(other.is_active(game));
+            assert_eq!(raid.is_active(game), Some(false));
+            assert_eq!(other.is_active(game), Some(true));
             assert_eq!(game.dim, super::super::Dim::Nether);
             assert_eq!(level.raid_at(game, [10, 70, 10]), None);
             assert_eq!(level.raid(game, raid.id()), Some(raid));
@@ -508,6 +508,8 @@ mod tests {
                     .is_some()
             );
             game.levels.clear();
+            assert_eq!(raid.is_active(game), None);
+            assert_eq!(raid.is_started(game), None);
             assert_eq!(raid.center(game), None);
             assert_eq!(raid.raiders(game), None);
             assert!(!raid.set_omen_level(game, 1));
@@ -529,7 +531,8 @@ mod tests {
             );
             let stale = RaidRef::new(later, raid.id());
             assert_eq!(game.raid_center(stale), None);
-            assert!(!game.raid_is_active(stale));
+            assert_eq!(game.raid_is_active(stale), None);
+            assert_eq!(game.raid_is_started(stale), None);
             assert!(!game.raid_stop(stale));
             assert!(!game.raid_set_omen_level(stale, 2));
             assert_eq!(game.level_raids(later), None);
@@ -540,6 +543,8 @@ mod tests {
             assert_eq!(game.raid_status(raid), Some(NativeRaidStatus::Ongoing));
 
             game.options.execution_role = ExecutionRole::Client;
+            assert_eq!(game.raid_is_active(raid), None);
+            assert_eq!(game.raid_is_started(raid), None);
             assert_eq!(game.raid_center(raid), None);
             assert_eq!(game.level_raid_at(level, [10, 70, 10]), None);
             assert_eq!(game.level_raids(level), None);

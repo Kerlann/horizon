@@ -617,8 +617,57 @@ fn culls_back_faces(key: &str) -> bool {
     matches!(key, "minecraft:bat#main" | "minecraft:turtle_baby#main")
 }
 
+/// Vanilla type geometry, narrowed to Java floats once at the resource boundary
+/// and widened for engine geometry calculations. Includes nonliving types.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EntityTypeGeometry {
+    pub width: f64,
+    pub height: f64,
+    pub eye_height: f64,
+}
+
+/// Resource-owned geometry for every entity type, independent of living models.
+#[derive(Debug)]
+pub struct EntityTypeGeometries(HashMap<String, EntityTypeGeometry>);
+
+impl EntityTypeGeometries {
+    pub fn get(&self, id: &str) -> Option<EntityTypeGeometry> {
+        self.0.get(id).copied()
+    }
+
+    fn parse(document: &Value) -> crate::Result<Self> {
+        let rows = document
+            .as_object()
+            .ok_or("entity-types.json must be an object")?;
+        let mut geometry = HashMap::with_capacity(rows.len());
+        for (id, row) in rows {
+            let mut dimensions = [0.0; 3];
+            for (index, field) in ["width", "height", "eye_height"].into_iter().enumerate() {
+                let raw = row[field]
+                    .as_f64()
+                    .ok_or_else(|| format!("entity type {id}: {field} must be numeric"))?;
+                // Resource declarations cross Java's float boundary, including
+                // negative values and overflow to infinity. Do not impose a
+                // stricter numerical domain than EntityDimensions' float fields.
+                dimensions[index] = f64::from(raw as f32);
+            }
+            let [width, height, eye_height] = dimensions;
+            geometry.insert(
+                id.clone(),
+                EntityTypeGeometry {
+                    width,
+                    height,
+                    eye_height,
+                },
+            );
+        }
+        Ok(Self(geometry))
+    }
+}
+
 pub struct MobTypes {
     pub types: HashMap<String, MobType>,
+    pub geometry: EntityTypeGeometries,
 }
 impl MobTypes {
     pub fn load(root: &Path) -> crate::Result<Self> {
@@ -666,6 +715,7 @@ impl MobTypes {
     ) -> crate::Result<Self> {
         let bytes = fs::read(root.join("entity-types.json"))?;
         let types: Value = serde_json::from_slice(&bytes)?;
+        let geometry = EntityTypeGeometries::parse(&types)?;
         let exact = exact_attributes(&bytes);
         let models = models_needed
             .then(|| -> crate::Result<EntityModelDocument> {
@@ -785,9 +835,9 @@ impl MobTypes {
                 MobType {
                     species: def.species,
                     item_stack_limits: item_stack_limits.clone(),
-                    width: t["width"].as_f64().unwrap_or(0.6),
-                    height: t["height"].as_f64().unwrap_or(1.8),
-                    eye_height: t["eye_height"].as_f64().unwrap_or(1.6),
+                    width: geometry.0[&id].width,
+                    height: geometry.0[&id].height,
+                    eye_height: geometry.0[&id].eye_height,
                     max_health: fields.max_health,
                     speed: fields.speed,
                     flying_speed: fields.flying_speed,
@@ -844,7 +894,10 @@ impl MobTypes {
                 },
             );
         }
-        Ok(Self { types: out })
+        Ok(Self {
+            types: out,
+            geometry,
+        })
     }
 }
 pub use horizon_client_core::who::Who;
@@ -3356,9 +3409,12 @@ pub fn collision_changes(w: &MobWorld, writes: &[((i32, i32, i32), u32, u32)]) -
         .collect()
 }
 /// Adds the pending pushes aimed at `m` to its velocity, in push order.
-pub fn apply_mob_pushes(m: &mut Mob, pending: &mut PendingPushes) {
+/// Returns whether at least one push was applied, including a zero-vector push.
+pub fn apply_mob_pushes(m: &mut Mob, pending: &mut PendingPushes) -> bool {
+    let mut applied = false;
     // Entity.push(x, y, z) sets needsSync.
     let mut add = |v: Vec3| {
+        applied = true;
         m.velocity = Vec3::new(m.velocity.x + v.x, m.velocity.y + v.y, m.velocity.z + v.z);
         m.needs_sync = true;
     };
@@ -3376,6 +3432,7 @@ pub fn apply_mob_pushes(m: &mut Mob, pending: &mut PendingPushes) {
     {
         pushes.into_iter().for_each(add);
     }
+    applied
 }
 /// Applies the brain memories a mob's tick set on other mobs (from event
 /// index `from` on), at once: vanilla sets them on the other entity during
@@ -3703,7 +3760,7 @@ pub struct MobWorld<'a> {
     pub sea_level: i32,
     /// The scoreboard teams of the player and the mobs (collision rules),
     /// shared: the mob ticks build them once a tick, not once a mob.
-    pub teams: std::sync::Arc<Teams<'a>>,
+    pub teams: std::sync::Arc<TeamRulesSnapshot>,
     /// Item data (max stack sizes), when the host has it.
     pub items: Option<&'a crate::items::Items>,
     /// `ChestBlockEntity.getOpenCount`: the players with each chest open.
@@ -3903,6 +3960,20 @@ pub trait WhoLookup {
 }
 /// `Entity.getTeam` of the player and of the mobs on a team.
 #[derive(Clone, Debug, Default)]
+pub struct TeamRulesSnapshot {
+    pub player: Option<crate::scoreboard::TeamRules<usize>>,
+    pub mobs: HashMap<u32, crate::scoreboard::TeamRules<usize>>,
+}
+impl TeamRulesSnapshot {
+    pub fn of(&self, who: Who) -> Option<&crate::scoreboard::TeamRules<usize>> {
+        match who {
+            Who::Player => self.player.as_ref(),
+            Who::Mob(id) => self.mobs.get(&id),
+        }
+    }
+}
+/// Borrowed authoritative teams for immediate non-mob gameplay reads.
+#[derive(Clone, Debug, Default)]
 pub struct Teams<'a> {
     pub player: Option<&'a crate::scoreboard::Team>,
     pub mobs: HashMap<u32, &'a crate::scoreboard::Team>,
@@ -3915,6 +3986,7 @@ impl<'a> Teams<'a> {
         }
     }
 }
+
 /// `InfestedMobEffect.onMobHurt`'s draws from the bearer's random
 /// (`mob.getRandom()`): a 10% chance of one or two silverfish, each thrown
 /// along `look` (`spawnSilverfish`). Their velocities; none when the chance
@@ -5874,25 +5946,77 @@ mod teams_tests {
             .filter_map(|(id, u)| Some((*id, board.players_team(&uuid_text(*u))?.clone())))
             .collect()
     }
-    fn borrowed<'a>(board: &'a Scoreboard, uuids: &HashMap<u32, [i32; 4]>) -> Teams<'a> {
-        Teams {
-            player: board.players_team("Steve"),
+    fn bounded(board: &Scoreboard, uuids: &HashMap<u32, [i32; 4]>) -> TeamRulesSnapshot {
+        let shared: HashMap<_, _> = board
+            .teams
+            .iter()
+            .enumerate()
+            .map(|(identity, team)| {
+                (
+                    team.name.as_str(),
+                    crate::scoreboard::TeamRules {
+                        identity,
+                        allow_friendly_fire: team.allow_friendly_fire,
+                        collision_rule: team.collision_rule,
+                    },
+                )
+            })
+            .collect();
+        TeamRulesSnapshot {
+            player: board
+                .players_team("Steve")
+                .map(|team| shared[team.name.as_str()]),
             mobs: uuids
                 .iter()
-                .filter_map(|(id, u)| Some((*id, board.players_team(&uuid_text(*u))?)))
+                .filter_map(|(id, u)| {
+                    Some((
+                        *id,
+                        shared[board.players_team(&uuid_text(*u))?.name.as_str()],
+                    ))
+                })
                 .collect(),
         }
     }
 
     #[test]
-    fn borrowed_teams_answer_as_the_clones() {
+    fn bounded_team_rules_match_authoritative_teams() {
         let (board, uuids) = board(40);
-        let teams = borrowed(&board, &uuids);
+        let teams = bounded(&board, &uuids);
         let old = owned(&board, &uuids);
         for id in 0..41 {
-            assert_eq!(teams.of(Who::Mob(id)), old.get(&id), "mob {id}");
+            let facts = teams.of(Who::Mob(id));
+            let expected = old.get(&id);
+            assert_eq!(
+                facts.map(|t| t.allow_friendly_fire),
+                expected.map(|t| t.allow_friendly_fire),
+                "mob {id}"
+            );
+            assert_eq!(
+                facts.map(|t| t.collision_rule),
+                expected.map(|t| t.collision_rule),
+                "mob {id}"
+            );
+            assert_eq!(facts.is_some(), expected.is_some());
         }
-        assert_eq!(teams.of(Who::Player).map(|t| t.name.as_str()), Some("red"));
+        assert!(teams.of(Who::Player).is_some());
+        for a in 0..41 {
+            for b in 0..41 {
+                let own = teams.of(Who::Mob(a));
+                let other = teams.of(Who::Mob(b));
+                assert_eq!(
+                    crate::scoreboard::TeamRules::allied(own, other),
+                    crate::scoreboard::teams_allied(old.get(&a), old.get(&b))
+                );
+                assert_eq!(
+                    crate::scoreboard::TeamRules::allows_damage(own, other),
+                    crate::scoreboard::teams_allow_damage(old.get(&a), old.get(&b))
+                );
+                assert_eq!(
+                    crate::scoreboard::TeamRules::pushable_by(own, other, true),
+                    crate::scoreboard::pushable_by(old.get(&a), old.get(&b), true)
+                );
+            }
+        }
     }
 
     /// One tick's worth of team building: once per mob (before) against once.
@@ -5909,7 +6033,7 @@ mod teams_tests {
             let t = std::time::Instant::now();
             let reps = 20;
             for _ in 0..reps {
-                std::hint::black_box(borrowed(&board, &uuids));
+                std::hint::black_box(bounded(&board, &uuids));
             }
             let after = t.elapsed() / reps;
             println!(
@@ -6246,6 +6370,20 @@ mod push_tests {
     }
 
     #[test]
+    fn push_publication_signal_names_only_actual_applies() {
+        let mut actors = mobs(2);
+        let mut pending = PendingPushes::default();
+        pending.push(actors[1].id, Vec3::ZERO);
+        assert!(!apply_mob_pushes(&mut actors[0], &mut pending));
+        assert!(apply_mob_pushes(&mut actors[1], &mut pending));
+        assert!(actors[1].needs_sync);
+        assert!(!apply_mob_pushes(&mut actors[1], &mut pending));
+        pending.push(actors[0].id, Vec3::new(1.0, 2.0, 3.0));
+        assert!(apply_mob_pushes(&mut actors[0], &mut pending));
+        assert_eq!(actors[0].velocity, Vec3::new(1.0, 2.0, 3.0));
+    }
+
+    #[test]
     fn pushes_land_as_with_the_list() {
         for n in [1u32, 3, 8, 20, 60] {
             let mut new_mobs = mobs(n);
@@ -6264,7 +6402,7 @@ mod push_tests {
                             apply_mob_pushes(
                                 &mut mobs.borrow_mut()[i as usize],
                                 &mut pending.borrow_mut(),
-                            )
+                            );
                         },
                     )
                 };
@@ -6334,7 +6472,7 @@ mod push_tests {
                         apply_mob_pushes(
                             &mut ms.borrow_mut()[i as usize],
                             &mut pending.borrow_mut(),
-                        )
+                        );
                     },
                 );
             }
@@ -8017,5 +8155,77 @@ mod hidden_speed_mob_tick_tests {
             assert!(m.effects_dirty);
             assert!(!m.has_effect("minecraft:absorption"));
         }
+    }
+}
+
+#[cfg(test)]
+mod entity_type_geometry_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn nonliving_geometry_is_resource_owned_and_uses_java_float_precision() {
+        let first = EntityTypeGeometries::parse(&json!({
+            "minecraft:marker": {"width":0.0,"height":0.0,"eye_height":0.0},
+            "minecraft:area_effect_cloud": {"width":6.0,"height":0.5,"eye_height":0.1}
+        }))
+        .unwrap();
+        let second = EntityTypeGeometries::parse(&json!({
+            "minecraft:area_effect_cloud": {"width":2.0,"height":1.0,"eye_height":0.2}
+        }))
+        .unwrap();
+        assert_eq!(
+            first.get("minecraft:marker"),
+            Some(EntityTypeGeometry {
+                width: 0.0,
+                height: 0.0,
+                eye_height: 0.0
+            })
+        );
+        let old = first.get("minecraft:area_effect_cloud").unwrap();
+        assert_eq!(old.width, 6.0);
+        assert_eq!(old.height, 0.5);
+        assert_eq!(old.eye_height, f64::from(f32::from_bits(0x3dcc_cccd)));
+        assert_eq!(
+            second.get("minecraft:area_effect_cloud").unwrap().width,
+            2.0
+        );
+        assert_eq!(first.get("minecraft:area_effect_cloud"), Some(old));
+        assert_eq!(second.get("minecraft:marker"), None);
+    }
+
+    #[test]
+    fn geometry_preserves_float_domain_without_invented_size_limits() {
+        let table = EntityTypeGeometries::parse(&json!({
+            "test:unusual": {"width":-2.5,"height":1e300,"eye_height":-0.25}
+        }))
+        .unwrap();
+        assert_eq!(
+            table.get("test:unusual"),
+            Some(EntityTypeGeometry {
+                width: -2.5,
+                height: f64::INFINITY,
+                eye_height: -0.25
+            })
+        );
+    }
+
+    #[test]
+    fn malformed_geometry_is_refused_at_the_resource_boundary() {
+        for field in ["width", "height", "eye_height"] {
+            for invalid in [json!(null), json!("1.0"), json!(false)] {
+                let mut row = json!({"width":1.0,"height":2.0,"eye_height":1.5});
+                row[field] = invalid;
+                let error = EntityTypeGeometries::parse(&json!({"test:bad":row}))
+                    .unwrap_err()
+                    .to_string();
+                assert!(error.contains("test:bad"), "{error}");
+                assert!(error.contains(field), "{error}");
+            }
+            let mut row = json!({"width":1.0,"height":2.0,"eye_height":1.5});
+            row.as_object_mut().unwrap().remove(field);
+            assert!(EntityTypeGeometries::parse(&json!({"test:missing":row})).is_err());
+        }
+        assert!(EntityTypeGeometries::parse(&json!([])).is_err());
     }
 }

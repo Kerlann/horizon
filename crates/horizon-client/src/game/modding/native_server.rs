@@ -721,7 +721,7 @@ impl Game<'_> {
     }
 
     /// Whether a live player handle names a connectionless actor.
-    pub(super) fn player_is_fake(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn uncached_player_is_fake(&self, player: PlayerRef) -> Option<bool> {
         match self.player_handle_read(player)? {
             PlayerRead::Acting { .. } => Some(self.lan_acting_fake),
             PlayerRead::Guest(guest) => Some(guest.is_fake()),
@@ -930,7 +930,7 @@ impl Game<'_> {
 
     /// `ServerPlayerGameMode.getGameModeForPlayer`; Paper `HumanEntity#getGameMode`.
     /// None for stale, offline or unavailable players (including displaced outer players).
-    pub(super) fn player_game_mode(&self, player: PlayerRef) -> Option<GameMode> {
+    pub(super) fn uncached_player_game_mode(&self, player: PlayerRef) -> Option<GameMode> {
         match self.player_read_both(player)? {
             PlayerRead::Acting { .. } => Some(self.mode),
             PlayerRead::Guest(guest) => GameMode::from_id(guest.game_mode),
@@ -995,12 +995,12 @@ impl Game<'_> {
     }
 
     /// `Player.isCreative`; Paper `HumanEntity#getGameMode`.
-    pub(super) fn player_is_creative(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn uncached_player_is_creative(&self, player: PlayerRef) -> Option<bool> {
         Some(self.player_read_both(player)?.creative())
     }
 
     /// `Inventory.getSelectedSlot`: the hotbar slot the player holds, 0..9.
-    pub(super) fn player_selected_slot(&self, player: PlayerRef) -> Option<usize> {
+    pub(super) fn uncached_player_selected_slot(&self, player: PlayerRef) -> Option<usize> {
         Some(match self.player_read_both(player)? {
             PlayerRead::Acting { .. } => self.selected,
             PlayerRead::Guest(guest) => guest.selected,
@@ -1080,24 +1080,27 @@ impl Game<'_> {
     }
 
     /// `Player.isSpectator`; Paper `HumanEntity#getGameMode`.
-    pub(super) fn player_is_spectator(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn uncached_player_is_spectator(&self, player: PlayerRef) -> Option<bool> {
         Some(self.player_read_both(player)?.mode() == 3)
     }
 
     /// `Player.mayBuild`; Paper `HumanEntity#getGameMode`.
-    pub(super) fn player_may_build(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn uncached_player_may_build(&self, player: PlayerRef) -> Option<bool> {
         Some(self.player_read_both(player)?.may_build())
     }
 
     /// `FoodData.getFoodLevel/getSaturationLevel/getExhaustionLevel`; Paper
     /// `HumanEntity#getFoodLevel/getSaturation/getExhaustion`. None until the
     /// guest's body exists, as well as for stale or unavailable players.
-    pub(super) fn player_food(&self, player: PlayerRef) -> Option<NativePlayerFood> {
+    pub(super) fn uncached_player_food(&self, player: PlayerRef) -> Option<NativePlayerFood> {
         self.player_read_both(player)?.food()
     }
 
     /// `Player.getAbilities`; Paper `Player#getAllowFlight/isFlying/getFlySpeed/getWalkSpeed`.
-    pub(super) fn player_abilities(&self, player: PlayerRef) -> Option<NativePlayerAbilities> {
+    pub(super) fn uncached_player_abilities(
+        &self,
+        player: PlayerRef,
+    ) -> Option<NativePlayerAbilities> {
         self.player_read_both(player)?.abilities()
     }
 
@@ -1350,14 +1353,14 @@ impl Game<'_> {
     }
     /// Whether `player_set_sleep_ignored` left the player out of the sleep
     /// count. None as the write's false.
-    pub(super) fn player_sleep_ignored(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn uncached_player_sleep_ignored(&self, player: PlayerRef) -> Option<bool> {
         let uuid = self.sleep_list_uuid(player)?;
         Some(self.lan.as_ref()?.sleep_ignored.contains(&uuid))
     }
     /// Whether `SleepStatus.update` counts the player: not a spectator, not a
     /// fake, and not an ignored player who is out of bed (`sleep_counts`'s
     /// own rule). None for a stale or unavailable player.
-    pub(super) fn player_counts_for_sleep(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn uncached_player_counts_for_sleep(&self, player: PlayerRef) -> Option<bool> {
         let ignored = |game: &Self| {
             game.lan
                 .as_ref()
@@ -1376,7 +1379,7 @@ impl Game<'_> {
     /// `Player.getSleepTimer`: the ticks in bed (`sleepCounter`), in the
     /// record of a guest or in place for the acting player. None for a
     /// stale or unavailable player.
-    pub(super) fn player_sleep_timer(&self, player: PlayerRef) -> Option<u32> {
+    pub(super) fn uncached_player_sleep_timer(&self, player: PlayerRef) -> Option<u32> {
         Some(match self.player_handle_read(player)? {
             PlayerRead::Acting { .. } => self.sleep_timer,
             PlayerRead::Guest(guest) => guest.sleep_timer,
@@ -1401,7 +1404,7 @@ impl Game<'_> {
     /// `ClientInformation` said, false for the player running the server and
     /// for an acting player with no connection. None for a stale or
     /// unavailable player.
-    pub(super) fn player_text_filtering(&self, player: PlayerRef) -> Option<bool> {
+    pub(super) fn uncached_player_text_filtering(&self, player: PlayerRef) -> Option<bool> {
         if let Some(guest) = self.online_player_record(player) {
             return Some(guest.info.text_filtering);
         }
@@ -1411,7 +1414,7 @@ impl Game<'_> {
     /// game keeps it (the guest's record, or the acting player's in place),
     /// `Some(None)` when they have none. None for a stale or unavailable
     /// player, or a dimension key the API can't name.
-    pub(super) fn player_respawn_config(
+    pub(super) fn uncached_player_respawn_config(
         &self,
         player: PlayerRef,
     ) -> Option<Option<PlayerRespawnConfig>> {

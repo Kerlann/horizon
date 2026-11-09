@@ -3,12 +3,10 @@
 //! the species' own, and the engine wraps each in a [`ModGoal`] that gives the
 //! mod its own mob, the tick's read view, its random and its writes.
 //!
-//! The read view answers through the generated `Backend` impl at the bottom:
-//! the ticking mob itself, the player the tick sees and the tick's snapshot of
-//! the other entities; entity data the snapshot does not carry is refused its
-//! typed refusal, and every other backend read forwards to the real backend of
-//! the game host behind the tick. The engine's own goals are
-//! untouched, and a mob whose type no mod attached a part to pays nothing.
+//! The explicit actor reads its live loan. Foreign handles use the real shared
+//! Host publications; engine AI snapshots are not exposed as a separate mod
+//! reader. The engine's own goals are unchanged, and an unattached entity type
+//! pays no mod-goal dispatch cost.
 use super::{
     Mob, MobWorld,
     goals::{Cx, Goal as EngineGoal, GoalSelector},
@@ -24,8 +22,29 @@ use mod_api::{
 /// the mob tick once beside `mob_world_base`, `None` in `MobWorld::goal_host`
 /// wherever no mod attached an entity part — so no other side runs one.
 pub trait GoalHost {
+    /// Refresh the explicit actor publication at a real callback/apply boundary.
+    /// A host without publication support must return false, never claim success.
+    fn refresh_mob_read_publication(
+        &self,
+        mob: &Mob,
+        world: &MobWorld<'_>,
+        phase: mod_api::EntityReadCapturePhase,
+    ) -> bool;
+    /// Resolve a requested target through authoritative source facts; `validate`
+    /// additionally applies the ordinary AI target rules. Player binding must
+    /// name the requested player, not the tick's previously selected player.
+    fn resolve_lent_mob_goal_target(
+        &self,
+        actor: &Mob,
+        world: &MobWorld<'_>,
+        target: mod_api::LivingRef,
+        validate: bool,
+    ) -> Option<super::Who>;
+
     /// The handles' epoch: a handle of an earlier world refuses.
     fn epoch(&self) -> Option<NativeWorldEpoch>;
+    /// Remaining use time projected from the explicit lent mob and its held stack.
+    fn mob_item_use_remaining_lent(&self, mob: &Mob) -> Option<i32>;
     /// Whether a merchant lent to this tick remains available to server hooks.
     fn merchant_is_live(&self, mob: &Mob) -> bool;
     /// Read the current offers, including a guest's more recent trade session.
@@ -34,8 +53,9 @@ pub trait GoalHost {
     fn merchant_trading_player_lent(&self, mob: &Mob) -> Option<mod_api::PlayerRef>;
     /// Current XP and level, including an open guest's trading session.
     fn merchant_trade_state_lent(&self, mob: &Mob) -> (i32, i32);
-    /// Live player passengers of a vehicle, with their boarding order.
-    fn player_passenger_seats(&self, vehicle: u32) -> Vec<(i64, u32)>;
+    /// Authoritative ordered passengers of the explicit actor loan. A foreign
+    /// source that cannot be inspected makes this unsupported, not a partial list.
+    fn mob_passengers_lent(&self, mob: &Mob) -> Option<Vec<mod_api::EntityRef>>;
     /// Whether this player steers the lent mob.
     fn mob_player_controls(&self, mob: &Mob, player: u32) -> bool;
     /// Dismount location using a mob lent out of the game list.
