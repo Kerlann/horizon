@@ -32,6 +32,9 @@ impl Resources {
     pub(super) fn mob_types(&self) -> &HashMap<String, Arc<MobType>> {
         &self.rest().mob_types
     }
+    pub(super) fn entity_type_geometry(&self) -> &horizon_client::mobs::EntityTypeGeometries {
+        &self.rest().entity_type_geometry
+    }
     pub(super) fn mob_data(&self) -> &horizon_client::mobs::MobData {
         &self.rest().mob_data
     }

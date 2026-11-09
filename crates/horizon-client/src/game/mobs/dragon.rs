@@ -584,7 +584,7 @@ fn is_fire(kind: DamageKind) -> bool {
     };
     source.is_fire()
 }
-const PART_SIZES: [(f64, f64); 8] = [
+pub(super) const PART_SIZES: [(f64, f64); 8] = [
     (1.0, 1.0),
     (3.0, 3.0),
     (5.0, 3.0),
