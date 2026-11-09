@@ -14,6 +14,7 @@
 
 use super::commands::Target;
 use super::entity_residency::{define_resident_access, resident_owners};
+use super::native_base_read_source::parked_base_read_access;
 use super::{
     Dim, ExperienceOrb, FallingBlock, Game, ItemEntity, Mob, boats, commands,
     creaking::CreakingState, dragon, fireworks, lightning, machines, minecarts,
@@ -115,27 +116,63 @@ pub(super) struct Parked {
 }
 
 impl Parked {
+    pub(super) fn saved_entity_uuid(&self, id: u32) -> Option<[i32; 4]> {
+        self.persist.uuids.get(&id).copied()
+    }
+
+    pub(super) fn saved_entity_uuids(&self) -> impl Iterator<Item = (u32, [i32; 4])> + '_ {
+        self.persist.uuids.iter().map(|(&id, &uuid)| (id, uuid))
+    }
+
     resident_owners!(define_resident_access, self, projectiles);
+    resident_owners!(parked_base_read_access, self, projectiles);
 }
 
 impl Game<'_> {
+    /// Logical retirement is independent of physical lifting. Cached rows of
+    /// a lifted owner still observe removals made before a lifecycle callback.
+    pub(super) fn server_read_target_visible(
+        &self,
+        dimension: DimensionKey,
+        target: Target,
+    ) -> bool {
+        if dimension == self.dim.key() {
+            return !self.persist.removals.contains(&target);
+        }
+        let dim = match dimension {
+            DimensionKey::OVERWORLD => Dim::Overworld,
+            DimensionKey::NETHER => Dim::Nether,
+            DimensionKey::END => Dim::End,
+            key => Dim::Extra(key),
+        };
+        self.levels
+            .parked
+            .get(&dim)
+            .is_some_and(|parked| !parked.persist.removals.contains(&target))
+    }
+
     /// Resolve through the exact owner, never by trying dimension swaps.
+    pub(super) fn locate_server_resident_owner(
+        &self,
+        at: Location,
+    ) -> Option<SourceEntity<(Target, bool)>> {
+        if at.owner.dimension == self.dim.key() {
+            return self.locate_resident_owner(at);
+        }
+        let dim = match at.owner.dimension {
+            DimensionKey::OVERWORLD => Dim::Overworld,
+            DimensionKey::NETHER => Dim::Nether,
+            DimensionKey::END => Dim::End,
+            key => Dim::Extra(key),
+        };
+        self.levels.parked.get(&dim)?.locate_resident_owner(at)
+    }
+
     pub(super) fn server_resident_entity(&self, id: u32) -> EntityLookup<Target> {
         let found = self
             .entity_residency
             .borrow_mut()
-            .server_entity_lookup(id, |at| {
-                if at.owner.dimension == self.dim.key() {
-                    return self.locate_resident_owner(at);
-                }
-                let dim = match at.owner.dimension {
-                    DimensionKey::OVERWORLD => Dim::Overworld,
-                    DimensionKey::NETHER => Dim::Nether,
-                    DimensionKey::END => Dim::End,
-                    key => Dim::Extra(key),
-                };
-                self.levels.parked.get(&dim)?.locate_resident_owner(at)
-            });
+            .server_entity_lookup(id, |at| self.locate_server_resident_owner(at));
         match found {
             EntityLookup::Found {
                 location,
@@ -205,6 +242,7 @@ impl Game<'_> {
 
     /// A new epoch invalidates every old producer before rebinding retained levels.
     pub(super) fn reset_entity_residency(&mut self) {
+        self.entity_read_state.get_mut().reset();
         let table = self.entity_residency.get_mut();
         table.reset();
         let journal = table.producer();
@@ -667,6 +705,7 @@ impl Game<'_> {
             // Overworld's.
             let clock = self.level_clock_name(target);
             p.world.day_time = self.switch_clock(&clock);
+            p.world.end_clock = self.world.end_clock;
             p.world.weather = self.world.weather;
             // The game rules and the difficulty are the server's, not a
             // level's: natural regeneration holds in every dimension.
@@ -1461,6 +1500,68 @@ mod tests {
             }
         }
         assert!(failures.is_empty(), "reopened borders: {failures:#?}");
+    }
+
+    /// `ImposterProtoChunk(…, false)`: a new chunk's features read a full
+    /// neighbour but their ordinary `setBlockState` writes do not change it,
+    /// while `BulkSectionAccess` (ores) writes its sections. Expected values
+    /// from the official 26.3 server on the constructed 1.20.4 world
+    /// (`H077_OLD_WORLD`: full old chunks, their partial ring removed), where
+    /// chunks 13..14 at z 0 generate next to the full chunk (12, -1).
+    #[test]
+    #[ignore = "needs HORIZON_TEST_RESOURCES, a scratch HORIZON_HOME and the constructed H077_OLD_WORLD"]
+    fn features_write_a_full_neighbour_only_through_its_sections() {
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let home = std::path::PathBuf::from(std::env::var_os("HORIZON_HOME").unwrap()).join("h078");
+        let world = home.join("saves/h078");
+        let source = std::path::PathBuf::from(std::env::var_os("H077_OLD_WORLD").unwrap());
+        fn copy(from: &std::path::Path, to: &std::path::Path) {
+            std::fs::create_dir_all(to).unwrap();
+            for entry in std::fs::read_dir(from).unwrap().flatten() {
+                let target = to.join(entry.file_name());
+                if entry.file_type().unwrap().is_dir() {
+                    copy(&entry.path(), &target);
+                } else if entry.file_name() != "session.lock" {
+                    std::fs::copy(entry.path(), target).unwrap();
+                }
+            }
+        }
+        copy(&source, &world);
+        let mut game = open_game(&root, &home, &world);
+        // The world's level.dat has cheats off: the open read it after open_game's setting.
+        game.set_allow_commands(true);
+        assert!(game.run_command("forceload add 208 0 239 15"));
+        let mut loaded = false;
+        // As the dedicated server's loop: a tick, then the chunk streaming.
+        for _ in 0..2000 {
+            game.tick_world(true).unwrap();
+            game.update_world();
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            if game.run_command_quietly("execute if loaded 215 64 8") {
+                loaded = true;
+                break;
+            }
+        }
+        assert!(loaded, "the new chunk (13, 0) was not generated");
+        game.save_game().unwrap();
+        let mut failures = Vec::new();
+        for (p, want) in [
+            // A spruce tree and a mushroom of the new chunks: ordinary writes.
+            ([207, 68, -10], "minecraft:air"),
+            ([207, 69, -6], "minecraft:air"),
+            ([202, 69, -5], "minecraft:air"),
+            // A gold ore blob: section writes.
+            ([207, -32, -12], "minecraft:deepslate_gold_ore"),
+        ] {
+            let got = game.block_name(p);
+            if &*got != want {
+                failures.push(format!("{p:?}: {got}, expected {want}"));
+            }
+        }
+        assert!(
+            failures.is_empty(),
+            "the full chunk (12, -1): {failures:#?}"
+        );
     }
 
     /// `BlendingData.pack` of an old chunk whose border columns a new chunk's

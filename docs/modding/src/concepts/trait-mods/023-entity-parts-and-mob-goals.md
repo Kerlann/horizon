@@ -50,8 +50,12 @@ identity, not authority or proof of completion. These are cached, potentially st
 publications. Removal, physical lifting and retained output are separate states.
 
 `EntityReadError<E = core::convert::Infallible>` keeps one live-read refusal family:
-`Lifted` for a physically lifted foreign owner, or `Domain(E)` preserving the operation's
-typed error. Only the explicit nested callback actor is OWN. Cached scalar Option
+`Lifted` for a physically lifted foreign owner, `Domain(E)` preserving the operation's
+typed error, or `Pending(CommandId)` for a resident foreign owner with a pending heavy
+dependency relevant to this read. FIFO ordering may queue heavy writes even while the
+owner remains resident; this is Pending, never Lifted or a stale successful read. An
+unrelated pending light overlay does not make every heavy read Pending. Only the explicit
+nested callback actor is OWN; its live reads remain own reads. Cached scalar Option
 accessors do not gain this error. Native and wasm share the Wire form, and the default
 uninhabited Infallible domain always refuses decoding. This schema foundation does not
 implement the deferred heavy-read or queued-write routing.

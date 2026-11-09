@@ -145,14 +145,28 @@ impl Channel {
         Ok(())
     }
 }
+#[cfg(test)]
+std::thread_local! {
+    // Only the calling test's I/O loop sees this clock. The first WouldBlock
+    // pause advances it to the deadline instead of waiting on the scheduler.
+    static TEST_NOW: std::cell::Cell<Option<Instant>> = const { std::cell::Cell::new(None) };
+}
 fn check_deadline(deadline: Instant) -> io::Result<()> {
-    if Instant::now() >= deadline {
+    let now = Instant::now();
+    #[cfg(test)]
+    let now = TEST_NOW.get().unwrap_or(now);
+    if now >= deadline {
         return Err(io::ErrorKind::TimedOut.into());
     }
     Ok(())
 }
 fn pause(deadline: Instant) -> io::Result<()> {
     check_deadline(deadline)?;
+    #[cfg(test)]
+    if TEST_NOW.get().is_some() {
+        TEST_NOW.set(Some(deadline));
+        return Ok(());
+    }
     std::thread::sleep(Duration::from_millis(2));
     Ok(())
 }

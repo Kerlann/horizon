@@ -2,6 +2,8 @@
 exclude = ["launcher", "crates/horizon-mod-registry", "third_party/wgpu-hal", "third_party/naga", "third_party/libmimalloc-sys", "tools/fixtures/paper-trace-mod"]
 members = [
     "crates/horizon-core",
+    "crates/horizon-platform",
+    "crates/horizon-addresses",
     "crates/horizon-mod-runtime",
     "crates/horizon-mod-render",
     "docs/modding/examples",

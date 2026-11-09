@@ -35,7 +35,7 @@ impl Game<'_> {
     /// Players are `Players`; `Monster`s, the dragon, hoglins, ghasts,
     /// phantoms, shulkers, slimes and a killer bunny are `Hostile`; dropped
     /// items and experience orbs `Ambient`; every other entity `Neutral`.
-    pub(super) fn entity_sound_source(&self, entity: EntityRef) -> Option<SoundSource> {
+    pub(super) fn uncached_entity_sound_source(&self, entity: EntityRef) -> Option<SoundSource> {
         Some(match self.native_entity_target(entity)? {
             Target::Player | Target::Guest(_) => SoundSource::Players,
             Target::Mob(id) => {
@@ -166,7 +166,7 @@ impl Game<'_> {
     }
     /// `Entity.isSpectator`: true for a player in spectator mode, false for
     /// every other entity.
-    pub(super) fn entity_spectator(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_spectator(&self, entity: EntityRef) -> Option<bool> {
         Some(match self.native_entity_target(entity)? {
             Target::Player => self.spectator(),
             Target::Guest(conn) => self.command_guest(conn)?.game_mode == 3,

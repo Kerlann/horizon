@@ -30,7 +30,7 @@ impl Game<'_> {
     }
 
     /// `EnderDragonPhaseManager.getCurrentPhase`.
-    pub(super) fn dragon_phase(&self, dragon: DragonRef) -> Option<NativeDragonPhase> {
+    pub(super) fn uncached_dragon_phase(&self, dragon: DragonRef) -> Option<NativeDragonPhase> {
         Some(self.native_dragon(dragon.entity())?.native_phase())
     }
 
@@ -59,13 +59,13 @@ impl Game<'_> {
     /// `EnderDragonFight.aliveCrystals`: the crystals the last scan found
     /// (every 100 ticks). None for a stale handle, a client, or a dragon
     /// outside the End or whose fight is not loaded.
-    pub(super) fn dragon_alive_crystals(&self, dragon: DragonRef) -> Option<i32> {
+    pub(super) fn uncached_dragon_alive_crystals(&self, dragon: DragonRef) -> Option<i32> {
         Some(self.native_dragon_fight(dragon)?.alive_crystals)
     }
 
     /// `EnderDragonFight.hasPreviouslyKilledDragon`. None as
     /// `alive_crystals` is.
-    pub(super) fn dragon_previously_killed(&self, dragon: DragonRef) -> Option<bool> {
+    pub(super) fn uncached_dragon_previously_killed(&self, dragon: DragonRef) -> Option<bool> {
         Some(self.native_dragon_fight(dragon)?.previously_killed)
     }
 

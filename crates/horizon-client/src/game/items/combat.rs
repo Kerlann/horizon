@@ -1,6 +1,7 @@
 //! The player's `CombatTracker`: the damage taken lately, who dealt it and
 //! where the player fell from, turned into the vanilla death message.
 use super::{Game, commands::Target};
+
 use horizon_client::{
     health::{Attack, HealthEvent},
     mobs::{Mob, Species, stuck::Stuck},

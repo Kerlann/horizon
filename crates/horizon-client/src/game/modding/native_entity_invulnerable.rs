@@ -64,7 +64,10 @@ impl Game<'_> {
     /// keeps no such field yet), the other kinds in the saved `Invulnerable`
     /// tag of their entity data (#916) — the tag the item damage path
     /// already refuses by.
-    pub(super) fn entity_permanently_invulnerable(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_permanently_invulnerable(
+        &self,
+        entity: EntityRef,
+    ) -> Option<bool> {
         match self.native_entity_target(entity)? {
             Target::Mob(id) => Some(self.mobs.iter().find(|m| m.id == id)?.invulnerable_flag),
             t @ (Target::Player | Target::Guest(_)) => {
@@ -133,7 +136,7 @@ impl Game<'_> {
     /// cooldown — and the saved `invulnerable_time` tag for the other kinds.
     /// Counted down by the base tick; `isTemporarilyInvulnerable` is it above
     /// zero. None for a stale handle or a kind that keeps none.
-    pub(super) fn entity_invulnerable_time(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn uncached_entity_invulnerable_time(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_target(entity)? {
             Target::Mob(id) => Some(self.mobs.iter().find(|m| m.id == id)?.invulnerable_time),
             t @ (Target::Player | Target::Guest(_)) => {
@@ -339,7 +342,10 @@ impl Game<'_> {
     /// `Entity.invulnerableTime` keeps open — a mob's own fields, a player's
     /// health, the saved tags for the other kinds (#916). None for a stale
     /// handle.
-    pub(super) fn entity_invulnerable_to_piercing_weapon(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_invulnerable_to_piercing_weapon(
+        &self,
+        entity: EntityRef,
+    ) -> Option<bool> {
         match self.native_entity_target(entity)? {
             Target::Mob(id) => Some(self.mobs.iter().find(|m| m.id == id)?.is_invulnerable()),
             t @ (Target::Player | Target::Guest(_)) => {
@@ -360,7 +366,7 @@ impl Game<'_> {
     /// `LivingEntity.damageCooldownTime`: 20 after a hit, counting down;
     /// while it is above 10 a hit does only what it deals beyond the last
     /// one. Mobs and players.
-    pub(super) fn entity_damage_cooldown_time(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn uncached_entity_damage_cooldown_time(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_target(entity)? {
             Target::Mob(id) => Some(self.mobs.iter().find(|m| m.id == id)?.invulnerable),
             t => Some(self.native_player_body(t)?.health.hurt.cooldown),

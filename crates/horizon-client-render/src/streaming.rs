@@ -624,6 +624,12 @@ pub struct Streaming {
     saves: Arc<dyn Saves>,
     /// Results received while `save` waited, for the next `update`.
     deferred: Vec<Done>,
+    /// Per-update collection scratch, retained to avoid allocator churn while
+    /// the view is moving or many columns are dirty.
+    light_scratch: Vec<(i64, i32, i32)>,
+    gone_scratch: Vec<(i32, i32)>,
+    mesh_candidates_scratch: Vec<(i64, i32, i32, SectionMask)>,
+    mesh_columns_scratch: Vec<((i32, i32), SectionMask)>,
     sequence: u64,
     pub center: (i32, i32),
     /// The view distance around `center`; below 0, no area there (a dedicated
@@ -1232,6 +1238,10 @@ impl Streaming {
             written: Default::default(),
             saves,
             deferred: Vec::new(),
+            light_scratch: Vec::new(),
+            gone_scratch: Vec::new(),
+            mesh_candidates_scratch: Vec::new(),
+            mesh_columns_scratch: Vec::new(),
             sequence: 0,
             center: (0, 0),
             radius: 8,
@@ -2037,13 +2047,21 @@ impl Streaming {
         if paused {
             return (uploads, removed);
         }
+        let mut light = std::mem::take(&mut self.light_scratch);
+        light.clear();
+        let mut gone = std::mem::take(&mut self.gone_scratch);
+        gone.clear();
+        let mut candidates = std::mem::take(&mut self.mesh_candidates_scratch);
+        candidates.clear();
+        let mut columns = std::mem::take(&mut self.mesh_columns_scratch);
+        columns.clear();
         let (protos, finishing) = (&self.protos, &self.finishing);
         self.decorated.retain(|k| {
             protos.contains_key(k) || finishing.contains(k) || world.chunks.contains_key(k)
         });
         // Finalize chunks whose neighbourhood is decorated.
-        let candidates: Vec<(i32, i32)> = self.protos.keys().copied().collect();
-        for (x, z) in candidates {
+        let finalize_candidates: Vec<(i32, i32)> = self.protos.keys().copied().collect();
+        for (x, z) in finalize_candidates {
             if world.chunks.contains_key(&(x, z))
                 || self.finishing.contains(&(x, z))
                 || !self.in_range(x, z, 1)
@@ -2200,8 +2218,6 @@ impl Streaming {
         // grew with the render distance and outlived the columns they
         // were queued for (#3629). What stays in `dirty_light` is asked
         // for again, from the current centre, as capacity frees.
-        let mut light: Vec<(i64, i32, i32)> = Vec::new();
-        let mut gone: Vec<(i32, i32)> = Vec::new();
         for &(x, z) in world.dirty_light.iter() {
             if !world.chunks.contains_key(&(x, z)) {
                 gone.push((x, z));
@@ -2209,12 +2225,12 @@ impl Streaming {
                 light.push((self.distance(x, z), x, z));
             }
         }
-        for key in gone {
+        for key in gone.drain(..) {
             world.dirty_light.remove(&key);
         }
         let room = (self.workers * 4).saturating_sub(self.lighting.len());
         nearest_first(&mut light, room);
-        for (_, x, z) in light {
+        for (_, x, z) in light.drain(..) {
             let Some(region) = self.light_region(world, x, z) else {
                 continue;
             };
@@ -2233,6 +2249,10 @@ impl Streaming {
         if !self.mesh {
             world.dirty_sections.clear();
             self.cover_current = false;
+            self.light_scratch = light;
+            self.gone_scratch = gone;
+            self.mesh_candidates_scratch = candidates;
+            self.mesh_columns_scratch = columns;
             return (uploads, removed);
         }
         // Meshing once the column and its neighbours are lit, and the column
@@ -2261,9 +2281,8 @@ impl Streaming {
         }
         // Column by column: the checks below hold for all of a column's
         // sections, and columns waiting for light cost one look per frame.
-        let mut candidates: Vec<(i64, i32, i32, SectionMask)> = Vec::new();
-        let columns: Vec<_> = world.dirty_sections.columns().collect();
-        for ((x, z), sections) in columns {
+        columns.extend(world.dirty_sections.columns());
+        for ((x, z), sections) in columns.iter().copied() {
             if !world.chunks.contains_key(&(x, z)) {
                 world.dirty_sections.take_column(x, z);
                 continue;
@@ -2301,7 +2320,7 @@ impl Streaming {
         // capacity frees; `requeue` then has a small queue to keep close.
         let room = (self.workers * 32).saturating_sub(self.meshing.len());
         nearest_first(&mut candidates, room);
-        for (_, x, z, sections) in candidates {
+        for (_, x, z, sections) in candidates.drain(..) {
             let Some(region) = Self::region(world, x, z) else {
                 continue;
             };
@@ -2337,6 +2356,10 @@ impl Streaming {
             }
         }
         self.cover_current = false;
+        self.light_scratch = light;
+        self.gone_scratch = gone;
+        self.mesh_candidates_scratch = candidates;
+        self.mesh_columns_scratch = columns;
         (uploads, removed)
     }
     fn schedule_generation(&mut self, world: &World, workers: usize) {

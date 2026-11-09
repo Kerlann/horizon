@@ -181,7 +181,7 @@ impl Game<'_> {
     }
     /// Whether the entity is made of parts that are entities of their own
     /// (`Entity.isMultipartEntity`): the dragon, not one of its parts.
-    pub(super) fn entity_is_multipart(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_is_multipart(&self, entity: EntityRef) -> Option<bool> {
         Some(matches!(
             self.native_entity_read_target(entity)?,
             Target::Dragon(_)
@@ -190,7 +190,7 @@ impl Game<'_> {
     /// The entities a multipart entity is made of (`Entity.getParts`), in
     /// `getSubEntities` order, each resolved as any handle is (`entity`): the dragon's
     /// parts have the eight ids after its own. Empty for any other entity.
-    pub(super) fn entity_parts(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
+    pub(super) fn uncached_entity_parts(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
         let Target::Dragon(id) = self.native_entity_read_target(entity)? else {
             return Some(Vec::new());
         };
@@ -672,7 +672,7 @@ impl Game<'_> {
 
     /// The entity's position (`Entity.position`): its feet, the middle of
     /// its box for a painting or an item frame.
-    pub(super) fn entity_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
+    pub(super) fn uncached_entity_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
         match self.native_entity_read_target(entity) {
             Some(target) => self.target_position(target),
             None => self
@@ -682,18 +682,18 @@ impl Game<'_> {
     }
     /// The block the entity's position is in (`Entity.blockPosition`). API
     /// 373.
-    pub(super) fn entity_block_position(&self, entity: EntityRef) -> Option<[i32; 3]> {
-        self.entity_position(entity)
+    pub(super) fn uncached_entity_block_position(&self, entity: EntityRef) -> Option<[i32; 3]> {
+        self.uncached_entity_position(entity)
             .map(|p| p.map(|v| v.floor() as i32))
     }
     /// The entity's yaw and pitch in degrees (`Entity.getYRot`, `getXRot`); 0
     /// for the kinds that don't turn. API 373.
-    pub(super) fn entity_rotation(&self, entity: EntityRef) -> Option<[f32; 2]> {
+    pub(super) fn uncached_entity_rotation(&self, entity: EntityRef) -> Option<[f32; 2]> {
         Some(self.target_rotation(self.native_entity_read_target(entity)?))
     }
     /// The entity's type (`Entity.getType`): `minecraft:zombie`. API
     /// 373.
-    pub(super) fn entity_kind(&self, entity: EntityRef) -> Option<String> {
+    pub(super) fn uncached_entity_kind(&self, entity: EntityRef) -> Option<String> {
         match self.native_entity_read_target(entity) {
             Some(t) => Some(self.target_type(t)),
             None => self
@@ -732,7 +732,7 @@ impl Game<'_> {
     }
     /// The level the entity is in (`Entity.level`): on a client, the
     /// client's level. API 373.
-    pub(super) fn entity_level(&self, entity: EntityRef) -> Option<LevelRef> {
+    pub(super) fn uncached_entity_level(&self, entity: EntityRef) -> Option<LevelRef> {
         let key = match self.native_entity_read_target(entity) {
             Some(t) if self.is_logical_server() => self.target_level(t).key(),
             Some(_) => self.native_level_key(),

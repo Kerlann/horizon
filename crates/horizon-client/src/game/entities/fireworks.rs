@@ -65,6 +65,13 @@ pub(super) struct Rocket {
     pub(super) item: ItemStack,
     /// `Entity.random`: what a mod's `Projectile.deflect` draws from.
     pub(super) random: horizon_core::random::LegacyRandom,
+    /// `Entity.onGround`: whether its last move was stopped going down (or
+    /// the one it was loaded with, until it moves).
+    pub(super) on_ground: bool,
+    /// `Projectile.hasBeenShot`: its first tick posts `projectile_shoot`.
+    pub(super) has_been_shot: bool,
+    /// `Entity.isSilent`: no launch sound.
+    pub(super) silent: bool,
 }
 impl Rocket {
     /// A rocket a server sent (`handleAddEntity`): placed and moved by it.
@@ -90,6 +97,10 @@ impl Rocket {
             angled: false,
             item,
             random: horizon_client::projectiles::unique_random(position),
+            on_ground: false,
+            // The server posts the shot.
+            has_been_shot: true,
+            silent: false,
         }
     }
     /// `Projectile.setOwner`; the UUID is kept only for an owner `who` can't name.
@@ -125,6 +136,8 @@ impl Rocket {
                     self.owner_uuid
                 },
                 left_owner: self.left_owner,
+                on_ground: self.on_ground,
+                has_been_shot: self.has_been_shot,
             },
             uuid,
             raw,
@@ -137,7 +150,7 @@ impl Rocket {
             .unwrap_or_else(|| ItemStack::new("minecraft:firework_rocket", 1));
         let (_, explosions) = fireworks_of(&item);
         Self {
-            rotation: [0.0, 0.0],
+            rotation: r.rotation,
             join: Default::default(),
             id: 0,
             position: r.position,
@@ -155,7 +168,29 @@ impl Rocket {
             angled: r.angled,
             item,
             random: horizon_client::projectiles::unique_random(r.position),
+            on_ground: r.on_ground,
+            has_been_shot: r.has_been_shot,
+            silent: r.silent,
         }
+    }
+    /// `Entity.load` over a live rocket (`/data merge`, `/data modify`): what
+    /// [`Self::from_nbt`] reads replaces its own; it keeps its id and what it
+    /// boosts.
+    pub(super) fn load_nbt(&mut self, r: RocketNbt) {
+        let loaded = Self::from_nbt(r);
+        self.rotation = loaded.rotation;
+        self.has_been_shot = loaded.has_been_shot;
+        self.silent = loaded.silent;
+        self.position = loaded.position;
+        self.previous = loaded.position;
+        self.velocity = loaded.velocity;
+        self.life = loaded.life;
+        self.lifetime = loaded.lifetime;
+        self.explosions = loaded.explosions;
+        self.item = loaded.item;
+        self.angled = loaded.angled;
+        self.left_owner = loaded.left_owner;
+        self.on_ground = loaded.on_ground;
     }
     /// One tick of a server's client: the rocket flies on by itself between
     /// the server's updates (a rocket that follows an entity is placed by the
@@ -166,6 +201,17 @@ impl Rocket {
             self.free_flight(scene);
         }
         self.life += 1;
+    }
+    /// `Projectile.updateRotation`: a fifth of the way from `old` (yaw,
+    /// pitch) toward its motion's direction, the short way round.
+    fn update_rotation(&mut self, old: [f32; 2]) {
+        let v = self.velocity;
+        let horizontal = (v.x * v.x + v.z * v.z).sqrt();
+        let atan2 = horizon_core::geometry::trig::atan2_degrees;
+        self.rotation = [
+            horizon_client::arrows::lerp_rotation(old[0], atan2(v.x, v.z)),
+            horizon_client::arrows::lerp_rotation(old[1], atan2(v.y, horizontal)),
+        ];
     }
     /// The move of a rocket attached to no entity: sped up and rising, or an
     /// angled one's own motion.
@@ -209,6 +255,8 @@ impl Rocket {
             return;
         };
         let horizontal = (moved.x - wanted.x).abs() > 1e-7 || (moved.z - wanted.z).abs() > 1e-7;
+        // Entity.move: on the ground when a move down was stopped.
+        self.on_ground = wanted.y < 0.0 && moved.y != wanted.y;
         self.position = Vec3::new(
             self.position.x + moved.x,
             self.position.y + moved.y,
@@ -277,6 +325,9 @@ impl Game<'_> {
             angled: false,
             item: stack.clone(),
             random,
+            on_ground: false,
+            has_been_shot: false,
+            silent: false,
         }
     }
     /// `FireworkRocketItem.useOn`: launch from the clicked point.
@@ -418,6 +469,14 @@ impl Game<'_> {
             }
             let mut r = self.rockets.remove(i);
             r.previous = r.position;
+            // Entity.baseTick's setOldRot: where updateRotation eases from.
+            let old_rotation = r.rotation;
+            // Projectile.tick: the first tick posts the shot, with its owner.
+            if !r.has_been_shot {
+                let at = [r.position.x, r.position.y, r.position.z];
+                self.projectile_shoot_event(r.owner, r.guest, at);
+                r.has_been_shot = true;
+            }
             // Projectile.tick: whether it has left its owner, before it moves.
             let owner = self.rocket_owner(&r);
             if !r.left_owner {
@@ -484,8 +543,9 @@ impl Game<'_> {
                 Some(RocketHit::Block) if !r.explosions.is_empty() => r.life = r.lifetime,
                 Some(RocketHit::Block) | None => {}
             }
+            r.update_rotation(old_rotation);
             let at = [r.position.x, r.position.y, r.position.z];
-            if r.life == 0 {
+            if r.life == 0 && !r.silent {
                 self.audio.play(
                     "minecraft:entity.firework_rocket.launch",
                     Some(at),
@@ -793,8 +853,11 @@ impl Game<'_> {
                 (p.y + 0.2125).floor() as i32,
                 p.z.floor() as i32,
             );
+            // Frame generation and temporal upscaling follow its own flight.
+            self.mark_motion(out.len(), Self::MOTION_OBJECT | u64::from(r.id));
             self.submit_item_world(&state, pose, vertex_light(light), out);
         }
+        self.mark_motion(out.len(), 0);
     }
 }
 
@@ -806,6 +869,67 @@ fn use_on_passes(fall_flying: bool) -> bool {
 
 #[cfg(test)]
 mod tests {
+    /// A flying rocket's vertices carry its own id for frame generation's and a temporal
+    /// upscaler's motion vectors (`Frame::entity_motion`), so the motion matched between
+    /// two frames is its flight, not only the camera's.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_flying_rocket_opens_a_motion_run_of_its_own() {
+        use crate::game::{Audio, Options, Progress, Settings, load_resources};
+        use horizon_core::geometry::Vec3;
+
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let settings = Settings::default();
+        let loaded = load_resources(
+            horizon_assets::resource_source::ResourceRoot::directory(root.clone()),
+            Vec::new(),
+            None,
+            &root,
+            &settings,
+            std::time::Instant::now(),
+            false,
+            crate::game::execution_role::ExecutionRole::IntegratedServer,
+            &Progress::new(),
+            &mut |_, _| unreachable!(),
+        )
+        .unwrap();
+        let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
+        options.resources = root.clone();
+        let res: &'static _ = Box::leak(Box::new(loaded.resources));
+        let mut game = super::Game::new(
+            res,
+            loaded.pack,
+            loaded.gui.unwrap(),
+            options,
+            settings,
+            Audio::silent(&horizon_assets::resource_source::ResourceSource::directory(
+                root.clone(),
+            )),
+            None,
+        )
+        .unwrap();
+        let camera = glam::DVec3::new(0.5, 64.0, 0.5);
+        let start = Vec3::new(0.5, 64.0, 4.5);
+        game.rockets
+            .push(super::Rocket::remote(77, start, Vec3::ZERO));
+        let id = super::Game::MOTION_OBJECT | 77;
+        // One frame's motion runs: the rocket's vertices open a run under its own id, and
+        // a camera-only run (id 0) closes it so nothing drawn after takes its motion.
+        game.entity_motion.borrow_mut().clear();
+        let mut out = Vec::new();
+        game.rocket_geometry(camera, 1.0, &mut out);
+        let marks = game.entity_motion.borrow().clone();
+        let at = marks
+            .iter()
+            .position(|m| m.1 == id)
+            .expect("the rocket's run");
+        assert_eq!(
+            marks[at].0, 0,
+            "the run starts at the rocket's first vertex"
+        );
+        assert_eq!(marks.last(), Some(&(out.len() as u32, 0)));
+    }
+
     #[test]
     fn use_on_passes_only_while_gliding() {
         assert!(super::use_on_passes(true));

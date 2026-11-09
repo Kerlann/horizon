@@ -967,6 +967,8 @@ mod crack_sound_tests {
         let mut test_level = crate::health::TestLevel::new(0);
         let level = &mut test_level.level();
         let mut m = golem();
+        // Absorption I: max_absorption 4, which a hit clamps the amount to.
+        m.add_effect("absorption", 600, 0);
         m.absorption = 4.0;
         assert!(m.damage(level, 1.5, Damage::player([0.0, 0.0, 1.0])));
         assert_eq!(m.dealt_absorbed, 15);
@@ -977,6 +979,7 @@ mod crack_sound_tests {
         m.damage(level, 2.0, Damage::player([0.0, 0.0, 1.0]));
         assert_eq!(m.dealt_absorbed, 40);
         let mut other = golem();
+        other.add_effect("absorption", 600, 0);
         other.absorption = 4.0;
         other.damage(level, 1.5, Damage::of(crate::mobs::DamageKind::Generic));
         assert_eq!(other.dealt_absorbed, 0);

@@ -206,7 +206,10 @@ impl Game<'_> {
 
     /// `Merchant.getTradingPlayer`: the player whose trading screen is open on
     /// it. None when nobody trades, or the screen is the host window's.
-    pub(super) fn merchant_trading_player(&self, merchant: MerchantRef) -> Option<PlayerRef> {
+    pub(super) fn uncached_merchant_trading_player(
+        &self,
+        merchant: MerchantRef,
+    ) -> Option<PlayerRef> {
         let index = self.native_merchant_index(merchant)?;
         let conn = self.lan_trade_conn(self.mobs[index].id)?;
         self.player(self.lan_trade_player(conn)?)
@@ -214,7 +217,7 @@ impl Game<'_> {
 
     /// `VillagerData.profession`, a registry id (`minecraft:farmer`; none is
     /// `minecraft:none`). None for a wandering trader.
-    pub(super) fn merchant_profession(&self, merchant: MerchantRef) -> Option<String> {
+    pub(super) fn uncached_merchant_profession(&self, merchant: MerchantRef) -> Option<String> {
         let mob = &self.mobs[self.native_villager_index(merchant)?];
         Some(mob.extra.profession.id())
     }
@@ -250,7 +253,7 @@ impl Game<'_> {
     }
 
     /// `VillagerData.level`, at least 1.
-    pub(super) fn merchant_level(&self, merchant: MerchantRef) -> Option<i32> {
+    pub(super) fn uncached_merchant_level(&self, merchant: MerchantRef) -> Option<i32> {
         let index = self.native_villager_index(merchant)?;
         Some(self.merchant_read(index, |_, _, level| level.max(1)))
     }
@@ -271,7 +274,7 @@ impl Game<'_> {
     }
 
     /// `VillagerData.type`, a registry id (`minecraft:plains`).
-    pub(super) fn merchant_villager_type(&self, merchant: MerchantRef) -> Option<String> {
+    pub(super) fn uncached_merchant_villager_type(&self, merchant: MerchantRef) -> Option<String> {
         let mob = &self.mobs[self.native_villager_index(merchant)?];
         let name = VILLAGER_TYPES[mob.extra.variant as usize % VILLAGER_TYPES.len()];
         Some(format!("minecraft:{name}"))
@@ -301,7 +304,7 @@ impl Game<'_> {
     }
 
     /// `Villager.getVillagerXp`.
-    pub(super) fn merchant_xp(&self, merchant: MerchantRef) -> Option<i32> {
+    pub(super) fn uncached_merchant_xp(&self, merchant: MerchantRef) -> Option<i32> {
         let index = self.native_villager_index(merchant)?;
         Some(self.merchant_read(index, |_, xp, _| xp))
     }

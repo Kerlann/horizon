@@ -296,7 +296,10 @@ impl Game<'_> {
         // opens shows as the 3x3 size.
         let craft_size = std::mem::replace(&mut self.craft_size, 2);
         let craft_table = self.craft_table.take();
-        let craft_grid = std::mem::replace(&mut self.craft_grid, vec![None; 9]);
+        play.craft_grid.clear();
+        play.craft_grid.resize(9, None);
+        let craft_grid =
+            std::mem::replace(&mut self.craft_grid, std::mem::take(&mut play.craft_grid));
         let container = self.container.take();
         let mining = std::mem::replace(&mut self.mining, play.mining.take());
         let destroy_delay = std::mem::replace(&mut self.destroy_delay, play.destroy_delay);
@@ -405,9 +408,15 @@ impl Game<'_> {
             std::mem::take(&mut play.modifiers),
         );
         // Its worn armour on its attributes, when it changed.
-        let mut equipped: Vec<Option<ItemStack>> = self.armor.to_vec();
-        equipped.push(self.inventory.get(self.selected).cloned().flatten());
-        if play.equipped.as_ref() != Some(&equipped) {
+        let selected_item = self.inventory.get(self.selected).and_then(Option::as_ref);
+        let unchanged = play.equipped.as_deref().is_some_and(|eq| {
+            eq.len() == self.armor.len() + 1
+                && eq[..self.armor.len()] == self.armor[..]
+                && eq[self.armor.len()].as_ref() == selected_item
+        });
+        if !unchanged {
+            let mut equipped: Vec<Option<ItemStack>> = self.armor.to_vec();
+            equipped.push(selected_item.cloned());
             self.apply_equipment();
             play.equipped = Some(equipped);
         }
@@ -750,7 +759,7 @@ impl Game<'_> {
         let opened_table = (std::mem::replace(&mut self.craft_size, craft_size) == 3)
             .then_some(guest_table)
             .flatten();
-        self.craft_grid = craft_grid;
+        play.craft_grid = std::mem::replace(&mut self.craft_grid, craft_grid);
         let opened_station = std::mem::replace(&mut self.station, host_station);
         let bed = std::mem::replace(&mut self.sleeping, sleeping);
         let guest_sleep_timer = std::mem::replace(&mut self.sleep_timer, sleep_timer);
@@ -1021,6 +1030,9 @@ impl Game<'_> {
         }
         // The turn's teleports are in the hub now: the mods hear them.
         self.flush_teleport_notes();
+        if let Some(host) = self.lan.as_ref() {
+            refresh_building_player(host, conn);
+        }
         // An inner turn can move, kill, or change the mode of a hub-owned body.
         if let (Some(actor), Some(host)) = (self.lan_acting, self.lan.as_ref()) {
             self.lan_building_boxes =

@@ -2295,3 +2295,7 @@ mod tests {
         assert_eq!(pulled, Vec3::new(1.5, 0.2, 0.0));
     }
 }
+
+#[cfg(test)]
+#[path = "fishing_tests/block_hit.rs"]
+mod incoming_block_hit_tests;

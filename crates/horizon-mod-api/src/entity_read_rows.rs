@@ -42,6 +42,10 @@ pub enum EntityReadError<E = core::convert::Infallible> {
     Lifted,
     /// The operation's original typed domain error.
     Domain(E),
+    /// A resident foreign source has a pending heavy dependency for this read.
+    /// Identifies the latest relevant command, not an unrelated light overlay.
+    /// Physical lifting remains Lifted; OWN live reads remain own reads.
+    Pending(CommandId),
 }
 
 #[cfg(test)]
@@ -82,6 +86,31 @@ mod tests {
         let mut writer = Writer::new();
         writer.put(&row);
         assert_eq!(writer.bytes(), bytes);
+    }
+
+    #[test]
+    fn pending_refusal_preserves_command_metadata_and_generic_domain() {
+        // Independent wire input: Pending is case 2, followed by two full u64s.
+        // Domain remains case 1, including when the default domain is uninhabited.
+        let bytes = [
+            2, 0, 0, 0, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 8, 7, 6, 5, 4, 3, 2, 1,
+        ];
+        let id = CommandId {
+            epoch: NativeWorldEpoch::new(0x1122_3344_5566_7788),
+            sequence: 0x0102_0304_0506_0708,
+        };
+        let pending: EntityReadError = Reader::decode(&bytes).unwrap();
+        assert_eq!(pending, EntityReadError::Pending(id));
+        let mut writer = Writer::new();
+        writer.put(&pending);
+        assert_eq!(writer.bytes(), bytes);
+        let typed: EntityReadError<TextFormError> = Reader::decode(&bytes).unwrap();
+        assert_eq!(typed, EntityReadError::Pending(id));
+        writer.clear();
+        writer.put(&typed);
+        assert_eq!(writer.bytes(), bytes);
+        assert!(Reader::decode::<EntityReadError>(&bytes[..19]).is_err());
+        assert!(Reader::decode::<EntityReadError>(&[3, 0, 0, 0]).is_err());
     }
 
     #[test]

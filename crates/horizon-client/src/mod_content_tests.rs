@@ -745,6 +745,7 @@ fn creative_tabs_keep_vanilla_items_missing_from_search() {
         items: Vec::new(),
         vanilla_items: tab.items.iter().cloned().collect(),
         effects: Vec::new(),
+        fluids: Vec::new(),
         entity_types: Vec::new(),
         block_entity_types: Vec::new(),
         block_entity_factories: BTreeMap::new(),
@@ -925,6 +926,9 @@ fn allocated_ids_follow_mod_and_entry_order_after_vanilla() {
             "minecraft:iron_block":{"protocol_id":11}}},
             "minecraft:mob_effect":{"entries":{"minecraft:speed":{"protocol_id":0},
             "minecraft:luck":{"protocol_id":25}}},
+            "minecraft:fluid":{"entries":{"minecraft:empty":{"protocol_id":0},
+            "minecraft:flowing_water":{"protocol_id":1},"minecraft:water":{"protocol_id":2},
+            "minecraft:flowing_lava":{"protocol_id":3},"minecraft:lava":{"protocol_id":4}}},
             "minecraft:block_entity_type":{"entries":{"minecraft:chest":{"protocol_id":1}}}}"#,
     )
     .unwrap();
@@ -951,6 +955,10 @@ fn allocated_ids_follow_mod_and_entry_order_after_vanilla() {
                 "data/ruby/horizon/mob_effect/glow.json",
                 r#"{"category":"beneficial","color":16711680}"#,
             ),
+            (
+                "data/ruby/horizon/fluid/honey.json",
+                r#"{"sprite":"ruby:block/h"}"#,
+            ),
         ],
     );
     let alpha = folder_mod(
@@ -972,6 +980,10 @@ fn allocated_ids_follow_mod_and_entry_order_after_vanilla() {
             (
                 "data/alpha/horizon/mob_effect/dull.json",
                 r#"{"category":"neutral","color":0}"#,
+            ),
+            (
+                "data/alpha/horizon/fluid/molten/tin.json",
+                r#"{"sprite":"alpha:block/s"}"#,
             ),
         ],
     );
@@ -1016,6 +1028,9 @@ fn allocated_ids_follow_mod_and_entry_order_after_vanilla() {
                 "minecraft:iron_block":{"protocol_id":11}}},
                 "minecraft:mob_effect":{"entries":{"minecraft:speed":{"protocol_id":0},
                 "minecraft:luck":{"protocol_id":25}}},
+                "minecraft:fluid":{"entries":{"minecraft:empty":{"protocol_id":0},
+                "minecraft:flowing_water":{"protocol_id":1},"minecraft:water":{"protocol_id":2},
+                "minecraft:flowing_lava":{"protocol_id":3},"minecraft:lava":{"protocol_id":4}}},
                 "minecraft:block_entity_type":{"entries":{"minecraft:chest":{"protocol_id":1}}}}"#,
         )
         .unwrap();
@@ -1048,11 +1063,18 @@ fn allocated_ids_follow_mod_and_entry_order_after_vanilla() {
         assert_eq!(id("minecraft:mob_effect", "alpha:dull"), 26);
         assert_eq!(id("minecraft:mob_effect", "alpha:zap"), 27);
         assert_eq!(id("minecraft:mob_effect", "ruby:glow"), 28);
+        // Each mod fluid after vanilla's, by id: its source, then its flowing form.
+        assert_eq!(id("minecraft:fluid", "minecraft:lava"), 4);
+        assert_eq!(id("minecraft:fluid", "alpha:molten/tin"), 5);
+        assert_eq!(id("minecraft:fluid", "alpha:flowing_molten/tin"), 6);
+        assert_eq!(id("minecraft:fluid", "ruby:honey"), 7);
+        assert_eq!(id("minecraft:fluid", "ruby:flowing_honey"), 8);
 
         // `/effect` and the mob_effect arguments check ids against this table.
         let mut commands: J = serde_json::from_str(
             r#"{"blocks":[],"items":[],"effects":["minecraft:speed"],
-                "by_registry":{"minecraft:mob_effect":{"ids":["minecraft:speed"]}}}"#,
+                "by_registry":{"minecraft:mob_effect":{"ids":["minecraft:speed"]},
+                "minecraft:fluid":{"ids":["minecraft:water"]}}}"#,
         )
         .unwrap();
         plan.json("command-registries.json", &mut commands).unwrap();
@@ -1063,6 +1085,17 @@ fn allocated_ids_follow_mod_and_entry_order_after_vanilla() {
         assert_eq!(
             commands["by_registry"]["minecraft:mob_effect"]["ids"],
             serde_json::json!(want)
+        );
+        // Fluid tag files and fluid arguments check ids against this table.
+        assert_eq!(
+            commands["by_registry"]["minecraft:fluid"]["ids"],
+            serde_json::json!([
+                "minecraft:water",
+                "alpha:molten/tin",
+                "alpha:flowing_molten/tin",
+                "ruby:honey",
+                "ruby:flowing_honey"
+            ])
         );
         drop(plan);
 

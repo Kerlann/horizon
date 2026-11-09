@@ -617,34 +617,105 @@ fn culls_back_faces(key: &str) -> bool {
     matches!(key, "minecraft:bat#main" | "minecraft:turtle_baby#main")
 }
 
+/// Vanilla type geometry, narrowed to Java floats once at the resource boundary
+/// and widened for engine geometry calculations. Includes nonliving types.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct EntityTypeGeometry {
+    pub width: f64,
+    pub height: f64,
+    pub eye_height: f64,
+}
+
+/// Resource-owned geometry for every entity type, independent of living models.
+#[derive(Debug)]
+pub struct EntityTypeGeometries(HashMap<String, EntityTypeGeometry>);
+
+impl EntityTypeGeometries {
+    pub fn get(&self, id: &str) -> Option<EntityTypeGeometry> {
+        self.0.get(id).copied()
+    }
+
+    fn parse(document: &Value) -> crate::Result<Self> {
+        let rows = document
+            .as_object()
+            .ok_or("entity-types.json must be an object")?;
+        let mut geometry = HashMap::with_capacity(rows.len());
+        for (id, row) in rows {
+            let mut dimensions = [0.0; 3];
+            for (index, field) in ["width", "height", "eye_height"].into_iter().enumerate() {
+                let raw = row[field]
+                    .as_f64()
+                    .ok_or_else(|| format!("entity type {id}: {field} must be numeric"))?;
+                // Resource declarations cross Java's float boundary, including
+                // negative values and overflow to infinity. Do not impose a
+                // stricter numerical domain than EntityDimensions' float fields.
+                dimensions[index] = f64::from(raw as f32);
+            }
+            let [width, height, eye_height] = dimensions;
+            geometry.insert(
+                id.clone(),
+                EntityTypeGeometry {
+                    width,
+                    height,
+                    eye_height,
+                },
+            );
+        }
+        Ok(Self(geometry))
+    }
+}
+
 pub struct MobTypes {
     pub types: HashMap<String, MobType>,
+    pub geometry: EntityTypeGeometries,
 }
 impl MobTypes {
     pub fn load(root: &Path) -> crate::Result<Self> {
-        Self::load_with_models(root, true, None)
+        Self::load_with_models(root, true, None, None)
+    }
+
+    /// Load client mob data using defaults already decoded by the resource
+    /// bootstrap. This avoids decoding `items.json` a second time for Allay
+    /// inventory limits.
+    pub fn load_with_defaults(
+        root: &Path,
+        defaults: &horizon_world::item_defaults::Defaults,
+    ) -> crate::Result<Self> {
+        Self::load_with_models(root, true, None, Some(defaults))
     }
 
     /// The dedicated server needs entity facts and AI, but never their render
     /// geometry. Keep one empty part for the fields shared with the client
     /// rather than parsing and retaining every entity-model layer.
     pub fn load_for_server(root: &Path) -> crate::Result<Self> {
-        Self::load_with_models(root, false, None)
+        Self::load_with_models(root, false, None, None)
     }
 
     /// The client startup already parsed `entity-models.json` for the handoff
     /// and the other model loaders; read the model layers from that copy.
     pub fn load_with_document(root: &Path, document: &EntityModelDocument) -> crate::Result<Self> {
-        Self::load_with_models(root, true, Some(document))
+        Self::load_with_models(root, true, Some(document), None)
+    }
+
+    /// The client startup already has both the entity model document and the
+    /// item defaults. Reuse both instead of decoding either file again.
+    pub fn load_with_document_and_defaults(
+        root: &Path,
+        document: &EntityModelDocument,
+        defaults: &horizon_world::item_defaults::Defaults,
+    ) -> crate::Result<Self> {
+        Self::load_with_models(root, true, Some(document), Some(defaults))
     }
 
     fn load_with_models(
         root: &Path,
         models_needed: bool,
         document: Option<&EntityModelDocument>,
+        item_defaults: Option<&horizon_world::item_defaults::Defaults>,
     ) -> crate::Result<Self> {
         let bytes = fs::read(root.join("entity-types.json"))?;
         let types: Value = serde_json::from_slice(&bytes)?;
+        let geometry = EntityTypeGeometries::parse(&types)?;
         let exact = exact_attributes(&bytes);
         let models = models_needed
             .then(|| -> crate::Result<EntityModelDocument> {
@@ -671,24 +742,43 @@ impl MobTypes {
         };
         // The Allay's InventoryCarrier loading needs item limits before a
         // Game exists. Other mob-only resource sets need no item data.
-        let items: HashMap<String, Value> = if types.get("minecraft:allay").is_some() {
-            serde_json::from_slice(&fs::read(root.join("items.json"))?)?
-        } else {
-            HashMap::new()
-        };
-        let item_stack_limits: Arc<HashMap<String, u32>> = Arc::new(
-            items
-                .into_iter()
-                .map(|(id, components)| {
-                    (
-                        id,
-                        components["minecraft:max_stack_size"]
-                            .as_u64()
-                            .unwrap_or(64) as u32,
+        let item_stack_limits: Arc<HashMap<String, u32>> = if types.get("minecraft:allay").is_some()
+        {
+            match item_defaults {
+                Some(items) => Arc::new(
+                    items
+                        .iter()
+                        .map(|(id, components)| {
+                            (
+                                id.clone(),
+                                components["minecraft:max_stack_size"]
+                                    .as_u64()
+                                    .unwrap_or(64) as u32,
+                            )
+                        })
+                        .collect(),
+                ),
+                None => {
+                    let items: HashMap<String, Value> =
+                        serde_json::from_slice(&fs::read(root.join("items.json"))?)?;
+                    Arc::new(
+                        items
+                            .into_iter()
+                            .map(|(id, components)| {
+                                (
+                                    id,
+                                    components["minecraft:max_stack_size"]
+                                        .as_u64()
+                                        .unwrap_or(64) as u32,
+                                )
+                            })
+                            .collect(),
                     )
-                })
-                .collect(),
-        );
+                }
+            }
+        } else {
+            Arc::new(HashMap::new())
+        };
         let mut out = HashMap::new();
         // A content mod's living type (its row names a vanilla `template`) is
         // its template's mob under its own id: the template's model, sounds
@@ -745,9 +835,9 @@ impl MobTypes {
                 MobType {
                     species: def.species,
                     item_stack_limits: item_stack_limits.clone(),
-                    width: t["width"].as_f64().unwrap_or(0.6),
-                    height: t["height"].as_f64().unwrap_or(1.8),
-                    eye_height: t["eye_height"].as_f64().unwrap_or(1.6),
+                    width: geometry.0[&id].width,
+                    height: geometry.0[&id].height,
+                    eye_height: geometry.0[&id].eye_height,
                     max_health: fields.max_health,
                     speed: fields.speed,
                     flying_speed: fields.flying_speed,
@@ -804,7 +894,10 @@ impl MobTypes {
                 },
             );
         }
-        Ok(Self { types: out })
+        Ok(Self {
+            types: out,
+            geometry,
+        })
     }
 }
 pub use horizon_client_core::who::Who;
@@ -2145,6 +2238,17 @@ pub enum MobEvent {
         event: &'static str,
         at: [f64; 3],
         source: u32,
+        state: horizon_world::registry::BlockStateId,
+    },
+    /// `Level.gameEvent` from the block a mob landed on (`FarmlandBlock.turnToBaseBlock`'s
+    /// BLOCK_CHANGE from the mob that trampled it, `TurtleEggBlock.decreaseEggs`' and
+    /// `Level.destroyBlock`'s BLOCK_DESTROY with no source): the game posts it, a
+    /// sculk sensor, a calibrated sensor and a warden hear it.
+    LandingGameEvent {
+        event: &'static str,
+        at: [i32; 3],
+        /// The entity that caused the change, `None` for a destroyed egg.
+        source: Option<u32>,
         state: horizon_world::registry::BlockStateId,
     },
     AttackPlayer(f32, [f64; 3]),
@@ -3904,13 +4008,32 @@ pub fn entity_random(id: u32, position: Vec3) -> LegacyRandom {
     let _ = random.next_int();
     random
 }
+/// The own random (`Entity.random`) of a living entity the server makes, as
+/// `LivingEntity.<init>` leaves it: its first two draws made the UUID
+/// (`Mth.createInsecureUUID`), returned here, and the next one the yaw, which
+/// every spawn path then replaces. Constructor draws of the kind come after.
+pub fn living_random() -> (LegacyRandom, [i32; 4]) {
+    let mut random = crate::random_source::entity();
+    let uuid = crate::save::insecure_uuid(&mut random);
+    let _yaw = random.next_float();
+    (random, uuid)
+}
 impl Mob {
     /// A mob as its authoritative side builds it — spawned, or loaded from a
     /// chunk (`Mob.finalizeSpawn` runs around it): the species' own goals, then
     /// the goals every mod part attached to its type (#1077), vanilla's
     /// `registerGoals` moment.
     pub fn new(id: u32, kind: Arc<MobType>, position: Vec3, yaw: f32) -> Self {
-        let mut mob = Self::new_remote(id, kind, position, yaw);
+        Self::with_random(id, kind, position, yaw, entity_random(id, position))
+    }
+    pub fn with_random(
+        id: u32,
+        kind: Arc<MobType>,
+        position: Vec3,
+        yaw: f32,
+        random: LegacyRandom,
+    ) -> Self {
+        let mut mob = Self::remote_with_random(id, kind, position, yaw, random);
         // The parts a mod attached to this entity type add their goals right
         // after the species' own (#1077): vanilla's `registerGoals` moment,
         // which belongs to the authoritative construction. A type with no
@@ -3927,7 +4050,15 @@ impl Mob {
     /// it for the mob itself, and a copy's would only allocate goal state no
     /// tick runs (#1077).
     pub fn new_remote(id: u32, kind: Arc<MobType>, position: Vec3, yaw: f32) -> Self {
-        let random = entity_random(id, position);
+        Self::remote_with_random(id, kind, position, yaw, entity_random(id, position))
+    }
+    fn remote_with_random(
+        id: u32,
+        kind: Arc<MobType>,
+        position: Vec3,
+        yaw: f32,
+        random: LegacyRandom,
+    ) -> Self {
         let mut mob = Self {
             attachment_lifetime: Default::default(),
             join: Default::default(),
@@ -5059,7 +5190,13 @@ impl Mob {
         ) {
             through = damage - taken;
         }
-        self.absorption = (self.absorption - (damage - through)).max(0.0);
+        let left = self.absorption - (damage - through);
+        // LivingEntity.setAbsorptionAmount clamps the remainder to the attribute maximum.
+        self.absorption = if left < 0.0 {
+            0.0
+        } else {
+            left.min(armor::max_absorption(self))
+        };
         through
     }
     /// `LivingEntity.checkTotemDeathProtection`: the first hand with a
@@ -5385,7 +5522,7 @@ impl EntityModelDocument {
     }
 
     /// The parsed document, for loaders that read several keys from it.
-    pub(crate) fn value(&self) -> &Value {
+    pub fn value(&self) -> &Value {
         &self.0
     }
 }
@@ -7623,6 +7760,8 @@ mod hurt_cooldown_incoming_tests {
         let mut test_level = crate::health::TestLevel::new(0);
         let level = &mut test_level.level();
         let mut m = mob(Species::Pig);
+        // Absorption I gives max_absorption 4, so the 1.5 remainder is valid.
+        m.add_effect("absorption", 600, 0);
         m.absorption = 1.5;
         assert!(m.damage(level, 1.0, Damage::of(DamageKind::Generic)));
         assert_eq!((m.health, m.absorption), (40.0, 0.5));
@@ -7931,5 +8070,77 @@ mod hidden_speed_mob_tick_tests {
             assert!(m.effects_dirty);
             assert!(!m.has_effect("minecraft:absorption"));
         }
+    }
+}
+
+#[cfg(test)]
+mod entity_type_geometry_tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn nonliving_geometry_is_resource_owned_and_uses_java_float_precision() {
+        let first = EntityTypeGeometries::parse(&json!({
+            "minecraft:marker": {"width":0.0,"height":0.0,"eye_height":0.0},
+            "minecraft:area_effect_cloud": {"width":6.0,"height":0.5,"eye_height":0.1}
+        }))
+        .unwrap();
+        let second = EntityTypeGeometries::parse(&json!({
+            "minecraft:area_effect_cloud": {"width":2.0,"height":1.0,"eye_height":0.2}
+        }))
+        .unwrap();
+        assert_eq!(
+            first.get("minecraft:marker"),
+            Some(EntityTypeGeometry {
+                width: 0.0,
+                height: 0.0,
+                eye_height: 0.0
+            })
+        );
+        let old = first.get("minecraft:area_effect_cloud").unwrap();
+        assert_eq!(old.width, 6.0);
+        assert_eq!(old.height, 0.5);
+        assert_eq!(old.eye_height, f64::from(f32::from_bits(0x3dcc_cccd)));
+        assert_eq!(
+            second.get("minecraft:area_effect_cloud").unwrap().width,
+            2.0
+        );
+        assert_eq!(first.get("minecraft:area_effect_cloud"), Some(old));
+        assert_eq!(second.get("minecraft:marker"), None);
+    }
+
+    #[test]
+    fn geometry_preserves_float_domain_without_invented_size_limits() {
+        let table = EntityTypeGeometries::parse(&json!({
+            "test:unusual": {"width":-2.5,"height":1e300,"eye_height":-0.25}
+        }))
+        .unwrap();
+        assert_eq!(
+            table.get("test:unusual"),
+            Some(EntityTypeGeometry {
+                width: -2.5,
+                height: f64::INFINITY,
+                eye_height: -0.25
+            })
+        );
+    }
+
+    #[test]
+    fn malformed_geometry_is_refused_at_the_resource_boundary() {
+        for field in ["width", "height", "eye_height"] {
+            for invalid in [json!(null), json!("1.0"), json!(false)] {
+                let mut row = json!({"width":1.0,"height":2.0,"eye_height":1.5});
+                row[field] = invalid;
+                let error = EntityTypeGeometries::parse(&json!({"test:bad":row}))
+                    .unwrap_err()
+                    .to_string();
+                assert!(error.contains("test:bad"), "{error}");
+                assert!(error.contains(field), "{error}");
+            }
+            let mut row = json!({"width":1.0,"height":2.0,"eye_height":1.5});
+            row.as_object_mut().unwrap().remove(field);
+            assert!(EntityTypeGeometries::parse(&json!({"test:missing":row})).is_err());
+        }
+        assert!(EntityTypeGeometries::parse(&json!([])).is_err());
     }
 }
