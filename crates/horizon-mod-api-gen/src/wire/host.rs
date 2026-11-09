@@ -201,7 +201,7 @@ fn event_input(
         write!(put, "w.put(&{tag});").unwrap();
         return;
     }
-    let Some(fields) = types.defs[def].kind.fields() else {
+    let Some(fields) = types.defs[def].borrowed.fields() else {
         return;
     };
     for f in fields.iter() {

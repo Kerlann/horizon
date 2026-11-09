@@ -9,7 +9,7 @@ use syn::{Fields, GenericArgument, Item, PathArguments, Type};
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum Ty {
     Unit,
-    /// A primitive: its Rust and WIT names.
+    /// A primitive, by its Rust spelling.
     Prim(&'static str),
     /// `u128`/`i128`, as two halves.
     Wide(&'static str),
@@ -67,7 +67,7 @@ pub(crate) struct Def {
     pub(super) lifetimes: usize,
     /// It implements `Clone`, so a point record can hold a copy of a borrowed one.
     pub(super) clone: bool,
-    pub(super) kind: Kind,
+    pub(super) borrowed: BorrowedShape,
     pub(super) append: Option<super::append::Append>,
     pub(super) projection: Option<Vec<Field>>,
     pub(super) view: Option<View>,
@@ -81,7 +81,7 @@ impl Def {
         if let Some(append) = &self.append {
             Some(std::borrow::Cow::Borrowed(&append.fields))
         } else {
-            self.kind.fields()
+            self.borrowed.fields()
         }
     }
 }
@@ -94,21 +94,16 @@ pub(super) struct View {
 }
 
 #[derive(Debug)]
-pub(crate) enum Kind {
+pub(crate) enum BorrowedShape {
     Record(Vec<Field>),
     /// A tuple struct with public fields.
     TupleRecord(Vec<Ty>),
-    Enum(Vec<String>),
-    /// A unit struct.
-    Unit,
     Variant(Vec<Case>),
-    /// Crosses as JSON through its own serde derives.
-    Json,
-    /// It can't cross.
-    Opaque,
+    /// An owned value: its type owns the Wire implementation.
+    None,
 }
 
-impl Kind {
+impl BorrowedShape {
     pub(super) fn fields(&self) -> Option<std::borrow::Cow<'_, [Field]>> {
         match self {
             Self::Record(fields) => Some(std::borrow::Cow::Borrowed(fields)),
@@ -150,7 +145,7 @@ pub(crate) enum Payload {
 pub(crate) struct Types<'a> {
     pub(super) index: Index<'a>,
     pub(super) defs: Vec<Def>,
-    by_item: HashMap<ItemId, usize>,
+    pub(super) by_item: HashMap<ItemId, usize>,
     /// The `mod_api` root module, where re-exported names are looked up.
     api_root: usize,
     /// Each exported trait with the exported traits its handlers answer as (`super::views`).
@@ -351,7 +346,7 @@ impl<'a> Types<'a> {
             rust: rust.into(),
             lifetimes: 0,
             clone: true,
-            kind: Kind::Json,
+            borrowed: BorrowedShape::None,
         }))
     }
 
@@ -362,7 +357,7 @@ impl<'a> Types<'a> {
     }
 
     /// The named item `id`, used with type arguments `args`.
-    fn item(&mut self, id: ItemId, name: &str, args: Vec<Ty>) -> Result<Ty, String> {
+    pub(super) fn item(&mut self, id: ItemId, name: &str, args: Vec<Ty>) -> Result<Ty, String> {
         let item = self.index.item(id).clone();
         if let Item::Type(alias) = &item {
             let params: Vec<String> = alias
@@ -396,14 +391,17 @@ impl<'a> Types<'a> {
             rust,
             lifetimes,
             clone,
-            kind: Kind::Opaque,
+            borrowed: BorrowedShape::None,
         });
         self.by_item.insert(id, def);
         let outer = self.current.replace(def);
-        let kind = self.kind(id, &item, name);
+        let shape = if lifetimes == 0 {
+            Ok(BorrowedShape::None)
+        } else {
+            self.borrowed_shape(id, &item)
+        };
         self.current = outer;
-        let kind = kind?;
-        self.defs[def].kind = kind;
+        self.defs[def].borrowed = shape?;
         self.defs[def].append = super::append::detect(self, id, &item)?;
         self.defs[def].projection = self.projection(id, &item)?;
         self.defs[def].view = self.view(id, &item)?;
@@ -499,7 +497,7 @@ impl<'a> Types<'a> {
         let Item::Struct(target_record) = self.index.item(*target_id) else {
             return None;
         };
-        let Kind::Record(fields) = &self.defs[*target].kind else {
+        let Fields::Named(fields) = &target_record.fields else {
             return None;
         };
         for item in &self.index.modules[source_id.module].items {
@@ -549,17 +547,17 @@ impl<'a> Types<'a> {
             };
             if !result.path.is_ident("Self")
                 || result.rest.is_some()
-                || result.fields.len() != fields.len()
+                || result.fields.len() != fields.named.len()
             {
                 continue;
             }
-            let projection = fields
+            let projection = fields.named
                 .iter()
                 .map(|field| {
                     let value = result
                         .fields
                         .iter()
-                        .find(|v| matches!(&v.member, syn::Member::Named(n) if *n == field.rust))?;
+                        .find(|v| matches!(&v.member, syn::Member::Named(n) if Some(n) == field.ident.as_ref()))?;
                     let expr = match &value.expr {
                         syn::Expr::MethodCall(call)
                             if call.method == "clone"
@@ -642,25 +640,6 @@ impl<'a> Types<'a> {
             .position(|m| m.path == module_path)
             .unwrap();
         let snapshot = self.ty(module, &arg, &[])?;
-        // Snapshot records are type-owned transport state, not constructors of live
-        // objects. Their crate-visible fields are accessible to the generated Wire impl.
-        if let Ty::Named(d) = snapshot
-            && let syn::Type::Path(path) = &arg
-        {
-            let name = &path.path.segments.last().unwrap().ident;
-            let record = self.index.modules[module]
-                .items
-                .iter()
-                .find_map(|item| match item {
-                    Item::Struct(s) if s.ident == *name => Some(s.clone()),
-                    _ => None,
-                });
-            if let Some(record) = record
-                && let Fields::Named(fields) = record.fields
-            {
-                self.defs[d].kind = Kind::Record(self.fields(module, fields.named.iter())?);
-            }
-        }
         Ok(Some(View {
             field: field.ident.as_ref().unwrap().to_string(),
             pointee,
@@ -669,47 +648,40 @@ impl<'a> Types<'a> {
         }))
     }
 
-    fn kind(&mut self, id: ItemId, item: &Item, name: &str) -> Result<Kind, String> {
-        let serde = derives(item, "Serialize") && derives(item, "Deserialize");
-        if generics(item).type_params().next().is_some() {
-            return Ok(if serde { Kind::Json } else { Kind::Opaque });
-        }
-        let structural = match item {
-            Item::Struct(item) => match &item.fields {
+    /// Only borrowed call arguments need structural descriptions. Owned values are
+    /// opaque to the generator and cross through their explicit Wire implementations.
+    fn borrowed_shape(&mut self, id: ItemId, item: &Item) -> Result<BorrowedShape, String> {
+        match item {
+            Item::Struct(record) => match &record.fields {
                 Fields::Named(fields)
-                    if fields.named.iter().all(|f| self.reachable(id, &f.vis)) =>
+                    if fields
+                        .named
+                        .iter()
+                        .all(|f| matches!(f.vis, syn::Visibility::Public(_))) =>
                 {
                     self.fields(id.module, fields.named.iter())
-                        .map(Kind::Record)
+                        .map(BorrowedShape::Record)
                 }
                 Fields::Unnamed(fields)
-                    if fields.unnamed.iter().all(|f| self.reachable(id, &f.vis)) =>
+                    if fields
+                        .unnamed
+                        .iter()
+                        .all(|f| matches!(f.vis, syn::Visibility::Public(_))) =>
                 {
                     fields
                         .unnamed
                         .iter()
                         .map(|f| self.ty(id.module, &f.ty, &[]))
                         .collect::<Result<_, _>>()
-                        .map(Kind::TupleRecord)
+                        .map(BorrowedShape::TupleRecord)
                 }
-                Fields::Unit => Ok(Kind::Unit),
-                _ => Err(format!("{name} has private fields")),
+                _ => Ok(BorrowedShape::None),
             },
-            Item::Enum(item)
-                if item
-                    .variants
-                    .iter()
-                    .all(|v| matches!(v.fields, Fields::Unit)) =>
-            {
-                Ok(Kind::Enum(
-                    item.variants.iter().map(|v| v.ident.to_string()).collect(),
-                ))
-            }
-            Item::Enum(item) => item
+            Item::Enum(record) => record
                 .variants
                 .iter()
-                .map(|v| {
-                    let payload = match &v.fields {
+                .map(|case| {
+                    let payload = match &case.fields {
                         Fields::Unit => Payload::None,
                         Fields::Unnamed(fields) => Payload::Tuple(
                             fields
@@ -723,19 +695,14 @@ impl<'a> Types<'a> {
                         }
                     };
                     Ok(Case {
-                        rust: v.ident.to_string(),
+                        rust: case.ident.to_string(),
                         payload,
                     })
                 })
                 .collect::<Result<_, String>>()
-                .map(Kind::Variant),
-            _ => Err(format!("{name} is not a struct or enum")),
-        };
-        Ok(match structural {
-            Ok(kind) => kind,
-            Err(_) if serde => Kind::Json,
-            Err(_) => Kind::Opaque,
-        })
+                .map(BorrowedShape::Variant),
+            _ => Ok(BorrowedShape::None),
+        }
     }
 
     fn fields<'f>(
@@ -851,16 +818,4 @@ fn derives(item: &Item, name: &str) -> bool {
                 .split(|c: char| !c.is_alphanumeric() && c != '_')
                 .any(|word| word == name)
     })
-}
-
-impl Types<'_> {
-    /// Whether the generated glue, inside `mod_api`, can reach a field of item `id` with
-    /// visibility `vis`: a public one, a crate-visible one of `mod_api`'s (`pub(crate)`, or
-    /// `pub(super)` in a module at its root), or any of a type
-    /// defined at `mod_api`'s root, which the glue is a descendant of.
-    /// Whether a field may be built by anyone: only a public one. A private or crate-private
-    /// field is guarded by its type's constructor, which a decoder must go through.
-    fn reachable(&self, _id: ItemId, vis: &syn::Visibility) -> bool {
-        matches!(vis, syn::Visibility::Public(_))
-    }
 }

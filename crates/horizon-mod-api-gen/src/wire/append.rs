@@ -1,6 +1,6 @@
 //! A private collection editable only through public, untransformed enum pushes.
 //! Keep its contract separate from public records: replies may append, never replace it.
-use super::ty::{Field, Kind, List, Payload, Ty, Types};
+use super::ty::{Case, Field, List, Payload, Ty, Types};
 use crate::index::{Found, ItemId};
 use std::collections::HashSet;
 use syn::{Expr, Fields, Item, Stmt};
@@ -10,6 +10,7 @@ pub(super) struct Append {
     pub(super) fields: Vec<Field>,
     pub(super) field: usize,
     pub(super) element: Ty,
+    pub(super) equal: String,
 }
 
 pub(super) fn detect(
@@ -58,13 +59,33 @@ pub(super) fn detect(
     let Ty::Named(e) = &element else {
         return Ok(None);
     };
-    let Kind::Variant(cases) = &types.defs[*e].kind else {
+    // Inspect only the enum queued by this borrowed append-only argument. This
+    // describes the checked push contract, not an owned value codec.
+    let Some((&element_id, _)) = types.by_item.iter().find(|(_, def)| **def == *e) else {
         return Ok(None);
     };
-    let cases = cases.clone();
-    if equal(types, &element, "a", "b").is_none() {
+    let Item::Enum(variants) = types.index.item(element_id).clone() else {
         return Ok(None);
+    };
+    let mut cases = Vec::new();
+    for case in variants.variants {
+        let Fields::Unnamed(fields) = case.fields else {
+            return Ok(None);
+        };
+        let payload = fields
+            .unnamed
+            .iter()
+            .map(|f| types.ty(element_id.module, &f.ty, &[]))
+            .collect::<Result<Vec<_>, _>>()?;
+        cases.push(Case {
+            rust: case.ident.to_string(),
+            payload: Payload::Tuple(payload),
+        });
     }
+    let path = &types.defs[*e].rust;
+    let Some(equal) = equal_cases(path, &cases) else {
+        return Ok(None);
+    };
     let type_name = types.defs[*e].rust.rsplit("::").next().unwrap().to_string();
     let implementations = types
         .index
@@ -183,91 +204,68 @@ pub(super) fn detect(
         fields: described,
         field: *field,
         element,
+        equal,
     }))
 }
 
 // Compare transport identity, including NaN payloads, without serializing or allocating.
-pub(super) fn equal(types: &Types<'_>, ty: &Ty, a: &str, b: &str) -> Option<String> {
+fn equal(ty: &Ty, a: &str, b: &str) -> Option<String> {
     Some(match ty {
         Ty::Prim("f32" | "f64") => format!("({a}).to_bits()==({b}).to_bits()"),
         Ty::Unit | Ty::Prim(..) | Ty::Wide(..) | Ty::Str(..) | Ty::Duration => {
             format!("({a})==({b})")
         }
-        Ty::Ref(t, _) | Ty::Boxed(t) | Ty::Shared(t) => equal(types, t, a, b)?,
+        Ty::Ref(t, _) | Ty::Boxed(t) | Ty::Shared(t) => equal(t, a, b)?,
         Ty::Option(t) => format!(
             "match ({a},{b}) {{ (Some(a),Some(b))=>{},(None,None)=>true,_=>false }}",
-            equal(types, t, "a", "b")?
+            equal(t, "a", "b")?
         ),
         Ty::Result(ok, err) => format!(
             "match ({a},{b}) {{ (Ok(a),Ok(b))=>{},(Err(a),Err(b))=>{},_=>false }}",
-            equal(types, ok, "a", "b")?,
-            equal(types, err, "a", "b")?
+            equal(ok, "a", "b")?,
+            equal(err, "a", "b")?
         ),
         Ty::List(t, List::Vec | List::Slice) | Ty::Array(t, _) => format!(
             "({a}).len()==({b}).len() && ({a}).iter().zip(({b}).iter()).all(|(a,b)|{})",
-            equal(types, t, "a", "b")?
+            equal(t, "a", "b")?
         ),
         Ty::Tuple(v) => v
             .iter()
             .enumerate()
-            .map(|(i, t)| equal(types, t, &format!("&({a}).{i}"), &format!("&({b}).{i}")))
+            .map(|(i, t)| equal(t, &format!("&({a}).{i}"), &format!("&({b}).{i}")))
             .collect::<Option<Vec<_>>>()?
             .join(" && "),
-        Ty::Named(d) => {
-            let def = &types.defs[*d];
-            match &def.kind {
-                Kind::Enum(cases) => format!(
-                    "matches!(({a},{b}),{})",
-                    cases
-                        .iter()
-                        .map(|c| format!("({}::{c},{}::{c})", def.rust, def.rust))
-                        .collect::<Vec<_>>()
-                        .join(" | ")
-                ),
-                Kind::Variant(cases) => {
-                    let mut arms = Vec::new();
-                    for case in cases {
-                        let Payload::Tuple(fields) = &case.payload else {
-                            return None;
-                        };
-                        let left = (0..fields.len())
-                            .map(|i| format!("a{i}"))
-                            .collect::<Vec<_>>()
-                            .join(",");
-                        let right = (0..fields.len())
-                            .map(|i| format!("b{i}"))
-                            .collect::<Vec<_>>()
-                            .join(",");
-                        let equals = fields
-                            .iter()
-                            .enumerate()
-                            .map(|(i, t)| equal(types, t, &format!("a{i}"), &format!("b{i}")))
-                            .collect::<Option<Vec<_>>>()?
-                            .join(" && ");
-                        arms.push(format!(
-                            "({}::{}({left}),{}::{}({right}))=>{equals}",
-                            def.rust, case.rust, def.rust, case.rust
-                        ));
-                    }
-                    format!("match ({a},{b}) {{ {},_=>false }}", arms.join(","))
-                }
-                Kind::Record(fields) => fields
-                    .iter()
-                    .map(|f| {
-                        equal(
-                            types,
-                            &f.ty,
-                            &format!("&({a}).{}", f.rust),
-                            &format!("&({b}).{}", f.rust),
-                        )
-                    })
-                    .collect::<Option<Vec<_>>>()?
-                    .join(" && "),
-                _ => return None,
-            }
-        }
         _ => return None,
     })
+}
+
+/// Prefix comparisons preserve float bit patterns, without serializing or allocating.
+fn equal_cases(path: &str, cases: &[Case]) -> Option<String> {
+    let mut arms = Vec::new();
+    for case in cases {
+        let Payload::Tuple(fields) = &case.payload else {
+            return None;
+        };
+        let left = (0..fields.len())
+            .map(|i| format!("a{i}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let right = (0..fields.len())
+            .map(|i| format!("b{i}"))
+            .collect::<Vec<_>>()
+            .join(",");
+        let equals = fields
+            .iter()
+            .enumerate()
+            .map(|(i, ty)| equal(ty, &format!("a{i}"), &format!("b{i}")))
+            .collect::<Option<Vec<_>>>()?
+            .join(" && ");
+        arms.push(format!(
+            "({path}::{}({left}),{path}::{}({right}))=>{equals}",
+            case.rust, case.rust
+        ));
+    }
+    Some(format!("match (a,b) {{ {},_=>false }}", arms.join(",")))
 }
 
 #[cfg(test)]

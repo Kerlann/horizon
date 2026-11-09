@@ -2,8 +2,8 @@
 //! the backends, the drawing contexts) and every method it implements (`Hooks`, the parts, the
 //! capability handlers), through one shared-memory boundary and the glue on both sides of it.
 mod append;
+mod borrowed;
 mod calls;
-mod emit;
 mod host;
 pub use host::generate_host;
 mod ty;
@@ -566,7 +566,7 @@ pub fn generate(root: &Path, included: &[(&str, &str)]) -> Result<Generated, Str
     with_providers.push(("capability_providers_generated.rs", providers.as_str()));
     let surface = surface(root, &with_providers)?;
     coverage(&surface)?;
-    let mut wire = emit::types(&surface.types);
+    let mut wire = borrowed::calls(&surface.types);
     let mut guest = calls::guest(
         &surface.types,
         &surface.methods,
@@ -590,10 +590,9 @@ pub fn generate(root: &Path, included: &[(&str, &str)]) -> Result<Generated, Str
     })
 }
 
-/// Every `mod_api` type the boundary lays out, by the path the generated impls name it with
-/// (`mod_api::EntityRef`): each has a `Wire` impl, generated or checked beside it. A point record
-/// may hold exactly these and the std types, when they are `Clone`: the record holds a copy, and a
-/// capability the game only lends (`Transaction`) is never copied.
+/// Public owned API values available to point records, without inspecting their fields.
+/// The generated record's Wire bounds check its members; Clone permits copying a borrowed
+/// argument, while a live capability such as Transaction remains non-copyable.
 pub(crate) fn owned_types(
     root: &Path,
     included: &[(&str, &str)],
@@ -601,7 +600,52 @@ pub(crate) fn owned_types(
     let providers = crate::capability_providers::generate(root, included)?.0;
     let mut with_providers = included.to_vec();
     with_providers.push(("capability_providers_generated.rs", providers.as_str()));
-    let surface = surface(root, &with_providers)?;
+    let mut surface = surface(root, &with_providers)?;
+    // Point records may name any public owned API type, not just types reached by
+    // recursively inspecting the private fields of another value. Wire bounds on
+    // the generated record remain the authority for whether those values cross.
+    fn names(tree: &syn::UseTree, out: &mut Vec<String>) {
+        match tree {
+            syn::UseTree::Name(n) => out.push(n.ident.to_string()),
+            syn::UseTree::Rename(n) => out.push(n.rename.to_string()),
+            syn::UseTree::Path(p) => names(&p.tree, out),
+            syn::UseTree::Group(g) => g.items.iter().for_each(|t| names(t, out)),
+            syn::UseTree::Glob(_) => {}
+        }
+    }
+    let api = surface.types.index.module("mod_api", &[])?;
+    let mut public = Vec::new();
+    for item in &surface.types.index.modules[api].items {
+        match item {
+            Item::Use(item) if matches!(item.vis, syn::Visibility::Public(_)) => {
+                names(&item.tree, &mut public)
+            }
+            Item::Struct(item) if matches!(item.vis, syn::Visibility::Public(_)) => {
+                public.push(item.ident.to_string())
+            }
+            Item::Enum(item) if matches!(item.vis, syn::Visibility::Public(_)) => {
+                public.push(item.ident.to_string())
+            }
+            Item::Type(item) if matches!(item.vis, syn::Visibility::Public(_)) => {
+                public.push(item.ident.to_string())
+            }
+            _ => {}
+        }
+    }
+    for name in public {
+        let Ok(Found::Item(id)) = surface.types.index.resolve(api, &name) else {
+            continue;
+        };
+        let parameters = match surface.types.index.item(id) {
+            Item::Struct(item) => &item.generics,
+            Item::Enum(item) => &item.generics,
+            Item::Type(item) => &item.generics,
+            _ => continue,
+        };
+        if parameters.params.is_empty() {
+            surface.types.item(id, &name, Vec::new())?;
+        }
+    }
     Ok(surface
         .types
         .defs
@@ -638,7 +682,7 @@ fn layout(surface: &Surface<'_>) -> u64 {
         // Private borrowed descriptors also define bytes and checked writeback policy.
         // Hash the complete definition so a new transport shape cannot hide behind Opaque.
         feed(&format!("{def:?}"));
-        if let ty::Kind::Variant(cases) = &def.kind {
+        if let ty::BorrowedShape::Variant(cases) = &def.borrowed {
             for case in cases {
                 if let ty::Payload::Record(fields) = &case.payload {
                     // Named payload fields also define the transport's structural schema.
@@ -729,6 +773,15 @@ mod tests {
             ];
             let mut surface = super::surface(&root, &included).unwrap();
             let baseline = super::layout(&surface);
+            assert!(
+                surface
+                    .types
+                    .defs
+                    .iter()
+                    .filter(|def| def.lifetimes == 0)
+                    .all(|def| matches!(def.borrowed, super::ty::BorrowedShape::None)),
+                "owned fields must not be classified by the call generator"
+            );
             let append = surface
                 .types
                 .defs
@@ -736,8 +789,8 @@ mod tests {
                 .position(|d| d.append.is_some())
                 .unwrap();
             assert!(matches!(
-                surface.types.defs[append].kind,
-                super::ty::Kind::Opaque
+                surface.types.defs[append].borrowed,
+                super::ty::BorrowedShape::None
             ));
             surface.types.defs[append].append.as_mut().unwrap().field += 1;
             assert_ne!(baseline, super::layout(&surface));
@@ -748,7 +801,10 @@ mod tests {
                 .iter_mut()
                 .find(|d| d.projection.is_some())
                 .unwrap();
-            assert!(matches!(projection.kind, super::ty::Kind::Opaque));
+            assert!(matches!(
+                projection.borrowed,
+                super::ty::BorrowedShape::None
+            ));
             projection.projection.as_mut().unwrap()[0].ty = super::ty::Ty::Unit;
             assert_ne!(baseline, super::layout(&surface));
             let before_borrowed = super::layout(&surface);
@@ -760,8 +816,8 @@ mod tests {
                     if def.lifetimes == 0 {
                         return None;
                     }
-                    match &mut def.kind {
-                        super::ty::Kind::Record(fields) => fields.first_mut(),
+                    match &mut def.borrowed {
+                        super::ty::BorrowedShape::Record(fields) => fields.first_mut(),
                         _ => None,
                     }
                 })

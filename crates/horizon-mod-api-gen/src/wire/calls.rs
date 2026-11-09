@@ -462,7 +462,7 @@ fn held_in(types: &Types<'_>, ty: &Ty, statics: bool) -> Option<String> {
         Ty::Ref(inner, _) => held_in(types, inner, statics)?,
         Ty::Str(Str::Static) if statics => "String".into(),
         Ty::Named(def) if types.defs[*def].lifetimes != 0 => {
-            let fields = types.defs[*def].kind.fields()?;
+            let fields = types.defs[*def].borrowed.fields()?;
             format!(
                 "({},)",
                 fields
@@ -495,7 +495,7 @@ fn held_in(types: &Types<'_>, ty: &Ty, statics: bool) -> Option<String> {
 }
 
 pub(super) fn frame_cases<'t>(types: &'t Types<'_>, def: usize) -> Option<&'t [super::ty::Case]> {
-    let super::ty::Kind::Variant(cases) = &types.defs[def].kind else {
+    let super::ty::BorrowedShape::Variant(cases) = &types.defs[def].borrowed else {
         return None;
     };
     cases.iter().all(|case|matches!(&case.payload,super::ty::Payload::Tuple(v) if matches!(v.as_slice(),[Ty::Dyn(..)]))).then_some(cases.as_slice())
@@ -518,7 +518,7 @@ fn reborrow(types: &Types<'_>, ty: &Ty, place: &str) -> Option<String> {
         Ty::Str(Str::Borrowed) => format!("({place}).as_str()"),
         Ty::Str(Str::Owned) => format!("({place}).clone()"),
         Ty::Named(d) if types.defs[*d].lifetimes != 0 => {
-            let fields = types.defs[*d].kind.fields()?;
+            let fields = types.defs[*d].borrowed.fields()?;
             format!(
                 "mod_api::__wire_record_{d}({})",
                 fields
@@ -552,7 +552,7 @@ fn reborrow(types: &Types<'_>, ty: &Ty, place: &str) -> Option<String> {
 pub(super) fn snapshot(types: &Types<'_>, ty: &Ty, place: &str) -> Option<String> {
     Some(match ty {
         Ty::Named(d) if types.defs[*d].lifetimes != 0 => {
-            let fields = types.defs[*d].kind.fields()?;
+            let fields = types.defs[*d].borrowed.fields()?;
             fields
                 .iter()
                 .map(|f| snapshot(types, &f.ty, &format!("({place}).{}", f.rust)))
