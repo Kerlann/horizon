@@ -19,6 +19,8 @@ from test_dedicated_server_parity import Server, free_port, game_time
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True, help='new private output directory')
+    parser.add_argument('--cases', nargs='+', choices=('root_child', 'siblings', 'leaf', 'loaded'),
+                        default=('root_child', 'siblings', 'leaf', 'loaded'))
     args = parser.parse_args()
     out = args.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
@@ -56,9 +58,10 @@ def main():
         while game_time(server) < before + ticks:
             assert time.monotonic() < deadline, 'tick step stalled'
 
-    def observe():
+    def observe(dimension=None):
+        prefix = f'execute in minecraft:{dimension} run ' if dimension else ''
         for tag in ('root', 'first', 'rejected', 'grandchild', 'leaf'):
-            reply(f'data get entity @e[tag={tag},limit=1]')
+            reply(f'{prefix}data get entity @e[tag={tag},limit=1]')
 
     def start(label):
         nonlocal server
@@ -82,7 +85,7 @@ def main():
         start('initial')
         reply('gamerule minecraft:spawn_mobs false')
         # Each case gets distinct UUIDs so cleanup cannot mask admission behavior.
-        for number, kind in enumerate(('root_child', 'siblings', 'leaf', 'loaded'), 1):
+        for number, kind in enumerate(args.cases, 1):
             records.append({'case': kind})
             reply('kill @e[type=minecraft:pig]')
             u = number * 10
@@ -114,7 +117,10 @@ def main():
             else:
                 raise AssertionError('destination chunk not loaded')
             reply('execute as @e[tag=root] in minecraft:the_nether run teleport @s 1 200 1')
-            reply('execute in minecraft:the_nether run data get entity @e[tag=root,limit=1]')
+            observe('the_nether')
+            observe()
+            advance(5)
+            observe('the_nether')
             reply('execute in minecraft:the_nether run kill @e[tag=root]')
             reply('kill @e[tag=root]')
             observe()
