@@ -12,10 +12,19 @@
 //! game rules, the scoreboard, the maps and the entities waiting to arrive
 //! through a portal.
 
+use super::commands::Target;
+use super::entity_residency::{define_resident_access, resident_owners};
 use super::{
     Dim, ExperienceOrb, FallingBlock, Game, ItemEntity, Mob, boats, commands,
     creaking::CreakingState, dragon, fireworks, lightning, machines, minecarts,
     ominous_item_spawner, persist, raids::Raiding, sculk::SculkState, tnt, trident,
+};
+use horizon_client::join_seq::{
+    Joined,
+    residency::{
+        Journal, Kind, Owner,
+        table::{EntityLookup, Location, SourceEntity},
+    },
 };
 use horizon_client::{
     Result,
@@ -29,6 +38,7 @@ use horizon_client::{
     world::World,
 };
 use horizon_world::level::{LevelEvent, Ticks};
+use mod_api::DimensionKey;
 use std::{
     collections::HashMap,
     sync::Arc,
@@ -102,6 +112,107 @@ pub(super) struct Parked {
     /// last told of it (`LanHost::border_sent`).
     border: horizon_client::worldborder::WorldBorder,
     border_sent: Option<horizon_client::lan::border::Sent>,
+}
+
+impl Parked {
+    resident_owners!(define_resident_access, self, projectiles);
+}
+
+impl Game<'_> {
+    /// Resolve through the exact owner, never by trying dimension swaps.
+    pub(super) fn server_resident_entity(&self, id: u32) -> EntityLookup<Target> {
+        let found = self
+            .entity_residency
+            .borrow_mut()
+            .server_entity_lookup(id, |at| {
+                if at.owner.dimension == self.dim.key() {
+                    return self.locate_resident_owner(at);
+                }
+                let dim = match at.owner.dimension {
+                    DimensionKey::OVERWORLD => Dim::Overworld,
+                    DimensionKey::NETHER => Dim::Nether,
+                    DimensionKey::END => Dim::End,
+                    key => Dim::Extra(key),
+                };
+                self.levels.parked.get(&dim)?.locate_resident_owner(at)
+            });
+        match found {
+            EntityLookup::Found {
+                location,
+                value: (value, true),
+            } => EntityLookup::Found { location, value },
+            EntityLookup::Found {
+                value: (_, false), ..
+            }
+            | EntityLookup::Missing => EntityLookup::Missing,
+            EntityLookup::Taken => EntityLookup::Taken,
+        }
+    }
+    /// Find the level of a target without swapping or scanning entity lists.
+    /// Fishing hooks still live in per-player slots: this one named exception
+    /// costs O(players), not O(entities) or O(dimensions).
+    pub(super) fn resident_target_dimension(&self, target: Target) -> Option<Dim> {
+        if matches!(target, Target::Player | Target::Guest(_)) {
+            return Some(self.dim);
+        }
+        let id = super::native_entities::target_id(target)?;
+        if matches!(target, Target::Hook(_)) {
+            if self.fishing_hook_by_id(id).is_some() {
+                return (!self.persist.removals.contains(&target)).then_some(self.dim);
+            }
+            let host = self.lan.as_ref()?;
+            return host.hub.guests.iter().find_map(|guest| {
+                (guest.placed
+                    && self.lan_acting != Some(guest.conn)
+                    && !self.lan_guest_swaps.contains(&guest.conn)
+                    && host.play.get(&guest.conn)?.hook.as_ref()?.id() == id)
+                    .then(|| Dim::from_id(&guest.dimension))
+                    .filter(|dim| {
+                        if *dim == self.dim {
+                            !self.persist.removals.contains(&target)
+                        } else {
+                            self.levels
+                                .parked
+                                .get(dim)
+                                .is_some_and(|level| !level.persist.removals.contains(&target))
+                        }
+                    })
+            });
+        }
+        let found = if matches!(target, Target::DragonPart(_)) {
+            (1..=8)
+                .filter_map(|offset| id.checked_sub(offset))
+                .find_map(|parent| match self.server_resident_entity(parent) {
+                    EntityLookup::Found {
+                        location,
+                        value: Target::Dragon(_),
+                    } => Some(location),
+                    _ => None,
+                })?
+        } else {
+            match self.server_resident_entity(id) {
+                EntityLookup::Found { location, value } if value == target => location,
+                _ => return None,
+            }
+        };
+        Some(match found.owner.dimension {
+            DimensionKey::OVERWORLD => Dim::Overworld,
+            DimensionKey::NETHER => Dim::Nether,
+            DimensionKey::END => Dim::End,
+            key => Dim::Extra(key),
+        })
+    }
+
+    /// A new epoch invalidates every old producer before rebinding retained levels.
+    pub(super) fn reset_entity_residency(&mut self) {
+        let table = self.entity_residency.get_mut();
+        table.reset();
+        let journal = table.producer();
+        self.bind_resident_owners(&journal, self.dim.key());
+        for (dim, parked) in &mut self.levels.parked {
+            parked.bind_resident_owners(&journal, dim.key());
+        }
+    }
 }
 
 /// Which passes of the server tick the level in place runs: the first
@@ -651,6 +762,28 @@ impl Game<'_> {
     /// run. The native server tick hook brackets it (`ServerTickStart` before
     /// the first level, `ServerTickEnd` after the last).
     pub(super) fn tick_server(&mut self, paused: bool) -> Result<()> {
+        use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
+        let result = catch_unwind(AssertUnwindSafe(|| self.tick_server_body(paused)));
+        // Expire markers even after an interrupted pass. Preserve the original
+        // native payload if the debug completion assertion also fires.
+        let finished = catch_unwind(AssertUnwindSafe(|| {
+            self.entity_residency.get_mut().end_tick()
+        }));
+        match result {
+            Err(payload) => resume_unwind(payload),
+            Ok(result) => {
+                let finished = match finished {
+                    Ok(finished) => finished,
+                    Err(payload) => resume_unwind(payload),
+                };
+                result?;
+                finished
+                    .map_err(|error| format!("unfinished entity residency pass: {error:?}").into())
+            }
+        }
+    }
+
+    fn tick_server_body(&mut self, paused: bool) -> Result<()> {
         // `tickRateManager.tick()` once per server tick, before any level
         // (each `ServerLevel.tick` only reads `runsNormally`), and the native
         // `ServerTickStart` before that level work, where NeoForge fires
@@ -988,6 +1121,12 @@ impl Game<'_> {
             || self.levels.heard_open.contains(&dim)
         {
             return;
+        }
+        let journal = self.entity_residency.borrow().producer();
+        if dim == self.dim {
+            self.bind_resident_owners(&journal, dim.key());
+        } else if let Some(parked) = self.levels.parked.get_mut(&dim) {
+            parked.bind_resident_owners(&journal, dim.key());
         }
         self.bind_dimension_attachments(dim);
         self.levels.heard_open.push(dim);

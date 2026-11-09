@@ -2746,7 +2746,9 @@ mod tests {
                 for &(id, at) in entries {
                     game.spawn_creeper_cloud(at, Vec::new(), Vec::new(), Vec::new(), 0);
                     let i = game.breath_clouds.len() - 1;
-                    game.breath_clouds.update(i, |c| c.id = id);
+                    let mut cloud = game.breath_clouds.remove(i);
+                    cloud.id = id;
+                    game.breath_clouds.push(cloud);
                 }
             },
             ids: |game| game.breath_clouds.iter().map(|c| c.id).collect(),
