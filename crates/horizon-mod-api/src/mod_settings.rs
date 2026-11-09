@@ -8,6 +8,7 @@ pub const SETTING_KEY_MAX: usize = 64;
 /// What a setting is, with its default.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum SettingKind {
     /// On or off.
     Toggle {
@@ -42,6 +43,7 @@ pub enum SettingKind {
 /// A setting's value, as the game keeps it and the mod reads it.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum SettingValue {
     /// A toggle's state.
     Toggle(bool),
@@ -57,6 +59,7 @@ pub enum SettingValue {
 /// mod), the translation keys of its label and tooltip, and what it is.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct SettingSpec {
     /// The setting's key within its mod (`zoom_speed`): `a-z`, `0-9`, `_`, `-` and `.`, at most
     /// [`SETTING_KEY_MAX`] bytes, not starting with `.`.
@@ -72,6 +75,7 @@ pub struct SettingSpec {
 /// Why a setting was refused at registration.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum SettingError {
     /// The key is empty, too long, starts with `.` or holds another character than `a-z`,
     /// `0-9`, `_`, `-` and `.`.

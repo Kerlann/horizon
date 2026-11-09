@@ -14,6 +14,7 @@ where
         self(host, at)
     }
 }
+// no wire: trait-object alias inherits its provider trait policy; callbacks are not serialized.
 /// A block capability provider, as the registrar keeps it.
 pub type BlockProvider<T> = dyn BlockCapabilityProvider<T>;
 
@@ -75,6 +76,7 @@ pub fn block_entity_providers<T: ?Sized + 'static>(
     })
 }
 
+// no wire: provider lookup borrows static capability dispatch tables and process-local type identity.
 /// A block entity's providers of one capability ([`block_entity_providers`]).
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct BlockEntityProviders<T: ?Sized + 'static> {

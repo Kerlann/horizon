@@ -1,5 +1,6 @@
 //! Shared table state, cross-kind registration and common test fixtures only.
 use super::*;
+// no wire: process-local registration and dispatch storage contains trait objects and owning-mod identities.
 /// A part, with the mod that attached it.
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct Attached<P: ?Sized> {
@@ -66,6 +67,7 @@ pub(crate) fn insert_part<P: ?Sized>(
     true
 }
 
+// no wire: process-local registration and dispatch storage contains trait objects and owning-mod identities.
 /// Every mod's parts, by the id of the thing they are attached to, in dispatch order.
 #[derive(Clone, Default)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
@@ -103,6 +105,7 @@ pub struct Parts {
     pub(crate) hooks: Vec<Option<HookParts>>,
 }
 
+// no wire: process-local registration and dispatch storage contains trait objects and owning-mod identities.
 #[derive(Clone, Default)]
 /// The Parts attached to blocks for one hook, with which hooks have a subscriber.
 // exhaustive: its fields are private, so mods cannot build or destructure it
@@ -120,7 +123,7 @@ pub struct HookParts {
 // hidden: a lookup's view of the registrar's table, not part of the mod surface
 // exhaustive: the three kinds of thing a capability is asked of
 #[doc(hidden)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, horizon_mod_api_macros::Wire)]
 pub enum ProvidedBy {
     BlockEntity,
     Item,
@@ -221,6 +224,7 @@ pub fn has_scoped_hook(hook: HookId) -> bool {
     !crate::mods().is_empty() && has_part_hook(hook)
 }
 
+// no wire: process-local registration and dispatch storage contains trait objects and owning-mod identities.
 /// The parts table a dispatch reads: the process-wide one, or this game thread's.
 #[non_exhaustive]
 pub enum PartsRef {
@@ -246,6 +250,7 @@ pub fn parts(hook: HookId, name: &'static str) -> PartsRef {
     try_parts(hook, name).unwrap_or_else(|error| panic!("{error}"))
 }
 
+// no wire: process-local registration diagnostic retains a static hook or mod identity.
 /// The engine asked for tag Parts on a thread without that world's table.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -302,6 +307,7 @@ pub fn mark_game_thread() {
     clear_game_parts();
 }
 
+// no wire: registration diagnostic contains ItemKeyError with static owning-mod identity.
 /// Refusals at the Parts load boundary.
 #[derive(Debug)]
 #[non_exhaustive]
@@ -312,6 +318,7 @@ pub enum ResolvePartsError {
     Parts(Vec<String>),
 }
 
+// no wire: borrowed parser or registration callbacks execute only in their owning process.
 /// The ids a game knows, which a part's key must name.
 // exhaustive: the game builds it with a literal; mods only read it
 pub struct KnownIds<'a> {
@@ -516,6 +523,7 @@ pub(crate) fn attached<'a, 'k, P: ?Sized>(
     id().and_then(|id| table.get(id)).map_or(&[], Vec::as_slice)
 }
 
+// no wire: process-local registration and dispatch storage contains trait objects and owning-mod identities.
 /// The game's [`Registrar`]: every mod's registrations, checked as they come.
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct PartRegistrar {

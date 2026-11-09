@@ -65,6 +65,7 @@ pub enum SpawnerEntry {
 /// A list of spawners could not be made.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum SpawnerError {
     /// The key is not a namespaced identifier.
     InvalidKey(String),

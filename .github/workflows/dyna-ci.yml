@@ -54,15 +54,37 @@ jobs:
       contents: read
       actions: read
     outputs:
-      self_hosted: ${{ !inputs.github-fallback && steps.runner.outputs.self_hosted || 'false' }}
+      self_hosted: ${{ !inputs.github-fallback && steps.hosted.outputs.forced_github != 'true' && steps.runner.outputs.self_hosted || 'false' }}
       # Every ignored-tests shard on main pushes and dispatches; empty on pull requests.
       ignored_matrix: ${{ steps.matrix.outputs.matrix || '{"shard":[]}' }}
       # Where lint and verify run when they don't go to Dyna's pool: boat-large for listed outside contributors
       # while vars.BOAT_CI is on (boat refuses a public repository's run unless both its author and the user who
       # started it are on boat's own list, so the same list lives in vars.BOAT_CI_USERS), else GitHub's runner.
       hosted_label: ${{ steps.hosted.outputs.label }}
+      forced_github: ${{ steps.hosted.outputs.forced_github }}
     steps:
       - uses: actions/checkout@v4
+      # workflow_run omits pull_requests for fork runs. Record only immutable IDs;
+      # the trusted controller reads this as bounded data, never as executable code.
+      - name: Record the original PR base for boat recovery
+        if: github.event_name == 'pull_request' && github.run_attempt == 1
+        run: |
+          python3 -I - <<'PY'
+          import json, os
+          from pathlib import Path
+          event = json.loads(Path(os.environ['GITHUB_EVENT_PATH']).read_text())
+          Path('boat-base.json').write_text(json.dumps({
+              'run_id': os.environ['GITHUB_RUN_ID'], 'attempt': '1',
+              'base': event['pull_request']['base']['sha'],
+              'head': event['pull_request']['head']['sha'],
+          }))
+          PY
+      - uses: actions/upload-artifact@v4
+        if: github.event_name == 'pull_request' && github.run_attempt == 1
+        with:
+          name: boat-base-1
+          path: boat-base.json
+          retention-days: 2
       # The pool's switch and lease are read live: `vars` is fixed when the run is created, and a main run
       # that waits in the concurrency group would otherwise see a lease that expired while it waited.
       # A fork's pull request gets no token to read them and stays on GitHub's runners.
@@ -97,7 +119,8 @@ jobs:
         id: matrix
         run: python3 tools/ci/ignored_shards.py --matrix --all >> "$GITHUB_OUTPUT"
 
-  # Fork PR tokens cannot dispatch or cancel runs. They receive only the pre-pick gate.
+  # Fork PR tokens cannot dispatch or cancel runs. The trusted default-branch
+  # boat-recovery workflow cancels/reruns outages; changes reads the previous attempt.
   # Same-run fallback jobs would leave the original queued checks pending, not green.
   boat-watch:
     needs: changes
@@ -259,7 +282,7 @@ jobs:
 
   verify:
     needs: changes
-    runs-on: ${{ needs.changes.outputs.self_hosted == 'true' && 'dyna-large' || !inputs.github-fallback && vars.SELF_HOSTED_CI == 'all' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "linux", "playhorizon-ci"]') || needs.changes.outputs.hosted_label || 'ubuntu-latest' }}
+    runs-on: ${{ needs.changes.outputs.self_hosted == 'true' && 'dyna-large' || !inputs.github-fallback && needs.changes.outputs.forced_github != 'true' && vars.SELF_HOSTED_CI == 'all' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "linux", "playhorizon-ci"]') || needs.changes.outputs.hosted_label || 'ubuntu-latest' }}
     timeout-minutes: 45
     # Dyna's runner image now carries lavapipe, Mesa's software Vulkan driver, for ignored-tests' `gpu` tests.
     # verify's tests were written to skip GPU work when no adapter exists, and one of them
@@ -269,7 +292,7 @@ jobs:
       VK_ICD_FILENAMES: /nonexistent/no-vulkan-in-verify.json
       VK_DRIVER_FILES: /nonexistent/no-vulkan-in-verify.json
       JOBS: ${{ (needs.changes.outputs.self_hosted == 'true' || startsWith(needs.changes.outputs.hosted_label, 'boat')) && '-j4' || '' }}
-      RUNNER_KIND: ${{ needs.changes.outputs.self_hosted == 'true' && 'dyna' || !inputs.github-fallback && vars.SELF_HOSTED_CI == 'all' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && 'other' || startsWith(needs.changes.outputs.hosted_label, 'boat') && 'boat' || 'github' }}
+      RUNNER_KIND: ${{ needs.changes.outputs.self_hosted == 'true' && 'dyna' || !inputs.github-fallback && needs.changes.outputs.forced_github != 'true' && vars.SELF_HOSTED_CI == 'all' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && 'other' || startsWith(needs.changes.outputs.hosted_label, 'boat') && 'boat' || 'github' }}
     steps:
       - uses: actions/checkout@v4
       # Only this commit's own history (rust_changes.py's merge base, check_public_tree.py's range and HEAD
@@ -448,7 +471,7 @@ jobs:
   # alone and break it together (#2059 and the registry ratings did, 2026-10-26).
   launcher:
     needs: changes
-    runs-on: ${{ needs.changes.outputs.self_hosted == 'true' && 'dyna-medium' || !inputs.github-fallback && vars.SELF_HOSTED_CI == 'all' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "linux", "playhorizon-ci"]') || 'ubuntu-latest' }}
+    runs-on: ${{ needs.changes.outputs.self_hosted == 'true' && 'dyna-medium' || !inputs.github-fallback && needs.changes.outputs.forced_github != 'true' && vars.SELF_HOSTED_CI == 'all' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) && fromJSON('["self-hosted", "linux", "playhorizon-ci"]') || 'ubuntu-latest' }}
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4

@@ -150,6 +150,7 @@ fn lock() -> std::sync::MutexGuard<'static, Open> {
 }
 
 /// The open list, while listeners may still register.
+#[cfg(not(target_arch = "wasm32"))]
 fn open() -> Result<std::sync::MutexGuard<'static, Open>, RegisterError> {
     let open = lock();
     if open.sealing {
@@ -159,6 +160,7 @@ fn open() -> Result<std::sync::MutexGuard<'static, Open>, RegisterError> {
 }
 
 /// Mod `id`'s entry in the open list, added on its first registration.
+#[cfg(not(target_arch = "wasm32"))]
 fn listener(open: &mut Open, id: &'static str) -> usize {
     match open.listeners.iter().position(|listener| listener.id == id) {
         Some(index) => index,
@@ -313,6 +315,7 @@ impl SlotListener {
 }
 
 /// Registers a function or checked endpoint, in the same order for native and wasm owners.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn register(slot: &SlotListener) -> Result<(), RegisterError> {
     let mut open = open()?;
     let listener = listener(&mut open, slot.id) as u32;

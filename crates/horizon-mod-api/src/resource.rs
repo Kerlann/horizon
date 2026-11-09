@@ -12,6 +12,7 @@ use std::fmt;
 /// `DataComponentType`.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ComponentId(Box<str>);
 
 impl ComponentId {
@@ -28,6 +29,7 @@ impl ComponentId {
     }
 }
 
+// no wire: static registration identity; mod-local storage cannot be reconstructed from a wire string.
 /// An enchantment effect component type (`EnchantmentEffectComponents`): what an enchantment's
 /// `effects` are keyed by, and what [`ItemResource::has_enchantment_effect`] asks for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -55,6 +57,7 @@ pub const PREVENT_ARMOR_CHANGE: EnchantmentEffect =
 /// The effective rarity of an item stack, after its enchantment upgrade.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum ItemRarity {
     /// The ordinary rarity.
     Common,
@@ -90,6 +93,7 @@ impl ItemRarity {
 /// A visible item bar: its width out of thirteen pixels and its RGB colour.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: a plain drawing value, also constructed by the bundle calculation.
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ItemBar {
     /// Width out of thirteen pixels.
     pub width: i32,
@@ -100,6 +104,7 @@ pub struct ItemBar {
 /// Effective attack range for an actor, including the component's hitbox margin.
 #[derive(Clone, Copy, Debug, PartialEq)]
 // exhaustive: a value record
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ItemAttackRange {
     /// Minimum reach before the margin.
     pub min: f32,
@@ -119,6 +124,7 @@ impl ItemAttackRange {
 /// Owned damage source information for a stack attack or a source-specific item query.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: a value record
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ItemDamageSource {
     /// Registry identifier of the damage type.
     pub damage_type: crate::Identifier,
@@ -551,6 +557,7 @@ pub trait ResourceHandler<R> {
 /// neither end keeps any of it.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct Overanswered {
     /// The mod whose handler answered, or "the game".
     pub owner: String,

@@ -3123,7 +3123,7 @@ impl Game<'_> {
         }
         let mut at = y + text_h + bundle_extra + 2.0;
         for image in &images {
-            if let Ok(stack) = image.stack.try_into_engine(self.items()) {
+            if let Ok(stack) = crate::game::api_values::stack_value(&image.stack) {
                 self.native_tooltip_component_draw(&stack, batch, [x, at], image.size);
             }
             at += image.size[1] + 2.0;

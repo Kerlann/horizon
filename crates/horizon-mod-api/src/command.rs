@@ -5,6 +5,7 @@ use crate::{DimensionKey, EntityRef, Identifier, ItemStack, NativePermissionLeve
 /// The origin of a registered mod command, independent of `execute as`'s executor.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum CommandSource {
     /// A player's command; their state is swapped in for the listener.
     Player {
@@ -59,6 +60,7 @@ impl CommandSource {
 /// One validated native command argument, resolved against its command source.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum CommandArgumentValue {
     /// A `word` or greedy `text` argument, exactly as the dispatcher parsed it.
     String(String),
@@ -80,6 +82,7 @@ pub enum CommandArgumentValue {
 /// An argument's registered name and its validated value.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct CommandArgument {
     /// The name from the command's usage, without its kind or brackets.
     pub name: String,
@@ -101,6 +104,7 @@ impl CommandArgument {
 /// command feedback instead. Every source receives this same data.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct CommandInvocation {
     /// The literal path, including the registered command name and subcommands.
     pub literals: Vec<String>,

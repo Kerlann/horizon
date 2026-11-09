@@ -9,6 +9,7 @@
 //! server thread's), never on a client's.
 use super::api_values::{TryIntoApi, TryIntoEngine};
 use super::{Dim, Game, commands::execute, lan::LanHost, respawn_anchor::RespawnConfig};
+use crate::game::level_control_hooks::LevelControl;
 use mod_api::__private::game::*;
 pub use mod_api::game::NativeExperienceOrb;
 // Their old home, for mixin code that names them here.
@@ -1297,6 +1298,23 @@ impl Game<'_> {
             self.clock.rate(),
             self.clock.average_nanos() as f64 / 1_000_000.0,
         )
+    }
+    /// A mod's `set_tick_rate`: `apply_tick_rate`, refused inside the `server_tick_rate_changed`
+    /// hook so a listener can't fire it again without end.
+    pub(in crate::game) fn set_tick_rate(&mut self, rate: f32) -> bool {
+        !LevelControl::TickRate.is_heard() && self.apply_tick_rate(rate)
+    }
+    /// `/tick rate`'s `ServerTickRateManager.setTickRate`, then `MinecraftServer.onTickRateChanged`
+    /// (the hook, and the autosave wait shortened). False for a rate outside 1 to 10000 and
+    /// on a client, which follows its server's rate. The command runs it from a listener too,
+    /// as vanilla does.
+    pub(in crate::game) fn apply_tick_rate(&mut self, rate: f32) -> bool {
+        if !self.is_logical_server() || !(1.0..=10_000.0).contains(&rate) {
+            return false;
+        }
+        self.clock.set_rate(rate);
+        self.on_tick_rate_changed();
+        true
     }
     /// Whether that player counts for `players_sleeping_percentage`: an
     /// ignored player who isn't in bed is left out of the players the night

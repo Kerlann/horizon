@@ -1,5 +1,15 @@
 //! Derive hook subscriptions from a trait implementation.
 mod point;
+mod wire;
+
+/// Derive the shared native/wasm owned-value encoding.
+#[proc_macro_derive(Wire, attributes(wire))]
+pub fn derive_wire(input: TokenStream) -> TokenStream {
+    wire::expand(syn::parse_macro_input!(input as syn::DeriveInput))
+        .unwrap_or_else(syn::Error::into_compile_error)
+        .into()
+}
+
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{

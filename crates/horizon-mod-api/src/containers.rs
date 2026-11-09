@@ -24,6 +24,7 @@ pub struct ModBlockEntity {
 /// which the mod sets and nothing saves.
 #[derive(Clone, Debug, Default, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ModBlockEntityFields {
     pub nbt: Compound,
     pub items: Vec<Option<ItemStack>>,
@@ -44,6 +45,7 @@ pub struct ModRevision {
 // hidden: the game's snapshot of a mod block entity, read by generated boundary code
 /// An entity's transport form; identity and revision are read-only on writeback.
 #[doc(hidden)]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ModBlockEntitySnapshot {
     pub(crate) id: String,
     pub(crate) fields: ModBlockEntityFields,
@@ -200,6 +202,7 @@ impl std::ops::DerefMut for ModBlockEntity {
 /// slots when the block is used, if any (`MOD_MENUS`).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ModContainer {
     pub slots: usize,
     pub faces: [Vec<usize>; 6],
@@ -214,6 +217,7 @@ pub struct ModContainer {
 /// they survive restarts and the block's own tick reads them.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ModFluidTanks {
     /// Each tank's capacity in millibuckets, in tank order.
     pub tanks: Vec<i32>,
@@ -230,6 +234,7 @@ pub struct ModFluidTanks {
 /// `energy`, so it survives restarts and the block's own tick reads it.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ModEnergyBuffer {
     pub capacity: i32,
     /// The most one insert moves; 0 takes none.

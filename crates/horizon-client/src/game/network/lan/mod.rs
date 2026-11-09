@@ -4770,6 +4770,16 @@ mod tests {
     #[test]
     #[ignore = "requires prepared vanilla resources"]
     fn datapack_damage_lazy_wire_load_caches_after_all_packs_are_removed() {
+        if crate::game::native_entity_refs::tests::run_fresh_cases(
+            "game::lan::tests::datapack_damage_lazy_wire_load_caches_after_all_packs_are_removed",
+            "HORIZON_LAZY_DAMAGE_CUSTOM_COMPONENTS",
+            &["custom"],
+        ) {
+            return;
+        }
+        // Component registration is process-global. Exercise the identity path
+        // deterministically, without depending on another test's registration.
+        horizon_protocol::item::custom::install(1000, vec!["lazy_damage:test".into()]).unwrap();
         use super::{SyncCache, cached_sync_data, initialize_world_sync_data, prepare_sync_reload};
         use horizon_world::{damage_source::Catalog, loot::PackOverlay};
         use std::{path::Path, sync::Arc};
@@ -4803,8 +4813,10 @@ mod tests {
                 .as_nanos()
         ));
         // Keep the cache's resource-root identity stable while making a reload fail.
-        // Copy only data, not prepared assets, and never mutate shared resources.
+        // Copy data and the identity inputs, not prepared assets. Custom components
+        // make wire loading hash facts.json even when this world's packs are empty.
         copy_tree(&prepared.join("data"), &root.join("data"));
+        std::fs::copy(prepared.join("facts.json"), root.join("facts.json")).unwrap();
         let report = horizon_protocol::registry::Builtin::find(&prepared)
             .expect("prepared test resources require registries.json");
         std::fs::copy(report, root.join("registries.json")).unwrap();
@@ -4826,6 +4838,7 @@ mod tests {
         assert!(cache.data.is_none());
         assert!(prepare_sync_reload(&mut cache, &PackOverlay::NONE).is_none());
         let opened = cached_sync_data(&mut cache, &root, &PackOverlay::NONE, &item_data).unwrap();
+        assert!(opened.content_identity.is_some());
         // Changing the root invalidates the cache. Instead remove the private
         // fixture's files: an accidental reload at the same root must now fail.
         std::fs::remove_dir_all(&root).unwrap();

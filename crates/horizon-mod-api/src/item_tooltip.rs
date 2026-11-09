@@ -3,6 +3,7 @@ use crate::ItemStack;
 #[allow(unused_imports)]
 use crate::*;
 use horizon_core::nbt::Tag;
+// no wire: borrowed call-scoped view; transport uses owned snapshots rather than serializing references.
 /// The `minecraft:tooltip_display` component applied by `ItemStack` while it
 /// builds a hover tooltip.
 // exhaustive: its fields are private, so mods cannot build or destructure it

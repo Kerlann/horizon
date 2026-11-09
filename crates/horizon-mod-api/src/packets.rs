@@ -8,6 +8,7 @@ use crate::Identifier;
 /// a connection or a protocol implementation, and sending does not apply effects locally.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ServerboundPlayPacket {
     /// Packet type, for example `minecraft:pong` or `minecraft:custom_payload`.
     pub id: Identifier,
@@ -25,6 +26,7 @@ impl ServerboundPlayPacket {
 /// Why the client could not submit a play packet.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum SendPacketError {
     /// There is no server connection.
     NotConnected,

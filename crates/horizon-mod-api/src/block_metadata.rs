@@ -7,6 +7,7 @@ use crate::{BlockKey, StateConstraint};
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct BlockStateRecord {
     /// Process-local block key, not a saved block name.
     pub block: BlockKey,
@@ -23,6 +24,7 @@ impl BlockStateRecord {
 /// A refused metadata read or state operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum BlockStateError {
     /// Metadata is unavailable in this context.
     Unavailable,

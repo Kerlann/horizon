@@ -4,6 +4,7 @@ use crate::ClientModifiers;
 /// The screens in which two mappings can conflict.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum KeyConflictContext {
     /// Conflicts on every screen.
     #[default]
@@ -35,6 +36,7 @@ mod context_tests {
 /// Its default is `key` with `modifiers` held; shift, control and alt are bound, super is not.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct NativeKeyRegistration {
     /// The key's id, unique within its mod (`zoom`).
     pub id: String,

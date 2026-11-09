@@ -1,0 +1,74 @@
+name: native dylib linkage probe
+
+# Probe only: no release, mod loader, or player data. Open the probe PR only
+# after the local gates pass; its ready head receives one cross-platform run.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - 'tools/native_dylib_probe.py'
+      - 'tools/native_dylib_probe/**'
+      - 'tools/prebuilt_game.py'
+      - '.github/workflows/native-dylib-probe.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-dylib-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linkage:
+    if: github.event.pull_request.draft == false
+    name: linkage ${{ matrix.target }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            target: x86_64-unknown-linux-gnu
+          # Match the launcher's actual compiler host, not Windows MSVC.
+          - os: windows-latest
+            target: x86_64-pc-windows-gnu
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    defaults:
+      run:
+        shell: bash
+    env:
+      CARGO_INCREMENTAL: '0'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Record exact head and select the launcher's pinned compiler
+        id: rust
+        run: |
+          git rev-parse HEAD
+          echo "version=$(sed -n 's/^pub const VERSION: &str = "\(.*\)";$/\1/p' launcher/src/rust_toolchain.rs)" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.rust.outputs.version }}-${{ matrix.target }}
+          components: clippy
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: native-dylib-probe-${{ matrix.target }}
+      - name: Linux SDK prerequisites
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libasound2-dev libudev-dev
+      - name: Exact compiler identity
+        run: rustc -vV
+      - name: Build the unmodified prebuilt SDK topology
+        run: python tools/prebuilt_game.py build prebuilt
+      - name: Export counts and Windows format limit
+        run: python tools/prebuilt_game.py exports prebuilt
+      - name: Two mod libraries share the game's exact Rust state
+        run: python tools/native_dylib_probe.py --sdk prebuilt --output target/native-dylib-probe
+      - name: Probe command log
+        if: failure()
+        run: tail -n 120 target/native-dylib-probe/commands.log

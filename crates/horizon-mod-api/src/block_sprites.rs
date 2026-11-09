@@ -5,6 +5,7 @@ use crate::*;
 /// 1 to 7) and its layer in that array.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct SpriteRef {
     pub array: u32,
     pub layer: u32,
@@ -16,6 +17,7 @@ pub struct SpriteRef {
 /// One face of a block's model on one of its sides.
 #[derive(Clone, Copy, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct FaceSprite {
     pub sprite: SpriteRef,
     /// Where the face lies on the side, in the side's two axes (`side_axes`), from 0 to 1 across the block:
@@ -35,6 +37,7 @@ pub struct FaceSprite {
 /// What a block draws on each side, in [`Direction::ALL`]'s order (down, up, north, south, west, east).
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct BlockSprites {
     /// The faces on each side, in the model's order: the one drawn first first (a grass block's side: its dirt
     /// and grass, then the grass overlay tinted over it). A side with none is empty. Faces that do not lie flat
@@ -49,6 +52,7 @@ pub struct BlockSprites {
 /// A model face's texture name and tint selector, as block drawing helpers accept them.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct BlockFaceTexture {
     /// Texture name, for example `block/oak_planks` or a mod's namespaced texture.
     pub texture: String,
@@ -70,6 +74,7 @@ impl BlockFaceTexture {
 /// `texture_atlas_stitched` names it. Horizon packs vanilla's many atlases into these two.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TextureAtlas {
     /// The block sprite arrays: every texture a block model uses, one layer each. Look a sprite up
     /// with `texture_sprites`, which answers a [`SpriteRef`].
@@ -82,6 +87,7 @@ pub enum TextureAtlas {
 /// A mod-generated PNG to stitch into the next client resource generation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: mods submit declarations by value
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct RuntimeSprite {
     /// The target client atlas.
     pub atlas: TextureAtlas,
@@ -96,6 +102,7 @@ pub struct RuntimeSprite {
 /// [`TextureAtlas::Gui`], when a mod reads it again.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct AtlasRegion {
     /// `[u0, v0, u1, v1]`: the sprite's corners, from 0 to 1 across the atlas.
     pub uv: [f32; 4],

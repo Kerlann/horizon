@@ -114,6 +114,7 @@ impl Drop for RestoreControllers {
     }
 }
 
+// no wire: in-process testing harness state, not a mod boundary payload.
 /// A server and client host for tests, composed of one fake per service: the registries, the
 /// players, one level, the commands and messages services, and the transaction journal, which
 /// keeps the players and the level on each transaction and puts them back when it aborts.

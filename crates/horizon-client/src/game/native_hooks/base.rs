@@ -2940,7 +2940,8 @@ impl Game<'_> {
         thundering: bool,
         cancel: &mut bool,
     ) {
-        self.fire_weather_change(dimension, raining, thundering, cancel);
+        crate::game::level_control_hooks::LevelControl::Weather
+            .hear(|| self.fire_weather_change(dimension, raining, thundering, cancel));
     }
 
     /// The server changed its thunder state through `/weather`. Set `cancel`
@@ -2951,7 +2952,8 @@ impl Game<'_> {
         thundering: bool,
         cancel: &mut bool,
     ) {
-        self.fire_thunder_change(dimension, thundering, cancel);
+        crate::game::level_control_hooks::LevelControl::Weather
+            .hear(|| self.fire_thunder_change(dimension, thundering, cancel));
     }
 
     /// A server lightning bolt is about to be created. `cause` is `weather`,
@@ -3011,12 +3013,14 @@ impl Game<'_> {
     /// The server world's border bounds changed, either immediately or when
     /// its timed size change was requested.
     pub(in crate::game) fn native_world_border_bounds_changed(&mut self) {
-        self.fire_world_border_bounds_changed();
+        crate::game::level_control_hooks::LevelControl::BorderBounds
+            .hear(|| self.fire_world_border_bounds_changed());
     }
 
     /// The server world's border center changed.
     pub(in crate::game) fn native_world_border_center_changed(&mut self) {
-        self.fire_world_border_center_changed();
+        crate::game::level_control_hooks::LevelControl::BorderCenter
+            .hear(|| self.fire_world_border_center_changed());
     }
 
     /// A Nether portal was built for a dimension travel, or an End platform
@@ -3457,7 +3461,9 @@ impl Game<'_> {
     }
     /// `DispenserBlock.getDispenseMethod`: choose a behaviour for any item,
     /// including vanilla items, on the authoritative server (not droppers).
-    /// Leave answer None for vanilla. Otherwise answer `(remainder, event)`:
+    /// The block the dispenser faces is asked first (`dispense_method`), and
+    /// its answer keeps this part from being asked. Leave answer None for
+    /// vanilla. Otherwise answer `(remainder, event)`:
     /// a remainder of None empties the slot, `Some(stack)` replaces it (the hook
     /// owns consumption: no extra item is removed afterwards). `event` is the
     /// level event the dispenser plays with its smoke: 1000 the click, 1001 the

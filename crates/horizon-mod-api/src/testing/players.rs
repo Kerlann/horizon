@@ -8,6 +8,7 @@ use std::collections::BTreeMap;
 /// The off hand's inventory slot (`ItemPlace::PlayerSlot`).
 const OFF_HAND: i32 = -106;
 
+// no wire: in-process testing harness state, not a mod boundary payload.
 /// The players online in a test world, by UUID, and the one whose action is running.
 #[derive(Clone, Debug, Default)]
 #[non_exhaustive]
@@ -76,6 +77,7 @@ impl FakePlayers {
     }
 }
 
+// no wire: in-process testing harness state, not a mod boundary payload.
 /// An online player: their entity and level, their name, their inventory by
 /// `ItemPlace::PlayerSlot` number, and what the game handed or showed them.
 #[derive(Clone, Debug)]

@@ -138,6 +138,7 @@ pub trait PlaceProvider: Send + Sync + 'static {
     ) -> u32;
 }
 
+// no wire: process-local capability declaration carries a provider function pointer and type identity.
 /// An item capability: its name, the handler trait `T` it answers with, and the game's own
 /// provider, if the game has one.
 // exhaustive: its fields are private, so mods cannot build or destructure it

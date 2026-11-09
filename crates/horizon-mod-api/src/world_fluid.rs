@@ -2,6 +2,7 @@
 /// Simulation and bucket settings for a declared world fluid.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct WorldFluid {
     /// Ticks between flow steps, at least one.
     pub tick_delay: i32,

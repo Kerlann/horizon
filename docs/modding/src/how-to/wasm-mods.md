@@ -19,6 +19,35 @@ the same mod API runs with no rebuild. Only the build step differs: the hooks, P
 {{#include ../../examples/wasm-hello/src/lib.rs:mod}}
 ```
 
+## Owned values and `Wire`
+
+Native and wasm use the same owned-value encoding. A mod chooses which of its own
+values may cross that boundary by explicitly deriving `mod_api::Wire`:
+
+```rust
+#[derive(mod_api::Wire)]
+struct CounterUpdate {
+    counter: mod_api::Identifier,
+    value: u32,
+}
+```
+
+Records write fields in declaration order; enum tags are zero-based declaration
+indices, not Rust discriminants. Each field must have a Wire form. Borrowed hook
+arguments are call-table views, not owned Wire values; a borrowed record cannot
+use this derive. The derive is never added automatically to a mod's types.
+
+For a value with checked construction, `#[wire(via = SomeOwnedType)]` uses
+`From<&Self>` to encode and `TryFrom<SomeOwnedType>` to decode. A failed conversion
+refuses the value rather than constructing unchecked state. This also lets a type
+retain a deliberately chosen encoding instead of exposing its Rust fields.
+
+The loader compares composed encoding layouts, including nested fields and
+recursive shapes. Equivalent standard representations share one encoding:
+`Vec<T>` and `Box<[T]>`, for example, are both lists, while `Box<T>` is transparent.
+Changing a field's encoded form changes its callers' layout too. Layouts are
+computed once at load; they are not per-tick work.
+
 ## Build
 
 ```sh

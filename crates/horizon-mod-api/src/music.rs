@@ -4,6 +4,7 @@ use crate::*;
 /// `Music`: a sound event and the delay range (ticks) before it starts.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct Music {
     pub sound: String,
     pub min_delay: i32,
@@ -78,6 +79,7 @@ impl Music {
 /// (`native_music_layers`): a sound event and its volume, 0 to 1.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct MusicLayer {
     pub sound: String,
     pub volume: f32,

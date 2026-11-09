@@ -9,6 +9,7 @@ use super::{
 /// One property and its legal values in a state definition.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct StateProperty {
     /// Property name.
     pub name: String,
@@ -26,6 +27,7 @@ impl StateProperty {
 /// A property constraint used when matching a state.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct StateConstraint {
     /// Property name.
     pub name: String,
@@ -46,6 +48,7 @@ impl StateConstraint {
 /// An invalid constraint, identifying its index in the supplied list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum StateMatchError {
     /// The definition has no such property.
     UnknownProperty(u32),
@@ -53,6 +56,7 @@ pub enum StateMatchError {
     InvalidValue(u32),
 }
 
+// no wire: borrowed host or registrar backend; access stays scoped to the owning call.
 /// The block-state facts service: `host.block_states()`.
 // exhaustive: its field is private; only `host.block_states()` builds one
 pub struct BlockStates<'a> {

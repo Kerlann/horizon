@@ -3,6 +3,7 @@
 /// One criterion in an advancement, including criteria not yet obtained.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct CriterionProgress {
     /// The criterion's name within the advancement.
     pub name: String,
@@ -27,6 +28,7 @@ impl CriterionProgress {
 /// describe progress outside an event without borrowing the game or a player.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct AdvancementProgress {
     /// Every criterion in definition order, including unobtained criteria.
     pub criteria: Vec<CriterionProgress>,

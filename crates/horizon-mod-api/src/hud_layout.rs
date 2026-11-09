@@ -5,6 +5,7 @@ use std::borrow::Cow;
 /// A `Matrix3x2fStack` operation applied to a copy of the current pose.
 #[derive(Clone, Copy, Debug, PartialEq)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum PoseOp {
     Translate(f32, f32),
     Scale(f32, f32),
@@ -12,6 +13,7 @@ pub enum PoseOp {
 /// The render pipeline of a texture blit.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum Blend {
     /// `GUI_TEXTURED`.
     Textured,
@@ -36,6 +38,7 @@ impl Blend {
 /// Text deeper than 512 nodes refuses the whole command buffer at the game boundary.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum GuiDraw {
     /// `blitSprite(pipeline, sprite, x, y, w, h, color)`; `region` =
     /// (spriteW, spriteH, u, v) for the partial overload.
@@ -106,6 +109,7 @@ pub enum GuiDraw {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum HeartKind {
     Normal,
     Poisoned,
@@ -113,6 +117,7 @@ pub enum HeartKind {
     Frozen,
 }
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct HealthInputs {
     /// `Hud.tickCount`.
     pub tick: i32,

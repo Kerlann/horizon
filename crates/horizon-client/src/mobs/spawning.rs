@@ -97,13 +97,7 @@ impl LocalDifficulty {
     }
     /// `getSpecialMultiplier`.
     pub fn special(&self) -> f32 {
-        if self.effective < 2.0 {
-            0.0
-        } else if self.effective > 4.0 {
-            1.0
-        } else {
-            (self.effective - 2.0) / 2.0
-        }
+        mod_api::NativeDifficulty::from(*self).special_multiplier()
     }
 }
 /// `Mob.populateDefaultEquipmentSlots`: sometimes a set of armour, from the

@@ -14,6 +14,7 @@ where
         self(host, entity, context)
     }
 }
+// no wire: trait-object alias inherits its provider trait policy; callbacks are not serialized.
 /// An entity capability provider, as the registrar keeps it.
 pub type EntityProvider<T, C = ()> = dyn EntityCapabilityProvider<T, C>;
 
@@ -88,6 +89,7 @@ pub fn entity_providers<T: ?Sized + 'static, C: Copy + 'static>(
     })
 }
 
+// no wire: provider lookup borrows static capability dispatch tables and process-local type identity.
 /// An entity's providers of one capability ([`entity_providers`]).
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct EntityProviders<T: ?Sized + 'static, C: 'static> {

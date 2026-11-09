@@ -3,6 +3,7 @@
 /// Whether world geometry is hidden by nearer world surfaces.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum WorldDepth {
     /// Test against the world's depth, without writing depth.
     Tested,
@@ -13,6 +14,7 @@ pub enum WorldDepth {
 /// A world-space line, colored with 0xAARRGGBB and measured in screen pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct WorldLine {
     /// Starting position in blocks, before camera subtraction.
     pub from: [f64; 3],
@@ -42,6 +44,7 @@ impl WorldLine {
 /// top right as seen from the front; alpha blends without writing depth.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct WorldQuad {
     /// Four world-space corners in blocks, before camera subtraction.
     pub corners: [[f64; 3]; 4],
@@ -64,6 +67,7 @@ impl WorldQuad {
 /// Why a whole geometry batch was refused; nothing from that batch was appended.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum DrawError {
     /// A coordinate or width is not finite, or a camera-relative coordinate overflows f32.
     NonFinite,
@@ -77,6 +81,7 @@ pub enum DrawError {
 /// `RenderLevelStageEvent` stages Horizon draws, in the order the frame reaches them.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum RenderLevelStage {
     /// After the sky, sun, moon and stars, before any terrain (`AfterSky`): behind
     /// everything else the world draws, for backdrops and atmosphere.
@@ -108,6 +113,7 @@ impl RenderLevelStage {
 /// This initial view does not expose NeoForge's full level state or visible sections.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct WorldRenderView {
     /// Camera origin in world-space blocks. Subtraction precedes f32 conversion.
     pub camera: [f64; 3],
@@ -133,6 +139,7 @@ impl WorldRenderView {
 /// when the view's storage is created and is never grown during submission.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct WorldDrawUsage {
     /// Lines queued for this view after near-plane clipping.
     pub lines: u32,

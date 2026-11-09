@@ -220,7 +220,7 @@ Nothing crosses at post time. `r.listen` goes through the `Registrar` import, so
 
 ### NeoForge
 
-A NeoForge library defines `class TankFilledEvent extends Event implements ICancellableEvent` and posts it with `NeoForge.EVENT_BUS.post(event)` or on its own bus. Listeners use `@SubscribeEvent(priority = …, receiveCanceled = true)` or `bus.addListener(priority, receiveCanceled, TankFilledEvent.class, consumer)`. The [public events guide](https://docs.neoforged.net/docs/concepts/events/) documents `ICancellableEvent` and `receiveCanceled`. It is labelled 26.1, so 26.3 equivalence is **unverified**. Differences: NeoForge has five `EventPriority` steps where Horizon uses `i32`, as catalog hooks already do. NeoForge dispatches by event class where Horizon uses a declared name, because a name can be refused, shown and checked for type agreement. A Java listener for an event nobody posts is silently never called, while Horizon refuses it.
+A NeoForge library defines `class TankFilledEvent extends Event implements ICancellableEvent` and posts it with `IEventBus#post`, on `NeoForge.EVENT_BUS` or its own bus. Listeners set `priority` and `receiveCanceled` on `@SubscribeEvent` or pass them to `IEventBus#addListener(priority, receiveCanceled, eventType, consumer)`. Sources: public docs and javadoc only, namely the [events guide](https://docs.neoforged.net/docs/concepts/events/) (labelled 26.1) and the event bus javadoc (`IEventBus`, bus 8.0.5). 26.3 equivalence is **unverified**. Differences: NeoForge has five `EventPriority` steps where Horizon uses `i32`, as catalog hooks already do. NeoForge dispatches by event class where Horizon uses a declared name, because a name can be refused, shown and checked for type agreement. A Java listener for an event nobody posts is silently never called, while Horizon refuses it.
 
 ### Cost when unused
 
@@ -248,7 +248,7 @@ for reactor in REACTORS.parts(host, block_entity_type) { … }
 | Targets | An id or a tag. Tags are resolved by each game at world open and on `/reload`, as built-in parts are, into a table keyed by slot. |
 | Multiplicity | One part of each concrete type per kind and thing, the existing `insert_part` rule and message. Different mods' parts on one thing are all kept. |
 | Order | Dependency order, then registration order within a mod, as `Attached` keeps it. |
-| Contract | The library's own. `parts()` yields the parts in order, and the library decides whether all of them run, the first answer wins, or anything else. Part kind methods are part of the library's API, as `IPart` is AE2's. |
+| Contract | The library's own. `parts()` yields the parts in order, and the library decides whether all of them run, the first answer wins, or anything else. Part kind methods are part of the library's API: a pipe library's `PipeAttachment` trait is the library's to define and evolve. |
 | State | Parts are shared behaviour. Data for each instance lives in attachments, as #2328 proposes. |
 | Lifetime | Attached during `register` and frozen when it seals. The resolved table is rebuilt at world open and on `/reload`, and an iterator never outlives the call it was made in. |
 
@@ -260,7 +260,7 @@ This works like `OwnProvider` today. The part is an erased resource in the attac
 
 ### NeoForge
 
-There is no first-class counterpart, and #41's Parts are already a fork addition. In NeoForge this is a library convention: AE2's `IPart` with `PartItem` for cable-bus parts that addons implement, Create's `BlockEntityBehaviour` and `BehaviourType`, and Mekanism's module registry. Capabilities (`BlockCapability.createSided` plus `RegisterCapabilitiesEvent`) are the platform's nearest mechanism, and they map to `CapabilityKey`. Horizon gives every library the same table, the same refusals and tag resolution in place of hand-rolled maps.
+There is no first-class counterpart, and #41's Parts are already a fork addition. On NeoForge, a library that wants addons to attach behaviour to its blocks (say, filters and upgrades that fit into a pipe) defines its own interface and its own lookup table for it. Capabilities (`BlockCapability.createSided` plus `RegisterCapabilitiesEvent`, in the public [capabilities guide](https://docs.neoforged.net/docs/inventories/capabilities/), labelled 26.1) are the platform's nearest mechanism, and they map to `CapabilityKey`. Horizon gives every library the same table, the same refusals and tag resolution in place of hand-rolled maps.
 
 ### Cost when unused
 
@@ -302,7 +302,7 @@ The object is an erased resource in the group. Scope identity comes from the hos
 
 ### NeoForge
 
-NeoForge has no service type. Libraries combine Java `ServiceLoader` (an API jar with one implementation found at run time), `InterModComms` messages at load, `SavedData` (`level.getDataStorage().computeIfAbsent(…)`, with the overworld's storage for server-wide data) and data attachments on levels. Scoped state plus attachments covers `SavedData`. `ServiceKey` covers the `ServiceLoader` pattern, and adds a load-time refusal for two providers or a missing required one where Java just picks one. IMC isn't needed, because dependents call the library directly in dependency order.
+NeoForge has no service type. Libraries combine Java `ServiceLoader` (an API jar with one implementation found at run time), `InterModComms` messages at load (`InterModEnqueueEvent` and `InterModProcessEvent`), `SavedData` (`SavedDataStorage#computeIfAbsent` on `ServerLevel#getDataStorage`, or `MinecraftServer#getDataStorage` for data not specific to a level) and data attachments on levels. Sources: public docs only, namely the [events guide](https://docs.neoforged.net/docs/concepts/events/), [saved data guide](https://docs.neoforged.net/docs/datastorage/saveddata/) and [attachments guide](https://docs.neoforged.net/docs/datastorage/attachments/), all labelled 26.1. Scoped state plus attachments covers `SavedData`. `ServiceKey` covers the `ServiceLoader` pattern, and adds a load-time refusal for two providers or a missing required one where Java just picks one. IMC isn't needed, because dependents call the library directly in dependency order.
 
 ### Cost when unused
 
@@ -323,7 +323,7 @@ CHEMICALS.get(PLASMA) / CHEMICALS.by_name("addon:plasma") / CHEMICALS.iter()
 |---|---|
 | Registry name | Namespaced by the declaring mod, declared once (refused otherwise, naming both). It shares one key space with the game's registries and with #2332's data-pack registries, and a collision with either is refused. |
 | Entries | Named in the registering mod's own namespace, which is refused otherwise, as #2332 proposes. A duplicate entry name is refused, naming both mods. `register` returns a typed `RegistryEntry<T>` slot key, the same kind of key as `BlockKey`. |
-| Order | Dependency order already makes the library's `declare_registry` run before any dependent's `register`, so one registration phase is enough. NeoForge needs `NewRegistryEvent` before `RegisterEvent` only because Java mods have no declared dependency order. |
+| Order | Dependency order already makes the library's `declare_registry` run before any dependent's `register`, so one registration phase is enough. NeoForge registers a new registry in `NewRegistryEvent` and its entries afterwards through `DeferredRegister` or `RegisterEvent`; Horizon's declared dependency order makes that second phase unnecessary. |
 | Freezing | The registry is frozen when registration seals. After sealing, the library builds its derived tables in a listener of the first lifecycle hook after registration. Which hook that is, and whether it needs a dedicated "registries frozen" hook with no NeoForge name, is question 6. |
 | Slots | Fixed when registration seals and local to the session. Saves store names, never slots, as #2332 requires. A save naming an entry that is no longer registered follows #2336's quarantine rule. |
 | Clients | With `RegistrySync::Names`, the server sends name→slot during configuration and the client remaps, as NeoForge's `sync(true)` does. Values aren't sent: both sides ran the same code. A client missing the declaring mod is refused at join with the registry named. `RegistrySync::None` registries are server-only. |
@@ -336,7 +336,7 @@ The game keeps names, slots, owners and tags. Values stay in the group as erased
 
 ### NeoForge
 
-`RegistryBuilder<T>(ResourceKey<Registry<T>>)` with `.sync(true)`, `.defaultKey(…)` and callbacks, registered in `NewRegistryEvent` or with `DeferredRegister.makeRegistry`. Entries come from `DeferredRegister.create(key, modid)` and `RegisterEvent`. Sources: the [public registries guide](https://docs.neoforged.net/docs/concepts/registries/), labelled 26.1, and the 26.1 `DeferredRegister.makeRegistry` javadoc. 26.3 is **unverified**. Differences: there is one phase in place of two, for the reason above. Entry namespaces are enforced. A missing client mod is refused by registry name.
+`new RegistryBuilder<>(key)` with `.sync(true)` (integer id syncing) and `.defaultKey(…)`, built and registered in `NewRegistryEvent`. Entries come from `DeferredRegister.create(registry, modid)` or `RegisterEvent`. Sources: public docs only, namely the [registries guide](https://docs.neoforged.net/docs/concepts/registries/), labelled 26.1. 26.3 is **unverified**. Differences: there is one phase in place of two, for the reason above. Entry namespaces are enforced. A missing client mod is refused by registry name.
 
 ### Cost when unused
 
@@ -443,7 +443,7 @@ Each stage updates this book page into a how-to and adds rustdoc. None of them t
 1. **Mixed targets.** Should a native library with wasm addons (or the reverse) be supported through the game, as proposed above? That needs a stateless "types crate" in the package model. The alternative is refusing mixed targets outright with a clear message. Recommendation: land the clear refusals first (stage 6a) and decide the types crate when a real library needs it.
 2. **`[[inject]]` for mod hooks.** Should mod hooks also be listenable through `[[inject]] at = "<mod>:<hook>"`, which would make points and mod hooks one manifest model? Recommendation: code registration only, since it is typed and needs no slot.
 3. **Capability keys and Part kinds.** Should `CapabilityKey` be merged into `PartKind` (a part kind with a context and first-answer lookup)? Recommendation: keep NeoForge's name and API for capabilities and share only the storage.
-4. **Server-wide saved data.** Should `AttachmentHolder::Server` be added for state that belongs to a server and not a level? NeoForge uses the overworld's storage.
+4. **Server-wide saved data.** Should `AttachmentHolder::Server` be added for state that belongs to a server and not a level? NeoForge's public saved data guide attaches such data to `MinecraftServer#getDataStorage`.
 5. **Replacing a service provider.** May a mod override another mod's service provider? Recommendation: no, refuse two providers, until a concrete case exists.
 6. **The "registries frozen" moment.** Which existing hook is the first after registration seals? If none fits, a Horizon-only hook is needed.
 7. **Patching other mods' code: decided.** Mod points mirror engine points (section above). Left for review: the opt-out attribute's name, `#[mod_api::no_point]`.

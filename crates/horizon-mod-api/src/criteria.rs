@@ -39,6 +39,7 @@ pub trait CriterionTest: Send + Sync + 'static {
 /// Why the mod's criterion test could not answer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum CriterionTestError {
     /// The test could not run (including a stopped, busy or unscoped reentrant wasm group).
     Unavailable,
@@ -53,6 +54,7 @@ impl From<(crate::Identifier, String)> for CriterionTestError {
 /// Why [`PlayerRef::trigger_criterion`](crate::PlayerRef::trigger_criterion) was refused.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TriggerCriterionError {
     /// Vanilla's `minecraft` triggers are fired only by the game, or the id has an empty
     /// namespace or path.

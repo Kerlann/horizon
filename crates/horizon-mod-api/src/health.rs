@@ -39,6 +39,7 @@ pub enum Reduction {
 /// the reduction accessors so future reduction kinds do not expose a fixed array layout.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct DamageValues {
     /// The damage sequence's `original` value.
     pub original: f32,
@@ -159,6 +160,7 @@ impl DamageContainer {
     }
 }
 
+// no wire: borrowed call-scoped view; transport uses owned snapshots rather than serializing references.
 /// A hit's `DamageSource` for `HURT_SERVER`: its type (`minecraft:fall`),
 /// the entity ids of `getEntity` (`causing`) and `getDirectEntity`
 /// (`direct`), 0 for none or not known, and where it comes from
@@ -180,6 +182,7 @@ pub struct HurtSource<'a> {
 /// `HURT_SERVER`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct Victim {
     pub position: [f64; 3],
     pub view: [f64; 3],
@@ -188,6 +191,7 @@ pub struct Victim {
 /// may change it (`LivingShieldBlockEvent`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ShieldBlock {
     /// The player counts as blocking.
     /// The damage sequence's `blocked` value.

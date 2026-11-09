@@ -8,6 +8,7 @@ use crate::{BlockKey, FluidKey, Identifier, ItemKey};
 pub struct TagKey(pub(crate) u32);
 
 impl TagKey {
+    #[cfg(any(not(target_arch = "wasm32"), test))]
     pub(crate) fn from_slot(slot: u32) -> Result<Self, &'static str> {
         horizon_mod_runtime::registry_keys::with_tag_name(slot, |id| {
             id.map(|_| Self(slot)).ok_or("unknown TagKey slot")

@@ -3,6 +3,7 @@
 /// A screen registered by `Hooks::register_dimension_transition_screen`.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: mods construct registrations and the game reads both fields
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct DimensionTransitionScreen {
     /// Namespaced screen id, drawn by `Hooks::dimension_transition_screen_draw`.
     pub screen: String,
@@ -13,6 +14,7 @@ pub struct DimensionTransitionScreen {
 /// NeoForge's incoming, outgoing and conditional registration variants.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: the three registration variants
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum DimensionTransition {
     /// Travel to this dimension (`registerIncomingEffect`).
     Incoming(String),
@@ -30,6 +32,7 @@ pub enum DimensionTransition {
 /// Why the client is displaying its level-loading screen.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: LevelLoadingScreen.Reason's three variants
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum DimensionTransitionReason {
     /// Travel involving the Nether, except a death respawn.
     NetherPortal,

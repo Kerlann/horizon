@@ -7,6 +7,7 @@
 /// Block and sky light, each `0..=15`, in vanilla's convention.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct LightCoords {
     /// Block light, `0..=15`.
     pub block: u8,
@@ -27,6 +28,7 @@ impl LightCoords {
 /// White-flash column and the hurt tint. Hurt hides the white flash.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct Overlay {
     /// White flash column, `0..=15`. Zero is no flash.
     pub white: u8,
@@ -54,6 +56,7 @@ pub const IDENTITY_TRANSFORM: [f32; 12] =
 /// One copy. `origin` is world blocks; `transform` is row-major 3×4 in that local space.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ModelInstance {
     /// World-space origin, in blocks. The camera is subtracted in `f64`.
     pub origin: [f64; 3],
@@ -102,6 +105,7 @@ impl ModelInstance {
 /// Why a whole instance batch was refused. Nothing from that batch is drawn.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum InstanceError {
     /// The handle is stale or not a resolved standalone model.
     Model(crate::ModelError),
@@ -176,6 +180,7 @@ impl InstanceGroupRef {
 /// Why a persistent group operation was refused. Errors leave storage and view unchanged.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum GroupError {
     /// The group belongs to another mod, was destroyed, its owner was disabled,
     /// or its world/resources retired. Re-enabling or slot reuse cannot revive it.

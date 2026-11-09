@@ -8,6 +8,7 @@ use super::{
 };
 use std::marker::PhantomData;
 
+// no wire: process-local capability declaration carries a provider function pointer and type identity.
 /// An entity capability: its name, the handler trait `T` it answers with, the context `C` a
 /// lookup passes its providers (NeoForge's `EntityCapability<T, C>`: `()` where NeoForge's is
 /// `Void`, the side asked about where it is `@Nullable Direction`), and the game's own provider,

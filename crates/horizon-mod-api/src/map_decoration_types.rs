@@ -5,6 +5,7 @@
 /// entry names it by, and how it is drawn.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: a mod builds it with a literal, as NeoForge's constructor takes these values
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct MapDecorationType {
     /// `<namespace>:<path>` in a namespace other than vanilla's, like `mymod:treasure`.
     pub id: String,

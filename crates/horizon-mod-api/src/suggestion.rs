@@ -1,6 +1,7 @@
 /// A command completion replacing a byte range of the input.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct Suggestion {
     /// Start (inclusive) and end (exclusive) byte offsets.
     pub range: (usize, usize),

@@ -14368,9 +14368,6 @@ mod tests {
         // compile (#9448).
         let mut glsl_failed = Vec::new();
         let mut translated = std::collections::HashSet::new();
-        // naga's GLSL writer gives an image one sampler, and the HUD's glint
-        // samples one image through two; one failed entry does not hide the rest.
-        let known_unsupported = [("hud.wgsl", "fs_cit_glint")];
         for (path, text) in sources {
             // entity.wgsl comes after the overlay's constants (entity_shader).
             let module = naga::front::wgsl::parse_str(&text)
@@ -14473,13 +14470,11 @@ mod tests {
                     .and_then(|mut w| w.write());
                     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                     if let Err(e) = glsl_result {
-                        if !known_unsupported.contains(&(name, entry.name.as_str())) {
-                            glsl_failed.push(format!(
-                                "{} {} (GLSL {version}): {e}",
-                                path.display(),
-                                entry.name
-                            ));
-                        }
+                        glsl_failed.push(format!(
+                            "{} {} (GLSL {version}): {e}",
+                            path.display(),
+                            entry.name
+                        ));
                         continue;
                     }
                     translated.insert((name.to_owned(), entry.name.clone()));
@@ -14499,8 +14494,13 @@ mod tests {
             glsl_failed.join("\n")
         );
         // These read the world's depth through `textureLoad`; before #9448 their
-        // depth binding could not translate, so TAA and the blit never came up.
-        for (file, entry) in [("world_post.wgsl", "fs_taa"), ("pack_post.wgsl", "fs_blit")] {
+        // depth binding could not translate, so TAA and the blit never came up. The HUD's
+        // CIT glint sampled one image through two samplers until #2386.
+        for (file, entry) in [
+            ("world_post.wgsl", "fs_taa"),
+            ("pack_post.wgsl", "fs_blit"),
+            ("hud.wgsl", "fs_cit_glint"),
+        ] {
             assert!(
                 translated.contains(&(file.to_owned(), entry.to_owned())),
                 "{file} {entry} must translate to GLSL"

@@ -5,18 +5,7 @@ import subprocess
 import time
 from datetime import datetime, timezone
 
-from boat_health import api, health_reason
-
-
-def recovery_reason(jobs, now):
-    """Do not replace a run that has already reported a genuine failure."""
-    if any(job.get("conclusion") == "failure" and any(
-        step.get("started_at") and step.get("name") not in ("Set up job", "Complete job")
-        for step in job.get("steps", [])
-    ) for job in jobs):
-        return ""
-    targets = [job for job in jobs if job["name"] in ("lint", "verify")]
-    return health_reason(targets, now)
+from boat_health import api, recovery_reason, user_step_started
 
 
 def main():
@@ -41,10 +30,7 @@ def main():
             subprocess.run(["gh", "api", "--method", "POST", f"repos/{repo}/actions/runs/{run}/cancel"], check=True)
             return
         if len(targets) == 2 and all(
-            job["status"] == "completed" or any(
-                step.get("started_at") and step.get("name") not in ("Set up job", "Complete job")
-                for step in job.get("steps", [])
-            ) for job in targets
+            job["status"] == "completed" or user_step_started(job) for job in targets
         ):
             return
         time.sleep(30)

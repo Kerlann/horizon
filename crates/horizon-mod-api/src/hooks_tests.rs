@@ -711,6 +711,27 @@ fn player_rules_take_their_hosts(
     let _: bool = player.set_sleep_timer(server, 0);
 }
 
+#[test]
+fn the_special_multiplier_rises_between_effective_two_and_four() {
+    let at = |effective| NativeDifficulty::new(3, effective).special_multiplier();
+    assert_eq!(at(1.5), 0.0);
+    assert_eq!(at(3.0), 0.5);
+    assert_eq!(at(4.5), 1.0);
+}
+
+/// Compile-only: the border, weather and difficulty calls take their hosts.
+#[allow(dead_code)]
+fn level_world_controls_take_a_server_host(server: &mut dyn ServerHost, level: LevelRef) {
+    let _ = level.local_difficulty(server, [0, 64, 0]);
+    let _ = level.set_world_border_center(server, [0.0, 0.0]);
+    let _ = level.set_world_border_size(server, 100.0, 20);
+    let _ = level.set_world_border_damage(server, 0.2, 5.0);
+    let _ = level.set_world_border_warning(server, 5, 300);
+    let _ = level.set_weather(server, 0, 6000, true, false);
+    let _ = level.set_weather_levels(server, 1.0, 0.0);
+    let _ = server.set_tick_rate(40.0);
+}
+
 /// Compile-only: mob spawning and the spawn policy as a mod calls them, the reads on any host
 /// and the writes, which change what the level spawns, on a server host.
 #[allow(dead_code)]

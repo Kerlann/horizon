@@ -4,6 +4,7 @@ use crate::{Host, ItemStack};
 /// An item payment, with an optional exact component predicate.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ItemCost {
     /// Item and minimum count required for this payment.
     pub stack: ItemStack,
@@ -23,6 +24,7 @@ impl ItemCost {
 /// A merchant offer copied at an API boundary, not a reference into the game's trade table.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct MerchantOffer {
     /// Undiscounted first payment.
     pub base_cost_a: ItemCost,

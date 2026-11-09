@@ -2,6 +2,7 @@
 /// An accepted root's original-jar inputs could not be checked.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum JarInputsError {
     /// An exact original is unavailable, with every requiring mod retained.
     Missing(Box<MissingJar>),
@@ -23,6 +24,7 @@ pub enum JarInputsError {
 /// One missing original file and its owners.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct MissingJar {
     /// Every mod requiring this exact file, in load order.
     pub owners: Vec<String>,

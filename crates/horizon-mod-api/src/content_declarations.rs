@@ -7,6 +7,7 @@ use std::collections::BTreeMap;
 /// BlockProperties in a load-time content declaration.
 #[derive(Clone, Debug, PartialEq, Default)]
 // exhaustive: declaration drafts mirror the closed content schema and support record construction.
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct BlockProperties {
     /// Destroy time in seconds of hand mining (-1: unbreakable).
     pub hardness: Option<f32>,
@@ -40,6 +41,7 @@ pub struct BlockProperties {
 /// PushReaction in a load-time content declaration.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: these variants are the closed content declaration vocabulary.
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum PushReaction {
     /// Declaration option.
     PushPull,
@@ -56,6 +58,7 @@ pub enum PushReaction {
 /// RenderShape in a load-time content declaration.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: these variants are the closed content declaration vocabulary.
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum RenderShape {
     /// Declaration option.
     Model,
@@ -68,6 +71,7 @@ pub enum RenderShape {
 /// RandomTicks in a load-time content declaration.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: these variants are the closed content declaration vocabulary.
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum RandomTicks {
     /// Every state (`true`), or none (`false`, for a template that ticks).
     All(bool),
@@ -83,6 +87,7 @@ pub enum RandomTicks {
 /// BlockShapes in a load-time content declaration.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: declaration drafts mirror the closed content schema and support record construction.
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct BlockShapes {
     /// State property names selecting a shape, in tuple order.
     pub properties: Vec<String>,
@@ -95,6 +100,7 @@ pub struct BlockShapes {
 /// Entity category selecting a load-time shape override.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 // exhaustive: entity categories are the closed content schema vocabulary.
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum ShapeEntityKind {
     /// Dropped items.
     Item,
@@ -109,6 +115,7 @@ pub enum ShapeEntityKind {
 /// BlockStateProperty in a load-time content declaration.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: these variants are the closed content declaration vocabulary.
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum BlockStateProperty {
     /// `false` and `true`, in vanilla's spelling.
     Boolean,
@@ -124,6 +131,7 @@ pub enum BlockStateProperty {
 /// `native blocks and items of <namespace>: <reason>`, without admitting part of that namespace.
 #[derive(Clone, Debug, PartialEq, Default)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct Block {
     /// `<mod id>:<path>`.
     pub id: String,
@@ -191,6 +199,7 @@ pub struct Block {
 /// Rarity in a load-time content declaration.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: these variants are the closed content declaration vocabulary.
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum Rarity {
     /// Declaration option.
     Common,
@@ -207,6 +216,7 @@ pub enum Rarity {
 /// `native blocks and items of <namespace>: <reason>`, without admitting part of that namespace.
 #[derive(Clone, Debug, PartialEq, Default)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct Item {
     /// Identifier in the declaring mod's namespace.
     pub id: String,
