@@ -85,21 +85,21 @@ impl NativeMobRelations {
                 self.players_by_id.remove(&id);
             }
         }
-        if let Some(id) = self.guest_vehicles.remove(&conn) {
-            if let Some(count) = self.guest_riders.get_mut(&id) {
-                *count -= 1;
-                if *count == 0 {
-                    self.guest_riders.remove(&id);
-                }
+        if let Some(id) = self.guest_vehicles.remove(&conn)
+            && let Some(count) = self.guest_riders.get_mut(&id)
+        {
+            *count -= 1;
+            if *count == 0 {
+                self.guest_riders.remove(&id);
             }
         }
     }
     /// Call at merchant session open/close/rebinding, including disconnect.
     pub(super) fn update_merchant(&mut self, conn: u32, mob: Option<u32>) {
-        if let Some(old) = self.merchant_by_conn.remove(&conn) {
-            if self.merchants.get(&old) == Some(&conn) {
-                self.merchants.remove(&old);
-            }
+        if let Some(old) = self.merchant_by_conn.remove(&conn)
+            && self.merchants.get(&old) == Some(&conn)
+        {
+            self.merchants.remove(&old);
         }
         if let Some(id) = mob {
             self.merchant_by_conn.insert(conn, id);
@@ -113,10 +113,10 @@ impl NativeMobRelations {
         old: Option<[i32; 4]>,
         new: Option<[i32; 4]>,
     ) {
-        if let Some(old) = old {
-            if self.saved_ids.get(&old) == Some(&id) {
-                self.saved_ids.remove(&old);
-            }
+        if let Some(old) = old
+            && self.saved_ids.get(&old) == Some(&id)
+        {
+            self.saved_ids.remove(&old);
         }
         if let Some(new) = new {
             self.saved_ids.insert(new, id);
