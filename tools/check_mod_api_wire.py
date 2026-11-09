@@ -233,5 +233,6 @@ def repository_violations(root=ROOT):
 
 if __name__ == '__main__':
     failures = repository_violations()
-    print('\n'.join(failures))
+    for failure in failures:
+        print(f'{failure}: missing Wire policy; add #[derive(mod_api::Wire)] or document an opt-out with // no wire: <reason>.')
     raise SystemExit(bool(failures))

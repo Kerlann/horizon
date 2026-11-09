@@ -28,7 +28,7 @@ Owner decision (2026-11-08): one derive in `horizon-mod-api-macros`, used by `mo
 
 ### What the derive emits: the same bytes as today
 
-The derive implements the existing trait (`crates/horizon-mod-api/src/wire.rs:558`: `MIN`, `put`, `put_owned`, `take`). It copies the generator's rules from `wire/emit.rs` exactly, so no encoding changes:
+The derive implements the existing trait (`crates/horizon-mod-api/src/wire/mod.rs`: `MIN`, `put`, `put_owned`, `take`). It copies the generator's rules from `wire/emit.rs` exactly, so no encoding changes:
 
 | Shape | Bytes | `MIN` | `take` |
 |---|---|---|---|
@@ -41,7 +41,7 @@ The derive implements the existing trait (`crates/horizon-mod-api/src/wire.rs:55
 - `put_owned` moves each field with `out.put_owned`, as the generator does, so resource fields hand over ownership.
 - On a `#[non_exhaustive]` type the derive emits the same `_ => unreachable!` arm under `#[allow(unreachable_patterns)]`. Within the defining crate, `non_exhaustive` adds no case.
 
-**Names.** Type names in this section are as of `54bee0f608`. D1, D2 and the golden test use the names as of D1's base. The restructure drops the `Native` prefix (106 renames, among them `NativeWorldEpoch`→`WorldEpoch`, `NativeTickId`→`TickId`, `NativeGoal`→`GoalSpec`, `NativeHeldItem`→`HeldItemSlot`, `NativeSpawner`→`SpawnSource`; the restructure PR carries the full table).
+**Names.** The source audit and golden values were taken at `54bee0f608`. The domain restructure removes the `Native` prefix: the current names include `WorldEpoch`, `TickId` and `TicketOwner`. The goal enum, held-item slot and spawn source are `GoalSpec`, `HeldItemSlot` and `SpawnSource` to avoid collisions with other API types. Root public reexports remain available.
 
 **Golden bytes.** These were taken from the current generated and hand-written impls at `54bee0f608` with a throwaway test, which was not committed:
 
@@ -150,7 +150,7 @@ Many hand-written impls exist only because the type is built through a checked c
 | `wire_types.rs`: `Transaction`, `TransactionSeal`, `LoadedMods`, `RegistrationContext` | 4 | **stay hand-written** | zero-byte lent tokens: the receiver rebuilds its own token. Boundary policy, not a layout |
 | `wire_types.rs`: `OwnProvider`; `wire_slots.rs`: `Id` | 2 | **stay hand-written** | resource handles (group-scoped ids, the `Unsupported` marker) |
 | `wire_types.rs`: slot keys (9 `u32`, `UnresolvedFluid` `u64`) | 1 macro | **stay hand-written** | the host checks each slot with `from_slot`; the guest carries it unchecked, which differs by target |
-| `wire_types.rs`: field-by-field handles and values with plain constructors (`NativeWorldEpoch`, `NativeTickId`, `EntityRef` and the 9 entity handles, `LevelRef`, `ChunkRef`, `GlobalPos`, `Corners`, `PackageKind`, `Side`, `PackageInfo`, …) | ~35 | **derive**, after checking the field order matches the hand impl's `put` order | same bytes. `PackageKind`/`Side` return `WireError::Tag` in place of `Invalid` for an unknown case, a different error with the same refusal |
+| `wire_types.rs`: field-by-field handles and values with plain constructors (`WorldEpoch`, `TickId`, `EntityRef` and the 9 entity handles, `LevelRef`, `ChunkRef`, `GlobalPos`, `Corners`, `PackageKind`, `Side`, `PackageInfo`, …) | ~35 | **derive**, after checking the field order matches the hand impl's `put` order | same bytes. `PackageKind`/`Side` return `WireError::Tag` in place of `Invalid` for an unknown case, a different error with the same refusal |
 | `wire_types.rs`: impls whose `take` validates or converts (`Identifier`, `LevelKey`, `ConfigPath`, `JavaString`, `BlockState`, `BlockStateRange`, `Components`, `ItemStack`, `StatePredicate`, …) | ~25 | **`#[wire(via = …)]`** where one simple form exists (`LevelKey`, `ConfigPath` via `String`); **hand-written** where `take` runs several steps (`ItemStack`, `Identifier` as two strings) | validation stays where it is |
 | `attachment_query.rs`: `AttachmentHolder` | 1 | **derive** | already a declaration-ordered `u32` case plus payload |
 | `attachment_query.rs`: `AttachmentWriteToken`, `AttachmentBatch` | 2 | **stay hand-written** | tokens with generation checks |

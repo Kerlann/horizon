@@ -737,7 +737,14 @@ pub(super) fn generate(root: &Path) -> Result<(String, String), String> {
     let areas = load(root)?;
     let api_source = fs::read_to_string(root.join("crates/horizon-mod-api/src/lib.rs"))
         .map_err(|e| e.to_string())?;
-    let api_source = super::exports::expand(root, &api_source)?;
+    let mut api_source = super::exports::expand(root, &api_source)?;
+    // The handle types sit in each domain's `types.rs`, carved from the old API root.
+    for entry in fs::read_dir(root.join("crates/horizon-mod-api/src")).map_err(|e| e.to_string())? {
+        let types = entry.map_err(|e| e.to_string())?.path().join("types.rs");
+        if types.is_file() {
+            api_source.push_str(&fs::read_to_string(types).map_err(|e| e.to_string())?);
+        }
+    }
     let types = api_types(&api_source)?;
     let supertraits = |union: &str| -> String {
         areas

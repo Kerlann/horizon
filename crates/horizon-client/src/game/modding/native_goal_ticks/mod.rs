@@ -17,7 +17,7 @@ use crate::mobs::{
 use horizon_core::geometry::Axis;
 use mod_api::{
     BehaviorCxBackend, EntityRef, GoalCxBackend, Host, LegacyRandom, LivingRef, MobRef, PlayerRef,
-    crash::{NativeModCall, enter_native_mod},
+    content::crash::{ModCall, enter_native_mod},
 };
 
 /// What a mod goal runs with: the mob in hand, the tick's `MobWorld` (the
@@ -440,7 +440,7 @@ impl BehaviorCxBackend for GoalCx<'_, '_> {
 }
 
 impl mobs::part_goals::GoalHost for Game<'_> {
-    fn epoch(&self) -> Option<mod_api::NativeWorldEpoch> {
+    fn epoch(&self) -> Option<mod_api::WorldEpoch> {
         self.native_lifecycle.epoch()
     }
 
@@ -462,7 +462,7 @@ impl mobs::part_goals::GoalHost for Game<'_> {
         };
         let mut gcx = GoalCx { m, w, host: self };
         let mut context = mod_api::GoalContext::new(&mut gcx);
-        let _guard = enter_native_mod(NativeModCall {
+        let _guard = enter_native_mod(ModCall {
             id: mod_id,
             hook: call,
             part: Some(part),
@@ -505,7 +505,7 @@ impl mobs::part_goals::GoalHost for Game<'_> {
         // memories typed on top.
         let mut gcx = GoalCx { m, w, host: self };
         let mut context = mod_api::BehaviorCx::new(&mut gcx);
-        let _guard = enter_native_mod(NativeModCall {
+        let _guard = enter_native_mod(ModCall {
             id: mod_id,
             hook: call,
             part: Some(part),

@@ -40,7 +40,7 @@ pub(super) const IMPORTS: &[&str] = &[
     "RenderAssets",
     "InstanceGroups",
     "Tags",
-    "menu::SlotView",
+    "item::menu::SlotView",
     "Registrar",
     "CapabilityProviders",
     "TicketValidation",
@@ -405,7 +405,9 @@ pub(super) fn surface<'a>(
     let dropped = excused_methods;
     // The type emitter respects checked, hand-written Wire impls even when a shape
     // becomes derivable after a new generic borrowing/resource rule is added.
-    types.index.module("mod_api", &["wire_types".into()])?;
+    types
+        .index
+        .module("mod_api", &["wire".into(), "wire_types".into()])?;
     for owner in exports() {
         let (path, _) = owner_parts(owner)?;
         let Found::Item(id) = types.index.resolve_path(api, &path)? else {
@@ -708,7 +710,7 @@ mod tests {
                 assert!(
                     sources
                         .iter()
-                        .any(|p| p.ends_with("crates/horizon-mod-api/src/wire_types.rs"))
+                        .any(|p| p.ends_with("crates/horizon-mod-api/src/wire/wire_types.rs"))
                 );
             })
             .unwrap()

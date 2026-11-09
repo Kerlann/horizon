@@ -147,7 +147,7 @@ impl Game<'_> {
                         &mut m.despawn,
                     );
                 })) {
-                    m.despawn = mod_api::NativeDespawn::default();
+                    m.despawn = mod_api::Despawn::default();
                     *dispatch_panic = Some(payload);
                     break;
                 }
@@ -169,7 +169,7 @@ impl Game<'_> {
                     ..base
                 };
                 let kept = horizon_client::mobs::ai::despawn_check(m, &w);
-                m.despawn = mod_api::NativeDespawn::default();
+                m.despawn = mod_api::Despawn::default();
                 if !kept {
                     died.remove(&m.id);
                     snapshot[i].alive = false;
@@ -193,7 +193,7 @@ impl Game<'_> {
                 .flatten();
             // A mod canceled its tick: it stays as it is.
             if round.canceled(m.id) {
-                m.despawn = mod_api::NativeDespawn::default();
+                m.despawn = mod_api::Despawn::default();
                 keep.push(true);
                 continue;
             }
@@ -252,7 +252,7 @@ impl Game<'_> {
                 super::super::tick_profile::add(level_id, &kind, started);
             }
             let m = &mut mobs[i];
-            m.despawn = mod_api::NativeDespawn::default();
+            m.despawn = mod_api::Despawn::default();
             if credit_expiring && m.ai.last_hurt_by_player == 0 {
                 player_credit.remove(&m.id);
             }

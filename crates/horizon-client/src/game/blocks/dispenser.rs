@@ -27,7 +27,6 @@ use horizon_world::{
     level::{BucketContent, PlaceContext, PlaceOutcome},
     registry::BlockStateId,
 };
-pub(super) use mod_api::NativeDispensed;
 use std::sync::Arc;
 
 type Pos = (i32, i32, i32);
@@ -105,7 +104,7 @@ fn shrink(mut stack: ItemStack) -> Option<ItemStack> {
 type Dispensed = (Option<ItemStack>, i32);
 
 /// None keeps vanilla's behaviour; an explicit empty remainder consumes the stack.
-fn mod_dispensed(answer: Option<NativeDispensed>, items: &Items) -> Option<Dispensed> {
+fn mod_dispensed(answer: Option<mod_api::Dispensed>, items: &Items) -> Option<Dispensed> {
     use super::api_values::TryIntoEngine;
     answer.and_then(|(stack, event)| Some((stack.try_into_engine(items).ok()?, event)))
 }

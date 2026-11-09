@@ -372,7 +372,7 @@ mod jukebox_stop_tests {
                     game.world.block(0, 64, 0),
                     Some(disc),
                     horizon_world::level::UseBranch::ItemOn,
-                ) == Some(mod_api::NativeInteractionResult::Success),
+                ) == Some(mod_api::InteractionResult::Success),
                 "the disc goes in"
             );
             assert!(
@@ -381,7 +381,7 @@ mod jukebox_stop_tests {
                     game.world.block(0, 64, 0),
                     None,
                     horizon_world::level::UseBranch::WithoutItem,
-                ) == Some(mod_api::NativeInteractionResult::Success),
+                ) == Some(mod_api::InteractionResult::Success),
                 "the empty hand pops it out"
             );
         }) else {
@@ -401,7 +401,7 @@ mod jukebox_stop_tests {
                     game.world.block(0, 64, 0),
                     Some(disc),
                     horizon_world::level::UseBranch::ItemOn,
-                ) == Some(mod_api::NativeInteractionResult::Success),
+                ) == Some(mod_api::InteractionResult::Success),
                 "the disc goes in"
             );
             for _ in 0..40_000 {
@@ -422,7 +422,7 @@ mod jukebox_stop_tests {
                     game.world.block(0, 64, 0),
                     None,
                     horizon_world::level::UseBranch::WithoutItem,
-                ) == Some(mod_api::NativeInteractionResult::Success),
+                ) == Some(mod_api::InteractionResult::Success),
                 "the empty hand pops it out"
             );
         }) else {
@@ -443,7 +443,7 @@ mod jukebox_stop_tests {
                     game.world.block(0, 64, 0),
                     Some(disc),
                     horizon_world::level::UseBranch::ItemOn,
-                ) == Some(mod_api::NativeInteractionResult::Success),
+                ) == Some(mod_api::InteractionResult::Success),
                 "the disc goes in"
             );
             game.jukebox_removed([0, 64, 0]);
@@ -606,7 +606,7 @@ mod add_blocks_tests {
                 let state = registry.default_state(BLOCK).unwrap();
                 let level = game.level(game.dim.id()).unwrap();
                 assert!(
-                    game.level_set_block(level, [1, 64, 1], state, NativeBlockUpdateFlags::NONE)
+                    game.level_set_block(level, [1, 64, 1], state, BlockUpdateFlags::NONE)
                         .unwrap()
                 );
                 assert!(matches!(
@@ -654,13 +654,8 @@ mod add_blocks_tests {
                 ));
                 let own_state = registry.default_state(DECLARED).unwrap();
                 assert!(
-                    game.level_set_block(
-                        level,
-                        [3, 64, 1],
-                        own_state,
-                        NativeBlockUpdateFlags::NONE
-                    )
-                    .unwrap()
+                    game.level_set_block(level, [3, 64, 1], own_state, BlockUpdateFlags::NONE)
+                        .unwrap()
                 );
                 assert!(
                     matches!(game.world.block_entities.get(&(3, 64, 1)), Some(BlockEntity::Mod(entity)) if entity.id() == "add_blocks_test:own")

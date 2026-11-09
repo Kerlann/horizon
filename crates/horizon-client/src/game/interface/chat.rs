@@ -2496,7 +2496,7 @@ mod tests {
     fn a_client_commands_usage_is_parsed_by_the_chat_tree() {
         let reg = Registries::default();
         let vanilla = horizon_client::command::vanilla::game_dispatcher();
-        let commands = [mod_api::NativeCommand::new("xmode <mode:word>")];
+        let commands = [mod_api::Command::new("xmode <mode:word>")];
         let (tree, _, problems) = super::super::native_server::command_tree(&commands, |name| {
             vanilla.find(name).is_some()
         });
@@ -2522,7 +2522,7 @@ mod tests {
         );
         // A name the game has is not taken over.
         let (_, _, problems) = super::super::native_server::command_tree(
-            &[mod_api::NativeCommand::new("help <x:word>")],
+            &[mod_api::Command::new("help <x:word>")],
             |name| vanilla.find(name).is_some(),
         );
         assert_eq!(problems.len(), 1);

@@ -72,7 +72,7 @@ pub(crate) fn insert_part<P: ?Sized>(
 #[derive(Clone, Default)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct Parts {
-    pub(crate) key_mappings: Vec<(&'static str, crate::NativeKeyRegistration)>,
+    pub(crate) key_mappings: Vec<(&'static str, crate::KeyRegistration)>,
     /// Block parts, and block entity parts as the block parts they also are.
     pub(crate) blocks: HashMap<Box<str>, Vec<Attached<dyn BlockPart>>>,
     /// Block entity parts by block, for the hooks asked by block (`block_entity`, `screen`).
@@ -158,9 +158,9 @@ pub(crate) struct Installed {
     pub(crate) particles: OnceLock<horizon_mod_runtime::registry_keys::Particles>,
     /// The ticket controllers the mods registered; a [`TicketController`]'s slot indexes it.
     pub(crate) controllers: Vec<ControllerInfo>,
-    pub(crate) structure_types: Vec<crate::structure_type::StructureTypeInfo>,
-    pub(crate) dimensions: Vec<crate::dimension::DimensionInfo>,
-    pub(crate) chunk_generators: Vec<crate::chunk_generator::ChunkGeneratorInfo>,
+    pub(crate) structure_types: Vec<crate::world::structure_type::StructureTypeInfo>,
+    pub(crate) dimensions: Vec<crate::world::dimension::DimensionInfo>,
+    pub(crate) chunk_generators: Vec<crate::world::chunk_generator::ChunkGeneratorInfo>,
     pub(crate) hook_bits: Vec<bool>,
     pub(crate) tag_hook_bits: Vec<bool>,
 }
@@ -371,7 +371,7 @@ pub fn prepare_parts(
             .blocks
             .iter()
             .map(|(name, attached)| {
-                crate::registry_keys::block_key(name)
+                crate::content::registry_keys::block_key(name)
                     .map(|key| (key, attached.clone()))
                     .ok_or_else(|| {
                         ResolvePartsError::Parts(vec![format!(
@@ -542,10 +542,10 @@ pub struct PartRegistrar {
     pub(crate) registry_keys: Rc<RefCell<horizon_mod_runtime::registry_keys::Requests>>,
     pub(crate) effects: OnceLock<horizon_mod_runtime::registry_keys::Effects>,
     pub(crate) controllers: Vec<ControllerInfo>,
-    pub(crate) structure_types: Vec<crate::structure_type::StructureTypeInfo>,
-    pub(crate) dimensions: Vec<crate::dimension::DimensionInfo>,
+    pub(crate) structure_types: Vec<crate::world::structure_type::StructureTypeInfo>,
+    pub(crate) dimensions: Vec<crate::world::dimension::DimensionInfo>,
     pub(crate) dimension_shape: fn(&crate::DimensionSettings) -> bool,
-    pub(crate) chunk_generators: Vec<crate::chunk_generator::ChunkGeneratorInfo>,
+    pub(crate) chunk_generators: Vec<crate::world::chunk_generator::ChunkGeneratorInfo>,
     pub(crate) refused: Vec<String>,
 }
 
@@ -676,7 +676,7 @@ pub(crate) fn register_all(
 /// the error lists every part refused, naming its mods.
 pub fn install_parts(
     mods: &[ModEntry],
-    schema: &crate::declarations::RuleSchema<'_>,
+    schema: &crate::content::declarations::RuleSchema<'_>,
     dimension_shape: fn(&crate::DimensionSettings) -> bool,
 ) -> Result<(), Vec<String>> {
     install_registrar(register_all(mods, dimension_shape), schema)
@@ -684,7 +684,7 @@ pub fn install_parts(
 
 pub(crate) fn install_registrar(
     mut registrar: PartRegistrar,
-    schema: &crate::declarations::RuleSchema<'_>,
+    schema: &crate::content::declarations::RuleSchema<'_>,
 ) -> Result<(), Vec<String>> {
     let slots = schema.validate(&registrar.game_rule_categories, &registrar.game_rules);
     if let Err(errors) = &slots {
@@ -774,7 +774,7 @@ pub mod tests {
     /// its installed test mods and Parts. Production mods request only the entries they use.
     pub fn register_game_keys(
         ids: impl IntoIterator<Item = String>,
-        schema: &crate::declarations::RuleSchema<'_>,
+        schema: &crate::content::declarations::RuleSchema<'_>,
         dimension_shape: fn(&crate::DimensionSettings) -> bool,
     ) {
         let mut registrar = super::register_all(crate::mods(), dimension_shape);
@@ -784,7 +784,7 @@ pub mod tests {
             registrar.block_key(&id);
         }
         super::install_registrar(registrar, schema).unwrap();
-        crate::registry_keys::resolve_fluids(
+        crate::content::registry_keys::resolve_fluids(
             &[
                 "minecraft:empty",
                 "minecraft:water",
@@ -851,7 +851,7 @@ pub mod tests {
 
     /// The level the test worlds are.
     pub(crate) fn here() -> LevelRef {
-        LevelRef::new(NativeWorldEpoch::new(1), crate::DimensionKey::OVERWORLD)
+        LevelRef::new(WorldEpoch::new(1), crate::DimensionKey::OVERWORLD)
     }
 
     /// The block at `pos` in [`here`], through `side`.
@@ -880,12 +880,16 @@ pub mod tests {
         )
         .unwrap();
         assert_eq!(
-            crate::registry_keys::resolve_block_keys(std::iter::empty(), |_| unreachable!())
-                .unwrap_err(),
+            crate::content::registry_keys::resolve_block_keys(
+                std::iter::empty(),
+                |_| unreachable!()
+            )
+            .unwrap_err(),
             ["mod lookup requested unknown block absent:block"]
         );
         assert_eq!(
-            crate::registry_keys::resolve_effects(std::iter::empty(), |_| None).unwrap_err(),
+            crate::content::registry_keys::resolve_effects(std::iter::empty(), |_| None)
+                .unwrap_err(),
             ["mod lookup requested unknown effect absent:effect"]
         );
     }
@@ -933,7 +937,7 @@ pub mod tests {
     pub(crate) fn a_host_without_a_backend_refuses_handle_calls() {
         // NoHost implements nothing, so Host::backend keeps its None default:
         // every handle answers its typed refusal, never a no-op success.
-        let level = LevelRef::new(NativeWorldEpoch::new(1), crate::DimensionKey::OVERWORLD);
+        let level = LevelRef::new(WorldEpoch::new(1), crate::DimensionKey::OVERWORLD);
         assert!(!level.in_place(&NoHost));
         assert_eq!(
             level.entities_in(&NoHost, [0.0, 0.0, 0.0], [1.0, 1.0, 1.0]),
@@ -1108,7 +1112,7 @@ pub mod tests {
         .into();
         crate::install(mods.clone());
         install_parts(&mods, &crate::parts::tests::rule_schema(), |_| false).unwrap();
-        crate::registry_keys::resolve_fluids(
+        crate::content::registry_keys::resolve_fluids(
             &[
                 "minecraft:water",
                 "minecraft:lava",
@@ -1119,7 +1123,7 @@ pub mod tests {
             &[],
         )
         .unwrap();
-        crate::registry_keys::resolve_block_keys(
+        crate::content::registry_keys::resolve_block_keys(
             [
                 "minecraft:air",
                 "minecraft:granite",

@@ -6030,7 +6030,7 @@ mod tests {
             &HashSet::new(),
         );
         let options = ParticleOptions::vibration(
-            mod_api::particles::PositionSource::Block([10, 70, -4]),
+            mod_api::client::particles::PositionSource::Block([10, 70, -4]),
             [10.5, 70.5, -3.5],
             20,
         );
@@ -6074,7 +6074,7 @@ mod tests {
             &HashSet::new(),
         );
         let options = ParticleOptions::vibration(
-            mod_api::particles::PositionSource::Entity {
+            mod_api::client::particles::PositionSource::Entity {
                 id: 42,
                 y_offset: 1.15,
             },

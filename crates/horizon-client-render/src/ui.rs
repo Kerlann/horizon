@@ -1199,7 +1199,7 @@ pub struct EditBox {
     /// The text, cursor, selection anchor, maximum length and whether line breaks are kept (a
     /// book page's `MultiLineEditBox`): the editing core mods' text fields share. Its fields
     /// read and write through the box (`edit_box.value`).
-    pub edit: mod_api::widgets::TextEdit,
+    pub edit: mod_api::client::widgets::TextEdit,
     display: usize,
     pub bordered: bool,
     pub x: f32,
@@ -1398,9 +1398,11 @@ pub fn append_field(
         }
     }
 }
-// The editing core's helpers, shared with mods' text fields (`mod_api::widgets`).
-use mod_api::widgets::byte_index;
-pub use mod_api::widgets::{char_len, java_whitespace, multiline_word_position, word_position};
+// The editing core's helpers, shared with mods' text fields (`mod_api::client::widgets`).
+use mod_api::client::widgets::byte_index;
+pub use mod_api::client::widgets::{
+    char_len, java_whitespace, multiline_word_position, word_position,
+};
 /// `EditBox.deleteWords(dir)` for an append-only field, whose caret is at the
 /// end: removes the word in that direction. True when the value changed.
 pub fn delete_words(value: &mut String, dir: isize) -> bool {
@@ -1427,7 +1429,7 @@ impl crate::clipboard::Editable for EditBox {
     }
 }
 impl std::ops::Deref for EditBox {
-    type Target = mod_api::widgets::TextEdit;
+    type Target = mod_api::client::widgets::TextEdit;
     fn deref(&self) -> &Self::Target {
         &self.edit
     }
@@ -1440,7 +1442,7 @@ impl std::ops::DerefMut for EditBox {
 impl EditBox {
     pub fn new(x: f32, y: f32, width: f32, height: f32) -> Self {
         Self {
-            edit: mod_api::widgets::TextEdit::default(),
+            edit: mod_api::client::widgets::TextEdit::default(),
             display: 0,
             bordered: true,
             x,
@@ -1575,7 +1577,7 @@ impl EditBox {
     }
     /// Keyboard editing shared by every text field. Returns true if handled.
     pub fn key(&mut self, key: winit::keyboard::KeyCode, ctrl: bool, shift: bool) -> bool {
-        use mod_api::widgets::EditKey;
+        use mod_api::client::widgets::EditKey;
         use winit::keyboard::KeyCode as K;
         let key = match key {
             K::Backspace => EditKey::Backspace,

@@ -15,9 +15,9 @@ use horizon_core::{
     position::BlockPos,
     random::{LegacyRandom, RandomSource},
 };
+use mod_api::ExplosionStart;
 #[cfg(test)]
-use mod_api::NativeItemDrop;
-use mod_api::{NativeBlockInteraction, NativeExplosionStart};
+use mod_api::ItemDrop;
 use std::{cmp::Ordering, io};
 use {
     horizon_core::java_hash_map::{JavaHashMap, JavaKey},
@@ -574,7 +574,7 @@ impl Game<'_> {
         }
         self.combat.forget_noted(outcome.canceled);
         if raised {
-            let source = mod_api::health::HurtSource {
+            let source = mod_api::entity::health::HurtSource {
                 damage_type,
                 causing: attacker.map_or(0, |(id, _)| *id as i32),
                 direct: 0,
@@ -935,7 +935,7 @@ impl Game<'_> {
     }
     /// `ExplosionEvent.Start` for the explosion `start`: true when a mod
     /// cancels it, and nothing of it happens.
-    pub(super) fn explosion_start_cancelled(&mut self, start: &NativeExplosionStart<'_>) -> bool {
+    pub(super) fn explosion_start_cancelled(&mut self, start: &ExplosionStart<'_>) -> bool {
         if !mod_api::__private::listened(mod_api::HookId::ExplosionStart) {
             return false;
         }
@@ -1052,24 +1052,23 @@ impl Game<'_> {
         source: ExplosionSource,
     ) -> Result<()> {
         if self.serving.is_some() || self.options.dedicated.is_some() {
-            let start =
-                NativeExplosionStart::from(mod_api::__private::built::NativeExplosionStart {
-                    dimension: self.dim.id(),
-                    center,
-                    radius,
-                    fire,
-                    interaction: match interaction {
-                        BlockInteraction::Keep => NativeBlockInteraction::Keep,
-                        BlockInteraction::Destroy => NativeBlockInteraction::Destroy,
-                        BlockInteraction::DestroyWithDecay => {
-                            NativeBlockInteraction::DestroyWithDecay
-                        }
-                    },
-                    damage_type,
-                    source: self.combat.explosion_source,
-                    // `getIndirectSourceEntity`, as the blast's attacker is.
-                    owner: self.blast_attacker().map(|(id, _)| id),
-                });
+            let start = ExplosionStart::from(mod_api::__private::built::ExplosionStart {
+                dimension: self.dim.id(),
+                center,
+                radius,
+                fire,
+                interaction: match interaction {
+                    BlockInteraction::Keep => mod_api::BlockInteraction::Keep,
+                    BlockInteraction::Destroy => mod_api::BlockInteraction::Destroy,
+                    BlockInteraction::DestroyWithDecay => {
+                        mod_api::BlockInteraction::DestroyWithDecay
+                    }
+                },
+                damage_type,
+                source: self.combat.explosion_source,
+                // `getIndirectSourceEntity`, as the blast's attacker is.
+                owner: self.blast_attacker().map(|(id, _)| id),
+            });
             if self.explosion_start_cancelled(&start) {
                 return Ok(());
             }
@@ -1496,7 +1495,7 @@ mod tests {
                 if matches!(event.pos.x, 1 | 4) {
                     return mod_api::Flow::Cancel;
                 }
-                *event.drops = vec![NativeItemDrop::new(
+                *event.drops = vec![ItemDrop::new(
                     mod_api::ItemStack::new(
                         mod_api::__private::item_key("minecraft:emerald").unwrap(),
                         3,

@@ -13,7 +13,7 @@ use horizon_client::{
 use horizon_core::geometry::Vec3;
 use horizon_core::random::RandomSource;
 use horizon_protocol::packets::play::Clientbound as C;
-use mod_api::NativeProgressType;
+use mod_api::ProgressType;
 use serde_json::Value;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -877,7 +877,7 @@ impl Game<'_> {
             let was = self.adv.progress.done(a);
             let criterion = &a.criteria[ci].name;
             if self.adv.progress.grant(&a.id, criterion, &date) {
-                self.advancement_progress(a, criterion, NativeProgressType::Grant);
+                self.advancement_progress(a, criterion, ProgressType::Grant);
             }
             self.progress_changed(ai);
             if !was && self.adv.progress.done(a) {
@@ -890,7 +890,7 @@ impl Game<'_> {
         &mut self,
         advancement: &adv::Advancement,
         criterion: &str,
-        progress_type: NativeProgressType,
+        progress_type: ProgressType,
     ) {
         if !mod_api::__private::listened(mod_api::HookId::PlayerAdvancementProgress) {
             return;
@@ -975,7 +975,7 @@ impl Game<'_> {
                             name: &task.name,
                             advancement: &grant.advancement,
                             criterion: &grant.criterion,
-                            progress_type: NativeProgressType::Grant,
+                            progress_type: ProgressType::Grant,
                             progress: &progress,
                         },
                     );
@@ -2501,7 +2501,7 @@ impl Game<'_> {
             let was = self.adv.progress.done(a);
             if self.adv.progress.grant(&a.id, c, &date) {
                 changed = true;
-                self.advancement_progress(a, c, NativeProgressType::Grant);
+                self.advancement_progress(a, c, ProgressType::Grant);
                 self.progress_changed(index);
                 if !was && self.adv.progress.done(a) {
                     self.award(index);
@@ -2534,7 +2534,7 @@ impl Game<'_> {
     fn revoke_criterion(&mut self, advancement: &adv::Advancement, criterion: &str) -> bool {
         let revoked = self.adv.progress.revoke(&advancement.id, criterion);
         if revoked {
-            self.advancement_progress(advancement, criterion, NativeProgressType::Revoke);
+            self.advancement_progress(advancement, criterion, ProgressType::Revoke);
         }
         revoked
     }

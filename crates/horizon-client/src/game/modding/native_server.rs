@@ -10,7 +10,6 @@
 use super::api_values::{TryIntoApi, TryIntoEngine};
 use super::{Dim, Game, commands::execute, lan::LanHost, respawn_anchor::RespawnConfig};
 use mod_api::__private::game::*;
-pub use mod_api::game::NativeExperienceOrb;
 // Their old home, for mixin code that names them here.
 use horizon_client::{
     command::{Arg, ArgType, Context, Dispatcher},
@@ -22,11 +21,9 @@ use horizon_client::{
 use horizon_core::position::BlockPos;
 use horizon_protocol::packets::play::{self, Clientbound as C};
 use mod_api::LevelRef;
-pub(crate) use mod_api::NativeCommand;
 use mod_api::{
-    ActionOutcome, ActionRefused, FakeEffect, GameMode, GlobalPos, Identifier,
-    NativePlayerAbilities, NativePlayerFood, PlayerAction, PlayerActionSetup, PlayerRef,
-    PlayerRespawnConfig, ScopedActionResult,
+    ActionOutcome, ActionRefused, FakeEffect, GameMode, GlobalPos, Identifier, PlayerAction,
+    PlayerActionSetup, PlayerFood, PlayerRef, PlayerRespawnConfig, ScopedActionResult,
 };
 use serde_json::{Map, Value, json};
 use std::sync::{
@@ -163,7 +160,7 @@ fn usage_nodes(usage: &str) -> Result<Vec<(String, Value, bool)>, String> {
 /// A command vanilla has (`vanilla`
 /// answers) or a usage that doesn't parse is left out, with why.
 pub(super) fn command_tree(
-    commands: &[NativeCommand],
+    commands: &[mod_api::Command],
     vanilla: impl Fn(&str) -> bool,
 ) -> (Value, HashMap<String, u8>, Vec<String>) {
     let mut root: Map<String, Value> = Map::new();
@@ -373,22 +370,20 @@ impl PlayerRead<'_> {
         }
     }
 
-    fn food(&self) -> Option<NativePlayerFood> {
+    fn food(&self) -> Option<PlayerFood> {
         let food = &self.body()?.health.food;
         let (level, saturation) = match self {
             Self::Acting { .. } => (food.food, food.saturation),
             Self::Guest(guest) => (guest.food, guest.saturation),
         };
-        Some(NativePlayerFood::from(
-            mod_api::__private::built::NativePlayerFood {
-                level,
-                saturation,
-                exhaustion: food.exhaustion,
-            },
-        ))
+        Some(PlayerFood::from(mod_api::__private::built::PlayerFood {
+            level,
+            saturation,
+            exhaustion: food.exhaustion,
+        }))
     }
 
-    fn abilities(&self) -> Option<NativePlayerAbilities> {
+    fn abilities(&self) -> Option<mod_api::PlayerAbilities> {
         let a = match self {
             Self::Acting {
                 abilities: Some(a), ..
@@ -407,8 +402,8 @@ impl PlayerRead<'_> {
             }
             Self::Guest(guest) => guest.abilities,
         };
-        Some(NativePlayerAbilities::from(
-            mod_api::__private::built::NativePlayerAbilities {
+        Some(mod_api::PlayerAbilities::from(
+            mod_api::__private::built::PlayerAbilities {
                 invulnerable: a.invulnerable,
                 flying: a.flying,
                 may_fly: a.may_fly,
@@ -960,7 +955,7 @@ impl Game<'_> {
     pub(super) fn player_set_abilities(
         &mut self,
         player: PlayerRef,
-        abilities: NativePlayerAbilities,
+        abilities: mod_api::PlayerAbilities,
     ) -> bool {
         if !abilities.fly_speed.is_finite() || !abilities.walk_speed.is_finite() {
             return false;
@@ -1091,12 +1086,12 @@ impl Game<'_> {
     /// `FoodData.getFoodLevel/getSaturationLevel/getExhaustionLevel`; Paper
     /// `HumanEntity#getFoodLevel/getSaturation/getExhaustion`. None until the
     /// guest's body exists, as well as for stale or unavailable players.
-    pub(super) fn player_food(&self, player: PlayerRef) -> Option<NativePlayerFood> {
+    pub(super) fn player_food(&self, player: PlayerRef) -> Option<PlayerFood> {
         self.player_read_both(player)?.food()
     }
 
     /// `Player.getAbilities`; Paper `Player#getAllowFlight/isFlying/getFlySpeed/getWalkSpeed`.
-    pub(super) fn player_abilities(&self, player: PlayerRef) -> Option<NativePlayerAbilities> {
+    pub(super) fn player_abilities(&self, player: PlayerRef) -> Option<mod_api::PlayerAbilities> {
         self.player_read_both(player)?.abilities()
     }
 
@@ -1615,7 +1610,7 @@ impl Game<'_> {
         dimension: &str,
         min: [f64; 3],
         max: [f64; 3],
-    ) -> Vec<NativeExperienceOrb> {
+    ) -> Vec<mod_api::ExperienceOrb> {
         if (self.serving.is_none() && self.options.dedicated.is_none())
             || dimension != self.dim.id()
         {
@@ -1624,7 +1619,7 @@ impl Game<'_> {
         self.orbs
             .iter()
             .filter(|o| o.count > 0)
-            .map(|o| NativeExperienceOrb {
+            .map(|o| mod_api::ExperienceOrb {
                 id: o.id,
                 position: [o.position.x, o.position.y, o.position.z],
                 value: o.value,
@@ -1883,7 +1878,7 @@ impl Game<'_> {
     ) -> super::commands::R<mod_api::CommandSource> {
         use super::commands::err;
         use mod_api::CommandSource;
-        let permission = mod_api::NativePermissionLevel::from_level(i32::from(permission));
+        let permission = mod_api::PermissionLevel::from_level(i32::from(permission));
         let source = self.command_source.unwrap_or_else(|| self.player_source());
         let origin = if let Some(id) = self.exec.functions.last() {
             CommandSource::Function {
@@ -2393,8 +2388,8 @@ mod tests {
         );
         assert_eq!(
             read.abilities(),
-            Some(NativePlayerAbilities::from(
-                mod_api::__private::built::NativePlayerAbilities {
+            Some(mod_api::PlayerAbilities::from(
+                mod_api::__private::built::PlayerAbilities {
                     invulnerable: false,
                     flying: false,
                     may_fly: false,
@@ -2412,8 +2407,8 @@ mod tests {
         assert_eq!(read.mode(), 1);
         assert_eq!(
             read.abilities(),
-            Some(NativePlayerAbilities::from(
-                mod_api::__private::built::NativePlayerAbilities {
+            Some(mod_api::PlayerAbilities::from(
+                mod_api::__private::built::PlayerAbilities {
                     invulnerable: true,
                     flying: true,
                     may_fly: true,
@@ -2430,7 +2425,7 @@ mod tests {
         assert!(!abilities.may_build && !abilities.instabuild && abilities.may_fly);
     }
 
-    fn tree(commands: &[NativeCommand]) -> (Value, HashMap<String, u8>, Vec<String>) {
+    fn tree(commands: &[mod_api::Command]) -> (Value, HashMap<String, u8>, Vec<String>) {
         command_tree(commands, |name| name == "give")
     }
 
@@ -2499,10 +2494,10 @@ mod tests {
     #[test]
     fn usages_merge_into_one_tree_with_runnable_nodes() {
         let (t, levels, problems) = tree(&[
-            NativeCommand::new("balance [player:player]"),
-            NativeCommand::new("pay <player:player> <amount:integer>"),
-            NativeCommand::op("eco give <player:player> <amount:integer>", 3),
-            NativeCommand::op("eco take <player:player> <amount:integer>", 3),
+            mod_api::Command::new("balance [player:player]"),
+            mod_api::Command::new("pay <player:player> <amount:integer>"),
+            mod_api::Command::op("eco give <player:player> <amount:integer>", 3),
+            mod_api::Command::op("eco take <player:player> <amount:integer>", 3),
         ]);
         assert!(problems.is_empty(), "{problems:?}");
         let c = &t["children"];
@@ -2543,7 +2538,7 @@ mod tests {
             ),
         ] {
             let (tree, _, problems) =
-                tree(&[NativeCommand::new(first), NativeCommand::new(second)]);
+                tree(&[mod_api::Command::new(first), mod_api::Command::new(second)]);
             assert_eq!(problems.len(), 1, "{first} then {second}: {problems:?}");
             assert!(problems[0].starts_with(&format!("`{second}`")));
             let mut dispatcher = Dispatcher::new();
@@ -2568,9 +2563,9 @@ mod tests {
     #[test]
     fn native_usages_parse_with_their_permissions_in_the_server_dispatcher() {
         let (tree, _, problems) = tree(&[
-            NativeCommand::new("warp [name:word]"),
-            NativeCommand::op("warp set <amount:integer>", 2),
-            NativeCommand::new("toggle <enabled:boolean>"),
+            mod_api::Command::new("warp [name:word]"),
+            mod_api::Command::op("warp set <amount:integer>", 2),
+            mod_api::Command::new("toggle <enabled:boolean>"),
         ]);
         assert!(problems.is_empty(), "{problems:?}");
         let mut dispatcher = Dispatcher::new();
@@ -2638,7 +2633,7 @@ mod tests {
                 event: &mut mod_api::RegisterCommandsEvent<'_>,
             ) {
                 self.registrations.fetch_add(1, Ordering::Relaxed);
-                event.commands.push(NativeCommand::new(
+                event.commands.push(mod_api::Command::new(
                     if self.changed.load(Ordering::Relaxed) {
                         "after <n:integer>"
                     } else {
@@ -2751,11 +2746,11 @@ mod tests {
                 event: &mut mod_api::RegisterCommandsEvent<'_>,
             ) {
                 event.commands.extend([
-                    NativeCommand::new("typed give <who:player> <amount:integer> [message:text]"),
-                    NativeCommand::new("typed data <word:word> <number:number> <enabled:boolean> <item:item> <pos:block_pos>"),
-                    NativeCommand::new("typed opt [value:integer]"),
-                    NativeCommand::new("typed repeat <value:player> <value:integer>"),
-                    NativeCommand::op("protected <who:player>", 4),
+                    mod_api::Command::new("typed give <who:player> <amount:integer> [message:text]"),
+                    mod_api::Command::new("typed data <word:word> <number:number> <enabled:boolean> <item:item> <pos:block_pos>"),
+                    mod_api::Command::new("typed opt [value:integer]"),
+                    mod_api::Command::new("typed repeat <value:player> <value:integer>"),
+                    mod_api::Command::op("protected <who:player>", 4),
                 ]);
             }
             fn run_mod_command(
@@ -2909,7 +2904,7 @@ mod tests {
             datapack::{Function, FunctionLine},
         };
         use horizon_core::position::BlockPos;
-        use mod_api::{CommandSource, NativePermissionLevel as Permission};
+        use mod_api::{CommandSource, PermissionLevel as Permission};
         struct Commands(Arc<Mutex<Vec<CommandSource>>>);
         #[mod_api::__subscriptions]
         impl mod_api::Hooks for Commands {
@@ -2919,9 +2914,9 @@ mod tests {
                 event: &mut mod_api::RegisterCommandsEvent<'_>,
             ) {
                 event.commands.extend([
-                    NativeCommand::new("origin"),
-                    NativeCommand::op("denied", 4),
-                    NativeCommand::new("unhandled"),
+                    mod_api::Command::new("origin"),
+                    mod_api::Command::op("denied", 4),
+                    mod_api::Command::new("unhandled"),
                 ]);
             }
             fn run_mod_command(
@@ -3021,11 +3016,11 @@ mod tests {
                 event: &mut mod_api::RegisterCommandsEvent<'_>,
             ) {
                 event.commands.extend([
-                    NativeCommand::op("foo [value:integer]", 4),
-                    NativeCommand::new("foo bar"),
-                    NativeCommand::op("choice <a:integer>", 4),
-                    NativeCommand::new("choice <a:integer> bar"),
-                    NativeCommand::new("choice <b:word>"),
+                    mod_api::Command::op("foo [value:integer]", 4),
+                    mod_api::Command::new("foo bar"),
+                    mod_api::Command::op("choice <a:integer>", 4),
+                    mod_api::Command::new("choice <a:integer> bar"),
+                    mod_api::Command::new("choice <b:word>"),
                 ]);
             }
             fn run_mod_command(
@@ -3100,7 +3095,10 @@ mod tests {
                 } else {
                     "foo"
                 };
-                let mut commands = vec![NativeCommand::op(admin, 4), NativeCommand::new("foo bar")];
+                let mut commands = vec![
+                    mod_api::Command::op(admin, 4),
+                    mod_api::Command::new("foo bar"),
+                ];
                 if reverse {
                     commands.reverse();
                 }
@@ -3130,7 +3128,10 @@ mod tests {
     #[test]
     fn native_public_prefixes_do_not_open_admin_children() {
         for reverse in [false, true] {
-            let mut commands = vec![NativeCommand::new("foo"), NativeCommand::op("foo bar", 4)];
+            let mut commands = vec![
+                mod_api::Command::new("foo"),
+                mod_api::Command::op("foo bar", 4),
+            ];
             if reverse {
                 commands.reverse();
             }
@@ -3159,8 +3160,8 @@ mod tests {
     fn native_shared_executable_prefix_takes_its_lowest_usage_level() {
         for reverse in [false, true] {
             let mut commands = vec![
-                NativeCommand::op("foo [value:integer]", 4),
-                NativeCommand::op("foo", 2),
+                mod_api::Command::op("foo [value:integer]", 4),
+                mod_api::Command::op("foo", 2),
             ];
             if reverse {
                 commands.reverse();
@@ -3189,8 +3190,8 @@ mod tests {
     #[test]
     fn native_rejected_usage_cannot_open_an_executable_prefix() {
         let (tree, _, problems) = tree(&[
-            NativeCommand::op("foo <value:integer>", 4),
-            NativeCommand::new("foo [value:word]"),
+            mod_api::Command::op("foo <value:integer>", 4),
+            mod_api::Command::new("foo [value:word]"),
         ]);
         assert_eq!(problems.len(), 1);
         let mut dispatcher = Dispatcher::new();
@@ -3217,8 +3218,8 @@ mod tests {
     #[test]
     fn a_command_takes_its_lowest_level() {
         let (t, levels, _) = tree(&[
-            NativeCommand::new("warp [name:word]"),
-            NativeCommand::op("warp set <name:word>", 2),
+            mod_api::Command::new("warp [name:word]"),
+            mod_api::Command::op("warp set <name:word>", 2),
         ]);
         assert_eq!(levels["warp"], 0);
         assert!(t["children"]["warp"].get("permissions").is_none());
@@ -3229,14 +3230,14 @@ mod tests {
     #[test]
     fn bad_usages_and_vanilla_names_are_left_out() {
         let (t, levels, problems) = tree(&[
-            NativeCommand::new("give <x:integer>"),
-            NativeCommand::new("a [x:integer] <y:integer>"),
-            NativeCommand::new("b <x:text> <y:word>"),
-            NativeCommand::new("c <x:colour>"),
-            NativeCommand::new("<x:integer>"),
-            NativeCommand::new("Bad"),
-            NativeCommand::new("d <x:integer>"),
-            NativeCommand::new("d <x:word>"),
+            mod_api::Command::new("give <x:integer>"),
+            mod_api::Command::new("a [x:integer] <y:integer>"),
+            mod_api::Command::new("b <x:text> <y:word>"),
+            mod_api::Command::new("c <x:colour>"),
+            mod_api::Command::new("<x:integer>"),
+            mod_api::Command::new("Bad"),
+            mod_api::Command::new("d <x:integer>"),
+            mod_api::Command::new("d <x:word>"),
         ]);
         assert_eq!(problems.len(), 7, "{problems:?}");
         assert_eq!(levels.keys().collect::<Vec<_>>(), ["d"]);
@@ -3967,7 +3968,7 @@ mod fake_action_tests {
                 game.player_perform_action(player, interact(player.entity())),
                 Err(ActionRefused::InvalidTarget)
             );
-            let stale = mod_api::EntityRef::new(mod_api::NativeWorldEpoch::new(0), near.id());
+            let stale = mod_api::EntityRef::new(mod_api::WorldEpoch::new(0), near.id());
             assert_eq!(
                 game.player_perform_action(player, interact(stale)),
                 Err(ActionRefused::InvalidTarget)
@@ -3978,9 +3979,7 @@ mod fake_action_tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn scoped_fake_use_hooks_see_the_setup_and_fail_is_not_consumed() {
-        use mod_api::{
-            Flow, Hooks, HostSide, NativeInteractionResult, PlayerActionSetup, RightClickBlockEvent,
-        };
+        use mod_api::{Flow, Hooks, HostSide, PlayerActionSetup, RightClickBlockEvent};
         use std::sync::{
             Arc,
             atomic::{AtomicBool, Ordering},
@@ -4002,7 +4001,7 @@ mod fake_action_tests {
                 );
                 assert_eq!(entity.is_shift_key_down(host), Some(true));
                 self.0.store(true, Ordering::Relaxed);
-                *event.cancellation_result = NativeInteractionResult::Fail;
+                *event.cancellation_result = mod_api::InteractionResult::Fail;
                 Flow::Cancel
             }
         }

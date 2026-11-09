@@ -11,7 +11,7 @@ use horizon_client::{
     pose::Pose,
 };
 use horizon_core::nbt::Tag;
-use mod_api::NativeLootDrops;
+use mod_api::LootDrops;
 
 /// `Vec3.yRot(angle)`.
 /// `LocalPlayer.getRopeHoldPosition`'s `Mth.lerp(partialTick * 0.5F, getYRot(),
@@ -372,7 +372,7 @@ impl Game<'_> {
             return;
         };
         let mut drops = vec![ItemStack::new("minecraft:lead", 1)];
-        let context = NativeLootDrops::from(mod_api::__private::built::NativeLootDrops {
+        let context = LootDrops::from(mod_api::__private::built::LootDrops {
             table: "",
             dimension: self.dim.id(),
             origin: at,

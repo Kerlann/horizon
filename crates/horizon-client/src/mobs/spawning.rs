@@ -45,14 +45,14 @@ pub struct LocalDifficulty {
     /// `Difficulty.getId`: 0 peaceful to 3 hard.
     pub id: u8,
 }
-impl From<LocalDifficulty> for mod_api::NativeDifficulty {
+impl From<LocalDifficulty> for mod_api::Difficulty {
     fn from(d: LocalDifficulty) -> Self {
         Self::new(d.base, d.effective)
     }
 }
-impl From<mod_api::NativeDifficulty> for LocalDifficulty {
+impl From<mod_api::Difficulty> for LocalDifficulty {
     /// A mod's difficulty; a base past hard is hard.
-    fn from(d: mod_api::NativeDifficulty) -> Self {
+    fn from(d: mod_api::Difficulty) -> Self {
         let base = d.base.min(3);
         Self {
             base,

@@ -1,10 +1,36 @@
 """Fixture checks for the source-only Wire boundary policy."""
+import subprocess
+import sys
+import tempfile
 import unittest
+from pathlib import Path
 
-from tools.check_mod_api_wire import violations, wire_impls, template_violations
+from tools.check_mod_api_wire import API_TEMPLATE_FILES, violations, wire_impls, template_violations
 
 
 class WireGuardFixtures(unittest.TestCase):
+    def test_cli_names_the_type_and_explains_both_fixes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            script = root / 'tools/check_mod_api_wire.py'
+            script.parent.mkdir()
+            script.write_text((Path(__file__).resolve().parents[1] / 'tools/check_mod_api_wire.py').read_text())
+            api = root / 'crates/horizon-mod-api/src/lib.rs'
+            api.parent.mkdir(parents=True)
+            api.write_text('pub struct MissingType;')
+            for relative in API_TEMPLATE_FILES:
+                template = root / 'crates/horizon-mod-api-gen/src' / relative
+                template.parent.mkdir(parents=True, exist_ok=True)
+                template.write_text('')
+            refused = subprocess.run([sys.executable, str(script)], capture_output=True, text=True)
+            self.assertEqual(refused.returncode, 1)
+            self.assertIn('MissingType', refused.stdout)
+            self.assertIn('#[derive(mod_api::Wire)]', refused.stdout)
+            self.assertIn('// no wire: <reason>', refused.stdout)
+            api.write_text('#[derive(mod_api::Wire)] pub struct MissingType;')
+            accepted = subprocess.run([sys.executable, str(script)], capture_output=True, text=True)
+            self.assertEqual(accepted.returncode, 0, accepted.stderr)
+
     def test_missing_declarations_include_aliases_and_generics(self):
         source = 'pub struct A<T>(T); pub enum B { A } pub type C<T> = Vec<T>;'
         self.assertEqual([n for _, n in violations(source)], ['A', 'B', 'C'])
@@ -59,7 +85,7 @@ pub struct Real;
 
     def test_conditional_test_modules_are_not_production(self):
         source = '''#[cfg(all(test, not(target_arch = "wasm32")))]
-mod tests { #[derive(Debug)] pub struct NativeLootDrops; }
+mod tests { #[derive(Debug)] pub struct LootDrops; }
 #[cfg(all(feature = "foo", any(test, all(test, feature = "bar"))))]
 mod more_tests { pub enum OnlyTest {} }
 #[cfg(any(test, feature = "foo"))] pub struct Production;

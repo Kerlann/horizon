@@ -289,10 +289,12 @@ pub(super) fn emit<'a>(
                 let lookup = match key_type.as_str() {
                     "BlockState" if table == "block" => format!("block_value({key})"),
                     "BlockState" => {
-                        format!("{table}(|| super::registry_keys::block_id({key}.block()))")
+                        format!(
+                            "{table}(|| super::content::registry_keys::block_id({key}.block()))"
+                        )
                     }
                     "& ItemStack" => {
-                        format!("{table}(|| super::registry_keys::item_id({key}.item()))")
+                        format!("{table}(|| super::content::registry_keys::item_id({key}.item()))")
                     }
                     "& str" => format!("{table}(|| Some({key}))"),
                     // An entity's type id need not be its block's: its own table.
@@ -373,8 +375,7 @@ pub(super) fn emit<'a>(
             struct OwnedLootContext;
             impl syn::visit_mut::VisitMut for OwnedLootContext {
                 fn visit_type_path_mut(&mut self, path: &mut syn::TypePath) {
-                    if path.path.segments.len() == 1
-                        && path.path.segments[0].ident == "NativeLootContext"
+                    if path.path.segments.len() == 1 && path.path.segments[0].ident == "LootContext"
                     {
                         path.path.segments[0].arguments = syn::PathArguments::None;
                     } else {
@@ -810,7 +811,7 @@ fn stack_crossing_routed(
         "GameRuleValue",
         "PlacementContext",
         "LootStack",
-        "NativeLootContext",
+        "LootContext",
         "ParticleOptions",
     ];
     const BLOCK_VALUES: &[&str] = &["BlockState", "LandingWrite"];

@@ -318,7 +318,7 @@ pub fn host_area(_attribute: TokenStream, input: TokenStream) -> TokenStream {
         let operation = method.sig.ident.to_string();
         let label = format!("{union}::{operation}");
         method.default = Some(syn::parse_quote!({
-            crate::phase::unprovided(#label, #operation, crate::phase::LoadAccess::#level)
+            crate::world::phase::unprovided(#label, #operation, crate::world::phase::LoadAccess::#level)
         }));
         method.semi_token = None;
     }

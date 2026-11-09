@@ -2224,7 +2224,7 @@ mod part_front_tests {
     use horizon_client::containers::BlockEntity;
     use horizon_client::items::ItemStack;
     use horizon_core::position::BlockPos;
-    use mod_api::NativeBlockUpdateFlags;
+    use mod_api::BlockUpdateFlags;
     use std::sync::Arc;
 
     fn stack(item: &str, count: u32) -> ItemStack {
@@ -2260,12 +2260,7 @@ mod part_front_tests {
             };
             let crafter = game.pack.assets.registry.resolve(&state).unwrap();
             assert_eq!(
-                game.level_set_block(
-                    level,
-                    [2, 64, 8],
-                    crafter,
-                    NativeBlockUpdateFlags::NEIGHBORS
-                ),
+                game.level_set_block(level, [2, 64, 8], crafter, BlockUpdateFlags::NEIGHBORS),
                 Ok(true)
             );
             let pipe = game
@@ -2275,7 +2270,7 @@ mod part_front_tests {
                 .default_state("test:pipe")
                 .unwrap();
             assert_eq!(
-                game.level_set_block(level, [1, 64, 8], pipe, NativeBlockUpdateFlags::NONE),
+                game.level_set_block(level, [1, 64, 8], pipe, BlockUpdateFlags::NONE),
                 Ok(true)
             );
             if let Some(BlockEntity::Crafter(c)) = game.world.block_entities.get_mut(&(2, 64, 8)) {
@@ -2324,12 +2319,7 @@ mod part_front_tests {
             };
             let dropper = game.pack.assets.registry.resolve(&state).unwrap();
             assert_eq!(
-                game.level_set_block(
-                    level,
-                    [2, 64, 8],
-                    dropper,
-                    NativeBlockUpdateFlags::NEIGHBORS
-                ),
+                game.level_set_block(level, [2, 64, 8], dropper, BlockUpdateFlags::NEIGHBORS),
                 Ok(true)
             );
             let pipe = game
@@ -2339,7 +2329,7 @@ mod part_front_tests {
                 .default_state("test:pipe")
                 .unwrap();
             assert_eq!(
-                game.level_set_block(level, [1, 64, 8], pipe, NativeBlockUpdateFlags::NONE),
+                game.level_set_block(level, [1, 64, 8], pipe, BlockUpdateFlags::NONE),
                 Ok(true)
             );
             if let Some(BlockEntity::Chest(items)) = game.world.block_entities.get_mut(&(2, 64, 8))
@@ -2398,7 +2388,7 @@ mod part_front_tests {
                 .registry
                 .default_state("minecraft:chest")
                 .unwrap();
-            let flags = NativeBlockUpdateFlags::NEIGHBORS;
+            let flags = BlockUpdateFlags::NEIGHBORS;
             let chest_items =
                 |game: &super::Game<'_>, z| match game.world.block_entities.get(&(2, 64, z)) {
                     Some(BlockEntity::Chest(items)) => {
@@ -2415,7 +2405,7 @@ mod part_front_tests {
                 }
                 let state = game.pack.assets.registry.default_state(part).unwrap();
                 assert_eq!(
-                    game.level_set_block(level, [1, 64, z], state, NativeBlockUpdateFlags::NONE),
+                    game.level_set_block(level, [1, 64, z], state, BlockUpdateFlags::NONE),
                     Ok(true)
                 );
                 if let Some(BlockEntity::Chest(items)) =
@@ -2445,7 +2435,7 @@ mod part_front_tests {
                 }
                 let state = game.pack.assets.registry.default_state(part).unwrap();
                 assert_eq!(
-                    game.level_set_block(level, [1, 64, z], state, NativeBlockUpdateFlags::NONE),
+                    game.level_set_block(level, [1, 64, z], state, BlockUpdateFlags::NONE),
                     Ok(true)
                 );
                 if let Some(BlockEntity::Crafter(c)) =
