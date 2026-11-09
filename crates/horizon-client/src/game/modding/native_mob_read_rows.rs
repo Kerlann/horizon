@@ -1,8 +1,13 @@
 //! Borrowed-source projections. Retained rows contain no per-publication owned collections.
+//! Capture reads only source and publication context: no Game lookups or scans.
+//! Mob work is O(PathType::COUNT); merchant work is constant except hashing an
+//! unresolved profession's bytes. Interning allocates on the first distinct id
+//! only, and the publisher must bound the pool lifetime (for example per world).
+//! Context construction must index guests, sessions and target facts once per
+//! pass. Those indexes and semantic target validation are the caller's cost.
 use super::Game;
 use horizon_client::mobs::{
-    self, Mob, Species, Who,
-    ai::brain_target,
+    self, Mob, Species,
     render::VILLAGER_TYPES,
     villager::{self, ProfessionState},
 };
@@ -118,41 +123,57 @@ impl NativeMerchantReadRow {
         }
     }
 }
+/// Publication-owned cross-entity facts, built once using indexed source lanes.
+/// No field may be obtained by a live `Game.mobs` scan during capture.
+pub(super) struct MobReadContext {
+    /// Resolved `brain_target(source).unwrap_or(source.ai.target)`, validated
+    /// against target source facts. For ordinary mobs use `Mob::valid_target`
+    /// with a MobWorld containing the target's Seen facts (team/tame rules),
+    /// or player alive/invulnerable/mode/UUID facts and difficulty.
+    /// Warden instead needs alive, invulnerable, species (not Warden),
+    /// player dimension/mode (guest same dimension; modes 1/3 excluded),
+    /// bounds inside border (max minus 1e-5_f32),
+    /// and source/target teams not allied: do not apply ordinary valid_target.
+    /// Warden player invulnerability tests only motion.invulnerable, not the
+    /// ordinary permanently_invulnerable/invulnerable_time union; guest fake
+    /// filtering likewise follows native_warden_valid_target, not player facts.
+    /// Player Who resolves through the source mob's bound player connection.
+    pub target: Option<LivingRef>,
+    /// Local player riding this source; authoritative guest rider presence.
+    pub local_player_riding: bool,
+    pub guest_riding: bool,
+    pub carries_riders: bool,
+    /// Raid membership resolved from source raider state and publication level.
+    pub raid: Option<RaidRef>,
+}
+/// Guest sessions are indexed by mob id once per pass, not scanned per mob.
+#[derive(Default)]
+pub(super) struct MerchantReadContext<'a> {
+    pub session: Option<&'a horizon_client::merchant::Session>,
+    pub trading_player: Option<PlayerRef>,
+}
 impl Game<'_> {
-    /// Identity is validated by the publisher; `source` may be lent out of Game.
+    /// Identity and references are validated by the publisher; source may be lent.
     pub(super) fn capture_mob_read_row(
         &self,
         capture: EntityReadCapture,
         entity: EntityRef,
-        level: LevelRef,
         source: &Mob,
+        context: MobReadContext,
     ) -> NativeMobReadRow {
-        let target = brain_target(source)
-            .unwrap_or(source.ai.target)
-            .and_then(|who| {
-                let id = match who {
-                    Who::Mob(id) => id,
-                    Who::Player => {
-                        let host = self.lan.as_ref()?;
-                        let conn = host.mob_players.get(&source.id)?;
-                        u32::try_from(host.hub.guest(*conn)?.entity_id).ok()?
-                    }
-                };
-                let entity = self.entity(id)?;
-                self.native_mob_valid_target(source, self.native_entity_target(entity)?)
-                    .then(|| self.living(entity))?
-            });
-        let raid = mobs::raider::state(source)
-            .and_then(|state| state.raid_id)
-            .and_then(|id| self.level_raid(level, id));
         NativeMobReadRow {
             capture,
             entity,
             is_done: Some(source.ai.nav.is_done()),
             navigation_speed: Some(source.ai.nav.speed_modifier),
             pathfinding_malus: PATH_TYPES.map(|kind| (kind, source.malus(kind))),
-            can_use_portal: Some(self.mob_portal_eligible(source)),
-            target,
+            can_use_portal: Some(
+                mobs::mob_can_use_portal(source)
+                    && source.extra.mount.is_none()
+                    && !context.local_player_riding
+                    && (!context.guest_riding || context.carries_riders),
+            ),
+            target: context.target,
             is_aggressive: Some(source.ai.aggressive),
             persistence_required: Some(source.persistent),
             requires_custom_persistence: Some(mobs::ai::requires_custom_persistence(source)),
@@ -163,7 +184,7 @@ impl Game<'_> {
             left_handed: Some(source.extra.left_handed),
             can_pick_up_loot: Some(source.can_pick_up_loot()),
             no_action_time: Some(source.ai.no_action_time),
-            raid,
+            raid: context.raid,
         }
     }
     /// The publisher owns the identity pool, so unresolved saved ids allocate only once.
@@ -172,6 +193,7 @@ impl Game<'_> {
         capture: EntityReadCapture,
         entity: EntityRef,
         source: &Mob,
+        context: MerchantReadContext<'_>,
         identities: &mut HashSet<Arc<str>>,
     ) -> Option<NativeMerchantReadRow> {
         let villager = match source.species() {
@@ -191,14 +213,21 @@ impl Game<'_> {
                 RetainedProfession::Unresolved(key)
             }
         });
-        let (level, xp) = self.merchant_read_lent(source, |_, xp, level| (level.max(1), xp));
+        // Match merchant_read_lent: unresolved professions suppress session data.
+        let session = context
+            .session
+            .filter(|_| !villager || source.extra.profession.index().is_some());
+        let level = session
+            .map_or(source.extra.villager_level, |s| s.level)
+            .max(1);
+        let xp = session.map_or_else(
+            || source.extra.trade.as_deref().map_or(0, |t| t.xp),
+            |s| s.xp,
+        );
         Some(NativeMerchantReadRow {
             capture,
             entity,
-            trading_player: self
-                .lan_trade_conn(source.id)
-                .and_then(|conn| self.lan_trade_player(conn))
-                .and_then(|entity| self.player(entity)),
+            trading_player: context.trading_player,
             profession,
             villager_type: villager
                 .then(|| VILLAGER_TYPES[source.extra.variant as usize % VILLAGER_TYPES.len()]),
@@ -234,7 +263,6 @@ mod tests {
                 phase: EntityReadCapturePhase::BeforeCallback,
                 pending_overlay: None,
             };
-            let level = game.entity_level(entity).unwrap();
             let mut sources = game.mobs.lift();
             let source = &mut sources[0];
             source.no_ai = true;
@@ -242,12 +270,36 @@ mod tests {
             source.extra.profession = ProfessionState::Unresolved("example:engineer".into());
             source.extra.villager_level = 6;
             let mut identities = HashSet::new();
-            let mob = game.capture_mob_read_row(capture, entity, level, source);
+            let mob = game.capture_mob_read_row(
+                capture,
+                entity,
+                source,
+                MobReadContext {
+                    // A previously resolved reference need not be resident in Game.
+                    target: Some(LivingRef::new(EntityRef::new(entity.epoch(), 99))),
+                    local_player_riding: false,
+                    guest_riding: true,
+                    carries_riders: false,
+                    raid: None,
+                },
+            );
             let merchant = game
-                .capture_merchant_read_row(capture, entity, source, &mut identities)
+                .capture_merchant_read_row(
+                    capture,
+                    entity,
+                    source,
+                    MerchantReadContext::default(),
+                    &mut identities,
+                )
                 .unwrap();
             let second = game
-                .capture_merchant_read_row(capture, entity, source, &mut identities)
+                .capture_merchant_read_row(
+                    capture,
+                    entity,
+                    source,
+                    MerchantReadContext::default(),
+                    &mut identities,
+                )
                 .unwrap();
             match (&merchant.profession, &second.profession) {
                 (
@@ -261,7 +313,9 @@ mod tests {
             source.extra.profession = ProfessionState::None;
             let row = mob.materialize();
             assert_eq!(row.no_ai, Some(true));
+            assert_eq!(row.can_use_portal, Some(false));
             assert_eq!(row.no_action_time, Some(73));
+            assert_eq!(row.target.unwrap().id(), 99);
             assert_eq!(row.pathfinding_malus.len(), 27);
             assert_eq!(
                 row.pathfinding_malus
