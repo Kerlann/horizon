@@ -1,18 +1,18 @@
-//! An owning temporary projectile loan, not a replacement body or a Host.
+//! An owning temporary entity actor loan, not a replacement body or a Host.
 //! Callback handoffs return the complete actual body to its real Game owner.
 use super::Game;
 use horizon_client::join_seq::residency::{Kind, Owner, Source, table::Location};
 use horizon_client::join_seq::{JoinList, JoinSeq, Joined};
 use mod_api::EntityReadCapturePhase;
 
-pub(super) trait ProjectileActor: Joined + Sized {
+pub(super) trait EntityActor: Joined + Sized {
     const KIND: Kind;
     fn id(&self) -> u32;
     fn target(&self) -> super::commands::Target;
     fn owner<'a, 'g>(game: &'a mut Game<'g>) -> &'a mut JoinList<Self>;
 }
 
-impl ProjectileActor for super::fireworks::Rocket {
+impl EntityActor for super::fireworks::Rocket {
     const KIND: Kind = Kind::Rocket;
     fn id(&self) -> u32 {
         self.id
@@ -24,7 +24,7 @@ impl ProjectileActor for super::fireworks::Rocket {
         &mut game.rockets
     }
 }
-impl ProjectileActor for super::trident::ThrownTrident {
+impl EntityActor for super::trident::ThrownTrident {
     const KIND: Kind = Kind::Trident;
     fn id(&self) -> u32 {
         self.id
@@ -37,13 +37,13 @@ impl ProjectileActor for super::trident::ThrownTrident {
     }
 }
 
-pub(super) struct ProjectileLoan<T> {
+pub(super) struct EntityActorLoan<T> {
     body: Option<T>,
     location: Location,
     // A restoration ordinal only. Identity is always reacquired by exact join.
     ordinal: usize,
 }
-impl<T: ProjectileActor> ProjectileLoan<T> {
+impl<T: EntityActor> EntityActorLoan<T> {
     pub(super) fn extract(game: &mut Game<'_>, join: JoinSeq) -> Option<Self> {
         let owner = Owner {
             dimension: game.dim.key(),

@@ -819,8 +819,7 @@ impl Game<'_> {
             let writer = self.begin_resident_actor_writer(
                 super::native_base_read_rows::BaseReadSource::Trident(&self.tridents[i]),
             );
-            let mut actor =
-                super::projectile_actor_loan::ProjectileLoan::extract(self, join).unwrap();
+            let mut actor = super::entity_actor_loan::EntityActorLoan::extract(self, join).unwrap();
             let body = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 self.tick_trident_body(&mut actor, &catchers, &targets)
             }));
@@ -842,7 +841,7 @@ impl Game<'_> {
     }
     fn tick_trident_body(
         &mut self,
-        actor: &mut super::projectile_actor_loan::ProjectileLoan<ThrownTrident>,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<ThrownTrident>,
         catchers: &[Catcher],
         targets: &[(Who, Aabb)],
     ) -> Option<bool> {

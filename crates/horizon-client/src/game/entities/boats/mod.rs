@@ -749,6 +749,10 @@ impl Game<'_> {
         if !controlled && self.remote.is_none() {
             self.tick_boat_leash(b);
         }
+        self.tick_boat_motion(b, controlled);
+    }
+    /// Shared motion after the existing previous-pose and leash phase.
+    fn tick_boat_motion(&mut self, b: &mut Boat, controlled: bool) {
         let had_status = std::mem::replace(&mut b.status_known, true);
         b.old_status = b.status;
         b.status = self.boat_status(b);
