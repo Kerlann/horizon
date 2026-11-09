@@ -116,6 +116,10 @@ pub(super) struct Parked {
 }
 
 impl Parked {
+    pub(super) fn saved_entity_uuids(&self) -> impl Iterator<Item = (u32, [i32; 4])> + '_ {
+        self.persist.uuids.iter().map(|(&id, &uuid)| (id, uuid))
+    }
+
     resident_owners!(define_resident_access, self, projectiles);
     resident_owners!(parked_base_read_access, self, projectiles);
 }
