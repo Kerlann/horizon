@@ -1,6 +1,6 @@
 //! Shared exception: dispatch infrastructure and cross-area fixture types/tests; no new hooks.
 use horizon_core::game_mode::GameMode;
-use mod_api::mod_api::hud_layout::GuiDraw;
+use mod_api::mod_api::client::hud_layout::GuiDraw;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -21,18 +21,21 @@ impl ItemStack {
         ItemKey(&self.item)
     }
 }
-mod registry_keys {
-    pub(super) fn block_key(name: &str) -> Option<super::BlockKey> {
-        match name {
-            "test:block" => Some(super::BlockKey::Test),
-            "test:other" => Some(super::BlockKey::Other),
-            _ => None,
+mod content {
+    pub(super) mod registry_keys {
+        pub(in crate::tests) fn block_key(name: &str) -> Option<super::super::BlockKey> {
+            match name {
+                "test:block" => Some(super::super::BlockKey::Test),
+                "test:other" => Some(super::super::BlockKey::Other),
+                _ => None,
+            }
+        }
+        pub(in crate::tests) fn item_id(key: super::super::ItemKey<'_>) -> Option<&str> {
+            Some(key.0)
         }
     }
-    pub(super) fn item_id(key: super::ItemKey<'_>) -> Option<&str> {
-        Some(key.0)
-    }
 }
+
 struct BlockEntityDraw(Vec<u32>);
 use serde_json::{Map, Value};
 use stubs::*;
@@ -102,6 +105,10 @@ mod generated {
         pub struct Block;
         pub struct Item;
         pub(super) use super::super::ItemStack;
+        pub(super) use super::super::{
+            Command, Config, Dispensed, InteractionResult, MapDecoration, MapInfo, Minimap, Screen,
+            Zoom,
+        };
         pub struct FluidModel;
         include!(concat!(env!("OUT_DIR"), "/dispatch_fixtures_api.rs"));
     }
@@ -649,42 +656,50 @@ mod api {
     pub struct DamageContainer(pub f32);
     #[derive(Clone, Copy)]
     pub struct LivingRef;
-    pub mod camera {
-        pub struct CameraEntity;
-        pub struct FovPlayer;
-    }
+
     #[derive(Clone, Copy)]
     pub struct FluidKey;
-    pub mod menu {
-        pub struct MenuButtonContext {
-            pub player: u128,
-            pub player_entity_id: i32,
-            pub pos: [i32; 3],
-            pub id: i32,
-        }
-        pub struct AnvilCraft;
-        pub struct AnvilUpdate;
-        pub struct GrindstonePlace;
-        pub struct GrindstoneTake;
-    }
+
     pub mod mod_chunk_tickets {
         pub trait TicketValidation {}
     }
     pub use mod_chunk_tickets::TicketValidation;
-    pub mod stations {
-        pub struct EnchantmentRow<'a>(std::marker::PhantomData<&'a ()>);
+
+    pub mod client {
+        pub use super::fog;
+        pub mod camera {
+            pub struct CameraEntity;
+            pub struct FovPlayer;
+        }
+        pub mod first_person {
+            #[derive(Clone, Copy)]
+            pub struct Hand;
+        }
+        pub mod widgets {
+            pub struct TextEdit;
+        }
+        pub mod hud_layout {
+            pub struct HealthInputs;
+            pub struct GuiDraw;
+            #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+            pub enum HeartKind {}
+        }
     }
-    pub mod first_person {
-        #[derive(Clone, Copy)]
-        pub struct Hand;
-    }
-    pub mod widgets {
-        pub struct TextEdit;
-    }
-    pub mod hud_layout {
-        pub struct HealthInputs;
-        pub struct GuiDraw;
-        #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-        pub enum HeartKind {}
+    pub mod item {
+        pub mod menu {
+            pub struct MenuButtonContext {
+                pub player: u128,
+                pub player_entity_id: i32,
+                pub pos: [i32; 3],
+                pub id: i32,
+            }
+            pub struct AnvilCraft;
+            pub struct AnvilUpdate;
+            pub struct GrindstonePlace;
+            pub struct GrindstoneTake;
+        }
+        pub mod stations {
+            pub struct EnchantmentRow<'a>(std::marker::PhantomData<&'a ()>);
+        }
     }
 }

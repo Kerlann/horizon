@@ -189,7 +189,7 @@ fn menu_button_mutates_entity_and_cursor_once() {
         block_entities: vec![part(1, &calls)],
         ..Parts::default()
     });
-    let context = generated::mod_api::menu::MenuButtonContext {
+    let context = generated::mod_api::item::menu::MenuButtonContext {
         player: 123,
         player_entity_id: 42,
         pos: [1, 2, 3],
@@ -345,18 +345,18 @@ fn placement_replacement_can_refuse_and_stops_later_mods() {
     let table = parts(HookId::StateForPlacement, "state_for_placement");
     assert_eq!(
         table
-            .block_key(registry_keys::block_key("test:block"))
+            .block_key(content::registry_keys::block_key("test:block"))
             .len(),
         2
     );
     assert!(
         table
-            .block_key(registry_keys::block_key("missing:block"))
+            .block_key(content::registry_keys::block_key("missing:block"))
             .is_empty()
     );
     let mut answer = None;
     for state in [
-        BlockState::new(registry_keys::block_key("test:other").unwrap(), 0),
+        BlockState::new(content::registry_keys::block_key("test:other").unwrap(), 0),
         BlockState::new(BlockKey::Test, u16::MAX),
     ] {
         dispatch_state_for_placement(
