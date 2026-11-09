@@ -497,6 +497,9 @@ impl Game<'_> {
     }
 
     pub(super) fn entity_is_silent(&self, entity: EntityRef) -> Option<bool> {
+        if let Some(value) = self.entity_own_silent(entity) {
+            return value;
+        }
         self.with_entity_read_publication(entity, |row| Some(row.base.is_silent))
             .unwrap_or_else(|| self.uncached_entity_is_silent(entity))
     }
