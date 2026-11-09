@@ -171,7 +171,7 @@ impl Game<'_> {
                     SlotAccess::Done(()) => {}
                     SlotAccess::Taken => return Err(AttachmentError::HolderBusy),
                     SlotAccess::Missing => return Err(AttachmentError::MissingHolder),
-                    SlotAccess::UnsupportedKind(kind) if access == AttachmentAccess::Store => {
+                    SlotAccess::UnsupportedKind(kind) => {
                         let name = match kind {
                             Kind::Mob => "mob",
                             Kind::Item => "item",
@@ -200,7 +200,6 @@ impl Game<'_> {
                         };
                         return Err(AttachmentError::UnsupportedHolder(name));
                     }
-                    SlotAccess::UnsupportedKind(_) => {}
                 }
             }
             if self.entity_initialization.active != Some(holder)

@@ -129,8 +129,10 @@ type with the same key.
 
 ## First-store errors
 
-The first store binds the entity's lifetime registration. Inspection and removal
-do not create one. A store can return `AttachmentError::HolderBusy` while the
+First stores on resident mobs and paintings bind their lifetime registration.
+Inspection and removal do not create one. First-store indexing for other
+families is not extended by this foundation. A store can return
+`AttachmentError::HolderBusy` while the
 engine has lifted or extracted its physical storage: retry after the current
 pass. The refused store writes no value and creates no registration.
 
@@ -139,7 +141,8 @@ own attachments; retrying cannot help. The name is bounded static text, not an
 engine type. Family names are stable lowercase identifiers: `mob`, `item`,
 `orb`, `projectile`, `armorstand`, `itemframe`, `painting`, `boat`,
 `minecart`, `other`, `fangs`, `crystal`, `dragon`, `tnt`, `falling`,
-`rocket`, `trident`, `spawner`, `cloud`, `cushion`, and `knot`.
+`rocket`, `trident`, `spawner`, `cloud`, `cushion`, `knot`, `player`, `hook`,
+and `dragonpart`.
 Retained row writes report the matching `AttachmentRowError::HolderBusy` or
 `AttachmentRowError::UnsupportedHolder`; a missing holder is instead
 `StaleHolder`.
