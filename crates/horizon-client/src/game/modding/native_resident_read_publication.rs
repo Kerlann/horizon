@@ -291,12 +291,13 @@ impl Game<'_> {
             Err(_) => return false,
         };
         let entity = EntityRef::new(epoch, raw.id);
+        let merchant_sources_available = self.merchant_sources_available();
         let publication = {
             let mut state = self.entity_read_state.borrow_mut();
             let state = &mut *state;
             let pass = state.mob_relations.entry(level).or_default();
             if pass.tick != Some(tick) {
-                self.rebuild_mob_read_relations(level, &mut pass.index);
+                self.rebuild_mob_read_relations(level, &mut pass.index, merchant_sources_available);
                 pass.tick = Some(tick);
             }
             let index = &pass.index;

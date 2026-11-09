@@ -2742,6 +2742,9 @@ impl Game<'_> {
                     self.save_guest(&mut guest);
                     let host = self.lan.as_mut()?;
                     host.play.remove(&guest.conn);
+                    self.entity_read_state
+                        .borrow_mut()
+                        .record_merchant_connection(guest.conn, None);
                     self.guest_combat.remove(&guest.conn);
                     // A held player was recorded as joined at its login: it leaves too.
                     if self.options.dedicated.is_some() && (guest.placed || guest.held) {
