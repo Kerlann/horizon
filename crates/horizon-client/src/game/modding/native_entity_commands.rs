@@ -46,14 +46,14 @@ impl Drop for EntityWriterScope {
 }
 
 pub(super) struct EntityCommands {
-    pub(super) epoch: NativeWorldEpoch,
+    pub(super) epoch: WorldEpoch,
     pub(super) queue: WriteQueue<EntityOperation, EntityWriteCompletion>,
     clock: Rc<RefCell<WriterClock>>,
     issuers: HashMap<&'static str, RuntimeIssuers>,
     pub(super) identities: Vec<CommandIssuer>,
 }
 impl EntityCommands {
-    pub(super) fn new(epoch: NativeWorldEpoch) -> Self {
+    pub(super) fn new(epoch: WorldEpoch) -> Self {
         Self {
             epoch,
             queue: WriteQueue::new(epoch),
@@ -215,8 +215,8 @@ impl Game<'_> {
         if self.native_lifecycle.epoch() != Some(id.epoch) {
             return Err(CommandQueryError::StaleEpoch);
         }
-        let native =
-            mod_api::crash::current_native_mod().ok_or(CommandQueryError::UnknownOrExpired)?;
+        let native = mod_api::content::crash::current_native_mod()
+            .ok_or(CommandQueryError::UnknownOrExpired)?;
         let state = self.entity_read_state.borrow();
         let commands = state
             .commands

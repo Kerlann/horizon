@@ -48,9 +48,9 @@ macro_rules! resident_read_owner_locations {
         fn resident_owner_read_locations(&$this, kind: Kind) -> Vec<Location> {
             let owner = Owner { dimension: $this.dim.key(), kind };
             match kind {
-                $(Kind::$kind => $this$(.$field)+.iter().map(|source| Location { owner, join: source.join_seq() }).collect(),)*
-                Kind::Projectile => $this$(.$projectiles)+.iter().map(|source| Location { owner, join: source.join_seq() }).collect(),
-                Kind::Dragon => $this.dragon.iter().map(|source| Location { owner, join: source.join_seq() }).collect(),
+                $(Kind::$kind => $this$(.$field)+.iter().map(|source| Location { source: Default::default(), owner, join: source.join_seq() }).collect(),)*
+                Kind::Projectile => $this$(.$projectiles)+.iter().map(|source| Location { source: Default::default(), owner, join: source.join_seq() }).collect(),
+                Kind::Dragon => $this.dragon.iter().map(|source| Location { source: Default::default(), owner, join: source.join_seq() }).collect(),
             }
         }
     };
@@ -156,6 +156,7 @@ impl Game<'_> {
         };
         self.publish_lent_resident_reads(
             Location {
+                source: Default::default(),
                 owner: Owner {
                     dimension: self.dim.key(),
                     kind,
@@ -408,16 +409,16 @@ impl Game<'_> {
             }
             BaseReadSource::Other(source) => {
                 let kind = match source.kind.as_str() {
-                    "minecraft:text_display" => Some(NativeDisplayKind::Text),
-                    "minecraft:item_display" => Some(NativeDisplayKind::Item),
-                    "minecraft:block_display" => Some(NativeDisplayKind::Block),
+                    "minecraft:text_display" => Some(DisplayKind::Text),
+                    "minecraft:item_display" => Some(DisplayKind::Item),
+                    "minecraft:block_display" => Some(DisplayKind::Block),
                     _ => None,
                 };
                 if let Some(kind) = kind {
                     let empty =
                         horizon_core::nbt::Tag::compound([] as [(&str, horizon_core::nbt::Tag); 0]);
                     let tag = raw.persist.raw.get(&raw.id).unwrap_or(&empty);
-                    let block = (kind == NativeDisplayKind::Block)
+                    let block = (kind == DisplayKind::Block)
                         .then(|| {
                             tag.get("block_state")
                                 .and_then(|t| self.state_from_nbt(t))
@@ -764,19 +765,19 @@ mod tests {
                             (NativeReadDetails::Display(display), Kind::Other) =>
                                 match row.base.kind.as_deref() {
                                     Some("minecraft:text_display") =>
-                                        display.kind == Some(NativeDisplayKind::Text)
+                                        display.kind == Some(DisplayKind::Text)
                                             && display.text_shadow == Some(false)
                                             && display.brightness.is_none()
                                             && display.item_context.is_none(),
                                     Some("minecraft:block_display") =>
-                                        display.kind == Some(NativeDisplayKind::Block)
+                                        display.kind == Some(DisplayKind::Block)
                                             && display.block_state.is_some()
                                             && display.text_shadow.is_none()
                                             && display.item_context.is_none(),
                                     Some("minecraft:item_display") =>
-                                        display.kind == Some(NativeDisplayKind::Item)
+                                        display.kind == Some(DisplayKind::Item)
                                             && display.item_context
-                                                == Some(NativeItemDisplayContext::None)
+                                                == Some(ItemDisplayContext::None)
                                             && display.text_shadow.is_none(),
                                     _ => false,
                                 },

@@ -247,7 +247,7 @@ impl GoalCx<'_, '_> {
         &self,
         entity: EntityRef,
         distance: f64,
-    ) -> Option<mod_api::NativeClipHit> {
+    ) -> Option<mod_api::ClipHit> {
         if !(distance.is_finite() && distance >= 0.0) {
             return None;
         }
@@ -261,8 +261,8 @@ impl GoalCx<'_, '_> {
                 level,
                 from,
                 to,
-                mod_api::NativeClipBlock::Outline,
-                mod_api::NativeClipFluid::None,
+                mod_api::ClipBlock::Outline,
+                mod_api::ClipFluid::None,
             )
         })
         .flatten()

@@ -37,6 +37,7 @@ impl Game<'_> {
         self.publish_mob_read_source_at(
             source,
             Location {
+                source: Default::default(),
                 owner: Owner {
                     dimension: self.dim.key(),
                     kind: Kind::Mob,

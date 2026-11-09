@@ -257,7 +257,7 @@ mod tests {
                 .push(Mob::new(40, kind, horizon_core::geometry::Vec3::ZERO, 0.0));
             let entity = game.entity(40).unwrap();
             let capture = EntityReadCapture {
-                tick: NativeTickId::new(12),
+                tick: TickId::new(12),
                 pass: 3,
                 revision: 4,
                 phase: EntityReadCapturePhase::BeforeCallback,

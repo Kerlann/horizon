@@ -11,7 +11,7 @@ use mod_api::*;
 
 impl Game<'_> {
     // display
-    pub(super) fn display_kind(&self, display: DisplayRef) -> Option<NativeDisplayKind> {
+    pub(super) fn display_kind(&self, display: DisplayRef) -> Option<DisplayKind> {
         self.with_entity_read_publication(display.entity(), |row| {
             Some(match &row.details {
                 NativeReadDetails::Display(row) => row.kind,
@@ -21,10 +21,7 @@ impl Game<'_> {
         .unwrap_or_else(|| self.uncached_display_kind(display))
     }
 
-    pub(super) fn display_transformation(
-        &self,
-        display: DisplayRef,
-    ) -> Option<NativeTransformation> {
+    pub(super) fn display_transformation(&self, display: DisplayRef) -> Option<Transformation> {
         self.with_entity_read_publication(display.entity(), |row| {
             Some(match &row.details {
                 NativeReadDetails::Display(row) => row.transformation,
@@ -34,7 +31,7 @@ impl Game<'_> {
         .unwrap_or_else(|| self.uncached_display_transformation(display))
     }
 
-    pub(super) fn display_billboard(&self, display: DisplayRef) -> Option<NativeBillboard> {
+    pub(super) fn display_billboard(&self, display: DisplayRef) -> Option<Billboard> {
         self.with_entity_read_publication(display.entity(), |row| {
             Some(match &row.details {
                 NativeReadDetails::Display(row) => row.billboard,
@@ -204,7 +201,7 @@ impl Game<'_> {
         .unwrap_or_else(|| self.uncached_display_default_background(display))
     }
 
-    pub(super) fn display_alignment(&self, display: DisplayRef) -> Option<NativeTextAlignment> {
+    pub(super) fn display_alignment(&self, display: DisplayRef) -> Option<TextAlignment> {
         self.with_entity_read_publication(display.entity(), |row| {
             Some(match &row.details {
                 NativeReadDetails::Display(row) => row.alignment,
@@ -226,10 +223,7 @@ impl Game<'_> {
         .unwrap_or_else(|| self.uncached_display_block_state(display))
     }
 
-    pub(super) fn display_item_context(
-        &self,
-        display: DisplayRef,
-    ) -> Option<NativeItemDisplayContext> {
+    pub(super) fn display_item_context(&self, display: DisplayRef) -> Option<ItemDisplayContext> {
         self.with_entity_read_publication(display.entity(), |row| {
             Some(match &row.details {
                 NativeReadDetails::Display(row) => row.item_context,
@@ -240,7 +234,7 @@ impl Game<'_> {
     }
 
     // dragon
-    pub(super) fn dragon_phase(&self, dragon: DragonRef) -> Option<NativeDragonPhase> {
+    pub(super) fn dragon_phase(&self, dragon: DragonRef) -> Option<DragonPhase> {
         self.with_entity_read_publication(dragon.entity(), |row| {
             Some(match &row.details {
                 NativeReadDetails::Dragon { dragon: row, .. } => row.phase,
@@ -1105,7 +1099,7 @@ impl Game<'_> {
         .unwrap_or_else(|| self.uncached_player_can_eat(player, always))
     }
 
-    pub(super) fn player_experience(&self, player: PlayerRef) -> Option<NativePlayerExperience> {
+    pub(super) fn player_experience(&self, player: PlayerRef) -> Option<PlayerExperience> {
         self.with_entity_read_publication(player.entity(), |row| {
             Some(match &row.details {
                 NativeReadDetails::Player {
@@ -1312,7 +1306,7 @@ impl Game<'_> {
         .unwrap_or_else(|| self.uncached_player_may_build(player))
     }
 
-    pub(super) fn player_food(&self, player: PlayerRef) -> Option<NativePlayerFood> {
+    pub(super) fn player_food(&self, player: PlayerRef) -> Option<PlayerFood> {
         self.with_entity_read_publication(player.entity(), |row| {
             Some(match &row.details {
                 NativeReadDetails::Player {
@@ -1324,7 +1318,7 @@ impl Game<'_> {
         .unwrap_or_else(|| self.uncached_player_food(player))
     }
 
-    pub(super) fn player_abilities(&self, player: PlayerRef) -> Option<NativePlayerAbilities> {
+    pub(super) fn player_abilities(&self, player: PlayerRef) -> Option<PlayerAbilities> {
         self.with_entity_read_publication(player.entity(), |row| {
             Some(match &row.details {
                 NativeReadDetails::Player {
@@ -1371,7 +1365,7 @@ impl Game<'_> {
         .unwrap_or_else(|| self.uncached_projectile_owner(projectile))
     }
 
-    pub(super) fn projectile_pickup(&self, projectile: ProjectileRef) -> Option<NativeArrowPickup> {
+    pub(super) fn projectile_pickup(&self, projectile: ProjectileRef) -> Option<ArrowPickup> {
         self.with_entity_read_publication(projectile.entity(), |row| {
             Some(match &row.details {
                 NativeReadDetails::Projectile(row) => row.pickup,
@@ -1506,7 +1500,7 @@ impl Game<'_> {
         cached.unwrap_or_else(|| self.uncached_raid_is_active(raid))
     }
 
-    pub(super) fn raid_status(&self, raid: RaidRef) -> Option<NativeRaidStatus> {
+    pub(super) fn raid_status(&self, raid: RaidRef) -> Option<RaidStatus> {
         if self.native_lifecycle.epoch() != Some(raid.level().epoch()) {
             return None;
         }
@@ -1621,7 +1615,7 @@ mod tests {
             let publication = NativeReadPublication {
                 silent_overlay: Default::default(),
                 capture: EntityReadCapture {
-                    tick: NativeTickId::new(1),
+                    tick: TickId::new(1),
                     pass: 2,
                     revision: 0,
                     phase: EntityReadCapturePhase::PassStart,
@@ -1656,7 +1650,7 @@ mod tests {
             assert_eq!(game.entity_position(entity), Some([-0.5, 12.0, 3.0]));
             assert_eq!(game.entity_is_sprinting(entity), Some(false));
             assert_eq!(
-                game.entity_position(EntityRef::new(NativeWorldEpoch::new(epoch.get() + 1), 410)),
+                game.entity_position(EntityRef::new(WorldEpoch::new(epoch.get() + 1), 410)),
                 None
             );
             game.mobs.restore(

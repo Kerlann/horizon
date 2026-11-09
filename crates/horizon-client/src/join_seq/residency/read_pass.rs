@@ -1,7 +1,7 @@
 //! Capture clocks for nested owner passes. Rows remain in EntityTable; closing
 //! a pass never scans or clears the population it captured.
 use super::Owner;
-use mod_api::{EntityReadCapture, EntityReadCapturePhase, NativeTickId};
+use mod_api::{EntityReadCapture, EntityReadCapturePhase, TickId};
 use std::{cell::RefCell, rc::Rc};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,7 +17,7 @@ pub enum ReadPassError {
 struct Frame {
     pass: ReadPass,
     owner: Owner,
-    tick: NativeTickId,
+    tick: TickId,
     revision: u64,
 }
 
@@ -35,7 +35,7 @@ impl ReadScope {
         clock: Rc<RefCell<ReadPasses>>,
         enabled: bool,
         owner: Owner,
-        tick: NativeTickId,
+        tick: TickId,
     ) -> Result<Option<Self>, ReadPassError> {
         let started = clock.borrow_mut().begin(enabled, owner, tick)?;
         Ok(started.map(|(pass, start)| Self {
@@ -85,7 +85,7 @@ impl ReadPasses {
         &mut self,
         enabled: bool,
         owner: Owner,
-        tick: NativeTickId,
+        tick: TickId,
     ) -> Result<Option<(ReadPass, EntityReadCapture)>, ReadPassError> {
         if !enabled {
             return Ok(None);
@@ -187,18 +187,12 @@ mod tests {
     #[test]
     fn nested_passes_keep_independent_clocks_and_resume_the_outer_actor() {
         let mut passes = ReadPasses::default();
-        let (outer, initial) = passes
-            .begin(true, MOB, NativeTickId::new(9))
-            .unwrap()
-            .unwrap();
+        let (outer, initial) = passes.begin(true, MOB, TickId::new(9)).unwrap().unwrap();
         assert_eq!(initial.phase, EntityReadCapturePhase::PassStart);
         let before = passes
             .stamp(outer, MOB, EntityReadCapturePhase::BeforeCallback)
             .unwrap();
-        let (inner, nested) = passes
-            .begin(true, TNT, NativeTickId::new(9))
-            .unwrap()
-            .unwrap();
+        let (inner, nested) = passes.begin(true, TNT, TickId::new(9)).unwrap().unwrap();
         assert_ne!(before.pass, nested.pass);
         assert_eq!(passes.finish(outer), Err(ReadPassError::NotCurrent));
         assert_eq!(
@@ -215,7 +209,7 @@ mod tests {
             .unwrap();
         assert_eq!(resumed.pass, before.pass);
         assert_eq!(resumed.revision, 2);
-        assert_eq!(resumed.tick, NativeTickId::new(9));
+        assert_eq!(resumed.tick, TickId::new(9));
         assert_eq!(resumed.pending_overlay, None);
         passes.finish(outer).unwrap();
     }
@@ -224,11 +218,11 @@ mod tests {
     fn callback_unwind_closes_only_its_nested_capture_frame() {
         use std::panic::{AssertUnwindSafe, catch_unwind};
         let clock = Rc::new(RefCell::new(ReadPasses::default()));
-        let outer = ReadScope::begin(clock.clone(), true, MOB, NativeTickId::new(9))
+        let outer = ReadScope::begin(clock.clone(), true, MOB, TickId::new(9))
             .unwrap()
             .unwrap();
         let panic = catch_unwind(AssertUnwindSafe(|| {
-            let _inner = ReadScope::begin(clock.clone(), true, TNT, NativeTickId::new(9))
+            let _inner = ReadScope::begin(clock.clone(), true, TNT, TickId::new(9))
                 .unwrap()
                 .unwrap();
             panic!("original callback failure");
@@ -246,7 +240,7 @@ mod tests {
             outer.start().pass
         );
         clock.borrow_mut().reset();
-        let new = ReadScope::begin(clock.clone(), true, TNT, NativeTickId::new(10))
+        let new = ReadScope::begin(clock.clone(), true, TNT, TickId::new(10))
             .unwrap()
             .unwrap();
         drop(outer);
@@ -254,7 +248,7 @@ mod tests {
             new.stamp(EntityReadCapturePhase::BeforeCallback)
                 .unwrap()
                 .tick,
-            NativeTickId::new(10)
+            TickId::new(10)
         );
         drop(new);
         assert!(clock.borrow().frames.is_empty());
@@ -263,23 +257,14 @@ mod tests {
     #[test]
     fn disabled_capture_and_epoch_reset_never_reuse_a_publication_token() {
         let mut passes = ReadPasses::default();
-        assert_eq!(
-            passes.begin(false, MOB, NativeTickId::new(1)).unwrap(),
-            None
-        );
+        assert_eq!(passes.begin(false, MOB, TickId::new(1)).unwrap(), None);
         assert_eq!(passes.frames.capacity(), 0);
-        let (old, _) = passes
-            .begin(true, MOB, NativeTickId::new(1))
-            .unwrap()
-            .unwrap();
+        let (old, _) = passes.begin(true, MOB, TickId::new(1)).unwrap().unwrap();
         passes.reset();
-        let (new, capture) = passes
-            .begin(true, MOB, NativeTickId::new(2))
-            .unwrap()
-            .unwrap();
+        let (new, capture) = passes.begin(true, MOB, TickId::new(2)).unwrap().unwrap();
         assert_ne!(old, new);
         assert_eq!(passes.finish(old), Err(ReadPassError::NotCurrent));
-        assert_eq!(capture.tick, NativeTickId::new(2));
+        assert_eq!(capture.tick, TickId::new(2));
         assert_eq!(capture.revision, 0);
         passes.finish(new).unwrap();
     }

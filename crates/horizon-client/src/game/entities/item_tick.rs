@@ -217,6 +217,7 @@ impl Game<'_> {
         if capture_reads && !index.is_removed(i, item.join) {
             self.publish_lent_resident_reads(
                 horizon_client::join_seq::residency::table::Location {
+                    source: horizon_client::join_seq::residency::Source::Ordinary,
                     owner: horizon_client::join_seq::residency::Owner {
                         dimension: self.dim.key(),
                         kind: horizon_client::join_seq::residency::Kind::Item,

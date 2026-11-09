@@ -46,6 +46,14 @@ pub enum AttachmentError {
     InvalidCopyPolicy,
     /// Syncing to clients requires a serializer.
     InvalidSyncPolicy,
+    /// The holder's physical storage is temporarily extracted or lifted.
+    /// Retry after the current pass; the refused store writes no value.
+    HolderBusy,
+    /// This physical holder family has no attachment lifetime storage; retrying cannot help.
+    /// Stable lowercase family names: mob, item, orb, projectile, armorstand,
+    /// itemframe, painting, boat, minecart, other, fangs, crystal, dragon, tnt,
+    /// falling, rocket, trident, spawner, cloud, cushion, knot.
+    UnsupportedHolder(&'static str),
 }
 
 /// NBT key reserved for server-owned attachment maps.

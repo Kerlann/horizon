@@ -45,8 +45,10 @@ fn silent_warm_converted_acceptance_and_queries_allocate_no_package_text() {
             )]
             .into(),
             || {
-                let inventory =
-                    mod_api::crash::ConvertedPackages::new("alloc-runtime", [package.to_string()]);
+                let inventory = mod_api::content::crash::ConvertedPackages::new(
+                    "alloc-runtime",
+                    [package.to_string()],
+                );
                 let _native = mod_api::__private::enter("alloc-runtime", "test");
                 let _package = inventory
                     .package(&package)

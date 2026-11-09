@@ -14,6 +14,10 @@ pub enum AttachmentRowError {
     Value(AttachmentError),
     /// The holder unloaded, was replaced, or belongs to another index.
     StaleHolder,
+    /// The physical holder storage is temporarily unavailable; retry after the pass.
+    HolderBusy,
+    /// This holder family cannot own attachments.
+    UnsupportedHolder(&'static str),
 }
 
 impl fmt::Display for AttachmentRowError {
@@ -21,6 +25,8 @@ impl fmt::Display for AttachmentRowError {
         match self {
             Self::Value(error) => write!(f, "attachment row read failed: {error:?}"),
             Self::StaleHolder => f.write_str("attachment row holder is stale"),
+            Self::HolderBusy => f.write_str("attachment row holder is busy"),
+            Self::UnsupportedHolder(kind) => write!(f, "unsupported attachment holder: {kind}"),
         }
     }
 }

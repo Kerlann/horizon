@@ -131,6 +131,7 @@ fn refresh_items(
         {
             game.publish_lent_resident_reads(
                 horizon_client::join_seq::residency::table::Location {
+                    source: horizon_client::join_seq::residency::Source::Ordinary,
                     owner: horizon_client::join_seq::residency::Owner {
                         dimension: game.dim.key(),
                         kind: horizon_client::join_seq::residency::Kind::Item,

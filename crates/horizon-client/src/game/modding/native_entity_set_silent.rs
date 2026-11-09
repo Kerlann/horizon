@@ -128,7 +128,7 @@ impl Game<'_> {
         if !self.transactions.is_empty() {
             return WriteReceipt::Refused(EntityWriteError::TransactionActive);
         }
-        let Some(native) = mod_api::crash::current_native_mod() else {
+        let Some(native) = mod_api::content::crash::current_native_mod() else {
             return WriteReceipt::Refused(EntityWriteError::OutsideScope);
         };
         let mut cached = false;

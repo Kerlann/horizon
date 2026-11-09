@@ -81,6 +81,7 @@ mod tests {
         let address = Target {
             runtime_id: body.id,
             location: Location {
+                source: horizon_client::join_seq::residency::Source::Ordinary,
                 owner: Owner {
                     dimension: mod_api::DimensionKey::OVERWORLD,
                     kind: Kind::Cart,

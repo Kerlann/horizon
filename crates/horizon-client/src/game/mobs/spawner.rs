@@ -162,7 +162,7 @@ impl Game<'_> {
         // A minecart spawner has no block.
         let source = cart
             .is_none()
-            .then(|| mod_api::NativeSpawner::Block(mod_api::BlockPos::new(key.0, key.1, key.2)));
+            .then(|| mod_api::SpawnSource::Block(mod_api::BlockPos::new(key.0, key.1, key.2)));
         let extras = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             let mut level = self.natural_level();
             // A minecart spawner has no block to tell the spawn checks of.
@@ -178,6 +178,7 @@ impl Game<'_> {
                         horizon_client::join_seq::residency::write_queue::Target {
                             runtime_id: cart.id,
                             location: horizon_client::join_seq::residency::table::Location {
+                                source: horizon_client::join_seq::residency::Source::Ordinary,
                                 owner: horizon_client::join_seq::residency::Owner {
                                     dimension: self.dim.key(),
                                     kind: horizon_client::join_seq::residency::Kind::Cart,
@@ -289,7 +290,7 @@ impl Game<'_> {
         &self,
         l: &super::natural_spawning::GameLevel,
         r: &SpawnerSpawn,
-        source: Option<mod_api::NativeSpawner>,
+        source: Option<mod_api::SpawnSource>,
         planned: &mut Vec<Planned>,
         random: &mut horizon_core::random::LegacyRandom,
         body_provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,

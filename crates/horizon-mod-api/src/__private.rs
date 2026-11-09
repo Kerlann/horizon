@@ -5,7 +5,7 @@ use crate::*;
 
 /// Borrow the active converted package's validated identity without copying crash text.
 pub fn with_current_converted_package<R>(f: impl FnOnce(Option<&str>) -> R) -> R {
-    crate::crash::with_current_converted_package(f)
+    crate::content::crash::with_current_converted_package(f)
 }
 
 /// Deliver a terminal only to its captured issuing mod/package. Generated
@@ -30,7 +30,7 @@ pub fn set_mod_enabled(id: &str, on: bool) -> bool {
 
 /// Resolve a listener's owner once at load, for dispatch through [`mod_index_on`].
 pub fn mod_index(id: &str) -> Option<usize> {
-    crate::mods().iter().position(|entry| entry.id == id)
+    crate::runtime::installed()?.by_id.get(id).copied()
 }
 
 /// Whether a resolved listener's owner is currently enabled.
@@ -40,7 +40,7 @@ pub fn mod_index_on(index: usize) -> bool {
 
 /// Marks the thread as inside mod `id`'s `call` until the guard drops, as a hook's dispatch does,
 /// so a panic in it names both.
-pub fn enter(id: &'static str, call: &'static str) -> crate::crash::NativeModGuard {
+pub fn enter(id: &'static str, call: &'static str) -> crate::content::crash::ModGuard {
     crate::mark_mod(id, call)
 }
 
@@ -52,7 +52,7 @@ pub fn install(mods: Mods) {
 /// Conservative load-time interest in entity read publication, including custom
 /// point listeners. Constant-time and independent of runtime enable toggles.
 pub fn entity_reads_listened() -> bool {
-    crate::entity_reads_listened()
+    crate::runtime::entity_reads_listened()
 }
 
 /// Whether an installed mod subscribes to `hook`.
@@ -155,7 +155,7 @@ pub mod game {
         SoundRef { id }
     }
     /// A boss bar handle the game names.
-    pub fn boss_bar_ref(epoch: NativeWorldEpoch, uuid: u128) -> BossBarRef {
+    pub fn boss_bar_ref(epoch: WorldEpoch, uuid: u128) -> BossBarRef {
         BossBarRef { epoch, uuid }
     }
     /// A chunk handle the game names.
@@ -245,7 +245,7 @@ pub mod game {
     }
 
     pub struct BossBarRefFields {
-        pub epoch: NativeWorldEpoch,
+        pub epoch: WorldEpoch,
         pub uuid: u128,
     }
     impl Fields for BossBarRef {
@@ -343,29 +343,33 @@ pub mod game {
     }
 
     pub trait ReloadContextNew {
-        fn new(files: crate::reload::ReloadFiles) -> Self;
+        fn new(files: crate::world::reload::ReloadFiles) -> Self;
     }
     impl ReloadContextNew for ServerReloadContext {
-        fn new(files: crate::reload::ReloadFiles) -> Self {
+        fn new(files: crate::world::reload::ReloadFiles) -> Self {
             ServerReloadContext::new(files)
         }
     }
     impl ReloadContextNew for ClientReloadContext {
-        fn new(files: crate::reload::ReloadFiles) -> Self {
+        fn new(files: crate::world::reload::ReloadFiles) -> Self {
             ClientReloadContext::new(files)
         }
     }
 
     pub trait ServerReloadListenersOrder {
         fn new() -> Self;
-        fn finish(self) -> Result<crate::server_reload::OrderedServerReload, ReloadOrderError>;
+        fn finish(
+            self,
+        ) -> Result<crate::world::server_reload::OrderedServerReload, ReloadOrderError>;
     }
-    impl ServerReloadListenersOrder for crate::server_reload::ServerListenerRegistry {
+    impl ServerReloadListenersOrder for crate::world::server_reload::ServerListenerRegistry {
         fn new() -> Self {
-            crate::server_reload::ServerListenerRegistry::new()
+            crate::world::server_reload::ServerListenerRegistry::new()
         }
-        fn finish(self) -> Result<crate::server_reload::OrderedServerReload, ReloadOrderError> {
-            crate::server_reload::ServerListenerRegistry::finish(self)
+        fn finish(
+            self,
+        ) -> Result<crate::world::server_reload::OrderedServerReload, ReloadOrderError> {
+            crate::world::server_reload::ServerListenerRegistry::finish(self)
         }
     }
 
@@ -375,30 +379,30 @@ pub mod game {
         fn finish(
             self,
         ) -> Result<
-            Vec<crate::reload::RegisteredListener<dyn ClientReloadListener>>,
+            Vec<crate::world::reload::RegisteredListener<dyn ClientReloadListener>>,
             ReloadOrderError,
         >;
     }
-    impl ClientReloadListenersOrder for crate::client_reload::ClientListenerRegistry {
+    impl ClientReloadListenersOrder for crate::client::client_reload::ClientListenerRegistry {
         fn new() -> Self {
-            crate::client_reload::ClientListenerRegistry::new()
+            crate::client::client_reload::ClientListenerRegistry::new()
         }
         fn finish(
             self,
         ) -> Result<
-            Vec<crate::reload::RegisteredListener<dyn ClientReloadListener>>,
+            Vec<crate::world::reload::RegisteredListener<dyn ClientReloadListener>>,
             ReloadOrderError,
         > {
-            crate::client_reload::ClientListenerRegistry::finish(self)
+            crate::client::client_reload::ClientListenerRegistry::finish(self)
         }
     }
 
     pub trait ServerReloadResourcesInstall {
-        fn install(&mut self, retained: Vec<crate::server_reload::RetainedEntry>);
+        fn install(&mut self, retained: Vec<crate::world::server_reload::RetainedEntry>);
     }
-    impl ServerReloadResourcesInstall for crate::server_reload::RetainedListeners {
-        fn install(&mut self, retained: Vec<crate::server_reload::RetainedEntry>) {
-            crate::server_reload::RetainedListeners::install(self, retained)
+    impl ServerReloadResourcesInstall for crate::world::server_reload::RetainedListeners {
+        fn install(&mut self, retained: Vec<crate::world::server_reload::RetainedEntry>) {
+            crate::world::server_reload::RetainedListeners::install(self, retained)
         }
     }
 
@@ -450,13 +454,13 @@ pub mod game {
 
     mod reloadfilesnew {
         #[allow(unused_imports)]
-        use crate::reload::*;
+        use crate::world::reload::*;
         #[allow(unused_imports)]
         use crate::*;
         #[allow(unused_imports)]
         use crate::{
             FileToIdConverter, Identifier,
-            reload_order::{ReloadOrder, ReloadOrderError},
+            world::reload_order::{ReloadOrder, ReloadOrderError},
         };
         #[allow(unused_imports)]
         use std::{collections::BTreeMap, sync::Arc};

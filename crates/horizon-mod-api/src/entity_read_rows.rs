@@ -20,7 +20,7 @@ pub enum EntityReadCapturePhase {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Wire)]
 pub struct EntityReadCapture {
     /// Logical engine tick, not vanilla world time.
-    pub tick: NativeTickId,
+    pub tick: TickId,
     /// The owner's capture pass.
     pub pass: u64,
     /// Publication revision within that pass.
@@ -96,7 +96,7 @@ mod tests {
             2, 0, 0, 0, 0x88, 0x77, 0x66, 0x55, 0x44, 0x33, 0x22, 0x11, 8, 7, 6, 5, 4, 3, 2, 1,
         ];
         let id = CommandId {
-            epoch: NativeWorldEpoch::new(0x1122_3344_5566_7788),
+            epoch: WorldEpoch::new(0x1122_3344_5566_7788),
             sequence: 0x0102_0304_0506_0708,
         };
         let pending: EntityReadError = Reader::decode(&bytes).unwrap();

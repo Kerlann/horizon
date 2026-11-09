@@ -13,8 +13,11 @@ impl Hooks for Runtime {
         host: &mut dyn ServerHost,
         event: &mut EntityCommandCompletedEvent<'_>,
     ) {
-        assert_eq!(mod_api::crash::current_native_mod(), Some("silent-runtime"));
-        let package = mod_api::crash::current_converted_call()
+        assert_eq!(
+            mod_api::content::crash::current_native_mod(),
+            Some("silent-runtime")
+        );
+        let package = mod_api::content::crash::current_converted_call()
             .map_or_else(|| "native".to_owned(), |call| call.package.into_owned());
         let EntityWriteCompletion::EntitySetSilent(done) = event.completion;
         assert_eq!(
@@ -76,7 +79,8 @@ pub(super) fn writer(game: &Game<'_>) -> EntityWriterScope {
 fn silent_converted_package_issuers_do_not_collapse_into_native_runtime() {
     with_fixture(|game, events| {
         let _native = mod_api::__private::enter("silent-runtime", "test");
-        let packages = mod_api::crash::ConvertedPackages::new("silent-runtime", ["a", "b"]);
+        let packages =
+            mod_api::content::crash::ConvertedPackages::new("silent-runtime", ["a", "b"]);
         let scope = writer(game);
         let target = EntityRef::new(game.native_lifecycle.epoch().unwrap(), 72);
         let mut ids = Vec::new();

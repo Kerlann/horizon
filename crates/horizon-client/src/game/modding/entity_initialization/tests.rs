@@ -113,7 +113,8 @@ fn spawn_summon_and_disk_load_initialize_before_first_attachment_read() {
                     .find(|(_, value)| **value == [uuid, 2, 3, 4])
                     .unwrap()
                     .0;
-                assert_eq!(VALUE.get(game, Holder::Entity(id)), Ok(41), "{kind}");
+                let expected = Ok(41);
+                assert_eq!(VALUE.get(game, Holder::Entity(id)), expected, "{kind}");
                 assert_eq!(
                     calls
                         .lock()
@@ -378,4 +379,110 @@ fn a_loaded_entity_reads_its_saved_attachments_over_the_listeners_and_is_named_b
             );
         })
     });
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn mob_constructor_first_store_binds_only_the_resident_lifetime() {
+    use mod_api::AttachmentQueries;
+    observe(|_| {
+        with_game(|game| {
+            game.options.dedicated = Some(Vec::new());
+            game.native_level_opened(Dim::Overworld);
+            let id = game
+                .spawn_mob_spawned(
+                    "cow",
+                    [1.0, 70.0, 3.0],
+                    crate::game::creatures::SpawnSite::Plain,
+                )
+                .unwrap();
+            assert!(
+                game.mobs
+                    .iter()
+                    .find(|mob| mob.id == id)
+                    .unwrap()
+                    .attachment_lifetime
+                    .is_bound()
+            );
+            let batch = game.query(&VALUE).unwrap();
+            let rows: Vec<_> = batch.iter().collect();
+            assert_eq!(rows.len(), 1);
+            let row = rows[0].as_ref().unwrap();
+            assert_eq!(row.value, &41);
+            assert_eq!(
+                row.holder,
+                mod_api::AttachmentHolder::Entity(game.entity(id).unwrap())
+            );
+        });
+    });
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn marker_constructor_store_reaches_its_real_owned_map() {
+    struct Refusal;
+    #[mod_api::__subscriptions]
+    impl Hooks for Refusal {
+        fn entity_constructing(&self, host: HostSide<'_>, event: &mut EntityConstructingEvent) {
+            if let HostSide::Server(host) = host {
+                assert_eq!(VALUE.set(host, event.holder, 41), Ok(()));
+            }
+        }
+    }
+    mod_api::testing::with_mods(
+        vec![mod_api::ModEntry::new("refusal", Box::new(Refusal))].into(),
+        || {
+            with_game(|game| {
+                game.options.dedicated = Some(Vec::new());
+                game.native_level_opened(Dim::Overworld);
+                game.spawn_entity_from_nbt(tag("minecraft:marker", 909));
+            });
+        },
+    );
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn cancelled_mob_creation_forgets_constructor_payload_and_identity() {
+    struct Cancel;
+    #[mod_api::__subscriptions]
+    impl Hooks for Cancel {
+        fn finalize_spawn(
+            &self,
+            _: &dyn mod_api::Host,
+            event: &mut mod_api::FinalizeSpawnEvent<'_>,
+        ) -> mod_api::Flow {
+            event.spawn_cancelled = true;
+            mod_api::Flow::Continue
+        }
+    }
+    let calls = Calls::default();
+    mod_api::testing::with_mods(
+        vec![
+            mod_api::ModEntry::new("constructing", Box::new(Listener(calls.clone()))),
+            mod_api::ModEntry::new("cancel", Box::new(Cancel)),
+        ]
+        .into(),
+        || {
+            with_game(|game| {
+                game.options.dedicated = Some(Vec::new());
+                game.native_level_opened(Dim::Overworld);
+                let before = game.persist.uuids.clone();
+                assert!(
+                    game.spawn_mob_spawned(
+                        "cow",
+                        [1.0, 70.0, 3.0],
+                        crate::game::creatures::SpawnSite::Finalizing(
+                            crate::game::creatures::SpawnReason::Command
+                        )
+                    )
+                    .is_none()
+                );
+                assert_eq!(calls.lock().unwrap().len(), 1);
+                assert_eq!(game.persist.uuids, before);
+                assert!(game.entity_attachments.is_empty());
+                assert!(game.entity_initialization.initialized.is_empty());
+            });
+        },
+    );
 }
