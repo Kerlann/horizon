@@ -828,7 +828,7 @@ impl Game<'_> {
                 actor.restore(self);
                 actor.publish(self, mod_api::EntityReadCapturePhase::AfterEntityTick);
             } else {
-                actor.retire();
+                actor.retire(self);
             }
             let body = self.finish_resident_actor_turn(writer.as_ref(), body);
             let survives = match body {
@@ -1599,6 +1599,9 @@ mod tests {
                             result.unwrap();
                             assert_eq!(game.tridents.len(), if mode == 2 { 1 } else { 2 });
                             assert_eq!(game.tridents.locate(a).is_none(), mode == 2);
+                            if mode == 2 {
+                                assert!(matches!(game.server_resident_entity(ids.get().unwrap()[0]), horizon_client::join_seq::residency::table::EntityLookup::Missing));
+                            }
                             let drag = f64::from(0.99f32);
                             for t in &game.tridents {
                                 assert_eq!(t.age, 1);

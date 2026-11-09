@@ -487,7 +487,7 @@ impl Game<'_> {
                 actor.restore(self);
                 actor.publish(self, mod_api::EntityReadCapturePhase::AfterEntityTick);
             } else {
-                actor.retire();
+                actor.retire(self);
             }
             let body = self.finish_resident_actor_turn(writer.as_ref(), body);
             let survives = match body {
@@ -1073,6 +1073,11 @@ mod tests {
                         } else {
                             result.unwrap();
                             assert!(game.rockets.is_empty());
+                            for retired in &ids.get().unwrap()[..2] {
+                                assert!(matches!(game.server_resident_entity(*retired), horizon_client::join_seq::residency::table::EntityLookup::Missing));
+                                assert!(<dyn mod_api::Host>::entity(game, *retired).is_none());
+                            }
+                            assert_eq!(header.uuid(game), None);
                             assert_eq!(&*order.lock().unwrap(), &["A", "done", "B"]);
                         }
                     });

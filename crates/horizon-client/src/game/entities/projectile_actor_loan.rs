@@ -7,12 +7,16 @@ use mod_api::EntityReadCapturePhase;
 
 pub(super) trait ProjectileActor: Joined + Sized {
     const KIND: Kind;
+    fn id(&self) -> u32;
     fn target(&self) -> super::commands::Target;
     fn owner<'a, 'g>(game: &'a mut Game<'g>) -> &'a mut JoinList<Self>;
 }
 
 impl ProjectileActor for super::fireworks::Rocket {
     const KIND: Kind = Kind::Rocket;
+    fn id(&self) -> u32 {
+        self.id
+    }
     fn target(&self) -> super::commands::Target {
         super::commands::Target::Rocket(self.id)
     }
@@ -22,6 +26,9 @@ impl ProjectileActor for super::fireworks::Rocket {
 }
 impl ProjectileActor for super::trident::ThrownTrident {
     const KIND: Kind = Kind::Trident;
+    fn id(&self) -> u32 {
+        self.id
+    }
     fn target(&self) -> super::commands::Target {
         super::commands::Target::Trident(self.id)
     }
@@ -61,8 +68,10 @@ impl<T: ProjectileActor> ProjectileLoan<T> {
     pub(super) fn join(&self) -> JoinSeq {
         self.location.join
     }
-    pub(super) fn retire(&mut self) {
-        self.body = None;
+    pub(super) fn retire(&mut self, game: &mut Game<'_>) {
+        if let Some(body) = self.body.take() {
+            T::owner(game).retire_extracted(body.id(), self.location.join);
+        }
     }
     pub(super) fn publish(&self, game: &Game<'_>, phase: EntityReadCapturePhase) {
         game.publish_resident_read_location(self.location, phase);
@@ -91,7 +100,7 @@ impl<T: ProjectileActor> ProjectileLoan<T> {
             .as_ref()
             .is_some_and(|body| game.persist.removals.contains(&body.target()))
         {
-            self.body = None;
+            self.retire(game);
         }
         self.body.as_ref().map(|_| result)
     }
