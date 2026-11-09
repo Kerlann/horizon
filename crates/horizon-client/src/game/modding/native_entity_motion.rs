@@ -260,53 +260,96 @@ impl Game<'_> {
         let [yaw, pitch] = self.uncached_entity_rotation(entity)?;
         Some(turned_view_vector(yaw, pitch, -90.0))
     }
-    /// `Entity.mainSupportingBlockPos` of an entity on the ground: the player's own, kept
-    /// as it moved, or the one `Entity.checkSupportingBlock` finds under the box of any
-    /// other that stands.
-    fn native_supporting_block(&self, entity: EntityRef, t: Target) -> Option<BlockPos> {
-        if t == Target::Player
-            && let Some(player) = &self.player
-        {
-            return player.ground.supporting_block;
-        }
-        if !self.entity_on_ground(entity)? {
-            return None;
-        }
-        let (position, bounds) = match self.native_target_guest(t) {
-            Some(g) => (
-                Vec3::new(g.position[0], g.position[1], g.position[2]),
-                g.bounds(),
-            ),
-            None => {
-                with_entity!(self, self.native_walk_entity(entity.id())?, e => (e.position(), e.bounds()))
-            }
-        };
-        self.supporting_block(position, bounds)
-    }
     /// The block the entity stands on (`Entity.getOnPos`). API 379.
-    pub(super) fn entity_on_block(&self, entity: EntityRef) -> Option<[i32; 3]> {
-        let t = self.native_entity_target(entity)?;
-        let [x, y, z] = self.entity_position(entity)?;
-        Some(on_block_position(
-            self.native_supporting_block(entity, t),
-            Vec3::new(x, y, z),
-        ))
+    pub(super) fn entity_on_block(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<[i32; 3]>, mod_api::EntityReadError> {
+        self.read_entity_on_block(None, entity)
+    }
+
+    pub(super) fn read_entity_on_block(
+        &self,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Result<Option<[i32; 3]>, mod_api::EntityReadError> {
+        use super::{
+            native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        let Some(read) = self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Entity(entity),
+            &[EntityReadDependency::Geometry],
+        ) else {
+            return Ok(None);
+        };
+        self.with_live_entity_source(read?, provider, |source| {
+            let geometry = self.live_source_geometry(source.body)?;
+            let [x, y, z] = geometry.position;
+            let position = Vec3::new(x, y, z);
+            let support = match source.body {
+                BaseReadSource::Player(player) => player.ground.supporting_block,
+                _ if geometry.on_ground => {
+                    let [lo, hi] = geometry.bounding_box;
+                    self.supporting_block_in(
+                        source.level.world,
+                        position,
+                        Aabb::new(
+                            Vec3::new(lo[0], lo[1], lo[2]),
+                            Vec3::new(hi[0], hi[1], hi[2]),
+                        ),
+                    )
+                }
+                _ => None,
+            };
+            Some(on_block_position(support, position))
+        })
+        .ok_or(mod_api::EntityReadError::Lifted)
     }
     /// What the entity looks at within `distance` blocks of its eyes: `Entity.pick`'s block
     /// ray along the view vector, outlines and no fluids.
-    pub(super) fn entity_pick(&self, entity: EntityRef, distance: f64) -> Option<ClipHit> {
+    pub(super) fn entity_pick(
+        &self,
+        entity: EntityRef,
+        distance: f64,
+    ) -> Result<Option<ClipHit>, mod_api::EntityReadError> {
+        self.read_entity_pick(None, entity, distance)
+    }
+
+    pub(super) fn read_entity_pick(
+        &self,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+        distance: f64,
+    ) -> Result<Option<ClipHit>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
         if !(distance.is_finite() && distance >= 0.0) {
-            return None;
+            return Ok(None);
         }
-        let from = self.entity_eye_position(entity)?;
-        let to = ray_end(from, self.entity_view_vector(entity)?, distance);
-        self.level_clip(
-            self.entity_level(entity)?,
-            from,
-            to,
-            ClipBlock::Outline,
-            ClipFluid::None,
-        )
+        let Some(read) = self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Entity(entity),
+            &[EntityReadDependency::Geometry],
+        ) else {
+            return Ok(None);
+        };
+        self.with_live_entity_source(read?, provider, |source| {
+            let geometry = self.live_source_geometry(source.body)?;
+            let mut from = geometry.position;
+            from[1] += geometry.eye_height;
+            let [yaw, pitch] = geometry.rotation;
+            let to = ray_end(from, turned_view_vector(yaw, pitch, 0.0), distance);
+            self.clip_in_world(
+                source.level.world,
+                from,
+                to,
+                ClipBlock::Outline,
+                ClipFluid::None,
+            )
+        })
+        .ok_or(mod_api::EntityReadError::Lifted)
     }
     /// The square of the distance from the entity's feet to `pos`
     /// (`Entity.distanceToSqr`). API 379.

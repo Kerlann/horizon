@@ -26,6 +26,23 @@ pub(super) struct EntityReadSource<'a> {
 }
 
 impl Game<'_> {
+    /// Fresh geometry from the selected body and immutable resource facts.
+    /// The intern pool retains type identifiers only, never entity values.
+    pub(super) fn live_source_geometry(
+        &self,
+        source: BaseReadSource<'_>,
+    ) -> Option<super::native_base_read_rows::BaseReadGeometry> {
+        use super::native_base_read_source::{base_read_source_geometry, base_read_source_kind};
+        let kind =
+            base_read_source_kind(source, &mut self.entity_read_state.borrow_mut().kind_pool);
+        let facts = self.res.entity_type_geometry().get(&kind)?;
+        let mut geometry = base_read_source_geometry(source, facts)?;
+        if matches!(source, BaseReadSource::Player(_)) {
+            geometry.rotation = [self.yaw, self.pitch];
+        }
+        Some(geometry)
+    }
+
     /// Select the actual callback loan, if this admitted address is the current
     /// actor's. A provider does not grant permission for a foreign Taken body.
     /// The higher-ranked projection returns owned output, never a stored loan.
