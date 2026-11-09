@@ -1344,6 +1344,7 @@ mod tests {
                         w,
                         level: &mut test_level.level(),
                         events: &mut events,
+                        selectors: Default::default(),
                     };
                     super::GrowCrop.tick(&mut m, &mut cx);
                 }
@@ -1379,6 +1380,7 @@ mod tests {
                 w,
                 level: &mut test_level.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
             sting(&mut m, Who::Mob(9), &mut cx);
             assert!(events.iter().any(|e| matches!(
@@ -1415,8 +1417,9 @@ mod tests {
                     w: &w,
                     level: &mut random.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
-                let mut goals = std::mem::take(&mut m.ai.goals);
+                let mut goals = m.ai.goals.take();
                 for _ in 0..200 {
                     goals.tick(&mut m, &mut cx);
                 }

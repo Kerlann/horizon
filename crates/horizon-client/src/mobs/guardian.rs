@@ -393,6 +393,7 @@ mod elder_home_tests {
                     w,
                     level: &mut level,
                     events: &mut events,
+                    selectors: Default::default(),
                 },
             );
             assert_eq!(m.ai.home, Some(([10, 64, -21], 16)));
@@ -407,6 +408,7 @@ mod elder_home_tests {
                     w,
                     level: &mut level,
                     events: &mut events,
+                    selectors: Default::default(),
                 },
             );
             assert_eq!(kept.ai.home, Some(([100, 50, 100], 24)));
@@ -432,6 +434,7 @@ mod elder_home_tests {
                         w,
                         level: &mut level,
                         events: &mut events,
+                        selectors: Default::default(),
                     },
                 );
                 let curses: Vec<_> = events

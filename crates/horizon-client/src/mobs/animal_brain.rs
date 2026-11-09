@@ -2552,6 +2552,7 @@ fn axolotl_action(m: &mut Mob, cx: &mut Bx, action: AxolotlAction, until: &mut i
                     w: cx.w,
                     level: cx.level,
                     events: cx.events,
+                    selectors: Default::default(),
                 },
             );
             mem(m).attack_cooling_down.set_ttl(true, 20);

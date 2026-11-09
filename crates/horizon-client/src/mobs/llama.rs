@@ -324,13 +324,14 @@ mod tests {
                 let mut m = llama(1, 0.5);
                 m.random = LegacyRandom::new(0);
                 let mut events = Vec::new();
-                let mut goals = std::mem::take(&mut m.ai.goals);
+                let mut goals = m.ai.goals.take();
                 let mut test_level = crate::health::TestLevel::new(0);
                 let level = &mut test_level.level();
                 let mut cx = Cx {
                     w: &w,
                     level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 for _ in 0..80 {
                     goals.tick(&mut m, &mut cx);

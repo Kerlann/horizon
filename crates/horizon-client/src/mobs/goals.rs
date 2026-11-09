@@ -45,6 +45,7 @@ pub struct Cx<'a, 'w, 'l> {
     /// behaviours make from it rather than from the mob's own, and the damage hooks.
     pub level: &'a mut crate::health::DamageLevel<'l>,
     pub events: &'a mut Vec<MobEvent>,
+    pub selectors: GoalSelectorSources<'a>,
 }
 pub trait Goal: std::fmt::Debug {
     fn flags(&self) -> u8;
@@ -65,7 +66,8 @@ pub trait Goal: std::fmt::Debug {
     }
     fn tick(&mut self, _m: &mut Mob, _cx: &mut Cx) {}
     fn box_clone(&self) -> Box<dyn Goal>;
-    /// The goal's name for debugging (`Goal.toString`).
+    /// The goal's registration name for debugging (`Goal.toString`).
+    /// A selector captures this identifier when the goal is added.
     fn name(&self) -> &'static str {
         std::any::type_name::<Self>()
             .rsplit("::")
@@ -96,139 +98,222 @@ fn adjusted(every_tick: bool, ticks: i32) -> i32 {
 }
 
 #[derive(Clone, Debug)]
-struct Wrapped {
+struct GoalRegistration {
     priority: i32,
-    goal: Box<dyn Goal>,
-    running: bool,
+    name: &'static str,
+    running: std::cell::Cell<bool>,
 }
+
+/// A synchronous view of the selector's canonical registration state.
+#[derive(Clone, Copy, Debug)]
+pub struct GoalSelectorRead<'a> {
+    entries: &'a [GoalRegistration],
+}
+impl<'a> GoalSelectorRead<'a> {
+    pub fn entries(self) -> impl Iterator<Item = (i32, &'static str, bool)> + 'a {
+        self.entries
+            .iter()
+            .map(|entry| (entry.priority, entry.name, entry.running.get()))
+    }
+}
+#[derive(Clone, Copy, Debug, Default)]
+pub enum SelectorKind {
+    #[default]
+    Goals,
+    Targets,
+}
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GoalSelectorSources<'a> {
+    pub goals: Option<GoalSelectorRead<'a>>,
+    pub targets: Option<GoalSelectorRead<'a>>,
+    pub active: SelectorKind,
+}
+impl<'a> GoalSelectorSources<'a> {
+    fn with_active(mut self, source: GoalSelectorRead<'a>) -> Self {
+        match self.active {
+            SelectorKind::Goals => self.goals = Some(source),
+            SelectorKind::Targets => self.targets = Some(source),
+        }
+        self
+    }
+}
+enum GoalCallback {
+    CanUse,
+    CanContinue,
+    Start,
+    Stop,
+    Tick,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct GoalSelector {
-    goals: Vec<Wrapped>,
+    goals: Vec<Box<dyn Goal>>,
+    registrations: Vec<GoalRegistration>,
     locked: [Option<usize>; 4],
     pub disabled: u8,
+    loaned: bool,
 }
 impl GoalSelector {
+    /// Move the actual selector out, leaving an explicitly unreadable loan slot.
+    pub fn take(&mut self) -> Self {
+        std::mem::replace(
+            self,
+            Self {
+                loaned: true,
+                ..Self::default()
+            },
+        )
+    }
+    pub fn read_source(&self) -> Option<GoalSelectorRead<'_>> {
+        (!self.loaned).then_some(GoalSelectorRead {
+            entries: &self.registrations,
+        })
+    }
     pub fn add(&mut self, priority: i32, goal: impl Goal + 'static) {
         self.add_boxed(priority, Box::new(goal));
     }
-    /// `add` for a goal built at runtime (`Box<dyn Goal>`).
     pub fn add_boxed(&mut self, priority: i32, goal: Box<dyn Goal>) {
-        self.goals.push(Wrapped {
+        self.registrations.push(GoalRegistration {
             priority,
-            goal,
-            running: false,
+            name: goal.name(),
+            running: std::cell::Cell::new(false),
         });
+        self.goals.push(goal);
     }
-    /// `Goal::set_start_delay` of the goal of this name.
     pub fn set_start_delay(&mut self, name: &str, ticks: i32) {
-        for g in &mut self.goals {
-            if g.goal.name() == name {
-                g.goal.set_start_delay(ticks);
+        for (goal, entry) in self.goals.iter_mut().zip(&self.registrations) {
+            if entry.name == name {
+                goal.set_start_delay(ticks);
             }
         }
     }
     pub fn clear(&mut self) {
         self.goals.clear();
+        self.registrations.clear();
         self.locked = [None; 4];
     }
     pub fn running_names(&self) -> Vec<&'static str> {
-        self.goals
+        self.registrations
             .iter()
-            .filter(|g| g.running)
-            .map(|g| g.goal.name())
+            .filter(|entry| entry.running.get())
+            .map(|entry| entry.name)
             .collect()
     }
-    /// Whether a goal of this name is registered, running or not.
     pub fn has(&self, name: &str) -> bool {
-        self.goals.iter().any(|g| g.goal.name() == name)
+        self.registrations.iter().any(|entry| entry.name == name)
     }
     pub fn is_running(&self, name: &str) -> bool {
-        self.goals
+        self.registrations
             .iter()
-            .any(|g| g.running && g.goal.name() == name)
+            .any(|entry| entry.running.get() && entry.name == name)
     }
-    fn stop(&mut self, i: usize, m: &mut Mob, cx: &mut Cx) {
-        if self.goals[i].running {
-            self.goals[i].running = false;
-            self.goals[i].goal.stop(m, cx);
+    fn invoke(&mut self, i: usize, mob: &mut Mob, cx: &mut Cx, callback: GoalCallback) -> bool {
+        // The immutable registration slice and mutable goal objects are disjoint
+        // canonical fields. Running changes use Cells, not a copied read shadow.
+        let sources = cx.selectors.with_active(GoalSelectorRead {
+            entries: &self.registrations,
+        });
+        let mut scoped = Cx {
+            w: cx.w,
+            level: &mut *cx.level,
+            events: &mut *cx.events,
+            selectors: sources,
+        };
+        let goal = &mut self.goals[i];
+        match callback {
+            GoalCallback::CanUse => goal.can_use(mob, &mut scoped),
+            GoalCallback::CanContinue => goal.can_continue(mob, &mut scoped),
+            GoalCallback::Start => {
+                goal.start(mob, &mut scoped);
+                false
+            }
+            GoalCallback::Stop => {
+                goal.stop(mob, &mut scoped);
+                false
+            }
+            GoalCallback::Tick => {
+                goal.tick(mob, &mut scoped);
+                false
+            }
         }
     }
-    /// GoalSelector.tick
-    pub fn tick(&mut self, m: &mut Mob, cx: &mut Cx) {
+    fn stop(&mut self, i: usize, mob: &mut Mob, cx: &mut Cx) {
+        if self.registrations[i].running.replace(false) {
+            self.invoke(i, mob, cx, GoalCallback::Stop);
+        }
+    }
+    pub fn tick(&mut self, mob: &mut Mob, cx: &mut Cx) {
         for i in 0..self.goals.len() {
-            if self.goals[i].running
-                && (self.goals[i].goal.flags() & self.disabled != 0
-                    || !self.goals[i].goal.can_continue(m, cx))
+            if self.registrations[i].running.get()
+                && (self.goals[i].flags() & self.disabled != 0
+                    || !self.invoke(i, mob, cx, GoalCallback::CanContinue))
             {
-                self.stop(i, m, cx);
+                self.stop(i, mob, cx);
             }
         }
         for slot in &mut self.locked {
-            if slot.is_some_and(|i| !self.goals[i].running) {
+            if slot.is_some_and(|i| !self.registrations[i].running.get()) {
                 *slot = None;
             }
         }
         for i in 0..self.goals.len() {
-            let flags = self.goals[i].goal.flags();
-            if self.goals[i].running || flags & self.disabled != 0 {
+            let flags = self.goals[i].flags();
+            if self.registrations[i].running.get() || flags & self.disabled != 0 {
                 continue;
             }
             let replaceable =
                 (0..4)
-                    .filter(|b| flags & (1 << b) != 0)
-                    .all(|b| match self.locked[b] {
+                    .filter(|bit| flags & (1 << bit) != 0)
+                    .all(|bit| match self.locked[bit] {
                         None => true,
                         Some(j) => {
-                            self.goals[j].goal.interruptable()
-                                && self.goals[i].priority < self.goals[j].priority
+                            self.goals[j].interruptable()
+                                && self.registrations[i].priority < self.registrations[j].priority
                         }
                     });
-            if !replaceable || !self.goals[i].goal.can_use(m, cx) {
+            if !replaceable || !self.invoke(i, mob, cx, GoalCallback::CanUse) {
                 continue;
             }
-            for b in 0..4 {
-                if flags & (1 << b) != 0 {
-                    if let Some(j) = self.locked[b] {
-                        self.stop(j, m, cx);
+            for bit in 0..4 {
+                if flags & (1 << bit) != 0 {
+                    if let Some(j) = self.locked[bit] {
+                        self.stop(j, mob, cx);
                     }
-                    self.locked[b] = Some(i);
+                    self.locked[bit] = Some(i);
                 }
             }
-            if !self.goals[i].running {
-                self.goals[i].running = true;
-                self.goals[i].goal.start(m, cx);
+            if !self.registrations[i].running.replace(true) {
+                self.invoke(i, mob, cx, GoalCallback::Start);
             }
         }
-        self.tick_running(m, cx, true);
+        self.tick_running(mob, cx, true);
     }
-    pub fn tick_running(&mut self, m: &mut Mob, cx: &mut Cx, force: bool) {
-        for g in &mut self.goals {
-            if g.running && (force || g.goal.every_tick()) {
-                g.goal.tick(m, cx);
-            }
-        }
-    }
-    pub fn stop_all(&mut self, m: &mut Mob, cx: &mut Cx) {
+    pub fn tick_running(&mut self, mob: &mut Mob, cx: &mut Cx, force: bool) {
         for i in 0..self.goals.len() {
-            self.stop(i, m, cx);
+            if self.registrations[i].running.get() && (force || self.goals[i].every_tick()) {
+                self.invoke(i, mob, cx, GoalCallback::Tick);
+            }
+        }
+    }
+    pub fn stop_all(&mut self, mob: &mut Mob, cx: &mut Cx) {
+        for i in 0..self.goals.len() {
+            self.stop(i, mob, cx);
         }
         self.locked = [None; 4];
     }
-    /// `GoalSelector.removeAllGoals(predicate)`: every goal `predicate`
-    /// picks goes, a running one stopped first (`removeGoal` stops it), and
-    /// the flag locks it held move with the list. How many went.
     pub fn remove_all(
         &mut self,
         predicate: impl Fn(&dyn Goal) -> bool,
-        m: &mut Mob,
+        mob: &mut Mob,
         cx: &mut Cx,
     ) -> usize {
         let mut removed = 0;
         let mut i = 0;
         while i < self.goals.len() {
-            if predicate(&*self.goals[i].goal) {
-                self.stop(i, m, cx);
+            if predicate(&*self.goals[i]) {
+                self.stop(i, mob, cx);
                 self.goals.remove(i);
+                self.registrations.remove(i);
                 removed += 1;
                 for slot in &mut self.locked {
                     match *slot {
@@ -243,11 +328,10 @@ impl GoalSelector {
         }
         removed
     }
-    /// Every goal as (priority, name, running), in registration order.
     pub fn entries(&self) -> impl Iterator<Item = (i32, &'static str, bool)> + '_ {
-        self.goals
+        self.registrations
             .iter()
-            .map(|g| (g.priority, g.goal.name(), g.running))
+            .map(|entry| (entry.priority, entry.name, entry.running.get()))
     }
 }
 
@@ -3344,6 +3428,7 @@ mod breeding_variant_tests {
                         w: &world,
                         level,
                         events: &mut events,
+                        selectors: Default::default(),
                     };
                     goal.tick(&mut parent, &mut cx);
                     let (choice, experience) = events
@@ -3631,7 +3716,7 @@ mod remove_all_tests {
                 // `Mob::new` registered the species' own goals; only the ones
                 // this test adds matter here.
                 let mut goals = {
-                    let mut goals = std::mem::take(&mut m.ai.goals);
+                    let mut goals = m.ai.goals.take();
                     goals.clear();
                     goals
                 };
@@ -3644,6 +3729,7 @@ mod remove_all_tests {
                         w,
                         level: &mut test_level.level(),
                         events: &mut events,
+                        selectors: Default::default(),
                     };
                     goals.tick(&mut m, &mut cx);
                     // The Walk runs; Float needs water the empty world has none of.
@@ -3727,6 +3813,7 @@ mod avoid_entity_targeting_tests {
                 w: &world,
                 level: &mut test_level.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
             let in_range = m.distance_sqr(player.position) <= 20.0 * 20.0;
             out = Some((in_range, goal.avoid_target(&mut m, &mut cx).is_some()));
@@ -3790,8 +3877,9 @@ mod avoid_entity_targeting_tests {
                     w: &world,
                     level: &mut lr.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
-                let mut goals = std::mem::take(&mut m.ai.goals);
+                let mut goals = m.ai.goals.take();
                 goals.tick(&mut m, &mut cx);
                 outcomes.push(goals.is_running("Tempt"));
                 m.ai.goals = goals;
@@ -3831,6 +3919,7 @@ mod peaceful_targets_tests {
                 w: &w,
                 level,
                 events: &mut events,
+                selectors: Default::default(),
             };
             assert!(
                 HurtByTarget::default().can_use(&mut wolf, &mut cx),
@@ -3844,6 +3933,7 @@ mod peaceful_targets_tests {
                 w: &peaceful,
                 level,
                 events: &mut events,
+                selectors: Default::default(),
             };
             assert!(
                 !HurtByTarget::default().can_use(&mut wolf, &mut cx),
@@ -3877,6 +3967,7 @@ mod peaceful_targets_tests {
                 w,
                 level: &mut lr.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
             m.ai.last_hurt_by = Some(Who::Mob(2));
             m.ai.last_hurt_by_time = 5;
@@ -4080,6 +4171,7 @@ mod target_change_hook_tests {
                     w: &world,
                     level: &mut level.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 goal.start(&mut mob, &mut cx);
                 assert_eq!(mob.ai.target, None);
@@ -4337,6 +4429,7 @@ mod melee_continue_tests {
             w: world,
             level: &mut fixture.level(),
             events: &mut events,
+            selectors: Default::default(),
         };
         goals.tick(m, &mut cx);
     }
@@ -4453,8 +4546,9 @@ mod hurt_by_anger_tests {
                     w: &world,
                     level: &mut lr.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
-                let mut goals = std::mem::take(&mut m.ai.goals);
+                let mut goals = m.ai.goals.take();
                 goals.tick(&mut m, &mut cx);
                 truth.push(goals.is_running("HurtByTarget"));
                 m.ai.goals = goals;

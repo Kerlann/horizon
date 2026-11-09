@@ -425,6 +425,7 @@ mod tests {
                 w: &w,
                 level,
                 events: &mut events,
+                selectors: Default::default(),
             };
             m.ai.seen_cache.clear();
             assert!(target.can_use(&mut m, &mut cx));
@@ -441,6 +442,7 @@ mod tests {
                 w: &w,
                 level,
                 events: &mut events,
+                selectors: Default::default(),
             };
             sweep.tick(&mut m, &mut cx);
             assert!(
@@ -473,6 +475,7 @@ mod tests {
                 w: &w,
                 level,
                 events: &mut events,
+                selectors: Default::default(),
             };
             m.ai.seen_cache.clear();
             assert!(!target.can_use(&mut m, &mut cx));
@@ -526,6 +529,7 @@ mod tests {
                         w: &w,
                         level,
                         events: &mut events,
+                        selectors: Default::default(),
                     };
                     assert_eq!(target.can_use(&mut m, &mut cx), roof.is_none(), "{roof:?}");
                     m.ai.target = Some(Who::Player);

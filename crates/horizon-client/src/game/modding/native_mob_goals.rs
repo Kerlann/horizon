@@ -263,14 +263,15 @@ impl Game<'_> {
             );
             let m = &mut mobs[index];
             let mut selector = if targets {
-                std::mem::take(&mut m.ai.targets)
+                m.ai.targets.take()
             } else {
-                std::mem::take(&mut m.ai.goals)
+                m.ai.goals.take()
             };
             let mut cx = Cx {
                 w: &w,
                 level: &mut level,
                 events: &mut events,
+                selectors: Default::default(),
             };
             let removed = selector.remove_all(|g| goal_id(g.name()) == id, m, &mut cx);
             if targets {
@@ -702,7 +703,7 @@ mod tests {
             let mut test_level = horizon_client::health::TestLevel::new(0);
             let mut level = test_level.level();
             let mut events = Vec::new();
-            let mut selector = std::mem::take(&mut mobs[0].ai.goals);
+            let mut selector = mobs[0].ai.goals.take();
             selector.clear();
             selector.add(0, StopProbe);
             {
@@ -711,6 +712,7 @@ mod tests {
                     w: &world,
                     level: &mut level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 selector.tick(&mut mobs[0], &mut cx);
             }
@@ -747,7 +749,7 @@ mod tests {
             let mut test_level = horizon_client::health::TestLevel::new(0);
             let mut level = test_level.level();
             let mut events = Vec::new();
-            let mut selector = std::mem::take(&mut mobs[0].ai.goals);
+            let mut selector = mobs[0].ai.goals.take();
             selector.clear();
             selector.add(0, HoldGroundAttack::new(8.0));
             {
@@ -756,6 +758,7 @@ mod tests {
                     w: &world,
                     level: &mut level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 selector.tick(&mut mobs[0], &mut cx);
             }
@@ -785,7 +788,7 @@ mod tests {
             let mut test_level = horizon_client::health::TestLevel::new(0);
             let mut level = test_level.level();
             let mut events = Vec::new();
-            let mut selector = std::mem::take(&mut mobs[0].ai.goals);
+            let mut selector = mobs[0].ai.goals.take();
             selector.clear();
             selector.add(0, FollowFlockLeader::new(0));
             {
@@ -794,6 +797,7 @@ mod tests {
                     w: &world,
                     level: &mut level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 selector.tick(&mut mobs[0], &mut context);
             }

@@ -818,6 +818,7 @@ mod tests {
                     w,
                     level: &mut test_level.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 goal.tick(&mut m, &mut cx);
                 m.ai.jumping

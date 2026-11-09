@@ -689,6 +689,7 @@ mod keep_jumping_tests {
                 w,
                 level: &mut fixture.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
             starts = Some([true, false].map(|passenger| {
                 let mut m = Mob::new(
@@ -699,7 +700,7 @@ mod keep_jumping_tests {
                 );
                 m.extra.passenger = passenger;
                 m.ai.goals.add(5, CubeKeepJumping);
-                let mut goals = std::mem::take(&mut m.ai.goals);
+                let mut goals = m.ai.goals.take();
                 goals.tick(&mut m, &mut cx);
                 let running = goals.is_running("CubeKeepJumping");
                 m.ai.goals = goals;

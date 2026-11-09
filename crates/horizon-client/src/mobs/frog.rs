@@ -1223,8 +1223,9 @@ mod tests {
                     w,
                     level: &mut fixture.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
-                let mut goals = std::mem::take(&mut m.ai.goals);
+                let mut goals = m.ai.goals.take();
                 goals.tick(&mut m, &mut cx);
                 assert!(goals.is_running("Panic"), "the hurt frog should flee");
                 m.ai.goals = goals;

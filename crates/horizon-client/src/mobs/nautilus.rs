@@ -772,6 +772,7 @@ mod tests {
                 w: &w,
                 level,
                 events: &mut events,
+                selectors: Default::default(),
             };
             goal.tick(&mut m, &mut cx);
         });
