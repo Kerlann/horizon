@@ -289,6 +289,8 @@ fn actual_dragon_admits_exactly_eight_checked_parts_with_independent_uuids() {
         sync: false,
     };
     crate::game::native_entity_refs::tests::with_game(|game| {
+        game.options.dedicated = Some(Vec::new());
+        game.native_level_opened(game.dim);
         let parent = game
             .spawn_dragon_spawned([0.0; 3], crate::game::creatures::SpawnSite::Plain)
             .unwrap();
