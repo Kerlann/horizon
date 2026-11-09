@@ -49,6 +49,9 @@ class CommandGenerationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'expected operation'):
                 declarations(directory)
 
+    def test_checked_in_command_outputs_are_current(self):
+        run(Path(__file__).resolve().parents[1], check=True)
+
     def test_empty_catalog_refuses_instead_of_erasing_operations(self):
         with tempfile.TemporaryDirectory() as temporary:
             with self.assertRaisesRegex(ValueError, 'no command declarations'):
