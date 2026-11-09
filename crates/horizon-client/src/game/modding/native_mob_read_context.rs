@@ -7,7 +7,10 @@ use super::{
     native_mob_read_rows::{MerchantReadContext, MobReadContext},
 };
 use horizon_client::{
-    join_seq::residency::table::EntityLookup,
+    join_seq::residency::{
+        IdentityDetails, Source,
+        table::{EntityLookup, Location},
+    },
     mobs::{self, Mob, Species, Who, ai::brain_target},
 };
 use horizon_core::geometry::{Aabb, Axis};
@@ -54,6 +57,7 @@ pub(super) struct NativeMobRelations {
     merchant_by_conn: HashMap<u32, u32>,
     merchants: HashMap<u32, u32>,
     saved_ids: HashMap<[i32; 4], u32>,
+    identity_candidates: Vec<(u32, Location, IdentityDetails)>,
     mob_riders: HashMap<u32, std::collections::HashSet<u32>>,
     rider_vehicles: HashMap<u32, u32>,
 }
@@ -69,6 +73,7 @@ impl NativeMobRelations {
         self.merchants.clear();
         self.merchant_by_conn.clear();
         self.saved_ids.clear();
+        self.identity_candidates.clear();
         for riders in self.mob_riders.values_mut() {
             riders.clear();
         }
@@ -163,6 +168,67 @@ struct PlayerTargetSource<'a> {
     team: Option<&'a horizon_client::scoreboard::Team>,
 }
 impl Game<'_> {
+    /// Resolve a saved UUID only after canonical admission. A loose saved-map
+    /// key, removed body, foreign level or dragon-part alias is not an identity.
+    fn admitted_saved_uuid_at(
+        &self,
+        id: u32,
+        dimension: mod_api::DimensionKey,
+    ) -> Option<(Location, IdentityDetails, [i32; 4])> {
+        let (at, state, details) = {
+            let mut table = self.entity_residency.borrow_mut();
+            let (at, state, _, details) = table
+                .server_admitted_read_lookup(id, |at| self.locate_server_resident_owner(at))?;
+            (at, state, details)
+        };
+        if at.owner.dimension != dimension
+            || !matches!(at.source, Source::Ordinary | Source::Hook { .. })
+            || !matches!(
+                state,
+                EntityLookup::Taken
+                    | EntityLookup::Found {
+                        value: (_, true),
+                        ..
+                    }
+            )
+        {
+            return None;
+        }
+        let uuid = if dimension == self.dim.key() {
+            self.persist.uuids.get(&id).copied()
+        } else {
+            self.levels
+                .parked_of(mod_api::dimension_id(dimension)?)?
+                .saved_entity_uuid(id)
+        }?;
+        Some((at, details, uuid))
+    }
+
+    /// The primary table enumerates candidates only. Resolve each after dropping
+    /// its iterator borrow, then require the same immutable admission. The reused
+    /// scratch is returned empty; no second identity/facts authority is retained.
+    pub(super) fn for_admitted_saved_uuids(
+        &self,
+        dimension: mod_api::DimensionKey,
+        candidates: &mut Vec<(u32, Location, IdentityDetails)>,
+        mut visit: impl FnMut(u32, [i32; 4]),
+    ) {
+        candidates.clear();
+        candidates.extend(self.entity_residency.borrow_mut().admitted_metadata());
+        for &(id, expected, expected_details) in candidates.iter() {
+            if expected.owner.dimension != dimension {
+                continue;
+            }
+            if let Some((at, details, uuid)) = self.admitted_saved_uuid_at(id, dimension)
+                && at == expected
+                && details == expected_details
+            {
+                visit(id, uuid);
+            }
+        }
+        candidates.clear();
+    }
+
     /// Rebuild once per pass, preserving allocation capacity. This is not a
     /// callback refresh: canonical changes use NativeMobRelations update methods.
     pub(super) fn rebuild_mob_read_relations(
@@ -179,24 +245,17 @@ impl Game<'_> {
                 index.update_merchant(conn, play.merchant.as_ref().and_then(|m| m.merchant.mob));
             }
         }
-        if level.dimension() == self.dim.key() {
-            index
-                .saved_ids
-                .extend(self.persist.uuids.iter().map(|(&id, &uuid)| (uuid, id)));
-        } else if let Some(parked) = self.levels.parked_of(level.dimension_id()) {
-            index
-                .saved_ids
-                .extend(parked.saved_entity_uuids().map(|(id, uuid)| (uuid, id)));
-        }
+        self.for_admitted_saved_uuids(
+            level.dimension(),
+            &mut index.identity_candidates,
+            |id, uuid| {
+                index.saved_ids.insert(uuid, id);
+            },
+        );
     }
     fn read_saved_uuid(&self, id: u32, level: LevelRef) -> Option<[i32; 4]> {
-        if level.dimension() == self.dim.key() {
-            self.persist.uuids.get(&id).copied()
-        } else {
-            self.levels
-                .parked_of(level.dimension_id())?
-                .saved_entity_uuid(id)
-        }
+        self.admitted_saved_uuid_at(id, level.dimension())
+            .map(|(_, _, uuid)| uuid)
     }
     fn read_guest<'a>(
         &'a self,
@@ -267,7 +326,8 @@ impl Game<'_> {
                 .board
                 .players_team(&self.read_guest(index, conn)?.name);
         }
-        self.read_relation_entity(*index.saved_ids.get(&root)?, level, index)?;
+        let id = *index.saved_ids.get(&root)?;
+        (self.read_saved_uuid(id, level)? == root).then_some(())?;
         self.score
             .board
             .players_team(&horizon_client::save::uuid_text(root))
