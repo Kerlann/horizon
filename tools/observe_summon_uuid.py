@@ -61,7 +61,7 @@ def main():
     def observe(dimension=None):
         prefix = f'execute in minecraft:{dimension} run ' if dimension else ''
         for tag in ('root', 'first', 'rejected', 'grandchild', 'leaf'):
-            reply(f'{prefix}data get entity @e[tag={tag},limit=1]')
+            reply(f'{prefix}data get entity @e[tag={tag},distance=0..,limit=1]')
 
     def start(label):
         nonlocal server
@@ -121,7 +121,7 @@ def main():
             observe()
             advance(5)
             observe('the_nether')
-            reply('execute in minecraft:the_nether run kill @e[tag=root]')
+            reply('execute in minecraft:the_nether run kill @e[tag=root,distance=0..]')
             reply('kill @e[tag=root]')
             observe()
         (out / 'version.json').write_text(json.dumps(lock['minecraft'], indent=2))
