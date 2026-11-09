@@ -118,9 +118,9 @@ pub trait HurtWorld {
         blocked: bool,
     ) -> Result<(), Self::Error>;
 }
-/// What `LivingDamageEvent.Pre` changed, back in the cooldown: NeoForge bubbles the damage
-/// Pre left up to `lastHurt` (here vanilla's `lastHurt` plus what Pre added) and applies the
-/// cooldown Pre set, which was `cooldown`. A hit Pre left alone writes nothing more, so a
+/// What `LivingDamageEvent.Pre` changed, back in the cooldown: `lastHurt` takes the damage
+/// Pre left (vanilla's `lastHurt` plus what Pre added) and the cooldown takes what Pre set,
+/// which was `cooldown`. A hit Pre left alone writes nothing more, so a
 /// write `actuallyHurt` made itself stands as in vanilla.
 fn after_pre<S>(s: &mut HurtState<S>, container: &DamageContainer, cooldown: i32) {
     let change = container.pre_change();

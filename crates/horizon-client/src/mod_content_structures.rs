@@ -119,7 +119,7 @@ pub(super) fn apply(
         tags: &entity_tags,
     };
     let mut changed: BTreeMap<String, J> = BTreeMap::new();
-    // NeoForge phases: ADD before REMOVE, preserving overlay traversal order.
+    // Apply ADD before REMOVE, preserving overlay traversal order.
     for m in modifiers
         .iter()
         .filter(|m| matches!(m.action, Action::Add(_)))

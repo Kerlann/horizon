@@ -74,8 +74,11 @@ pub fn common(from: &Mob, to: &mut Mob, preserve_can_pick_up_loot: bool) {
     to.absorption = from.absorption.clamp(0.0, maximum);
     // addEffect for each: Absorption's onEffectStarted raises it again.
     for effect in &from.extra.effects {
-        let (effect, ticks, amplifier) = (effect.id, effect.duration, effect.amplifier);
-        to.add_effect(effect, ticks, amplifier);
+        to.add_effect(effect.id, effect.duration, effect.amplifier);
+        // `new MobEffectInstance(effect)` copies its icon flag too.
+        if let Some(copy) = to.extra.effects.iter_mut().find(|e| e.id == effect.id) {
+            copy.show_icon = effect.show_icon;
+        }
     }
     to.extra.hidden_effects = from.extra.hidden_effects.clone();
     to.extra.effect_chains = from.extra.effect_chains.clone();

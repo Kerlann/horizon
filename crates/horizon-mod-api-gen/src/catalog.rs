@@ -97,6 +97,9 @@ pub struct Hook {
     pub out: Option<String>,
     /// A replace hook whose output also names the mod that answered.
     pub answered_by_mod: bool,
+    /// A listener about one mod's own things: the event field naming that mod, whose
+    /// subscription alone is told.
+    pub owner: Option<String>,
     pub scope: Option<PartScope>,
     pub host: Option<HostAccess>,
     pub context: Option<PhaseContext>,
@@ -137,6 +140,7 @@ pub enum CatalogError {
     Counterpart { hook: String, key: &'static str },
     InvalidContract(String),
     AnsweredNeedsGlobalReplace(String),
+    OwnerNeedsGlobalListener(String),
     ScopeNeedsKey(String),
     NoHooks,
     Retired(String),
@@ -167,6 +171,9 @@ impl fmt::Display for CatalogError {
             Self::InvalidContract(name) => write!(f, "invalid contract for {name}"),
             Self::AnsweredNeedsGlobalReplace(name) => {
                 write!(f, "{name}: answered_by needs a global replace hook")
+            }
+            Self::OwnerNeedsGlobalListener(name) => {
+                write!(f, "{name}: owner needs a global listener")
             }
             Self::ScopeNeedsKey(name) => write!(f, "{name} needs both scope and key, or neither"),
             Self::NoHooks => f.write_str("no native hooks"),
@@ -238,6 +245,7 @@ struct ModApiEntry {
     scope: Option<PartKind>,
     key: Option<String>,
     answered_by: Option<AnsweredBy>,
+    owner: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -282,6 +290,9 @@ impl Hook {
         if answered_by_mod && (api.contract != Contract::Replace || scope.is_some()) {
             return Err(CatalogError::AnsweredNeedsGlobalReplace(name));
         }
+        if api.owner.is_some() && (api.contract != Contract::Listen || scope.is_some()) {
+            return Err(CatalogError::OwnerNeedsGlobalListener(name));
+        }
         let counterparts = Counterparts {
             neoforge: counterparts(&name, "neoforge", entry.neoforge)?,
             fabric: counterparts(&name, "fabric", entry.fabric)?,
@@ -296,6 +307,7 @@ impl Hook {
             contract: api.contract,
             out: api.out,
             answered_by_mod,
+            owner: api.owner,
             scope,
             host: entry.host,
             context: entry.context,
@@ -502,7 +514,7 @@ impl Declared {
                         }
                         // The contract's arguments are the entry's `mod_api` object.
                         let mut api = serde_json::Map::new();
-                        for key in ["contract", "out", "scope", "key", "answered_by"] {
+                        for key in ["contract", "out", "scope", "key", "answered_by", "owner"] {
                             if let Some(value) = entry.remove(key) {
                                 api.insert(key.into(), value);
                             }
@@ -639,6 +651,7 @@ impl Hook {
             contract: Contract::Listen,
             out: None,
             answered_by_mod: false,
+            owner: None,
             scope: None,
             host: None,
             context: None,
@@ -965,6 +978,27 @@ mod tests {
             );
         }
         assert!(scoped(json!({"contract": "listen", "scope": "nothing", "key": "k"})).is_err());
+    }
+
+    #[test]
+    fn owner_needs_a_global_listener() {
+        let owned = |api: serde_json::Value| Hook::parse(hook("o", json!({"mod_api": api})));
+        assert_eq!(
+            owned(json!({"contract": "listen", "owner": "mod_id"}))
+                .unwrap()
+                .owner
+                .as_deref(),
+            Some("mod_id")
+        );
+        for api in [
+            json!({"contract": "cancel", "out": "c", "owner": "mod_id"}),
+            json!({"contract": "listen", "owner": "mod_id", "scope": "item", "key": "k"}),
+        ] {
+            assert_eq!(
+                owned(api).unwrap_err(),
+                CatalogError::OwnerNeedsGlobalListener("o".into())
+            );
+        }
     }
 
     #[test]

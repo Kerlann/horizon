@@ -2819,8 +2819,8 @@ mod tests {
         fs::remove_dir_all(&dir).unwrap();
     }
 
-    /// NeoForge loads a recipe only when its `neoforge:conditions` pass. The oracle's recipes are the ones
-    /// that did: those are upgraded like any vanilla recipe, the others stay outside, as NeoForge left them out.
+    /// The oracle's recipes that passed `neoforge:conditions` are upgraded like any vanilla recipe;
+    /// recipes absent from the oracle stay outside.
     #[test]
     fn conditional_recipes_are_the_ones_neoforge_loaded() {
         let dir = std::env::temp_dir().join(format!(

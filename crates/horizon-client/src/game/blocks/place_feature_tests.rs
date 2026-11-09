@@ -6,7 +6,7 @@ use super::*;
 use horizon_client::chunk::Chunk;
 use std::sync::Arc;
 
-fn game() -> Game<'static> {
+fn game(resources: &mut Option<std::sync::Arc<Resources>>) -> Game<'_> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -28,7 +28,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -81,7 +81,8 @@ fn block_is(game: &mut Game<'_>, at: &str, block: &str) -> bool {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn an_inline_simple_block_feature_places_like_a_named_one() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     for (feature, at, placed) in [
         (
             r#"{type:"minecraft:simple_block",to_place:{id:"minecraft:stone"}}"#,
@@ -131,7 +132,8 @@ fn an_inline_simple_block_feature_places_like_a_named_one() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn inline_and_named_features_fail_and_succeed_alike() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     let failed = Some("Failed to place feature".to_owned());
     let dandelion = r#"{type:"minecraft:simple_block",to_place:{id:"minecraft:dandelion"}}"#;
     assert_eq!(
@@ -164,7 +166,8 @@ fn inline_and_named_features_fail_and_succeed_alike() {
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn an_inline_feature_draws_the_level_random_as_its_named_twin() {
     use horizon_core::random::{LegacyRandom, RandomSource};
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
     let json =
         std::fs::read_to_string(root.join("data/minecraft/worldgen/feature/flower_default.json"))

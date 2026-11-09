@@ -22,6 +22,8 @@ fn killed_holder_releases_production_home_source_and_parent_leases() {
     let game = root.path().join("game");
     let source = root.path().join("versions/native-fixture");
     let data = root.path().join("data");
+    let resources = root.path().join("base/resources");
+    fs::create_dir_all(&resources).unwrap();
     fs::create_dir_all(&home).unwrap();
     fs::create_dir_all(&game).unwrap();
     fs::create_dir_all(&source).unwrap();
@@ -61,7 +63,7 @@ fn killed_holder_releases_production_home_source_and_parent_leases() {
         .any(|line| line.contains("LEASE-READY"));
     assert!(ready, "holder did not acquire its production runtime guard");
     let registry = Registry::at(&data).unwrap();
-    for path in [&home, &game, &source, source.parent().unwrap()] {
+    for path in [&home, &game, &source, source.parent().unwrap(), &resources] {
         assert!(
             matches!(
                 registry.lock(&directory(path), LockMode::Exclusive),
@@ -73,7 +75,7 @@ fn killed_holder_releases_production_home_source_and_parent_leases() {
     }
     actor.0.kill().unwrap(); // SIGKILL on Unix; no Drop/marker cleanup in the holder.
     actor.0.wait().unwrap();
-    for path in [&home, &game, &source, source.parent().unwrap()] {
+    for path in [&home, &game, &source, source.parent().unwrap(), &resources] {
         drop(
             registry
                 .lock(&directory(path), LockMode::Exclusive)
@@ -91,7 +93,9 @@ fn lease_holder_actor() {
     let mut command = Command::new(std::env::current_exe().unwrap());
     command
         .current_dir(root.join("game"))
-        .env("HORIZON_HOME", root.join("home"));
+        .env("HORIZON_HOME", root.join("home"))
+        .arg("--resources")
+        .arg(root.join("base/resources"));
     mark(&mut command, &root.join("versions/native-fixture"));
     let (_command, _guard) = crate::backend::prepare_command(command).unwrap();
     println!("LEASE-READY");

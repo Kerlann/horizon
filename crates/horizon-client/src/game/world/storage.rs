@@ -658,7 +658,8 @@ mod reach_tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn breaking_the_other_half_closes_the_open_double_chest() {
-        let mut game = server_game();
+        let mut resources = None;
+        let mut game = server_game(&mut resources);
         game.player = Some(
             PlayerMotion::new(game.motion, Vec3::new(8.5, 64.0, 8.5)).expect("a player position"),
         );
@@ -711,7 +712,8 @@ mod lock_tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_locked_container_refuses_the_local_players_open() {
-        let mut game = server_game();
+        let mut resources = None;
+        let mut game = server_game(&mut resources);
         game.options.dedicated = None;
         let state = game
             .pack
@@ -765,7 +767,8 @@ mod lock_tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_lock_on_either_half_refuses_a_double_chest() {
-        let mut game = server_game();
+        let mut resources = None;
+        let mut game = server_game(&mut resources);
         game.options.dedicated = None;
         let registry = game.pack.assets.registry;
         let half = |kind: &str| {

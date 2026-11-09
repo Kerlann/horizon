@@ -244,7 +244,7 @@ impl SettingSpec {
                 .map(SettingValue::Range),
             (SettingKind::Color { .. }, Some(text)) => text
                 .strip_prefix('#')
-                .filter(|hex| hex.len() == 6)
+                .filter(|hex| hex.len() == 6 && hex.bytes().all(|b| b.is_ascii_hexdigit()))
                 .and_then(|hex| u32::from_str_radix(hex, 16).ok())
                 .map(SettingValue::Color),
             _ => None,
@@ -378,6 +378,7 @@ mod tests {
         assert_eq!(range.read(Some("9.0")), SettingValue::Range(1.0));
         assert_eq!(range.read(Some("NaN")), SettingValue::Range(1.0));
         assert_eq!(color.read(Some("#12345")), SettingValue::Color(0x33_66CC));
+        assert_eq!(color.read(Some("#+12345")), SettingValue::Color(0x33_66CC));
         assert_eq!(toggle.store(SettingValue::Choice(0)), None);
         assert_eq!(range.store(SettingValue::Range(4.5)), None);
         assert_eq!(color.store(SettingValue::Color(0x0100_0000)), None);

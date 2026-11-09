@@ -295,7 +295,9 @@ fn install_in(
     let record = serde_json::json!({ "base": base, "file": file, "sha256": sha256 });
     let made = fs::create_dir_all(&partial)
         .map_err(|e| e.to_string())
-        .and_then(|()| native_mods::copy_base(&versions.join(base), &partial, Target::Client))
+        .and_then(|()| {
+            native_mods::copy_base(&versions.join(base), &partial, Target::Client, false)
+        })
         .and_then(|()| finish(&partial, &dir, program, &record).map_err(|e| e.to_string()));
     let _ = retried(|| fs::remove_dir_all(&partial).or_else(|_| gone(&partial)));
     if let Err(e) = made {

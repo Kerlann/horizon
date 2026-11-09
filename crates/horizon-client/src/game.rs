@@ -2307,6 +2307,8 @@ pub struct PackResources {
     polytone_particles: Option<Arc<horizon_client::particles::polytone::Registry>>,
     /// The packs' Polytone post chains (#11486), when a pack has some.
     polytone_post: Option<Arc<horizon_client::polytone_post::PolytonePost>>,
+    /// The packs' Polytone custom colours (`polytone/colors.json`).
+    polytone_colors: Arc<horizon_client::polytone_colors::PackColors>,
 }
 
 /// A quick craft drag as the screen draws it: each dragged slot's count and
@@ -2732,6 +2734,7 @@ struct Game<'a> {
     /// The side, registries and mod settings of this game's resource generation, which
     /// its menus lend to the hooks they fire inside a loop; rebuilt by `refresh_loop_context`.
     loop_context: Arc<horizon_world::native_load_context::LoopContext>,
+    setting_overrides: std::cell::RefCell<std::collections::BTreeMap<(String, String), String>>,
     /// The native damage hooks every level of this game lends to its hits.
     damage_hooks: horizon_client::health::DamageHooks,
     music: horizon_client::music::MusicManager,
@@ -5021,27 +5024,15 @@ impl Game<'_> {
             attachment_lifetime: Default::default(),
             fall_distance: 0.0,
             rotation: [yaw, 0.0],
-            join: Default::default(),
-            no_gravity: false,
-            health: 5,
-            fire_ticks: 0,
-            thrower: None,
-            target: None,
-            id: self.next_entity,
-            stack,
-            position: p,
-            previous: p,
-            velocity: Vec3::new(velocity[0], velocity[1], velocity[2]),
-            on_ground: false,
-            vertical_collision: false,
-            horizontal_collision: false,
-            age: 0,
             pickup_delay: i64::from(pickup_delay),
-            bob_offset: bob,
-            ticks: 0,
-            needs_sync: false,
-            stuck: Vec3::ZERO,
-            was_touching_water: false,
+            random: random.own.into(),
+            ..ItemEntity::new(
+                self.next_entity,
+                stack,
+                p,
+                Vec3::new(velocity[0], velocity[1], velocity[2]),
+                bob,
+            )
         });
         // ServerLevel.addFreshEntity.
         if self.native_joins_flush(false, self.next_entity) {
@@ -5365,10 +5356,6 @@ impl Game<'_> {
             // really ticks in this pass.
             self.tick_saved_invulnerable_time(items[i].id);
             let item = &mut items[i];
-            // ItemEntity.tick's noPhysics (servers only): out of a block
-            // placed on it, towards the closest open side (#1252).
-            let no_physics = merging && item.inside_block(&self.world, self.collision);
-            let escape_speed = no_physics.then(|| self.world.random.next_float() * 0.2 + 0.1);
             // `getEntityCollisions(entity, bounds.expandTowards(movement))`: the boxes around
             // where the item can reach this tick (a block of slack for the next velocity).
             let reach = Vec3::new(
@@ -5377,6 +5364,14 @@ impl Game<'_> {
                 item.velocity.z.abs() + 1.0,
             );
             obstacles.near(item.bounds().inflate(reach), &mut nearby);
+            let no_physics = merging
+                && item.inside_block(
+                    &self.world,
+                    self.collision,
+                    &nearby,
+                    Some(self.border.geometry()),
+                );
+            let escape_speed = no_physics.then(|| item.random.next_float() * 0.2 + 0.1);
             let mut entered = Vec::new();
             let (alive, discarded) = self.tick_item_with_block_contacts(
                 item,
@@ -7179,7 +7174,7 @@ impl Game<'_> {
             .get("minecraft:breaks_decorated_pots")
             .is_some_and(|t| t.contains(&*held.item));
         let enchantments = &self.stations().enchantments;
-        // `EnchantmentHelper.hasTag`, which NeoForge asks through the mods.
+        // `EnchantmentHelper.hasTag`.
         let kept = held
             .all_enchantments()
             .iter()
@@ -8274,6 +8269,7 @@ impl Game<'_> {
                             eff.amplifier,
                             eff.ambient,
                             eff.show_particles,
+                            eff.show_icon,
                         );
                         changed |= self.living_add_effect(living, &effect);
                     } else {
@@ -9202,44 +9198,6 @@ impl Game<'_> {
             } else {
                 self.draw_mount_hud(&mut batch, wi, hi)
             };
-            // The one bar above the hotbar: the mount's jump bar, the locator
-            // bar (with its background) or the experience bar, with the level
-            // number that a survival player always has.
-            self.gui_layer("minecraft:contextual_info_bar", &mut batch, |g, batch| {
-                if contextual == ContextualBar::JumpableVehicle {
-                    g.draw_jump_bar(batch, wi, hi);
-                }
-                if contextual == ContextualBar::Locator {
-                    let (sprite, [x, y, w, h]) = horizon_client::locator_bar::background(wi, hi);
-                    horizon_client::ui::nine_slice(
-                        batch,
-                        &g.gui.atlas,
-                        sprite,
-                        x as f32,
-                        y as f32,
-                        w as f32,
-                        h as f32,
-                        u32::MAX,
-                    );
-                }
-                if has_experience && g.player.is_some() {
-                    let atlas = &g.gui.atlas;
-                    let width = |s: &str| HudBatch::text_width(atlas, s) as i32;
-                    let draws = hud_layout::experience(
-                        wi,
-                        hi,
-                        g.experience.progress,
-                        g.experience.level,
-                        contextual == ContextualBar::Experience,
-                        &width,
-                    );
-                    hud_layout::paint(batch, atlas, &draws);
-                }
-                if contextual == ContextualBar::Locator {
-                    let draws = g.locator_bar_draws(wi, hi);
-                    hud_layout::paint(batch, &g.gui.atlas, &draws);
-                }
-            });
             let (visual_ticks, visual_millis) = (self.visual_ticks(), self.visual_millis());
             let kind = (!self.creative && !spectator)
                 .then(|| self.player_heart_kind())
@@ -9300,6 +9258,43 @@ impl Game<'_> {
                     self.audio.capture = capture;
                 }
             }
+            // After the health rows (Hud.extractHotbarAndDecorations): jump, locator or XP bar.
+            self.gui_layer("minecraft:contextual_info_bar", &mut batch, |g, batch| {
+                if contextual == ContextualBar::JumpableVehicle {
+                    g.draw_jump_bar(batch, wi, hi);
+                }
+                if contextual == ContextualBar::Locator {
+                    let (sprite, [x, y, w, h]) = horizon_client::locator_bar::background(wi, hi);
+                    horizon_client::ui::nine_slice(
+                        batch,
+                        &g.gui.atlas,
+                        sprite,
+                        x as f32,
+                        y as f32,
+                        w as f32,
+                        h as f32,
+                        u32::MAX,
+                    );
+                }
+                if has_experience && g.player.is_some() {
+                    let atlas = &g.gui.atlas;
+                    let width = |s: &str| HudBatch::text_width(atlas, s) as i32;
+                    let draws = hud_layout::experience_colored(
+                        g.pack.polytone_colors.xp_bar(),
+                        wi,
+                        hi,
+                        g.experience.progress,
+                        g.experience.level,
+                        contextual == ContextualBar::Experience,
+                        &width,
+                    );
+                    hud_layout::paint(batch, atlas, &draws);
+                }
+                if contextual == ContextualBar::Locator {
+                    let draws = g.locator_bar_draws(wi, hi);
+                    hud_layout::paint(batch, &g.gui.atlas, &draws);
+                }
+            });
             if !spectator {
                 self.gui_layer("minecraft:selected_item_name", &mut batch, |g, batch| {
                     g.draw_selected_name(batch, !g.creative);
@@ -10961,8 +10956,7 @@ impl Game<'_> {
             self.clock.camera_fraction()
         };
         self.player_model_geometry(camera, player_alpha, &mut out);
-        // A native pack has no per-entity draws to hide it with: its shadow pass alone gets
-        // the first-person model.
+        // A native pack's shadow pass alone gets the first-person model (no per-entity draws).
         if self.pack_ids.is_none() && !self.own_body_in_view() {
             self.shadow_only_vertices
                 .borrow_mut()
@@ -10981,14 +10975,13 @@ impl Game<'_> {
         self.text_display_geometry(camera, alpha, &mut out, &mut see_through);
         self.see_through_vertices = see_through;
         laps.lap("eg_name_tags");
-        // Entity shadows (EntityRenderer.extractShadow).
+        // Entity shadows (EntityRenderer.extractShadow); a native pack's sun shadows replace them.
         self.mark_translucent_entity(out.len(), "minecraft:entity_shadow");
-        // A native shader pack's sun shadows already fall under the entities in the Overworld:
-        // the round blob would be a second one. The Nether and the End have no sun to cast them.
         let pack_shadows = self.renderer.as_ref().is_some_and(|r| {
             r.pack_entity_shadows() || (self.dim == Dim::Overworld && r.native_shadow())
         });
-        let shadow_sprite = (self.settings.entity_shadows && !pack_shadows)
+        let shadows = self.settings.entity_shadows && self.pack.polytone_colors.entity_shadows();
+        let shadow_sprite = (shadows && !pack_shadows)
             .then(|| self.gui.atlas.sprites.get("misc/shadow").copied())
             .flatten();
         if let Some(sprite) = shadow_sprite {
@@ -12040,8 +12033,8 @@ impl Game<'_> {
     /// ServerExplosion: rays from a 16^3 grid lose (resistance + 0.3) * 0.3 per step.
     /// A mob explosion (`ServerLevel.explode` with `ExplosionInteraction.MOB`:
     /// blocks are kept without mobGriefing, else the mob_explosion_drop_decay
-    /// rule picks decay). NeoForge asks `canEntityGrief` for `source`, the
-    /// exploding entity (the rule alone without one).
+    /// rule picks decay). Mods are asked through `can_entity_grief` for
+    /// `source`, the exploding entity (the rule alone without one).
     fn explode(
         &mut self,
         source: Option<u32>,
@@ -12495,6 +12488,7 @@ impl Game<'_> {
     /// Let go of every entity of the level (saved first): the next world
     /// opened must not inherit them, nor save them as its own.
     pub(super) fn clear_entities(&mut self) {
+        self.clear_pending_mob_actions();
         self.mobs.clear();
         self.dropped.clear();
         self.orbs.clear();
@@ -14499,8 +14493,8 @@ impl Game<'_> {
             );
             horizon_client::graphics::lose_gpu_culling();
         }
-        let screenshot = old.screenshot.take();
-        let screenshot_result = old.screenshot_result.take();
+        let (screenshot, screenshot_result) = (old.screenshot.take(), old.screenshot_result.take());
+        let display = old.display_reading();
         drop(old);
         let mut renderer = build_renderer(
             window,
@@ -14511,15 +14505,15 @@ impl Game<'_> {
             None,
             self.settings.horizon.api,
             self.settings.horizon.translucent_batching,
-            self.settings.horizon.wide_frame(),
+            &self.settings.horizon,
             shader_packs::picked_pack_shape(&self.settings),
+            display,
             (
                 self.settings.file.int("textureFiltering"),
                 self.settings.file.int("maxAnisotropyBit"),
             ),
         )?;
-        renderer.screenshot = screenshot;
-        renderer.screenshot_result = screenshot_result;
+        (renderer.screenshot, renderer.screenshot_result) = (screenshot, screenshot_result);
         self.adopt_renderer(renderer);
         log::info!("Horizon: graphics device recovered; rebuilding world meshes");
         Ok(())
@@ -16963,6 +16957,7 @@ impl<'a> Game<'a> {
             world_adopted: false,
             audio,
             loop_context: Arc::new(res.core.item_data.context().loop_context(loop_side, [])),
+            setting_overrides: Default::default(),
             damage_hooks: native_hooks::DAMAGE_HOOKS,
             music: {
                 // The manager starts with the saved option (MusicManager's constructor).
@@ -18554,5 +18549,72 @@ mod nested_orb_spawn_tests {
                 expected
             );
         });
+    }
+}
+
+#[cfg(test)]
+pub(crate) fn in_own_process(name: &str, body: impl FnOnce()) {
+    const OWN_PROCESS: &str = "HORIZON_TEST_OWN_PROCESS";
+    if std::env::var_os(OWN_PROCESS).is_some_and(|v| v == name) {
+        return body();
+    }
+    let out = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([name, "--exact", "--include-ignored", "--test-threads=1"])
+        .env(OWN_PROCESS, name)
+        .output()
+        .unwrap();
+    let report = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(
+        out.status.success() && report.contains("test result: ok. 1 passed;"),
+        "{name} failed in its own process:\n{report}"
+    );
+}
+
+#[cfg(test)]
+mod escape_tests {
+    use super::game_tests::tests::server_game;
+    use horizon_client::chunk::Chunk;
+    use horizon_client::items::ItemStack;
+    use horizon_core::random::RandomSource;
+    use std::sync::Arc;
+
+    /// `Entity.moveTowardsClosestSpace` takes an item's escape speed from the
+    /// item's own random, the one its constructor drew from, and leaves the
+    /// level's random as it was (#13043).
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn an_item_escapes_a_block_at_its_own_randoms_speed() {
+        let mut game_resources = None;
+        let mut game = server_game(&mut game_resources);
+        let feet = horizon_core::geometry::Vec3::new(8.5, 70.0, 8.5);
+        game.player = Some(horizon_client::motion::PlayerMotion::new(game.motion, feet).unwrap());
+        game.world
+            .chunks
+            .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        game.update_chunk_tickets();
+        assert!(game.entity_ticking_area()(8, 8));
+        let stone = game
+            .pack
+            .assets
+            .registry
+            .default_state("minecraft:stone")
+            .unwrap();
+        game.world.set(8, 64, 8, stone).unwrap();
+        let stack = ItemStack::new("minecraft:stone", 2);
+        game.spawn_item(stack, [8.5, 64.4, 8.5], [0.0, 0.0, 0.0], 10);
+        let item = game.dropped.last().unwrap();
+        let expected = f64::from(item.random.clone().next_float() * 0.2 + 0.1);
+        let mut level = game.world.random.clone();
+        game.ticked_entities_through = u32::MAX;
+        game.tick_items();
+        let item = game.dropped.last().unwrap();
+        // Up is the nearest open side from the middle of the block.
+        // The push replaces the fall's velocity; then the 0.98 drag.
+        assert_eq!(item.velocity.y, expected * 0.98);
+        assert_eq!(game.world.random.next_float(), level.next_float());
     }
 }

@@ -744,7 +744,7 @@ pub(super) fn mob_meta(
         meta.push((
             2,
             serializer::OPTIONAL_COMPONENT,
-            Value::OptText(Some(horizon_protocol::text::literal(name))),
+            Value::OptText(Some(super::names::name_component(m, name))),
         ));
     }
     if m.name_visible {
@@ -1683,11 +1683,7 @@ impl Game<'_> {
                 .get_or_init(|| Arc::new(horizon_client::save::SaveTables::new(&self.pack.assets)))
                 .clone(),
         );
-        encoder.mod_update_tag = Some(|pos, entity| {
-            let mut tag = None;
-            Game::api_block_entity_update_tag(pos, entity, &mut tag);
-            tag
-        });
+        self.lan_update_tag_sources(&mut encoder);
         let far = (net.lod_distance > 0)
             .then(|| horizon_client::lod_net::Service::new(net.lod_distance, biome_names.clone()));
         let lan = Lan::start_with(sync.clone(), net)?;
@@ -2008,37 +2004,7 @@ impl Game<'_> {
             }
         }
     }
-    /// `PlayerAdvancements.save` and `ServerStatsCounter.save` of a network player.
-    pub(super) fn save_guest_records(
-        &self,
-        host: &LanHost,
-        guest: &horizon_client::lan::guest::Guest,
-    ) {
-        if !guest.participates_in_player_simulation()
-            || !guest.placed
-            || guest.released
-            || self.adv.tree.list.is_empty()
-        {
-            return;
-        }
-        let Some(uuid) = self.records_uuid(host, guest.uuid) else {
-            return;
-        };
-        let path = super::stats::player_json(&self.world_root, "advancements", uuid);
-        let json = guest
-            .advancements
-            .to_json(&self.adv.tree, horizon_world::DATA_VERSION);
-        if let Some(dir) = path.parent() {
-            let _ = std::fs::create_dir_all(dir);
-        }
-        if let Ok(text) = serde_json::to_string_pretty(&json) {
-            let _ = std::fs::write(path, text);
-        }
-        if let Some(play) = host.play.get(&guest.conn) {
-            play.stats
-                .write(&super::stats::player_json(&self.world_root, "stats", uuid));
-        }
-    }
+
     /// The advancements and statistics files of a held arrival, before it is placed
     /// (`player-confirm`): each through a new file, synced and renamed into place
     /// (`save::write_durable`), so the reply's `ok` means both are on the disk whole.
@@ -2602,7 +2568,7 @@ impl Game<'_> {
                             );
                         }
                     }
-                    // Canceled, NeoForge returns before `detectRateSpam`.
+                    // Canceled: stop before `detectRateSpam`.
                     if cancel {
                         continue;
                     }
@@ -4343,9 +4309,9 @@ mod tests {
         let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
         options.resources = root.clone();
         options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
-        let res = Box::leak(Box::new(loaded.resources));
+        let res = loaded.resources;
         let mut game = super::Game::new(
-            res,
+            &res,
             loaded.pack,
             loaded.gui.unwrap(),
             options,
@@ -6037,7 +6003,8 @@ mod mob_pickup_sync_tests {
     #[test]
     #[ignore = "needs prepared resources and scratch homes/cwd"]
     fn a_mob_pickup_reaches_guests_as_a_take() {
-        let mut game = super::super::game_tests::tests::server_game();
+        let mut resources = None;
+        let mut game = super::super::game_tests::tests::server_game(&mut resources);
         game.build_registries();
         game.set_allow_commands(true);
         assert!(game.run_command("summon piglin 8.5 80 8.5 {NoAI:1b,PersistenceRequired:1b}"));
@@ -6140,7 +6107,8 @@ mod mob_swing_sync_tests {
     #[test]
     #[ignore = "needs prepared resources and scratch homes/cwd"]
     fn an_off_hand_mob_swing_reaches_guests_as_the_off_hand() {
-        let mut game = crate::game::game_tests::tests::server_game();
+        let mut resources = None;
+        let mut game = crate::game::game_tests::tests::server_game(&mut resources);
         game.build_registries();
         game.set_allow_commands(true);
         let piglin = "{NoAI:1b,PersistenceRequired:1b}";
@@ -6211,7 +6179,8 @@ mod owner_attachment_save_tests {
     #[test]
     #[ignore = "needs prepared resources and scratch homes/cwd"]
     fn an_autosave_writes_the_owners_live_attachments_to_the_file_it_loads() {
-        let mut game = crate::game::game_tests::tests::server_game();
+        let mut resources = None;
+        let mut game = crate::game::game_tests::tests::server_game(&mut resources);
         let _rx = super::world_spawn_sync_tests::host_for(&mut game);
         let uuid = 1;
         game.lan.as_mut().unwrap().owner = Some(Owner { uuid, saved: None });
@@ -6255,8 +6224,11 @@ mod connected_statistics_save_tests {
     fn connected_stats_save_control(stale: bool) {
         use super::super::{execution_role::ExecutionRole, stats};
         use std::sync::{Arc, Mutex};
-        let mut game = crate::game::game_tests::tests::server_game();
+        let mut resources = None;
+        let mut game = crate::game::game_tests::tests::server_game(&mut resources);
         game.options.execution_role = ExecutionRole::DedicatedServer;
+        // The command's dedicated-only guard also checks the launch mode.
+        game.options.dedicated = Some(Vec::new());
         let dir = std::env::current_dir().unwrap().join(if stale {
             "stats-stale"
         } else {
@@ -6361,7 +6333,8 @@ mod connected_statistics_save_exclusion_tests {
     #[test]
     #[ignore = "needs prepared resources and scratch homes/cwd"]
     fn excluded_guest_records_are_not_invented_or_written() {
-        let mut game = crate::game::game_tests::tests::server_game();
+        let mut resources = None;
+        let mut game = crate::game::game_tests::tests::server_game(&mut resources);
         let _rx = super::world_spawn_sync_tests::host_for(&mut game);
         game.world_root = std::env::current_dir().unwrap().join("stats-excluded");
         std::fs::create_dir_all(&game.world_root).unwrap();
@@ -6402,3 +6375,9 @@ mod connected_statistics_save_exclusion_tests {
         );
     }
 }
+
+use super::stats;
+mod advancement_records;
+
+#[cfg(test)]
+include!("advancement_save_tests.rs");

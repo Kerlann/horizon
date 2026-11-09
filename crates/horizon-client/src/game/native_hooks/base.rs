@@ -1081,15 +1081,10 @@ impl Game<'_> {
     ) {
         Self::fire_standalone_models(context, models);
     }
-    /// The buttons of mod `mod_id`'s settings page, under its keys: push
-    /// their labels when it is yours. Asked again each time the page opens
-    /// and after each click.
-    pub(in crate::game) fn native_settings(&mut self, mod_id: &str, buttons: &mut Vec<String>) {
-        self.fire_settings(mod_id, buttons);
-    }
-    /// Button `button` of mod `mod_id`'s settings page was clicked.
-    pub(in crate::game) fn native_settings_click(&mut self, mod_id: &str, button: usize) {
-        self.fire_settings_click(mod_id, button);
+    /// The player changed setting `key` of mod `mod_id` on its page in Options > Mods; the new
+    /// value is kept already.
+    pub(in crate::game) fn native_setting_changed(&mut self, mod_id: &str, key: &str) {
+        self.fire_setting_changed(mod_id, key);
     }
     /// The player did `event` on mod `mod_id`'s panel (`panel_items`):
     /// act on it when it is yours.
@@ -1290,15 +1285,18 @@ impl Game<'_> {
     /// window's player is drawn only in third person (and F5 front view); an
     /// invisible player is not asked. `draw` is the frame of `native_mob_submit`:
     /// at the player's feet, turned with the body. The name tag, shadow,
-    /// flames and glowing outline draw as before.
+    /// flames and glowing outline draw as before. `hidden.hide(part)` leaves only that part out of
+    /// the vanilla model this frame (after Skin Customization; its children go with it, its
+    /// armour, held items and other layers, the cape among them, keep theirs).
     pub(in crate::game) fn native_player_submit(
         &self,
         player: &NativeMobRender<'_>,
         who: &NativePlayerRender<'_>,
         draw: &mut BlockEntityDraw,
+        hidden: &mut HiddenParts,
         drawn: &mut bool,
     ) {
-        self.fire_player_submit(player, who, draw, drawn);
+        self.fire_player_submit(player, who, draw, hidden, drawn);
     }
     /// A layer on every mob and player in view, once a frame after its
     /// vanilla model and layers (`EntityRenderersEvent.AddLayers`, with
@@ -1306,15 +1304,18 @@ impl Game<'_> {
     /// in the entity's frame, which starts at its feet turned with the body
     /// (`mob.head_yaw`, `mob.pitch` and the walk cycle place a part, the eyes
     /// being at the entity type's eye height). `who` is set for a player.
+    /// `parts` is a humanoid model's parts as vanilla posed them this frame,
+    /// None for a model that isn't humanoid.
     /// Not asked for what a mod drew itself (`native_mob_submit`,
     /// `native_player_submit`) nor for a mob that isn't drawn at all.
     pub(in crate::game) fn native_mob_layer(
         &self,
         mob: &NativeMobRender<'_>,
         who: Option<&NativePlayerRender<'_>>,
+        parts: Option<&PosedParts>,
         draw: &mut BlockEntityDraw,
     ) {
-        self.fire_mob_layer(mob, who, draw);
+        self.fire_mob_layer(mob, who, parts, draw);
     }
     /// Icons a mod puts on map `map` each time it is drawn: held, in an
     /// item frame or on the cartography table's screen (a map's pixels are
@@ -5057,14 +5058,30 @@ impl Game<'_> {
     pub(in crate::game) fn instance_dir(&self) -> PathBuf {
         Self::game_dir()
     }
-    /// A mod's setting `key` (one file per key in `native_data_dir`).
+    /// A mod's setting `key` (one file per key in `native_data_dir`). A mod's hook or part reads
+    /// only its own mod's: another mod's id gives None.
     pub(in crate::game) fn setting(&self, mod_id: &str, key: &str) -> Option<String> {
-        horizon_world::native_load_context::read_setting(&self.native_data_dir(mod_id), key)
+        if Self::another_mods(mod_id) {
+            return None;
+        }
+        self.stored_setting(mod_id, key)
     }
-    /// Keeps a mod's setting `key`.
+    pub(super) fn stored_setting(&self, mod_id: &str, key: &str) -> Option<String> {
+        mod_settings::read_raw(&self.native_data_dir(mod_id), mod_id, key)
+    }
+    /// Keeps a mod's setting `key`. A mod's hook or part keeps only its own mod's.
     pub(in crate::game) fn set_setting(&self, mod_id: &str, key: &str, value: &str) {
-        let dir = self.native_data_dir(mod_id);
-        let _ = fs::create_dir_all(&dir).and_then(|()| fs::write(dir.join(key), value));
+        if Self::another_mods(mod_id) {
+            return;
+        }
+        self.store_setting(mod_id, key, value);
+    }
+    pub(super) fn store_setting(&self, mod_id: &str, key: &str, value: &str) -> bool {
+        mod_settings::store(&self.native_data_dir(mod_id), mod_id, key, value)
+    }
+    /// A mod's hook or part is running, and `mod_id` is another mod's.
+    fn another_mods(mod_id: &str) -> bool {
+        mod_api::crash::current_native_mod().is_some_and(|running| running != mod_id)
     }
     /// Shows the panel beside container screens with these items (at most
     /// 8192), as the game's own slots in pages, with a search box; the

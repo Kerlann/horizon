@@ -175,6 +175,7 @@ impl Storage {
         for version in backend::installed() {
             if native_mods::is_native(&version)
                 && !played.contains(&version)
+                && !backend::resource_dependents(&version)
                 && !backend::in_use(&version)
             {
                 add(

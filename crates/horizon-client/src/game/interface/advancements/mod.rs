@@ -3660,7 +3660,8 @@ mod movement_predicate_tests {
     #[test]
     #[ignore = "requires prepared resources and scratch cwd/homes"]
     fn actual_registered_movement_predicate_uses_admitted_mob() {
-        let mut game = server_game();
+        let mut resources = None;
+        let mut game = server_game(&mut resources);
         game.build_registries();
         game.set_allow_commands(true);
         game.block_ticks

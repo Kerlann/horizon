@@ -2162,6 +2162,7 @@ mod tests {
         let mut item = ItemEntity {
             attachment_lifetime: Default::default(),
             fall_distance: 0.0,
+            random: horizon_core::random::LegacyRandom::new(0),
             rotation: [0.0, 0.0],
             join: Default::default(),
             no_gravity: false,

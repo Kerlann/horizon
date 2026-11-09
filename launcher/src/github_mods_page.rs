@@ -123,9 +123,6 @@ impl Launcher {
                     if result.is_ok() {
                         self.github.text.set(String::new());
                         self.github.newer.clear();
-                        // The review above was the trust notice; the Mods page offers Build.
-                        self.settings.native_mods_noticed = true;
-                        self.save_settings();
                     }
                     self.instance_mods_changed();
                     self.github.message = Some(result);
@@ -164,7 +161,11 @@ impl Launcher {
     }
 
     /// Downloads and checks what the player agreed to; installs it unless there is a choice.
-    fn github_install(&mut self, found: Resolved, only: Option<String>) {
+    pub(super) fn github_install(&mut self, found: Resolved, only: Option<String>) {
+        if self.settings.native_mods_allowed_at.is_none() {
+            self.pending_consent = Some(PendingConsent::Github(found, only));
+            return;
+        }
         self.github.stage =
             Stage::Working(trf("Downloading {source}…", &[("source", &found.label())]));
         let tx = self.github.tx.clone();
@@ -468,6 +469,11 @@ impl Launcher {
         right = right.child(
             switch(format!("native-switch-{id}"), on, &t).on_click(cx.listener(
                 move |this, _: &ClickEvent, _, cx| {
+                    if !on && this.settings.native_mods_allowed_at.is_none() {
+                        this.pending_consent = Some(PendingConsent::Local(id.clone()));
+                        cx.notify();
+                        return;
+                    }
                     let home = this.mods.home();
                     // An update holds the folder: the window doesn't wait for it.
                     let Some(_lock) = horizon_launcher::browser::try_lock_home(&home) else {
@@ -485,6 +491,26 @@ impl Launcher {
                 },
             )),
         );
+        right = right.child(blocks::badge(tr("NATIVE"), t.muted, &t));
+        if self.settings.native_mods_allowed_at.is_none() {
+            let id = row.id.clone();
+            right = right
+                .child(blocks::badge(tr("Needs permission"), t.muted, &t))
+                .child(
+                    button(
+                        SharedString::from(format!("native-allow-{id}")),
+                        "Allow native mods",
+                        Kind::Secondary,
+                        &t,
+                    )
+                    .on_click(cx.listener(
+                        move |this, _: &ClickEvent, _, cx| {
+                            this.pending_consent = Some(PendingConsent::Local(id.clone()));
+                            cx.notify();
+                        },
+                    )),
+                );
+        }
         let confirming = self.github.confirm_remove.as_deref() == Some(&row.file);
         let row = row.clone();
         let remove = button(

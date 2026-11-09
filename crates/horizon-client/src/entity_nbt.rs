@@ -17,6 +17,10 @@ use crate::{
 };
 use horizon_core::geometry::Vec3;
 use std::{collections::HashMap, sync::Arc};
+mod projectile_fields;
+use projectile_fields::{load_projectile_entity_fields, put_projectile_entity_fields};
+mod saved_attributes;
+
 use {
     horizon_core::nbt::{Compound, Tag},
     horizon_world::{
@@ -772,6 +776,7 @@ pub fn mob_to_nbt(
         map.remove(&horizon_core::nbt::JavaString::from("active_effects"));
     } else {
         let effects = m.extra.effects.iter().map(|effect| {
+            let show_icon = effect.show_icon;
             let (effect, duration, amplifier) = (effect.id, effect.duration, effect.amplifier);
             let shown = !m.extra.hidden_effects.contains(&effect);
             let ambient = m.extra.ambient_effects.contains(&effect);
@@ -787,7 +792,7 @@ pub fn mob_to_nbt(
             if !shown {
                 e.push(("show_particles", Tag::Byte(0)));
             }
-            e.push(("show_icon", Tag::Byte(i8::from(shown))));
+            e.push(("show_icon", Tag::Byte(i8::from(show_icon))));
             if let Some(hidden) = m.extra.effect_chains.iter().find(|e| e.id == effect) {
                 e.push(("hidden_effect", hidden_effect_nbt(hidden)));
             }
@@ -1134,7 +1139,6 @@ pub fn mob_to_nbt(
         }
         "minecraft:zombie_villager" => {
             map.insert("VillagerData".into(), villager_data(m));
-            map.insert("VillagerDataFinalized".into(), Tag::Byte(1));
             let xp = m.extra.trade.as_deref().map_or(0, |t| t.xp);
             map.insert("Xp".into(), Tag::Int(xp));
             put_offers(map, m);
@@ -1448,6 +1452,9 @@ pub fn mob_to_nbt(
         }
         _ => {}
     }
+    if m.species() == S::Frog {
+        crate::mobs::brain::write_frog(m, map);
+    }
     // Bogged.addAdditionalSaveData: whether its mushrooms were sheared.
     if m.species() == S::Bogged {
         map.insert("sheared".into(), Tag::Byte(i8::from(m.extra.sheared)));
@@ -1501,28 +1508,15 @@ pub fn mob_to_nbt(
         put_attributes(map, m);
     }
     put_sulfur_attributes(map, m);
-    // The attribute their load makes, which AttributeMap.pack then saves:
-    // Zombie and Piglin.setBaby (even for an adult) the speed, Rabbit.setVariant
-    // the attack damage.
+    // The instances their own construction and load make (finalize::made_at_load),
+    // which AttributeMap.pack saves although the loaded tag had none.
     use crate::mobs::finalize::Attr;
-    // Every other living entity's first tick makes the movement_speed instance
-    // (LivingEntity.removeFrost reads it through getAttribute); before it, the
-    // mob has only the instances it was loaded with (the kept list above).
-    let speed_at_load = crate::mobs::doors::is_zombie(species)
-        || species == crate::mobs::Species::Piglin
-        || (species == crate::mobs::Species::Ravager && crate::mobs::ravager::immobile(m));
-    let mut made = Vec::new();
-    if speed_at_load || m.age > 0 {
-        made.push(Attr::MovementSpeed);
-    }
-    if species == crate::mobs::Species::Rabbit {
-        made.push(Attr::AttackDamage);
-    }
+    let made = crate::mobs::finalize::made_at_load(m);
     // AttributeMap.pack writes the list even when no instance exists.
     map.entry("attributes".into())
         .or_insert_with(|| Tag::List(Vec::new()));
     for attr in made {
-        let base = crate::mobs::finalize::base_value(m, attr);
+        let base = crate::mobs::finalize::made_base(m, attr);
         let mut list = match map.get(&"attributes".into()) {
             Some(Tag::List(l)) => l.clone(),
             _ => Vec::new(),
@@ -1532,9 +1526,11 @@ pub fn mob_to_nbt(
             .iter_mut()
             .find(|t| text(t.get("id")).as_deref() == Some(attr_id.as_str()))
         {
-            if species == crate::mobs::Species::Ravager
-                && attr == Attr::MovementSpeed
-                && let Tag::Compound(c) = existing
+            // The model owns these bases: a ravager's speed, a wolf's health.
+            if matches!(
+                (species, attr),
+                (S::Ravager, Attr::MovementSpeed) | (S::Wolf, Attr::MaxHealth)
+            ) && let Tag::Compound(c) = existing
             {
                 c.insert("base".into(), Tag::Double(base.to_bits()));
             }
@@ -1688,6 +1684,17 @@ fn put_attributes(map: &mut Compound, m: &Mob) {
         Some(Tag::List(l)) => l.clone(),
         _ => Vec::new(),
     };
+    if let Some(attributes) = m.extra.attributes.as_deref() {
+        for attr in crate::mobs::finalize::Attr::ALL {
+            if !attributes
+                .modifiers
+                .iter()
+                .any(|modifier| modifier.attr == attr)
+            {
+                saved_attributes::forget_stale_modifiers(&mut list, attr);
+            }
+        }
+    }
     for (id, entry) in attribute_entries(m) {
         match list
             .iter_mut()
@@ -1762,42 +1769,6 @@ fn put_sulfur_attributes(map: &mut Compound, m: &Mob) {
     }
 }
 /// `Brain.Packed`: the memories finalizeSpawn set, over the saved ones.
-pub fn put_brain(map: &mut Compound, m: &Mob, dimension: &str) {
-    if m.extra.memories.is_empty() {
-        return;
-    }
-    let mut memories = match map.get(&"Brain".into()).and_then(|b| b.get("memories")) {
-        Some(Tag::Compound(c)) => c.clone(),
-        _ => Compound::new(),
-    };
-    for &(name, value, ttl) in &m.extra.memories {
-        let value = match name {
-            "hunted_recently" => Tag::Byte(value as i8),
-            // `Unit` memories save an empty compound.
-            "is_pregnant" => Tag::Compound(Compound::new()),
-            "home" => match m.extra.home {
-                Some(p) => Tag::compound([
-                    ("dimension", string(dimension)),
-                    ("pos", Tag::IntArray(p.to_vec())),
-                ]),
-                None => continue,
-            },
-            _ => Tag::Int(value as i32),
-        };
-        let mut memory = vec![("value", value)];
-        if ttl != i64::MAX {
-            memory.push(("ttl", Tag::Long(ttl)));
-        }
-        memories.insert(
-            format!("minecraft:{name}").as_str().into(),
-            Tag::compound(memory),
-        );
-    }
-    map.insert(
-        "Brain".into(),
-        Tag::compound([("memories", Tag::Compound(memories))]),
-    );
-}
 /// `CustomName`: a text component saved as a string or a `{text: ..}` compound.
 fn custom_name(tag: &Tag) -> Option<String> {
     match tag.get("CustomName")? {
@@ -1810,23 +1781,6 @@ fn custom_name(tag: &Tag) -> Option<String> {
     }
 }
 pub use horizon_client_core::component::name_text;
-/// Mob.finalizeSpawn's follow range bonus in the saved attributes.
-#[cfg(test)]
-pub(crate) fn spawn_bonus(tag: &Tag) -> Option<f64> {
-    let Some(Tag::List(attrs)) = tag.get("attributes") else {
-        return None;
-    };
-    let range = attrs
-        .iter()
-        .find(|a| text(a.get("id")).as_deref() == Some("minecraft:follow_range"))?;
-    let Some(Tag::List(modifiers)) = range.get("modifiers") else {
-        return None;
-    };
-    let bonus = modifiers
-        .iter()
-        .find(|x| text(x.get("id")).as_deref() == Some("minecraft:random_spawn_bonus"))?;
-    float(bonus.get("amount"))
-}
 /// `Mob.readAdditionalSaveData`: negative radii retain the live homePosition.
 /// Used after the command adapter restores runtime AI, as well as fresh load.
 pub fn read_mob_home(m: &mut Mob, tag: &Tag) {
@@ -1979,31 +1933,9 @@ pub fn mob_from_nbt_with_random(
     // `AttributeMap.apply`: the saved permanent modifiers of the attributes the
     // game models (the follow range bonus finalizeSpawn made among them), and
     // the other saved attributes for the live map.
-    if let Some(Tag::List(attrs)) = tag.get("attributes") {
-        use crate::mobs::finalize::{Attr, Op, add_modifier};
-        for a in attrs {
-            let Some(attr) = text(a.get("id")).and_then(|id| {
-                Attr::ALL
-                    .into_iter()
-                    .find(|x| *x != Attr::Armor && x.id() == id)
-            }) else {
-                continue;
-            };
-            let Some(Tag::List(modifiers)) = a.get("modifiers") else {
-                continue;
-            };
-            for x in modifiers {
-                let op = match text(x.get("operation")).as_deref() {
-                    Some("add_value") => Op::AddValue,
-                    Some("add_multiplied_base") => Op::AddMultipliedBase,
-                    Some("add_multiplied_total") => Op::AddMultipliedTotal,
-                    _ => continue,
-                };
-                if let (Some(id), Some(amount)) = (text(x.get("id")), float(x.get("amount"))) {
-                    add_modifier(&mut m, attr, id, amount, op);
-                }
-            }
-        }
+    if let Some(Tag::List(_)) = tag.get("attributes") {
+        use crate::mobs::finalize::Attr;
+        saved_attributes::read_attribute_modifiers(&mut m, tag);
         // An attribute the type lacks is skipped (`AttributeMap.apply`).
         let kind = m.kind.clone();
         m.extra.live.load(tag.get("attributes"), |id| {
@@ -2157,16 +2089,19 @@ pub fn mob_from_nbt_with_random(
                 .get("amplifier")
                 .and_then(horizon_world::datafix::dynamic::as_number)
                 .map_or(0, |n| i32::from(n.byte_value() as u8));
-            m.load_effect(effect, duration, amplifier);
+            // Details.CODEC: `show_particles` defaults to true, `show_icon` to `show_particles`.
+            let particles = number(e.get("show_particles")) != Some(0);
+            let mut stored = crate::mobs::StoredEffect::new(effect, duration, amplifier);
+            stored.show_icon = number(e.get("show_icon")).map_or(particles, |v| v != 0);
+            m.load_effect(stored);
             m.extra.effect_chains.retain(|e| e.id != effect);
             if let Some(hidden) = e.get("hidden_effect") {
                 m.extra
                     .effect_chains
                     .push(hidden_effect_from_nbt(effect, hidden));
             }
-            // Details.CODEC: `show_particles` defaults to true.
             m.extra.hidden_effects.retain(|h| *h != effect);
-            if number(e.get("show_particles")) == Some(0) {
+            if !particles {
                 m.extra.hidden_effects.push(effect);
             }
             // Details.CODEC: `ambient` defaults to false.
@@ -2727,9 +2662,9 @@ pub fn mob_from_nbt_with_random(
         m.extra.left_handed = false;
         m.no_ai = false;
     }
-    // A mob saved mid-death finishes dying; one saved dead is dropped.
-    if m.health <= 0.0 && m.death_time == 0 {
-        return None;
+    // setHealth clamps a negative health to 0; a dead mob keeps its body (tickDeath).
+    if m.health < 0.0 {
+        m.health = 0.0;
     }
     Some(m)
 }
@@ -2919,7 +2854,6 @@ pub fn item_entity_from_nbt(tag: &Tag, id: u32, bob_offset: f32) -> Option<ItemE
     let position = position(tag)?;
     Some(ItemEntity {
         attachment_lifetime: Default::default(),
-        fall_distance: float(tag.get("fall_distance")).unwrap_or(0.0),
         rotation: rotation(tag),
         join: Default::default(),
         no_gravity: flag(tag, "NoGravity"),
@@ -2940,6 +2874,8 @@ pub fn item_entity_from_nbt(tag: &Tag, id: u32, bob_offset: f32) -> Option<ItemE
         on_ground: flag(tag, "OnGround"),
         vertical_collision: false,
         horizontal_collision: false,
+        // Entity.load: getDoubleOr, any number widened.
+        fall_distance: float(tag.get("fall_distance")).unwrap_or(0.0),
         age: number(tag.get("Age")).unwrap_or(0) as i32,
         pickup_delay: number(tag.get("PickupDelay")).unwrap_or(0),
         bob_offset,
@@ -2947,6 +2883,8 @@ pub fn item_entity_from_nbt(tag: &Tag, id: u32, bob_offset: f32) -> Option<ItemE
         needs_sync: false,
         stuck: Vec3::ZERO,
         was_touching_water: false,
+        // The caller gives it the own random that drew its UUID and bobOffs.
+        random: horizon_core::random::LegacyRandom::new(0),
     })
 }
 
@@ -3228,7 +3166,7 @@ pub fn fireball_to_nbt(
         motion: p.velocity,
         rotation: [p.yaw, p.pitch],
         on_ground: p.on_ground,
-        fall_distance: 0.0,
+        fall_distance: p.fall_distance,
     };
     let mut tag = base.tag(raw);
     put(
@@ -3253,27 +3191,6 @@ pub fn fireball_to_nbt(
         put(&mut tag, "Item", item_to_nbt(item));
     }
     Some(tag)
-}
-
-/// `Entity.load`: fire is read as a short, air as an int and the visual
-/// fire flag as a byte-valued boolean. Portal state lives on the level.
-fn load_projectile_entity_fields(p: &mut Projectile, tag: &Tag) {
-    p.fire_ticks = i32::from(tag.get("Fire").and_then(int_value).unwrap_or(0) as i16);
-    p.air_supply = tag.get("Air").and_then(int_value).unwrap_or(p.air_supply);
-    p.has_visual_fire = flag(tag, "HasVisualFire");
-}
-
-/// `Entity.saveWithoutId`: save the current fire and air as shorts, and
-/// only write the optional visual fire flag when it is true.
-fn put_projectile_entity_fields(tag: &mut Tag, p: &Projectile) {
-    put(tag, "Fire", Tag::Short(p.fire_ticks as i16));
-    put(tag, "Air", Tag::Short(p.air_supply as i16));
-    if let Tag::Compound(map) = tag {
-        map.remove(&"HasVisualFire".into());
-    }
-    if p.has_visual_fire {
-        put(tag, "HasVisualFire", Tag::Byte(1));
-    }
 }
 
 /// `Projectile.addAdditionalSaveData`: Owner, LeftOwner only when set, and
@@ -3379,7 +3296,7 @@ pub fn throwable_to_nbt(
         motion: p.velocity,
         rotation: [p.yaw, p.pitch],
         on_ground: p.on_ground,
-        fall_distance: 0.0,
+        fall_distance: p.fall_distance,
     };
     let mut tag = base.tag(raw);
     put_projectile(&mut tag, p, owner);
@@ -3565,6 +3482,7 @@ pub fn fireball_from_nbt(tag: &Tag, player: Option<[i32; 4]>) -> Option<Projecti
         load_projectile_entity_fields(&mut p, tag);
     }
     p.on_ground = flag(tag, "OnGround");
+    p.fall_distance = float(tag.get("fall_distance")).unwrap_or(0.0);
     p.acceleration = float(tag.get("acceleration_power")).unwrap_or(0.1);
     if let Some(item) = tag.get("Item").and_then(item_from_nbt) {
         p.set_item(item);
@@ -3658,119 +3576,8 @@ pub fn firework_rocket_to_nbt(r: &RocketSave, uuid: [i32; 4], raw: Option<&Tag>)
     tag
 }
 
-/// A thrown trident as `AbstractArrow` + `ThrownTrident` save it.
-pub struct TridentSave<'a> {
-    pub position: Vec3,
-    pub motion: Vec3,
-    pub yaw: f32,
-    pub pitch: f32,
-    pub in_ground: bool,
-    pub life: i32,
-    pub shake: u32,
-    pub dealt_damage: bool,
-    pub pickup: Pickup,
-    pub left_owner: bool,
-    pub has_been_shot: bool,
-    pub owner: Option<[i32; 4]>,
-    pub no_gravity: bool,
-    /// `Entity.onGround`: a trident moves by `setPos`, so it keeps the loaded one.
-    pub on_ground: bool,
-    pub fire_ticks: i32,
-    pub item: &'a crate::items::ItemStack,
-}
-/// `ThrownTrident.addAdditionalSaveData`, including its arrow/projectile state.
-pub fn trident_to_nbt(t: &TridentSave, uuid: [i32; 4], raw: Option<&Tag>) -> Tag {
-    let mut tag = Base {
-        id: "minecraft:trident",
-        uuid,
-        position: t.position,
-        motion: t.motion,
-        rotation: [t.yaw, t.pitch],
-        on_ground: t.on_ground,
-        fall_distance: 0.0,
-    }
-    .tag(raw);
-    // Projectile.addAdditionalSaveData omits LeftOwner until it is true,
-    // including when raw NBT explicitly supplied false.
-    if let Tag::Compound(map) = &mut tag {
-        map.remove(&"LeftOwner".into());
-        map.remove(&"Owner".into());
-    }
-    if t.left_owner {
-        put(&mut tag, "LeftOwner", Tag::Byte(1));
-    }
-    if let Some(owner) = t.owner {
-        put(&mut tag, "Owner", Tag::IntArray(owner.to_vec()));
-    }
-    for (key, value) in [
-        ("life", Tag::Short(t.life as i16)),
-        ("shake", Tag::Byte(t.shake as i8)),
-        ("inGround", Tag::Byte(i8::from(t.in_ground))),
-        // AbstractArrow.Pickup: 0 disallowed, 1 allowed, 2 creative only.
-        ("pickup", Tag::Byte(t.pickup.byte())),
-        ("damage", Tag::Double(2.0_f64.to_bits())),
-        ("HasBeenShot", Tag::Byte(i8::from(t.has_been_shot))),
-        ("crit", Tag::Byte(0)),
-        ("PierceLevel", Tag::Byte(0)),
-        ("SoundEvent", string("minecraft:item.trident.hit_ground")),
-        ("item", item_to_nbt(t.item)),
-        ("DealtDamage", Tag::Byte(i8::from(t.dealt_damage))),
-        ("Fire", Tag::Short(t.fire_ticks as i16)),
-    ] {
-        put(&mut tag, key, value);
-    }
-    // Entity.saveWithoutId writes NoGravity only when set.
-    if t.no_gravity {
-        put(&mut tag, "NoGravity", Tag::Byte(1));
-    } else if let Tag::Compound(map) = &mut tag {
-        map.remove(&"NoGravity".into());
-    }
-    tag
-}
-/// `AbstractArrow` and `Projectile.readAdditionalSaveData` for a trident.
-pub struct TridentNbt {
-    pub position: Vec3,
-    pub motion: Vec3,
-    pub yaw: f32,
-    pub pitch: f32,
-    pub in_ground: bool,
-    pub life: i32,
-    pub shake: u32,
-    pub dealt_damage: bool,
-    pub pickup: Pickup,
-    pub left_owner: bool,
-    pub has_been_shot: bool,
-    pub owner: Option<[i32; 4]>,
-    pub no_gravity: bool,
-    pub on_ground: bool,
-    pub fire_ticks: i32,
-    pub item: crate::items::ItemStack,
-}
-/// `ThrownTrident.readAdditionalSaveData`, including its arrow/projectile defaults.
-pub fn trident_from_nbt(tag: &Tag) -> Option<TridentNbt> {
-    let [yaw, pitch] = rotation(tag);
-    Some(TridentNbt {
-        position: position(tag)?,
-        motion: motion(tag),
-        yaw,
-        pitch,
-        in_ground: flag(tag, "inGround"),
-        life: number(tag.get("life")).unwrap_or(0) as i32,
-        shake: number(tag.get("shake")).unwrap_or(0).max(0) as u32,
-        dealt_damage: flag(tag, "DealtDamage"),
-        pickup: Pickup::from_byte(number(tag.get("pickup")).unwrap_or(0)),
-        left_owner: flag(tag, "LeftOwner"),
-        has_been_shot: flag(tag, "HasBeenShot"),
-        owner: owner_uuid(tag),
-        no_gravity: flag(tag, "NoGravity"),
-        on_ground: flag(tag, "OnGround"),
-        fire_ticks: number(tag.get("Fire")).unwrap_or(0) as i32,
-        item: tag
-            .get("item")
-            .and_then(item_from_nbt)
-            .unwrap_or_else(|| crate::items::ItemStack::new("minecraft:trident", 1)),
-    })
-}
+mod trident;
+pub use trident::{TRIDENT_HIT_GROUND, TridentNbt, TridentSave, trident_from_nbt, trident_to_nbt};
 
 /// `FallingBlockEntity`: BlockState, Time, DropItem, HurtEntities.
 #[allow(clippy::too_many_arguments)]
@@ -4629,74 +4436,7 @@ mod tnt_power_tests {
 }
 
 #[cfg(test)]
-mod spell_ticks_nbt_tests {
-    use super::*;
-    use crate::mobs::Species;
-
-    fn caster(species: Species, name: &str) -> Mob {
-        let mut kind = crate::mobs::sensor_scan_tests::kind();
-        let ty = Arc::make_mut(&mut kind);
-        ty.species = species;
-        ty.id = format!("minecraft:{name}");
-        Mob::new(1, kind, Vec3::new(0.5, 64.0, 0.5), 0.0)
-    }
-
-    /// `SpellcasterIllager.readAdditionalSaveData`: bind loaded values to the
-    /// counter already used by casting goals and customServerAiStep.
-    #[test]
-    fn spell_ticks_load_into_the_live_counter() {
-        for (species, name) in [
-            (Species::Evoker, "evoker"),
-            (Species::Illusioner, "illusioner"),
-        ] {
-            let m = caster(species, name);
-            let types = HashMap::from([(m.kind.id.clone(), m.kind.clone())]);
-            for value in [None, Some(30), Some(0), Some(-2)] {
-                let mut raw = Tag::compound([
-                    ("id", string(&m.kind.id)),
-                    ("Pos", doubles(&[0.5, 64.0, 0.5])),
-                ]);
-                if let Some(value) = value {
-                    put(&mut raw, "SpellTicks", Tag::Int(value));
-                }
-                let loaded = mob_from_nbt(&raw, &types, 2, None).unwrap();
-                assert_eq!(
-                    loaded.extra.counter,
-                    value.unwrap_or(0),
-                    "{name}: {value:?}"
-                );
-                let saved = mob_to_nbt(&loaded, [1, 2, 3, 4], None, None, |_| None);
-                assert_eq!(saved.get("SpellTicks"), Some(&Tag::Int(value.unwrap_or(0))));
-            }
-        }
-    }
-
-    /// `SpellcasterIllager.addAdditionalSaveData`: live state wins even when
-    /// no raw input exists or the original raw counter has become stale.
-    #[test]
-    fn spell_ticks_save_the_mutated_model_without_a_raw_fallback() {
-        for (species, name) in [
-            (Species::Evoker, "evoker"),
-            (Species::Illusioner, "illusioner"),
-        ] {
-            let mut m = caster(species, name);
-            let raw = Tag::compound([
-                ("SpellTicks", Tag::Int(30)),
-                ("audit:unrelated", Tag::Int(7)),
-            ]);
-            for value in [29, 27, 20, 0, -2] {
-                m.extra.counter = value;
-                for raw in [None, Some(&raw)] {
-                    let saved = mob_to_nbt(&m, [1, 2, 3, 4], raw, None, |_| None);
-                    assert_eq!(saved.get("SpellTicks"), Some(&Tag::Int(value)), "{name}");
-                    if raw.is_some() {
-                        assert_eq!(saved.get("audit:unrelated"), Some(&Tag::Int(7)));
-                    }
-                }
-            }
-        }
-    }
-}
+mod spell_ticks_nbt_tests;
 
 #[cfg(test)]
 mod tests {
@@ -5317,6 +5057,7 @@ mod tests {
                 no_gravity: true,
                 on_ground: true,
                 fire_ticks: 0,
+                sound_event: TRIDENT_HIT_GROUND,
                 item: &trident,
             },
             [1, 2, 3, 4],
@@ -5868,27 +5609,22 @@ mod tests {
             health: 2,
             fire_ticks: 73,
             thrower: Some([5, 6, 7, 8]),
-            target: None,
-            id: 7,
-            stack: ItemStack {
-                item: Arc::from("minecraft:diamond_pickaxe"),
-                count: 1,
-                damage: 5,
-                extra: None,
-            },
-            position: Vec3::new(100.5, 64.0, -31.5),
             previous: Vec3::ZERO,
-            velocity: Vec3::new(0.0, -0.04, 0.0),
             on_ground: true,
-            vertical_collision: false,
-            horizontal_collision: false,
             age: 120,
             pickup_delay: 10,
-            ticks: 0,
-            bob_offset: 0.0,
-            needs_sync: false,
-            stuck: Vec3::ZERO,
-            was_touching_water: false,
+            ..ItemEntity::new(
+                7,
+                ItemStack {
+                    item: Arc::from("minecraft:diamond_pickaxe"),
+                    count: 1,
+                    damage: 5,
+                    extra: None,
+                },
+                Vec3::new(100.5, 64.0, -31.5),
+                Vec3::new(0.0, -0.04, 0.0),
+                0.0,
+            )
         };
         let tag = item_entity_to_nbt(&e, [1, 2, 3, 4], None);
         assert_eq!(kind(&tag).as_deref(), Some("minecraft:item"));
@@ -6311,6 +6047,7 @@ mod tests {
                 no_gravity: false,
                 on_ground: false,
                 fire_ticks: 0,
+                sound_event: TRIDENT_HIT_GROUND,
                 item: &trident,
             },
             [0; 4],
@@ -10460,15 +10197,10 @@ mod mob_effect_amplifier_codec {
         for (value, expected) in cases {
             let raw = input(value.clone());
             let mob = mob_from_nbt(&raw, &types, 7, None).unwrap();
-            assert_eq!(
-                mob.extra.effects,
-                [crate::mobs::StoredEffect::new(
-                    "minecraft:night_vision",
-                    200,
-                    expected
-                )],
-                "{value:?}"
-            );
+            let mut loaded =
+                crate::mobs::StoredEffect::new("minecraft:night_vision", 200, expected);
+            loaded.show_icon = false;
+            assert_eq!(mob.extra.effects, [loaded], "{value:?}");
             for source in [None, Some(&raw)] {
                 let saved = mob_to_nbt(&mob, [158, 0, 0, 1], source, None, |_| None);
                 let effect = saved_effect(&saved);
@@ -10481,6 +10213,43 @@ mod mob_effect_amplifier_codec {
                 let back = mob_from_nbt(&saved, &types, 8, None).unwrap();
                 assert_eq!(back.extra.effects, mob.extra.effects);
             }
+        }
+    }
+
+    /// `MobEffectInstance.Details.CODEC`: `show_icon` is its own field, and a saved effect
+    /// without one takes `show_particles`.
+    #[test]
+    fn a_mobs_show_icon_roundtrips_apart_from_show_particles() {
+        let types = types();
+        let with = |fields: &[(&str, i8)]| {
+            let mut raw = input(None);
+            let mut effect = Tag::compound([
+                ("id", string("minecraft:night_vision")),
+                ("duration", Tag::Int(200)),
+            ]);
+            for (key, value) in fields {
+                put(&mut effect, key, Tag::Byte(*value));
+            }
+            put(&mut raw, "active_effects", Tag::List(vec![effect]));
+            raw
+        };
+        let cases: [(&[(&str, i8)], bool, Option<Tag>); 4] = [
+            (&[("show_icon", 0)], false, None),
+            (
+                &[("show_particles", 0), ("show_icon", 1)],
+                true,
+                Some(Tag::Byte(0)),
+            ),
+            (&[("show_particles", 0)], false, Some(Tag::Byte(0))),
+            (&[], true, None),
+        ];
+        for (fields, icon, particles) in cases {
+            let mob = mob_from_nbt(&with(fields), &types, 7, None).unwrap();
+            assert_eq!(mob.extra.effects[0].show_icon, icon, "{fields:?}");
+            let saved = mob_to_nbt(&mob, [158, 0, 0, 1], None, None, |_| None);
+            let effect = saved_effect(&saved);
+            assert_eq!(effect.get("show_icon"), Some(&Tag::Byte(i8::from(icon))));
+            assert_eq!(effect.get("show_particles"), particles.as_ref());
         }
     }
 

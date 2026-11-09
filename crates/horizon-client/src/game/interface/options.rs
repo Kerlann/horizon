@@ -183,7 +183,11 @@ impl Game<'_> {
         if ui.controller_open() {
             ui.set_controller_context(context);
         }
-        ui.draw(&self.settings, batch, &self.gui.atlas, self.cursor);
+        let output = self
+            .renderer
+            .as_ref()
+            .map_or(Default::default(), |r| *r.output());
+        ui.draw(&self.settings, output, batch, &self.gui.atlas, self.cursor);
         self.ui.options = ui;
         self.show_calibration(batch.height);
     }
@@ -487,7 +491,7 @@ impl Game<'_> {
                     super::packs::open_folder(&dir);
                 }
                 Event::NativeSettings(i) => self.native_settings_refresh(i),
-                Event::NativeButton(i, b) => self.native_settings_event(i, b),
+                Event::NativeSetting(i, j) => self.native_setting_event(i, j),
                 Event::Credits => self.open_win_screen(false, super::win::Finish::Options),
                 Event::HudEditor => self.open_hud_editor(true),
                 // AccessibilityOptionsScreen's link button: ConfirmLinkScreen
@@ -595,13 +599,8 @@ impl Game<'_> {
                 self.gpu_culling_auto.reset();
             }
             let _ = r.set_gpu_culling(gpu_culling);
-            r.watch_hdr(s.horizon.hdr);
-            r.set_hdr(
-                s.horizon.hdr_wanted(),
-                s.horizon.paper_white_nits() as f32,
-                s.horizon.peak_nits() as f32,
-                s.horizon.black_level_nits(),
-                s.horizon.hdr_ui_brightness as f32 / 100.0,
+            r.update_output(
+                &s.horizon,
                 &Self::options_path().with_file_name(horizon_client::graphics::HDR_MARKER),
             );
         }

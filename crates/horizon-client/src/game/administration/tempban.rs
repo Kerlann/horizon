@@ -532,6 +532,7 @@ mod tests {
             let (tree, levels, problems) = super::super::native_server::command_tree(
                 &moderation_commands(chat_filter, dedicated),
                 |_| false,
+                &std::collections::HashMap::new(),
             );
             assert!(problems.is_empty(), "{problems:?}");
             for level in levels.values() {

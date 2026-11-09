@@ -1443,7 +1443,9 @@ mod tests {
 
     /// A server's game on the prepared resources with the chunk at the origin
     /// loaded, as `native_machines`' tests make one; None without them.
-    fn server_game() -> Option<Game<'static>> {
+    fn server_game<'a>(
+        resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>,
+    ) -> Option<Box<Game<'a>>> {
         use crate::game::*;
         let root = std::env::var_os("HORIZON_TEST_RESOURCES")
             .map(std::path::PathBuf::from)
@@ -1472,19 +1474,23 @@ mod tests {
         let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
         options.resources = root.clone();
         options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
-        let res: &'static _ = Box::leak(Box::new(loaded.resources));
-        let mut game = Game::new(
-            res,
-            loaded.pack,
-            loaded.gui.unwrap(),
-            options,
-            settings,
-            Audio::silent(&horizon_assets::resource_source::ResourceSource::directory(
-                root.clone(),
-            )),
-            None,
-        )
-        .unwrap();
+        let res = resources.insert(loaded.resources);
+        // Keep nested fixture helpers from copying the large Game value
+        // through several test-thread stack frames.
+        let mut game = Box::new(
+            Game::new(
+                res,
+                loaded.pack,
+                loaded.gui.unwrap(),
+                options,
+                settings,
+                Audio::silent(&horizon_assets::resource_source::ResourceSource::directory(
+                    root.clone(),
+                )),
+                None,
+            )
+            .unwrap(),
+        );
         game.options.dedicated = Some(Vec::new());
         game.world.chunks.insert(
             (0, 0),
@@ -1497,7 +1503,8 @@ mod tests {
     #[test]
     fn loaded_tnt_fuse_uses_numeric_short_and_saves_without_raw() {
         use horizon_core::nbt::Tag;
-        let Some(mut game) = server_game() else {
+        let mut resources = None;
+        let Some(mut game) = server_game(&mut resources) else {
             return;
         };
         let cases = [
@@ -1585,7 +1592,8 @@ mod tests {
     fn live_data_commands_adopt_into_the_existing_tnt() {
         use crate::game::commands::Target;
         use horizon_core::nbt::Tag;
-        let mut game = server_game().expect("prepared Game resources are required");
+        let mut resources = None;
+        let mut game = server_game(&mut resources).expect("prepared Game resources are required");
         game.build_registries();
         game.set_allow_commands(true);
         game.block_ticks
@@ -1680,7 +1688,8 @@ mod tests {
 
     #[test]
     fn silent_tnt_keeps_the_blast_without_its_sound() {
-        let Some(mut game) = source_silence_game() else {
+        let mut resources = None;
+        let Some(mut game) = source_silence_game(&mut resources) else {
             return;
         };
         let mut rows = Vec::new();
@@ -1736,7 +1745,8 @@ mod tests {
     #[test]
     fn silent_potions_keep_the_splash_without_its_sound() {
         use horizon_client::projectiles::{Hit, Projectile, ProjectileKind};
-        let Some(mut game) = source_silence_game() else {
+        let mut resources = None;
+        let Some(mut game) = source_silence_game(&mut resources) else {
             return;
         };
         let mut rows = Vec::new();
@@ -1801,7 +1811,8 @@ mod tests {
 
     #[test]
     fn silent_creeper_keeps_the_blast_after_its_source_is_removed() {
-        let Some(mut game) = source_silence_game() else {
+        let mut resources = None;
+        let Some(mut game) = source_silence_game(&mut resources) else {
             return;
         };
         for silent in [false, true, false] {
@@ -1834,7 +1845,8 @@ mod tests {
 
     #[test]
     fn silent_launched_potions_and_bottles_keep_their_impact() {
-        let Some(mut game) = source_silence_game() else {
+        let mut resources = None;
+        let Some(mut game) = source_silence_game(&mut resources) else {
             return;
         };
         let stone = game
@@ -1900,7 +1912,8 @@ mod tests {
     #[test]
     fn silent_bottles_preserve_xp_and_the_server_random_stream() {
         use horizon_client::projectiles::{Hit, Projectile, ProjectileKind};
-        let Some(mut game) = source_silence_game() else {
+        let mut resources = None;
+        let Some(mut game) = source_silence_game(&mut resources) else {
             return;
         };
         let mut rows = Vec::new();
@@ -1947,8 +1960,10 @@ mod tests {
         write_silence_output("bottles", &rows);
     }
 
-    fn source_silence_game() -> Option<Game<'static>> {
-        let mut game = server_game()?;
+    fn source_silence_game(
+        resources: &mut Option<std::sync::Arc<crate::game::Resources>>,
+    ) -> Option<Box<Game<'_>>> {
+        let mut game = server_game(resources)?;
         // Observe the server's real emission requests without a camera or render tick.
         game.particles.requested = Some(Vec::new());
         Some(game)
@@ -1965,7 +1980,8 @@ mod tests {
     /// against an `announced` already raised past it.
     #[test]
     fn lit_tnt_ticks_on_the_next_level_tick_and_explodes_on_the_80th() {
-        let Some(mut game) = server_game() else {
+        let mut resources = None;
+        let Some(mut game) = server_game(&mut resources) else {
             return;
         };
         game.add_primed_tnt(BlockPos::new(8, 64, 8), 0.0, 80, None, None);
@@ -1993,7 +2009,8 @@ mod tests {
     /// must not tick it in the tick it joined.
     #[test]
     fn tnt_primed_by_a_blast_waits_for_the_next_tick() {
-        let Some(mut game) = server_game() else {
+        let mut resources = None;
+        let Some(mut game) = server_game(&mut resources) else {
             return;
         };
         let block = game

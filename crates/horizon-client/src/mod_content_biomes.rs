@@ -7,8 +7,7 @@
 //!
 //! They rewrite the biomes' `features` lists and
 //! `minecraft:gameplay/natural_mob_spawns` attributes when the content root
-//! builds: an added feature goes at the end of its step's list, as NeoForge
-//! adds it, and the generator orders every biome's lists as vanilla's
+//! builds: an added feature goes at the end of its step's list, and the generator orders every biome's lists as vanilla's
 //! `FeatureSorter` does; an added spawner goes at the end of its entity type's
 //! spawn category with `minCount` and `maxCount` converted to 26.3's `count`.
 //! Biomes no modifier names keep their text byte for byte, and a root with no
@@ -493,11 +492,9 @@ impl Selector {
 }
 
 /// Applies `modifiers` to the biome bundle `biomes` (id → the biome's text):
-/// every addition first, then every removal, each in mod and file order (as
-/// NeoForge's add phase runs before its remove phase). A modifier naming a
+/// every addition first, then every removal, each in mod and file order. A modifier naming a
 /// biome, feature, entity type or tag the root doesn't have (another mod's, a
-/// `#c:` convention tag) is skipped with a line in `warnings`, as NeoForge
-/// skips a holder set it can't resolve, instead of dropping every content mod.
+/// `#c:` convention tag) is skipped with a line in `warnings`, instead of dropping every content mod.
 pub(super) fn apply(
     biomes: &mut J,
     modifiers: &[Modifier],

@@ -6,6 +6,7 @@
 # graphics adapter: it runs, and must pass, only where the runner has a Vulkan driver.
 
 # Parity harness steps.
+horizon-client-lib mobs::villager_brain::poi_classification_tests::vanilla_bed_poi_states tools/test_bed_poi_parity.py harness
 horizon-client-lib arrows::client_tests::client_arrow_parity_fixture tools/test_client_arrow_parity.py harness
 horizon-client-lib mobs::shulker::space_tests::shulker_space_parity_fixture tools/test_shulker_space_parity.py harness
 horizon-client-lib save::loot_tests::opened_loot_parity_fixture tools/test_opened_loot_parity.py harness
@@ -27,9 +28,6 @@ horizon-client-render packs::cache::tests::benchmark_real_resource_root HORIZON_
 horizon-client-render gfx::crumbling_tests::crack_samples_stay_aligned_between_stages adapter gpu
 horizon-client-render gfx::pack_uniforms::initial_history_tests::core_matrix_inputs_render_provider_values adapter gpu
 horizon-client-render gfx::weather::tests::weather_shader_uvs_match_legacy_bits adapter gpu
-# These require a non-CPU GPU, not merely a Vulkan driver; `flaky` admits host-dependent results.
-horizon-client-render gfx::pack_post::material_tests::terrain_material_samplers_preserve_surface_and_encoded_bytes adapter flaky
-horizon-client-render gfx::pack_post::weather_depth_tests::rain_depth_controls_writes_for_rain_snow_and_fallbacks adapter flaky
 
 # Known failures on main.
 horizon-client-render gfx::frame_gen::optical_flow::tests::finds_a_shift_and_a_scene_change horizon-rust/horizon#8627 flaky # llvmpipe/lavapipe scene-change threshold; horizon-rust/horizon#9138 fixes the race

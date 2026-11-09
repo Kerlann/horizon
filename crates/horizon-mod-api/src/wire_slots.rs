@@ -9,6 +9,8 @@
 
 // exhaustive: wasm boundary plumbing that generated code builds field by field
 /// A resource's id: generation in the high half, slot in the low.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Id(pub u64);
 
@@ -124,18 +126,6 @@ impl<T> Slots<T> {
                 }
             }
         }
-    }
-}
-
-impl crate::wire::Wire for Id {
-    crate::wire::layout_fields!("0" => u64);
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed(stringify!(Id));
-    const MIN: usize = 8;
-    fn put(&self, out: &mut crate::wire::Writer) {
-        out.put(&self.0);
-    }
-    fn take(input: &mut crate::wire::Reader<'_>) -> Result<Self, crate::wire::WireError> {
-        input.take().map(Self)
     }
 }
 

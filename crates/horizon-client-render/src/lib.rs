@@ -2,6 +2,7 @@
 //! the HUD, menus and settings. Gameplay (horizon-client) builds on it; nothing here reaches gameplay.
 #![forbid(unsafe_code)]
 pub mod android_gamepad;
+pub mod android_runtime;
 pub mod assets;
 pub mod atlas_sources;
 pub mod audio;
@@ -64,6 +65,7 @@ pub mod java_text;
 pub mod jigsaw_block;
 pub mod keypad;
 pub mod terrain_model;
+pub use horizon_polytone::colors as polytone_colors;
 pub use horizon_world::json_folder;
 pub mod dimension_transition;
 pub mod fluid_models;
@@ -90,6 +92,7 @@ pub mod options_ui;
 pub mod overlay;
 pub mod pack_browser;
 pub mod pack_options_ui;
+pub mod pack_palette;
 pub mod pack_screen;
 pub mod pack_tags;
 pub mod packs;

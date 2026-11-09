@@ -1,4 +1,4 @@
-//! Byte-level regression cases for handwritten compound codecs.
+//! Byte and independently typed field-schema regressions for derived and checked codecs.
 use super::*;
 use crate::*;
 use horizon_core::nbt::{Compound, JavaString};
@@ -112,6 +112,43 @@ fn checked_records_have_declared_field_bytes() {
 }
 
 #[test]
+fn resource_decoders_normalize_non_unit_wire_quantities() {
+    let _keys = Keys::new();
+    // Item key slot 0, count 7, no damage or component patch.
+    let item: ItemResource = Reader::decode(&[0, 0, 0, 0, 7, 0, 0, 0, 0, 0]).unwrap();
+    assert_eq!(item.as_stack().count(), 1);
+    let mut out = Writer::new();
+    out.put(&item);
+    assert_eq!(out.bytes(), &[0, 0, 0, 0, 1, 0, 0, 0, 0, 0]);
+    // Resolved-fluid tag 0, fluid slot 0, amount 7, no components.
+    let fluid: FluidResource = Reader::decode(&[0, 0, 0, 0, 0, 0, 0, 0, 7, 0, 0, 0, 0]).unwrap();
+    out.clear();
+    out.put(&fluid);
+    assert_eq!(out.bytes(), &[0, 0, 0, 0, 0, 0, 0, 0, 1, 0, 0, 0, 0]);
+}
+
+#[test]
+fn empty_feature_flag_storage_encodes_the_effective_vanilla_default() {
+    let flags = FeatureFlags::new(std::sync::Arc::from([]));
+    assert!(flags.contains("minecraft:vanilla"));
+    assert!(flags.contains("vanilla"));
+    assert_eq!(flags.iter().collect::<Vec<_>>(), ["minecraft:vanilla"]);
+    // Independent bytes: one flag, then the 17-byte UTF-8 resource id.
+    let expected = b"\x01\0\0\0\x11\0\0\0minecraft:vanilla";
+    let mut out = Writer::new();
+    out.put(&flags);
+    assert_eq!(out.bytes(), expected);
+    let decoded: FeatureFlags = Reader::decode(expected).unwrap();
+    assert_eq!(decoded.iter().collect::<Vec<_>>(), ["minecraft:vanilla"]);
+    // A zero-entry input still takes the constructor's empty-default path,
+    // and re-encoding it emits the same effective list as before the migration.
+    let empty: FeatureFlags = Reader::decode(&[0, 0, 0, 0]).unwrap();
+    out.clear();
+    out.put(&empty);
+    assert_eq!(out.bytes(), expected);
+}
+
+#[test]
 fn handle_records_have_declared_field_bytes() {
     let epoch = NativeWorldEpoch::new(47);
     let level = LevelRef::new(epoch, DimensionKey::OVERWORLD);
@@ -119,11 +156,9 @@ fn handle_records_have_declared_field_bytes() {
     let player = crate::__private::game::player_ref(entity, 0x1234);
     let pos = BlockPos { x: 7, y: -8, z: 9 };
     fields(level, (epoch, DimensionKey::OVERWORLD));
-    fields(
-        ChunkRef::new(level, [3, -4]),
-        (level, ChunkPos { x: 3, z: -4 }),
-    );
-    fields(RaidRef::new(level, 53), (level, 53u32));
+    fields(ChunkRef::new(level, [3, -4]), (level, [3i32, -4]));
+    fields(RaidRef::new(level, 53), (level, 53i32));
+    fields(RaidRef::new(level, -1), (level, -1i32));
     fields(player, (entity, 0x1234u128));
     fields(
         GlobalPos::new(id("example:moon"), pos),
@@ -150,7 +185,7 @@ fn handle_records_have_declared_field_bytes() {
             position: [7, -8, 9],
             generation: 83,
         },
-        (level, pos, 83u64),
+        (level, [7i32, -8, 9], 83u64),
     );
     fields(UnspawnedMobRef::new(epoch, 61), (epoch, 61u64));
     fields(ModelRef::from_parts(31, 7).unwrap(), (31u64, 7u32));
@@ -193,7 +228,7 @@ fn payload_enum_cases_have_declared_field_bytes() {
     fields(ReductionChange::Scale(2.5), (1u8, 2.5f32));
     fields(ReductionChange::AtLeast(3.75), (2u8, 3.75f32));
     fields(ReductionChange::AtMost(4.5), (3u8, 4.5f32));
-    let pos = BlockPos { x: 2, y: -4, z: 6 };
+    let pos = [2i32, -4, 6];
     fields(
         crate::particles::PositionSource::Block([2, -4, 6]),
         (0u32, pos),
@@ -203,7 +238,14 @@ fn payload_enum_cases_have_declared_field_bytes() {
             id: 19,
             y_offset: 1.75,
         },
-        (1u32, 19u32, 1.75f32),
+        (1u32, 19i32, 1.75f32),
+    );
+    fields(
+        crate::particles::PositionSource::Entity {
+            id: -1,
+            y_offset: 1.5,
+        },
+        (1u32, -1i32, 1.5f32),
     );
     fields(NativeTicketOwner::Block([1, -2, 3]), (0u32, [1i32, -2, 3]));
     fields(NativeTicketOwner::Entity(0x1234), (1u32, 0x1234u128));
@@ -353,7 +395,7 @@ fn snapshot_and_reload_records_have_declared_field_bytes() {
 fn decode<T: Wire, F: Wire>(value: T) -> F {
     let mut out = Writer::new();
     out.put(&value);
-    let declared = T::__field_layouts().expect("handwritten compound must declare its fields");
+    let declared = T::__field_layouts().expect("compound codec must declare its fields");
     let expected = F::__tuple_layouts().expect("expected fields must be a tuple");
     let actual = if declared.first().is_some_and(|(name, _)| *name == "tag") {
         let tag_layout = declared[0].1;

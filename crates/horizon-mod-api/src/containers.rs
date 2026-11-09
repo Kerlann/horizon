@@ -9,6 +9,7 @@ use crate::*;
 /// identity is fixed at construction and is not part of the mutable fields.
 /// Returned guest snapshots apply only changed mutable fields through the same revision path.
 // exhaustive: its fields are private, so mods cannot build or destructure it
+// no wire: transfers a flattened ModBlockEntitySnapshot, including revision counters and queued client fields, rather than internal fields storage.
 pub struct ModBlockEntity {
     pub(crate) id: String,
     pub(crate) fields: ModBlockEntityFields,
@@ -35,6 +36,8 @@ pub struct ModBlockEntityFields {
 /// Rejected callback writebacks also advance the engine revision to invalidate stale copies;
 /// this may cause one extra client redraw even though the fields were retained.
 /// Neither saved nor compared.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct ModRevision {

@@ -8,7 +8,7 @@ use horizon_client::chunk::Chunk;
 use horizon_core::position::ChunkPos;
 use std::sync::Arc;
 
-fn game() -> Game<'static> {
+fn game(resources: &mut Option<std::sync::Arc<Resources>>) -> Game<'_> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -30,7 +30,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -67,7 +67,8 @@ fn run(game: &mut Game<'_>, command: &str) -> (bool, Option<String>) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn an_unknown_clone_dimension_fails_and_clones_nothing() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     for (command, x, unknown) in [
         (
             "clone from h236:none 0 100 0 0 100 0 4 100 0",
@@ -127,7 +128,8 @@ fn block_in(game: &mut Game<'_>, dim: &str, at: &str, block: &str) -> bool {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_clone_to_another_dimension_lands_in_that_world_and_comes_back() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     let here = game.dim;
     assert_eq!(here, Dim::Overworld);
     load_chunk_in(&mut game, Dim::Nether, here);

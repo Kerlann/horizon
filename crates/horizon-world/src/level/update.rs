@@ -534,8 +534,8 @@ impl<L: LevelAccess + ?Sized> Sim<'_, L> {
 
     // ---- neighbour updater ----
     pub fn update_neighbors_at(&mut self, pos: BlockPos, block: BlockId) {
-        // NeoForge asks here and in the skipping variant, but not in the
-        // oriented one, which `ServerLevel` doesn't patch.
+        // Mods are asked here and in the skipping variant, but not in the
+        // oriented one.
         if self.level.neighbor_notify(pos, None) {
             return;
         }

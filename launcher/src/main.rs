@@ -54,6 +54,7 @@ mod mods_page;
 mod mods_project;
 mod motion;
 mod multiplayer_page;
+mod native_consent;
 mod native_log_page;
 mod new_instance;
 mod open_card;
@@ -65,6 +66,7 @@ mod plate;
 mod profile_heads;
 mod scene;
 mod screenshots_page;
+use native_consent::PendingConsent;
 mod scrollbar;
 mod servers_page;
 #[cfg(windows)]
@@ -260,7 +262,9 @@ struct Launcher {
     /// How the last native build ended ("Built (balanced, incremental)", or "Up to date").
     native_done: Option<String>,
     native_error: Option<String>,
-    native_confirm: Option<Result<Vec<native_mods::Bundle>, String>>,
+    pending_consent: Option<PendingConsent>,
+    /// Why the last Allow or Cancel failed, shown inside the dialog that the page is behind.
+    consent_error: Option<String>,
     /// The instance (id) the build under way, or the last one's error, is for.
     native_for: Option<String>,
     /// What each installed native build was made from, by version. A build's version names its
@@ -565,7 +569,8 @@ impl Launcher {
             native_progress: None,
             native_done: None,
             native_error: None,
-            native_confirm: None,
+            pending_consent: None,
+            consent_error: None,
             native_for: None,
             native_builds: Default::default(),
             native_log: Default::default(),
@@ -947,7 +952,7 @@ impl Launcher {
         if self.native_step.is_some() {
             return;
         }
-        self.native_confirm = None;
+        self.pending_consent = None;
         self.native_error = None;
         // This attempt's own log, starting empty: an open panel shows it rather than the last
         // attempt's (`native_log_page`).
@@ -1325,6 +1330,9 @@ impl Launcher {
                     // A build attempt ended: an open panel reads the log it left.
                     self.native_log.stale = true;
                     if let (Err(e), false) = (result, cancelled) {
+                        if matches!(e, native_mods::Failed::NoConsent) {
+                            self.request_native_build_consent();
+                        }
                         self.native_error = Some(String::from(e));
                     }
                 }
@@ -3975,61 +3983,87 @@ impl Launcher {
             .children(self.dev_options_section(cx))
     }
 
-    /// The warning before a native build: what the mods can do and which mods. The build starts
-    /// only from its button.
-    fn native_warning(
-        &self,
-        mods: &Result<Vec<native_mods::Bundle>, String>,
-        cx: &mut Context<Self>,
-    ) -> Div {
-        let t = self.theme;
-        let list = match mods {
-            Ok(found) => found
-                .iter()
-                .map(|b| format!("{} {}", b.manifest.id, b.manifest.version))
-                .collect::<Vec<_>>()
-                .join(", "),
-            Err(e) => e.clone(),
-        };
-        let panel = div()
-            .flex()
-            .flex_col()
-            .gap(px(6.))
-            .mt(px(8.))
-            .p(px(12.))
-            .bg(t.well)
-            .child(div().text_color(t.danger).child(tr("These mods will run with full access to your computer").to_string()))
-            .child(tr("They can read, change or delete your files, and use your accounts and network, like any program you run. Build them only if you trust their authors: the Mods page names them.").to_string())
-            .child(trf("Mods: {mods}", &[("mods", &list)]))
-            .child(tr("Native builds may download Rust and other build tools. Source builds compile the game on this computer.").to_string());
-        let mut buttons = div().flex().gap(px(8.)).mt(px(4.));
-        if mods.is_ok() {
-            buttons = buttons.child(
-                button(
-                    "native-trust",
-                    "I trust these mods: build",
-                    Kind::Primary,
-                    &t,
-                )
-                .on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
-                    if let Err(error) = this.settings.allow_native_mods() {
-                        this.native_error = Some(error);
-                        cx.notify();
-                        return;
-                    }
-                    this.build_native();
-                    cx.notify();
-                })),
-            );
+    fn request_native_build_consent(&mut self) {
+        self.pending_consent = Some(PendingConsent::Build(
+            native_status::enabled(&self.mods.home())
+                .into_iter()
+                .map(|(id, _, _)| id)
+                .collect(),
+        ));
+    }
+
+    /// Cancel and Escape share the transition; neither can execute a pending action.
+    fn cancel_native_consent(&mut self) {
+        if let Err(error) = native_consent::resolve(
+            &mut self.pending_consent,
+            false,
+            true,
+            &mut self.settings,
+            &self.mods.home(),
+        ) {
+            self.mods.message = Some(Err(error));
         }
-        panel.child(buttons.child(
-            button("native-cancel", "Cancel", Kind::Secondary, &t).on_click(cx.listener(
-                |this, _: &ClickEvent, _, cx| {
-                    this.native_confirm = None;
-                    cx.notify();
-                },
-            )),
-        ))
+        self.consent_error = None;
+        self.instance_mods_changed();
+    }
+
+    fn native_consent(&self, cx: &mut Context<Self>) -> Div {
+        let t = self.theme;
+        // A build refused for consent with no native mod enabled names none: the generic text.
+        let name = self
+            .pending_consent
+            .as_ref()
+            .map(PendingConsent::name)
+            .filter(|name| !name.is_empty());
+        let bytes = horizon_launcher::rust_toolchain::host().map(|host| host.download_bytes());
+        let size = bytes
+            .map(megabytes)
+            .unwrap_or_else(|| tr("Unavailable on this platform").into());
+        div().absolute().inset_0().occlude().flex().items_center().justify_center().bg(crate::glass_ui::scrim())
+            .child(plate(&t).w(px(520.)).p(px(28.)).bg(t.surface).rounded(px(16.)).border_1().border_color(t.rule).shadow_lg().flex().flex_col().gap(px(18.))
+                .child(div().size(px(48.)).rounded(px(12.)).bg(t.warn.opacity(0.12)).flex().items_center().justify_center().child(crate::glass_ui::icon("information-circle", 26., t.warn)))
+                .child(div().text_size(px(24.)).font_weight(FontWeight::BOLD).child(tr("Allow native mods?")))
+                .child(match name {
+                    Some(name) => {
+                        let body = trf("{mod} is a native mod. Native mods are native code that runs inside your game, with your rights: like any program you install, they can read and change your files. Allow them only if you trust their authors.", &[("mod", &name)]);
+                        let highlight = body.find(&name).map(|start| (start..start + name.len(), gpui::HighlightStyle { font_weight: Some(FontWeight::BOLD), ..Default::default() }));
+                        div().child(gpui::StyledText::new(body).with_highlights(highlight))
+                    }
+                    None => div().child(tr("Native mods are native code that runs inside your game, with your rights: like any program you install, they can read and change your files. Allow them only if you trust their authors.")),
+                })
+                .child(trf("Horizon will download the Rust compiler ({size}) to build them. You can turn this off in Settings, Storage.", &[("size", &size)]))
+                .children(self.consent_error.clone().map(|error| div().text_color(t.danger).child(error)))
+                .children(bytes.is_none().then(|| div().text_color(t.danger).child(tr("Native mods can't be built on this computer, so they can't be allowed here."))))
+                .child(div().flex().justify_end().gap(px(12.))
+                    .child(button("native-cancel", "Cancel", Kind::Secondary, &t).w(px(120.)).on_click(cx.listener(|this, _: &ClickEvent, _, cx| {
+                        this.cancel_native_consent();
+                        cx.notify();
+                    })))
+                    .child({
+                        let allow = button("native-allow", "Allow", Kind::Primary, &t).w(px(120.));
+                        if bytes.is_none() {
+                            disabled(allow)
+                        } else {
+                            allow.on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
+                        match native_consent::resolve(&mut this.pending_consent, true, true, &mut this.settings, &this.mods.home()) {
+                            Err(error) => this.consent_error = Some(error),
+                            Ok(Some(action)) => { this.consent_error = None; match action {
+                                PendingConsent::Build(_) => this.build_native(),
+                                PendingConsent::Toggle(entry) => this.mods_switch(&entry),
+                                PendingConsent::Install(source, id, known) => this.mods_install(source, id, known),
+                                PendingConsent::Github(found, only) => this.github_install(found, only),
+                                PendingConsent::Local(id) => {
+                                    this.mods.message = horizon_launcher::browser::java::set_enabled(&this.mods.home(), &id, true).err().map(Err);
+                                    this.instance_mods_changed();
+                                }
+                            } }
+                            Ok(None) => {},
+                        }
+                        cx.notify();
+                    }))
+                        }
+                    })
+                ))
     }
 
     /// Settings' Game arguments row: the extra arguments the game starts with, kept in
@@ -5153,6 +5187,13 @@ impl Render for Launcher {
         let mut root = div()
             .id("root")
             .track_focus(&self.root_focus)
+            .capture_key_down(cx.listener(|this, ev: &KeyDownEvent, _, cx| {
+                if ev.keystroke.key == "escape" && this.pending_consent.is_some() {
+                    this.cancel_native_consent();
+                    cx.stop_propagation();
+                    cx.notify();
+                }
+            }))
             .on_key_down(cx.listener(|this, ev: &KeyDownEvent, window, cx| {
                 let k = &ev.keystroke;
                 match k.key.as_str() {
@@ -5298,6 +5339,9 @@ impl Render for Launcher {
         }
         if let Some(palette) = self.palette_overlay(window, cx) {
             root = root.child(palette);
+        }
+        if self.pending_consent.is_some() {
+            root = root.child(self.native_consent(cx));
         }
         if self.asking_owner() {
             root = root.child(self.owner_screen(cx));

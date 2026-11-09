@@ -791,28 +791,41 @@ impl Game<'_> {
             name: &name,
             local: true,
         };
-        if body && self.mod_player_geometry(m, who, alpha as f32, camera, packed, out) {
+        let (drawn, hidden) = match body {
+            true => self.mod_player_geometry(m, who, alpha as f32, camera, packed, out),
+            false => (false, mod_api::HiddenParts::default()),
+        };
+        if drawn {
             return;
         }
         // A spectator still draws its own model in third person: the poses'
         // visibility (set by player_model_visibility) hides body parts, and
         // translucent_body marks the body OIT for the ghostly look. Only first
         // person and dead players skip it.
-        let render = if body || self.spectator() {
-            horizon_client::mobs::render::render_with
+        if body || self.spectator() {
+            horizon_client::mobs::render::render_with_hidden(
+                m,
+                alpha as f32,
+                camera,
+                &lookup,
+                packed,
+                self.res.mob_data(),
+                &self.player_armor_layers(),
+                hidden,
+                out,
+            );
         } else {
-            horizon_client::mobs::render::render_layers
-        };
-        render(
-            m,
-            alpha as f32,
-            camera,
-            &lookup,
-            packed,
-            self.res.mob_data(),
-            &self.player_armor_layers(),
-            out,
-        );
+            horizon_client::mobs::render::render_layers(
+                m,
+                alpha as f32,
+                camera,
+                &lookup,
+                packed,
+                self.res.mob_data(),
+                &self.player_armor_layers(),
+                out,
+            );
+        }
         // AvatarRenderer.shouldRenderLayers: a spectator draws no layers.
         if horizon_client::mobs::render::layers_shown(m) {
             let chest = self.armor[1].as_ref().map(|s| &*s.item);

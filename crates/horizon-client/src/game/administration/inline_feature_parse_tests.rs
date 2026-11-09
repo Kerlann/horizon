@@ -6,7 +6,7 @@
 use super::*;
 use std::sync::Arc;
 
-fn game() -> Game<'static> {
+fn game(resources: &mut Option<std::sync::Arc<Resources>>) -> Game<'_> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -28,7 +28,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -98,7 +98,8 @@ fn stored(game: &mut Game<'_>, feature: &str) -> (i32, i32, bool) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_malformed_inline_feature_fails_before_the_command_runs() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     assert!(game.run_command("fill 0 99 0 15 99 15 stone"));
     assert!(game.run_command("scoreboard objectives add h171 dummy"));
     // A valid inline feature places; one that decodes but does not place fails when it runs.
@@ -134,12 +135,15 @@ fn a_malformed_inline_feature_fails_before_the_command_runs() {
 
 /// Added controls (after the baseline): with the server's live features, a
 /// malformed inline feature is refused while the command is parsed and never
-/// reaches placement (no block is written); with no live features the parse
-/// leaves the decode to the run, as before (preservation, not parity).
+/// reaches placement (no block is written). With no live features, the parse
+/// keeps `check_feature`'s static check (a feature type and a simple block's
+/// `to_place`), and leaves what it does not cover to the run, as before
+/// (preservation, not parity).
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn the_parse_check_is_the_live_feature_codec_and_only_where_it_exists() {
-    let mut game = game();
+    let mut game_resources = None;
+    let mut game = game(&mut game_resources);
     assert!(game.run_command("fill 0 99 0 15 99 15 stone"));
     assert!(game.run_command("scoreboard objectives add h171 dummy"));
     assert!(
@@ -171,10 +175,17 @@ fn the_parse_check_is_the_live_feature_codec_and_only_where_it_exists() {
         ),
         (0, 0, true)
     );
-    // No live features: the old run-time failure.
+    // Beyond the static check: a provider with no state. The live codec refuses it while
+    // parsing too.
+    let deep =
+        "{type:\"minecraft:simple_block\",to_place:{type:\"minecraft:simple_state_provider\"}}";
+    assert_eq!(stored(&mut game, deep), (-1, -1, true));
+    // No live features: the static check still refuses at parse time what it covers.
     game.ui.registries.inline_feature = None;
-    assert_eq!(stored(&mut game, malformed), (0, 0, true));
-    let (ok, said) = run(&mut game, &format!("place feature {malformed} 7 100 8"));
+    assert_eq!(stored(&mut game, malformed), (-1, -1, true));
+    // What it does not cover is decoded when the command runs: the old run-time failure.
+    assert_eq!(stored(&mut game, deep), (0, 0, true));
+    let (ok, said) = run(&mut game, &format!("place feature {deep} 7 100 8"));
     assert!(!ok);
     assert_eq!(
         said.as_deref(),

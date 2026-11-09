@@ -42,6 +42,13 @@ For a value with checked construction, `#[wire(via = SomeOwnedType)]` uses
 refuses the value rather than constructing unchecked state. This also lets a type
 retain a deliberately chosen encoding instead of exposing its Rust fields.
 
+The API's own plain values use this same derive, including particle options,
+package descriptions, handles and reload file collections. Checked registry keys
+and item stacks retain codecs that validate host registry slots, nonzero stack
+counts and component patches. A declaration retaining a handwritten codec states
+its particular validation, projection or nonstandard byte format; merely having a
+handwritten codec is not an exception to the explicit Wire policy.
+
 The loader compares composed encoding layouts, including nested fields and
 recursive shapes. Equivalent standard representations share one encoding:
 `Vec<T>` and `Box<[T]>`, for example, are both lists, while `Box<T>` is transparent.

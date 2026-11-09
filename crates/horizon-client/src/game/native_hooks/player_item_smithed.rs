@@ -6,8 +6,7 @@ impl Game<'_> {
     /// smithing table (`SmithingMenu.onTake`, or `onQuickCraft` for a
     /// shift-click): `player` is their UUID and `player_entity_id` their
     /// network id, `inputs` the template, base and addition as they were
-    /// before the take used them (`None` for an empty slot). NeoForge fires it
-    /// first thing in `onTake`; here it comes once the click is done, so the
+    /// before the take used them (`None` for an empty slot). It comes once the click is done, so the
     /// menu already holds the used inputs, but before the table sounds.
     /// Server-side.
     pub(in crate::game) fn native_player_item_smithed(

@@ -12,8 +12,8 @@ const EMPTY: &str = "0000609b-0000-0000-0000-000000000001";
 const CHANCES: &str = "0000609b-0000-0000-0000-000000000002";
 const OCCUPIED: &str = "0000609b-0000-0000-0000-000000000003";
 
-fn game() -> Game<'static> {
-    let mut game = crate::game::game_tests::tests::server_game();
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
+    let mut game = crate::game::game_tests::tests::server_game(resources);
     game.build_registries();
     game.set_allow_commands(true);
     game.world
@@ -69,7 +69,8 @@ fn ints(uuid: &str) -> String {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_gifted_poppy_is_a_guaranteed_drop() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     assert!(
         !game.run_command(&format!(
             "execute if items entity {EMPTY} saddle minecraft:poppy"
@@ -98,7 +99,8 @@ fn a_gifted_poppy_is_a_guaranteed_drop() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn the_gift_keeps_the_other_slots_chances() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     assert!(holds(
         &mut game,
         CHANCES,
@@ -129,7 +131,8 @@ fn the_gift_keeps_the_other_slots_chances() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn an_antenna_that_holds_an_item_keeps_it_and_its_chance() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     gift_item(&mut game, OCCUPIED, "minecraft:dandelion");
     assert!(game.run_command(&format!(
         "execute if items entity {OCCUPIED} saddle minecraft:dandelion"
@@ -171,7 +174,8 @@ fn effective(game: &Game<'_>, uuid: &str) -> Vec<f32> {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn every_other_slot_keeps_its_effective_chance() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     for uuid in [EMPTY, CHANCES] {
         let before = effective(&game, uuid);
         gift(&mut game, uuid);
