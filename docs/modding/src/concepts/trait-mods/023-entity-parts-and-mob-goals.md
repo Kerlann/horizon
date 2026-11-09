@@ -56,6 +56,21 @@ accessors do not gain this error. Native and wasm share the Wire form, and the d
 uninhabited Infallible domain always refuses decoding. This schema foundation does not
 implement the deferred heavy-read or queued-write routing.
 
+The retained families expose `cached_row(&dyn Host) -> Option<...ReadRow>`; raid data
+uses its separate level-owned `RaidReadRow`. Row availability is the outer Option.
+Nullable fields retain domain absence, unsupported subkind or genuinely unknown client
+data, never a foreign live-read refusal. Base identity/position/geometry fields require
+known values, without invented defaults. Scalar Option contracts remain; `added_to_level`,
+`is_started` and `is_active` now return Option<bool>. Projectile pierce level keeps its
+existing domain-only `PierceLevelError`.
+
+Owned payloads materialize on request, not by cloning every capture pass. Distance and
+restriction checks project cached position and restriction center/radius. Pathfinding
+malus is a finite `Vec<(PathType, f32)>` table; can-eat stores `[bool; 2]` indexed by
+`always`. Ray tracing requires the engine builder's row-bounds/immutable-world proof and
+adds no LevelReadRow. Minecart payloads, player/session strings, passengers, block transforms,
+melee range, heavy payload reads and queued-write surfaces remain deferred.
+
 #### Brain behaviors
 
 Native mods only: entity parts do not cross to wasm yet.
