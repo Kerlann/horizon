@@ -303,6 +303,7 @@ impl Game<'_> {
                                     kind: horizon_client::join_seq::residency::Kind::Mob,
                                 },
                                 join: actor.join,
+                                source: Default::default(),
                             },
                         },
                     )

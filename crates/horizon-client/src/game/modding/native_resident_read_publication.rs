@@ -48,9 +48,9 @@ macro_rules! resident_read_owner_locations {
         fn resident_owner_read_locations(&$this, kind: Kind) -> Vec<Location> {
             let owner = Owner { dimension: $this.dim.key(), kind };
             match kind {
-                $(Kind::$kind => $this$(.$field)+.iter().map(|source| Location { owner, join: source.join_seq() }).collect(),)*
-                Kind::Projectile => $this$(.$projectiles)+.iter().map(|source| Location { owner, join: source.join_seq() }).collect(),
-                Kind::Dragon => $this.dragon.iter().map(|source| Location { owner, join: source.join_seq() }).collect(),
+                $(Kind::$kind => $this$(.$field)+.iter().map(|source| Location { owner, join: source.join_seq(), source: Default::default() }).collect(),)*
+                Kind::Projectile => $this$(.$projectiles)+.iter().map(|source| Location { owner, join: source.join_seq(), source: Default::default() }).collect(),
+                Kind::Dragon => $this.dragon.iter().map(|source| Location { owner, join: source.join_seq(), source: Default::default() }).collect(),
             }
         }
     };
@@ -161,6 +161,7 @@ impl Game<'_> {
                     kind,
                 },
                 join,
+                source: Default::default(),
             },
             source,
             phase,
