@@ -22,6 +22,7 @@ impl Game<'_> {
         f: impl FnOnce(&mut Self) -> R,
     ) -> Result<R, TurnRefused> {
         let swap = self.enter_guest_at(gi, conn, self.dim)?;
+        let before_ai = self.player_ai_facts();
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             crate::game::dedicated::crash_fixture("guest", || {
                 self.lan
@@ -32,12 +33,15 @@ impl Game<'_> {
                 .then_some(self.dim.id());
             let result = horizon_client::block_contact::in_level(dimension, || f(self));
             self.drain_entity_inside();
-            result
+            (result, self.player_ai_facts_delta(&before_ai))
         }));
         // Commit the guest's progress and restore the outer player before propagating a panic.
         self.leave_guest(swap);
         match result {
-            Ok(result) => Ok(result),
+            Ok((result, delta)) => {
+                self.publish_player_ai_delta(delta);
+                Ok(result)
+            }
             Err(payload) => std::panic::resume_unwind(payload),
         }
     }

@@ -11,7 +11,7 @@ use horizon_client::{
     },
     hud::HudBatch,
     hud_layout, hud_overlays,
-    lan::{guest::Guest, playerdata::ints_uuid},
+    lan::guest::Guest,
     save::{self, uuid_from_text, uuid_text},
     scoreboard::{self as sb, Comp, Scoreboard, literal},
     scoreboard_cmd::{self, Env, Holder},

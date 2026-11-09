@@ -20,6 +20,8 @@ use std::{
 pub(super) struct NativeReadState {
     pub(super) passes: Rc<RefCell<ReadPasses>>,
     pub(super) mob_backing: super::native_mob_backing::MobBackingRevision,
+    pub(super) mob_ai_level: Option<DimensionKey>,
+    pub(super) mob_player_writes: HashSet<super::native_mob_backing::PlayerBackingKey>,
     pub(super) commands: Option<super::native_entity_commands::EntityCommands>,
     pub(super) identities: HashSet<Arc<str>>,
     pub(super) player_identifiers: NativeReadIdentifiers,
@@ -38,6 +40,8 @@ impl NativeReadState {
     pub(super) fn reset(&mut self) {
         self.passes.borrow_mut().reset();
         self.mob_backing = Default::default();
+        self.mob_ai_level = None;
+        self.mob_player_writes.clear();
         self.commands = None;
         self.identities.clear();
         self.player_identifiers = NativeReadIdentifiers::default();

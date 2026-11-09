@@ -609,28 +609,7 @@ impl Game<'_> {
             sleep_timer: self.sleep_timer,
             passenger: self.riding.is_some(),
             riding_vehicle: self.riding,
-            vehicle: self.riding.and_then(|id| {
-                if let Some(b) = self.boats.iter().find(|b| b.id == id) {
-                    // A boat's box: 1.375 wide and 0.5625 high around its position.
-                    let w = 0.6875;
-                    return Some(horizon_client::mobs::Vehicle {
-                        nautilus: false,
-                        bounds: Aabb::new(
-                            Vec3::new(b.position.x - w, b.position.y, b.position.z - w),
-                            Vec3::new(b.position.x + w, b.position.y + 0.5625, b.position.z + w),
-                        ),
-                        velocity: b.velocity,
-                    });
-                }
-                let m = self.mobs.iter().find(|m| m.id == id)?;
-                matches!(m.species(), Species::Nautilus | Species::ZombieNautilus).then(|| {
-                    horizon_client::mobs::Vehicle {
-                        nautilus: true,
-                        bounds: m.bounds(),
-                        velocity: m.velocity,
-                    }
-                })
-            }),
+            vehicle: self.ai_player_vehicle_view(&self.mobs),
         })
     }
     /// Biome facts at a position for finalizeSpawn and variant rules.
@@ -1206,11 +1185,15 @@ impl Game<'_> {
         self.world.bottom_y()
     }
     pub(super) fn mob_world_base<'s>(&'s self, others: &'s [Seen]) -> MobWorld<'s> {
-        self.mob_world_reborrow(
-            others,
-            self.player_view(),
-            std::sync::Arc::new(self.mob_team_rules()),
-        )
+        if self.remote.is_none() {
+            self.mob_world_reborrow(others, self.ai_player_view(), Default::default())
+        } else {
+            self.mob_world_reborrow(
+                others,
+                self.player_view(),
+                std::sync::Arc::new(self.mob_team_rules()),
+            )
+        }
     }
     /// Reborrow the live level without rebuilding the pass's owned player/team backing.
     pub(super) fn mob_world_reborrow<'s>(
@@ -7223,6 +7206,13 @@ impl Game<'_> {
         let Some(index) = self.mob_interaction_target(target) else {
             return Ok(false);
         };
+        let id = self.mobs[index].id;
+        let result = self.interact_mob_at(index);
+        self.record_ai_mob_owner_id(id);
+        result
+    }
+
+    fn interact_mob_at(&mut self, index: usize) -> Result<bool> {
         // PlayerInteractTrigger: the name tag as it was before it named the mob.
         let used = self.held().cloned();
         if self.name_mob(index) {

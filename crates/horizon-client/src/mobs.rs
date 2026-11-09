@@ -3569,7 +3569,7 @@ pub fn apply_brain_events(
     }
 }
 /// The player as mobs see it.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PlayerView {
     pub position: Vec3,
     pub bounds: Aabb,
@@ -3631,7 +3631,7 @@ pub struct PlayerView {
     pub vehicle: Option<Vehicle>,
 }
 /// What a player rides, for the mobs that follow it (`FollowPlayerRiddenEntityGoal`).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Vehicle {
     pub nautilus: bool,
     pub bounds: Aabb,

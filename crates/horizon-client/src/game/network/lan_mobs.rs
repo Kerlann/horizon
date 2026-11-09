@@ -184,6 +184,27 @@ impl Game<'_> {
         views
     }
 
+    /// Project one canonical body after a real change, without visiting peers.
+    pub(super) fn ai_guest_view(
+        &mut self,
+        conn: u32,
+        mobs: &horizon_client::join_seq::JoinList<horizon_client::mobs::Mob>,
+    ) -> Option<PlayerView> {
+        let (uuid, moved) = {
+            let host = self.lan.as_ref()?;
+            let guest = host.hub.guest(conn)?;
+            if !host.hub.here(guest) || !guest.loaded || guest.dead || guest.is_fake() {
+                return None;
+            }
+            (
+                guest.uuid,
+                [0, 1, 2].map(|k| guest.position[k] - guest.previous_position[k]),
+            )
+        };
+        let view = self.as_guest(conn, |g| g.ai_player_view_for_pass(mobs))??;
+        Some(guest_view(view, uuid, moved))
+    }
+
     /// The guest `conn`'s real identity — the uuid its lent view carries and
     /// its entity id — when the guest is a player the tick can name: a fake
     /// guest resolves as none, as the write handle refuses it (#1077).

@@ -57,6 +57,9 @@ pub(super) struct NativeMobRelations {
     merchant_by_conn: HashMap<u32, u32>,
     merchants: HashMap<u32, u32>,
     saved_ids: HashMap<[i32; 4], u32>,
+    /// Minimal ownership edges, like rider_vehicles. AI still needs these when
+    /// the real roster is lent and no mod requested an R publication.
+    tame_owners: HashMap<u32, [i32; 4]>,
     identity_candidates: Vec<(u32, Location, IdentityDetails)>,
     mob_riders: HashMap<u32, std::collections::HashSet<u32>>,
     rider_vehicles: HashMap<u32, u32>,
@@ -73,6 +76,7 @@ impl NativeMobRelations {
         self.merchants.clear();
         self.merchant_by_conn.clear();
         self.saved_ids.clear();
+        self.tame_owners.clear();
         self.identity_candidates.clear();
         for riders in self.mob_riders.values_mut() {
             riders.clear();
@@ -122,9 +126,28 @@ impl NativeMobRelations {
             self.merchants.insert(id, conn);
         }
     }
+    pub(super) fn update_mob_owner(&mut self, source: &Mob) {
+        let owner = (!source.removed && source.extra.tame)
+            .then_some(source.extra.owner)
+            .flatten();
+        self.update_owner(source.id, owner);
+    }
+
+    fn update_owner(&mut self, id: u32, owner: Option<[i32; 4]>) {
+        if self.tame_owners.get(&id).copied() == owner {
+            return;
+        }
+        if let Some(owner) = owner {
+            self.tame_owners.insert(id, owner);
+        } else {
+            self.tame_owners.remove(&id);
+        }
+    }
+
     /// Call in source publication order and at canonical mount/remove boundaries.
     /// The relation index contains identities only; current facts stay in the row.
     pub(super) fn update_mob_rider(&mut self, source: &Mob) {
+        self.update_mob_owner(source);
         self.remove_mob_rider(source.id);
         if !source.removed
             && source.alive()
@@ -181,15 +204,15 @@ impl mobs::TeamLookup for Game<'_> {
                 self.score.board.players_team(name)
             }
             Who::Mob(id) => {
-                let facts = if id == actor.id {
+                let owner = if id == actor.id {
                     if actor.removed {
                         return None;
                     }
-                    NativeMobTargetFacts::capture(actor)
+                    actor.extra.tame.then_some(actor.extra.owner).flatten()
                 } else {
-                    self.read_mob_facts(id, level)?
+                    index.tame_owners.get(&id).copied()
                 };
-                self.read_mob_team(facts, level, index)
+                self.read_mob_team_owner(id, owner, level, index)
             }
         })?
     }
@@ -232,6 +255,51 @@ impl Game<'_> {
         Some((at, details, uuid))
     }
 
+    /// Seed only ownership edges from the actual pass roster. This also works
+    /// without mods/read publications; no foreign H payload is materialized.
+    pub(super) fn prepare_ai_mob_relations(&self, mobs: &[Mob]) {
+        if self.with_prepared_mob_relations(|_| ()).is_none() {
+            return;
+        }
+        let level = LevelRef::new(self.native_lifecycle.epoch().unwrap(), self.dim.key());
+        let mut state = self.entity_read_state.borrow_mut();
+        let pass = state.mob_relations.get_mut(&level).unwrap();
+        for source in mobs {
+            pass.index.update_mob_owner(source);
+        }
+    }
+
+    pub(super) fn record_ai_mob_owner(&self, source: &Mob) {
+        let Some(epoch) = self.native_lifecycle.epoch() else {
+            return;
+        };
+        let level = LevelRef::new(epoch, self.dim.key());
+        if let Some(pass) = self
+            .entity_read_state
+            .borrow_mut()
+            .mob_relations
+            .get_mut(&level)
+        {
+            pass.index.update_mob_owner(source);
+        }
+    }
+
+    pub(super) fn record_ai_mob_owner_id(&self, id: u32) {
+        let Some(epoch) = self.native_lifecycle.epoch() else {
+            return;
+        };
+        let level = LevelRef::new(epoch, self.dim.key());
+        let owner = self.read_mob_facts(id, level).and_then(|facts| facts.owner);
+        if let Some(pass) = self
+            .entity_read_state
+            .borrow_mut()
+            .mob_relations
+            .get_mut(&level)
+        {
+            pass.index.update_owner(id, owner);
+        }
+    }
+
     pub(super) fn current_admitted_saved_uuid(&self, id: u32) -> Option<[i32; 4]> {
         self.admitted_saved_uuid_at(id, self.dim.key())
             .map(|(_, _, uuid)| uuid)
@@ -239,7 +307,10 @@ impl Game<'_> {
 
     pub(super) fn current_mob_owner(&self, id: u32) -> Option<[i32; 4]> {
         let level = LevelRef::new(self.native_lifecycle.epoch()?, self.dim.key());
-        self.read_mob_facts(id, level)?.owner
+        self.with_prepared_mob_relations(|index| {
+            self.read_saved_uuid(id, level)?;
+            index.tame_owners.get(&id).copied()
+        })?
     }
 
     pub(super) fn admitted_profile_uuid(&self, id: u32, source: Source, uuid: [i32; 4]) -> bool {
@@ -316,6 +387,9 @@ impl Game<'_> {
             &mut index.identity_candidates,
             |id, uuid| {
                 index.saved_ids.insert(uuid, id);
+                if let Some(owner) = self.read_mob_facts(id, level).and_then(|facts| facts.owner) {
+                    index.tame_owners.insert(id, owner);
+                }
             },
         );
     }
@@ -389,12 +463,22 @@ impl Game<'_> {
         level: LevelRef,
         index: &NativeMobRelations,
     ) -> Option<&'a horizon_client::scoreboard::Team> {
-        let uuid = self.read_saved_uuid(facts.id, level)?;
+        self.read_mob_team_owner(facts.id, facts.owner, level, index)
+    }
+
+    fn read_mob_team_owner<'a>(
+        &'a self,
+        id: u32,
+        owner: Option<[i32; 4]>,
+        level: LevelRef,
+        index: &NativeMobRelations,
+    ) -> Option<&'a horizon_client::scoreboard::Team> {
+        let uuid = self.read_saved_uuid(id, level)?;
         let own = horizon_client::save::uuid_text(uuid);
         if let Some(team) = self.score.board.players_team(&own) {
             return Some(team);
         }
-        let mut root = facts.owner?;
+        let mut root = owner?;
         for _ in 0..64 {
             if let Some(name) = self.indexed_online_owner_name(root, index) {
                 return self.score.board.players_team(name);
@@ -403,8 +487,8 @@ impl Game<'_> {
                 .saved_ids
                 .get(&root)
                 .filter(|&&id| self.read_saved_uuid(id, level) == Some(root))
-                .and_then(|&id| self.read_mob_facts(id, level))
-                .and_then(|f| f.owner);
+                .and_then(|id| index.tame_owners.get(id))
+                .copied();
             match next {
                 Some(next) => root = next,
                 None => break,

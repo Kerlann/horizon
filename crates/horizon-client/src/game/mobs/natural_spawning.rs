@@ -167,6 +167,7 @@ impl SpawnScratch {
 }
 
 /// A player in the level in place, as spawning and despawning see it.
+#[derive(Clone, Copy)]
 pub(super) struct LevelPlayer {
     pub(super) uuid: u128,
     pub(super) position: Vec3,
@@ -176,6 +177,20 @@ pub(super) struct LevelPlayer {
     pub(super) spectator: bool,
 }
 impl LevelPlayer {
+    pub(super) fn guest(g: &horizon_client::lan::guest::Guest) -> Self {
+        Self {
+            uuid: g.uuid,
+            position: Vec3::new(g.position[0], g.position[1], g.position[2]),
+            bounds: super::lan_mobs::guest_bounds(g),
+            alive: !g.dead
+                && g.motion
+                    .as_ref()
+                    .map_or(g.health > 0.0, |p| p.health.health() > 0.0),
+            creative: g.creative(),
+            spectator: g.spectator(),
+        }
+    }
+
     fn distance_sqr(&self, x: f64, y: f64, z: f64) -> f64 {
         (self.position.x - x).powi(2)
             + (self.position.y - y).powi(2)
@@ -201,6 +216,7 @@ fn close_enough_for_spawning(p: &LevelPlayer, (cx, cz): (i32, i32)) -> bool {
 /// says a ticket holds it for natural spawning. How many there are.
 /// `EntityGetter.getNearestPlayer(x, y, z, -1, false)`: the nearest
 /// non-spectator, alive or not.
+#[cfg(test)]
 pub(super) fn nearest_player(
     players: &[LevelPlayer],
     x: f64,
@@ -221,43 +237,90 @@ pub(super) fn nearest_player(
 /// square they stand in, searched ring by ring outwards from the position.
 /// Every mob asks each tick, and with players spread over the map that was a
 /// look at every player for every mob.
-pub(super) struct NearestPlayers<'p> {
-    players: &'p [LevelPlayer],
-    cells: horizon_client::fast_hash::FxHashMap<(i64, i64), Vec<usize>>,
-    /// The cells' bounding box: (x0, z0, x1, z1).
+pub(super) struct NearestPlayers {
+    players: horizon_client::fast_hash::FxHashMap<u128, (LevelPlayer, u64)>,
+    order: std::collections::BTreeMap<u64, u128>,
+    cells: horizon_client::fast_hash::FxHashMap<
+        (i64, i64),
+        horizon_client::fast_hash::FxHashSet<u128>,
+    >,
+    far: horizon_client::fast_hash::FxHashSet<u128>,
     bounds: (i64, i64, i64, i64),
-    /// Few players, or one too far out for cells: every question scans.
+    next_order: u64,
+    active: usize,
     scan: bool,
 }
-impl<'p> NearestPlayers<'p> {
+impl NearestPlayers {
     const CELL: f64 = 64.0;
-    /// Further out than any world border: such positions are answered by a scan.
     const FAR: f64 = 1.0e9;
-    pub(super) fn new(players: &'p [LevelPlayer]) -> Self {
-        let mut cells = horizon_client::fast_hash::FxHashMap::<(i64, i64), Vec<usize>>::default();
-        let mut bounds = (i64::MAX, i64::MAX, i64::MIN, i64::MIN);
-        let mut scan = players.len() <= 8;
-        for (i, p) in players.iter().enumerate().filter(|(_, p)| !p.spectator) {
-            if !(p.position.x.abs() < Self::FAR && p.position.z.abs() < Self::FAR) {
-                // Past any world border (or not a number): scans answer.
-                scan = true;
-                break;
+    pub(super) fn new(players: &[LevelPlayer]) -> Self {
+        let mut index = Self {
+            players: Default::default(),
+            order: Default::default(),
+            cells: Default::default(),
+            far: Default::default(),
+            bounds: (i64::MAX, i64::MAX, i64::MIN, i64::MIN),
+            next_order: 0,
+            active: 0,
+            scan: true,
+        };
+        for player in players {
+            index.update(player.uuid, Some(*player));
+        }
+        index
+    }
+    fn player_cell(player: &LevelPlayer) -> Option<(i64, i64)> {
+        (!player.spectator
+            && player.position.x.abs() < Self::FAR
+            && player.position.z.abs() < Self::FAR)
+            .then(|| Self::cell(player.position.x, player.position.z))
+    }
+    /// Replace or remove one owned spatial projection, preserving vanilla list
+    /// order among ties. No source positions or other players are rebuilt.
+    pub(super) fn update(&mut self, uuid: u128, new: Option<LevelPlayer>) {
+        let old = self.players.remove(&uuid);
+        self.active -= usize::from(old.as_ref().is_some_and(|(p, _)| !p.spectator));
+        self.active += usize::from(new.as_ref().is_some_and(|p| !p.spectator));
+        let old_cell = old.as_ref().and_then(|(p, _)| Self::player_cell(p));
+        let new_cell = new.as_ref().and_then(Self::player_cell);
+        if old_cell != new_cell {
+            if let Some(cell) = old_cell
+                && let Some(ids) = self.cells.get_mut(&cell)
+            {
+                ids.remove(&uuid);
             }
-            let key = Self::cell(p.position.x, p.position.z);
-            cells.entry(key).or_default().push(i);
-            bounds = (
-                bounds.0.min(key.0),
-                bounds.1.min(key.1),
-                bounds.2.max(key.0),
-                bounds.3.max(key.1),
+            if let Some(cell) = new_cell {
+                self.cells.entry(cell).or_default().insert(uuid);
+                self.bounds = (
+                    self.bounds.0.min(cell.0),
+                    self.bounds.1.min(cell.1),
+                    self.bounds.2.max(cell.0),
+                    self.bounds.3.max(cell.1),
+                );
+            }
+        }
+        self.far.remove(&uuid);
+        if let Some(player) = new {
+            if !player.spectator && new_cell.is_none() {
+                self.far.insert(uuid);
+            }
+            let order = old.map_or_else(
+                || {
+                    let order = self.next_order;
+                    self.next_order = self
+                        .next_order
+                        .checked_add(1)
+                        .expect("player projection order exhausted");
+                    self.order.insert(order, uuid);
+                    order
+                },
+                |(_, order)| order,
             );
+            self.players.insert(uuid, (player, order));
+        } else if let Some((_, order)) = old {
+            self.order.remove(&order);
         }
-        Self {
-            players,
-            cells,
-            bounds,
-            scan,
-        }
+        self.scan = self.players.len() <= 8 || !self.far.is_empty();
     }
     fn cell(x: f64, z: f64) -> (i64, i64) {
         (
@@ -265,31 +328,48 @@ impl<'p> NearestPlayers<'p> {
             (z / Self::CELL).floor() as i64,
         )
     }
-    /// The same player [`nearest_player`] finds: the nearest, the first in
-    /// the list among equals.
-    pub(super) fn nearest(&self, x: f64, y: f64, z: f64) -> Option<&'p LevelPlayer> {
-        if self.scan || !(x.abs() < Self::FAR && z.abs() < Self::FAR) {
-            return nearest_player(self.players, x, y, z);
+    fn scanned(&self, x: f64, y: f64, z: f64) -> Option<&LevelPlayer> {
+        let mut best: Option<(&LevelPlayer, f64)> = None;
+        for uuid in self.order.values() {
+            let player = &self.players[uuid].0;
+            if player.spectator {
+                continue;
+            }
+            let d = player.distance_sqr(x, y, z);
+            if best.is_none_or(|(_, bd)| d < bd) {
+                best = Some((player, d));
+            }
         }
-        if self.cells.is_empty() {
+        best.map(|(p, _)| p)
+    }
+    pub(super) fn nearest(&self, x: f64, y: f64, z: f64) -> Option<&LevelPlayer> {
+        if self.scan || !(x.abs() < Self::FAR && z.abs() < Self::FAR) {
+            return self.scanned(x, y, z);
+        }
+        if self.active == 0 {
             return None;
         }
         let (qx, qz) = Self::cell(x, z);
         let (x0, z0, x1, z1) = self.bounds;
+        // No active non-spectators: the cell bounds have never been initialized.
+        if x0 == i64::MAX {
+            return None;
+        }
         let last = (qx - x0)
             .abs()
             .max((qx - x1).abs())
             .max((qz - z0).abs())
             .max((qz - z1).abs());
-        let mut best: Option<(usize, f64)> = None;
+        let mut best: Option<(u128, u64, f64)> = None;
         let mut looked = 0usize;
         for ring in 0..=last {
-            let mut look = |kx: i64, kz: i64| {
+            let mut look = |kx, kz| {
                 looked += 1;
-                for &i in self.cells.get(&(kx, kz)).into_iter().flatten() {
-                    let d = self.players[i].distance_sqr(x, y, z);
-                    if best.is_none_or(|(b, bd)| d < bd || d == bd && i < b) {
-                        best = Some((i, d));
+                for uuid in self.cells.get(&(kx, kz)).into_iter().flatten() {
+                    let (player, order) = &self.players[uuid];
+                    let d = player.distance_sqr(x, y, z);
+                    if best.is_none_or(|(_, bo, bd)| d < bd || d == bd && *order < bo) {
+                        best = Some((*uuid, *order, d));
                     }
                 }
             };
@@ -305,17 +385,15 @@ impl<'p> NearestPlayers<'p> {
                     look(qx + ring, qz + k);
                 }
             }
-            // Everyone in a further ring is more than `ring` cells away on one
-            // axis, so further than the one found.
             let bound = ring as f64 * Self::CELL;
-            if best.is_some_and(|(_, d)| d <= bound * bound) {
+            if best.is_some_and(|(_, _, d)| d <= bound * bound) {
                 break;
             }
             if looked > self.players.len() * 4 {
-                return nearest_player(self.players, x, y, z);
+                return self.scanned(x, y, z);
             }
         }
-        best.map(|(i, _)| &self.players[i])
+        best.map(|(uuid, _, _)| &self.players[&uuid].0)
     }
 }
 
@@ -1068,23 +1146,32 @@ impl<'a> Game<'a> {
     pub(super) fn level_players_iter(&self) -> impl Iterator<Item = LevelPlayer> + '_ {
         self.local_level_player()
             .into_iter()
-            .chain(self.level_guests().map(|g| LevelPlayer {
-                uuid: g.uuid,
-                position: Vec3::new(g.position[0], g.position[1], g.position[2]),
-                bounds: super::lan_mobs::guest_bounds(g),
-                alive: !g.dead,
-                creative: g.creative(),
-                spectator: g.spectator(),
-            }))
+            .chain(self.level_guests().map(LevelPlayer::guest))
     }
-    fn local_level_player(&self) -> Option<LevelPlayer> {
-        self.player_view().map(|p| LevelPlayer {
-            uuid: horizon_client::lan::playerdata::ints_uuid(p.uuid),
-            position: p.position,
-            bounds: p.bounds,
-            alive: p.alive,
-            creative: p.creative,
-            spectator: p.spectator,
+    pub(super) fn local_level_player(&self) -> Option<LevelPlayer> {
+        if self.lan_acting_fake {
+            return None;
+        }
+        let player = self.player.as_ref()?;
+        let half = f64::from(player.dimensions.width) / 2.0;
+        Some(LevelPlayer {
+            uuid: horizon_client::lan::playerdata::ints_uuid(self.acting_uuid()),
+            position: player.position,
+            bounds: Aabb::new(
+                Vec3::new(
+                    player.position.x - half,
+                    player.position.y,
+                    player.position.z - half,
+                ),
+                Vec3::new(
+                    player.position.x + half,
+                    player.position.y + f64::from(player.dimensions.height),
+                    player.position.z + half,
+                ),
+            ),
+            alive: !player.health.dead_or_dying(),
+            creative: self.creative || self.spectator(),
+            spectator: self.spectator(),
         })
     }
     /// The UUIDs of the players in level `dimension`, for a query that only
@@ -1109,7 +1196,7 @@ impl<'a> Game<'a> {
             .flat_map(|h| self.guests_placed_in(&h.hub.config.dimension))
     }
     /// The guests placed in level `dimension`, past the acting one.
-    fn guests_placed_in<'s>(
+    pub(super) fn guests_placed_in<'s>(
         &'s self,
         dimension: &'s str,
     ) -> impl Iterator<Item = &'s horizon_client::lan::guest::Guest> + 's {
@@ -1767,7 +1854,7 @@ mod tests {
     }
 
     /// Answers both spawn checks with one fixed result.
-    struct ChecksMod(SpawnCheck);
+    struct ChecksMod(NativeSpawnCheck);
     #[mod_api::__subscriptions]
     impl mod_api::Hooks for ChecksMod {
         fn mob_spawn_placement_check(

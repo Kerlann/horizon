@@ -792,6 +792,9 @@ impl Game<'_> {
             }
             self.persist.raw.insert(id, tag);
         }
+        if let Target::Mob(id) = t {
+            self.record_ai_mob_owner_id(id);
+        }
         Ok(())
     }
     /// The block entity part of `BlockInput.place`: load the block entity
