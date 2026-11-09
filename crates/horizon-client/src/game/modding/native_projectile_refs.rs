@@ -74,7 +74,7 @@ impl Game<'_> {
 
     /// `Projectile.getOwner`: the owner as a resolved entity. None for no
     /// owner, one that is gone or in another level, or a stale handle.
-    pub(super) fn projectile_owner(&self, projectile: ProjectileRef) -> Option<EntityRef> {
+    pub(super) fn uncached_projectile_owner(&self, projectile: ProjectileRef) -> Option<EntityRef> {
         let target = match self.native_projectile_backing(projectile)? {
             Backing::List(i) => {
                 let uuid = self.creatures.projectiles[i].owner_uuid?;
@@ -249,7 +249,10 @@ impl Game<'_> {
     }
 
     /// `AbstractArrow.pickup`, for an arrow or a mob's trident.
-    pub(super) fn projectile_pickup(&self, projectile: ProjectileRef) -> Option<NativeArrowPickup> {
+    pub(super) fn uncached_projectile_pickup(
+        &self,
+        projectile: ProjectileRef,
+    ) -> Option<NativeArrowPickup> {
         Some(
             match self.native_projectile(projectile)?.arrow.as_ref()?.pickup {
                 Pickup::Disallowed => NativeArrowPickup::Disallowed,
@@ -297,7 +300,7 @@ impl Game<'_> {
     }
 
     /// `AbstractArrow.getPierceLevel`: the signed byte stored by vanilla.
-    pub(super) fn projectile_pierce_level(
+    pub(super) fn uncached_projectile_pierce_level(
         &self,
         projectile: ProjectileRef,
     ) -> Result<i8, PierceLevelError> {
@@ -323,7 +326,7 @@ impl Game<'_> {
     }
 
     /// `AbstractArrow.getBaseDamage`, for an arrow (a trident's is fixed).
-    pub(super) fn projectile_base_damage(&self, projectile: ProjectileRef) -> Option<f64> {
+    pub(super) fn uncached_projectile_base_damage(&self, projectile: ProjectileRef) -> Option<f64> {
         match self.native_projectile(projectile)?.kind {
             ProjectileKind::Arrow { base_damage, .. } => Some(base_damage),
             _ => None,
@@ -353,7 +356,7 @@ impl Game<'_> {
     }
 
     /// `AbstractArrow.isCritArrow`, for an arrow.
-    pub(super) fn projectile_critical(&self, projectile: ProjectileRef) -> Option<bool> {
+    pub(super) fn uncached_projectile_critical(&self, projectile: ProjectileRef) -> Option<bool> {
         let p = self.native_projectile(projectile)?;
         matches!(p.kind, ProjectileKind::Arrow { .. }).then(|| p.critical())
     }
