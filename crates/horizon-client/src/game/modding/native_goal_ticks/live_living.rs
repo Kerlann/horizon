@@ -330,13 +330,6 @@ impl GoalCx<'_, '_> {
                 .mob_can_use_portal(self.live_living_mob(living)?),
         )
     }
-    pub(super) fn r_living_arrow_count(&self, living: LivingRef) -> Option<i32> {
-        Some(self.live_living_mob(living)?.extra.stuck.arrows)
-    }
-    pub(super) fn r_living_stinger_count(&self, living: LivingRef) -> Option<i32> {
-        Some(self.live_living_mob(living)?.extra.stuck.stingers)
-    }
-
     pub(super) fn r_living_item_use_remaining(&self, living: LivingRef) -> Option<i32> {
         self.w
             .goal_host?
