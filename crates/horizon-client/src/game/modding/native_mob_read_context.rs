@@ -346,7 +346,7 @@ impl Game<'_> {
 
     /// Canonical GuestList nominations plus only the explicit selected-body
     /// loan edges. Neither branch supplies identity proof or H data.
-    pub(super) fn mob_guest_rider_candidates(&self, vehicle: u32) -> Option<Vec<u32>> {
+    pub(super) fn mob_guest_rider_connections(&self, vehicle: u32) -> Option<Vec<u32>> {
         let mut candidates = self
             .lan
             .as_ref()
@@ -1031,7 +1031,7 @@ impl Game<'_> {
                 _ => return None,
             }
         };
-        let guest_candidates = self.mob_guest_rider_candidates(actor.id)?;
+        let guest_candidates = self.mob_guest_rider_connections(actor.id)?;
         self.with_mob_read_relations(level, |index| {
             self.read_relation_entity(actor.id, level, index)?;
             let mut seats = Vec::new();
