@@ -226,6 +226,7 @@ impl Game<'_> {
         let mut player_backing = self.player_view();
         let mut players = self.level_players();
         let mut nearest = super::super::natural_spawning::NearestPlayers::new(&players);
+        let mut backing_revision = self.entity_read_state.borrow().mob_backing;
         self.leash_boats = self
             .boats
             .iter()
@@ -281,6 +282,33 @@ impl Game<'_> {
                     }
                 }
             }
+            // Exactly one dirtiness check before reborrowing this actor's
+            // world. Mutation owners bump only the affected projection after
+            // real apply; unrelated callbacks reuse every owned index.
+            let revision = self.entity_read_state.borrow().mob_backing;
+            if revision.teams != backing_revision.teams {
+                teams = std::sync::Arc::new(self.mob_team_rules_for(&mobs));
+            }
+            if revision.players != backing_revision.players {
+                player_backing = self.player_view();
+                drop(nearest);
+                players = self.level_players();
+                nearest = super::super::natural_spawning::NearestPlayers::new(&players);
+                guests = self.lan_guest_views();
+                spare = guests.first().map(|g| g.1.clone());
+                guest_ids = self
+                    .lan
+                    .as_ref()
+                    .map(|host| {
+                        host.hub
+                            .guests
+                            .iter()
+                            .map(|g| (g.conn, g.entity_id as u32))
+                            .collect()
+                    })
+                    .unwrap_or_default();
+            }
+            backing_revision = revision;
             let mut post = None;
             let mut pause = None;
             {
@@ -854,6 +882,7 @@ impl Game<'_> {
                 let base = self.mob_world_reborrow(&[], None, teams.clone());
                 horizon_client::mobs::collision_changes(&base, &path_writes)
             };
+            backing_revision = self.entity_read_state.borrow().mob_backing;
             cached_difficulty = None;
             resuming = true;
         }
