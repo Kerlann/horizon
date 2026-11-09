@@ -3,6 +3,13 @@ use super::*;
 impl Game<'_> {
     /// Per tick, for every guest: dig, use items, pick up drops, die.
     pub(in crate::game) fn tick_guests(&mut self) {
+        building_cache(self.lan.as_ref());
+        self.tick_guests_inner();
+        building_cache(None);
+        self.pickup_columns = None;
+    }
+
+    fn tick_guests_inner(&mut self) {
         // `EntityEvent.Size` for the poses the guests' moves set since the last tick.
         self.native_guest_sizes();
         self.tick_guest_cameras();
@@ -38,6 +45,9 @@ impl Game<'_> {
             .filter(|g| host.hub.here(g) && g.loaded)
             .map(|g| g.conn)
             .collect();
+        // The players' pickups ask which columns items reach before
+        // scanning every item: most players stand on none.
+        self.pickup_columns = Some(Default::default());
         // The players the guests' hooks can catch.
         if host.play.values().any(|p| p.hook.is_some()) {
             self.refresh_hook_targets();
@@ -66,6 +76,9 @@ impl Game<'_> {
             };
             if host.hub.guests[gi].dead {
                 self.guest_tick_death(gi);
+                if let Some(host) = self.lan.as_ref() {
+                    refresh_building_player(host, conn);
+                }
                 self.guest_player_tick(
                     gi,
                     conn,
@@ -83,6 +96,9 @@ impl Game<'_> {
                 // has loaded around the player or not: its respawn request
                 // is taken as soon as it comes.
                 self.guest_die(gi, conn);
+                if let Some(host) = self.lan.as_ref() {
+                    refresh_building_player(host, conn);
+                }
                 self.guest_player_tick(
                     gi,
                     conn,
@@ -234,6 +250,9 @@ impl Game<'_> {
                 self.guest_orbs(gi);
             }
             self.guest_die(gi, conn);
+            if let Some(host) = self.lan.as_ref() {
+                refresh_building_player(host, conn);
+            }
             self.guest_player_tick(gi, conn, mod_api::HookId::PlayerTickPost, |game, player| {
                 game.native_player_tick_post(mod_api::__private::PlayerTickPostCall { player })
             });
@@ -706,7 +725,13 @@ impl Game<'_> {
                         .as_ref()
                         .and_then(|host| host.hub.guest(conn))
                         .map(|g| g.uuid);
-                    self.landing_block_updates(player, &event)
+                    // The rule's own game event goes out as the player whose
+                    // landing it was (`FarmlandBlock.turnToBaseBlock`'s change,
+                    // `TurtleEggBlock.decreaseEggs`' destroy): a sculk sensor, a
+                    // calibrated sensor and a warden hear it.
+                    if let Some(vibration) = self.landing_block_updates(player, &event) {
+                        self.as_guest(conn, |game| game.post_landing_vibration(vibration));
+                    }
                 }
                 // PowderSnowBlock.entityInside: every player around sees the
                 // snowflake (`ServerLevel.sendParticles`).
@@ -788,3 +813,7 @@ impl Game<'_> {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "tests/building_cache.rs"]
+mod building_cache_tests;

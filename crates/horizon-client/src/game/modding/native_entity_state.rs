@@ -755,6 +755,7 @@ mod tests {
             game.next_entity += 1;
             let falling = game.next_entity;
             game.falling.push(FallingBlock {
+                on_ground: false,
                 attachment_lifetime: Default::default(),
                 rotation: [0.0, 0.0],
                 join: Default::default(),

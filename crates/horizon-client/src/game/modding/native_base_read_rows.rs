@@ -56,6 +56,7 @@ pub(super) struct CompactEntityReadRow {
     pub(super) on_ground: bool,
     pub(super) bounding_box: [[f64; 3]; 2],
     pub(super) eye_height: f64,
+    pub(super) dimensions: [f64; 2],
     pub(super) is_multipart: Option<bool>,
     pub(super) parts: Option<BaseReadParts>,
     pub(super) head_yaw: Option<f32>,
@@ -97,9 +98,9 @@ impl CompactEntityReadRow {
         let view = horizon_world::view_direction::view_vector(pitch, yaw);
         let up = horizon_world::view_direction::view_vector(pitch - 90.0, yaw);
         EntityReadRow {
-            capture: capture,
-            entity: entity,
-            join_generation: join_generation,
+            capture,
+            entity,
+            join_generation,
             custom_name_visible: self.custom_name_visible,
             classification: self.classification,
             added_to_level: self.added_to_level,
@@ -123,10 +124,7 @@ impl CompactEntityReadRow {
             parts: self.parts.as_ref().map(BaseReadParts::materialize),
             head_yaw: self.head_yaw,
             direction: self.direction.map(str::to_owned),
-            dimensions: [
-                self.bounding_box[1][0] - self.bounding_box[0][0],
-                self.bounding_box[1][1] - self.bounding_box[0][1],
-            ],
+            dimensions: self.dimensions,
             no_physics: self.no_physics,
             leash_holder: self.leash_holder,
             sound_source: self.sound_source,
@@ -160,7 +158,7 @@ mod tests {
         let epoch = mod_api::NativeWorldEpoch::new(7);
         let raw = horizon_core::nbt::Tag::compound([(
             "CustomNameVisible",
-            horizon_core::nbt::Tag::Byte(1),
+            horizon_core::nbt::Tag::Byte(2),
         )]);
         let other = super::super::commands::OtherEntity {
             join: horizon_client::join_seq::JoinSeq::next(),
@@ -183,6 +181,7 @@ mod tests {
                 on_ground: false,
                 bounding_box: [[-0.6, 12.75, 2.5], [0.4, 14.75, 3.5]],
                 eye_height: 1.5,
+                dimensions: [1.0, 2.0],
             },
             BaseReadContext {
                 level: LevelRef::new(epoch, mod_api::DimensionKey::OVERWORLD),
@@ -271,9 +270,14 @@ pub(super) struct BaseReadGeometry {
     pub(super) on_ground: bool,
     pub(super) bounding_box: [[f64; 3]; 2],
     pub(super) eye_height: f64,
+    pub(super) dimensions: [f64; 2],
 }
 impl BaseReadGeometry {
-    pub(super) fn from_entity<E: super::entity::Entity>(e: &E, eye_height: f64) -> Self {
+    pub(super) fn from_entity<E: super::entity::Entity>(
+        e: &E,
+        eye_height: f64,
+        dimensions: [f64; 2],
+    ) -> Self {
         let p = e.position();
         let v = e.velocity();
         let b = e.bounds();
@@ -286,6 +290,7 @@ impl BaseReadGeometry {
             on_ground: e.on_ground(),
             bounding_box: [[lo.x, lo.y, lo.z], [hi.x, hi.y, hi.z]],
             eye_height,
+            dimensions,
         }
     }
 }
@@ -408,7 +413,10 @@ impl CompactEntityReadRow {
             Mob(m) => m.name_visible,
             Stand(s) => s.name_visible,
             Frame(_) | Item(_) | Painting(_) | Boat(_) | Cart(_) | Other(_) | Fangs(_)
-            | Cloud(_) => flag(2),
+            | Cloud(_) => saved
+                .and_then(|c| c.get(&KEYS[2]))
+                .and_then(horizon_client::nbt_path::int_value)
+                .is_some_and(|v| v as i8 != 0),
             _ => false,
         });
         let no_physics = match source {
@@ -451,18 +459,31 @@ impl CompactEntityReadRow {
             on_ground: geometry.on_ground,
             bounding_box: geometry.bounding_box,
             eye_height: geometry.eye_height,
+            dimensions: geometry.dimensions,
             is_multipart: Some(matches!(source, Dragon(_))),
             parts: if matches!(source, Dragon(_)) {
                 context.parts
             } else {
                 BaseReadParts::new(&[])
             },
-            head_yaw: Some(mob.map_or(context.head_yaw, |m| m.head_yaw)),
+            head_yaw: Some(match source {
+                Mob(m) => m.head_yaw,
+                Guest(g) => g.head_yaw,
+                Player(_) => context.head_yaw,
+                _ => 0.0,
+            }),
             direction: Some(direction),
             no_physics,
-            leash_holder: context.leash_holder,
+            leash_holder: match source {
+                Mob(_) | Boat(_) => context.leash_holder,
+                _ => None,
+            },
             sound_source,
-            spectator: Some(context.spectator),
+            spectator: Some(match source {
+                Guest(g) => g.game_mode == 3,
+                Player(_) => context.spectator,
+                _ => false,
+            }),
             is_shift_key_down: context
                 .client_shift
                 .or_else(|| Some(player.is_some_and(|p| p.shift_key_down))),
@@ -488,7 +509,10 @@ impl CompactEntityReadRow {
                     Item(i) => Some(i.fire_ticks),
                     _ => None,
                 }),
-            portal_cooldown: context.portal_cooldown,
+            portal_cooldown: match source {
+                Falling(f) => Some(f.portal.cooldown),
+                _ => context.portal_cooldown,
+            },
             air_supply: mob.map(|m| m.air).or_else(|| player.map(|p| p.air)),
             max_air_supply: Some(super::native_entity_state::max_air(
                 mob.map(|m| m.species()),
@@ -509,7 +533,8 @@ impl CompactEntityReadRow {
             is_invisible: match source {
                 Mob(m) => Some(m.is_invisible()),
                 Stand(s) => Some(s.invisible),
-                Player(_) | Guest(_) => context.invisible,
+                Player(_) => context.invisible,
+                Guest(g) => Some(g.effects.get("invisibility").is_some()),
                 _ => None,
             },
             pose,

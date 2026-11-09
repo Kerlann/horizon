@@ -52,6 +52,15 @@ impl Endpoint {
             match listener.accept() {
                 Ok((stream, _)) => {
                     peer(&stream)?;
+                    // A concurrent fork can keep the listening descriptor open
+                    // until exec. Remove its address before returning so even
+                    // that inherited listener cannot admit another connection.
+                    let directory = self.parent.open_dir_nofollow(
+                        self.path
+                            .file_name()
+                            .expect("bound endpoint has a directory name"),
+                    )?;
+                    directory.remove_file("control")?;
                     return Ok(stream);
                 }
                 Err(error) if error.kind() == io::ErrorKind::WouldBlock => pause(deadline)?,
@@ -155,6 +164,23 @@ fn foreign_peer_uid_is_refused_on_connect_and_accept() {
         assert!(matches!(result, Err(error) if error.kind() == io::ErrorKind::PermissionDenied));
     }
 }
+#[test]
+fn consumed_listener_refuses_connections_even_while_an_inherited_copy_is_open() {
+    let (_root, marker) = super::tests::marker();
+    let mut endpoint = Endpoint::bind(&marker).unwrap();
+    // A concurrent fork retains this reference until exec, even with CLOEXEC.
+    // Duplicate it explicitly so the regression never depends on scheduling.
+    let inherited = endpoint.listener.as_ref().unwrap().try_clone().unwrap();
+    let deadline = Instant::now() + std::time::Duration::from_secs(3);
+    let _client = connect(&marker, deadline).unwrap();
+    let _accepted = endpoint.accept(deadline).unwrap();
+    assert!(
+        UnixStream::connect(marker.directory.join("control")).is_err(),
+        "a consumed endpoint still accepts connections through an inherited listener"
+    );
+    drop(inherited);
+}
+
 impl Drop for Endpoint {
     fn drop(&mut self) {
         self.listener.take();

@@ -635,6 +635,8 @@ fn an_interact_packet_cannot_name_a_mob_the_pick_would_refuse() {
     assert!(named_mob_pickable(true, 17, Some(23), Some(29)));
 }
 
+#[path = "incoming_tests/pet_order.rs"]
+mod pet_order_tests;
 /// The packet's location is `EntityHitResult.getLocation() -
 /// entity.position()`, the point the view ray met the box at measured
 /// from the mob's feet (`MultiPlayerGameMode.interact`). The old fixed
@@ -682,6 +684,7 @@ fn a_mod_screen_on_a_machine_menu_takes_the_stock_layout_out() {
 fn a_falling_block_keeps_its_model_offset() {
     let at = Vec3::new(3.5, 70.25, -1.5);
     let falling = FallingBlock {
+        on_ground: false,
         attachment_lifetime: Default::default(),
         rotation: [0.0, 0.0],
         join: Default::default(),
@@ -1266,3 +1269,6 @@ fn eager_saves_wait_for_an_open_world_and_for_light() {
     assert!(dir.join("region/r.0.0.mca").exists());
     std::fs::remove_dir_all(dir).unwrap();
 }
+
+#[path = "incoming_tests/knot_command_view.rs"]
+mod knot_command_view_tests;

@@ -88,6 +88,8 @@ pub(super) enum Target {
     /// A cast fishing hook (`minecraft:fishing_bobber`), which lives with the
     /// player who cast it. Only a mod's handle names one.
     Hook(u32),
+    /// The fence knot a lead tie made, by entity id.
+    Knot(u32),
 }
 macro_rules! target_entity_mut {
     ($game:expr, $target:expr, $e:ident => $body:expr) => {{
@@ -142,6 +144,23 @@ horizon_client::impl_joined!(OtherEntity);
 
 pub(super) fn err(key: &str, args: &[&dyn std::fmt::Display]) -> CommandError {
     CommandError::tr(key, args)
+}
+/// A natural fence knot is only read by commands here: one that would move
+/// or remove it fails as a whole instead of skipping it, so it never
+/// reports a change it did not make (#13036).
+/// The targets a command that moves or kills entities acts on: a natural leash knot is
+/// listed for selectors and `/data` but not changed yet, so it is left out, as before it was
+/// listed. A selector that found only knots finds no entity.
+pub(in crate::game) fn without_knots(targets: Vec<Target>) -> R<Vec<Target>> {
+    let found = !targets.is_empty();
+    let kept: Vec<Target> = targets
+        .into_iter()
+        .filter(|t| !matches!(t, Target::Knot(_)))
+        .collect();
+    if found && kept.is_empty() {
+        return Err(err("argument.entity.notfound.entity", &[]));
+    }
+    Ok(kept)
 }
 /// `EntityType.getDescriptionId`: `entity.<namespace>.<path>`.
 fn entity_name_key(id: &str) -> String {
@@ -216,7 +235,8 @@ fn non_player_entity_id(t: Target) -> Option<i32> {
     | Target::Trident(id)
     | Target::Spawner(id)
     | Target::Cloud(id)
-    | Target::Hook(id)) = t
+    | Target::Hook(id)
+    | Target::Knot(id)) = t
     else {
         return None;
     };
@@ -665,6 +685,10 @@ impl Game<'_> {
                 .iter()
                 .find(|s| s.id == id)
                 .map(|s| s.position),
+            Target::Knot(id) => self.natural_knot(id).map(|fence| {
+                let p = horizon_client::mobs::leash::knot_state(fence).position;
+                [p.x, p.y, p.z]
+            }),
         }
     }
     pub(super) fn target_type(&self, t: Target) -> String {
@@ -721,6 +745,7 @@ impl Game<'_> {
             Target::Spawner(_) => "minecraft:ominous_item_spawner".into(),
             Target::Cloud(_) => "minecraft:area_effect_cloud".into(),
             Target::Hook(_) => "minecraft:fishing_bobber".into(),
+            Target::Knot(_) => "minecraft:leash_knot".into(),
         }
     }
     /// The name of the player the game acts for: a guest's own while their
@@ -883,6 +908,17 @@ impl Game<'_> {
             .map(|(t, _)| t)
             .collect()
     }
+    /// `type=`: every positive must match, no negative may match.
+    fn selector_types_match(&self, s: &Selector, ty: &str) -> bool {
+        s.types.iter().all(|(want, neg)| {
+            let matches = if let Some(tag) = want.strip_prefix('#') {
+                self.entity_tag_matches(tag, ty)
+            } else {
+                want == ty
+            };
+            matches != *neg
+        })
+    }
     /// The candidates of the level in place that pass the selector
     /// (EntitySelector.getPredicate).
     fn select_in_level(
@@ -893,22 +929,27 @@ impl Game<'_> {
     ) -> Vec<(Target, f64)> {
         let level = self.experience.level;
         let creative = self.creative;
+        // EntitySelector tests the type before any predicate. With no scores=
+        // or team= (whose holders may be made as they are read), the rest of
+        // the extra filter is a pure test of each candidate, so the ones of
+        // another type leave first: `@e[type=marker,tag=…]` no longer reads
+        // the tags of every falling block and item in the level.
+        let candidates = if !s.types.is_empty() && s.scores.is_empty() && s.teams.is_empty() {
+            candidates
+                .into_iter()
+                .filter(|&t| self.selector_types_match(s, &self.target_type(t)))
+                .collect()
+        } else {
+            candidates
+        };
         let passing = self.selector_extra_filter(&candidates, s);
         candidates
             .into_iter()
             .filter_map(|t| {
                 let p = self.target_position(t)?;
                 let ty = self.target_type(t);
-                // type=: every positive must match, no negative may match.
-                for (want, neg) in &s.types {
-                    let matches = if let Some(tag) = want.strip_prefix('#') {
-                        self.entity_tag_matches(tag, &ty)
-                    } else {
-                        *want == ty
-                    };
-                    if matches == *neg {
-                        return None;
-                    }
+                if !self.selector_types_match(s, &ty) {
+                    return None;
                 }
                 if !s.include_entities
                     && !t.is_player()
@@ -1051,6 +1092,7 @@ impl Game<'_> {
                 .filter(|c| c.id != 0)
                 .map(|c| Target::Cloud(c.id)),
         );
+        candidates.extend(self.natural_knot_ids().into_iter().map(Target::Knot));
         // `isRemoved` from a mod's call on, though the sweep has not taken it out.
         if !self.persist.removals.is_empty() {
             candidates.retain(|t| !self.persist.removals.contains(t));
@@ -1080,7 +1122,7 @@ impl Game<'_> {
             {
                 Some(value)
             }
-            _ => None,
+            _ => self.natural_knot(id).map(|_| Target::Knot(id)),
         }
     }
     /// `ServerLevel.getEntityOrPart` for a part: the `EnderDragonPart` of the
@@ -1125,6 +1167,7 @@ impl Game<'_> {
             Target::Spawner(id) => self.ominous_spawners.iter().any(|s| s.id == id),
             Target::Cloud(id) => self.breath_clouds.iter().any(|c| c.id == id),
             Target::Hook(id) => self.fishing_hook_by_id(id).is_some(),
+            Target::Knot(id) => self.natural_knot(id).is_some(),
         }
     }
     /// Run `f` with the level that holds the entity a target names in place
@@ -1981,7 +2024,11 @@ impl Game<'_> {
             }
             // Wall-mounted entities do not move; a hook follows its own tick and a
             // dragon part its dragon's.
-            Target::Frame(_) | Target::Painting(_) | Target::Hook(_) | Target::DragonPart(_) => {}
+            Target::Frame(_)
+            | Target::Painting(_)
+            | Target::Hook(_)
+            | Target::DragonPart(_)
+            | Target::Knot(_) => {}
         }
         // Entity.teleportSameDimension: the riders go with their vehicle at
         // once, by the offset it took and the turn it was given.
@@ -2143,7 +2190,7 @@ impl Game<'_> {
     }
     fn cmd_teleport(&mut self, id: &str, ctx: &Context) -> R<i32> {
         let targets = if id.starts_with("teleport.targets") {
-            self.entities(ctx, "targets", false)?
+            without_knots(self.entities(ctx, "targets", false)?)?
         } else {
             vec![
                 self.source_entity()
@@ -2620,6 +2667,7 @@ impl Game<'_> {
             Target::Spawner(id) => self.ominous_spawners.retain(|s| s.id != id),
             Target::Cloud(id) => self.breath_clouds.retain(|c| c.id != id),
             Target::Hook(id) => self.remove_fishing_hook(id),
+            Target::Knot(_) => {}
             // No command names a part, and `kill` on one would not stop its dragon.
             Target::DragonPart(_) => {}
         }
@@ -2632,7 +2680,7 @@ impl Game<'_> {
     }
     fn cmd_kill(&mut self, ctx: &Context) -> R<i32> {
         let targets = if ctx.get("targets").is_some() {
-            self.entities(ctx, "targets", false)?
+            without_knots(self.entities(ctx, "targets", false)?)?
         } else {
             vec![self.implied_player()]
         };
@@ -6618,3 +6666,7 @@ mod global_selector_order_tests {
         });
     }
 }
+
+#[cfg(test)]
+#[path = "incoming_tests/knot_identity.rs"]
+mod knot_identity_tests;

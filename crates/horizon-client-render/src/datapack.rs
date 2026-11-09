@@ -678,6 +678,8 @@ pub struct DataStore {
     pub predicates: BTreeMap<String, serde_json::Value>,
     /// `item_modifier` files, for `/item modify`.
     pub item_modifiers: BTreeMap<String, serde_json::Value>,
+    /// `slot_source` definitions, evaluated against a command's live accessor.
+    pub slot_sources: BTreeMap<String, serde_json::Value>,
     /// The content tables' raw files from the packs after the built-in one:
     /// Server JSON resources (recipes, loot, enchantments, songs, instruments,
     /// predicates, modifiers, advancements, registries, data maps and tags), by
@@ -757,6 +759,7 @@ impl DataStore {
                 "predicate",
                 "recipe",
                 "recipe_filter",
+                "slot_source",
                 "tags",
                 "trade_set",
                 "villager_trade",
@@ -805,6 +808,11 @@ impl DataStore {
                     && let Ok(v) = serde_json::from_slice(&bytes)
                 {
                     s.item_modifiers.insert(id, v);
+                } else if let Some(id) = resource_id(&f, "slot_source", ".json")
+                    && let Some(bytes) = pack.read(&f)
+                    && let Ok(v) = serde_json::from_slice(&bytes)
+                {
+                    s.slot_sources.insert(id, v);
                 }
             }
         }

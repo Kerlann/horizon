@@ -514,7 +514,9 @@ impl Game<'_> {
                     power,
                     interaction,
                     false,
-                    super::explosion::ExplosionSource::default().with_silence(silent),
+                    super::explosion::ExplosionSource::default()
+                        .with_silence(silent)
+                        .with_entity(id, "minecraft:tnt"),
                 )
             });
             self.combat.blast_owner = None;

@@ -22,6 +22,83 @@ use horizon_core::{
 };
 use std::{collections::HashMap, sync::Arc};
 
+/// Build the living-drops input at the loot-source boundary, before equipment pops.
+fn armor_stand_dying_drops<'a>(
+    stand: &ArmorStand,
+    mob_drops: bool,
+    dying: super::creatures::DyingDrops<'a>,
+    roll: impl FnOnce(&str) -> Vec<horizon_world::loot::LootStack>,
+) -> (super::creatures::DyingDrops<'a>, Vec<(ItemStack, [f64; 3])>) {
+    let stacks = if stand.small || !mob_drops {
+        Vec::new()
+    } else {
+        roll("minecraft:entities/armor_stand")
+            .iter()
+            .filter(|stack| !stack.is_empty())
+            .map(|stack| {
+                (
+                    super::creatures::from_loot(stack),
+                    [stand.position.x, stand.position.y, stand.position.z],
+                )
+            })
+            .collect()
+    };
+    (dying, stacks)
+}
+
+#[cfg(test)]
+mod death_loot_tests {
+    use super::*;
+
+    #[test]
+    fn loot_source_stacks_reach_dying_drops_and_obey_gates() {
+        for (small, mob_drops) in [(false, true), (true, true), (false, false), (true, false)] {
+            let mut stand = ArmorStand::new(42, Vec3::new(1.5, 64.0, -2.5), 0.0);
+            stand.small = small;
+            let dying = super::super::creatures::DyingDrops {
+                entity: stand.id,
+                kind: "minecraft:armor_stand",
+                player: None,
+                source: None,
+                recently_hit: false,
+            };
+            let mut called = false;
+            let (dying, stacks) = armor_stand_dying_drops(&stand, mob_drops, dying, |table| {
+                assert_eq!(table, "minecraft:entities/armor_stand");
+                called = true;
+                // A fake table source; no prepared vanilla resources or Game required.
+                let stack = horizon_world::loot::LootStack {
+                    item: "minecraft:stick".into(),
+                    count: 3,
+                    damage: 0,
+                    enchantments: Vec::new(),
+                    potion: None,
+                    map: false,
+                    exploration: None,
+                    ominous_amplifier: None,
+                    stew_effects: Vec::new(),
+                    names: Vec::new(),
+                    components: Vec::new(),
+                };
+                let mut empty = stack.clone();
+                empty.count = 0;
+                vec![stack, empty]
+            });
+            assert_eq!(dying.entity, 42);
+            assert_eq!(dying.kind, "minecraft:armor_stand");
+            assert_eq!(called, !small && mob_drops);
+            if !small && mob_drops {
+                assert_eq!(stacks.len(), 1);
+                assert_eq!(stacks[0].0.item.as_ref(), "minecraft:stick");
+                assert_eq!(stacks[0].0.count, 3);
+                assert_eq!(stacks[0].1, [1.5, 64.0, -2.5]);
+            } else {
+                assert!(stacks.is_empty());
+            }
+        }
+    }
+}
+
 /// Velocity `AbstractMinecart.push` adds: the cart, and a quarter on the stand.
 #[derive(Clone, Copy, Debug, PartialEq)]
 struct CartShove {
@@ -501,6 +578,8 @@ impl Game<'_> {
         // ArmorStandItem.useOn turns the stand to face the player.
         self.world.random.next_float();
         self.next_entity += 1;
+        let (_, uuid) = horizon_client::mobs::living_random();
+        self.persist.uuids.insert(stand.id, uuid);
         self.audio.play(
             "minecraft:entity.armor_stand.place",
             Some([foot.x, foot.y, foot.z]),
@@ -1211,44 +1290,10 @@ impl Game<'_> {
         }
         Ok(())
     }
-    /// Roll the stand's entity loot before dispatching `native_living_drops`.
-    /// The stand item and equipment pop outside this list, as in vanilla.
+    /// `ArmorStand.brokenByAnything` rolls the stand's entity loot table before
+    /// the equipment. The resulting list crosses the existing living-drops hook;
+    /// the stand item and equipment pop outside it, as in vanilla.
     fn armor_stand_death_drops(&mut self, stand: &ArmorStand, damage_type: &str, causing: u32) {
-        const TABLE: &str = "minecraft:entities/armor_stand";
-        let mut stacks = Vec::new();
-        if !stand.small
-            && self
-                .ui
-                .rules
-                .bool_at(horizon_client::gamerules::vanilla::MOB_DROPS)
-            && let Some(loot) = horizon_client::structure_blocks::loot_data(
-                &self.options.resources,
-                &self.pack_files(),
-                self.res.item_defaults(),
-            )
-            && loot.has_table(TABLE)
-        {
-            let params = horizon_world::loot::EntityLootParams {
-                this: horizon_world::loot::LootEntity {
-                    on_fire: stand.fire_ticks > 0,
-                    baby: false,
-                    ..horizon_world::loot::LootEntity::new("minecraft:armor_stand")
-                },
-                ..horizon_world::loot::EntityLootParams::default()
-            };
-            let rolled = match loot.random_sequence(TABLE) {
-                Some(id) => {
-                    loot.roll_entity(TABLE, self.rand_sequences.get(id, self.level.seed), &params)
-                }
-                None => loot.roll_entity(TABLE, &mut self.world.random, &params),
-            };
-            let at = [stand.position.x, stand.position.y, stand.position.z];
-            stacks = rolled
-                .iter()
-                .filter(|stack| !stack.is_empty())
-                .map(|stack| (super::creatures::from_loot(stack), at))
-                .collect();
-        }
         let source = (!mod_api::__private::mods().is_empty())
             .then(|| super::creatures::death_hurt_source(damage_type, causing));
         let dying = super::creatures::DyingDrops {
@@ -1258,6 +1303,41 @@ impl Game<'_> {
             source,
             recently_hit: false,
         };
+        let (dying, stacks) = armor_stand_dying_drops(
+            stand,
+            self.ui
+                .rules
+                .bool_at(horizon_client::gamerules::vanilla::MOB_DROPS),
+            dying,
+            |table| {
+                let Some(loot) = horizon_client::structure_blocks::loot_data(
+                    &self.options.resources,
+                    &self.pack_files(),
+                    self.res.item_defaults(),
+                ) else {
+                    return Vec::new();
+                };
+                if !loot.has_table(table) {
+                    return Vec::new();
+                }
+                let params = horizon_world::loot::EntityLootParams {
+                    this: horizon_world::loot::LootEntity {
+                        on_fire: stand.fire_ticks > 0,
+                        baby: false,
+                        ..horizon_world::loot::LootEntity::new("minecraft:armor_stand")
+                    },
+                    ..Default::default()
+                };
+                match loot.random_sequence(table) {
+                    Some(sequence) => loot.roll_entity(
+                        table,
+                        self.rand_sequences.get(sequence, self.level.seed),
+                        &params,
+                    ),
+                    None => loot.roll_entity(table, &mut self.world.random, &params),
+                }
+            },
+        );
         self.drop_death_items(&dying, stacks, 10, |_| None);
     }
     /// `ArmorStand.brokenByAnything`, then `kill`, as burning out or a blast
@@ -1687,13 +1767,10 @@ impl Game<'_> {
                 * glam::Mat4::from_translation(glam::Vec3::new(0.0, 1.0, 0.0))
                 * glam::Mat4::from_rotation_x(0.436_332_32)
                 * glam::Mat4::from_rotation_z(std::f32::consts::PI);
+        let glints = super::perspective::preview_glint_quads(&verts, gui, 0..0, self.glint_frame);
         let quads =
             super::perspective::player_preview_quads(verts, gui, None, &self.gui.atlas.sprites);
-        let start = batch.vertices.len();
-        for (_, p, uv, color) in quads {
-            batch.quad_3d(p, uv, color);
-        }
-        batch.depth_since(start, [x0, y0, x1, y1]);
+        super::perspective::emit_preview(batch, quads, glints, [x0, y0, x1, y1]);
     }
 }
 /// The stand's slot (`ArmorStand::SLOTS` order) for an item whose

@@ -872,6 +872,37 @@ impl Mob {
             });
         }
     }
+    /// `checkFallDamage` as the species has it: Strider's lava breaks any fall
+    /// (the fluid state waits for the next baseTick); Bat's and Bee's do nothing.
+    fn species_check_fall_damage(
+        &mut self,
+        w: &MobWorld,
+        level: &mut DamageLevel<'_>,
+        moved: Vec3,
+        events: &mut Vec<MobEvent>,
+    ) {
+        if self.kind.flags.lava_walker && self.fluids.in_lava {
+            self.fall_distance = 0.0;
+        } else if !matches!(self.kind.species, super::Species::Bat | super::Species::Bee) {
+            self.check_fall_damage(w, level, moved, events);
+        }
+    }
+    /// `handleMoveVehicle` for a mount its rider's client moves, after the move:
+    /// `setOnGroundWithMovement` with the client's ground (`checkSupportingBlock`),
+    /// then `doCheckFallDamage` with the client's move `delta`. The server's
+    /// `Entity.move` counted no fall: it isn't the mount's authority.
+    pub fn client_moved_fall(
+        &mut self,
+        w: &MobWorld,
+        level: &mut DamageLevel<'_>,
+        delta: Vec3,
+        on_ground: bool,
+        events: &mut Vec<MobEvent>,
+    ) {
+        self.on_ground = on_ground;
+        self.supporting = self.supporting_block(w, delta);
+        self.species_check_fall_damage(w, level, delta, events);
+    }
     /// LivingEntity.checkFallDamage: the fluid state refreshed out of water
     /// (touching water resets the fall), then Entity.checkFallDamage.
     fn check_fall_damage(
@@ -3568,5 +3599,56 @@ mod size_answer_tests {
             size: None,
         });
         assert_eq!(dims_array(cow.dims()), cow.vanilla_dims());
+    }
+}
+
+#[cfg(test)]
+mod farmland_event_tests {
+    use super::*;
+    #[test]
+    fn a_mob_trampling_farmland_posts_block_change_from_it() {
+        let ran = crate::mobs::world::with_built_test_world(
+            &[],
+            |world, registry| {
+                world.chunks.insert(
+                    (0, 0),
+                    std::sync::Arc::new(crate::chunk::Chunk::empty(0, 0)),
+                );
+                let state = registry.default_state("minecraft:farmland").unwrap();
+                world.set(0, 0, 0, state).unwrap();
+            },
+            |w, types| {
+                let dirt = w.registry.default_state("minecraft:dirt").unwrap();
+                let kind = std::sync::Arc::new(types.types["minecraft:zombie"].clone());
+                let mut mob = Mob::new(7, kind, Vec3::new(0.5, 1.0, 0.5), 0.0);
+                mob.fall_distance = 5.0;
+                let mut events = Vec::new();
+                let mut damage = crate::health::TestLevel::new(0);
+                mob.fall_on_block(w, &mut damage.level(), &mut events);
+                // The write, then the event the rule posts for it.
+                assert!(
+                    matches!(
+                        events.as_slice(),
+                        [
+                            MobEvent::SetBlock {
+                                pos: [0, 0, 0],
+                                state,
+                            },
+                            MobEvent::LandingGameEvent {
+                                event: "minecraft:block_change",
+                                at: [0, 0, 0],
+                                source: Some(7),
+                                state: affected,
+                            },
+                            ..
+                        ] if *state == dirt && *affected == dirt
+                    ),
+                    "{events:?}"
+                );
+            },
+        );
+        // Without the vanilla data under .local/horizon-client the world
+        // cannot be built: the test has nothing to check.
+        let _ = ran;
     }
 }
