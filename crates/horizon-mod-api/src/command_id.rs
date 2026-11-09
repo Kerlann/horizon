@@ -10,3 +10,14 @@ pub struct CommandId {
     /// Command sequence within that session.
     pub sequence: u64,
 }
+
+impl CommandId {
+    /// Query this command in the current issuing mod/package scope. Pending work
+    /// never expires. Terminal status agrees with `entity_command_completed` and
+    /// remains available through the end of the following logical engine tick.
+    /// Inaccessible ids are indistinguishable from unknown or expired ids.
+    pub fn query(self, host: &dyn Host) -> Result<EntityCommandStatus, CommandQueryError> {
+        crate::__private::backend_read(host, |backend| backend.entity_command_query(self))
+            .unwrap_or(Err(CommandQueryError::UnknownOrExpired))
+    }
+}

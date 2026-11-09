@@ -283,7 +283,8 @@ impl Game<'_> {
             .and_then(|who| self.read_mob_target(source, who, level, index));
         MobReadContext {
             target,
-            local_player_riding: self.riding == Some(source.id),
+            local_player_riding: level.dimension() == self.dim.key()
+                && self.riding == Some(source.id),
             guest_riding: index
                 .guest_riders
                 .get(&source.id)

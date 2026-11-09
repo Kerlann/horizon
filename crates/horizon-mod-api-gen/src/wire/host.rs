@@ -240,6 +240,12 @@ fn event_input(
 }
 fn fallback(types: &super::ty::Types<'_>, m: &Method) -> &'static str {
     match &m.ret {
+        Ty::Named(d) if types.defs[*d].rust.contains("::WriteReceipt<") => {
+            "mod_api::NoBackend::no_backend()"
+        }
+        Ty::Result(_, error) if matches!(&**error, Ty::Named(d) if types.defs[*d].rust.ends_with("::CommandQueryError")) => {
+            "Err(mod_api::NoBackend::no_backend())"
+        }
         Ty::Result(ok, _) if **ok == Ty::Unit => "Ok(())",
         Ty::Result(..) => "Err(call_refused())",
         Ty::Named(d) if types.defs[*d].rust.ends_with("::Flow") => "mod_api::Flow::Continue",
