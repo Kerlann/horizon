@@ -130,35 +130,43 @@ impl Game<'_> {
         self.position_riders();
     }
     fn sync_retained_riders(&mut self) {
-        let blocked = self.mobs_below_off_level();
-        let ids: Vec<_> = self.mob_objects().map(|m| m.id).collect();
+        let invalid: Vec<_> = self
+            .mob_objects()
+            .filter_map(|m| {
+                let v = m.extra.mount?;
+                let valid = !m.removed
+                    && (self.mob_object(v).is_some_and(|m| !m.removed)
+                        || self.boats.iter().any(|b| b.id == v)
+                        || self.carts.iter().any(|c| c.id == v)
+                        || self.cushions.iter().any(|c| c.id == v)
+                        || self.tnts.iter().any(|t| t.id == v && v != 0)
+                        || self.seat(v).is_some());
+                (!valid).then_some((m.id, v))
+            })
+            .collect();
+        for (id, vehicle) in invalid {
+            if self.mob_object(id).and_then(|m| m.extra.mount) != Some(vehicle) {
+                continue;
+            }
+            // Dismount supplies positioning, descendant snapping and the
+            // cancellable mount hook. Never overwrite its post-callback edge.
+            self.dismount_mob(id);
+        }
         let mut first: HashMap<u32, (i64, u32)> = HashMap::new();
-        for &id in &ids {
-            let m = self.mob_object(id).unwrap();
-            let Some(v) = m.extra.mount else { continue };
-            let valid = m.alive()
-                && !m.removed
-                && (self.mob_object(v).is_some_and(|m| m.alive() && !m.removed)
-                    || self.boats.iter().any(|b| b.id == v)
-                    || self.carts.iter().any(|c| c.id == v)
-                    || self.cushions.iter().any(|c| c.id == v)
-                    || self.tnts.iter().any(|t| t.id == v && v != 0)
-                    || self.seat(v).is_some());
-            if valid {
-                let place = (m.extra.vehicle_order, id);
+        for m in self.mob_objects() {
+            if let Some(v) = m.extra.mount {
+                let place = (m.extra.vehicle_order, m.id);
                 first
                     .entry(v)
                     .and_modify(|p| *p = (*p).min(place))
                     .or_insert(place);
-            } else {
-                let m = self.mob_object_mut(id).unwrap();
-                m.extra.mount = None;
-                m.extra.passenger = false;
             }
         }
+        let ids: Vec<_> = self.mob_objects().map(|m| m.id).collect();
         for id in ids {
             self.mob_object_mut(id).unwrap().extra.rider = first.get(&id).map(|&(_, id)| id);
         }
+        let blocked = self.mobs_below_off_level();
         for m in &mut self.mobs {
             if !blocked.contains(&m.id) && m.extra.boarding_cooldown > 0 {
                 m.extra.boarding_cooldown -= 1;
@@ -669,6 +677,107 @@ impl Game<'_> {
 mod off_level_tests {
     use super::*;
     use horizon_client::mobs::Mob;
+
+    struct CancelDismount;
+    #[mod_api::__subscriptions]
+    impl mod_api::Hooks for CancelDismount {
+        fn entity_mount(
+            &self,
+            _: &mut dyn mod_api::ServerHost,
+            event: &mut mod_api::EntityMountEvent<'_>,
+        ) -> mod_api::Flow {
+            assert!(!event.mounting);
+            mod_api::Flow::Cancel
+        }
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn invalid_retained_mount_uses_cancellable_dismount() {
+        for cancel in [false, true] {
+            let mods: mod_api::Mods = if cancel {
+                vec![mod_api::ModEntry::new(
+                    "cancel_dismount",
+                    Box::new(CancelDismount),
+                )]
+                .into()
+            } else {
+                Vec::new().into()
+            };
+            mod_api::testing::with_mods(mods, || {
+                crate::game::native_entity_refs::tests::with_game(|game| {
+                    game.options.dedicated = Some(Vec::new());
+                    let pig = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+                    let mut root = Mob::new(71, pig.clone(), Vec3::new(1.0, 200.0, 0.5), 0.0);
+                    root.removed = true;
+                    root.extra.rider = Some(72);
+                    let mut rider = Mob::new(72, pig.clone(), Vec3::new(1.0, 190.0, 0.5), 0.0);
+                    rider.extra.mount = Some(71);
+                    rider.extra.passenger = true;
+                    let mut child = Mob::new(73, pig, rider.position, 0.0);
+                    child.extra.mount = Some(72);
+                    child.age = 19;
+                    game.mobs.push(child);
+                    game.mobs.push(root);
+                    game.persist
+                        .off_level
+                        .insert(72, crate::game::persist::OffLevel::Mob(rider));
+                    game.sync_riders();
+                    let rider = game.mob_object(72).unwrap();
+                    if cancel {
+                        assert_eq!(rider.extra.mount, Some(71));
+                        assert!(rider.extra.passenger);
+                        assert_eq!(rider.position.y, 190.0);
+                        assert_eq!(game.mob_object(71).unwrap().extra.rider, Some(72));
+                        assert_eq!(game.mob_object(73).unwrap().position.y, 190.0);
+                    } else {
+                        assert_eq!(rider.extra.mount, None);
+                        assert!(!rider.extra.passenger);
+                        assert_eq!(
+                            rider.extra.boarding_cooldown,
+                            super::super::boat_passengers::BOARDING_COOLDOWN
+                        );
+                        assert!(rider.position.y > 200.0);
+                        assert_eq!(game.mob_object(71).unwrap().extra.rider, None);
+                        assert!(game.mob_object(73).unwrap().position.y > 200.0);
+                    }
+                    let child = game.mob_object(73).unwrap();
+                    assert_eq!(child.age, 19);
+                    assert_eq!(child.extra.mount, Some(72));
+                });
+            });
+        }
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn dying_objects_keep_passenger_links_until_removal() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            let pig = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+            let mut root = Mob::new(71, pig.clone(), Vec3::new(1.0, 200.0, 0.5), 0.0);
+            root.health = 0.0;
+            let mut parent = Mob::new(72, pig.clone(), root.position, 0.0);
+            parent.extra.mount = Some(71);
+            let mut child = Mob::new(73, pig, root.position, 0.0);
+            child.extra.mount = Some(72);
+            game.mobs.push(root);
+            game.mobs.push(child);
+            game.persist
+                .off_level
+                .insert(72, crate::game::persist::OffLevel::Mob(parent));
+            for dying_passenger in [false, true] {
+                if dying_passenger {
+                    game.mob_object_mut(72).unwrap().health = 0.0;
+                }
+                game.sync_riders();
+                assert_eq!(game.mob_object(72).unwrap().extra.mount, Some(71));
+                assert_eq!(game.mob_object(71).unwrap().extra.rider, Some(72));
+                assert_eq!(game.mob_object(73).unwrap().extra.mount, Some(72));
+                assert_eq!(game.mob_object(72).unwrap().extra.rider, Some(73));
+                assert_eq!(game.mob_object(73).unwrap().position.y, 200.0);
+            }
+        });
+    }
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
