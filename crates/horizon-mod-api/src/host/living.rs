@@ -20,6 +20,14 @@ pub trait LivingHost {
 #[horizon_mod_api_macros::host_area]
 pub trait LivingBackend {
     /// Side: both.
+    /// Materializes the cached row and its capture metadata, possibly stale.
+    /// Physical lifting does not hide an existing row. None means no available
+    /// row for this validated identity, never a live-read Lifted refusal.
+    /// Owned payloads are materialized on request, not cloned every capture pass.
+    #[access(WorldOnly)]
+    fn living_cached_row(&self, entity: LivingRef) -> Option<LivingReadRow>;
+
+    /// Side: both.
     /// The entity's instance of `effect` (`LivingEntity.getEffect`): its id
     /// namespaced as the registry has it, the ticks left (-1 infinite), the
     /// amplifier and the flags. The effect is a registration-slot key resolved at load.

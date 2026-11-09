@@ -15,6 +15,14 @@ pub trait DisplaysServerHost {
 #[doc(hidden)]
 #[horizon_mod_api_macros::host_area]
 pub trait DisplaysBackend {
+    /// Side: both.
+    /// Materializes the cached row and its capture metadata, possibly stale.
+    /// Physical lifting does not hide an existing row. None means no available
+    /// row for this validated identity, never a live-read Lifted refusal.
+    /// Owned payloads are materialized on request, not cloned every capture pass.
+    #[access(WorldOnly)]
+    fn display_cached_row(&self, entity: DisplayRef) -> Option<DisplayReadRow>;
+
     /// Side: server.
     /// Which `Display` subclass the entity is.
     #[access(WorldOnly)]
