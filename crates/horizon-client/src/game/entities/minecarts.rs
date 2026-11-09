@@ -2455,7 +2455,14 @@ impl Game<'_> {
     }
     /// Where the cart at `i` lets a player off.
     pub(super) fn cart_player_dismount_target(&self, i: usize) -> Vec3 {
-        let c = &self.carts[i];
+        self.cart_player_dismount_target_at(&self.world, &self.carts[i])
+    }
+
+    pub(super) fn cart_player_dismount_target_at(
+        &self,
+        world: &horizon_client::world::World,
+        c: &Minecart,
+    ) -> Vec3 {
         let (bx, by, bz) = (
             c.position.x.floor() as i32,
             c.position.y.floor() as i32,
@@ -2482,9 +2489,9 @@ impl Game<'_> {
         'search: for dy in [0, 1, -1] {
             for (dx, dz) in offsets {
                 let (x, y, z) = (bx + dx, by + dy, bz + dz);
-                let below = self.res.facts().get(self.world.block(x, y - 1, z));
-                let here = self.res.facts().get(self.world.block(x, y, z));
-                let head = self.res.facts().get(self.world.block(x, y + 1, z));
+                let below = self.res.facts().get(world.block(x, y - 1, z));
+                let here = self.res.facts().get(world.block(x, y, z));
+                let head = self.res.facts().get(world.block(x, y + 1, z));
                 if (below.full_collision || below.legacy_solid)
                     && !here.full_collision
                     && !head.full_collision
