@@ -41,35 +41,24 @@ impl Game<'_> {
 
     pub(super) fn read_item_entity_stack(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         item: ItemEntityRef,
     ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
         use super::{
             native_live_entity_reads::EntityReadSubject,
             native_read_dependencies::EntityReadDependency,
         };
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(read) = self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::ItemEntity(item),
             &[EntityReadDependency::ItemStack],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
+        ) else {
+            return Ok(None);
         };
-        Ok((|| {
-            let Target::Item(id) = target else {
-                return None;
-            };
-            self.dropped
-                .iter()
-                .find(|item| item.id == id)
-                .map(|item| item.stack.clone())
-        })())
+        self.with_live_entity_source(read?, provider, |source| match source.body {
+            super::native_base_read_rows::BaseReadSource::Item(item) => Some(item.stack.clone()),
+            _ => None,
+        })
+        .ok_or(mod_api::EntityReadError::Lifted)
     }
 
     /// Writes a nonempty complete stack using `ItemEntity.setItem`. Empty

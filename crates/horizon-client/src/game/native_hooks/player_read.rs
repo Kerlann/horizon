@@ -16,11 +16,11 @@ impl Game<'_> {
 
     pub(in crate::game) fn read_player_inventory(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         player: PlayerRef,
     ) -> Result<Option<Vec<ItemStack>>, mod_api::EntityReadError> {
         use crate::game::{
-            commands::Target, native_live_entity_reads::EntityReadSubject,
+            native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
             native_read_dependencies::EntityReadDependency,
         };
 
@@ -31,12 +31,13 @@ impl Game<'_> {
             Some(target) => target?,
             None => return Ok(None),
         };
-        Ok(match target {
-            Target::Player => Some(self.inventory.iter().flatten().cloned().collect()),
-            Target::Guest(conn) => self
-                .command_guest(conn)
-                .map(|guest| guest.inventory.iter().flatten().cloned().collect()),
+        self.with_live_entity_source(target, provider, |source| match source.body {
+            BaseReadSource::Player(_) => Some(self.inventory.iter().flatten().cloned().collect()),
+            BaseReadSource::Guest(guest) => {
+                Some(guest.inventory.iter().flatten().cloned().collect())
+            }
             _ => None,
         })
+        .ok_or(mod_api::EntityReadError::Lifted)
     }
 }
