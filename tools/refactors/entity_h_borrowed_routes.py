@@ -59,8 +59,21 @@ def arguments(text):
 
 def main():
     names = set()
-    for path in HOST.glob('*.rs'):
-        names.update(re.findall(r'\bfn\s+(\w+)\s*\([^;{}]*\)\s*->[^;{}]*\bEntityReadError\b[^;{}]*;', path.read_text()))
+    for path in HOST.rglob('*.rs'):
+        source = path.read_text()
+        for match in re.finditer(r'\bfn\s+(\w+)\s*\(', source):
+            depth, end = 0, match.start()
+            while True:
+                c = source[end]
+                if c in '([':
+                    depth += 1
+                elif c in ')]':
+                    depth -= 1
+                elif c in ';{' and depth == 0:
+                    break
+                end += 1
+            if re.search(r'\bEntityReadError\b', source[match.start():end]):
+                names.add(match[1])
     assert len(names) == 66, f'Expected the signed 66 H rows, got {len(names)}'
     files = {path: path.read_text() for path in GAME.glob('native*.rs')}
     edits = {}
