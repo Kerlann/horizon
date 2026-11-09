@@ -421,7 +421,7 @@ impl Game<'_> {
                 if let Some(k) = kind {
                     set_key(&mut tag, "id", Tag::String(k.as_str().into()));
                 }
-                let mut new = entity_nbt::mob_from_nbt(
+                let new = entity_nbt::mob_from_nbt(
                     &tag,
                     self.res.mob_types(),
                     id,
@@ -432,64 +432,7 @@ impl Game<'_> {
                 self.warn_missing_profession(&new);
                 let unresolved = new.extra.profession.index().is_none();
                 if let Some(slot) = self.mobs.iter_mut().find(|m| m.id == id) {
-                    // LivingEntity.readAdditionalSaveData only replaces a decoded
-                    // Brain. Keep the Allay's modeled LIKED_PLAYER when the
-                    // required root memory map cannot load; valid empty maps clear it.
-                    let keep_liked_player = slot.species() == horizon_client::mobs::Species::Allay
-                        && !matches!(
-                            tag.get("Brain").and_then(|brain| brain.get("memories")),
-                            Some(Tag::Compound(_))
-                        );
-                    // Runtime identity and lifetime stay on the resident owner.
-                    new.join = slot.join;
-                    new.random = slot.random.clone();
-                    let old = horizon_client::join_seq::store_back(slot, new);
-                    // Runtime-only state (AI, animation) carries over.
-                    if keep_liked_player {
-                        slot.extra.tame = old.extra.tame;
-                        slot.extra.owner = old.extra.owner;
-                        if let (Some(st), Some(was)) =
-                            (slot.extra.allay.as_mut(), old.extra.allay.as_ref())
-                        {
-                            st.liked_player_ttl = was.liked_player_ttl;
-                        }
-                    }
-                    // LivingEntity's damage cooldown and previous-hit amount
-                    // are runtime state. Entity's separate immunity window is
-                    // loaded from the saved `invulnerable_time` key above.
-                    slot.invulnerable = old.invulnerable;
-                    slot.last_hurt = old.last_hurt;
-                    // Entity.isInPowderSnow isn't saved data either: a skeleton in
-                    // powder snow stays afflicted through a merge.
-                    slot.in_powder_snow = old.in_powder_snow;
-                    // Entity.load updates saved data on the existing entity;
-                    // lastTradedPlayer is transient and survives a live NoAI edit.
-                    if slot.species() == horizon_client::mobs::Species::Villager {
-                        horizon_client::mobs::villager::ext_mut(slot).last_traded_player =
-                            horizon_client::mobs::villager::ext(&old)
-                                .and_then(|ext| ext.last_traded_player);
-                    }
-                    if slot.species() == horizon_client::mobs::Species::Shulker {
-                        horizon_client::mobs::shulker::keep_eased_peek(slot, &old);
-                    }
-                    slot.ai = old.ai;
-                    // Mob.readAdditionalSaveData updates persistent home fields,
-                    // while retaining the rest of the live AI/runtime state.
-                    entity_nbt::read_mob_home(slot, &tag);
-                    slot.extra.armor_attributes = old.extra.armor_attributes;
-                    // LivingEntity.lastEquipmentItems is runtime state Entity.load
-                    // keeps: the next tick swaps the archetype modifiers.
-                    slot.extra.adopted_body = old.extra.adopted_body;
-                    slot.age = old.age;
-                    slot.previous = slot.position;
-                    // Wolf.readAdditionalSaveData initializes persistent anger at
-                    // the live level clock, just as load_mob does on admission.
-                    if slot.species() == horizon_client::mobs::Species::Wolf {
-                        slot.extra.anger = horizon_client::mobs::anger_left(
-                            slot.extra.anger_end,
-                            self.world.game_time,
-                        );
-                    }
+                    Self::reload_mob_runtime(slot, new, &tag, self.world.game_time);
                 }
                 if unresolved {
                     self.close_opaque_merchant(id);
