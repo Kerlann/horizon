@@ -320,6 +320,7 @@ impl Game<'_> {
                         m.extra.passenger = true;
                         m.ai.nav.stop();
                         count += 1;
+                        self.record_ai_mob_owner_id(mob);
                         self.seat_mob(mob);
                         // Mob.startRiding drops its lead.
                         self.break_leash(mob, true, false);
@@ -506,6 +507,7 @@ impl Game<'_> {
             m.extra.boarding_cooldown = BOARDING_COOLDOWN;
             m.position = at;
             m.previous = at;
+            self.record_ai_mob_owner_id(self.mobs[j].id);
         }
     }
 }

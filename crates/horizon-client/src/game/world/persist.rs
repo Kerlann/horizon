@@ -1272,6 +1272,7 @@ impl Game<'_> {
         self.remember(id, uuid, tag);
         self.bind_saved_entity_attachments(id, &mut m.attachment_lifetime);
         self.mobs.push(m);
+        self.record_ai_mob_owner_id(id);
         if restore_target {
             self.native_restore_loaded_target(id, anger_uuid);
         }

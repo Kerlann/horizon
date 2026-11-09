@@ -1055,9 +1055,10 @@ impl Game<'_> {
         let transformed = self.mobs.iter().find(|m| m.id == id)?;
         let transformed_kind = from_kind.as_ref().map(|_| transformed.kind.id.clone());
         // Only move passengers once the new mob's join has succeeded.
-        for rider in self.mobs.iter_mut() {
-            if rider.extra.mount == Some(from.id) {
-                rider.extra.mount = Some(id);
+        for i in 0..self.mobs.len() {
+            if self.mobs[i].extra.mount == Some(from.id) {
+                self.mobs[i].extra.mount = Some(id);
+                self.record_ai_mob_owner(&self.mobs[i]);
             }
         }
         if let (Some(from_kind), Some(transformed_kind)) = (from_kind, transformed_kind) {

@@ -126,6 +126,9 @@ impl Game<'_> {
     /// Open before lifting an owner. The guard owns only the shared clock;
     /// no storage or Game borrow survives the call.
     pub(super) fn begin_resident_read_pass(&self, kind: Kind) -> Option<ReadScope> {
+        if self.is_logical_server() {
+            self.with_prepared_mob_relations(|_| ());
+        }
         if kind == Kind::Mob
             || !self.is_logical_server()
             || !mod_api::__private::entity_reads_listened()

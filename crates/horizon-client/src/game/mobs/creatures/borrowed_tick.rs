@@ -88,7 +88,11 @@ impl Game<'_> {
         &self,
     ) -> Option<horizon_client::join_seq::residency::read_pass::ReadScope> {
         use horizon_client::join_seq::residency::{Kind, Owner, read_pass::ReadScope};
-        if !mod_api::__private::entity_reads_listened() || !self.is_logical_server() {
+        if !self.is_logical_server() {
+            return None;
+        }
+        self.with_prepared_mob_relations(|_| ());
+        if !mod_api::__private::entity_reads_listened() {
             return None;
         }
         let tick = self.native_lifecycle.capture_tick()?;

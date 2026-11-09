@@ -624,6 +624,7 @@ impl Game<'_> {
             }
             Target::Mob(id) => {
                 horizon_client::mobs::riders::link(&mut self.mobs, id, vehicle_id);
+                self.record_ai_mob_owner_id(id);
                 self.seat_mob(id);
             }
             _ => return false,

@@ -133,6 +133,19 @@ impl Game<'_> {
         if self.native_lifecycle.epoch() != Some(level.epoch()) {
             return None;
         }
+        // While a guest acts, its row is not the owner of the selected body's
+        // vehicle. Snapshot that one canonical edge, never the displaced row.
+        if level.dimension() == self.dim.key()
+            && let Some(conn) = self.lan_acting
+            && let Some(pass) = self
+                .entity_read_state
+                .borrow_mut()
+                .mob_relations
+                .get_mut(&level)
+            && pass.tick == self.native_lifecycle.capture_tick()
+        {
+            pass.index.update_guest_vehicle(conn, self.riding);
+        }
         let state = self.entity_read_state.borrow();
         let pass = state.mob_relations.get(&level)?;
         if pass.tick != self.native_lifecycle.capture_tick() {
