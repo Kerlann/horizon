@@ -1,8 +1,52 @@
 use super::*;
+use horizon_client::join_seq::Joined as _;
 use crate::game::native_entity_refs::tests::with_game;
 use horizon_client::mobs::part_goals::GoalHost;
 use horizon_core::geometry::Vec3;
 use mod_api::prelude::PlayersHost;
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn admitted_roster_loan_retains_identity_without_publication_or_body_access() {
+    with_game(|game| {
+        game.options.dedicated = Some(Vec::new());
+        game.native_level_opened(game.dim);
+        game.reset_entity_residency();
+        let kind = game
+            .res
+            .mob_types()
+            .get("minecraft:zombie")
+            .unwrap()
+            .clone();
+        game.mobs.push(Mob::new(9001, kind, Vec3::ZERO, 0.0));
+        let entity = EntityRef::new(game.native_lifecycle.epoch().unwrap(), 9001);
+        assert_eq!(
+            game.with_entity_read_publication(entity, |_| Some(())),
+            None
+        );
+        let join = game.mobs[0].join_seq();
+        let actor = game.mobs.extract(join).unwrap();
+        assert_eq!(actor.id, entity.id());
+        assert!(matches!(
+            game.server_resident_entity(9001),
+            horizon_client::join_seq::residency::table::EntityLookup::Taken
+        ));
+        assert_eq!(game.entity(9001), Some(entity));
+        assert_eq!(
+            game.read_resident_identity(9001),
+            Some((entity, horizon_client::join_seq::residency::Kind::Mob))
+        );
+        assert_eq!(
+            game.with_entity_read_publication(entity, |_| Some(())),
+            None
+        );
+        assert_eq!(game.native_entity_target(entity), None);
+        game.mobs.put_back(0, actor);
+        assert_eq!(game.entity(9001), Some(entity));
+        game.mobs.remove(0);
+        assert_eq!(game.entity(9001), None);
+    });
+}
 
 struct OneMob<'a>(&'a Mob);
 impl mobs::LiveMobs for OneMob<'_> {

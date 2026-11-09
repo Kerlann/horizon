@@ -93,7 +93,11 @@ fn redirect_to_another_guest_switches_view_and_tags_subsequent_events() {
                         .server_entity_lookup(id, |at| game.locate_server_resident_owner(at)),
                     horizon_client::join_seq::residency::table::EntityLookup::Taken
                 ));
-                assert!(game.entity(id).is_some());
+                let entity = game.entity(id).unwrap();
+                assert_eq!(
+                    game.with_entity_read_publication(entity, |_| Some(())),
+                    None
+                );
             }
             let mut world = game.mob_world_base(&[]);
             world.goal_host = Some(game);
