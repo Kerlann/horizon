@@ -25,12 +25,22 @@ impl Game<'_> {
     /// The entity as the ender dragon, or None for another kind, a stale
     /// handle or a client.
     pub(super) fn dragon(&self, entity: EntityRef) -> Option<DragonRef> {
+        if self.is_logical_server()
+            && let Some(available) = self.with_entity_read_publication(entity, |row| {
+                Some(matches!(
+                    row.details,
+                    super::native_entity_read_cache::NativeReadDetails::Dragon { .. }
+                ))
+            })
+        {
+            return available.then(|| DragonRef::new(entity));
+        }
         self.native_dragon(entity)?;
         Some(DragonRef::new(entity))
     }
 
     /// `EnderDragonPhaseManager.getCurrentPhase`.
-    pub(super) fn dragon_phase(&self, dragon: DragonRef) -> Option<NativeDragonPhase> {
+    pub(super) fn uncached_dragon_phase(&self, dragon: DragonRef) -> Option<NativeDragonPhase> {
         Some(self.native_dragon(dragon.entity())?.native_phase())
     }
 
@@ -59,13 +69,13 @@ impl Game<'_> {
     /// `EnderDragonFight.aliveCrystals`: the crystals the last scan found
     /// (every 100 ticks). None for a stale handle, a client, or a dragon
     /// outside the End or whose fight is not loaded.
-    pub(super) fn dragon_alive_crystals(&self, dragon: DragonRef) -> Option<i32> {
+    pub(super) fn uncached_dragon_alive_crystals(&self, dragon: DragonRef) -> Option<i32> {
         Some(self.native_dragon_fight(dragon)?.alive_crystals)
     }
 
     /// `EnderDragonFight.hasPreviouslyKilledDragon`. None as
     /// `alive_crystals` is.
-    pub(super) fn dragon_previously_killed(&self, dragon: DragonRef) -> Option<bool> {
+    pub(super) fn uncached_dragon_previously_killed(&self, dragon: DragonRef) -> Option<bool> {
         Some(self.native_dragon_fight(dragon)?.previously_killed)
     }
 

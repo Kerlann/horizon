@@ -50,8 +50,12 @@ identity, not authority or proof of completion. These are cached, potentially st
 publications. Removal, physical lifting and retained output are separate states.
 
 `EntityReadError<E = core::convert::Infallible>` keeps one live-read refusal family:
-`Lifted` for a physically lifted foreign owner, or `Domain(E)` preserving the operation's
-typed error. Only the explicit nested callback actor is OWN. Cached scalar Option
+`Lifted` for a physically lifted foreign owner, `Domain(E)` preserving the operation's
+typed error, or `Pending(CommandId)` for a resident foreign owner with a pending heavy
+dependency relevant to this read. FIFO ordering may queue heavy writes even while the
+owner remains resident; this is Pending, never Lifted or a stale successful read. An
+unrelated pending light overlay does not make every heavy read Pending. Only the explicit
+nested callback actor is OWN; its live reads remain own reads. Cached scalar Option
 accessors do not gain this error. Native and wasm share the Wire form, and the default
 uninhabited Infallible domain always refuses decoding. This schema foundation does not
 implement the deferred heavy-read or queued-write routing.
@@ -70,6 +74,38 @@ malus is a finite `Vec<(PathType, f32)>` table; can-eat stores `[bool; 2]` index
 `always`. Ray tracing requires the engine builder's row-bounds/immutable-world proof and
 adds no LevelReadRow. Minecart payloads, player/session strings, passengers, block transforms,
 melee range, heavy payload reads and queued-write surfaces remain deferred.
+
+#### Write receipts and completion
+
+`WriteReceipt<R, E>` distinguishes `Applied(actual_result)`, `Pending(CommandId)`
+and `Refused(typed_error)`. Pending is acceptance only: it carries no invented
+boolean, changed count or delivery guarantee. Available validation runs before
+acceptance. `EntityWriteError<E>` keeps authority, epoch, generation, removal and
+work-limit refusals separate from the operation's original `Domain(E)` error.
+
+`CommandCompleted<R, E> { id, outcome: Result<R, E> }` is terminal: Pending cannot
+be represented in it. Each implemented queued domain supplies its concrete typed
+operation variant and the same result to the issuing mod's
+`entity_command_completed` event and `CommandId::query(&dyn Host)`. No placeholder
+operation or unsupported event/query route is introduced by these carrier types.
+The real route lands with its first converted operation, then grows by domain.
+
+Completion is published after authoritative apply/refusal and row refresh. Events
+are the primary path; terminal query results remain through the end of the following
+logical engine tick. Queries do not consume results. Pending records do not silently
+expire. `CommandQueryError::StaleEpoch` is distinct from `UnknownOrExpired`, which
+also covers commands inaccessible to the calling mod without disclosing another
+mod's work. Each converted domain must specify its transaction acceptance, commit
+and rollback rules before exposing queued writes inside a transaction.
+
+These declarations do not convert the deferred write methods by themselves. The
+18 RNG/veto/callback/lifecycle methods remain synchronous; 109 deterministic edits
+and 19 heavy-dependent edits require their actual ordered implementations. The
+heavy-dependent group has no speculative heavy payload overlay. Synchronous live
+operations preserve the typed refusal order after scope/identity validation: explicit
+OWN first, physically lifted foreign source as `Lifted`, resident foreign source with
+a relevant pending dependency as `Pending(CommandId)`, otherwise the live operation.
+An unrelated light overlay does not make every heavy operation Pending.
 
 #### Brain behaviors
 

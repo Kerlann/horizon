@@ -17,7 +17,10 @@ use mod_api::{GlobalPos, Identifier, PlayerRef};
 impl Game<'_> {
     /// The dimension and block of the player's last death
     /// (`Player.getLastDeathLocation`).
-    pub(super) fn player_last_death_location(&self, player: PlayerRef) -> Option<GlobalPos> {
+    pub(super) fn uncached_player_last_death_location(
+        &self,
+        player: PlayerRef,
+    ) -> Option<GlobalPos> {
         let (dimension, [x, y, z]) = self.native_player_last_death_record(player)?;
         let dimension = Identifier::parse(&dimension).ok()?;
         Some(GlobalPos::new(dimension, BlockPos::new(x, y, z)))

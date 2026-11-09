@@ -10,8 +10,13 @@ use std::{
     },
 };
 
+#[path = "residency/read_pass.rs"]
+pub mod read_pass;
 #[path = "residency/table.rs"]
 pub mod table;
+
+#[path = "residency/write_queue.rs"]
+pub mod write_queue;
 
 /// Authoritative entity storage families, excluding the dragon's eight parts.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -36,6 +41,7 @@ pub enum Kind {
     Spawner,
     Cloud,
     Cushion,
+    Knot,
 }
 
 /// The dimension and family owning a list or singleton.

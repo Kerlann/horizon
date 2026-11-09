@@ -140,7 +140,7 @@ impl Game<'_> {
     }
     /// Whether the entity's name shows over it at any distance
     /// (`Entity.isCustomNameVisible`); false for the kinds that keep no name.
-    pub(super) fn entity_custom_name_visible(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_custom_name_visible(&self, entity: EntityRef) -> Option<bool> {
         let t = self.native_entity_target(entity)?;
         let Some(id) = named_id(t) else {
             return Some(false);
@@ -179,7 +179,7 @@ impl Game<'_> {
     }
     /// The category of the entity's type (`EntityType.getCategory`): a mob's
     /// from its type, `Monster` for the dragon, `Misc` for every other kind.
-    pub(super) fn entity_classification(&self, entity: EntityRef) -> Option<MobCategory> {
+    pub(super) fn uncached_entity_classification(&self, entity: EntityRef) -> Option<MobCategory> {
         Some(match self.native_entity_target(entity)? {
             Target::Mob(id) => match self.mobs.iter().find(|m| m.id == id)?.category() {
                 "monster" => MobCategory::Monster,
@@ -200,24 +200,21 @@ impl Game<'_> {
     /// leaves or a mod removes it. Players, and the kinds that hook doesn't
     /// tell (displays, markers, interactions, evoker fangs, area effect
     /// clouds, ominous item spawners), are in it while the handle names them.
-    /// False for a stale handle or on a client.
-    pub(super) fn entity_added_to_level(&self, entity: EntityRef) -> bool {
-        match self.native_entity_target(entity) {
-            None => false,
-            Some(
-                Target::Player
-                | Target::Guest(_)
-                | Target::Other(_)
-                | Target::Fangs(_)
-                | Target::Cloud(_)
-                | Target::Spawner(_),
-            ) => true,
-            Some(_) => self
+    /// None for a stale handle or unknown client data.
+    pub(super) fn uncached_entity_added_to_level(&self, entity: EntityRef) -> Option<bool> {
+        Some(match self.native_entity_target(entity)? {
+            Target::Player
+            | Target::Guest(_)
+            | Target::Other(_)
+            | Target::Fangs(_)
+            | Target::Cloud(_)
+            | Target::Spawner(_) => true,
+            _ => self
                 .persist
                 .live
                 .binary_search_by_key(&entity.id(), |l| l.0)
                 .is_ok(),
-        }
+        })
     }
     /// The id of the entity a custom-name write changes, or None for a kind
     /// that keeps no name, a stale handle or on a client.
@@ -392,7 +389,7 @@ mod tests {
         use std::sync::{Arc, Mutex};
 
         /// Whether the joining entity was in its level while the hook ran.
-        struct Observer(Arc<Mutex<Vec<bool>>>);
+        struct Observer(Arc<Mutex<Vec<Option<bool>>>>);
         #[mod_api::__subscriptions]
         impl Hooks for Observer {
             fn entity_join_level(
@@ -418,13 +415,13 @@ mod tests {
                 game.next_entity += 1;
                 let id = game.next_entity;
                 let cow = push_mob(game, id, "minecraft:cow");
-                // In the lists, but not yet let in.
-                assert!(!cow.added_to_level(game));
+                // In the lists, but not yet let in: known false, not stale.
+                assert_eq!(cow.added_to_level(game), Some(false));
                 game.native_joins_flush(false, 0);
-                assert_eq!(*during.lock().unwrap(), [false]);
-                assert!(cow.added_to_level(game));
+                assert_eq!(*during.lock().unwrap(), [Some(false)]);
+                assert_eq!(cow.added_to_level(game), Some(true));
                 assert!(cow.discard(game));
-                assert!(!cow.added_to_level(game));
+                assert_eq!(cow.added_to_level(game), None);
             });
         });
     }

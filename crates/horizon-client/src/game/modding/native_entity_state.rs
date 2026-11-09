@@ -75,7 +75,7 @@ impl Game<'_> {
     /// `isSecondaryUseActive`: the local client's live semantic sneak state (not the
     /// physical key binding or last tick's crouching pose); the server's shift-key flag.
     /// False for non-player entities, None for a stale or unreachable handle.
-    pub(super) fn entity_is_shift_key_down(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_is_shift_key_down(&self, entity: EntityRef) -> Option<bool> {
         if !self.is_logical_server() {
             return Some(match self.native_client_entity_target(entity)? {
                 Target::Player => self.keys.held(horizon_client::actions::Action::Sneak),
@@ -89,13 +89,13 @@ impl Game<'_> {
     }
     /// Whether the entity crouches (`Entity.isCrouching`: the crouching
     /// pose).
-    pub(super) fn entity_is_crouching(&self, entity: EntityRef) -> Option<bool> {
-        Some(self.entity_pose(entity)? == "crouching")
+    pub(super) fn uncached_entity_is_crouching(&self, entity: EntityRef) -> Option<bool> {
+        Some(self.uncached_entity_pose(entity)? == "crouching")
     }
     /// Whether the entity sprints (`Entity.isSprinting`): a player, or a
     /// cat or ocelot dashing after its target (their shared sprinting flag);
     /// false for the other kinds.
-    pub(super) fn entity_is_sprinting(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_is_sprinting(&self, entity: EntityRef) -> Option<bool> {
         Some(match self.native_entity_body(entity)? {
             Body::Player(p) => p.sprinting,
             Body::Mob(m) => m.extra.sprinting,
@@ -104,7 +104,7 @@ impl Game<'_> {
     }
     /// Whether the entity touched water at its last fluid update
     /// (`Entity.isInWater`): players and mobs.
-    pub(super) fn entity_is_in_water(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_is_in_water(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.fluids.was_touching_water),
             Body::Mob(m) => Some(m.fluids.in_water),
@@ -112,7 +112,7 @@ impl Game<'_> {
         }
     }
     /// Whether the entity is in lava (`Entity.isInLava`): players and mobs.
-    pub(super) fn entity_is_in_lava(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_is_in_lava(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.is_in_lava()),
             Body::Mob(m) => Some(m.fluids.in_lava),
@@ -121,7 +121,7 @@ impl Game<'_> {
     }
     /// Whether the entity's type never burns (`EntityType.fireImmune`):
     /// players and mobs.
-    pub(super) fn entity_fire_immune(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_fire_immune(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Player(_) => Some(false),
             Body::Mob(m) => Some(horizon_client::mobs::spawn_rules::fire_immune(m.species())),
@@ -130,7 +130,7 @@ impl Game<'_> {
     }
     /// The ticks the entity burns for (`Entity.getRemainingFireTicks`):
     /// players, mobs, armor stands and items.
-    pub(super) fn entity_fire_ticks(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn uncached_entity_fire_ticks(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.fire_ticks),
             Body::Mob(m) => Some(m.fire_ticks),
@@ -146,7 +146,7 @@ impl Game<'_> {
     /// `Entity.getPortalCooldown`: a player's own portal state, the falling
     /// block's, a pearl's End gateway state, or the level's for the other
     /// kinds its portal walk carries (zero when it keeps no state for one).
-    pub(super) fn entity_portal_cooldown(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn uncached_entity_portal_cooldown(&self, entity: EntityRef) -> Option<i32> {
         let id = match self.native_entity_target(entity)? {
             // The acting guest's state is in place for its turn (`enter_guest`).
             Target::Player => return Some(self.portals.player.cooldown),
@@ -236,7 +236,7 @@ impl Game<'_> {
         self.entity_set_remaining_fire_ticks(entity, ticks.min(0))
     }
     /// The entity's air (`Entity.getAirSupply`): players and mobs.
-    pub(super) fn entity_air_supply(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn uncached_entity_air_supply(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.air),
             Body::Mob(m) => Some(m.air),
@@ -277,7 +277,7 @@ impl Game<'_> {
     }
     /// The most air the entity holds (`Entity.getMaxAirSupply`): 300, a
     /// dolphin's 4800, an axolotl's 6000.
-    pub(super) fn entity_max_air_supply(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn uncached_entity_max_air_supply(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_body(entity)? {
             Body::Mob(m) => Some(max_air(Some(m.species()))),
             _ => Some(max_air(None)),
@@ -285,7 +285,7 @@ impl Game<'_> {
     }
     /// Whether the mob makes no sounds (`Entity.isSilent`, its `Silent`
     /// tag); false for a player.
-    pub(super) fn entity_is_silent(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_is_silent(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Player(_) => Some(false),
             Body::Mob(m) => Some(m.silent),
@@ -309,7 +309,7 @@ impl Game<'_> {
     /// Whether the entity's model is hidden (`Entity.isInvisible`): the
     /// invisibility effect on a player or a mob, a mob's or an armor stand's
     /// flag.
-    pub(super) fn entity_is_invisible(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_is_invisible(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_target(entity)? {
             Target::Player => Some(self.potions.effects.get("invisibility").is_some()),
             Target::Guest(conn) => Some(
@@ -350,21 +350,21 @@ impl Game<'_> {
         }
     }
     /// Returns the mob's persistent glowing tag (`Entity.hasGlowingTag`).
-    pub(super) fn entity_glowing(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_glowing(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Mob(m) => Some(m.glowing),
             _ => None,
         }
     }
     /// Returns the mob's no-gravity flag (`Entity.isNoGravity`).
-    pub(super) fn entity_no_gravity(&self, entity: EntityRef) -> Option<bool> {
+    pub(super) fn uncached_entity_no_gravity(&self, entity: EntityRef) -> Option<bool> {
         match self.native_entity_body(entity)? {
             Body::Mob(m) => Some(m.no_gravity),
             _ => None,
         }
     }
     /// Returns the entity's frozen ticks (`Entity.getTicksFrozen`).
-    pub(super) fn entity_ticks_frozen(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn uncached_entity_ticks_frozen(&self, entity: EntityRef) -> Option<i32> {
         match self.native_entity_body(entity)? {
             Body::Player(p) => Some(p.ticks_frozen),
             Body::Mob(m) => Some(m.ticks_frozen),
@@ -373,7 +373,7 @@ impl Game<'_> {
     }
     /// Ticks the entity has lived (`Entity.tickCount`): mobs, item entities,
     /// experience orbs and minecarts. Wraps as vanilla's `int` does.
-    pub(super) fn entity_tick_count(&self, entity: EntityRef) -> Option<i32> {
+    pub(super) fn uncached_entity_tick_count(&self, entity: EntityRef) -> Option<i32> {
         Some(match self.native_entity_target(entity)? {
             Target::Mob(id) => self.mobs.iter().find(|m| m.id == id)?.age as i32,
             Target::Item(id) => self.dropped.iter().find(|i| i.id == id)?.ticks as i32,
@@ -426,7 +426,7 @@ impl Game<'_> {
     /// The entity's pose (`Entity.getPose`) as `Pose` names it: `standing`,
     /// `crouching`, `swimming`, `sleeping`, a warden's `roaring`... Kinds
     /// with no pose stand.
-    pub(super) fn entity_pose(&self, entity: EntityRef) -> Option<&'static str> {
+    pub(super) fn uncached_entity_pose(&self, entity: EntityRef) -> Option<&'static str> {
         Some(match self.native_entity_body(entity)? {
             Body::Player(p) => player_pose(p.pose),
             Body::Mob(m) => POSES.get(usize::from(sync::pose_id(m))).copied()?,

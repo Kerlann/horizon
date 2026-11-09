@@ -63,7 +63,7 @@ impl Game<'_> {
 
     /// `PathNavigation.isDone`; None for a stale or unavailable mob, or on a
     /// client, and for the dragon (no navigation).
-    pub(super) fn mob_is_done(&self, mob: MobRef) -> Option<bool> {
+    pub(super) fn uncached_mob_is_done(&self, mob: MobRef) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -74,7 +74,7 @@ impl Game<'_> {
     /// is followed at (1.0 is the mob's normal speed; 0 until a path sets
     /// one). This is not the mob's movement-speed attribute. None for a
     /// stale or unavailable mob, or on a client, and for the dragon.
-    pub(super) fn mob_navigation_speed(&self, mob: MobRef) -> Option<f64> {
+    pub(super) fn uncached_mob_navigation_speed(&self, mob: MobRef) -> Option<f64> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };
@@ -85,7 +85,11 @@ impl Game<'_> {
     /// pathfinder — its own override, else the kind's default (a negative
     /// malus closes the kind). None for a stale or unavailable mob, the
     /// dragon, or on a client.
-    pub(super) fn mob_pathfinding_malus(&self, mob: MobRef, kind: PathType) -> Option<f32> {
+    pub(super) fn uncached_mob_pathfinding_malus(
+        &self,
+        mob: MobRef,
+        kind: PathType,
+    ) -> Option<f32> {
         let Target::Mob(id) = self.native_entity_target(mob.entity())? else {
             return None;
         };

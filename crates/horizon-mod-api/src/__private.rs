@@ -33,6 +33,12 @@ pub fn install(mods: Mods) {
     crate::install(mods);
 }
 
+/// Conservative load-time interest in entity read publication, including custom
+/// point listeners. Constant-time and independent of runtime enable toggles.
+pub fn entity_reads_listened() -> bool {
+    crate::entity_reads_listened()
+}
+
 /// Whether an installed mod subscribes to `hook`.
 pub fn listened(hook: HookId) -> bool {
     crate::listened(hook)

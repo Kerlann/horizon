@@ -49,7 +49,7 @@ impl Game<'_> {
     /// counted from 0 again the tick after the glide ends. Players (including
     /// inactive guests) and mobs read their own stored body counter. None
     /// for an armor stand or the dragon.
-    pub(super) fn living_gliding_ticks(&self, living: LivingRef) -> Option<i32> {
+    pub(super) fn uncached_living_gliding_ticks(&self, living: LivingRef) -> Option<i32> {
         match self.native_living_read_target(living)? {
             Target::Player => Some(self.player.as_ref()?.fall_fly_ticks),
             Target::Guest(conn) => Some(
@@ -72,7 +72,7 @@ impl Game<'_> {
     /// Paper's `LivingEntity#isGliding`). The player in place and the guests
     /// answer from their fall-flying flag, a mob from its own. None for an
     /// armor stand or the dragon: the game keeps no glide for them.
-    pub(super) fn living_is_gliding(&self, living: LivingRef) -> Option<bool> {
+    pub(super) fn uncached_living_is_gliding(&self, living: LivingRef) -> Option<bool> {
         match self.native_living_read_target(living)? {
             Target::Player => Some(self.player.as_ref()?.fall_flying),
             Target::Guest(conn) => Some(self.command_guest(conn)?.fall_flying),
@@ -120,7 +120,7 @@ impl Game<'_> {
     /// player in place, a guest, or a villager or wandering trader asleep in
     /// its bed. Other mobs never sleep. None for an armor stand or the
     /// dragon.
-    pub(super) fn living_is_sleeping(&self, living: LivingRef) -> Option<bool> {
+    pub(super) fn uncached_living_is_sleeping(&self, living: LivingRef) -> Option<bool> {
         match self.native_living_read_target(living)? {
             Target::Player => Some(self.sleeping.is_some()),
             Target::Guest(conn) => Some(self.command_guest(conn)?.sleeping),
@@ -138,7 +138,7 @@ impl Game<'_> {
     /// as the block position it lies at. A guest keeps the bed it last slept
     /// in while it sleeps, a villager or wandering trader its own. None for
     /// an awake entity, another mob, an armor stand or the dragon.
-    pub(super) fn living_sleeping_pos(&self, living: LivingRef) -> Option<[i32; 3]> {
+    pub(super) fn uncached_living_sleeping_pos(&self, living: LivingRef) -> Option<[i32; 3]> {
         match self.native_living_read_target(living)? {
             Target::Player => self.sleeping,
             Target::Guest(conn) => {
@@ -282,7 +282,7 @@ impl Game<'_> {
     /// own jump state. The guests' jump is their client's, and a mob has no
     /// jump controller in the game's own AI, so both read false. None for
     /// an armor stand or the dragon.
-    pub(super) fn living_is_jumping(&self, living: LivingRef) -> Option<bool> {
+    pub(super) fn uncached_living_is_jumping(&self, living: LivingRef) -> Option<bool> {
         match self.native_living_read_target(living)? {
             Target::Player => Some(self.player.as_ref()?.jumping),
             Target::Guest(_) => Some(false),
@@ -312,7 +312,7 @@ impl Game<'_> {
     /// trapdoor above a ladder. A spectator never climbs; a gliding entity
     /// ignores blocks tagged to glide through, such as vines. None for an
     /// armor stand or the dragon.
-    pub(super) fn living_is_climbing(&self, living: LivingRef) -> Option<bool> {
+    pub(super) fn uncached_living_is_climbing(&self, living: LivingRef) -> Option<bool> {
         let target = self.native_living_read_target(living)?;
         let (position, spectator, gliding) = match target {
             Target::Player => {
@@ -355,7 +355,7 @@ impl Game<'_> {
     /// Whether the entity is a baby (`LivingEntity.isBaby`): a mob answers
     /// from its age, negative until it grows up. A player, an armor stand
     /// and the dragon are never babies.
-    pub(super) fn living_baby(&self, living: LivingRef) -> Option<bool> {
+    pub(super) fn uncached_living_baby(&self, living: LivingRef) -> Option<bool> {
         match self.native_living_read_target(living)? {
             Target::Mob(id) => Some(
                 self.mobs

@@ -14,6 +14,8 @@
 
 use super::commands::Target;
 use super::entity_residency::{define_resident_access, resident_owners};
+use super::native_base_read_source::parked_base_read_access;
+use super::native_resident_read_publication::resident_read_access;
 use super::{
     Dim, ExperienceOrb, FallingBlock, Game, ItemEntity, Mob, boats, commands,
     creaking::CreakingState, dragon, fireworks, lightning, machines, minecarts,
@@ -86,6 +88,7 @@ pub(super) struct Parked {
     pub(super) mobs: horizon_client::join_seq::JoinList<Mob>,
     /// The entity ids of the level's fence knots (`knot_ids`).
     knot_ids: HashMap<[i32; 3], u32>,
+    knots: horizon_client::join_seq::JoinList<super::leads::Knot>,
     projectiles: horizon_client::join_seq::JoinList<horizon_client::projectiles::Projectile, false>,
     dropped: horizon_client::join_seq::JoinList<ItemEntity>,
     orbs: horizon_client::join_seq::JoinList<ExperienceOrb>,
@@ -115,27 +118,64 @@ pub(super) struct Parked {
 }
 
 impl Parked {
+    pub(super) fn saved_entity_uuid(&self, id: u32) -> Option<[i32; 4]> {
+        self.persist.uuids.get(&id).copied()
+    }
+
+    pub(super) fn saved_entity_uuids(&self) -> impl Iterator<Item = (u32, [i32; 4])> + '_ {
+        self.persist.uuids.iter().map(|(&id, &uuid)| (id, uuid))
+    }
+
     resident_owners!(define_resident_access, self, projectiles);
+    resident_owners!(parked_base_read_access, self, projectiles);
+    resident_owners!(resident_read_access, self, projectiles);
 }
 
 impl Game<'_> {
+    /// Logical retirement is independent of physical lifting. Cached rows of
+    /// a lifted owner still observe removals made before a lifecycle callback.
+    pub(super) fn server_read_target_visible(
+        &self,
+        dimension: DimensionKey,
+        target: Target,
+    ) -> bool {
+        if dimension == self.dim.key() {
+            return !self.persist.removals.contains(&target);
+        }
+        let dim = match dimension {
+            DimensionKey::OVERWORLD => Dim::Overworld,
+            DimensionKey::NETHER => Dim::Nether,
+            DimensionKey::END => Dim::End,
+            key => Dim::Extra(key),
+        };
+        self.levels
+            .parked
+            .get(&dim)
+            .is_some_and(|parked| !parked.persist.removals.contains(&target))
+    }
+
     /// Resolve through the exact owner, never by trying dimension swaps.
+    pub(super) fn locate_server_resident_owner(
+        &self,
+        at: Location,
+    ) -> Option<SourceEntity<(Target, bool)>> {
+        if at.owner.dimension == self.dim.key() {
+            return self.locate_resident_owner(at);
+        }
+        let dim = match at.owner.dimension {
+            DimensionKey::OVERWORLD => Dim::Overworld,
+            DimensionKey::NETHER => Dim::Nether,
+            DimensionKey::END => Dim::End,
+            key => Dim::Extra(key),
+        };
+        self.levels.parked.get(&dim)?.locate_resident_owner(at)
+    }
+
     pub(super) fn server_resident_entity(&self, id: u32) -> EntityLookup<Target> {
         let found = self
             .entity_residency
             .borrow_mut()
-            .server_entity_lookup(id, |at| {
-                if at.owner.dimension == self.dim.key() {
-                    return self.locate_resident_owner(at);
-                }
-                let dim = match at.owner.dimension {
-                    DimensionKey::OVERWORLD => Dim::Overworld,
-                    DimensionKey::NETHER => Dim::Nether,
-                    DimensionKey::END => Dim::End,
-                    key => Dim::Extra(key),
-                };
-                self.levels.parked.get(&dim)?.locate_resident_owner(at)
-            });
+            .server_entity_lookup(id, |at| self.locate_server_resident_owner(at));
         match found {
             EntityLookup::Found {
                 location,
@@ -205,6 +245,7 @@ impl Game<'_> {
 
     /// A new epoch invalidates every old producer before rebinding retained levels.
     pub(super) fn reset_entity_residency(&mut self) {
+        self.entity_read_state.get_mut().reset();
         let table = self.entity_residency.get_mut();
         table.reset();
         let journal = table.producer();
@@ -470,6 +511,7 @@ impl Game<'_> {
             hoppers: HashMap::new(),
             mobs: Default::default(),
             knot_ids: HashMap::new(),
+            knots: Default::default(),
             projectiles: Default::default(),
             dropped: Default::default(),
             orbs: Default::default(),
@@ -619,6 +661,7 @@ impl Game<'_> {
         swap(&mut self.hoppers, &mut p.hoppers);
         swap(&mut self.mobs, &mut p.mobs);
         swap(&mut self.knot_ids, &mut p.knot_ids);
+        swap(&mut self.knots, &mut p.knots);
         swap(&mut self.creatures.projectiles, &mut p.projectiles);
         swap(&mut self.dropped, &mut p.dropped);
         swap(&mut self.orbs, &mut p.orbs);

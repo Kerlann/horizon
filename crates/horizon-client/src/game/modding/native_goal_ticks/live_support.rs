@@ -1,16 +1,11 @@
-//! Reads that combine a lent mob with authoritative game state.
-use super::{GoalCx, Resolved};
+//! Reads combining the explicit actor loan with authoritative game state.
+use super::GoalCx;
 use crate::mobs::Mob;
 use mod_api::EntityRef;
 
 impl GoalCx<'_, '_> {
     pub(super) fn r_entity_on_block(&self, entity: EntityRef) -> Option<[i32; 3]> {
-        let mob = match self.resolve(entity)? {
-            Resolved::Own if !self.m.removed => &*self.m,
-            Resolved::Live(mob) if !mob.removed => mob,
-            _ => return None,
-        };
-        Some(self.w.goal_host?.mob_on_block(mob))
+        Some(self.w.goal_host?.mob_on_block(self.entity_mob(entity)?))
     }
 
     pub(super) fn r_entity_entities_team_damage_allowed(
@@ -19,12 +14,10 @@ impl GoalCx<'_, '_> {
         source: EntityRef,
     ) -> Option<bool> {
         let mob = |handle| -> Option<Option<&Mob>> {
-            match self.resolve(handle) {
-                Some(Resolved::Own) if !self.m.removed => Some(Some(&*self.m)),
-                Some(Resolved::Live(mob)) if !mob.removed => Some(Some(mob)),
-                Some(Resolved::Seen(_) | Resolved::Own | Resolved::Live(_)) => None,
-                _ if self.is_game_entity(handle) => Some(None),
-                _ => None,
+            if self.is_own_entity(handle) {
+                Some(Some(&*self.m))
+            } else {
+                (self.host.entity(handle.id()) == Some(handle)).then_some(None)
             }
         };
         self.w.goal_host?.entities_team_damage_allowed(

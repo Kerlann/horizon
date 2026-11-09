@@ -3058,6 +3058,7 @@ struct Game<'a> {
     /// The entity ids a hosted server gives the knots its mobs hang on, by
     /// block, while a lead is tied there.
     knot_ids: HashMap<[i32; 3], u32>,
+    knots: horizon_client::join_seq::JoinList<leads::Knot>,
     text_display_vertices: usize,
     /// Player skin downloads, and which skin each atlas skin slot holds
     /// (least recently shown first).
@@ -3175,7 +3176,14 @@ struct Game<'a> {
     /// The native lifecycle bookkeeping.
     native_lifecycle: native_lifecycle::NativeLifecycle,
     /// Journal-fed residency across active and parked server dimensions.
-    entity_residency: Box<RefCell<horizon_client::join_seq::residency::table::EntityTable>>,
+    entity_residency: Box<
+        RefCell<
+            horizon_client::join_seq::residency::table::EntityTable<
+                native_entity_read_cache::NativeReadPublication,
+            >,
+        >,
+    >,
+    entity_read_state: Box<RefCell<native_entity_read_cache::NativeReadState>>,
     /// The mobs lent to the hook calls running now, before they join a level
     /// (game/modding/native_unspawned_mob.rs).
     lent_mobs: RefCell<native_unspawned_mob::LentMobs>,
@@ -16765,7 +16773,7 @@ impl<'a> Game<'a> {
             &gui.atlas.translucent,
         );
         let resource_source = pack.source.clone();
-        let game = Game {
+        let mut game = Game {
             structure_spawns: horizon_client::mobs::spawn_selection::StructureSpawns::load(
                 &options.resources,
             ),
@@ -17119,6 +17127,7 @@ impl<'a> Game<'a> {
             interactions: Default::default(),
             remote_knots: Default::default(),
             knot_ids: Default::default(),
+            knots: Default::default(),
             text_display_vertices: 0,
             skin_downloads: RefCell::new({
                 let mut downloads = horizon_client::skins::Downloader::new(
@@ -17206,6 +17215,7 @@ impl<'a> Game<'a> {
             entity_residency: Box::new(RefCell::new(
                 horizon_client::join_seq::residency::table::EntityTable::new(Default::default()),
             )),
+            entity_read_state: Default::default(),
             lent_mobs: Default::default(),
             held_out: Vec::with_capacity(4),
             native_configs: Default::default(),
@@ -17362,6 +17372,7 @@ impl<'a> Game<'a> {
             fangs: Default::default(),
             player_model: None,
         };
+        game.reset_entity_residency();
         Ok(game)
     }
 }

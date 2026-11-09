@@ -1122,7 +1122,7 @@ impl Game<'_> {
             {
                 Some(value)
             }
-            _ => None,
+            _ => self.natural_knot(id).map(|_| Target::Knot(id)),
         }
     }
     /// `ServerLevel.getEntityOrPart` for a part: the `EnderDragonPart` of the

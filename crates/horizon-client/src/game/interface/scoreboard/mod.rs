@@ -681,7 +681,6 @@ impl Game<'_> {
         if self.score.board.teams.is_empty() {
             return Default::default();
         }
-        // One pass over the mobs, not one per mob.
         let tame_owners: HashMap<u32, [i32; 4]> = self
             .mobs
             .iter()
@@ -696,6 +695,56 @@ impl Game<'_> {
                 .filter_map(|id| {
                     let owner = || tame_owners.get(id).copied();
                     Some((*id, self.team_with_owner(*id, owner)?))
+                })
+                .collect(),
+        }
+    }
+
+    /// Owned bounded AI backing, built once per segment, not once per actor.
+    pub(super) fn mob_team_rules(&self) -> horizon_client::mobs::TeamRulesSnapshot {
+        self.mob_team_rules_for(&self.mobs)
+    }
+
+    pub(super) fn mob_team_rules_for(
+        &self,
+        mobs: &[horizon_client::mobs::Mob],
+    ) -> horizon_client::mobs::TeamRulesSnapshot {
+        if self.score.board.teams.is_empty() {
+            return Default::default();
+        }
+        // One pass over the mobs, not one per mob.
+        let tame_owners: HashMap<u32, [i32; 4]> = mobs
+            .iter()
+            .filter_map(|m| Some((m.id, tame_owner(m)?)))
+            .collect();
+        // Bounded combat/collision facts survive mutable Game hook boundaries;
+        // full member sets, display components and strings stay authoritative here.
+        let shared: HashMap<_, _> = self
+            .score
+            .board
+            .teams
+            .iter()
+            .enumerate()
+            .map(|(identity, team)| {
+                (
+                    team.name.as_str(),
+                    horizon_client::scoreboard::TeamRules {
+                        identity,
+                        allow_friendly_fire: team.allow_friendly_fire,
+                        collision_rule: team.collision_rule,
+                    },
+                )
+            })
+            .collect();
+        horizon_client::mobs::TeamRulesSnapshot {
+            player: self.player_team().map(|team| shared[team.name.as_str()]),
+            mobs: self
+                .persist
+                .uuids
+                .keys()
+                .filter_map(|id| {
+                    let owner = || tame_owners.get(id).copied();
+                    Some((*id, shared[self.team_with_owner(*id, owner)?.name.as_str()]))
                 })
                 .collect(),
         }
