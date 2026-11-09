@@ -138,10 +138,11 @@ impl Game<'_> {
     /// selector as a `NativeMobGoalEntry` (the priority, the kind id and
     /// whether it runs), in registration order. None for a stale or
     /// unavailable mob, a client, and the dragon.
-    pub(super) fn mob_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>> {
-        let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
-            return None;
-        };
+    pub(super) fn mob_goals(&self, mob: MobRef) -> Result<Option<Vec<NativeMobGoalEntry>>, mod_api::EntityReadError> {
+use super::{native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
+let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::OrdinaryMob(mob), &[EntityReadDependency::Goals]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
+Ok((|| {
+        let Target::Mob(id)=target else {return None;};
         let m = self.mobs.iter().find(|m| m.id == id)?;
         Some(
             m.ai.goals
@@ -153,14 +154,16 @@ impl Game<'_> {
                 })
                 .collect(),
         )
-    }
+    })())
+}
 
     /// Every goal of the target selector, as `goals` reads the goal
     /// selector's.
-    pub(super) fn mob_target_goals(&self, mob: MobRef) -> Option<Vec<NativeMobGoalEntry>> {
-        let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
-            return None;
-        };
+    pub(super) fn mob_target_goals(&self, mob: MobRef) -> Result<Option<Vec<NativeMobGoalEntry>>, mod_api::EntityReadError> {
+use super::{native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
+let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::OrdinaryMob(mob), &[EntityReadDependency::TargetGoals]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
+Ok((|| {
+        let Target::Mob(id)=target else {return None;};
         let m = self.mobs.iter().find(|m| m.id == id)?;
         Some(
             m.ai.targets
@@ -172,7 +175,8 @@ impl Game<'_> {
                 })
                 .collect(),
         )
-    }
+    })())
+}
 
     /// One `removeGoal` pass over the mob's selector: the mob list comes
     /// out, as the mob tick takes it, so the goal's `stop` sees the world

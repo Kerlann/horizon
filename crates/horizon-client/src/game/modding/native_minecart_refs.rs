@@ -2,7 +2,8 @@
 use super::{
     Game,
     commands::Target,
-    minecarts::{CartKind, Minecart, display_offset},
+    minecarts::{CartKind, Minecart},
+    native_entity_body_provider::EntityBodyProvider,
     native_live_entity_reads::EntityReadSubject,
     native_read_dependencies::EntityReadDependency,
 };
@@ -15,13 +16,6 @@ impl Game<'_> {
             return None;
         };
         self.carts.iter().position(|c| c.id == id)
-    }
-
-    fn raw_minecart_source(&self, target: Target) -> Option<&Minecart> {
-        let Target::Cart(id) = target else {
-            return None;
-        };
-        self.carts.iter().find(|cart| cart.id == id)
     }
 
     /// Edits a cart, of one kind if `kind` is given. False for another kind
@@ -54,25 +48,22 @@ impl Game<'_> {
         &self,
         cart: MinecartRef,
     ) -> Result<Option<NativeMinecartKind>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        self.read_minecart_kind(None, cart)
+    }
+
+    pub(super) fn read_minecart_kind(
+        &self,
+        provider: Option<&dyn EntityBodyProvider>,
+        cart: MinecartRef,
+    ) -> Result<Option<NativeMinecartKind>, mod_api::EntityReadError> {
+        let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::MinecartKind],
         ) {
-            Some(target) => target?,
+            Some(read) => read?,
             None => return Ok(None),
         };
-        let Some(cart) = self.raw_minecart_source(target) else {
-            return Ok(None);
-        };
-        Ok(Some(match cart.kind {
-            CartKind::Rideable => NativeMinecartKind::Rideable,
-            CartKind::Chest => NativeMinecartKind::Chest,
-            CartKind::Furnace => NativeMinecartKind::Furnace,
-            CartKind::Tnt => NativeMinecartKind::Tnt,
-            CartKind::Hopper => NativeMinecartKind::Hopper,
-            CartKind::CommandBlock => NativeMinecartKind::CommandBlock,
-            CartKind::Spawner => NativeMinecartKind::Spawner,
-        }))
+        self.with_live_minecart_read(read, provider, |read| Some(read.minecart_kind()))
     }
 
     /// `AbstractMinecart.getMaxSpeed`, in blocks per tick: the old behaviour's
@@ -83,17 +74,22 @@ impl Game<'_> {
         &self,
         cart: MinecartRef,
     ) -> Result<Option<f64>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        self.read_minecart_max_speed(None, cart)
+    }
+
+    pub(super) fn read_minecart_max_speed(
+        &self,
+        provider: Option<&dyn EntityBodyProvider>,
+        cart: MinecartRef,
+    ) -> Result<Option<f64>, mod_api::EntityReadError> {
+        let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::MinecartSpeed],
         ) {
-            Some(target) => target?,
+            Some(read) => read?,
             None => return Ok(None),
         };
-        let Some(cart) = self.raw_minecart_source(target) else {
-            return Ok(None);
-        };
-        Ok(Some(self.cart_max_speed(cart)))
+        self.with_live_minecart_read(read, provider, |read| Some(read.minecart_max_speed()))
     }
 
     /// `AbstractMinecart.isOnRails`.
@@ -101,17 +97,22 @@ impl Game<'_> {
         &self,
         cart: MinecartRef,
     ) -> Result<Option<bool>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        self.read_minecart_is_on_rails(None, cart)
+    }
+
+    pub(super) fn read_minecart_is_on_rails(
+        &self,
+        provider: Option<&dyn EntityBodyProvider>,
+        cart: MinecartRef,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::MinecartRails],
         ) {
-            Some(target) => target?,
+            Some(read) => read?,
             None => return Ok(None),
         };
-        let Some(cart) = self.raw_minecart_source(target) else {
-            return Ok(None);
-        };
-        Ok(Some(cart.on_rails))
+        self.with_live_minecart_read(read, provider, |read| Some(read.minecart_is_on_rails()))
     }
 
     /// `AbstractMinecart.isFlipped`.
@@ -119,17 +120,22 @@ impl Game<'_> {
         &self,
         cart: MinecartRef,
     ) -> Result<Option<bool>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        self.read_minecart_flipped(None, cart)
+    }
+
+    pub(super) fn read_minecart_flipped(
+        &self,
+        provider: Option<&dyn EntityBodyProvider>,
+        cart: MinecartRef,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::MinecartFlipped],
         ) {
-            Some(target) => target?,
+            Some(read) => read?,
             None => return Ok(None),
         };
-        let Some(cart) = self.raw_minecart_source(target) else {
-            return Ok(None);
-        };
-        Ok(Some(cart.flipped))
+        self.with_live_minecart_read(read, provider, |read| Some(read.minecart_flipped()))
     }
 
     /// `AbstractMinecart.setFlipped`; saved as `FlippedRotation`, not synced.
@@ -142,17 +148,22 @@ impl Game<'_> {
         &self,
         cart: MinecartRef,
     ) -> Result<Option<f32>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        self.read_minecart_damage(None, cart)
+    }
+
+    pub(super) fn read_minecart_damage(
+        &self,
+        provider: Option<&dyn EntityBodyProvider>,
+        cart: MinecartRef,
+    ) -> Result<Option<f32>, mod_api::EntityReadError> {
+        let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::VehicleDamage],
         ) {
-            Some(target) => target?,
+            Some(read) => read?,
             None => return Ok(None),
         };
-        let Some(cart) = self.raw_minecart_source(target) else {
-            return Ok(None);
-        };
-        Ok(Some(cart.damage))
+        self.with_live_minecart_read(read, provider, |read| Some(read.minecart_damage()))
     }
 
     /// `VehicleEntity.setDamage`: synced to clients. The tick counts it down
@@ -166,17 +177,22 @@ impl Game<'_> {
         &self,
         cart: MinecartRef,
     ) -> Result<Option<i32>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        self.read_minecart_hurt_time(None, cart)
+    }
+
+    pub(super) fn read_minecart_hurt_time(
+        &self,
+        provider: Option<&dyn EntityBodyProvider>,
+        cart: MinecartRef,
+    ) -> Result<Option<i32>, mod_api::EntityReadError> {
+        let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::VehicleHurtTicks],
         ) {
-            Some(target) => target?,
+            Some(read) => read?,
             None => return Ok(None),
         };
-        let Some(cart) = self.raw_minecart_source(target) else {
-            return Ok(None);
-        };
-        Ok(Some(cart.hurt_time))
+        self.with_live_minecart_read(read, provider, |read| Some(read.minecart_hurt_time()))
     }
 
     /// `VehicleEntity.setHurtTime`: synced to clients.
@@ -190,21 +206,24 @@ impl Game<'_> {
         &self,
         cart: MinecartRef,
     ) -> Result<Option<Option<BlockStateId>>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        self.read_minecart_custom_display_block(None, cart)
+    }
+
+    pub(super) fn read_minecart_custom_display_block(
+        &self,
+        provider: Option<&dyn EntityBodyProvider>,
+        cart: MinecartRef,
+    ) -> Result<Option<Option<BlockStateId>>, mod_api::EntityReadError> {
+        let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::MinecartDisplay],
         ) {
-            Some(target) => target?,
+            Some(read) => read?,
             None => return Ok(None),
         };
-        let Some(cart) = self.raw_minecart_source(target) else {
-            return Ok(None);
-        };
-        Ok(Some(
-            cart.custom_display
-                .as_ref()
-                .and_then(|t| self.state_from_nbt(t)),
-        ))
+        self.with_live_minecart_read(read, provider, |read| {
+            Some(read.minecart_custom_display_block())
+        })
     }
 
     /// Sets the block the cart shows, or with None its kind's default again:
@@ -228,17 +247,22 @@ impl Game<'_> {
         &self,
         cart: MinecartRef,
     ) -> Result<Option<i32>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        self.read_minecart_display_offset(None, cart)
+    }
+
+    pub(super) fn read_minecart_display_offset(
+        &self,
+        provider: Option<&dyn EntityBodyProvider>,
+        cart: MinecartRef,
+    ) -> Result<Option<i32>, mod_api::EntityReadError> {
+        let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::MinecartDisplay],
         ) {
-            Some(target) => target?,
+            Some(read) => read?,
             None => return Ok(None),
         };
-        let Some(cart) = self.raw_minecart_source(target) else {
-            return Ok(None);
-        };
-        Ok(Some(display_offset(cart) as i32))
+        self.with_live_minecart_read(read, provider, |read| Some(read.minecart_display_offset()))
     }
 
     /// `AbstractMinecart.setDisplayOffset`, in sixteenths of a block: saved as
@@ -252,17 +276,22 @@ impl Game<'_> {
         &self,
         cart: MinecartRef,
     ) -> Result<Option<i32>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        self.read_minecart_fuel(None, cart)
+    }
+
+    pub(super) fn read_minecart_fuel(
+        &self,
+        provider: Option<&dyn EntityBodyProvider>,
+        cart: MinecartRef,
+    ) -> Result<Option<i32>, mod_api::EntityReadError> {
+        let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::FurnaceMinecart(cart),
             &[EntityReadDependency::MinecartFuel],
         ) {
-            Some(target) => target?,
+            Some(read) => read?,
             None => return Ok(None),
         };
-        let Some(cart) = self.raw_minecart_source(target) else {
-            return Ok(None);
-        };
-        Ok((cart.kind == CartKind::Furnace).then_some(cart.fuel))
+        self.with_live_minecart_read(read, provider, |read| Some(read.minecart_fuel()))
     }
 
     /// Sets a furnace minecart's fuel ticks, any int as vanilla's field holds
@@ -279,17 +308,22 @@ impl Game<'_> {
         &self,
         cart: MinecartRef,
     ) -> Result<Option<[f64; 3]>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        self.read_minecart_push(None, cart)
+    }
+
+    pub(super) fn read_minecart_push(
+        &self,
+        provider: Option<&dyn EntityBodyProvider>,
+        cart: MinecartRef,
+    ) -> Result<Option<[f64; 3]>, mod_api::EntityReadError> {
+        let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::FurnaceMinecart(cart),
             &[EntityReadDependency::MinecartPush],
         ) {
-            Some(target) => target?,
+            Some(read) => read?,
             None => return Ok(None),
         };
-        let Some(cart) = self.raw_minecart_source(target) else {
-            return Ok(None);
-        };
-        Ok((cart.kind == CartKind::Furnace).then_some([cart.push.x, cart.push.y, cart.push.z]))
+        self.with_live_minecart_read(read, provider, |read| Some(read.minecart_push()))
     }
 
     /// Sets a furnace minecart's push, as a player's click with fuel sets it toward them
@@ -311,17 +345,22 @@ impl Game<'_> {
         &self,
         cart: MinecartRef,
     ) -> Result<Option<i32>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        self.read_minecart_fuse(None, cart)
+    }
+
+    pub(super) fn read_minecart_fuse(
+        &self,
+        provider: Option<&dyn EntityBodyProvider>,
+        cart: MinecartRef,
+    ) -> Result<Option<i32>, mod_api::EntityReadError> {
+        let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::TntMinecart(cart),
             &[EntityReadDependency::MinecartFuse],
         ) {
-            Some(target) => target?,
+            Some(read) => read?,
             None => return Ok(None),
         };
-        let Some(cart) = self.raw_minecart_source(target) else {
-            return Ok(None);
-        };
-        Ok((cart.kind == CartKind::Tnt).then_some(cart.fuse))
+        self.with_live_minecart_read(read, provider, |read| Some(read.minecart_fuse()))
     }
 
     /// `MinecartTNT.primeFuse(null)`: an 80 tick fuse, the primed sound and
@@ -349,17 +388,22 @@ impl Game<'_> {
         &self,
         cart: MinecartRef,
     ) -> Result<Option<bool>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        self.read_minecart_hopper_enabled(None, cart)
+    }
+
+    pub(super) fn read_minecart_hopper_enabled(
+        &self,
+        provider: Option<&dyn EntityBodyProvider>,
+        cart: MinecartRef,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::HopperMinecart(cart),
             &[EntityReadDependency::MinecartHopper],
         ) {
-            Some(target) => target?,
+            Some(read) => read?,
             None => return Ok(None),
         };
-        let Some(cart) = self.raw_minecart_source(target) else {
-            return Ok(None);
-        };
-        Ok((cart.kind == CartKind::Hopper).then_some(cart.enabled))
+        self.with_live_minecart_read(read, provider, |read| Some(read.minecart_hopper_enabled()))
     }
 
     /// `MinecartHopper.setEnabled`: saved as `Enabled`, not synced.
@@ -373,17 +417,22 @@ impl Game<'_> {
         &self,
         cart: MinecartRef,
     ) -> Result<Option<String>, mod_api::EntityReadError> {
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        self.read_minecart_command(None, cart)
+    }
+
+    pub(super) fn read_minecart_command(
+        &self,
+        provider: Option<&dyn EntityBodyProvider>,
+        cart: MinecartRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
+        let read = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::CommandMinecart(cart),
             &[EntityReadDependency::MinecartCommand],
         ) {
-            Some(target) => target?,
+            Some(read) => read?,
             None => return Ok(None),
         };
-        let Some(cart) = self.raw_minecart_source(target) else {
-            return Ok(None);
-        };
-        Ok((cart.kind == CartKind::CommandBlock).then(|| cart.command.command.clone()))
+        self.with_live_minecart_read(read, provider, |read| Some(read.minecart_command()))
     }
 
     /// Sets a command block minecart's command (`BaseCommandBlock.setCommand`, which resets the

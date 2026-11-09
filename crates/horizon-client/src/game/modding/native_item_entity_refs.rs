@@ -32,14 +32,11 @@ impl Game<'_> {
     }
 
     /// `ItemEntity.getItem`: the complete stack, or None if unavailable.
-    pub(super) fn item_entity_stack(&self, item: ItemEntityRef) -> Option<ItemStack> {
-        Some(
-            self.dropped
-                .get(self.native_item_entity_index(item)?)?
-                .stack
-                .clone(),
-        )
-    }
+    pub(super) fn item_entity_stack(&self, item: ItemEntityRef) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+use super::{native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
+let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::ItemEntity(item), &[EntityReadDependency::ItemStack]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
+Ok((|| {let Target::Item(id)=target else {return None}; self.dropped.iter().find(|item|item.id==id).map(|item|item.stack.clone())})())
+}
 
     /// Writes a nonempty complete stack using `ItemEntity.setItem`. Empty
     /// stacks are refused: vanilla discards the item on its next tick. To

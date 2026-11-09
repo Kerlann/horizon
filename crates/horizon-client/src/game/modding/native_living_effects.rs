@@ -8,8 +8,11 @@
 //! keep no effects, as `/effect` skips them. `effect` and `effects` also read
 //! on a client, for the local player, from the effects the server sent it, and
 //! `effect_blend_factor` reads only there, from the fades the client ticks.
-use super::Game;
 use super::commands::Target;
+use super::{
+    Game, native_live_entity_reads::EntityReadSubject,
+    native_read_dependencies::EntityReadDependency,
+};
 use horizon_client::effects::{EffectInstance, PlayerEffects};
 use horizon_client::mobs::Mob;
 use horizon_items::items::ItemStack;
@@ -154,10 +157,20 @@ impl Game<'_> {
         &self,
         living: LivingRef,
         effect: EffectKey,
-    ) -> Option<NativeActiveEffect> {
-        let def = mod_api::__private::effect_index(effect)
-            .and_then(horizon_client_core::potions::effect_by_index)?;
-        match self.native_living_read_target(living)? {
+    ) -> Result<Option<NativeActiveEffect>, mod_api::EntityReadError> {
+        let Some(def) = mod_api::__private::effect_index(effect)
+            .and_then(horizon_client_core::potions::effect_by_index)
+        else {
+            return Ok(None);
+        };
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::MobOrPlayer(living),
+            &[EntityReadDependency::Effects],
+        ) {
+            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
+            None => return Ok(None),
+        };
+        Ok((|| match target {
             t @ (Target::Player | Target::Guest(_)) => self
                 .native_living_player_effects(t)?
                 .get_registered(def.index)
@@ -172,14 +185,24 @@ impl Game<'_> {
                 Some(mob_effect(m, e))
             }
             _ => None,
-        }
+        })())
     }
 
     /// The entity's active effects (`LivingEntity.getActiveEffects`), in the
     /// order their store keeps them, in `Some` even when it has none. None
     /// for an armor stand, the dragon, a stale handle or a client.
-    pub(super) fn living_effects(&self, living: LivingRef) -> Option<Vec<NativeActiveEffect>> {
-        match self.native_living_read_target(living)? {
+    pub(super) fn living_effects(
+        &self,
+        living: LivingRef,
+    ) -> Result<Option<Vec<NativeActiveEffect>>, mod_api::EntityReadError> {
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::MobOrPlayer(living),
+            &[EntityReadDependency::Effects],
+        ) {
+            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
+            None => return Ok(None),
+        };
+        Ok(match target {
             t @ (Target::Player | Target::Guest(_)) => self
                 .native_living_player_effects(t)
                 .map(|effects| effects.list.iter().map(active_effect).collect()),
@@ -189,24 +212,36 @@ impl Game<'_> {
                 .find(|m| m.id == id && !m.removed)
                 .map(|m| m.extra.effects.iter().map(|e| mob_effect(m, e)).collect()),
             _ => None,
-        }
+        })
     }
 
     /// Whether the entity has `effect` (`LivingEntity.hasEffect`), using its resolved key.
     /// False before effect resolution, for an armor stand, the dragon or a stale handle;
     /// on a client, for any entity but the local player, whose copy of what the server
     /// sent it is read.
-    pub(super) fn living_potion_affected(&self, living: LivingRef, effect: EffectKey) -> bool {
+    pub(super) fn living_potion_affected(
+        &self,
+        living: LivingRef,
+        effect: EffectKey,
+    ) -> Result<bool, mod_api::EntityReadError> {
         let Some(def) = mod_api::__private::effect_index(effect)
             .and_then(horizon_client_core::potions::effect_by_index)
         else {
-            return false;
+            return Ok(false);
         };
-        match self.native_living_read_target(living) {
-            Some(t @ (Target::Player | Target::Guest(_))) => self
+
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::MobOrPlayer(living),
+            &[EntityReadDependency::Effects],
+        ) {
+            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
+            None => return Ok(false),
+        };
+        Ok(match target {
+            t @ (Target::Player | Target::Guest(_)) => self
                 .native_living_player_effects(t)
                 .is_some_and(|effects| effects.get_registered(def.index).is_some()),
-            Some(Target::Mob(id)) => self
+            Target::Mob(id) => self
                 .mobs
                 .iter()
                 .find(|m| m.id == id && !m.removed)
@@ -217,7 +252,7 @@ impl Game<'_> {
                         .any(|e| e.registry_index == Some(def.index))
                 }),
             _ => false,
-        }
+        })
     }
 
     /// `LivingEntity.getEffectBlendFactor(effect, partialTick)` on a client:
@@ -237,25 +272,34 @@ impl Game<'_> {
         living: LivingRef,
         effect: EffectKey,
         partial: f32,
-    ) -> Option<f32> {
-        let def = mod_api::__private::effect_index(effect)
-            .and_then(horizon_client_core::potions::effect_by_index)?;
-        let Target::Player = self.native_living_read_target(living)? else {
-            return None;
+    ) -> Result<Option<f32>, mod_api::EntityReadError> {
+        let Some(def) = mod_api::__private::effect_index(effect)
+            .and_then(horizon_client_core::potions::effect_by_index)
+        else {
+            return Ok(None);
         };
-        let Some(e) = self.potions.effects.get_registered(def.index) else {
-            return Some(0.0);
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::ActingPlayer(living),
+            &[EntityReadDependency::Effects],
+        ) {
+            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
+            None => return Ok(None),
         };
-        Some(match def.id {
-            "darkness" => self.darkness_blend(partial),
-            "nausea" => self.nausea_blend(partial),
-            _ => {
-                let (previous, current) = e.client_blend;
-                let previous = u8::from(previous) as f32;
-                let current = u8::from(current) as f32;
-                previous + partial * (current - previous)
-            }
-        })
+        Ok((|| {
+            let Some(e) = self.potions.effects.get_registered(def.index) else {
+                return Some(0.0);
+            };
+            Some(match def.id {
+                "darkness" => self.darkness_blend(partial),
+                "nausea" => self.nausea_blend(partial),
+                _ => {
+                    let (previous, current) = e.client_blend;
+                    let previous = u8::from(previous) as f32;
+                    let current = u8::from(current) as f32;
+                    previous + partial * (current - previous)
+                }
+            })
+        })())
     }
 
     /// `LivingEntity.removeEffect(effect)` the way its running out goes

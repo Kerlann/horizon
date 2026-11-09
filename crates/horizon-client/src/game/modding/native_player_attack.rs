@@ -4,7 +4,7 @@
 //! resets the ticker). Reads return None for a stale handle or a player who
 //! isn't online here; a resting guest reads its saved body.
 use super::Game;
-use super::native_server::PlayerRead;
+use super::{commands::Target, native_live_entity_reads::EntityReadSubject, native_read_dependencies::EntityReadDependency};
 use horizon_client::attack_strength::{BASE_ATTACK_SPEED, delay};
 use mod_api::PlayerRef;
 
@@ -15,18 +15,16 @@ impl Game<'_> {
         &self,
         player: PlayerRef,
         partial: f32,
-    ) -> Option<f32> {
-        if !partial.is_finite() {
-            return None;
-        }
-        let read = self.player_handle_read(player)?;
+    ) -> Result<Option<f32>, mod_api::EntityReadError> {
+        if !partial.is_finite() || !self.is_logical_server() { return Ok(None); }
+        let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::AttackState, EntityReadDependency::Attributes, EntityReadDependency::Equipment, EntityReadDependency::Effects]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
+        Ok((|| {
         // 1.8.9 had no attack cooldown.
-        if self.legacy_rules() {
-            return Some(1.0);
-        }
-        Some(match read {
-            PlayerRead::Acting { .. } => return self.attack_strength_scale_at(partial),
-            PlayerRead::Guest(guest) => {
+        if self.legacy_rules() { return Some(1.0); }
+        Some(match target {
+            Target::Player => return self.attack_strength_scale_at(partial),
+            Target::Guest(conn) => {
+                let guest=self.command_guest(conn)?;
                 let (ticks, item) = self
                     .lan
                     .as_ref()?
@@ -36,7 +34,9 @@ impl Game<'_> {
                 let speed = guest_attack_speed(self, guest, item);
                 ((ticks as f32 + partial) / delay(speed)).clamp(0.0, 1.0)
             }
+            _ => return None,
         })
+        })())
     }
 }
 

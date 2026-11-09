@@ -8,7 +8,12 @@
 //! players (the hub's: a dedicated server's, a LAN host's, single player's
 //! server thread's), never on a client's.
 use super::api_values::{TryIntoApi, TryIntoEngine};
-use super::{Dim, Game, commands::execute, lan::LanHost, respawn_anchor::RespawnConfig};
+use super::{
+    Dim, Game,
+    commands::{Target, execute},
+    lan::LanHost,
+    respawn_anchor::RespawnConfig,
+};
 use crate::game::level_control_hooks::LevelControl;
 use mod_api::__private::game::*;
 pub use mod_api::game::NativeExperienceOrb;
@@ -1270,32 +1275,121 @@ impl Game<'_> {
 
     /// The stable name of a connected or acting player. None for a stale or
     /// unavailable player; displaced online players retain their identity.
-    pub(super) fn player_name(&self, player: PlayerRef) -> Option<String> {
-        if self.native_acting_player() == Some(player) {
-            return self.lan_acting_name.clone();
+    pub(super) fn player_name(
+        &self,
+        player: PlayerRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
+        use crate::game::{
+            commands::Target, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
         }
-        Some(self.online_player_record(player)?.name.clone())
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Session],
+        ) {
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
+            None => return Ok(None),
+        };
+        if matches!(target, Target::Player) && self.lan_acting_permission.is_some() {
+            return Ok(self.lan_acting_name.clone());
+        }
+        Ok(self.raw_player_peer(target).map(|guest| guest.name.clone()))
+    }
+    /// A connected peer's session record after subject admission. Acting
+    /// body lanes still come from Game rather than this mirrored record.
+    fn raw_player_peer(&self, target: Target) -> Option<&horizon_client::lan::guest::Guest> {
+        let conn = match target {
+            Target::Player => self.lan_acting?,
+            Target::Guest(conn) => conn,
+            _ => return None,
+        };
+        self.lan
+            .as_ref()?
+            .hub
+            .guest(conn)
+            .filter(|guest| guest.participates_online())
     }
 
     /// The IP address the player connects from, without the port (behind a
     /// Velocity proxy, the address the proxy forwards). Displaced connected
     /// players keep their address; an acting player with no known connection
     /// has an empty address. None for a stale or unavailable player.
-    pub(super) fn player_address(&self, player: PlayerRef) -> Option<String> {
-        if let Some(guest) = self.online_player_record(player) {
-            return Some(guest.address.ip().to_string());
+    pub(super) fn player_address(
+        &self,
+        player: PlayerRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
+        use crate::game::{
+            commands::Target, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
         }
-        (self.native_acting_player() == Some(player)).then(String::new)
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Session],
+        ) {
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
+            None => return Ok(None),
+        };
+        if let Some(guest) = self.raw_player_peer(target) {
+            return Ok(Some(guest.address.ip().to_string()));
+        }
+        Ok((matches!(target, Target::Player)
+            && self.lan_acting_name.is_some()
+            && self.lan_acting_permission.is_some())
+        .then(String::new))
     }
 
     /// The brand the player's client announced when it connected (`ServerPlayer.clientBrand`),
     /// empty when it sent none. Displaced connected players keep theirs; an acting player with
     /// no known connection has an empty one. None for a stale or unavailable player.
-    pub(super) fn player_client_brand(&self, player: PlayerRef) -> Option<String> {
-        if let Some(guest) = self.online_player_record(player) {
-            return Some(guest.brand.clone());
+    pub(super) fn player_client_brand(
+        &self,
+        player: PlayerRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
+        use crate::game::{
+            commands::Target, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
         }
-        (self.native_acting_player() == Some(player)).then(String::new)
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Session],
+        ) {
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
+            None => return Ok(None),
+        };
+        if let Some(guest) = self.raw_player_peer(target) {
+            return Ok(Some(guest.brand.clone()));
+        }
+        Ok((matches!(target, Target::Player)
+            && self.lan_acting_name.is_some()
+            && self.lan_acting_permission.is_some())
+        .then(String::new))
     }
 
     /// Validate identity without requiring a live body: sending to an online

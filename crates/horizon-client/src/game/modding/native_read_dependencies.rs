@@ -8,6 +8,7 @@ pub(super) enum EntityReadDependency {
     Nbt,
     Tags,
     Name,
+    DisplayText,
     Teams,
     Ownership,
     VitalState,

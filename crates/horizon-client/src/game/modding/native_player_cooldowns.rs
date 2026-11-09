@@ -19,16 +19,17 @@ impl Game<'_> {
     /// The cooldowns of `player`, where they are kept now: a guest's own
     /// outside their turn, the game's while theirs is swapped in (as
     /// `player` finds the player).
-    fn native_cooldowns_of(&self, player: PlayerRef) -> Option<&Cooldowns> {
-        match self.player_handle_read(player)? {
-            super::native_server::PlayerRead::Acting { .. } => Some(&self.cooldowns),
-            super::native_server::PlayerRead::Guest(g) => Some(
+    fn raw_cooldowns_of(&self, target: super::commands::Target) -> Option<&Cooldowns> {
+        match target {
+            super::commands::Target::Player => Some(&self.cooldowns),
+            super::commands::Target::Guest(conn) => Some(
                 self.lan
                     .as_ref()?
                     .play
-                    .get(&g.conn)
+                    .get(&conn)
                     .map_or(&EMPTY, |p| &p.cooldowns),
             ),
+            _ => None,
         }
     }
 
@@ -47,9 +48,13 @@ impl Game<'_> {
     pub(super) fn player_item_cooldowns(
         &self,
         player: PlayerRef,
-    ) -> Option<Vec<NativeItemCooldown>> {
+    ) -> Result<Option<Vec<NativeItemCooldown>>, mod_api::EntityReadError> {
+use super::{native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
+if !self.is_logical_server(){return Ok(None)}
+let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::Cooldowns]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
+Ok((||{
         let mut out: Vec<NativeItemCooldown> = self
-            .native_cooldowns_of(player)?
+            .raw_cooldowns_of(target)?
             .remaining()
             .filter(|(_, left)| *left > 0)
             .map(|(group, left)| NativeItemCooldown {
@@ -59,20 +64,31 @@ impl Game<'_> {
             .collect();
         out.sort_by(|a, b| a.group.cmp(&b.group));
         Some(out)
-    }
+    })())
+}
     /// `ItemCooldowns.isOnCooldown`: whether `group` still has time to run.
-    pub(super) fn player_has_item_cooldown(&self, player: PlayerRef, group: &str) -> Option<bool> {
-        Some(self.native_cooldowns_of(player)?.is_on_cooldown(group))
-    }
+    pub(super) fn player_has_item_cooldown(&self, player: PlayerRef, group: &str) -> Result<Option<bool>, mod_api::EntityReadError> {
+use super::{native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
+if !self.is_logical_server(){return Ok(None)}
+let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::Cooldowns]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
+Ok((||{
+        Some(self.raw_cooldowns_of(target)?.is_on_cooldown(group))
+    })())
+}
     /// `ItemCooldowns.getCooldownPercent(group, 0)`: what is left of the
     /// group's cooldown, from 1 (just started) to 0 (none).
     pub(super) fn player_item_cooldown_percent(
         &self,
         player: PlayerRef,
         group: &str,
-    ) -> Option<f32> {
-        Some(self.native_cooldowns_of(player)?.percent(group, 0.0))
-    }
+    ) -> Result<Option<f32>, mod_api::EntityReadError> {
+use super::{native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
+if !self.is_logical_server(){return Ok(None)}
+let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::Cooldowns]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
+Ok((||{
+        Some(self.raw_cooldowns_of(target)?.percent(group, 0.0))
+    })())
+}
     /// `ItemCooldowns.addCooldown(group, ticks)`: starts (or restarts) the
     /// group's cooldown, and the player's client draws it on every item of the
     /// group (`ServerItemCooldowns.onCooldownStarted`).

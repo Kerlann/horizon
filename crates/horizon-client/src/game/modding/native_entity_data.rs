@@ -72,7 +72,7 @@ impl Game<'_> {
             EntityReadSubject::Entity(entity),
             &[EntityReadDependency::Tags],
         ) {
-            Some(target) => target?,
+            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
             None => return Ok(None),
         };
         Ok(Some(self.tags_of(target)))
@@ -126,7 +126,7 @@ impl Game<'_> {
                 EntityReadDependency::ItemStack,
             ],
         ) {
-            Some(target) => target?,
+            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
             None => return Ok(None),
         };
         if let Some(remote) = &self.remote {

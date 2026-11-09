@@ -149,10 +149,11 @@ impl Game<'_> {
     /// `AbstractVillager.getOffers`, as they are now (a copy). Offers not
     /// rolled yet read as empty: they are rolled when a player first trades,
     /// or by `add_offer`; reading never draws a random.
-    pub(super) fn merchant_offers(&self, merchant: MerchantRef) -> Option<Vec<MerchantOffer>> {
-        let index = self.native_merchant_index(merchant)?;
-        Some(self.merchant_read(index, |offers, _, _| offers.to_vec()))
-    }
+    pub(super) fn merchant_offers(&self, merchant: MerchantRef) -> Result<Option<Vec<MerchantOffer>>, mod_api::EntityReadError> {
+use super::{native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
+let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Merchant(merchant), &[EntityReadDependency::Offers, EntityReadDependency::Session]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
+Ok((|| {let Target::Mob(id)=target else {return None}; let mob=self.mobs.iter().find(|mob|mob.id==id)?; Some(self.merchant_read_lent(mob, |offers,_,_|offers.to_vec()))})())
+}
 
     /// Replaces offer `index` (a player trading with it is sent the new
     /// offers). False for an index past the end, a stale handle, or an offer

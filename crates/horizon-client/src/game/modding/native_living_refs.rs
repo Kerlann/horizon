@@ -173,7 +173,7 @@ impl Game<'_> {
                 EntityReadDependency::Equipment,
             ],
         ) {
-            Some(target) => target?,
+            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
             None => return Ok(None),
         };
         Ok(self.native_target_attribute(
@@ -197,7 +197,7 @@ impl Game<'_> {
                 EntityReadDependency::Equipment,
             ],
         ) {
-            Some(target) => target?,
+            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
             None => return Ok(None),
         };
         Ok(self.native_target_attribute(target, id, horizon_world::attribute_map::ValueKind::Base))
@@ -220,7 +220,7 @@ impl Game<'_> {
                 EntityReadDependency::Equipment,
             ],
         ) {
-            Some(target) => target?,
+            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
             None => return Ok(None),
         };
         Ok((|| {
@@ -256,7 +256,7 @@ impl Game<'_> {
                 EntityReadDependency::Equipment,
             ],
         ) {
-            Some(target) => target?,
+            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
             None => return Ok(None),
         };
         Ok(self.native_target_attribute_modifiers(target, id))
@@ -800,7 +800,7 @@ impl Game<'_> {
             EntityReadSubject::Living(living),
             &[EntityReadDependency::Equipment],
         ) {
-            Some(target) => target?,
+            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
             None => return Ok(None),
         };
         Ok(self.raw_living_equipment(target, slot))

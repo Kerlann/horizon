@@ -130,6 +130,40 @@ impl Parked {
 }
 
 impl Game<'_> {
+    /// Borrow the exact level selected at entity admission, without swapping
+    /// Game or scanning loaded worlds. No handle or UUID is resolved here.
+    pub(super) fn entity_read_level(
+        &self,
+        dimension: DimensionKey,
+    ) -> Option<super::native_live_entity_sources::EntityReadLevel<'_>> {
+        use super::native_live_entity_sources::EntityReadLevel;
+        if dimension == self.dim.key() {
+            return Some(EntityReadLevel {
+                world: &self.world,
+                persist: &self.persist,
+                mobs: &self.mobs,
+                boats: &self.boats,
+                carts: &self.carts,
+                parked: None,
+            });
+        }
+        let dim = match dimension {
+            DimensionKey::OVERWORLD => Dim::Overworld,
+            DimensionKey::NETHER => Dim::Nether,
+            DimensionKey::END => Dim::End,
+            key => Dim::Extra(key),
+        };
+        let parked = self.levels.parked.get(&dim)?;
+        Some(EntityReadLevel {
+            world: &parked.world,
+            persist: &parked.persist,
+            mobs: &parked.mobs,
+            boats: &parked.boats,
+            carts: &parked.carts,
+            parked: Some(parked),
+        })
+    }
+
     /// Logical retirement is independent of physical lifting. Cached rows of
     /// a lifted owner still observe removals made before a lifecycle callback.
     pub(super) fn server_read_target_visible(

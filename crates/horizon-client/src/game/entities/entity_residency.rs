@@ -88,6 +88,19 @@ macro_rules! define_resident_targets {
 }
 resident_owners!(define_resident_targets, unused, unused);
 
+/// Canonical address mapping when an admitted payload is physically taken.
+/// Session role and dragon-part identity come from the same immutable location.
+pub(super) fn residency_target_at(at: Location, id: u32) -> Target {
+    use horizon_client::join_seq::residency::Source;
+    match at.source {
+        Source::Ordinary => residency_target(at.owner.kind, id),
+        Source::LocalPlayer => Target::Player,
+        Source::Guest(conn) => Target::Guest(conn),
+        Source::Hook { .. } => Target::Hook(id),
+        Source::DragonPart(_) => Target::DragonPart(id),
+    }
+}
+
 macro_rules! resident_visible {
     (Mob, $entity:expr) => {
         !$entity.removed

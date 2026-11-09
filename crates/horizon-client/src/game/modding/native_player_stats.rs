@@ -20,28 +20,6 @@ impl Game<'_> {
     fn native_player_current(&self, player: PlayerRef) -> bool {
         self.player_handle_read(player).is_some()
     }
-    /// The guest record `player` reads from outside their turn, or None
-    /// when their state is in the game (they act, or they are the host).
-    fn native_player_resting(
-        &self,
-        player: PlayerRef,
-    ) -> Option<&horizon_client::lan::guest::Guest> {
-        match self.player_handle_read(player)? {
-            super::native_server::PlayerRead::Guest(guest) => Some(guest),
-            super::native_server::PlayerRead::Acting { .. } => None,
-        }
-    }
-    /// The player's statistics, where they are kept now.
-    fn native_player_stats(&self, player: PlayerRef) -> Option<Option<&Stats>> {
-        if !self.native_player_current(player) {
-            return None;
-        }
-        Some(match self.native_player_resting(player) {
-            Some(g) => self.lan.as_ref()?.play.get(&g.conn).map(|p| &p.stats),
-            None => Some(&self.stats),
-        })
-    }
-
     /// The value of statistic `stat_type` for `key` (`minecraft:stone`,
     /// `minecraft:jump`...), as `ServerStatsCounter.getValue`: 0 when never
     /// counted.
@@ -50,11 +28,12 @@ impl Game<'_> {
         player: PlayerRef,
         stat_type: NativeStatType,
         key: &str,
-    ) -> Option<i32> {
-        let ty = stat_type.path();
-        let stats = self.native_player_stats(player)?;
-        Some(stats.map_or(0, |s| s.get(ty, &qualified(key))))
-    }
+    ) -> Result<Option<i32>, mod_api::EntityReadError> {
+use super::{commands::Target,native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
+if !self.is_logical_server(){return Ok(None)}
+let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::Stats]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
+Ok((||{let stats=match target {Target::Player=>Some(&self.stats),Target::Guest(conn)=>self.lan.as_ref()?.play.get(&conn).map(|play|&play.stats),_=>return None}; Some(stats.map_or(0, |stats|stats.get(stat_type.path(), &qualified(key))))})())
+}
     /// `Player.awardStat(stat, amount)`: adds `amount`, as the game does
     /// for its own counts, so `player_stat_award` hears it and may cancel
     /// it, and scoreboard criteria follow. False for a player it can't
@@ -91,28 +70,20 @@ impl Game<'_> {
         &self,
         player: PlayerRef,
         recipe: &str,
-    ) -> Option<bool> {
-        if !self.native_player_current(player) {
-            return None;
-        }
-        let id = qualified(recipe);
-        Some(match self.native_player_resting(player) {
-            Some(g) => g.recipe_book.recipes.contains(&id),
-            None => self.level.recipe_book.recipes.contains(&id),
-        })
-    }
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+use super::{commands::Target,native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
+if !self.is_logical_server(){return Ok(None)}
+let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::Recipes]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
+Ok((||{let book=match target {Target::Player=>&self.level.recipe_book,Target::Guest(conn)=>&self.command_guest(conn)?.recipe_book,_=>return None}; Some(book.recipes.contains(&qualified(recipe)))})())
+}
     /// Every recipe the player's recipe book knows (`ServerRecipeBook.recipes`), qualified ids in
     /// order. None for a player it can't reach.
-    pub(super) fn player_discovered_recipes(&self, player: PlayerRef) -> Option<Vec<String>> {
-        if !self.native_player_current(player) {
-            return None;
-        }
-        let book = match self.native_player_resting(player) {
-            Some(g) => &g.recipe_book.recipes,
-            None => &self.level.recipe_book.recipes,
-        };
-        Some(book.iter().cloned().collect())
-    }
+    pub(super) fn player_discovered_recipes(&self, player: PlayerRef) -> Result<Option<Vec<String>>, mod_api::EntityReadError> {
+use super::{commands::Target,native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
+if !self.is_logical_server(){return Ok(None)}
+let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::Recipes]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
+Ok((||{let book=match target {Target::Player=>&self.level.recipe_book,Target::Guest(conn)=>&self.command_guest(conn)?.recipe_book,_=>return None}; Some(book.recipes.iter().cloned().collect())})())
+}
     /// `ServerPlayer.awardRecipes`, as `/recipe give` does: the recipes
     /// unlock in the player's book, with their toasts and the
     /// `player_recipe_discovered` hook, and the client hears of them.
