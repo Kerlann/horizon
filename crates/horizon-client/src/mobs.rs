@@ -3409,9 +3409,12 @@ pub fn collision_changes(w: &MobWorld, writes: &[((i32, i32, i32), u32, u32)]) -
         .collect()
 }
 /// Adds the pending pushes aimed at `m` to its velocity, in push order.
-pub fn apply_mob_pushes(m: &mut Mob, pending: &mut PendingPushes) {
+/// Returns whether at least one push was applied, including a zero-vector push.
+pub fn apply_mob_pushes(m: &mut Mob, pending: &mut PendingPushes) -> bool {
+    let mut applied = false;
     // Entity.push(x, y, z) sets needsSync.
     let mut add = |v: Vec3| {
+        applied = true;
         m.velocity = Vec3::new(m.velocity.x + v.x, m.velocity.y + v.y, m.velocity.z + v.z);
         m.needs_sync = true;
     };
@@ -3429,6 +3432,7 @@ pub fn apply_mob_pushes(m: &mut Mob, pending: &mut PendingPushes) {
     {
         pushes.into_iter().for_each(add);
     }
+    applied
 }
 /// Applies the brain memories a mob's tick set on other mobs (from event
 /// index `from` on), at once: vanilla sets them on the other entity during
@@ -6299,6 +6303,20 @@ mod push_tests {
     }
 
     #[test]
+    fn push_publication_signal_names_only_actual_applies() {
+        let mut actors = mobs(2);
+        let mut pending = PendingPushes::default();
+        pending.push(actors[1].id, Vec3::ZERO);
+        assert!(!apply_mob_pushes(&mut actors[0], &mut pending));
+        assert!(apply_mob_pushes(&mut actors[1], &mut pending));
+        assert!(actors[1].needs_sync);
+        assert!(!apply_mob_pushes(&mut actors[1], &mut pending));
+        pending.push(actors[0].id, Vec3::new(1.0, 2.0, 3.0));
+        assert!(apply_mob_pushes(&mut actors[0], &mut pending));
+        assert_eq!(actors[0].velocity, Vec3::new(1.0, 2.0, 3.0));
+    }
+
+    #[test]
     fn pushes_land_as_with_the_list() {
         for n in [1u32, 3, 8, 20, 60] {
             let mut new_mobs = mobs(n);
@@ -6317,7 +6335,7 @@ mod push_tests {
                             apply_mob_pushes(
                                 &mut mobs.borrow_mut()[i as usize],
                                 &mut pending.borrow_mut(),
-                            )
+                            );
                         },
                     )
                 };
@@ -6387,7 +6405,7 @@ mod push_tests {
                         apply_mob_pushes(
                             &mut ms.borrow_mut()[i as usize],
                             &mut pending.borrow_mut(),
-                        )
+                        );
                     },
                 );
             }

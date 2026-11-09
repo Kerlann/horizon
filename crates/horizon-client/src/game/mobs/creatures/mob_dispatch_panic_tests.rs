@@ -304,3 +304,89 @@ fn mob_despawn_listener_panic_preserves_owned_rows_and_lent_random() {
         }
     }
 }
+
+struct ObserveRows(Arc<std::sync::Mutex<Vec<mod_api::EntityReadRow>>>);
+#[mod_api::__subscriptions]
+impl mod_api::Hooks for ObserveRows {
+    fn mob_despawn(&self, host: &dyn mod_api::Host, event: &mut mod_api::MobDespawnEvent<'_>) {
+        let other = if event.mob.id() == 71 { 72 } else { 71 };
+        let entity = mod_api::EntityRef::new(event.mob.entity().epoch(), other);
+        self.0.lock().unwrap().push(
+            entity
+                .cached_row(host)
+                .expect("foreign lifted mob has a cached row"),
+        );
+    }
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn mob_rows_publish_in_actual_actor_order_and_outputs_stay_owned() {
+    let observed = Arc::new(std::sync::Mutex::new(Vec::new()));
+    mod_api::testing::with_mods(
+        vec![mod_api::ModEntry::new(
+            "observe-rows",
+            Box::new(ObserveRows(observed.clone())),
+        )]
+        .into(),
+        || {
+            crate::game::native_entity_refs::tests::with_game(|game| {
+                game.options.dedicated = Some(Vec::new());
+                game.world
+                    .chunks
+                    .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+                let kind = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+                for id in [71, 72] {
+                    let mut mob = Mob::new(
+                        id,
+                        kind.clone(),
+                        Vec3::new(f64::from(id - 70), 80.0, 0.5),
+                        0.0,
+                    );
+                    mob.no_ai = true;
+                    game.mobs.push(mob);
+                }
+                game.tick_creature_entities().unwrap();
+                let rows = observed.lock().unwrap();
+                assert_eq!(rows.len(), 2);
+                assert_eq!(rows[0].entity.id(), 72);
+                assert_eq!(
+                    rows[0].capture.phase,
+                    mod_api::EntityReadCapturePhase::PassStart
+                );
+                assert_eq!(rows[0].tick_count, Some(0));
+                assert_eq!(rows[1].entity.id(), 71);
+                assert_eq!(
+                    rows[1].capture.phase,
+                    mod_api::EntityReadCapturePhase::AfterEntityTick
+                );
+                assert_eq!(rows[1].tick_count, Some(1));
+                assert_eq!(rows[0].capture.pass, rows[1].capture.pass);
+                assert!(rows[1].capture.revision > rows[0].capture.revision);
+                game.mobs.clear();
+                assert_eq!(rows[0].tick_count, Some(0));
+                assert_eq!(rows[1].tick_count, Some(1));
+            });
+        },
+    );
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn mob_pass_without_callbacks_does_not_publish_rows() {
+    mod_api::testing::with_mods(Vec::new().into(), || {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            game.options.dedicated = Some(Vec::new());
+            game.world
+                .chunks
+                .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+            let kind = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+            game.mobs
+                .push(Mob::new(71, kind, Vec3::new(1.0, 80.0, 0.5), 0.0));
+            assert!(game.begin_mob_read_pass().is_none());
+            game.tick_creature_entities().unwrap();
+            let entity = mod_api::EntityRef::new(game.native_lifecycle.epoch().unwrap(), 71);
+            assert!(game.entity_cached_row(entity).is_none());
+        });
+    });
+}

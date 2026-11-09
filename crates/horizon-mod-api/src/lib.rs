@@ -4086,6 +4086,7 @@ impl ModEntry {
 pub type Mods = Arc<[ModEntry]>;
 
 pub(crate) struct Installed {
+    entity_reads: bool,
     mods: Mods,
     subscribers: horizon_mod_runtime::subscribers::Subscribers,
     disabled: Box<[std::sync::atomic::AtomicBool]>,
@@ -4093,6 +4094,12 @@ pub(crate) struct Installed {
 
 impl Installed {
     fn new(mods: Mods) -> Self {
+        // Custom point listeners have no built-in HookId. Interest is frozen
+        // conservatively at load, independent of runtime enable toggles.
+        let entity_reads = mods.iter().any(|entry| {
+            !entry.hooks.listeners().is_empty()
+                || entry.hooks.subscribed().iter().flatten().next().is_some()
+        });
         // Each hook's subscribers are ordered once here: by the priority their `#[listener]`
         // gives, then in dependency order.
         let subscriptions = mods.iter().enumerate().flat_map(|(index, entry)| {
@@ -4121,6 +4128,7 @@ impl Installed {
             .map(|_| std::sync::atomic::AtomicBool::new(false))
             .collect();
         Self {
+            entity_reads,
             mods,
             subscribers,
             disabled,
@@ -4163,6 +4171,10 @@ pub(crate) fn install(mods: Mods) -> &'static Installed {
 /// The process-wide list in dispatch order, or an empty list before installation.
 pub(crate) fn mods() -> &'static [ModEntry] {
     installed().map_or(&[], |installed| &installed.mods)
+}
+
+pub(crate) fn entity_reads_listened() -> bool {
+    installed().is_some_and(|installed| installed.entity_reads)
 }
 
 pub(crate) fn listened(hook: generated::HookId) -> bool {
