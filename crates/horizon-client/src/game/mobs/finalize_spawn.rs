@@ -159,7 +159,7 @@ impl Game<'_> {
     ) -> finalize::SpawnEvent {
         // A mob finalization makes starts without group data, and the
         // finalization that follows reads none.
-        let (outcome, _) = self.finalize_spawn_event(mob, reason, None, &mut None);
+        let (outcome, _) = self.finalize_spawn_event(mob, reason, None, &mut None, None);
         match outcome {
             super::creatures::Finalized::Cancelled => finalize::SpawnEvent::Cancelled,
             super::creatures::Finalized::Skipped => finalize::SpawnEvent::Skip,

@@ -56,3 +56,62 @@ impl EntityBodyProvider for CartSpawnerBodyProvider<'_> {
         true
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use horizon_client::join_seq::{
+        JoinList,
+        residency::{Kind, Owner, table::Location},
+    };
+    use horizon_core::geometry::Vec3;
+
+    // Internal composition contract, not public Spawner-component API coverage.
+    #[test]
+    fn internal_cart_provider_lends_the_exact_separate_evolving_component() {
+        let carts: JoinList<Minecart, false> = [
+            Minecart::new(71, super::super::minecarts::CartKind::Spawner, Vec3::ZERO),
+            Minecart::new(72, super::super::minecarts::CartKind::Rideable, Vec3::ZERO),
+        ]
+        .into_iter()
+        .collect();
+        let mut body = carts[0].clone();
+        let mut spawner = body.spawner.take().unwrap();
+        spawner.spawn_delay = 37;
+        let address = Target {
+            runtime_id: body.id,
+            location: Location {
+                source: horizon_client::join_seq::residency::Source::Ordinary,
+                owner: Owner {
+                    dimension: mod_api::DimensionKey::OVERWORLD,
+                    kind: Kind::Cart,
+                },
+                join: body.join,
+            },
+        };
+        let provider = CartSpawnerBodyProvider::new(address, &body, &spawner);
+        let mut visits = 0;
+        assert!(provider.with_read_source(address, &mut |source| {
+            visits += 1;
+            let BaseReadSource::Cart(actual) = source.body else {
+                panic!("wrong supplied body");
+            };
+            assert!(std::ptr::eq(actual, &body));
+            assert!(actual.spawner.is_none());
+            let component = source.cart_spawner.unwrap();
+            assert!(std::ptr::eq(component, &*spawner));
+            assert_eq!(component.spawn_delay, 37);
+        }));
+        assert_eq!(visits, 1);
+        let foreign = Target {
+            runtime_id: 72,
+            location: Location {
+                join: carts[1].join,
+                ..address.location
+            },
+        };
+        assert!(
+            !provider.with_read_source(foreign, &mut |_| panic!("foreign actor received the loan"))
+        );
+    }
+}

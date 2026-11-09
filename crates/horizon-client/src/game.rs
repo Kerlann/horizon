@@ -5250,6 +5250,16 @@ impl Game<'_> {
     fn tick_items(&mut self) {
         // EntityTickEvent.Pre for the items about to tick, and the Post after them.
         let mut round = self.native_tick_round();
+        if self.native_authoritative()
+            && self.is_logical_server()
+            && mod_api::__private::entity_reads_listened()
+        {
+            self.tick_dropped_items_listened(&mut round);
+            self.drain_entity_inside();
+            self.native_tick_post_batch(round);
+            return;
+        }
+
         if round.listening() {
             let ticking = self.entity_ticking_area();
             let merging = self.remote.is_none();
@@ -5314,226 +5324,58 @@ impl Game<'_> {
     fn tick_dropped_items(&mut self, round: &mut native_ticks::TickRound) {
         let read_scope =
             self.begin_resident_read_pass(horizon_client::join_seq::residency::Kind::Item);
-        let mut items = self.dropped.lift();
-        // ServerLevel.tick: only entities in entity-ticking chunks tick.
+        let items = self.dropped.lift();
         let ticking = self.entity_ticking_area();
-        let mut removed = vec![false; items.len()];
-        let mut cells = horizon_client::entities::ItemCells::new(&items);
-        // A LAN or server guest only shows the host's items.
         let merging = self.remote.is_none();
-        let mut obstacles =
-            horizon_client::entities::ObstacleGrid::new(self.item_entity_collisions());
-        let mut nearby = Vec::new();
-        let mut bubble_tops = Vec::new();
-        // `ItemUtils.onContainerDestroyed`: what a destroyed item held, and
-        // where it lay, for adding to the level once its own tick is done.
-        let mut destroyed: Vec<(ItemStack, Vec3)> = Vec::new();
-        for i in 0..items.len() {
-            if removed[i] {
+        let mut pass = item_tick::ItemPhysicsPass::new(
+            items,
+            horizon_client::entities::ObstacleGrid::new(self.item_entity_collisions()),
+            merging,
+            read_scope.is_some(),
+        );
+        for i in 0..pass.items.len() {
+            if pass.index.is_removed(i, pass.items[i].join) {
                 // Merged into an earlier item before its own tick: it never ticked.
-                round.not_ticked(items[i].id);
+                round.not_ticked(pass.items[i].id);
                 continue;
             }
             // `addFreshEntity` during the entity pass: the item ticks from the
             // next tick on (`EntityTickList`).
-            if merging && self.joined_during_entity_pass(items[i].id) {
+            if merging && self.joined_during_entity_pass(pass.items[i].id) {
                 continue;
             }
             if !ticking(
-                items[i].position.x.floor() as i32,
-                items[i].position.z.floor() as i32,
-            ) || round.canceled(items[i].id)
+                pass.items[i].position.x.floor() as i32,
+                pass.items[i].position.z.floor() as i32,
+            ) || round.canceled(pass.items[i].id)
             {
                 continue;
             }
-            // Entity.baseTick: the entity-level invulnerability window of
-            // the saved data counts down (#916) — only for an item that
-            // really ticks in this pass.
-            self.tick_saved_invulnerable_time(items[i].id);
-            let item = &mut items[i];
-            // `getEntityCollisions(entity, bounds.expandTowards(movement))`: the boxes around
-            // where the item can reach this tick (a block of slack for the next velocity).
-            let reach = Vec3::new(
-                item.velocity.x.abs() + 1.0,
-                item.velocity.y.abs() + 1.0,
-                item.velocity.z.abs() + 1.0,
-            );
-            obstacles.near(item.bounds().inflate(reach), &mut nearby);
-            let no_physics = merging
-                && item.inside_block(
-                    &self.world,
-                    self.collision,
-                    &nearby,
-                    Some(self.border.geometry()),
-                );
-            let escape_speed = no_physics.then(|| item.random.next_float() * 0.2 + 0.1);
-            let mut entered = Vec::new();
-            let (alive, discarded) = self.tick_item_with_block_contacts(
-                item,
-                escape_speed,
-                &nearby,
-                false,
-                &mut |splash| entered.push(splash),
-            );
-            // Entity.doWaterSplashEffect: the server plays the sound (broadcast
-            // to clients). Its addParticle is empty.
-            for splash in entered {
-                self.apply_item_splash(splash);
-            }
-            if discarded {
-                removed[i] = true;
-                cells.remove(i, item.previous);
-                continue;
-            }
-            if merging && !no_physics {
-                self.item_landing_event(item.id, item.previous, item.position, item.on_ground);
-                self.entity_powder_snow_particles(
-                    item.previous,
-                    item.position,
-                    item.bounds(),
-                    item.velocity,
-                    false,
-                );
-            }
-            cells.moved(i, item.previous, item.position);
-            // Entity.handleOnAboveBubbleColumn: the server sends the particles of
-            // the surface of a bubble column the item is at the top of.
-            if merging {
-                bubble_tops.extend(horizon_client::motion::bubble_column_surfaces(
-                    &self.world,
-                    self.pack.assets.registry,
-                    self.res.facts(),
-                    self.collision,
-                    item.bounds(),
-                ));
-            }
-            // ItemEntity.tick: merge every 2 ticks while moving between
-            // blocks, every 40 otherwise, before the lifetime check.
-            let block = |v: Vec3| (v.x.floor(), v.y.floor(), v.z.floor());
-            let rate = if block(item.previous) == block(item.position) {
-                40
-            } else {
-                2
-            };
-            if merging
-                && (alive || item.age == 6000 && item.position.y > -128.0)
-                && item.ticks.is_multiple_of(rate)
-            {
-                let max_stack = |stack: &ItemStack| self.stack_max_size(stack).max(1);
-                horizon_client::entities::merge_with_neighbours(
-                    &mut items,
-                    &mut removed,
-                    &mut cells,
-                    i,
-                    &max_stack,
-                );
-            }
-            let item = &mut items[i];
-            let mut alive = alive || (item.age < 6000 && item.position.y > -128.0);
-            if merging && !removed[i] && item.age >= 6000 && item.position.y > -128.0 {
-                let mut extra_life = 0;
-                self.native_item_expire(item.id, &item.stack, &mut extra_life);
-                if extra_life > 0 {
-                    item.age = 6000 - extra_life.min(32766);
-                    alive = true;
-                } else if self.serving.is_some() || self.options.dedicated.is_some() {
-                    self.native_item_despawn(
-                        item.id,
-                        &item.stack.item,
-                        item.stack.count as i32,
-                        [item.position.x, item.position.y, item.position.z],
-                    );
-                }
-            }
-            if !alive || removed[i] {
-                removed[i] = true;
-                cells.remove(i, item.position);
-                continue;
-            }
-            let item_id = item.id;
-            let saved = [
-                "minecraft:on_fire",
-                "minecraft:lava",
-                "minecraft:in_fire",
-                "minecraft:cactus",
-            ]
-            .map(|damage| self.saved_refuses_damage(item_id, damage, false));
-            let tags = world_items!(self);
-            let registry = self.pack.assets.registry;
-            let block_registries = &self.pack.block_registries;
-            let hooks = &self.damage_hooks;
-            let environment = item.environment_tick_with_hook(
-                &mut self.world,
-                self.res.facts(),
-                registry,
-                tags,
-                |world, damage| {
-                    let vanilla = match damage {
-                        "minecraft:on_fire" => saved[0],
-                        "minecraft:lava" => saved[1],
-                        "minecraft:in_fire" => saved[2],
-                        "minecraft:cactus" => saved[3],
-                        _ => false,
-                    };
-                    let source = horizon_client::health::HurtSource {
-                        damage_type: damage,
-                        causing: 0,
-                        direct: 0,
-                        position: None,
-                    };
-                    horizon_client::health::DamageLevel::of(
-                        world,
-                        registry,
-                        Some(tags),
-                        Some(block_registries),
-                        hooks,
-                    )
-                    .invulnerability_check(
-                        horizon_client::health::Hurting::Entity(
-                            item_id as i32,
-                            "minecraft:item",
-                            source,
-                        ),
-                        vanilla,
-                    )
-                },
-            );
-            if environment.should_play_lava_hurt_sound(item.ticks) {
-                let pitch = 2.0 + self.world.random.next_float() * 0.4;
-                self.audio.play(
-                    "minecraft:entity.generic.burn",
-                    Some([item.position.x, item.position.y, item.position.z]),
-                    0.4,
-                    pitch,
-                );
-            }
-            if !environment.alive {
-                removed[i] = true;
-                cells.remove(i, item.position);
-                for stack in environment.spilled {
-                    destroyed.push((stack, item.position));
-                }
-            }
-            if read_scope.is_some() && !removed[i] {
-                self.publish_lent_resident_reads(
-                    horizon_client::join_seq::residency::table::Location {
-                        source: Default::default(),
-                        owner: horizon_client::join_seq::residency::Owner {
-                            dimension: self.dim.key(),
-                            kind: horizon_client::join_seq::residency::Kind::Item,
-                        },
-                        join: item.join,
-                    },
-                    native_base_read_rows::BaseReadSource::Item(item),
-                    mod_api::EntityReadCapturePhase::AfterEntityTick,
-                );
-            }
+            self.tick_dropped_item_body(&mut pass, i);
         }
+        let item_tick::ItemPhysicsPass {
+            mut items,
+            index,
+            bubble_tops,
+            destroyed,
+            ..
+        } = pass;
         for pos in bubble_tops {
             self.bubble_column_particles(pos);
         }
-        let mut removed = removed.into_iter();
-        items.retain(|_| !removed.next().unwrap_or(false));
+        let mut item_index = 0;
+        items.retain(|item| {
+            let keep = !index.is_removed(item_index, item.join);
+            item_index += 1;
+            keep
+        });
+        self.finish_dropped_item_pickups(items, destroyed);
+    }
+    pub(super) fn finish_dropped_item_pickups(
+        &mut self,
+        mut items: horizon_client::join_seq::JoinList<horizon_client::entities::ItemEntity>,
+        destroyed: Vec<(ItemStack, Vec3)>,
+    ) {
         let Some(p) = self.player.as_ref() else {
             self.put_back_dropped(items);
             self.spawn_destroyed_contents(destroyed);

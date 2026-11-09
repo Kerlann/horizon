@@ -99,6 +99,7 @@ impl Game<'_> {
 mod tests {
     use super::super::native_entity_refs::tests::with_game;
     use super::*;
+    use horizon_client::mobs::spawner::SpawnerExt;
     use mod_api::{EntityRef, HookId, Hooks, ModEntry};
     struct VehicleObserver {
         mode: u8,
@@ -396,5 +397,163 @@ mod tests {
                 })
             },
         );
+    }
+    struct SpawnerCartObserver {
+        panic: bool,
+        planning_panic: bool,
+        cart: std::sync::Arc<std::sync::OnceLock<mod_api::MinecartRef>>,
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    }
+    #[mod_api::__subscriptions]
+    impl Hooks for SpawnerCartObserver {
+        fn finalize_spawn(
+            &self,
+            host: &dyn mod_api::Host,
+            _: &mut mod_api::FinalizeSpawnEvent<'_>,
+        ) -> mod_api::Flow {
+            let cart = *self.cart.get().unwrap();
+            assert_eq!(cart.hurt_time(host), Some(8));
+            assert_eq!(cart.damage(host), Some(6.0));
+            if self.planning_panic {
+                self.calls
+                    .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+                panic!("spawner planning panic");
+            }
+            mod_api::Flow::Continue
+        }
+        fn mob_spawned(
+            &self,
+            host: &mut dyn mod_api::ServerHost,
+            _: &mut mod_api::MobSpawnedEvent<'_>,
+        ) {
+            let cart = host.entity(71).expect("the spawning cart remains admitted");
+            assert!(
+                cart.position(host).unwrap()[0] > 8.5,
+                "planning movement is canonical before the join callback"
+            );
+            assert!(cart.set_velocity(host, [0.3, 0.2, 0.1]));
+            self.calls
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            if self.panic {
+                panic!("spawner join panic");
+            }
+        }
+    }
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn spawner_callbacks_restore_cart_rng_and_listener_writes_on_unwind() {
+        use horizon_core::geometry::Vec3;
+        use horizon_core::random::{LegacyRandom, RandomSource};
+        for (panic, planning_panic, ridden) in [
+            (false, false, false),
+            (true, false, false),
+            (true, true, false),
+            (false, false, true),
+            (true, false, true),
+            (true, true, true),
+        ] {
+            let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let cart_handle = std::sync::Arc::new(std::sync::OnceLock::new());
+            mod_api::testing::with_mods(
+                vec![ModEntry::new(
+                    "spawner-cart-observer",
+                    Box::new(SpawnerCartObserver {
+                        panic,
+                        planning_panic,
+                        cart: cart_handle.clone(),
+                        calls: calls.clone(),
+                    }),
+                )]
+                .into(),
+                || {
+                    with_game(|game| {
+                        game.lan_acting_fake = false;
+                        game.options.dedicated = Some(Vec::new());
+                        game.world.chunks.insert(
+                            (0, 0),
+                            std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+                        );
+                        game.tickets.update(None);
+                        game.player = Some(
+                            horizon_client::motion::PlayerMotion::new(
+                                game.motion,
+                                Vec3::new(12.5, 65.0, 12.5),
+                            )
+                            .unwrap(),
+                        );
+                        let tag = horizon_core::nbt::parse_snbt("{Delay:0s,SpawnCount:1s,SpawnRange:0s,SpawnData:{entity:{id:\"minecraft:zombie\"}}}").unwrap().0;
+                        let mut cart = super::super::minecarts::Minecart::new(
+                            71,
+                            super::super::minecarts::CartKind::Spawner,
+                            Vec3::new(8.5, 64.5, 8.5),
+                        );
+                        cart.velocity.x = 0.25;
+                        cart.hurt_time = 9;
+                        cart.damage = 7.0;
+                        cart.spawner =
+                            Some(Box::new(horizon_client::mobs::spawner::Spawner::load(&tag)));
+                        cart.spawner
+                            .as_mut()
+                            .unwrap()
+                            .next_data_mut()
+                            .unwrap()
+                            .custom_spawn_rules =
+                            Some(horizon_client::mobs::spawner::CustomSpawnRules {
+                                block: (0, 15),
+                                sky: (0, 15),
+                            });
+                        game.ui.difficulty = 2;
+                        game.world.health_rules.difficulty =
+                            horizon_world::food::Difficulty::Normal;
+                        game.carts.push(cart);
+                        game.native_joins_skip();
+                        cart_handle
+                            .set(game.minecart(game.entity(71).unwrap()).unwrap())
+                            .unwrap();
+                        game.world.random = LegacyRandom::new(871_931);
+                        let unprogressed = game.world.random.clone().next_long();
+                        if ridden {
+                            game.riding = Some(71);
+                        }
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            if ridden {
+                                assert!(
+                                    game.tick_cart_riding(horizon_client::sprint::Keys::default())
+                                );
+                            } else {
+                                game.tick_carts();
+                            }
+                        }));
+                        assert_eq!(
+                            calls.load(std::sync::atomic::Ordering::Relaxed),
+                            1,
+                            "cart ticks {}, spawner delay {}, spawned mobs {}",
+                            game.carts[0].tick_count,
+                            game.carts[0].spawner.as_ref().unwrap().spawn_delay,
+                            game.mobs.len()
+                        );
+                        assert_eq!(result.is_err(), panic);
+                        if planning_panic {
+                            let progressed = game.world.random.next_long();
+                            assert_ne!(
+                                progressed,
+                                LegacyRandom::new(0).next_long(),
+                                "the level must not retain the temporary seed-zero carrier"
+                            );
+                            assert_ne!(
+                                progressed, unprogressed,
+                                "planning's actual random draws must survive unwind"
+                            );
+                            assert!(game.mobs.is_empty());
+                            assert_eq!(game.carts[0].spawner.as_ref().unwrap().spawn_delay, 0);
+                        } else {
+                            assert_eq!(game.carts[0].velocity, Vec3::new(0.3, 0.2, 0.1));
+                            assert!(game.carts[0].spawner.as_ref().unwrap().spawn_delay >= 200);
+                        }
+                        assert!(game.held_out.is_empty());
+                    });
+                },
+            );
+        }
     }
 }
