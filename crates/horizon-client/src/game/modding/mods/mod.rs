@@ -435,6 +435,16 @@ pub(super) fn register_block_tint_sources(role: ExecutionRole) {
     Game::native_register_block_tint_sources(&RegistrationContext::new(), &mut registry);
     horizon_client::mesher::register_block_tint_sources(registry.into_layers());
 }
+/// The native mods' particle providers (`native_register_particle_providers`), kept once at
+/// start, before resources load; every particle sprite-set load resolves each type's provider.
+pub(super) fn register_particle_providers(role: ExecutionRole) {
+    if !role.is_client() {
+        return;
+    }
+    let mut registry = mod_api::ParticleProviderRegistry::default();
+    Game::native_register_particle_providers(&RegistrationContext::new(), &mut registry);
+    horizon_client::particles::register_particle_providers(registry.into_providers());
+}
 
 /// `root` with the content mods that are on layered over it
 /// (docs/modpacks.md): their blocks, items, data and assets. Read once at
@@ -1382,6 +1392,29 @@ pub(super) fn living_mod_types()
         .collect()
 }
 
+/// Registered callbacks indexed directly by the slots resolved in enchantment content.
+pub(in crate::game) static ENCHANTMENT_DAMAGE_EFFECTS: std::sync::OnceLock<
+    Vec<std::sync::Arc<dyn mod_api::EnchantmentDamageEffect>>,
+> = std::sync::OnceLock::new();
+
+pub(super) fn register_enchantment_damage_effects() {
+    let mut effects = mod_api::EnchantmentDamageRegistry::default();
+    Game::native_register_enchantment_damage_effects(
+        &mod_api::RegistrationContext::new(),
+        &mut effects,
+    );
+    let (ids, callbacks): (Vec<_>, Vec<_>) = effects
+        .into_entries()
+        .into_iter()
+        .map(|(id, effect)| (id.to_string(), effect))
+        .unzip();
+    horizon_items::enchant::register_damage_effects(ids);
+    assert!(
+        ENCHANTMENT_DAMAGE_EFFECTS.set(callbacks).is_ok(),
+        "damage effects already registered"
+    );
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1589,6 +1622,151 @@ mod tests {
             Some(&55.0),
             "the finalize defaults read the declared value"
         );
+    }
+
+    /// #812: a mod's declared attribute type joins the catalog before the
+    /// rows resolve (a mod entity's set names its own new attribute), and
+    /// the live map, an item's modifier, the saves and the sync set carry it
+    /// by string id — a guest's catalog built from the same mods decodes the
+    /// same network id.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_mods_declared_attribute_reaches_rows_the_live_map_saves_and_sync() {
+        use horizon_client::lan;
+        use horizon_client::living_attributes::{self, LivingAttributes};
+        use horizon_core::nbt::Tag;
+        use horizon_world::attribute_map::ValueKind;
+        use horizon_world::attributes::{
+            Definition, Sentiment,
+            entity::{AddedAttribute, Catalog},
+        };
+
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let catalog = Catalog::from_json(
+            &horizon_world::json_file::read(&root.join("attributes.json")).unwrap(),
+        )
+        .unwrap();
+        let vanilla = catalog.attributes().count();
+        // Two mods' attributes, declared in an order that is not the sorted
+        // one; one syncable, one not.
+        let declared = |mod_id: &str, id: &str, default, syncable, sentiment| AddedAttribute {
+            mod_id: mod_id.into(),
+            id: id.into(),
+            definition: Definition::ranged(default, 0.0, 100.0).unwrap(),
+            syncable,
+            sentiment,
+        };
+        let grown = catalog
+            .with_attributes(&[
+                declared("zeta", "zeta:fury", 15.0, false, Sentiment::default()),
+                declared("ruby", "ruby:mana", 10.0, true, Sentiment::Negative),
+            ])
+            .unwrap();
+        // After every vanilla attribute, sorted by mod id: ruby's first
+        // though zeta's declared first, and vanilla ids never shift.
+        let (mana, fury) = (
+            grown.id("ruby:mana").unwrap(),
+            grown.id("zeta:fury").unwrap(),
+        );
+        assert_eq!(mana.registry_id() as usize, vanilla);
+        assert_eq!(fury.registry_id() as usize, vanilla + 1);
+        assert_eq!(
+            grown.id("minecraft:max_health"),
+            catalog.id("minecraft:max_health")
+        );
+        // A mod entity's row names its own new attribute (#845's rows
+        // resolve after the attributes join).
+        let merged = grown
+            .with_entity_row(
+                "ruby:ghoul",
+                "minecraft:zombie",
+                &[("ruby:mana".into(), 42.0), ("zeta:fury".into(), 7.0)],
+            )
+            .unwrap();
+        let live = LivingAttributes::default();
+        assert_eq!(
+            live.read(
+                &std::sync::Arc::new(merged.clone()),
+                "ruby:ghoul",
+                "ruby:mana",
+                ValueKind::Computed,
+                Vec::new
+            ),
+            Some(42.0)
+        );
+        // An item's `attribute_modifiers` entry naming the mod attribute
+        // reaches the live map (the worn-stack path's own write).
+        let mut map =
+            living_attributes::new_live(&std::sync::Arc::new(merged.clone()), "ruby:ghoul")
+                .unwrap();
+        assert_eq!(map_value(&mut map, mana), 42.0);
+        living_attributes::set_modifier(&mut map, "ruby:mana", "ruby:ring", 8.0, "add_value", true)
+            .unwrap();
+        assert_eq!(map_value(&mut map, mana), 50.0);
+        // The sync set: a syncable attribute joins it, a non-syncable one
+        // never does (`AttributeMap.getSyncableAttributes`).
+        living_attributes::set_modifier(&mut map, "zeta:fury", "zeta:mark", 1.0, "add_value", true)
+            .unwrap();
+        let synced: std::collections::HashSet<i32> = lan::attributes::syncable(&map)
+            .iter()
+            .map(|s| s.attribute)
+            .collect();
+        assert!(synced.contains(&mana.registry_id()));
+        assert!(!synced.contains(&fury.registry_id()));
+        // Save → load round trip by string id.
+        let saved = Tag::List(living_attributes::pack(&map, true));
+        let mut again =
+            living_attributes::new_live(&std::sync::Arc::new(merged.clone()), "ruby:ghoul")
+                .unwrap();
+        living_attributes::apply_saved(&mut again, Some(&saved)).unwrap();
+        // The saved base; the ring's transient modifier is equipment, not
+        // saved — as vanilla's `AttributeInstance.Packed` keeps permanent
+        // modifiers only.
+        assert_eq!(map_value(&mut again, mana), 42.0);
+        // A save whose attribute the loaded catalog does not know is
+        // skipped, as vanilla warns and skips: no panic, the map whole.
+        let mut vanilla_map =
+            living_attributes::new_live(&std::sync::Arc::new(catalog.clone()), "minecraft:zombie")
+                .unwrap();
+        living_attributes::apply_saved(&mut vanilla_map, Some(&saved)).unwrap();
+        assert!(lan::attributes::syncable(&vanilla_map).is_empty());
+        // The network id decodes on a guest's catalog built from the same
+        // mods declaring in another order: the snapshot's numbers find the
+        // same attributes.
+        let guest_catalog = catalog
+            .with_attributes(&[
+                declared("ruby", "ruby:mana", 10.0, true, Sentiment::Negative),
+                declared("zeta", "zeta:fury", 15.0, false, Sentiment::default()),
+            ])
+            .unwrap()
+            .with_entity_row(
+                "ruby:ghoul",
+                "minecraft:zombie",
+                &[("ruby:mana".into(), 42.0), ("zeta:fury".into(), 7.0)],
+            )
+            .unwrap();
+        let snapshots = lan::attributes::syncable(&map);
+        let mut guest =
+            living_attributes::new_live(&std::sync::Arc::new(guest_catalog), "ruby:ghoul").unwrap();
+        lan::attributes::apply(&mut guest, &snapshots);
+        assert_eq!(map_value(&mut guest, mana), 50.0);
+
+        fn map_value(
+            map: &mut horizon_client::living_attributes::Live,
+            id: horizon_world::attributes::entity::AttributeId,
+        ) -> f64 {
+            // The first read creates the instance, as `getInstance` does.
+            let key = map
+                .keys()
+                .iter()
+                .find(|key| key.attribute() == id)
+                .cloned()
+                .unwrap();
+            let Ok(Some(handle)) = map.get_instance(Some(key)) else {
+                panic!("the type has the attribute")
+            };
+            map.instance(&handle).unwrap().value()
+        }
     }
 
     /// A declared set's merged row — the template's with the declared set on

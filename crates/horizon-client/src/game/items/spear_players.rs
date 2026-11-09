@@ -137,7 +137,10 @@ impl Game<'_> {
             .player
             .as_ref()
             .map(|p| [p.position.x, p.position.y, p.position.z])?;
-        let magic_boost = self.enchant_damage_bonus("minecraft:player");
+        let magic_boost = self.enchant_damage_bonus(
+            "minecraft:player",
+            Some(self.stab_players[target].entity_id as u32),
+        );
         let (base_damage, magic_boost) = if self.using.is_none() {
             let scale = self.attack_strength_scale();
             (

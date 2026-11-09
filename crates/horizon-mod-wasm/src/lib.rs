@@ -508,7 +508,7 @@ pub fn load(std_member: &[u8], packages: Vec<WasmPackage>) -> Loaded {
             }
             let mut checked = Vec::new();
             for mut module in mods {
-                let names: Vec<String> = module
+                let subscriptions: Vec<(String, i32, bool)> = module
                     .call(
                         CallClass::Load,
                         boundary::Frame::default(),
@@ -518,6 +518,21 @@ pub fn load(std_member: &[u8], packages: Vec<WasmPackage>) -> Loaded {
                         |r| r.take(),
                     )
                     .ok_or_else(|| Refusal::Runtime("subscriptions failed".into()))?;
+                let names: Vec<String> = subscriptions
+                    .iter()
+                    .map(|(name, _, _)| name.clone())
+                    .collect();
+                module.listeners = subscriptions
+                    .into_iter()
+                    .filter_map(|(name, priority, receive_cancelled)| {
+                        boundary::hook_id(&name).map(|hook| mod_api::Listener {
+                            hook: Some(hook),
+                            priority,
+                            receive_cancelled,
+                        })
+                    })
+                    .collect::<Vec<_>>()
+                    .leak();
                 // The ground provider runs on the worldgen workers, a contract wasm lacks yet.
                 if names.iter().any(|name| name == "alter_ground") {
                     return Err(Refusal::Runtime(

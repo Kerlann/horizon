@@ -1152,11 +1152,24 @@ impl Game<'_> {
         // Connected to a server (single player's own included), the chat on
         // screen is the connection's: the game's own messages join it.
         if self.remote.is_some() {
-            self.chat_line(text, ChatSource::Server);
+            self.add_chat_line(text, ChatSource::Server);
             return;
         }
         // The Chat option's Hidden level takes the server's messages too.
         self.local_chat_line(text, Some(SYSTEM_INDICATOR), ChatSource::Server);
+    }
+    /// `ChatComponent.addClientSystemMessage`: a line the client adds itself.
+    /// It joins the connection's chat and its history, with the system
+    /// marker; the Chat option's server-message filter does not hide it
+    /// (`GuiMessageSource.SYSTEM_CLIENT`). Vanilla fires
+    /// `ClientChatReceivedEvent` from `ChatListener` for the lines the server
+    /// sent, so this path does not tell `client_chat_received`.
+    pub(super) fn chat_line(&mut self, text: Text) {
+        if self.remote.is_some() {
+            self.add_chat_line(text, ChatSource::Client);
+        } else {
+            self.local_chat_line(text, Some(SYSTEM_INDICATOR), ChatSource::Client);
+        }
     }
     /// A player's chat line on the window's own chat: a guest's message on
     /// the server's own chat (`HostEvent::Chat`). `ChatListener`
@@ -1732,7 +1745,6 @@ impl Game<'_> {
         // or the text of the message tag under the cursor.
         let height = batch.height as i32;
         let (cx, cy) = (f64::from(self.cursor.0), f64::from(self.cursor.1));
-        let wrap = (batch.width as i32 / 2).max(200);
         // handleTagIcon: the chat-modified icons over the cursor or its message.
         let (tag_tooltip, tag_icons) =
             self.ui
@@ -1747,30 +1759,74 @@ impl Game<'_> {
                     horizon_client::widgets::Cursor::PointingHand,
                 );
             }
-            if let Some(hover) = style.hover {
-                let lines = self.wrapped_rows(&hover, wrap);
-                self.draw_tooltip_lines(batch, &lines, self.cursor.0, self.cursor.1);
-            } else if let Some(stack) = style
-                .hover_item
-                .as_deref()
-                .and_then(horizon_client::item_data::stack_from_hover)
-                .filter(|s| self.items().get(&s.item).is_some())
-            {
-                self.draw_stack_tooltip(batch, &stack, self.cursor.0, self.cursor.1);
-            } else if let Some(entity) = style
-                .hover_entity
-                .as_deref()
-                .filter(|_| self.settings.file.bool("advancedItemTooltips"))
-            {
-                // ChatScreen: a ShowEntity tooltip only with advanced tooltips on.
-                let lines = Self::entity_tooltip_lines(entity);
-                self.draw_tooltip_lines(batch, &lines, self.cursor.0, self.cursor.1);
-            }
+            self.component_hover_effect(batch, &style, self.cursor);
         } else if let Some(tag) = &tag_tooltip {
             // The message tag's text, split at 210.
             let lines = self.wrapped_rows(tag, 210);
             self.draw_tooltip_lines(batch, &lines, self.cursor.0, self.cursor.1);
         }
+    }
+    /// `GuiGraphicsExtractor.componentHoverEffect`: the hover of the text component under the
+    /// cursor at `at`, as the chat, a book and a dialog draw it. `component_hover` is asked
+    /// first and may cancel it. Then a text hover is split at half the screen's width (at
+    /// least 200), an item hover draws its stack's tooltip, and an entity hover its name, type
+    /// and UUID while advanced tooltips are on.
+    pub(super) fn component_hover_effect(
+        &mut self,
+        batch: &mut HudBatch,
+        style: &horizon_client::text::Style,
+        at: (f32, f32),
+    ) {
+        if self.component_hover_canceled(batch, style, at) {
+            return;
+        }
+        if let Some(hover) = &style.hover {
+            let wrap = (batch.width as i32 / 2).max(200);
+            let lines = self.wrapped_rows(hover, wrap);
+            self.draw_tooltip_lines(batch, &lines, at.0, at.1);
+        } else if let Some(stack) = style
+            .hover_item
+            .as_deref()
+            .and_then(horizon_client::item_data::stack_from_hover)
+            .filter(|s| self.items().get(&s.item).is_some())
+        {
+            self.draw_stack_tooltip(batch, &stack, at.0, at.1);
+        } else if let Some(entity) = style
+            .hover_entity
+            .as_deref()
+            .filter(|_| self.settings.file.bool("advancedItemTooltips"))
+        {
+            // A ShowEntity tooltip only with advanced tooltips on.
+            let lines = Self::entity_tooltip_lines(entity);
+            self.draw_tooltip_lines(batch, &lines, at.0, at.1);
+        }
+    }
+    /// `component_hover`, only while a mod listens: true when a mod cancelled the hover.
+    fn component_hover_canceled(
+        &self,
+        batch: &mut HudBatch,
+        style: &horizon_client::text::Style,
+        at: (f32, f32),
+    ) -> bool {
+        if !mod_api::__private::listened(mod_api::HookId::ComponentHover) {
+            return false;
+        }
+        let Some(hover) = crate::game::api_values::style_hover(style) else {
+            return false;
+        };
+        let mut cancel = false;
+        let mut draw = super::host::draw::GameDrawContext {
+            game: self,
+            surface: batch,
+        };
+        self.native_component_hover(mod_api::__private::ComponentHoverCall {
+            draw: &mut draw,
+            hover: &hover,
+            x: at.0 as i32,
+            y: at.1 as i32,
+            cancel: &mut cancel,
+        });
+        cancel
     }
     /// `Font.split`: a tooltip text wrapped at `width`, one white row per line.
     pub(super) fn wrapped_rows(&self, text: &Text, width: i32) -> Vec<(Text, u32)> {

@@ -58,6 +58,13 @@ impl Default for Ticks {
     }
 }
 impl Ticks {
+    /// `ServerLevel.blockEvent`: queue `event` for `Behaviours::run_block_events`, once
+    /// (`blockEvents` is a set, so the same event queued twice runs once).
+    pub fn queue_block_event(&mut self, event: super::pistons::BlockEventData) {
+        if !self.block_events.contains(&event) {
+            self.block_events.push(event);
+        }
+    }
     /// `random_tick_seed` seeds `Level.randValue` (vanilla draws it from a
     /// thread-local random at level construction).
     pub fn new(random_tick_seed: i32) -> Self {

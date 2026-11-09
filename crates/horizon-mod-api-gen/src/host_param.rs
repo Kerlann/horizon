@@ -77,7 +77,7 @@ pub(super) fn context_param(
         PhaseContext::Registration => "RegistrationContext",
         PhaseContext::DataLoad => "LoadContext",
         PhaseContext::Loop => "LoopContext",
-        PhaseContext::Worldgen => "WorldgenContext",
+        PhaseContext::Worldgen => "OwningWorldgen",
     };
     let valid = args.first().is_some_and(|(name, ty)| {
         name == "context"
@@ -174,7 +174,7 @@ mod tests {
             (PhaseContext::Loop, "&LoopContext", "&dyn LoopContext"),
             (
                 PhaseContext::Worldgen,
-                "&WorldgenContext",
+                "&OwningWorldgen",
                 "&dyn WorldgenHost",
             ),
         ] {

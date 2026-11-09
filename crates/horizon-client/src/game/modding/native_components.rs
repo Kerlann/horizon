@@ -973,7 +973,7 @@ mod combat_query_tests {
                 enchanted
                     .attack_damage_bonus(game, attacker, target, 7.0)
                     .unwrap(),
-                game.enchanted_damage("minecraft:player", 7.0) - 7.0
+                game.enchanted_damage("minecraft:player", 7.0, Some(target.id())) - 7.0
             );
             patch(
                 &mut weapon,
@@ -1178,7 +1178,10 @@ mod combat_query_tests {
                 "minecraft:magic"
             );
             game.inventory[game.selected] = Some(sword.clone());
-            assert_eq!(game.enchanted_damage("minecraft:player", 7.0), 9.0);
+            assert_eq!(
+                game.enchanted_damage("minecraft:player", 7.0, Some(target.id())),
+                9.0
+            );
             assert_eq!(
                 super::super::creatures::source_damage_type(game.attack_source([0.0; 3])),
                 "minecraft:magic"
@@ -1199,7 +1202,10 @@ mod combat_query_tests {
                 "minecraft:player_attack"
             );
             game.inventory[game.selected] = Some(sword);
-            assert_eq!(game.enchanted_damage("minecraft:player", 7.0), 7.0);
+            assert_eq!(
+                game.enchanted_damage("minecraft:player", 7.0, Some(target.id())),
+                7.0
+            );
             assert_eq!(
                 super::super::creatures::source_damage_type(game.attack_source([0.0; 3])),
                 "minecraft:player_attack"

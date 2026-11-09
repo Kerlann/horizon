@@ -44,6 +44,12 @@ pub enum ModelError {
     StaleModel,
 }
 
+/// A block state as the game's state table numbers it (`Block.BLOCK_STATE_REGISTRY`'s id): what
+/// worldgen providers and fluid queries answer. Valid for the running game only; never save it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+// exhaustive: a state id is its number
+pub struct BlockStateId(pub u32);
+
 /// A dimension (`minecraft:the_nether`), as the game's table numbers it: a `LevelRef`'s identity.
 /// A key stays the same dimension until the game exits; `key.id(host)` gives the name.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -77,6 +83,37 @@ pub enum EntityAttributeError {
     NotFinite,
     /// Another declaration already covers the entity type.
     Duplicate,
+}
+
+/// Why a mod's attribute type declaration was refused
+/// ([`Registrar::declare_attribute`](AttributesRegistrar::declare_attribute)).
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub enum AttributeRegistrationError {
+    /// Only both-side packages may change the attribute registry.
+    WrongSide,
+    /// The attribute's id is malformed, empty or in a namespace the
+    /// declaring mod does not own (a vanilla attribute's included).
+    InvalidId,
+    /// Another declaration already covers the attribute.
+    Duplicate,
+    /// The default or a bound is not finite.
+    NotFinite,
+    /// `min > max`, or the default is not inside `[min, max]`
+    /// (`RangedAttribute`'s own checks).
+    InvalidBounds,
+}
+
+/// Tooltip color semantics for an attribute change.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Sentiment {
+    /// Increasing values are beneficial.
+    #[default]
+    Positive,
+    /// Increasing values are harmful.
+    Negative,
+    /// Changes are neutral.
+    Neutral,
 }
 
 /// A boolean game rule declared by a mod.
@@ -165,6 +202,47 @@ impl BiomeSearchResult {
     /// Pair a matching biome with its sampled position.
     pub fn new(biome: String, position: [i32; 3]) -> Self {
         Self { biome, position }
+    }
+}
+
+/// Search parameters for `LevelRef::find_nearest_structure`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct StructureSearch {
+    /// Where the search starts, in block coordinates; the distance is horizontal.
+    pub origin: [i32; 3],
+    /// How many rings of placement cells around the origin's are searched for
+    /// random-spread structure sets (vanilla's `searchRadius`); `/locate` uses 100.
+    pub radius: i32,
+}
+impl StructureSearch {
+    /// The largest radius one synchronous search takes: `/locate`'s and an
+    /// explorer map's 100 rings.
+    pub const MAX_RADIUS: i32 = 100;
+
+    /// The radius must be from 0 to [`Self::MAX_RADIUS`].
+    pub fn new(origin: [i32; 3], radius: i32) -> Self {
+        Self { origin, radius }
+    }
+}
+
+/// The nearest structure start a search found.
+#[derive(Clone, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+pub struct StructureSearchResult {
+    /// Registry id of the structure, the tag's member that matched for a `#tag`.
+    pub structure: String,
+    /// Where `/locate` reports the start (`StructurePlacement.getLocatePos`):
+    /// its chunk's corner at y 0, moved by the set's `locate_offset`.
+    pub position: [i32; 3],
+}
+impl StructureSearchResult {
+    /// Pair a found structure with its start position.
+    pub fn new(structure: String, position: [i32; 3]) -> Self {
+        Self {
+            structure,
+            position,
+        }
     }
 }
 
@@ -3062,6 +3140,80 @@ pub enum MobCategory {
     Misc,
 }
 
+/// How many mobs of each spawning category a level's natural spawning allows
+/// (`MobCategory.getMaxInstancesPerChunk`), read and set through
+/// `LevelRef::spawn_limits` and `set_spawn_limits`. Each limit counts twice, as
+/// vanilla's own does: the level spawns a category only while its count of
+/// that category's mobs stays under `limit * spawnable chunks / 289` (one
+/// player's 17 by 17 chunks hold the vanilla value), and only in a chunk with
+/// a player near it who has fewer than `limit` of them around. A limit of 0
+/// stops the category's natural spawning. `MobCategory::Misc` never spawns
+/// naturally, so it has no limit.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+// exhaustive: one field per vanilla spawning category; mods build it from `VANILLA`
+pub struct SpawnLimits {
+    /// `MONSTER`: 70 in vanilla.
+    pub monster: u32,
+    /// `CREATURE`: 10 in vanilla.
+    pub creature: u32,
+    /// `AMBIENT`: 15 in vanilla.
+    pub ambient: u32,
+    /// `AXOLOTLS`: 5 in vanilla.
+    pub axolotls: u32,
+    /// `UNDERGROUND_WATER_CREATURE`: 5 in vanilla.
+    pub underground_water_creature: u32,
+    /// `WATER_CREATURE`: 5 in vanilla.
+    pub water_creature: u32,
+    /// `WATER_AMBIENT`: 20 in vanilla.
+    pub water_ambient: u32,
+}
+
+impl SpawnLimits {
+    /// Vanilla's limits, which every level starts with.
+    pub const VANILLA: Self = Self {
+        monster: 70,
+        creature: 10,
+        ambient: 15,
+        axolotls: 5,
+        underground_water_creature: 5,
+        water_creature: 5,
+        water_ambient: 20,
+    };
+}
+
+impl Default for SpawnLimits {
+    fn default() -> Self {
+        Self::VANILLA
+    }
+}
+
+/// Which categories a level's natural spawning (`NaturalSpawner.spawnForChunk`)
+/// may spawn at all, read and set through `LevelRef::spawn_flags` and
+/// `set_spawn_flags`. A flag only takes away, for its level alone: monsters
+/// still need the `spawn_monsters` game rule, and nothing spawns naturally with
+/// `spawn_mobs` off. Spawners, patrols, sieges, phantoms, a new chunk's
+/// creatures and other custom spawners don't read the flags.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+// exhaustive: one switch for monsters, one for the rest; mods build it with a literal
+pub struct SpawnFlags {
+    /// Whether `MobCategory::Monster` spawns: off acts as the `spawn_monsters`
+    /// rule off does (`getFilteredSpawningCategories`' `spawnEnemies`).
+    pub monsters: bool,
+    /// Whether every other spawning category spawns: creatures, ambient and
+    /// water mobs, axolotls. Horizon's own; vanilla has no such switch.
+    pub friendlies: bool,
+}
+
+impl Default for SpawnFlags {
+    /// Both on, as every level starts.
+    fn default() -> Self {
+        Self {
+            monsters: true,
+            friendlies: true,
+        }
+    }
+}
+
 /// Why a mob spawns (`EntitySpawnReason`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -3807,13 +3959,23 @@ pub(crate) struct Installed {
 
 impl Installed {
     fn new(mods: Mods) -> Self {
+        // Each hook's subscribers are ordered once here: by the priority their `#[listener]`
+        // gives, then in dependency order.
         let subscriptions = mods.iter().enumerate().flat_map(|(index, entry)| {
-            entry
-                .hooks
-                .subscribed()
-                .iter()
-                .flatten()
-                .map(move |hook| (index, *hook as usize))
+            let listeners = entry.hooks.listeners();
+            entry.hooks.subscribed().iter().flatten().map(move |hook| {
+                let listener = listeners.iter().find(|listener| {
+                    listener
+                        .hook
+                        .is_some_and(|id| id as usize == *hook as usize)
+                });
+                horizon_mod_runtime::subscribers::Subscription {
+                    index,
+                    hook: *hook as usize,
+                    priority: listener.map_or(0, |listener| listener.priority),
+                    receives_cancelled: listener.is_some_and(|listener| listener.receive_cancelled),
+                }
+            })
         });
         let subscribers = horizon_mod_runtime::subscribers::Subscribers::new(
             generated::HOOK_COUNT,
@@ -3873,6 +4035,12 @@ pub(crate) fn listened(hook: generated::HookId) -> bool {
     installed().is_some_and(|installed| installed.subscribers.contains_any(hook as usize))
 }
 
+/// Whether a subscriber of a cancel hook is still told once the event is cancelled: the generated
+/// dispatch of an event the game hands over cancelled returns early without one.
+fn receives_cancelled(hook: generated::HookId) -> bool {
+    installed().is_some_and(|installed| installed.subscribers.receives_cancelled(hook as usize))
+}
+
 /// Switch an installed trait mod's subsequent dispatches on or off.
 pub(crate) fn set_mod_enabled(id: &str, on: bool) -> bool {
     let Some(installed) = installed() else {
@@ -3924,7 +4092,7 @@ fn entered(
     hook_id: generated::HookId,
     hook: &'static str,
 ) -> impl Iterator<Item = &'static dyn Hooks> {
-    entered_with_id(hook_id, hook).map(|(_, hooks)| hooks)
+    entered_subscribers(hook_id, hook).map(|entry| &*entry.hooks)
 }
 
 /// [`entered`] with each mod's own `[mod] id`, for a hook that names the mod that answered.
@@ -3932,21 +4100,49 @@ fn entered_with_id(
     hook_id: generated::HookId,
     hook: &'static str,
 ) -> impl Iterator<Item = (&'static str, &'static dyn Hooks)> {
+    entered_subscribers(hook_id, hook).map(|entry| (entry.id, &*entry.hooks))
+}
+
+/// A cancel hook's enabled subscribers in dispatch order, each with whether it is still told
+/// once the event is cancelled. Unlike [`entered`], nothing is marked: the dispatch enters only
+/// the mods it calls, through [`enter_listener`].
+fn listening(hook_id: generated::HookId) -> impl Iterator<Item = (bool, &'static ModEntry)> {
     installed().into_iter().flat_map(move |installed| {
-        let mut crash_guard = None;
         installed
             .subscribers
-            .indices(hook_id as usize)
-            .filter(move |&index| {
-                !installed.disabled[index].load(std::sync::atomic::Ordering::Relaxed)
+            .subscribers(hook_id as usize)
+            .filter(move |subscriber| {
+                !installed.disabled[subscriber.index].load(std::sync::atomic::Ordering::Relaxed)
             })
-            .map(move |index| {
-                drop(crash_guard.take());
-                let entry = &installed.mods[index];
-                let hooks = &*entry.hooks;
-                crash_guard = Some(mark_mod(entry.id, hook));
-                (entry.id, hooks)
+            .map(move |subscriber| {
+                (
+                    subscriber.receives_cancelled,
+                    &installed.mods[subscriber.index],
+                )
             })
+    })
+}
+
+/// Marks the thread as inside `entry`'s `hook` until the guard drops, and hands back its hooks.
+fn enter_listener(
+    entry: &'static ModEntry,
+    hook: &'static str,
+) -> (crate::crash::NativeModGuard, &'static dyn Hooks) {
+    (mark_mod(entry.id, hook), &*entry.hooks)
+}
+
+/// A hook's enabled subscribers in dispatch order (descending priority, then dependency order),
+/// each marked as running `hook` until the next one is (or the loop ends), so a panic in it
+/// names the mod.
+fn entered_subscribers(
+    hook_id: generated::HookId,
+    hook: &'static str,
+) -> impl Iterator<Item = &'static ModEntry> {
+    let mut crash_guard = None;
+    listening(hook_id).map(move |(_, entry)| {
+        drop(crash_guard.take());
+        crash_guard = Some(mark_mod(entry.id, hook));
+        entry
     })
 }
 
@@ -4001,6 +4197,36 @@ impl<'a> Iterator for Entered<'a> {
 }
 
 /// Whether a mod claims a cancellable hook.
+///
+/// A mod still told once an earlier one cancelled marks its method `#[listener(receive_cancelled)]`
+/// and reads the event's `cancelled` field, which it may set back to `false`:
+///
+/// ```
+/// use mod_api::{ClientHost, Flow, Hooks, RenderGuiPreEvent};
+/// #[derive(Default)]
+/// struct Gui;
+/// #[mod_api::horizon_mod]
+/// impl Hooks for Gui {
+///     #[listener(priority = -10, receive_cancelled)]
+///     fn render_gui_pre(&self, _: &dyn ClientHost, event: &mut RenderGuiPreEvent) -> Flow {
+///         event.cancelled = false;
+///         Flow::Continue
+///     }
+/// }
+/// ```
+///
+/// A hook no mod can cancel has no cancel to receive, so the option doesn't compile there:
+///
+/// ```compile_fail
+/// use mod_api::{ClientHost, ClientTickPreEvent, Hooks};
+/// #[derive(Default)]
+/// struct Ticker;
+/// #[mod_api::horizon_mod]
+/// impl Hooks for Ticker {
+///     #[listener(receive_cancelled)]
+///     fn client_tick_pre(&self, _: &mut dyn ClientHost, _: &mut ClientTickPreEvent) {}
+/// }
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum Flow {

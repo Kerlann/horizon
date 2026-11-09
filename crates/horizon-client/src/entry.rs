@@ -167,7 +167,7 @@ pub fn main_with(
     }
     if horizon_world::native_worldgen_hooks::install(
         horizon_world::native_worldgen_hooks::NativeWorldgenHooks {
-            alter_ground: mod_api::ground::alter_ground,
+            alter_ground: crate::game::api_values::alter_ground,
         },
     )
     .is_err()

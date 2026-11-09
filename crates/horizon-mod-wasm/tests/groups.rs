@@ -101,6 +101,7 @@ fn capability_is_answered_only_within_its_group() {
                 let mut message = Text::literal("");
                 let mut replies = Vec::new();
                 let mut event = ServerChatEvent {
+                    cancelled: false,
                     player_id: 1,
                     player: 1,
                     username: "tester",
@@ -152,6 +153,7 @@ fn capability_is_answered_only_within_its_group() {
                 let mut message = Text::literal("");
                 let mut replies = Vec::new();
                 let mut event = ServerChatEvent {
+                    cancelled: false,
                     player_id: 1,
                     player: 1,
                     username: "tester",

@@ -246,7 +246,7 @@ impl Game<'_> {
         let from = [p.position.x, p.position.y, p.position.z];
         // The enchantments' share, scaled by the attack strength unless the
         // weapon is in use.
-        let magic_boost = self.enchant_damage_bonus(&kind);
+        let magic_boost = self.enchant_damage_bonus(&kind, Some(id));
         let (base_damage, magic_boost) = if self.using.is_none() {
             let scale = self.attack_strength_scale();
             (

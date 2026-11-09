@@ -12,6 +12,7 @@ mod boundary {
 struct WasmMod {
     group: u8,
     subscribed: &'static [Option<mod_api::HookId>],
+    listeners: &'static [mod_api::Listener],
     corrupt: bool,
 }
 impl std::fmt::Debug for WasmMod {
@@ -176,7 +177,23 @@ fn __horizon_mod_hooks() -> Box<dyn Hooks> {
             registrar.block_entity_part(&kind, MachineBlock).unwrap();
         }
         fn subscribed(&self) -> &'static [Option<mod_api::HookId>] {
-            &[]
+            &[Some(mod_api::HookId::RenderGuiPre)]
+        }
+        fn listeners(&self) -> &'static [mod_api::Listener] {
+            &[mod_api::Listener {
+                hook: Some(mod_api::HookId::RenderGuiPre),
+                priority: -37,
+                receive_cancelled: true,
+            }]
+        }
+        fn render_gui_pre(
+            &self,
+            _: &dyn mod_api::ClientHost,
+            event: &mut mod_api::RenderGuiPreEvent,
+        ) -> mod_api::Flow {
+            assert!(event.cancelled);
+            event.cancelled = false;
+            mod_api::Flow::Continue
         }
         fn item_tooltip(
             &self,
@@ -314,6 +331,7 @@ fn wire_loopback_machine_tick_uses_checked_snapshot_writeback() {
         index: id,
         module: WasmMod {
             subscribed: &[],
+            listeners: &[],
             group: 0,
             corrupt: false,
         },
@@ -333,6 +351,7 @@ fn wire_loopback_machine_tick_uses_checked_snapshot_writeback() {
         index: id,
         module: WasmMod {
             subscribed: &[],
+            listeners: &[],
             group: 0,
             corrupt: true,
         },
@@ -592,6 +611,7 @@ fn wire_loopback_readonly_private_projection() {
     let module = WasmMod {
         group: 0,
         subscribed: &[],
+        listeners: &[],
         corrupt: false,
     };
     let stack = mod_api::ItemStack::new(REGISTERED_ITEM.get().unwrap(), 1).unwrap();
@@ -636,6 +656,7 @@ fn wire_loopback_checked_append_is_atomic_and_bit_exact() {
         Box::new(WasmMod {
             group: 0,
             subscribed: &[Some(mod_api::HookId::ApplyEffectTick)],
+            listeners: &[],
             corrupt: false,
         }),
     )];
@@ -709,6 +730,7 @@ fn wire_loopback_optional_borrowed_render_record() {
     let module = WasmMod {
         group: 0,
         subscribed: &[],
+        listeners: &[],
         corrupt: false,
     };
     let mob = mod_api::NativeMobRender {
@@ -755,6 +777,7 @@ fn wire_loopback_optional_borrowed_record() {
     let module = WasmMod {
         group: 0,
         subscribed: &[],
+        listeners: &[],
         corrupt: false,
     };
     let actor: mod_api::GameRuleActor = mod_api::GameRuleActor {
@@ -837,6 +860,7 @@ fn wire_loopback_borrowed_tuple_inside_optional_context() {
     let mut drops = vec![mod_api::ItemStack::new(REGISTERED_ITEM.get().unwrap(), 1).unwrap()];
     WasmMod {
         subscribed: &[],
+        listeners: &[],
         group: 0,
         corrupt: false,
     }
@@ -853,6 +877,7 @@ fn wire_loopback_borrowed_tuple_inside_optional_context() {
 fn wire_loopback_nested_tuple_reference_writes_back() {
     let module = WasmMod {
         subscribed: &[],
+        listeners: &[],
         group: 0,
         corrupt: false,
     };
@@ -872,7 +897,10 @@ fn wire_loopback_nested_tuple_reference_writes_back() {
     };
     module.item_stacked_on_other(
         &Context,
-        &mut mod_api::ItemStackedOnOtherEvent { event: &mut stack },
+        &mut mod_api::ItemStackedOnOtherEvent {
+            event: &mut stack,
+            cancelled: false,
+        },
     );
     assert!(stack.carried.0.is_none());
     assert!(stack.cancellation_result);
@@ -889,6 +917,7 @@ fn install_counter() {
         "wire_test",
         Box::new(WasmMod {
             subscribed: &[],
+            listeners: &[],
             group: 0,
             corrupt: false,
         }),
@@ -923,6 +952,7 @@ fn wire_loopback_tagged_frame_enum_preserves_side() {
         index,
         module: WasmMod {
             subscribed: &[],
+            listeners: &[],
             group: 0,
             corrupt: false,
         },
@@ -959,6 +989,7 @@ fn wire_loopback_owned_box_handlers_inside_result_and_vec() {
     let mut cx = boundary::Cx::default();
     let module = WasmMod {
         subscribed: &[],
+        listeners: &[],
         group: 0,
         corrupt: false,
     };
@@ -1155,6 +1186,7 @@ fn wire_loopback_provider_queries_return_owned_options_and_atomic_cursor_writeba
     let module = WasmMod {
         group: 0,
         subscribed: &[],
+        listeners: &[],
         corrupt: false,
     };
     let mut cx = Box::new(boundary::Cx::default());
@@ -1258,6 +1290,7 @@ fn wire_loopback_erased_resource_restores_identity_and_refuses_other_groups() {
     let module = WasmMod {
         group: 0,
         subscribed: &[],
+        listeners: &[],
         corrupt: false,
     };
     cx.module = &module;
@@ -1283,6 +1316,7 @@ fn wire_loopback_erased_resource_restores_identity_and_refuses_other_groups() {
     let other_module = WasmMod {
         group: 1,
         subscribed: &[],
+        listeners: &[],
         corrupt: false,
     };
     cx.module = &other_module;
@@ -1361,6 +1395,7 @@ fn wire_loopback_builtin_provider_invokes_nested_box_handler() {
     let module = WasmMod {
         group: 0,
         subscribed: &[],
+        listeners: &[],
         corrupt: false,
     };
     cx.module = &module;
@@ -1433,6 +1468,7 @@ fn wire_loopback_owner_thread_guards_access_and_drop() {
 fn wire_loopback_roundtrip_and_atomic_writeback() {
     let module = WasmMod {
         subscribed: &[],
+        listeners: &[],
         group: 0,
         corrupt: false,
     };
@@ -1446,6 +1482,7 @@ fn wire_loopback_roundtrip_and_atomic_writeback() {
     assert_eq!(event.kind, "original");
     let bad = WasmMod {
         subscribed: &[],
+        listeners: &[],
         group: 0,
         corrupt: true,
     };
@@ -1543,6 +1580,7 @@ fn wire_loopback_resource_load_restores_module_after_cross_group_unwind() {
     let first_module = WasmMod {
         group: 1,
         subscribed: &[],
+        listeners: &[],
         corrupt: false,
     };
     first.module = &first_module;
@@ -1550,6 +1588,7 @@ fn wire_loopback_resource_load_restores_module_after_cross_group_unwind() {
     let second_module = WasmMod {
         group: 2,
         subscribed: &[],
+        listeners: &[],
         corrupt: true,
     };
     second.module = &second_module;
@@ -1565,4 +1604,44 @@ fn wire_loopback_resource_load_restores_module_after_cross_group_unwind() {
         load(id).bounding_box(),
         mod_api::BoundingBox::new([1, 2, 3], [4, 5, 6])
     );
+}
+
+#[test]
+fn listener_metadata_and_cancellation_cross_the_real_guest() {
+    let module = WasmMod {
+        group: 0,
+        subscribed: &[],
+        listeners: &[],
+        corrupt: false,
+    };
+    let metadata: Vec<(String, i32, bool)> = module
+        .call(
+            CallClass::Load,
+            boundary::Frame::default(),
+            boundary::SUBSCRIBED,
+            None,
+            |_| {},
+            |r| r.take(),
+        )
+        .unwrap();
+    assert_eq!(metadata, vec![("render_gui_pre".into(), -37, true)]);
+    let event: mod_api::RenderGuiPreEvent = Reader::new(&[1]).take().unwrap();
+    let id = boundary::export_id("Hooks", "render_gui_pre").unwrap();
+    let (flow, event) = module
+        .call(
+            CallClass::Hook,
+            boundary::Frame::default(),
+            id,
+            None,
+            |w| w.put(&event),
+            |r| {
+                Ok((
+                    r.take::<mod_api::Flow>()?,
+                    r.take::<mod_api::RenderGuiPreEvent>()?,
+                ))
+            },
+        )
+        .unwrap();
+    assert_eq!(flow, mod_api::Flow::Continue);
+    assert!(!event.cancelled);
 }

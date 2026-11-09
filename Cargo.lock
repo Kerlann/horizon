@@ -2078,7 +2078,6 @@ dependencies = [
  "horizon-mod-api-macros",
  "horizon-mod-package",
  "horizon-mod-runtime",
- "horizon-world",
  "log",
  "serde",
  "serde_json",

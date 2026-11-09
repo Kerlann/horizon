@@ -5,7 +5,18 @@ pub struct Mod;
 
 #[mod_api::horizon_mod]
 impl Hooks for Mod {
+    #[listener(priority = 37)]
     fn server_stopped(&self, _: &mut dyn mod_api::ServerHost, _: &mut mod_api::ServerStoppedEvent) {
+    }
+
+    #[listener(priority = -12, receive_cancelled)]
+    fn render_gui_pre(
+        &self,
+        _: &dyn mod_api::ClientHost,
+        event: &mut mod_api::RenderGuiPreEvent,
+    ) -> mod_api::Flow {
+        event.cancelled = false;
+        mod_api::Flow::Continue
     }
 
     fn register(&self, registrar: &mut dyn mod_api::Registrar, _: &mod_api::RegistrationContext) {

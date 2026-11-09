@@ -138,7 +138,11 @@ impl Game<'_> {
     /// particles (`sendParticles`, spread 0.2) and `destroy`. The blow is
     /// `Player.attack` on a target that is not a mob: its sounds, then the swing.
     pub(super) fn hit_shulker_bullet(&mut self, i: usize) {
-        let (_, _, _, magic) = self.melee_damage("minecraft:shulker_bullet", false);
+        let (_, _, _, magic) = self.melee_damage(
+            "minecraft:shulker_bullet",
+            false,
+            Some(self.creatures.projectiles[i].id),
+        );
         let sweep = self.sweep_before_hit("minecraft:shulker_bullet", false);
         let p = self.creatures.projectiles.remove(i);
         let at = [p.position.x, p.position.y, p.position.z];

@@ -320,6 +320,15 @@ pub(super) fn gameplay_tables(
             let conditions = horizon_world::conditions::LoadConditions::new(inventory.server_ids());
             let mut motion =
                 MotionResources::load_with_conditions(root, assets, &facts, &conditions)?;
+            // #812: the attribute types mods declare come first, appended
+            // after every vanilla attribute in the sorted catalog order, so
+            // the rows below may name a mod's own new attribute and the
+            // network ids stay the same on every side running these mods.
+            let declared = mod_api::__private::attribute_declarations();
+            if !declared.is_empty() {
+                motion.attributes =
+                    std::sync::Arc::new(with_mod_attributes(&motion.attributes, declared)?);
+            }
             // #845: a mod's declared attribute sets
             // (`EntityAttributeCreationEvent`) become their entity types' rows
             // in the live attribute map's catalog — the one record the mob
@@ -361,6 +370,40 @@ pub(super) fn gameplay_tables(
         facts,
         gameplay_projection,
     })
+}
+
+/// The catalog with the attribute types mods declared (#812,
+/// `Registrar::declare_attribute`), appended after every vanilla attribute:
+/// `Catalog::with_attributes` sorts them by declaring mod id, then attribute
+/// id, and refuses a duplicate, naming it.
+pub(super) fn with_mod_attributes(
+    catalog: &horizon_world::attributes::entity::Catalog,
+    declared: &[mod_api::__private::AttributeDeclaration],
+) -> std::result::Result<horizon_world::attributes::entity::Catalog, String> {
+    let added = declared
+        .iter()
+        .map(|declared| {
+            Ok(horizon_world::attributes::entity::AddedAttribute {
+                mod_id: declared.mod_id.clone(),
+                id: declared.id.clone(),
+                definition: horizon_world::attributes::Definition::ranged(
+                    declared.default,
+                    declared.min,
+                    declared.max,
+                )
+                .map_err(|error| format!("mod attribute {}: {error}", declared.id))?,
+                syncable: declared.syncable,
+                sentiment: match declared.sentiment {
+                    mod_api::Sentiment::Positive => horizon_world::attributes::Sentiment::Positive,
+                    mod_api::Sentiment::Negative => horizon_world::attributes::Sentiment::Negative,
+                    mod_api::Sentiment::Neutral => horizon_world::attributes::Sentiment::Neutral,
+                },
+            })
+        })
+        .collect::<std::result::Result<Vec<_>, String>>()?;
+    catalog
+        .with_attributes(&added)
+        .map_err(|error| format!("mod attribute declarations: {error}"))
 }
 
 /// The catalog with the attributes mods add to existing entity types

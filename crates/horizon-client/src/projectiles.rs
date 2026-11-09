@@ -1454,12 +1454,15 @@ impl Projectile {
     }
     /// AbstractArrow.onHitEntity damage: ceil(speed * base) plus crit bonus.
     pub fn arrow_damage(&mut self) -> f32 {
-        let ProjectileKind::Arrow {
-            base_damage,
-            critical,
-            ..
-        } = self.kind
-        else {
+        let ProjectileKind::Arrow { base_damage, .. } = self.kind else {
+            return 0.0;
+        };
+        self.arrow_damage_with_base(base_damage)
+    }
+    /// Finish an arrow hit after enchantments transform its base damage, before
+    /// speed scaling, rounding and the projectile's critical random draw.
+    pub fn arrow_damage_with_base(&mut self, base_damage: f64) -> f32 {
+        let ProjectileKind::Arrow { critical, .. } = self.kind else {
             return 0.0;
         };
         let v = self.velocity;
@@ -2539,3 +2542,30 @@ mod render_light_tests {
 }
 crate::impl_joined!(Projectile);
 horizon_mod_runtime::impl_attachment_lifetime!(Projectile);
+
+#[cfg(test)]
+mod enchanted_arrow_order_tests {
+    use super::*;
+    #[test]
+    fn enchanted_base_is_scaled_before_rounding_and_critical_draw() {
+        let mut arrow = Projectile::new(
+            ProjectileKind::Arrow {
+                base_damage: 2.0,
+                critical: false,
+                effect: None,
+            },
+            Vec3::ZERO,
+            None,
+        );
+        arrow.velocity = Vec3::new(3.0, 0.0, 0.0);
+        // Power I adds 1 to base damage, not to the scaled hit.
+        assert_eq!(arrow.arrow_damage_with_base(3.0), 9.0);
+        if let ProjectileKind::Arrow { critical, .. } = &mut arrow.kind {
+            *critical = true;
+        }
+        arrow.random.0 = horizon_core::random::LegacyRandom::new(42);
+        // java.util.Random(42): nextInt(6) = 2.
+        assert_eq!(arrow.arrow_damage_with_base(3.0), 11.0);
+        assert_eq!(arrow.random.0.next_int(), 234785527);
+    }
+}

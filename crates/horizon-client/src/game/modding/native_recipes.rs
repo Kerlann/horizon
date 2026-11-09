@@ -144,7 +144,10 @@ impl Game<'_> {
                 let at = |i: usize| (i / w) * size + i % w;
                 let mut grid: [Option<ItemStack>; 9] = Default::default();
                 for (i, stack) in slots.iter().enumerate() {
-                    grid[at(i)] = stack.as_ref().map(&read_stack).transpose()?;
+                    #[allow(clippy::needless_borrows_for_generic_args)] // TODO(#2273)
+                    {
+                        grid[at(i)] = stack.as_ref().map(&read_stack).transpose()?;
+                    }
                 }
                 let grid = &grid[..size * size];
                 let scale = |id: i32| self.maps.data.get(&id).map(|m| m.scale);
@@ -209,8 +212,11 @@ impl Game<'_> {
                 else {
                     return Err(InvalidInput);
                 };
+                #[allow(clippy::needless_borrows_for_generic_args)] // TODO(#2273)
                 let template = template.as_ref().map(&read_stack).transpose()?;
+                #[allow(clippy::needless_borrows_for_generic_args)] // TODO(#2273)
                 let base = base.as_ref().map(&read_stack).transpose()?;
+                #[allow(clippy::needless_borrows_for_generic_args)] // TODO(#2273)
                 let addition = addition.as_ref().map(&read_stack).transpose()?;
                 let stations = self.stations();
                 let Some((id, output)) = stations.recipes.smithing_recipe(

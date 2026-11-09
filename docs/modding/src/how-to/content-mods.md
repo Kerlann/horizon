@@ -490,6 +490,19 @@ only for attributes the template has; one it lacks stops the content root's buil
 { "template": "minecraft:zombie", "attributes": { "minecraft:max_health": 40.0, "minecraft:movement_speed": 0.3 } }
 ```
 
+A code mod can also register an attribute type of its own with `Registrar::declare_attribute(path, default,
+min, max, syncable, sentiment)` (vanilla's `RangedAttribute` in the attribute registry). Only both-side
+packages may declare attributes; client-only and server-only packages refuse with `WrongSide` so extra
+client mods cannot shift packet IDs. `mod_api::Sentiment` is `Positive`, `Negative`, or `Neutral`.
+The id lands in the
+mod's namespace, the bounds and default follow `RangedAttribute`'s own checks, `syncable` decides whether the
+value syncs to clients, and `sentiment` (POSITIVE by default) colors the attribute's tooltip lines. The declared
+attributes append after the vanilla ones in the attribute catalog — sorted by declaring mod id, then attribute
+id, so the network ids are the same on every side running the same mods — before entity attribute rows resolve,
+so a mod's entity set may name its own new attribute. Values sanitize through the definition (NaN maps to the
+minimum, everything else clamps), and saves, item modifiers and the sync set carry the attribute by its string
+id.
+
 A code mod can also use `Registrar::declare_entity_attributes(path, template, attributes)` during registration.
 That declaration starts from the vanilla template's attribute row, replacing the content row's overrides.
 Declared bases remain available to base-value reads, but computed values and spawn fields clamp them to each

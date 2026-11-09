@@ -832,14 +832,14 @@ fn canonical_permissions_preserve_owner_and_fake_player_reads() {
 
 /// The UUIDs of the players in the level, checked against the full reader.
 fn level_uuids(game: &super::Game<'_>) -> Vec<u128> {
-    let uuids: Vec<u128> = game.level_player_uuids().collect();
+    let uuids: Vec<u128> = game.level_player_uuids(game.dim.id()).collect();
     let players: Vec<u128> = game.level_players().iter().map(|p| p.uuid).collect();
     assert_eq!(uuids, players, "both enumerations select the same players");
     uuids
 }
 
 /// The host in place, with a body and UUID 99.
-fn place_host(game: &mut super::Game<'_>) {
+pub(in crate::game) fn place_host(game: &mut super::Game<'_>) {
     let mut body =
         horizon_client::motion::PlayerMotion::new(game.motion, Vec3::new(0.0, 64.0, 0.0)).unwrap();
     body.entity_id = 99;

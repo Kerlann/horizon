@@ -20,7 +20,7 @@ use horizon_core::{
     geometry::{Aabb, Vec3},
     random::RandomSource,
 };
-use mod_api::NativeSpawnCheck;
+use mod_api::{NativeSpawnCheck, SpawnFlags, SpawnLimits};
 use serde_json::Value;
 use std::{borrow::Cow, collections::HashMap, fs, path::Path};
 
@@ -103,16 +103,19 @@ impl Category {
     fn index(self) -> usize {
         self as usize
     }
-    /// `getMaxInstancesPerChunk`.
-    pub fn max(self) -> i32 {
-        match self {
-            Self::Monster => 70,
-            Self::Creature => 10,
-            Self::Ambient => 15,
-            Self::Axolotls | Self::UndergroundWaterCreature | Self::WaterCreature => 5,
-            Self::WaterAmbient => 20,
-            Self::Misc => -1,
-        }
+    /// `getMaxInstancesPerChunk` under a level's `limits` (vanilla's are
+    /// [`SpawnLimits::VANILLA`]); MISC's is -1, as it never spawns.
+    pub fn max(self, limits: &SpawnLimits) -> i64 {
+        i64::from(match self {
+            Self::Monster => limits.monster,
+            Self::Creature => limits.creature,
+            Self::Ambient => limits.ambient,
+            Self::Axolotls => limits.axolotls,
+            Self::UndergroundWaterCreature => limits.underground_water_creature,
+            Self::WaterCreature => limits.water_creature,
+            Self::WaterAmbient => limits.water_ambient,
+            Self::Misc => return -1,
+        })
     }
     pub fn friendly(self) -> bool {
         self != Self::Monster
@@ -950,6 +953,8 @@ pub struct SpawnPlayer {
 #[derive(Clone, Debug)]
 pub struct SpawnState {
     spawnable_chunks: i32,
+    /// The level's `getMaxInstancesPerChunk` values.
+    limits: SpawnLimits,
     counts: [i32; 8],
     charges: Vec<([i32; 3], f64)>,
     players: Vec<SpawnPlayer>,
@@ -977,17 +982,7 @@ impl SpawnState {
         entities: &[Counted],
         chunk_loaded: impl Fn(i32, i32) -> bool,
     ) -> Self {
-        let mut state = Self {
-            spawnable_chunks,
-            counts: [0; 8],
-            charges: Vec::new(),
-            player_counts: vec![[0; 8]; players.len()],
-            cells: PlayerCells::new(players.iter().map(|p| (p.position[0], p.position[2]))),
-            players,
-            players_near: FxHashMap::default(),
-            near_list: Vec::new(),
-            last_checked: None,
-        };
+        let mut state = Self::uncounted(spawnable_chunks, players);
         for e in entities {
             if e.is_mob && e.persistent || e.category == Category::Misc {
                 continue;
@@ -1005,6 +1000,26 @@ impl SpawnState {
             state.counts[e.category.index()] += 1;
         }
         state
+    }
+    /// The state before any entity is counted.
+    fn uncounted(spawnable_chunks: i32, players: Vec<SpawnPlayer>) -> Self {
+        Self {
+            spawnable_chunks,
+            limits: SpawnLimits::VANILLA,
+            counts: [0; 8],
+            charges: Vec::new(),
+            player_counts: vec![[0; 8]; players.len()],
+            cells: PlayerCells::new(players.iter().map(|p| (p.position[0], p.position[2]))),
+            players,
+            players_near: FxHashMap::default(),
+            near_list: Vec::new(),
+            last_checked: None,
+        }
+    }
+    /// The state with the level's own spawn limits in place of vanilla's.
+    pub fn with_limits(mut self, limits: SpawnLimits) -> Self {
+        self.limits = limits;
+        self
     }
     fn add_charge(&mut self, pos: [i32; 3], charge: f64) {
         if charge != 0.0 {
@@ -1039,19 +1054,22 @@ impl SpawnState {
             self.player_counts[self.near_list[i]][category.index()] += 1;
         }
     }
-    /// `canSpawnForCategoryGlobal`.
+    /// `canSpawnForCategoryGlobal`, in wide arithmetic: a mod's limit times
+    /// the chunks may pass `i32`, which vanilla's limits never do, so they
+    /// divide as vanilla's `int`s.
     pub fn can_spawn_global(&self, category: Category) -> bool {
-        let max = category.max() * self.spawnable_chunks / 289;
-        self.counts[category.index()] < max
+        let max = category.max(&self.limits) * i64::from(self.spawnable_chunks) / 289;
+        i64::from(self.counts[category.index()]) < max
     }
     /// `canSpawnForCategoryLocal` (`LocalMobCapCalculator.canSpawn`).
     pub fn can_spawn_local(&mut self, category: Category, cx: i32, cz: i32) -> bool {
-        // A player with nothing counted yet can spawn: zero is under every
-        // spawning category's cap.
+        // A player with nothing counted yet can spawn while the cap is above
+        // zero, as vanilla's always are.
         let near = self.players_near(cx, cz);
+        let max = category.max(&self.limits);
         self.near_list[near]
             .iter()
-            .any(|&p| self.player_counts[p][category.index()] < category.max())
+            .any(|&p| i64::from(self.player_counts[p][category.index()]) < max)
     }
     /// `getFilteredSpawningCategories`.
     pub fn filtered_categories(
@@ -1067,6 +1085,21 @@ impl SpawnState {
                     && self.can_spawn_global(c)
             })
             .collect()
+    }
+    /// The categories a level's spawn pass tries: `filtered_categories` with
+    /// the `spawn_monsters` rule and the level's `flags` (Horizon's, set by
+    /// mods) both letting monsters through, and the other categories only
+    /// while `flags.friendlies` is on. Both flags on is vanilla's choice.
+    pub fn policy_categories(
+        &self,
+        flags: SpawnFlags,
+        spawn_monsters: bool,
+        spawn_persistent: bool,
+    ) -> Vec<Category> {
+        let mut categories =
+            self.filtered_categories(flags.monsters && spawn_monsters, spawn_persistent);
+        categories.retain(|c| flags.friendlies || !c.friendly());
+        categories
     }
     /// `SpawnState.canSpawn`: the spawn potential's energy change must stay
     /// within the type's budget where it has a spawn cost.
@@ -1753,6 +1786,121 @@ mod tests {
         assert_eq!(stops_at(Some(5), Species::Ghast), 5);
         // A limit of 0 ends the group with the mob just spawned, as vanilla's would.
         assert!(cluster_full(1, Some(0), Species::Zombie));
+    }
+
+    /// A state over `chunks` spawnable chunks with one player standing in chunk (0, 0).
+    fn one_player(chunks: i32, limits: SpawnLimits) -> SpawnState {
+        let player = SpawnPlayer {
+            position: [8.0, 64.0, 8.0],
+            spectator: false,
+        };
+        SpawnState::uncounted(chunks, vec![player]).with_limits(limits)
+    }
+
+    /// Vanilla's limits: one player's 289 chunks hold 70 monsters, so a count of 69 still
+    /// spawns and 70 doesn't; 144 chunks hold 70 * 144 / 289 = 34 (34.88 rounded down); and a
+    /// player near the chunk with 70 monsters around refuses it locally.
+    #[test]
+    fn vanilla_limits_cap_as_vanilla_does() {
+        let mut state = one_player(289, SpawnLimits::VANILLA);
+        state.counts[Category::Monster.index()] = 69;
+        assert!(state.can_spawn_global(Category::Monster));
+        state.counts[Category::Monster.index()] = 70;
+        assert!(!state.can_spawn_global(Category::Monster));
+        let mut fewer = one_player(144, SpawnLimits::VANILLA);
+        fewer.counts[Category::Monster.index()] = 33;
+        assert!(fewer.can_spawn_global(Category::Monster));
+        fewer.counts[Category::Monster.index()] = 34;
+        assert!(!fewer.can_spawn_global(Category::Monster));
+        // Ten creatures, fifteen ambient mobs.
+        state.counts[Category::Creature.index()] = 10;
+        state.counts[Category::Ambient.index()] = 14;
+        assert!(!state.can_spawn_global(Category::Creature));
+        assert!(state.can_spawn_global(Category::Ambient));
+        state.player_counts[0][Category::Monster.index()] = 69;
+        assert!(state.can_spawn_local(Category::Monster, 0, 0));
+        state.player_counts[0][Category::Monster.index()] = 70;
+        assert!(!state.can_spawn_local(Category::Monster, 0, 0));
+    }
+
+    /// A level's own limit moves both caps: a limit of 0 stops the category with nothing
+    /// counted, and a raised one lets the 70th monster through. A mod's largest limit over the
+    /// most chunks is counted without overflowing.
+    #[test]
+    fn a_levels_limits_move_both_caps() {
+        let none = SpawnLimits {
+            monster: 0,
+            ..SpawnLimits::VANILLA
+        };
+        let mut state = one_player(289, none);
+        assert!(!state.can_spawn_global(Category::Monster));
+        assert!(!state.can_spawn_local(Category::Monster, 0, 0));
+        assert!(
+            state.can_spawn_global(Category::Creature),
+            "the others keep theirs"
+        );
+        let raised = SpawnLimits {
+            monster: 100,
+            ..SpawnLimits::VANILLA
+        };
+        let mut state = one_player(289, raised);
+        state.counts[Category::Monster.index()] = 99;
+        state.player_counts[0][Category::Monster.index()] = 99;
+        assert!(state.can_spawn_global(Category::Monster));
+        assert!(state.can_spawn_local(Category::Monster, 0, 0));
+        state.counts[Category::Monster.index()] = 100;
+        assert!(!state.can_spawn_global(Category::Monster));
+        let most = SpawnLimits {
+            monster: u32::MAX,
+            ..SpawnLimits::VANILLA
+        };
+        let mut state = one_player(i32::MAX, most);
+        state.counts[Category::Monster.index()] = i32::MAX;
+        state.player_counts[0][Category::Monster.index()] = i32::MAX;
+        assert!(state.can_spawn_global(Category::Monster));
+        assert!(state.can_spawn_local(Category::Monster, 0, 0));
+    }
+
+    /// The flags take categories away from vanilla's choice and never add one back: the
+    /// `spawn_monsters` rule off keeps monsters out whatever the flag says.
+    #[test]
+    fn a_levels_flags_take_categories_away() {
+        use Category as C;
+        let state = one_player(289, SpawnLimits::VANILLA);
+        let flags = |monsters, friendlies| SpawnFlags {
+            monsters,
+            friendlies,
+        };
+        let friendly = vec![
+            C::Creature,
+            C::Ambient,
+            C::Axolotls,
+            C::UndergroundWaterCreature,
+            C::WaterCreature,
+            C::WaterAmbient,
+        ];
+        let mut all = vec![C::Monster];
+        all.extend(friendly.iter().copied());
+        assert_eq!(state.policy_categories(flags(true, true), true, true), all);
+        assert_eq!(
+            state.policy_categories(flags(false, true), true, true),
+            friendly
+        );
+        assert_eq!(
+            state.policy_categories(flags(true, true), false, true),
+            friendly
+        );
+        assert_eq!(
+            state.policy_categories(flags(true, false), true, true),
+            [C::Monster]
+        );
+        assert_eq!(state.policy_categories(flags(false, false), true, true), []);
+        // Creatures still wait for the persistent pass.
+        let without_creatures: Vec<_> = all.into_iter().filter(|&c| c != C::Creature).collect();
+        assert_eq!(
+            state.policy_categories(flags(true, true), true, false),
+            without_creatures
+        );
     }
 
     /// The grid finds the players whose chunk is within 8 of a chunk on both

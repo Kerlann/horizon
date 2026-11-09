@@ -525,6 +525,11 @@ impl Cx {
         }
         for group in groups {
             writeln!(code, "impl {} for crate::{receiver} {{", trait_path(&group)).unwrap();
+            if receiver == "WasmMod" && group == "Hooks" {
+                code.push_str(
+                    "fn listeners(&self) -> &'static [mod_api::Listener] { self.listeners }\n",
+                );
+            }
             for (id, m) in surface
                 .methods
                 .iter()

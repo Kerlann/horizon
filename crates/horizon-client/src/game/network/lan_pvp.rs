@@ -106,6 +106,17 @@ impl Strike {
     }
 }
 
+/// The attacker's pre-hit inputs retained until a sweep's actual victim is in place.
+#[derive(Clone)]
+struct SweepDamage {
+    weapon: horizon_client::items::ItemStack,
+    attacker: u32,
+    base: f32,
+    scale: f32,
+    damage_type: String,
+    direct_motion: Option<(f64, bool)>,
+}
+
 /// A sweep attack's reach to the other players (`Player.doSweepAttack`),
 /// worked out as the attacker.
 #[derive(Clone)]
@@ -118,6 +129,8 @@ pub(super) struct Sweep {
     from: [f64; 3],
     /// The damage after the enchantments and the attack strength.
     damage: f32,
+    /// Custom effects need the actual victim, so keep their pre-hit input until each landing.
+    custom_damage: Option<SweepDamage>,
     /// The push along the attacker's yaw.
     knockback: (f64, f64),
     team: Option<horizon_client::scoreboard::Team>,
@@ -175,10 +188,11 @@ impl Game<'_> {
 
     /// The attacker's side of `Player.attack` (the host, or a guest swapped
     /// in): the damage, the charge reset and the swing.
-    pub(super) fn pvp_strike(&mut self) -> Option<Strike> {
+    pub(super) fn pvp_strike(&mut self, victim: u32) -> Option<Strike> {
         let p = self.player.as_ref()?;
         let from = [p.position.x, p.position.y, p.position.z];
-        let (amount, scale, crit, magic) = self.melee_damage("minecraft:player", true);
+        let (amount, scale, crit, magic) =
+            self.melee_damage("minecraft:player", true, Some(victim));
         let sweep = self.sweep_attack_position(scale, crit, "minecraft:player");
         let (strength, knockback_attack) = self.extra_knockback("minecraft:player", scale);
         let (xd, zd) = self.extra_knockback_direction();
@@ -309,13 +323,21 @@ impl Game<'_> {
             at,
         };
         let shooter = self.player_attacker(p.guest);
+        let effect_attacker = shooter
+            .as_ref()
+            .map_or(self.own_entity_id() as u32, |s| s.0);
         let result = match victim {
             Victim::Guest(conn) => self.guest_hit_by(conn, |g| {
                 g.combat.refuse_player_hit = refused;
                 g.combat.projectile_attacker = shooter;
+                let saved_effect_attacker = g
+                    .combat
+                    .enchantment_projectile_attacker
+                    .replace(effect_attacker);
                 let r = g.projectile_hit(p, on_player);
                 g.combat.refuse_player_hit = false;
                 g.combat.projectile_attacker = None;
+                g.combat.enchantment_projectile_attacker = saved_effect_attacker;
                 r
             }),
         };
@@ -528,12 +550,34 @@ impl Game<'_> {
             .player
             .as_ref()
             .map_or([0.0; 3], |p| [p.position.x, p.position.y, p.position.z]);
-        let damage = self.enchanted_damage("minecraft:player", base) * scale;
+        let custom_damage = self
+            .held()
+            .filter(|_| self.stations().enchantments.has_custom_damage_effects())
+            .zip(self.player.as_ref())
+            .map(|(held, player)| {
+                let weapon = self.item_combat_stack(held);
+                let motion = (player.fall_distance, player.fall_flying);
+                let damage_type = self.stack_melee_damage_type(Some(&weapon), motion, true);
+                SweepDamage {
+                    weapon,
+                    attacker: player.entity_id as u32,
+                    base,
+                    scale,
+                    damage_type,
+                    direct_motion: Some(motion),
+                }
+            });
+        let damage = if custom_damage.is_some() {
+            0.0
+        } else {
+            self.enchanted_damage("minecraft:player", base, None) * scale
+        };
         Sweep {
             attacker: self.lan_acting,
             creative: self.creative,
             from,
             damage,
+            custom_damage,
             knockback: self.extra_knockback_direction(),
             team: self.player_team().cloned(),
             hit_box: Aabb::new(Vec3::ZERO, Vec3::ZERO),
@@ -591,12 +635,25 @@ impl Game<'_> {
         let attacker_id = self.player.as_ref().map_or(0, |p| p.entity_id);
         let attack = self.attack_of(attacker.as_ref().map_or(attacker_id, |(id, _)| *id as i32));
         let land = |g: &mut Self| {
+            let damage = if let Some(damage) = &sweep.custom_damage {
+                let victim = g.player.as_ref().map(|player| player.entity_id as u32);
+                g.weapon_enchanted_damage(
+                    &damage.weapon,
+                    victim.map(|victim| (damage.attacker, victim)),
+                    "minecraft:player",
+                    &damage.damage_type,
+                    damage.base,
+                    damage.direct_motion,
+                ) * damage.scale
+            } else {
+                sweep.damage
+            };
             g.with_attack(attack.clone(), |g| {
                 if let Some((id, name)) = &attacker {
                     g.note_named_attacker("minecraft:player_attack", *id, name.clone());
                 }
                 if g.mob_hits_player_from(
-                    sweep.damage,
+                    damage,
                     sweep.from,
                     "minecraft:player_attack",
                     sweep.creative,

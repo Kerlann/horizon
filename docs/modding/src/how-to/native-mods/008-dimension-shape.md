@@ -150,6 +150,19 @@ goes back. Match it with a final `Custom(_)` arm. The game's own rules read the 
 too (water that evaporates, fast lava, infiniburn, piglin portals), and `player_respawn_position` may send a player to
 a `Custom` level.
 
+### Players, structures and chunk watchers
+
+`level.online_players(host)` lists the real online players in that server level, including
+when it is parked. Obtain a chunk with `host.chunk(level, pos)`, then call
+`chunk.watchers(host)` to ask which players were sent it and still have it inside their
+view distance; fake players watch nothing.
+
+`level.find_nearest_structure(host, structure, StructureSearch::new(origin, radius))` searches
+for a structure id or `#tag` and returns its structure and locate position. This is a
+synchronous, `/locate`-cost search, not a cheap loaded-chunk lookup: cache results and avoid
+per-tick use. The radius counts placement-cell rings (at most 100); stronghold rings are
+checked regardless of radius. It does not load or generate chunks.
+
 ### Saving a level
 
 `level.request_save(host)` asks the server to save a level, as the autosave and `/save-all` do, with its

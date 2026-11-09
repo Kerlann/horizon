@@ -22,6 +22,23 @@ pub struct RegisteredAttribute {
     pub name: String,
     pub definition: Definition,
     pub syncable: bool,
+    pub sentiment: super::Sentiment,
+}
+/// A mod's declared attribute type, as the game hands it to
+/// [`Catalog::with_attributes`]: the declaring mod's id (the sort key), the
+/// namespaced attribute id, its definition, sync flag and sentiment.
+#[derive(Clone, Debug)]
+pub struct AddedAttribute {
+    /// The declaring mod's id (`mymod`).
+    pub mod_id: String,
+    /// The attribute's namespaced id (`mymod:mana`).
+    pub id: String,
+    /// The attribute's definition: default and bounds.
+    pub definition: Definition,
+    /// Whether the attribute joins the sync set.
+    pub syncable: bool,
+    /// The tooltip sentiment of a rising or falling value.
+    pub sentiment: super::Sentiment,
 }
 #[derive(Clone, Debug)]
 pub struct Catalog {
@@ -111,6 +128,9 @@ impl Catalog {
                 syncable: a["syncable"]
                     .as_bool()
                     .ok_or_else(|| invalid("missing attribute sync flag"))?,
+                // The vanilla export carries no sentiment: vanilla's own
+                // colors stay where the tooltip reads them.
+                sentiment: super::Sentiment::default(),
             });
         }
         let mut defaults = BTreeMap::new();
@@ -200,6 +220,56 @@ impl Catalog {
             start,
             additions.iter().map(|(name, base)| (name, *base)),
         )
+    }
+    /// A copy of the catalog with new attribute types appended
+    /// (`Registrar::declare_attribute`, #812): after every attribute the
+    /// export listed, in order sorted by declaring mod id, then attribute id
+    /// — the network order every side running the same mods builds, since
+    /// [`AttributeId::registry_id`](Self::attribute)'s number is the index.
+    /// Vanilla ids never shift. Every entity's default row grows to the new
+    /// width, so a row resolved later (#845's `with_entity_row`, #846's
+    /// additions) may name an attribute a mod added. A duplicate id — one
+    /// the export already listed, or one two mods declared — refuses,
+    /// naming the id.
+    pub fn with_attributes(&self, added: &[AddedAttribute]) -> io::Result<Catalog> {
+        let mut attributes = self.attributes.clone();
+        let mut ids = self.ids.clone();
+        let from = attributes.len();
+        let mut sorted: Vec<&AddedAttribute> = added.iter().collect();
+        sorted.sort_by(|a, b| {
+            (a.mod_id.as_str(), a.id.as_str()).cmp(&(b.mod_id.as_str(), b.id.as_str()))
+        });
+        for (offset, attribute) in sorted.into_iter().enumerate() {
+            let id = AttributeId(from + offset);
+            if self.ids.contains_key(attribute.id.as_str())
+                || ids.insert(attribute.id.clone(), id).is_some()
+            {
+                return Err(invalid(format!(
+                    "duplicate attribute identifier {}",
+                    attribute.id
+                )));
+            }
+            attributes.push(RegisteredAttribute {
+                name: attribute.id.clone(),
+                definition: attribute.definition,
+                syncable: attribute.syncable,
+                sentiment: attribute.sentiment,
+            });
+        }
+        let defaults = self
+            .defaults
+            .iter()
+            .map(|(entity, bases)| {
+                let mut grown = bases.to_vec();
+                grown.resize(attributes.len(), None);
+                (entity.clone(), Arc::from(grown))
+            })
+            .collect();
+        Ok(Catalog {
+            attributes,
+            ids,
+            defaults,
+        })
     }
     /// A copy of the catalog whose `entity` row is `start` with `overrides`
     /// on top; an override without a base takes the attribute's default.
@@ -512,6 +582,84 @@ mod row_tests {
         assert_eq!(live.value(luck).unwrap(), 3.5);
         // The catalog itself keeps what it had.
         assert_eq!(catalog.default_base("minecraft:zombie", luck), None);
+    }
+
+    /// Mod attributes append after every vanilla attribute, sorted by
+    /// declaring mod id then attribute id (#812): the order is the network
+    /// id's, the same whatever order the mods declared in, and vanilla ids
+    /// never shift.
+    #[test]
+    fn mod_attributes_append_after_vanilla_in_a_sorted_order() {
+        use super::super::Sentiment;
+        let catalog = catalog();
+        let added = |mod_id: &str, id: &str, syncable| AddedAttribute {
+            mod_id: mod_id.into(),
+            id: id.into(),
+            definition: Definition::ranged(1.0, 0.0, 10.0).unwrap(),
+            syncable,
+            sentiment: Sentiment::Neutral,
+        };
+        // Declared in the order the mods happen to register: the catalog
+        // sorts them by mod id, then attribute id.
+        let grown = catalog
+            .with_attributes(&[
+                added("zeta", "zeta:alpha", true),
+                added("alpha", "alpha:zeta", false),
+                added("alpha", "alpha:beta", true),
+            ])
+            .unwrap();
+        for (name, id) in [
+            ("minecraft:max_health", 0),
+            ("minecraft:armor", 1),
+            ("minecraft:luck", 2),
+            ("minecraft:follow_range", 3),
+            ("alpha:beta", 4),
+            ("alpha:zeta", 5),
+            ("zeta:alpha", 6),
+        ] {
+            assert_eq!(grown.id(name).unwrap().registry_id(), id, "{name}");
+        }
+        assert_eq!(
+            grown.id("minecraft:max_health"),
+            catalog.id("minecraft:max_health"),
+            "vanilla ids never shift"
+        );
+        // The same declarations in another order build the same ids.
+        let again = catalog
+            .with_attributes(&[
+                added("alpha", "alpha:zeta", false),
+                added("alpha", "alpha:beta", true),
+                added("zeta", "zeta:alpha", true),
+            ])
+            .unwrap();
+        assert_eq!(again.id("zeta:alpha"), grown.id("zeta:alpha"));
+        assert_eq!(again.id("alpha:beta"), grown.id("alpha:beta"));
+        // Every entity's row grows to the new width.
+        let mut live = Arc::new(grown.clone()).create("minecraft:zombie").unwrap();
+        let added_id = grown.id("alpha:beta").unwrap();
+        assert_eq!(live.value(added_id), Err(LookupError::MissingAttribute));
+        // Grown to the new width, but the type does not gain the attribute:
+        // an addition below may put it on the row, with its default.
+        assert!(!live.has(added_id));
+        let added_row = grown
+            .with_entity_additions("minecraft:zombie", &[("alpha:beta".into(), None)])
+            .unwrap();
+        let mut live = Arc::new(added_row).create("minecraft:zombie").unwrap();
+        assert_eq!(live.value(added_id), Ok(1.0));
+        // A duplicate — a vanilla id, or one declared twice — refuses.
+        assert!(
+            catalog
+                .with_attributes(&[added("minecraft", "minecraft:armor", true)])
+                .is_err()
+        );
+        assert!(
+            catalog
+                .with_attributes(&[
+                    added("alpha", "alpha:beta", true),
+                    added("zeta", "alpha:beta", false)
+                ])
+                .is_err()
+        );
     }
 
     #[test]

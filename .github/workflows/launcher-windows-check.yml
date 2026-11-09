@@ -2,6 +2,12 @@ name: launcher-windows-check
 # The launcher's tests on Windows x64, for pull requests that change it. Nothing is built for release or published:
 # the release workflow (launcher.yml) stays off. GitHub-hosted, so it needs no runner of ours.
 on:
+  # Main pushes publish the cache that pull requests restore (pull requests never save one).
+  push:
+    branches: [main]
+    paths:
+      - 'launcher/**'
+      - '.github/workflows/launcher-windows-check.yml'
   pull_request:
     paths:
       - 'launcher/**'
@@ -32,5 +38,7 @@ jobs:
         with:
           workspaces: launcher
           shared-key: launcher-windows-check
+          # One cache from main, read by every pull request: per-PR caches filled the 10 GB budget and evicted main's.
+          save-if: ${{ github.ref == 'refs/heads/main' }}
       # Every test target (the library, the binary, tests/), as launcher.yml runs them.
       - run: cargo test --release --locked

@@ -121,6 +121,51 @@ fn cfg_attributes(method: &ImplItemFn) -> Vec<syn::Attribute> {
         .collect()
 }
 
+/// A method's `#[listener(priority = …, receive_cancelled)]`, removed from the method.
+struct ListenerOptions {
+    priority: syn::Expr,
+    /// The attribute's span, for the error when the hook has no cancel to receive.
+    receive_cancelled: Option<proc_macro2::Span>,
+}
+
+/// Takes `method`'s `#[listener]`, if it has one.
+fn take_listener(method: &mut ImplItemFn) -> syn::Result<Option<ListenerOptions>> {
+    let Some(index) = method
+        .attrs
+        .iter()
+        .position(|attr| attr.path().is_ident("listener"))
+    else {
+        return Ok(None);
+    };
+    let attr = method.attrs.remove(index);
+    if let Some(again) = method
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("listener"))
+    {
+        return Err(syn::Error::new_spanned(
+            again,
+            "a hook method takes one #[listener]",
+        ));
+    }
+    let mut options = ListenerOptions {
+        priority: syn::parse_quote!(0),
+        receive_cancelled: None,
+    };
+    attr.parse_nested_meta(|meta| {
+        if meta.path.is_ident("priority") {
+            options.priority = meta.value()?.parse()?;
+            Ok(())
+        } else if meta.path.is_ident("receive_cancelled") {
+            options.receive_cancelled = Some(meta.path.get_ident().unwrap().span());
+            Ok(())
+        } else {
+            Err(meta.error("expected `priority = <i32>` or `receive_cancelled`"))
+        }
+    })?;
+    Ok(Some(options))
+}
+
 fn uninspectable(item: &ImplItem) -> bool {
     matches!(item, ImplItem::Macro(_) | ImplItem::Verbatim(_))
 }
@@ -164,9 +209,25 @@ fn expand(mut implementation: ItemImpl, export: bool) -> TokenStream {
     }
     let mut methods = Vec::new();
     let mut cfgs = Vec::new();
-    for item in &implementation.items {
+    let mut listeners = Vec::new();
+    for item in &mut implementation.items {
         if let ImplItem::Fn(method) = item {
-            methods.push(&method.sig.ident);
+            match take_listener(method) {
+                Ok(Some(_)) if part.is_some() => {
+                    return syn::Error::new_spanned(
+                        &method.sig.ident,
+                        "#[listener] orders a trait mod's hooks; a part's are called for its own thing",
+                    )
+                    .into_compile_error()
+                    .into();
+                }
+                Ok(Some(options)) => {
+                    listeners.push((method.sig.ident.clone(), cfg_attributes(method), options))
+                }
+                Ok(None) => {}
+                Err(error) => return error.into_compile_error().into(),
+            }
+            methods.push(method.sig.ident.clone());
             cfgs.push(cfg_attributes(method));
         }
     }
@@ -189,6 +250,25 @@ fn expand(mut implementation: ItemImpl, export: bool) -> TokenStream {
         }
     };
     implementation.items.push(subscribed);
+    if !listeners.is_empty() {
+        let entries = listeners.iter().map(|(method, cfgs, options)| {
+            let priority = &options.priority;
+            let receive_cancelled = options.receive_cancelled.is_some();
+            quote! { #(#cfgs)* mod_api::Listener { hook: mod_api::#ids::#method, priority: #priority, receive_cancelled: #receive_cancelled } }
+        });
+        // Only a hook a mod may cancel has a constant here, so the option fails to compile on
+        // any other.
+        let checks = listeners.iter().filter_map(|(method, cfgs, options)| {
+            let at_option = syn::Ident::new(&method.to_string(), options.receive_cancelled?);
+            Some(quote! { #(#cfgs)* const _: () = mod_api::cancel_hooks::#at_option; })
+        });
+        implementation.items.push(syn::parse_quote! {
+            fn listeners(&self) -> &'static [mod_api::Listener] {
+                #(#checks)*
+                &[#(#entries),*]
+            }
+        });
+    }
     let export = if export && part.is_none() {
         let ty = &implementation.self_ty;
         let registrations: proc_macro2::TokenStream =
@@ -277,6 +357,12 @@ pub fn host_area(_attribute: TokenStream, input: TokenStream) -> TokenStream {
 }
 
 /// Mark a trait mod and derive its hook subscriptions.
+///
+/// A hook method may carry `#[listener(priority = <i32>, receive_cancelled)]`, both optional:
+/// mods run by descending priority (0 when omitted), then in dependency order, and a mod that
+/// receives cancelled events is still called after an earlier mod cancels, with
+/// `event.cancelled` to read and clear. `receive_cancelled` compiles only on a hook a mod may
+/// cancel.
 #[proc_macro_attribute]
 pub fn horizon_mod(_attribute: TokenStream, input: TokenStream) -> TokenStream {
     expand(parse_macro_input!(input as ItemImpl), true)

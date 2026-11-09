@@ -1024,6 +1024,22 @@ mod tests {
     }
 
     #[test]
+    fn provider_particle_state_survives_the_wire() {
+        round(crate::ModParticle {
+            position: [1.25, -2.5, 3.75],
+            previous: [0.0, -1.0, 2.0],
+            velocity: [0.1, 0.2, -0.3],
+            age: 7,
+            lifetime: 31,
+            size: 0.5,
+            rgba: [0.25, 0.5, 0.75, 1.0],
+            frame: 3,
+            removed: true,
+            state: [8.0, -9.0, 10.0, 11.0],
+        });
+    }
+
+    #[test]
     fn values_survive_a_round_trip() {
         round(7u32);
         round(-3i64);

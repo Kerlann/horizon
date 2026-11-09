@@ -74,7 +74,7 @@ impl Game<'_> {
     /// `FluidState.createLegacyBlock` for `state`, through the one table the engine converts
     /// fluid states with. None for a state no fluid can be in: no world form, an amount above
     /// 8, a zero amount for anything but the empty fluid, or a source that isn't full.
-    pub(super) fn fluid_legacy_block(&self, state: FluidState) -> Option<BlockStateId> {
+    pub(super) fn fluid_legacy_block(&self, state: FluidState) -> Option<mod_api::BlockStateId> {
         let kind = super::native_world_read::engine_fluid_kind(state.fluid)?;
         let engine = EngineFluidState::new(kind, state.amount, state.falling);
         let consistent = match kind {
@@ -82,7 +82,7 @@ impl Game<'_> {
             _ if engine.is_source() => state.amount == 8,
             _ => (1..=8).contains(&state.amount),
         };
-        consistent.then(|| self.res.behaviours().legacy_block(engine))
+        consistent.then(|| mod_api::BlockStateId(self.res.behaviours().legacy_block(engine).0))
     }
 
     /// Validate fluid constraints against the exported property definition.
@@ -511,7 +511,7 @@ mod tests {
             };
             let block = |state: FluidState| {
                 let id = service.legacy_block(state)?;
-                game.pack.assets.registry.state(id).cloned()
+                game.pack.assets.registry.state(BlockStateId(id.0)).cloned()
             };
             let liquid = |name: &str, level: &str| {
                 Some(BlockState {

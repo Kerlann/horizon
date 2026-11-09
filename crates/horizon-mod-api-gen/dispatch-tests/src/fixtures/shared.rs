@@ -121,12 +121,20 @@ thread_local! {
 }
 fn install(mods: Arc<[ModEntry]>) {
     let subscriptions = mods.iter().enumerate().flat_map(|(index, entry)| {
-        entry
-            .hooks
-            .subscribed()
-            .iter()
-            .flatten()
-            .map(move |hook| (index, *hook as usize))
+        let listeners = entry.hooks.listeners();
+        entry.hooks.subscribed().iter().flatten().map(move |hook| {
+            let listener = listeners.iter().find(|listener| {
+                listener
+                    .hook
+                    .is_some_and(|id| id as usize == *hook as usize)
+            });
+            horizon_mod_runtime::subscribers::Subscription {
+                index,
+                hook: *hook as usize,
+                priority: listener.map_or(0, |listener| listener.priority),
+                receives_cancelled: listener.is_some_and(|listener| listener.receive_cancelled),
+            }
+        })
     });
     let subscribers =
         horizon_mod_runtime::subscribers::Subscribers::new(HOOK_COUNT, mods.len(), subscriptions);
@@ -137,6 +145,10 @@ fn listened(hook: HookId) -> bool {
     MODS.get()
         .is_some_and(|installed| installed.subscribers.contains_any(hook as usize))
 }
+fn receives_cancelled(hook: HookId) -> bool {
+    MODS.get()
+        .is_some_and(|installed| installed.subscribers.receives_cancelled(hook as usize))
+}
 fn entered(hook_id: HookId, hook: &'static str) -> impl Iterator<Item = &'static dyn Hooks> {
     entered_with_id(hook_id, hook).map(|(_, hooks)| hooks)
 }
@@ -144,16 +156,34 @@ fn entered_with_id(
     hook_id: HookId,
     hook: &'static str,
 ) -> impl Iterator<Item = (&'static str, &'static dyn Hooks)> {
+    listening(hook_id).map(move |(_, entry)| {
+        let ((), hooks) = enter_listener(entry, hook);
+        (entry.id, hooks)
+    })
+}
+fn listening(hook_id: HookId) -> impl Iterator<Item = (bool, &'static ModEntry)> {
     MODS.get().into_iter().flat_map(move |installed| {
         installed
             .subscribers
-            .indices(hook_id as usize)
-            .map(move |index| {
-                let entry = &installed.mods[index];
-                ENTERED.with(|entered| entered.borrow_mut().push((index, hook)));
-                (entry.id, &*entry.hooks)
+            .subscribers(hook_id as usize)
+            .map(move |subscriber| {
+                (
+                    subscriber.receives_cancelled,
+                    &installed.mods[subscriber.index],
+                )
             })
     })
+}
+fn enter_listener(entry: &'static ModEntry, hook: &'static str) -> ((), &'static dyn Hooks) {
+    let index = MODS
+        .get()
+        .unwrap()
+        .mods
+        .iter()
+        .position(|e| std::ptr::eq(e, entry))
+        .unwrap();
+    ENTERED.with(|entered| entered.borrow_mut().push((index, hook)));
+    ((), &*entry.hooks)
 }
 struct ModEntry {
     id: &'static str,
