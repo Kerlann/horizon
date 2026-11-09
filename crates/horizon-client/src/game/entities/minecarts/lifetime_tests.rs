@@ -346,3 +346,47 @@ fn a_bound_tnt_cart_keeps_its_join_when_damage_primes_it() {
         assert!((0..=38).contains(&game.carts[0].fuse));
     });
 }
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn canonical_priming_keeps_event_sound_and_exact_destruction_rng() {
+    use horizon_core::random::{LegacyRandom, RandomSource};
+    for mode in 0..3 {
+        bound_cart_case(CartKind::Tnt, |game| {
+            let join = game.carts[0].join;
+            game.carts
+                .update(0, |cart| cart.random = LegacyRandom::new(0));
+            game.audio.capture = Some(Vec::new());
+            game.lan_entity_events.clear();
+            match mode {
+                0 => assert!(game.prime_cart_join(join)),
+                1 => {
+                    game.inventory[game.selected] =
+                        Some(ItemStack::new("minecraft:fire_charge", 1));
+                    assert!(game.interact_cart(Some(InteractTarget {
+                        id: 71,
+                        location: [0.5, 70.0, 0.5]
+                    })));
+                }
+                _ => game.hurt_cart(0, 5.0, false, true),
+            }
+            assert_eq!(game.carts[0].join, join);
+            assert_eq!(game.carts[0].fuse, if mode == 2 { 8 } else { 80 });
+            // java.util.Random(0).nextInt(20): 0, 8, 9. Ordinary priming
+            // draws nothing; destruction draws exactly the first two values.
+            assert_eq!(
+                game.carts.update(0, |cart| cart.random.next_int_bound(20)),
+                Ok(if mode == 2 { 9 } else { 0 })
+            );
+            assert_eq!(game.lan_entity_events, [(71, 70)]);
+            let sounds = game.audio.capture.as_ref().unwrap();
+            let primed: Vec<_> = sounds
+                .iter()
+                .filter(|sound| sound.event == "minecraft:entity.tnt.primed")
+                .collect();
+            assert_eq!(primed.len(), 1);
+            assert_eq!(primed[0].position, [0.5, 70.0, 0.5]);
+            assert_eq!((primed[0].volume, primed[0].pitch), (1.0, 1.0));
+        });
+    }
+}

@@ -1220,7 +1220,12 @@ impl Game<'_> {
     /// `NewMinecartBehavior.moveAlongTrack`: the iteration keeps moving
     /// while distance is left, over as many rails as it takes, the speed
     /// recomputed per rail (slope, halt, boost).
-    fn move_along_track_new(&mut self, c: &mut Minecart, intent: [f64; 2]) {
+    fn move_along_track_new(
+        &mut self,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<Minecart, false>,
+        intent: [f64; 2],
+    ) -> Option<()> {
+        let mut c = actor.body_mut()?;
         // `TrackIteration`: the slope, halt and boost speeds each apply once
         // per tick, and the iteration keeps moving while distance is left.
         let mut first = true;
@@ -1240,7 +1245,7 @@ impl Game<'_> {
                     self.cart_block_effects(c);
                     self.cart_block_effects(c);
                 }
-                return;
+                return Some(());
             };
             if !c.on_rails {
                 c.on_rails = true;
@@ -1250,7 +1255,8 @@ impl Game<'_> {
             step_start = c.position;
             self.note_cart_pass(c, pos);
             if &*rail.name == "minecraft:activator_rail" {
-                self.activate_cart(c, rail.powered);
+                self.activate_cart(actor, rail.powered)?;
+                c = actor.body_mut()?;
             }
             let ridden = self.cart_is_vehicle(c.id);
             let initial_h = c.velocity.horizontal_distance();
@@ -1341,6 +1347,7 @@ impl Game<'_> {
             }
             first = false;
         }
+        Some(())
     }
     /// `NewMinecartBehavior.stepAlongTrack`: toward the rail's exit, the
     /// hill's Y projected, a V of opposing slopes resting a slow cart.
@@ -1546,12 +1553,14 @@ impl Game<'_> {
         let pos = self.rail_block(c.position);
         let mut step = None;
         if self.minecart_improvements() {
-            self.move_along_track_new(c, intent);
+            self.move_along_track_new(actor, intent)?;
+            c = actor.body_mut()?;
         } else if let Some(rail) = self.rail(pos[0], pos[1], pos[2]) {
             step = Some(self.move_along_track(c, pos, &rail, intent));
             self.note_cart_pass(c, pos);
             if &*rail.name == "minecraft:activator_rail" {
-                self.activate_cart(c, rail.powered);
+                self.activate_cart(actor, rail.powered)?;
+                c = actor.body_mut()?;
             }
         } else {
             self.come_off_track(c);
@@ -1697,7 +1706,12 @@ impl Game<'_> {
         );
     }
     /// `activateMinecart` on an activator rail.
-    fn activate_cart(&mut self, c: &mut Minecart, powered: bool) {
+    fn activate_cart(
+        &mut self,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<Minecart, false>,
+        powered: bool,
+    ) -> Option<()> {
+        let c = actor.body_mut()?;
         match c.kind {
             CartKind::Rideable if powered => {
                 // Minecart.activateMinecart: ejectPassengers.
@@ -1716,7 +1730,10 @@ impl Game<'_> {
                     c.damage = 50.0;
                 }
             }
-            CartKind::Tnt if powered && c.fuse < 0 => self.prime_cart(c),
+            CartKind::Tnt if powered && c.fuse < 0 => {
+                let join = actor.join();
+                actor.with_game(self, |game| game.prime_cart_join(join))?;
+            }
             CartKind::Hopper => c.enabled = !powered,
             // MinecartCommandBlock.activateMinecart: the command runs at most
             // every ACTIVATION_DELAY ticks.
@@ -1726,10 +1743,29 @@ impl Game<'_> {
             }
             _ => {}
         }
+        Some(())
     }
     /// `MinecartTNT.primeFuse`: fuse 80, then `Level.broadcastEntityEvent`
     /// (`EntityEvent.TNT_PRIME`, 70) and `SoundEvents.TNT_PRIMED`. A client
     /// that receives 70 only sets the fuse (`handleEntityEvent`).
+    pub(super) fn prime_cart_join(&mut self, join: horizon_client::join_seq::JoinSeq) -> bool {
+        let Some(index) = self.carts.locate(join) else {
+            return false;
+        };
+        if !self
+            .ui
+            .rules
+            .bool_at(horizon_client::gamerules::vanilla::TNT_EXPLODES)
+        {
+            return false;
+        }
+        let (id, at) = self.carts.update(index, |c| {
+            c.fuse = 80;
+            (c.id, [c.position.x, c.position.y, c.position.z])
+        });
+        self.cart_prime_effects(id, at);
+        true
+    }
     pub(super) fn prime_cart(&mut self, c: &mut Minecart) {
         if !self
             .ui
@@ -1739,8 +1775,10 @@ impl Game<'_> {
             return;
         }
         c.fuse = 80;
-        let at = [c.position.x, c.position.y, c.position.z];
-        self.lan_entity_event(c.id as i32, TNT_PRIME_EVENT, at);
+        self.cart_prime_effects(c.id, [c.position.x, c.position.y, c.position.z]);
+    }
+    fn cart_prime_effects(&mut self, id: u32, at: [f64; 3]) {
+        self.lan_entity_event(id as i32, TNT_PRIME_EVENT, at);
         self.audio
             .play("minecraft:entity.tnt.primed", Some(at), 1.0, 1.0);
     }
@@ -2776,9 +2814,7 @@ impl Game<'_> {
                 if !lighter || self.carts[i].fuse >= 0 {
                     return false;
                 }
-                let mut c = self.carts[i].clone();
-                self.prime_cart(&mut c);
-                self.store_cart_back(i, c);
+                self.prime_cart_join(self.carts[i].join);
             }
             // MinecartCommandBlock.interact: a game master gets SUCCESS (the
             // client opens the editor, `open_cart_command_block`), anyone else
@@ -2795,26 +2831,28 @@ impl Game<'_> {
     /// (`store_cart_items`/`close_cart_container`).
     pub(super) fn open_cart_container(&mut self, i: usize) {
         self.unpack_cart_loot(i);
-        let c = self.carts[i].clone();
-        let key = (i32::MAX - 15, CART_KEY_Y, c.id as i32);
+        let id = self.carts[i].id;
+        let kind = self.carts[i].kind;
+        let position = self.carts[i].position;
+        let key = (i32::MAX - 15, CART_KEY_Y, id as i32);
         // `startOpen` shares one container, it does not reset it: a stand-in
         // another player's menu is still editing over stays as it is.
         if !self.world.block_entities.contains_key(&key) {
             self.world
                 .block_entities
-                .insert(key, BlockEntity::Chest(c.items.clone()));
+                .insert(key, BlockEntity::Chest(self.carts[i].items.clone()));
         }
         self.container = Some(key);
         self.set_screen(super::Screen::Inventory);
         self.capture(false);
         self.right = false;
-        if c.kind == CartKind::Chest {
+        if kind == CartKind::Chest {
             // `MinecartChest.interact` (which overrides
             // `AbstractMinecartContainer.interact`): a successful open fires
             // CONTAINER_OPEN with the player and angers the piglins that see
             // it. `MinecartHopper` does not override it, so a hopper minecart
             // fires neither. Vanilla plays no open sound for a chest minecart.
-            let at = [c.position.x, c.position.y, c.position.z];
+            let at = [position.x, position.y, position.z];
             let ctx = self.player_context(None);
             self.post_game_event("minecraft:container_open", at, ctx);
             self.anger_piglins(true);
@@ -3016,20 +3054,20 @@ impl Game<'_> {
                 ];
                 self.native_vehicle_destroy(self.carts[i].kind.id(), at);
             }
-            let mut c = if tnt_prime {
-                self.carts.extract(self.carts[i].join).unwrap()
-            } else {
-                self.carts.remove(i)
-            };
             if tnt_prime {
-                // MinecartTNT.destroy: prime instead of breaking.
-                if c.fuse < 0 {
-                    self.prime_cart(&mut c);
-                    c.fuse = c.random.next_int_bound(20).unwrap_or(0)
-                        + c.random.next_int_bound(20).unwrap_or(0);
+                // MinecartTNT.destroy: event and sound precede both fuse RNG draws.
+                let join = self.carts[i].join;
+                if self.carts[i].fuse < 0 {
+                    self.prime_cart_join(join);
+                    if let Some(at) = self.carts.locate(join) {
+                        self.carts.update(at, |c| {
+                            c.fuse = c.random.next_int_bound(20).unwrap_or(0)
+                                + c.random.next_int_bound(20).unwrap_or(0)
+                        });
+                    }
                 }
-                self.carts.put_back(i, c);
             } else {
+                let c = self.carts.remove(i);
                 let at = [c.position.x, c.position.y, c.position.z];
                 // AbstractMinecartContainer.remove: `Containers.dropContents`
                 // for every destroying removal (the kill below, and a creative
