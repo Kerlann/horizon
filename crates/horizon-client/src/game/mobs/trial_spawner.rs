@@ -195,7 +195,9 @@ impl Game<'_> {
             let loot = self.server_loot.get();
             let seed = self.level.seed;
             let mut spawn = |l: &GameLevel, r: &SpawnerSpawn, rng: &mut LegacyRandom| {
-                let added = l.game.plan_spawner_mob(l, r, source, &mut planned, rng)?;
+                let added = l
+                    .game
+                    .plan_spawner_mob(l, r, source, &mut planned, rng, None)?;
                 let uuid = match planned.last_mut() {
                     Some(Planned::Loaded(Tag::Compound(tag), _, _)) => {
                         let tag_uuid =

@@ -1632,7 +1632,7 @@ impl Game<'_> {
                         c.position.z.floor() as i32,
                     );
                     let planned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                        self.plan_server_tick_spawner_of(key, &mut spawner, Some(c.id))
+                        self.plan_server_tick_spawner_of(key, &mut spawner, Some(c))
                     }));
                     c.spawner = Some(spawner);
                     match planned {
@@ -2342,6 +2342,27 @@ impl Game<'_> {
             self.dismount_cart(i);
             return true;
         }
+        let join = self.carts[i].join;
+        let writer = self.begin_resident_actor_writer(BaseReadSource::Cart(&self.carts[i]));
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            self.tick_cart_riding_actor(i, keys)
+        }));
+        let finish = self.finish_resident_actor_turn(writer.as_ref(), result);
+        if mod_api::__private::entity_reads_listened()
+            && let Some(at) = self.carts.locate(join)
+        {
+            self.publish_resident_actor_reads(
+                BaseReadSource::Cart(&self.carts[at]),
+                EntityReadCapturePhase::AfterAppliedWrite,
+            );
+        }
+        match finish {
+            Ok(value) => value,
+            Err(payload) => std::panic::resume_unwind(payload),
+        }
+    }
+    /// A ridden cart is its own nested actor turn, not the rider's body.
+    fn tick_cart_riding_actor(&mut self, i: usize, keys: Keys) -> bool {
         // ServerPlayer.getLastClientMoveIntent: getInputVector((left, 0, forward), 1, yRot).
         let left = f64::from(i8::from(keys.left) - i8::from(keys.right));
         let forward = f64::from(i8::from(keys.forward) - i8::from(keys.backward));

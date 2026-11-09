@@ -484,7 +484,7 @@ impl GameLevel<'_, '_> {
         let mut group = None;
         let (outcome, difficulty) = self
             .game
-            .finalize_spawn_event(&mut mob, r.reason, None, &mut group);
+            .finalize_spawn_event(&mut mob, r.reason, None, &mut group, None);
         match outcome {
             Finalized::Cancelled => return None,
             Finalized::Skipped => {}
@@ -2136,8 +2136,7 @@ mod tests {
                     next: Some(Next::Own(SpawnData::new(entity, None, None))),
                     ..Default::default()
                 };
-                game.server_tick_spawner_of(key, &mut spawner, None)
-                    .unwrap();
+                game.server_tick_spawner(key, &mut spawner).unwrap();
                 assert!(game.lent_mobs.borrow().is_empty(), "every lend ended");
                 let added: Vec<Snap> = game.mobs[mobs..].iter().map(snap).collect();
                 let out = (

@@ -396,15 +396,19 @@ mod tests {
     struct SpawnerCartObserver {
         panic: bool,
         planning_panic: bool,
+        cart: std::sync::Arc<std::sync::OnceLock<mod_api::MinecartRef>>,
         calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
     }
     #[mod_api::__subscriptions]
     impl Hooks for SpawnerCartObserver {
         fn finalize_spawn(
             &self,
-            _: &dyn mod_api::Host,
+            host: &dyn mod_api::Host,
             _: &mut mod_api::FinalizeSpawnEvent<'_>,
         ) -> mod_api::Flow {
+            let cart = *self.cart.get().unwrap();
+            assert_eq!(cart.hurt_time(host), Some(8));
+            assert_eq!(cart.damage(host), Some(6.0));
             if self.planning_panic {
                 self.calls
                     .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -435,14 +439,23 @@ mod tests {
     fn spawner_callbacks_restore_cart_rng_and_listener_writes_on_unwind() {
         use horizon_core::geometry::Vec3;
         use horizon_core::random::{LegacyRandom, RandomSource};
-        for (panic, planning_panic) in [(false, false), (true, false), (true, true)] {
+        for (panic, planning_panic, ridden) in [
+            (false, false, false),
+            (true, false, false),
+            (true, true, false),
+            (false, false, true),
+            (true, false, true),
+            (true, true, true),
+        ] {
             let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+            let cart_handle = std::sync::Arc::new(std::sync::OnceLock::new());
             mod_api::testing::with_mods(
                 vec![ModEntry::new(
                     "spawner-cart-observer",
                     Box::new(SpawnerCartObserver {
                         panic,
                         planning_panic,
+                        cart: cart_handle.clone(),
                         calls: calls.clone(),
                     }),
                 )]
@@ -450,6 +463,7 @@ mod tests {
                 || {
                     with_game(|game| {
                         game.lan_acting_fake = false;
+                        game.options.dedicated = Some(Vec::new());
                         game.world.chunks.insert(
                             (0, 0),
                             std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
@@ -469,6 +483,8 @@ mod tests {
                             Vec3::new(8.5, 64.5, 8.5),
                         );
                         cart.velocity.x = 0.25;
+                        cart.hurt_time = 9;
+                        cart.damage = 7.0;
                         cart.spawner =
                             Some(Box::new(horizon_client::mobs::spawner::Spawner::load(&tag)));
                         cart.spawner
@@ -486,10 +502,22 @@ mod tests {
                             horizon_world::food::Difficulty::Normal;
                         game.carts.push(cart);
                         game.native_joins_skip();
+                        cart_handle
+                            .set(game.minecart(game.entity(71).unwrap()).unwrap())
+                            .unwrap();
                         game.world.random = LegacyRandom::new(871_931);
                         let unprogressed = game.world.random.clone().next_long();
+                        if ridden {
+                            game.riding = Some(71);
+                        }
                         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                            game.tick_carts()
+                            if ridden {
+                                assert!(
+                                    game.tick_cart_riding(horizon_client::sprint::Keys::default())
+                                );
+                            } else {
+                                game.tick_carts();
+                            }
                         }));
                         assert_eq!(
                             calls.load(std::sync::atomic::Ordering::Relaxed),

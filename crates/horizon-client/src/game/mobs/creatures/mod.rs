@@ -1320,7 +1320,8 @@ impl Game<'_> {
         spawner: Option<mod_api::NativeSpawner>,
     ) -> Finalized {
         let mut group = None;
-        let (outcome, difficulty) = self.finalize_spawn_event(mob, reason, spawner, &mut group);
+        let (outcome, difficulty) =
+            self.finalize_spawn_event(mob, reason, spawner, &mut group, None);
         if outcome == Finalized::Done {
             self.finalize_grouped(mob, &difficulty, reason, group);
         }
@@ -1337,6 +1338,7 @@ impl Game<'_> {
         reason: SpawnReason,
         spawner: Option<mod_api::NativeSpawner>,
         group: &mut Option<Group>,
+        body_provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
     ) -> (Finalized, spawning::LocalDifficulty) {
         let at = [mob.position.x, mob.position.y, mob.position.z];
         let difficulty = self.local_difficulty(at);
@@ -1344,7 +1346,16 @@ impl Game<'_> {
             return (Finalized::Done, difficulty);
         }
         let kind = mob.kind.id.clone();
-        self.finalize_spawn_lent(&kind, at, reason, spawner, difficulty, Some(mob), group)
+        self.finalize_spawn_lent(
+            &kind,
+            at,
+            reason,
+            spawner,
+            difficulty,
+            Some(mob),
+            group,
+            body_provider,
+        )
     }
     /// `Mob.getMaxSpawnClusterSize` as the entity parts of the finalized `mob`'s type answer it
     /// (`EntityPart::spawn_cluster_size`), asked with `mob` lent as it stands before it joins the
@@ -1394,7 +1405,7 @@ impl Game<'_> {
         if !mod_api::__private::listened(mod_api::HookId::FinalizeSpawn) {
             return (Finalized::Done, difficulty);
         }
-        self.finalize_spawn_lent(kind, at, reason, spawner, difficulty, None, &mut None)
+        self.finalize_spawn_lent(kind, at, reason, spawner, difficulty, None, &mut None, None)
     }
     /// Fires `finalize_spawn` with `mob` lent to it and the group data as the
     /// API's; a group the listener changed comes back as the game's.
@@ -1408,6 +1419,7 @@ impl Game<'_> {
         difficulty: spawning::LocalDifficulty,
         mob: Option<&mut Mob>,
         group: &mut Option<Group>,
+        body_provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
     ) -> (Finalized, spawning::LocalDifficulty) {
         let mut heard = mod_api::NativeDifficulty::from(difficulty);
         let (mut spawn_cancelled, mut skip) = (false, false);
@@ -1416,7 +1428,7 @@ impl Game<'_> {
             .and_then(|g| super::native_unspawned_mob::native_spawn_group(g, self.lend_epoch()));
         let mut native_group = given.clone();
         self.lend_unspawned(kind, at, mob, |mob, edits| {
-            self.native_finalize_spawn(mod_api::__private::FinalizeSpawnCall {
+            let call = mod_api::__private::FinalizeSpawnCall {
                 dimension: self.dim.id(),
                 kind,
                 reason,
@@ -1428,7 +1440,14 @@ impl Game<'_> {
                 edits,
                 group: &mut native_group,
                 cancel: &mut skip,
-            });
+            };
+            if let Some(provider) = body_provider {
+                let host =
+                    super::native_borrowed_entity_host::BorrowedEntityHost::new(self, provider);
+                mod_api::dispatch_finalize_spawn(&host, call);
+            } else {
+                self.native_finalize_spawn(call);
+            }
         });
         if native_group != given {
             *group = native_group

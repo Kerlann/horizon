@@ -119,18 +119,10 @@ impl Game<'_> {
             )
         });
     }
-    fn server_tick_spawner(&mut self, key: Pos, spawner: &mut Spawner) -> Result<()> {
-        self.server_tick_spawner_of(key, spawner, None)
-    }
-    /// `BaseSpawner.serverTick` at `key`: a spawner block's, or the spawner minecart
-    /// `cart` is at (its `broadcastEvent` is an entity event on the cart).
-    pub(super) fn server_tick_spawner_of(
-        &mut self,
-        key: Pos,
-        spawner: &mut Spawner,
-        cart: Option<u32>,
-    ) -> Result<()> {
-        if let Some(work) = self.plan_server_tick_spawner_of(key, spawner, cart) {
+    /// A block spawner completes its plan immediately. A cart instead returns
+    /// its plan across the canonical body handoff before applying it.
+    pub(super) fn server_tick_spawner(&mut self, key: Pos, spawner: &mut Spawner) -> Result<()> {
+        if let Some(work) = self.plan_server_tick_spawner_of(key, spawner, None) {
             self.complete_spawner_tick(work)?;
         }
         Ok(())
@@ -139,7 +131,7 @@ impl Game<'_> {
         &mut self,
         key: Pos,
         spawner: &mut Spawner,
-        cart: Option<u32>,
+        cart: Option<&super::minecarts::Minecart>,
     ) -> Option<SpawnerTickCompletion> {
         // `BaseSpawner.serverTick` does nothing without an alive player in
         // range (`isNearPlayer`) or with the rule off: no level to build for it.
@@ -179,8 +171,34 @@ impl Game<'_> {
             });
             let mut spawn = |l: &super::natural_spawning::GameLevel,
                              r: &SpawnerSpawn,
+                             actual_spawner: &Spawner,
                              rng: &mut LegacyRandom| {
-                l.game.plan_spawner_mob(l, r, source, &mut planned, rng)
+                let provider = cart.map(|cart| {
+                    super::native_entity_body_provider::CartSpawnerBodyProvider::new(
+                        horizon_client::join_seq::residency::write_queue::Target {
+                            runtime_id: cart.id,
+                            location: horizon_client::join_seq::residency::table::Location {
+                                owner: horizon_client::join_seq::residency::Owner {
+                                    dimension: self.dim.key(),
+                                    kind: horizon_client::join_seq::residency::Kind::Cart,
+                                },
+                                join: cart.join,
+                            },
+                        },
+                        cart,
+                        actual_spawner,
+                    )
+                });
+                l.game.plan_spawner_mob(
+                    l,
+                    r,
+                    source,
+                    &mut planned,
+                    rng,
+                    provider.as_ref().map(|provider| {
+                        provider as &dyn super::native_entity_body_provider::EntityBodyProvider
+                    }),
+                )
             };
             spawner.server_tick(&level, &mut random, pos, &mut spawn, &mut events);
             (
@@ -195,7 +213,7 @@ impl Game<'_> {
         };
         Some(SpawnerTickCompletion {
             key,
-            cart,
+            cart: cart.map(|cart| cart.id),
             planned,
             created,
             rides,
@@ -274,6 +292,7 @@ impl Game<'_> {
         source: Option<mod_api::NativeSpawner>,
         planned: &mut Vec<Planned>,
         random: &mut horizon_core::random::LegacyRandom,
+        body_provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
     ) -> Option<SpawnerAdded> {
         let kind = self.res.mob_types().get(r.id)?.clone();
         let [x, y, z] = r.position;
@@ -291,7 +310,7 @@ impl Game<'_> {
             // TrialSpawner.spawnMob: setPersistenceRequired.
             mob.persistent = r.trial;
             let mut group = None;
-            match self.finalize_spawn_event(&mut mob, reason, source, &mut group) {
+            match self.finalize_spawn_event(&mut mob, reason, source, &mut group, body_provider) {
                 (Finalized::Cancelled, _) => return None,
                 (outcome, difficulty) => {
                     if outcome == Finalized::Done {
