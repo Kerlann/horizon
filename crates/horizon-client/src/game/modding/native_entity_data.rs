@@ -357,6 +357,47 @@ mod tests {
 
     #[test]
     #[ignore = "needs prepared resources"]
+    fn assigned_uuids_are_visible_in_the_prepared_relation_index() {
+        with_game(|game| {
+            let entity = push_mob(game, 934, "minecraft:cow");
+            game.native_lifecycle.world_open_ready().unwrap();
+            game.native_lifecycle.server_tick_start(true).unwrap();
+            let level = mod_api::LevelRef::new(entity.epoch(), game.dim.key());
+            let mob = game.mobs.iter().find(|mob| mob.id == entity.id()).unwrap();
+            assert!(game.publish_mob_read_source(mob, mod_api::EntityReadCapturePhase::PassStart));
+            assert!(!game.persist.uuids.contains_key(&entity.id()));
+
+            let first = game.uuid_for(entity.id());
+            let resolved = game.with_mob_read_relations(level, |index| {
+                game.resolve_read_uuid(first, level, index)
+            });
+            assert_eq!(resolved, Some(Some(entity)));
+
+            let mut replacement = first;
+            replacement[0] ^= 1;
+            assert_eq!(
+                game.set_saved_entity_uuid(entity.id(), replacement),
+                Some(first)
+            );
+            let resolved = game.with_mob_read_relations(level, |index| {
+                (
+                    game.resolve_read_uuid(first, level, index),
+                    game.resolve_read_uuid(replacement, level, index),
+                )
+            });
+            assert_eq!(resolved, Some((None, Some(entity))));
+            game.remove_saved_entity_uuid(entity.id());
+            assert_eq!(
+                game.with_mob_read_relations(level, |index| {
+                    game.resolve_read_uuid(replacement, level, index)
+                }),
+                Some(None)
+            );
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources"]
     fn classification_is_the_types_category() {
         with_game(|game| {
             for (id, kind, category) in [

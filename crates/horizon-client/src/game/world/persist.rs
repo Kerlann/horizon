@@ -1796,7 +1796,7 @@ impl Game<'_> {
     }
     /// Forget an entity that left the world (its UUID and loaded compound).
     pub(super) fn forget_entity(&mut self, id: u32) {
-        if let Some(uuid) = self.persist.uuids.remove(&id) {
+        if let Some(uuid) = self.remove_saved_entity_uuid(id) {
             self.forget_entity_initialization(uuid);
             self.entity_attachments.remove(&uuid);
         }
@@ -1804,7 +1804,7 @@ impl Game<'_> {
     }
     /// Detach a travelling entity without discarding its in-memory attachments.
     pub(super) fn detach_entity(&mut self, id: u32) {
-        self.persist.uuids.remove(&id);
+        self.remove_saved_entity_uuid(id);
         self.persist.raw.remove(&id);
     }
     /// The compound a crystal or the dragon was loaded with, found again by type
@@ -1904,7 +1904,7 @@ impl Game<'_> {
     /// The UUID entity `id` was loaded with, and the attachments `tag` saved under it.
     pub(super) fn remember_uuid(&mut self, id: u32, uuid: Option<[i32; 4]>, tag: &Tag) {
         if let Some(u) = uuid {
-            self.persist.uuids.insert(id, u);
+            self.set_saved_entity_uuid(id, u);
         }
         // `EntityType.create` then `Entity.load`: the constructing listeners set their
         // values first and the saved attachments are read over them. An entity whose map
@@ -1948,7 +1948,41 @@ impl Game<'_> {
         self.uuid_for(id)
     }
     pub(super) fn uuid_for(&mut self, id: u32) -> [i32; 4] {
-        *self.persist.uuids.entry(id).or_insert_with(random_uuid)
+        if let Some(&uuid) = self.persist.uuids.get(&id) {
+            return uuid;
+        }
+        let uuid = random_uuid();
+        self.set_saved_entity_uuid(id, uuid);
+        uuid
+    }
+    /// Mutate canonical UUID ownership and its already prepared relation index.
+    pub(super) fn set_saved_entity_uuid(&mut self, id: u32, uuid: [i32; 4]) -> Option<[i32; 4]> {
+        let old = self.persist.uuids.insert(id, uuid);
+        if old != Some(uuid) {
+            self.saved_entity_uuid_changed(id, old, Some(uuid));
+        }
+        old
+    }
+    pub(super) fn remove_saved_entity_uuid(&mut self, id: u32) -> Option<[i32; 4]> {
+        let old = self.persist.uuids.remove(&id);
+        if old.is_some() {
+            self.saved_entity_uuid_changed(id, old, None);
+        }
+        old
+    }
+    fn saved_entity_uuid_changed(&self, id: u32, old: Option<[i32; 4]>, new: Option<[i32; 4]>) {
+        let Some(epoch) = self.native_lifecycle.epoch() else {
+            return;
+        };
+        let level = mod_api::LevelRef::new(epoch, self.dim.key());
+        if let Some(pass) = self
+            .entity_read_state
+            .borrow_mut()
+            .mob_relations
+            .get_mut(&level)
+        {
+            pass.index.update_saved_uuid(id, old, new);
+        }
     }
     /// `BlockState.CODEC`: a block name or `{id, properties}` (or legacy `{Name, Properties}`).
     pub(super) fn state_from_nbt(&self, tag: &Tag) -> Option<BlockStateId> {
