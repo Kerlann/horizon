@@ -178,7 +178,21 @@ impl WorldOptions {
                 self.preset_order = built
                     .tags
                     .remove("minecraft:normal")
-                    .unwrap_or_else(|| defaults.into_iter().map(str::to_owned).collect())
+                    .filter(|presets| !presets.is_empty())
+                    .unwrap_or_else(|| {
+                        let mut all: Vec<_> = defaults
+                            .into_iter()
+                            .chain([crate::save::WorldPreset::Debug.id()])
+                            .map(str::to_owned)
+                            .collect();
+                        all.extend(
+                            self.presets
+                                .keys()
+                                .filter(|id| crate::save::WorldPreset::of_id(id).is_none())
+                                .cloned(),
+                        );
+                        all
+                    })
             }
             Err(error) => {
                 log::warn!("Invalid world preset tags: {error}");

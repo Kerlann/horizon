@@ -196,6 +196,36 @@ fn registered_world_preset_editor_commits_only_on_done_and_saves_its_dimensions(
     assert_eq!(options.preset_id(), "example:islands");
     assert!(!options.preset_order.iter().any(|id| id == "example:hidden"));
     let original = options.dimensions().unwrap();
+
+    // Vanilla falls back to every registry entry for an explicitly empty normal tag.
+    fs::write(
+        tag_dir.join("normal.json"),
+        r#"{"replace":true,"values":[]}"#,
+    )
+    .unwrap();
+    options.refresh_presets(&f.root, None);
+    let mut expected: Vec<_> = crate::save::WorldPreset::ALL
+        .iter()
+        .map(|preset| preset.id().to_owned())
+        .collect();
+    expected.extend([
+        "minecraft:debug_all_block_states".into(),
+        "example:hidden".into(),
+        "example:islands".into(),
+    ]);
+    let mut actual = options.preset_order.clone();
+    actual.sort();
+    expected.sort();
+    assert_eq!(actual, expected);
+    options.cycle_preset(1);
+    assert_ne!(options.preset_id(), "example:islands");
+    for _ in 0..options.preset_order.len() {
+        if options.preset_id() == "example:islands" {
+            break;
+        }
+        options.cycle_preset(1);
+    }
+    assert_eq!(options.preset_id(), "example:islands");
     assert!(
         !f.title
             .buttons(480.0, 262.0)
