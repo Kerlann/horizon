@@ -24,7 +24,13 @@ use mod_api::{
 pub trait GoalHost {
     /// Supply a read Host backed by this explicit actor's actual loan. The
     /// visitor cannot retain that host; unsupported engine doubles invoke none.
-    fn with_entity_read_host(&self, _actor: &Mob, _visit: &mut dyn FnMut(&dyn mod_api::Host)) {}
+    fn with_entity_read_host(
+        &self,
+        _actor: &Mob,
+        _selectors: super::goals::GoalSelectorSources<'_>,
+        _visit: &mut dyn FnMut(&dyn mod_api::Host),
+    ) {
+    }
 
     /// Refresh the explicit actor publication at a real callback/apply boundary.
     /// A host without publication support must return false, never claim success.
@@ -111,7 +117,7 @@ pub trait GoalHost {
         &self,
         goal: &mut Box<dyn mod_api::Goal>,
         m: &mut Mob,
-        w: &MobWorld<'_>,
+        cx: &Cx<'_, '_, '_>,
         op: GoalOp,
         mod_id: &'static str,
         part: &'static str,
@@ -256,7 +262,7 @@ impl ModGoal {
     fn run(&mut self, m: &mut Mob, cx: &mut Cx, op: GoalOp) -> Option<bool> {
         let goal = self.goal.as_mut()?;
         cx.w.goal_host?
-            .run_goal(goal, m, cx.w, op, self.mod_id, self.part)
+            .run_goal(goal, m, cx, op, self.mod_id, self.part)
     }
 }
 

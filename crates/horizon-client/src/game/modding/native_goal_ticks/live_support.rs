@@ -8,7 +8,7 @@ impl GoalCx<'_, '_> {
         let mut read = Some(read);
         let mut result = None;
         if let Some(host) = self.w.goal_host {
-            host.with_entity_read_host(self.m, &mut |host| {
+            host.with_entity_read_host(self.m, self.selectors, &mut |host| {
                 result = Some(read.take().expect("one callback loan Host")(host));
             });
         }

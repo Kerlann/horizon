@@ -29,6 +29,7 @@ pub(super) struct GoalCx<'a, 'w> {
     m: &'a mut Mob,
     w: &'a MobWorld<'w>,
     host: &'a dyn Host,
+    selectors: mobs::goals::GoalSelectorSources<'a>,
 }
 
 impl GoalCx<'_, '_> {
@@ -272,7 +273,12 @@ impl BehaviorCxBackend for GoalCx<'_, '_> {
 }
 
 impl mobs::part_goals::GoalHost for Game<'_> {
-    fn with_entity_read_host(&self, actor: &Mob, visit: &mut dyn FnMut(&dyn mod_api::Host)) {
+    fn with_entity_read_host(
+        &self,
+        actor: &Mob,
+        selectors: mobs::goals::GoalSelectorSources<'_>,
+        visit: &mut dyn FnMut(&dyn mod_api::Host),
+    ) {
         use horizon_client::join_seq::{
             Joined as _,
             residency::{Kind, table::EntityLookup, write_queue::Target},
@@ -300,6 +306,7 @@ impl mobs::part_goals::GoalHost for Game<'_> {
                 location,
             },
             actor,
+            selectors,
         );
         let host = super::native_borrowed_entity_host::BorrowedEntityHost::new(self, &provider);
         visit(&host);
@@ -459,11 +466,12 @@ impl mobs::part_goals::GoalHost for Game<'_> {
         &self,
         goal: &mut Box<dyn mod_api::Goal>,
         m: &mut Mob,
-        w: &MobWorld<'_>,
+        cx: &mobs::goals::Cx<'_, '_, '_>,
         op: GoalOp,
         mod_id: &'static str,
         part: &'static str,
     ) -> Option<bool> {
+        let w = cx.w;
         let call = match op {
             GoalOp::CanUse => "goal_can_use",
             GoalOp::CanContinue => "goal_can_continue",
@@ -472,7 +480,12 @@ impl mobs::part_goals::GoalHost for Game<'_> {
             GoalOp::Tick => "goal_tick",
         };
         self.publish_lent_mob_reads(m, w, mod_api::EntityReadCapturePhase::BeforeCallback);
-        let mut gcx = GoalCx { m, w, host: self };
+        let mut gcx = GoalCx {
+            m,
+            w,
+            host: self,
+            selectors: cx.selectors,
+        };
         let mut context = mod_api::GoalContext::new(&mut gcx);
         let _guard = enter_native_mod(ModCall {
             id: mod_id,
@@ -516,7 +529,12 @@ impl mobs::part_goals::GoalHost for Game<'_> {
         // The same view a goal runs on (#824): one boundary, the brain's
         // memories typed on top.
         self.publish_lent_mob_reads(m, w, mod_api::EntityReadCapturePhase::BeforeCallback);
-        let mut gcx = GoalCx { m, w, host: self };
+        let mut gcx = GoalCx {
+            m,
+            w,
+            host: self,
+            selectors: Default::default(),
+        };
         let mut context = mod_api::BehaviorCx::new(&mut gcx);
         let _guard = enter_native_mod(ModCall {
             id: mod_id,
@@ -578,6 +596,7 @@ impl Game<'_> {
             m: mob,
             w: world,
             host: self,
+            selectors: Default::default(),
         };
         let mut new_target = original;
         let mut cancel = false;

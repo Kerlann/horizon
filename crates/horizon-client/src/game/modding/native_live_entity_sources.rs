@@ -23,6 +23,7 @@ pub(super) struct EntityReadSource<'a> {
     pub(super) body: BaseReadSource<'a>,
     pub(super) level: EntityReadLevel<'a>,
     pub(super) cart_spawner: Option<&'a horizon_client::mobs::spawner::Spawner>,
+    pub(super) selectors: horizon_client::mobs::goals::GoalSelectorSources<'a>,
 }
 
 impl Game<'_> {
@@ -87,6 +88,7 @@ impl Game<'_> {
                     body: source.body,
                     level,
                     cart_spawner: source.cart_spawner,
+                    selectors: source.selectors,
                 },
             ));
         });
@@ -127,10 +129,19 @@ impl Game<'_> {
             BaseReadSource::Cart(cart) => cart.spawner.as_deref(),
             _ => None,
         };
+        let selectors = match raw.source {
+            BaseReadSource::Mob(mob) => horizon_client::mobs::goals::GoalSelectorSources {
+                goals: mob.ai.goals.read_source(),
+                targets: mob.ai.targets.read_source(),
+                ..Default::default()
+            },
+            _ => Default::default(),
+        };
         Some(EntityReadSource {
             body: raw.source,
             level,
             cart_spawner,
+            selectors,
         })
     }
 }

@@ -147,42 +147,38 @@ impl Game<'_> {
 
     pub(super) fn read_mob_goals(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         mob: MobRef,
     ) -> Result<Option<Vec<MobGoalEntry>>, mod_api::EntityReadError> {
         use super::{
             native_live_entity_reads::EntityReadSubject,
             native_read_dependencies::EntityReadDependency,
         };
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::OrdinaryMob(mob),
             &[EntityReadDependency::Goals],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
+        ) else {
+            return Ok(None);
         };
-        Ok((|| {
-            let Target::Mob(id) = target else {
-                return None;
-            };
-            let m = self.mobs.iter().find(|m| m.id == id)?;
-            Some(
-                m.ai.goals
-                    .entries()
-                    .map(|(priority, name, running)| MobGoalEntry {
-                        priority,
-                        id: goal_id(name),
-                        running,
-                    })
-                    .collect(),
-            )
-        })())
+        self.with_entity_read_storage(admitted, provider, |source| {
+            let selector = source
+                .selectors
+                .goals
+                .ok_or(mod_api::EntityReadError::Lifted)?;
+            admitted.project_actual(|| {
+                Some(
+                    selector
+                        .entries()
+                        .map(|(priority, name, running)| MobGoalEntry {
+                            priority,
+                            id: goal_id(name),
+                            running,
+                        })
+                        .collect(),
+                )
+            })
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
 
     /// Every goal of the target selector, as `goals` reads the goal
@@ -196,42 +192,38 @@ impl Game<'_> {
 
     pub(super) fn read_mob_target_goals(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         mob: MobRef,
     ) -> Result<Option<Vec<MobGoalEntry>>, mod_api::EntityReadError> {
         use super::{
             native_live_entity_reads::EntityReadSubject,
             native_read_dependencies::EntityReadDependency,
         };
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+        let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::OrdinaryMob(mob),
             &[EntityReadDependency::TargetGoals],
-        ) {
-            Some(read) => {
-                let read = read?;
-                if read.location.owner.dimension != self.dim.key() {
-                    return Ok(None);
-                }
-                read.target
-            }
-            None => return Ok(None),
+        ) else {
+            return Ok(None);
         };
-        Ok((|| {
-            let Target::Mob(id) = target else {
-                return None;
-            };
-            let m = self.mobs.iter().find(|m| m.id == id)?;
-            Some(
-                m.ai.targets
-                    .entries()
-                    .map(|(priority, name, running)| MobGoalEntry {
-                        priority,
-                        id: goal_id(name),
-                        running,
-                    })
-                    .collect(),
-            )
-        })())
+        self.with_entity_read_storage(admitted, provider, |source| {
+            let selector = source
+                .selectors
+                .targets
+                .ok_or(mod_api::EntityReadError::Lifted)?;
+            admitted.project_actual(|| {
+                Some(
+                    selector
+                        .entries()
+                        .map(|(priority, name, running)| MobGoalEntry {
+                            priority,
+                            id: goal_id(name),
+                            running,
+                        })
+                        .collect(),
+                )
+            })
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
 
     /// One `removeGoal` pass over the mob's selector: the mob list comes

@@ -181,9 +181,10 @@ impl GoalSelector {
         self.goals.push(goal);
     }
     pub fn set_start_delay(&mut self, name: &str, ticks: i32) {
-        for (goal, entry) in self.goals.iter_mut().zip(&self.registrations) {
+        for (goal, entry) in self.goals.iter_mut().zip(&mut self.registrations) {
             if entry.name == name {
                 goal.set_start_delay(ticks);
+                entry.name = goal.name();
             }
         }
     }
@@ -220,7 +221,7 @@ impl GoalSelector {
             selectors: sources,
         };
         let goal = &mut self.goals[i];
-        match callback {
+        let result = match callback {
             GoalCallback::CanUse => goal.can_use(mob, &mut scoped),
             GoalCallback::CanContinue => goal.can_continue(mob, &mut scoped),
             GoalCallback::Start => {
@@ -235,7 +236,9 @@ impl GoalSelector {
                 goal.tick(mob, &mut scoped);
                 false
             }
-        }
+        };
+        self.registrations[i].name = goal.name();
+        result
     }
     fn stop(&mut self, i: usize, mob: &mut Mob, cx: &mut Cx) {
         if self.registrations[i].running.replace(false) {
@@ -3357,19 +3360,17 @@ mod breeding_variant_tests {
                 parent.extra.in_love = 600;
                 parent.extra.egg_time = 1;
                 parent.ai.targets.clear();
-                parent.ai.goals = GoalSelector {
-                    goals: vec![Wrapped {
-                        priority: 2,
-                        running: true,
-                        goal: Box::new(SeedAtBreed(Breed {
-                            speed: 1.0,
-                            partner: Some(2),
-                            love_time: reduced(60) - 1,
-                        })),
-                    }],
-                    locked: [Some(0), Some(0), None, None],
-                    disabled: 0,
-                };
+                parent.ai.goals.clear();
+                parent.ai.goals.add(
+                    2,
+                    SeedAtBreed(Breed {
+                        speed: 1.0,
+                        partner: Some(2),
+                        love_time: reduced(60) - 1,
+                    }),
+                );
+                parent.ai.goals.registrations[0].running.set(true);
+                parent.ai.goals.locked = [Some(0), Some(0), None, None];
                 let mut events = Vec::new();
                 parent.tick(
                     &w,

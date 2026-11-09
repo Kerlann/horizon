@@ -2284,13 +2284,62 @@ mod selector_restore_tests {
             calls: Arc<Mutex<Vec<(usize, u32)>>>,
             panic: Arc<AtomicBool>,
             ticks: u32,
+            target: bool,
+        }
+        impl Probe {
+            fn inspect(&self, mob: &Mob, cx: &Cx, running: bool) {
+                assert!(mob.ai.goals.read_source().is_none());
+                assert!(mob.ai.targets.read_source().is_none());
+                let goals: Vec<_> = cx
+                    .selectors
+                    .goals
+                    .expect("actual action selector")
+                    .entries()
+                    .collect();
+                let targets: Vec<_> = cx
+                    .selectors
+                    .targets
+                    .expect("actual target selector")
+                    .entries()
+                    .collect();
+                assert_eq!(goals.len(), 1);
+                assert_eq!(targets.len(), 1);
+                assert_eq!((goals[0].0, goals[0].1), (21, "selector_read_probe"));
+                assert_eq!((targets[0].0, targets[0].1), (11, "selector_read_probe"));
+                assert_eq!(
+                    if self.target {
+                        targets[0].2
+                    } else {
+                        goals[0].2
+                    },
+                    running
+                );
+                assert_eq!(
+                    matches!(
+                        cx.selectors.active,
+                        super::super::goals::SelectorKind::Targets
+                    ),
+                    self.target
+                );
+            }
         }
         impl Goal for Probe {
             fn flags(&self) -> u8 {
                 0
             }
-            fn can_use(&mut self, _: &mut Mob, _: &mut Cx) -> bool {
+            fn name(&self) -> &'static str {
+                "selector_read_probe"
+            }
+            fn can_use(&mut self, mob: &mut Mob, cx: &mut Cx) -> bool {
+                self.inspect(mob, cx, false);
                 true
+            }
+            fn can_continue(&mut self, mob: &mut Mob, cx: &mut Cx) -> bool {
+                self.inspect(mob, cx, true);
+                true
+            }
+            fn start(&mut self, mob: &mut Mob, cx: &mut Cx) {
+                self.inspect(mob, cx, true);
             }
             fn every_tick(&self) -> bool {
                 true
@@ -2298,7 +2347,8 @@ mod selector_restore_tests {
             fn box_clone(&self) -> Box<dyn Goal> {
                 panic!("live goals must not clone")
             }
-            fn tick(&mut self, _: &mut Mob, _: &mut Cx) {
+            fn tick(&mut self, mob: &mut Mob, cx: &mut Cx) {
+                self.inspect(mob, cx, true);
                 self.ticks += 1;
                 self.calls
                     .lock()
@@ -2345,9 +2395,10 @@ mod selector_restore_tests {
                                     calls: calls[i].clone(),
                                     panic: panics[i].clone(),
                                     ticks: 0,
+                                    target: i == 0,
                                 });
                                 identities[i] = &*goal as *const Probe as usize;
-                                selector.add_boxed(1, goal);
+                                selector.add_boxed(if i == 0 { 11 } else { 21 }, goal);
                             }
                             let mut level = crate::health::TestLevel::new(0);
                             let mut events = Vec::new();
