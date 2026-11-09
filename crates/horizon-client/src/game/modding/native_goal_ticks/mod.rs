@@ -80,14 +80,7 @@ impl GoalCx<'_, '_> {
             self.host.mob(entity)
         }
     }
-    fn position(&self, entity: EntityRef) -> Option<horizon_core::geometry::Vec3> {
-        let p = if self.is_own_entity(entity) {
-            return Some(self.m.position);
-        } else {
-            entity.position(self.host)?
-        };
-        Some(horizon_core::geometry::Vec3::new(p[0], p[1], p[2]))
-    }
+
     fn r_entity_position(&self, entity: EntityRef) -> Option<[f64; 3]> {
         let m = self.entity_mob(entity)?;
         Some([m.position.x, m.position.y, m.position.z])

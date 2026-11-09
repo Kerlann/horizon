@@ -1,5 +1,6 @@
 use super::*;
 use crate::game::native_entity_refs::tests::with_game;
+use horizon_client::mobs::part_goals::GoalHost;
 use horizon_core::geometry::Vec3;
 use mod_api::prelude::PlayersHost;
 
@@ -205,6 +206,7 @@ fn foreign_lifted_read_observes_shared_publication_updates_not_seen_or_live_view
                 velocity: [0.0; 3],
                 on_ground: false,
                 bounding_box: [[4.5, 2.0, 2.5], [5.5, 4.0, 3.5]],
+                dimensions: [1.0, 2.0],
                 eye_height: 1.5,
             },
             BaseReadContext {
@@ -234,6 +236,7 @@ fn foreign_lifted_read_observes_shared_publication_updates_not_seen_or_live_view
             details: NativeReadDetails::Base,
             join_generation: 1,
             target: Target::Mob(9002),
+            mob_target_facts: None,
         };
         assert_eq!(
             game.entity_residency
@@ -301,5 +304,79 @@ fn acting_guest_reads_are_shared_host_reads_not_selected_world_player_reads() {
             );
             assert_eq!(context.player(12), game.player(12));
         }));
+    });
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn actual_goal_callback_refreshes_own_rows_only_at_callback_and_apply_boundaries() {
+    struct Stopper;
+    impl mod_api::Goal for Stopper {
+        fn flags(&self) -> mod_api::GoalFlags {
+            mod_api::GoalFlags::MOVE
+        }
+        fn can_use(&mut self, cx: &mut mod_api::GoalContext<'_>) -> bool {
+            let own = cx.mob();
+            let before = own.cached_row(cx.host()).expect("callback publication");
+            assert_eq!(
+                before.capture.phase,
+                mod_api::EntityReadCapturePhase::BeforeCallback
+            );
+            assert_eq!(before.is_done, Some(false));
+            assert_eq!(own.cached_row(cx.host()).unwrap().capture, before.capture);
+            cx.look_at([f64::NAN, 0.0, 0.0]);
+            assert_eq!(own.cached_row(cx.host()).unwrap().capture, before.capture);
+            cx.stop_navigation();
+            let after = own.cached_row(cx.host()).expect("applied publication");
+            assert_eq!(
+                after.capture.phase,
+                mod_api::EntityReadCapturePhase::AfterAppliedWrite
+            );
+            assert_eq!(after.is_done, Some(true));
+            assert_eq!(own.is_done(cx.host()), Some(true));
+            assert_eq!(own.cached_row(cx.host()).unwrap().capture, after.capture);
+            true
+        }
+    }
+    with_game(|game| {
+        let kind = game
+            .res
+            .mob_types()
+            .get("minecraft:zombie")
+            .unwrap()
+            .clone();
+        let mut actor = Mob::new(9010, kind, Vec3::ZERO, 0.0);
+        actor.ai.nav.path = Some(horizon_client::mobs::path::Path {
+            nodes: vec![horizon_client::mobs::path::PathNode {
+                x: 1,
+                y: 0,
+                z: 0,
+                kind: mod_api::PathType::Walkable,
+            }],
+            next: 0,
+            target: [1, 0, 0],
+            dist_to_target: 0.0,
+            reached: true,
+        });
+        game.mobs.push(actor);
+        let mut lifted = game.mobs.lift();
+        let mut goal: Box<dyn mod_api::Goal> = Box::new(Stopper);
+        let mut world = game.mob_world_base(&[]);
+        world.goal_host = Some(game);
+        assert_eq!(
+            game.run_goal(
+                &mut goal,
+                &mut lifted[0],
+                &world,
+                GoalOp::CanUse,
+                "fixture",
+                "stopper"
+            ),
+            Some(true)
+        );
+        game.mobs.restore(
+            lifted,
+            horizon_client::join_seq::RestoreOrder::SurvivorsFirst,
+        );
     });
 }
