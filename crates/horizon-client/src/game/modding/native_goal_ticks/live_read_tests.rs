@@ -18,8 +18,10 @@ fn admitted_roster_loan_retains_identity_without_publication_or_body_access() {
             .get("minecraft:zombie")
             .unwrap()
             .clone();
-        game.mobs.push(Mob::new(9001, kind, Vec3::ZERO, 0.0));
+        game.mobs
+            .push(Mob::new(9001, kind.clone(), Vec3::ZERO, 0.0));
         let entity = EntityRef::new(game.native_lifecycle.epoch().unwrap(), 9001);
+        let uuid = entity.uuid(game).unwrap();
         assert_eq!(
             game.with_entity_read_publication(entity, |_| Some(())),
             None
@@ -41,10 +43,38 @@ fn admitted_roster_loan_retains_identity_without_publication_or_body_access() {
             None
         );
         assert_eq!(game.native_entity_target(entity), None);
+        assert_eq!(entity.uuid(game), Some(uuid));
         game.mobs.put_back(0, actor);
         assert_eq!(game.entity(9001), Some(entity));
+        assert_eq!(entity.uuid(game), Some(uuid));
         game.mobs.remove(0);
         assert_eq!(game.entity(9001), None);
+        assert_eq!(entity.uuid(game), None);
+
+        // A valid ordinary identity may receive its first UUID while lent.
+        game.mobs.push(Mob::new(9002, kind, Vec3::ZERO, 0.0));
+        let second = EntityRef::new(entity.epoch(), 9002);
+        assert!(!game.persist.uuids.contains_key(&9002));
+        let join = game.mobs[0].join_seq();
+        let actor = game.mobs.extract(join).unwrap();
+        let assigned = second.uuid(game).unwrap();
+        assert_eq!(second.uuid(game), Some(assigned));
+        assert_eq!(
+            game.with_entity_read_publication(second, |_| Some(())),
+            None
+        );
+        game.mobs.put_back(0, actor);
+        assert_eq!(second.uuid(game), Some(assigned));
+        let stale = EntityRef::new(
+            mod_api::WorldEpoch::new(entity.epoch().get() + 1),
+            second.id(),
+        );
+        assert_eq!(stale.uuid(game), None);
+        game.mobs.remove(0);
+        assert_eq!(second.uuid(game), None);
+        let saved = game.persist.uuids.clone();
+        assert_eq!(EntityRef::new(entity.epoch(), 99_999).uuid(game), None);
+        assert_eq!(game.persist.uuids, saved);
     });
 }
 

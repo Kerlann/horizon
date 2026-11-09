@@ -937,6 +937,37 @@ fn use_on_passes(fall_flying: bool) -> bool {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn actual_rocket_uuid_survives_temporary_loan_and_retires_with_body() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            game.options.dedicated = Some(Vec::new());
+            game.player = None;
+            let rocket = game.new_rocket(
+                horizon_core::geometry::Vec3::new(8.5, 80.0, 8.5),
+                &horizon_client::items::ItemStack::new("minecraft:firework_rocket", 1),
+                false,
+            );
+            game.rockets.push(rocket);
+            game.native_joins_skip();
+            let (id, join) = (game.rockets[0].id, game.rockets[0].join);
+            let header = <dyn mod_api::Host>::entity(game, id).unwrap();
+            let uuid = header.uuid(game).expect("real Rocket UUID before loan");
+            let held = game.rockets.extract(join).unwrap();
+            let taken = <dyn mod_api::Host>::entity(game, id)
+                .expect("actual temporary loan is still admitted");
+            assert_eq!(taken.uuid(game), Some(uuid));
+            assert_eq!(header.uuid(game), Some(uuid));
+            assert_eq!(taken.position(game), None, "I does not supply R or a body");
+            game.rockets.put_back(0, held);
+            assert_eq!(header.uuid(game), Some(uuid));
+            assert_eq!(header.position(game), Some([8.5, 80.0, 8.5]));
+            drop(game.rockets.extract(join).unwrap());
+            game.rockets.retire_extracted(id, join);
+            assert!(<dyn mod_api::Host>::entity(game, id).is_none());
+            assert_eq!(header.uuid(game), None);
+        });
+    }
     use super::*;
     use std::sync::{Arc, Mutex, OnceLock};
     struct LoanObserver {
