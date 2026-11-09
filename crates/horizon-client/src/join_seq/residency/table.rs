@@ -1,6 +1,6 @@
 //! A journal-fed index. Every hit is checked against its named storage owner;
 //! there is no owner reconciliation scan or reference back to the game.
-use super::{Change, DimensionKey, Event, Identity, Journal, Owner};
+use super::{Change, DimensionKey, Event, Identity, IdentityDetails, Journal, Owner};
 use crate::join_seq::JoinSeq;
 use horizon_core::fast_hash::FxHashMap;
 use std::num::NonZeroU32;
@@ -10,6 +10,7 @@ use std::num::NonZeroU32;
 pub struct Location {
     pub owner: Owner,
     pub join: JoinSeq,
+    pub source: super::Source,
 }
 
 /// A candidate obtained by locating the join in exactly the named owner.
@@ -39,6 +40,7 @@ pub struct UnbalancedPass {
 /// Runtime ids are allocated by the game's one counter, not per dimension.
 struct ResidentRow<R> {
     location: Location,
+    details: IdentityDetails,
     cached: Option<R>,
 }
 
@@ -273,17 +275,20 @@ impl<R> EntityTable<R> {
             let location = |identity: Identity| Location {
                 owner: event.owner,
                 join: identity.join,
+                source: identity.source,
             };
             match event.change {
                 Change::Install(identity) | Change::PutBack(identity) => {
                     let location = location(identity);
                     let row = self.rows.entry(identity.id).or_insert(ResidentRow {
                         location,
+                        details: identity.details,
                         cached: None,
                     });
                     debug_assert_eq!(row.location, location, "duplicate loaded entity id");
-                    if row.location != location {
+                    if row.location != location || row.details != identity.details {
                         row.location = location;
+                        row.details = identity.details;
                         row.cached = None;
                     }
                     forget_extraction(
@@ -353,6 +358,32 @@ impl<R> EntityTable<R> {
         }
         Ok(())
     }
+    /// Resolve once and return immutable metadata from that same primary row.
+    /// Real loans keep metadata even without an available physical payload.
+    pub fn server_admitted_identity<T>(
+        &mut self,
+        id: u32,
+        locate: impl FnOnce(Location) -> Option<SourceEntity<T>>,
+    ) -> Option<(Location, EntityLookup<T>, IdentityDetails)> {
+        let state = self.lookup(None, id, locate);
+        if matches!(state, EntityLookup::Missing) {
+            return None;
+        }
+        let row = self.rows.get(&NonZeroU32::new(id)?)?;
+        Some((row.location, state, row.details))
+    }
+
+    /// Candidate-only metadata, including Taken. Collect into a reusable buffer
+    /// and release this borrow before invoking any source or UUID resolver.
+    pub fn admitted_metadata(
+        &mut self,
+    ) -> impl Iterator<Item = (u32, Location, IdentityDetails)> + '_ {
+        self.drain();
+        self.rows
+            .iter()
+            .map(|(id, row)| (id.get(), row.location, row.details))
+    }
+
     /// Clone the current producer authority when binding storage.
     pub fn producer(&self) -> Journal {
         self.journal.clone()
@@ -399,6 +430,9 @@ fn forget_extraction(
 #[cfg(test)]
 #[path = "table/completion_tests.rs"]
 mod completion_tests;
+#[cfg(test)]
+#[path = "table/metadata_tests.rs"]
+mod metadata_tests;
 
 #[cfg(test)]
 mod tests {
@@ -430,6 +464,7 @@ mod tests {
             let location = Location {
                 owner,
                 join: JoinSeq::next(),
+                source: Default::default(),
             };
             self.source.insert(location, SourceEntity { id, value: 42 });
             self.emit(
@@ -793,6 +828,7 @@ mod tests {
         let first = Location {
             owner: HOME,
             join: list[0].1,
+            source: Default::default(),
         };
         let taken = list.lift();
         assert_eq!(
@@ -803,6 +839,7 @@ mod tests {
         let second = Location {
             owner: HOME,
             join: list[0].1,
+            source: Default::default(),
         };
         assert_eq!(
             table.entity_lookup(&HOME.dimension, 8, |at| locate(&list, at)),

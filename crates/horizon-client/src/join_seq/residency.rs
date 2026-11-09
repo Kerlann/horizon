@@ -10,15 +10,16 @@ use std::{
     },
 };
 
+#[path = "residency/member.rs"]
+pub mod member;
 #[path = "residency/read_pass.rs"]
 pub mod read_pass;
 #[path = "residency/table.rs"]
 pub mod table;
-
 #[path = "residency/write_queue.rs"]
 pub mod write_queue;
 
-/// Authoritative entity storage families, excluding the dragon's eight parts.
+/// Authoritative entity storage families, including specialized semantic sources.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Kind {
     Mob,
@@ -51,11 +52,50 @@ pub struct Owner {
     pub kind: Kind,
 }
 
+/// A semantic source key, never a mutable element position.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum Source {
+    #[default]
+    Ordinary,
+    LocalPlayer,
+    Guest(u32),
+    Hook {
+        caster: Option<u32>,
+    },
+    DragonPart(u8),
+}
+
+/// Immutable receiver class, projected from the actual admission payload.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub enum EntitySubtype {
+    #[default]
+    Ordinary,
+    Merchant,
+    BlockDisplay,
+    ItemDisplay,
+    TextDisplay,
+    ChestCart,
+    FurnaceCart,
+    HopperCart,
+    TntCart,
+    CommandCart,
+}
+
+/// Identity facts, independent of snapshots and physical payload availability.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct IdentityDetails {
+    pub known_uuid: Option<[i32; 4]>,
+    pub subtype: EntitySubtype,
+}
+
 /// Existing runtime identity, not a new residency token or attachment slot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Identity {
     pub id: NonZeroU32,
     pub join: JoinSeq,
+    pub source: Source,
+    /// Immutable identity owned by specialized payloads, never a view cache.
+    pub details: IdentityDetails,
 }
 impl Identity {
     /// A pending id of zero cannot name an entity in the lookup table.
@@ -63,7 +103,22 @@ impl Identity {
         Some(Self {
             id: NonZeroU32::new(id)?,
             join,
+            source: Source::Ordinary,
+            details: IdentityDetails::default(),
         })
+    }
+
+    pub fn at_source(mut self, source: Source) -> Self {
+        self.source = source;
+        self
+    }
+    pub fn with_known_uuid(mut self, uuid: Option<[i32; 4]>) -> Self {
+        self.details.known_uuid = uuid;
+        self
+    }
+    pub fn with_subtype(mut self, subtype: EntitySubtype) -> Self {
+        self.details.subtype = subtype;
+        self
     }
 }
 
@@ -97,6 +152,10 @@ struct Pending {
 #[derive(Clone, Debug, Default)]
 pub struct Journal(Arc<Pending>);
 impl Journal {
+    pub(super) fn same_epoch(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.0, &other.0)
+    }
+
     /// Record an operation at the storage boundary, in mutation order.
     pub fn push(&self, event: Event) {
         let mut events = self.0.events.lock().unwrap();
@@ -150,6 +209,10 @@ pub(super) struct Binding<T> {
     journal: Journal,
     owner: Owner,
     identity: fn(&T) -> (u32, JoinSeq),
+    source: Source,
+    children: Option<(Kind, u8, fn(&T, u8) -> Option<[i32; 4]>)>,
+    known_uuid: Option<fn(&T) -> Option<[i32; 4]>>,
+    subtype: Option<fn(&T) -> EntitySubtype>,
 }
 impl Journal {
     pub(super) fn bind<T>(&self, owner: Owner, identity: fn(&T) -> (u32, JoinSeq)) -> Binding<T> {
@@ -157,6 +220,10 @@ impl Journal {
             journal: self.clone(),
             owner,
             identity,
+            source: Source::Ordinary,
+            children: None,
+            known_uuid: None,
+            subtype: None,
         }
     }
 }
@@ -166,12 +233,36 @@ impl<T> Clone for Binding<T> {
             journal: self.journal.clone(),
             owner: self.owner,
             identity: self.identity,
+            source: self.source,
+            children: self.children,
+            known_uuid: self.known_uuid,
+            subtype: self.subtype,
         }
     }
 }
 impl<T> Binding<T> {
+    pub(super) fn source(&mut self, source: Source) {
+        self.source = source;
+    }
+    pub(super) fn children(&mut self, kind: Kind, count: u8, uuid: fn(&T, u8) -> Option<[i32; 4]>) {
+        self.children = Some((kind, count, uuid));
+    }
+    pub(super) fn known_uuid(&mut self, uuid: Option<fn(&T) -> Option<[i32; 4]>>) {
+        self.known_uuid = uuid;
+    }
+
+    pub(super) fn subtype(&mut self, subtype: fn(&T) -> EntitySubtype) {
+        self.subtype = Some(subtype);
+    }
+
     pub(super) fn same(&self, other: &Self) -> bool {
-        self.owner == other.owner && Arc::ptr_eq(&self.journal.0, &other.journal.0)
+        self.owner == other.owner
+            && self.source == other.source
+            && self.children.map(|(kind, count, _)| (kind, count))
+                == other.children.map(|(kind, count, _)| (kind, count))
+            && self.known_uuid.is_some() == other.known_uuid.is_some()
+            && self.subtype.is_some() == other.subtype.is_some()
+            && self.journal.same_epoch(&other.journal)
     }
     pub(super) fn marker(&self, change: Change) {
         self.journal.push(Event {
@@ -180,16 +271,64 @@ impl<T> Binding<T> {
         });
     }
     pub(super) fn identity(&self, id: u32, join: JoinSeq, change: fn(Identity) -> Change) {
+        self.identity_from(id, join, None, change);
+    }
+    fn identity_from(
+        &self,
+        id: u32,
+        join: JoinSeq,
+        entity: Option<&T>,
+        change: fn(Identity) -> Change,
+    ) {
         if let Some(identity) = Identity::new(id, join) {
-            self.marker(change(identity));
+            let known = entity.and_then(|entity| self.known_uuid.and_then(|uuid| uuid(entity)));
+            let subtype = entity
+                .and_then(|entity| self.subtype.map(|subtype| subtype(entity)))
+                .unwrap_or_default();
+            self.marker(change(
+                identity
+                    .at_source(self.source)
+                    .with_known_uuid(known)
+                    .with_subtype(subtype),
+            ));
+            if let Some((kind, count, uuid)) = self.children {
+                for offset in 0..count {
+                    let Some(child) = id
+                        .checked_add(u32::from(offset) + 1)
+                        .and_then(|id| Identity::new(id, join))
+                    else {
+                        continue;
+                    };
+                    self.journal.push(Event {
+                        owner: Owner {
+                            dimension: self.owner.dimension,
+                            kind,
+                        },
+                        change: change(
+                            child
+                                .at_source(Source::DragonPart(offset))
+                                .with_known_uuid(entity.and_then(|entity| uuid(entity, offset))),
+                        ),
+                    });
+                }
+            }
         }
+    }
+    pub(super) fn location(&self, entity: &T) -> Option<table::Location> {
+        let (id, join) = self.read(entity);
+        NonZeroU32::new(id)?;
+        Some(table::Location {
+            owner: self.owner,
+            join,
+            source: self.source,
+        })
     }
     pub(super) fn read(&self, entity: &T) -> (u32, JoinSeq) {
         (self.identity)(entity)
     }
     pub(super) fn entity(&self, entity: &T, change: fn(Identity) -> Change) {
         let (id, join) = self.read(entity);
-        self.identity(id, join, change);
+        self.identity_from(id, join, Some(entity), change);
     }
     pub(super) fn all(&self, entities: &[T], change: fn(Identity) -> Change) {
         for entity in entities {
