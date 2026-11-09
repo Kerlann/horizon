@@ -185,6 +185,8 @@ impl Respawn {
 }
 #[derive(Clone, Debug)]
 pub(super) struct Crystal {
+    /// Entity-owned registration metadata; content clones are detached.
+    pub(super) attachment_lifetime: horizon_mod_runtime::attachments::AttachmentLifetime,
     pub join: horizon_client::join_seq::JoinSeq,
     /// The entity id a server tracks it by (0 until it is tracked).
     pub id: u32,
@@ -197,6 +199,7 @@ pub(super) struct Crystal {
     pub invulnerable: bool,
 }
 horizon_client::impl_joined!(Crystal);
+horizon_mod_runtime::impl_attachment_lifetime!(Crystal);
 impl Crystal {
     /// The start of `time` (the spin and bob) for a crystal at `position`: the random draw
     /// vanilla makes, or under `HORIZON_STILL` one seeded from the position alone. Which crystal
@@ -381,6 +384,8 @@ impl Phase {
     }
 }
 pub(in crate::game) struct Dragon {
+    /// Entity-owned registration metadata; content clones are detached.
+    pub(super) attachment_lifetime: horizon_mod_runtime::attachments::AttachmentLifetime,
     pub join: horizon_client::join_seq::JoinSeq,
     /// `Entity.id` once tracked to guests (0 before); its parts take the
     /// eight ids after it (`EnderDragon`'s constructor reserves them).
@@ -610,6 +615,7 @@ impl Dragon {
     /// spawn egg or a save without `DragonPhase` keeps hovering where it was put.
     pub(super) fn new(position: Vec3, yaw: f32, seed: i64) -> Self {
         Self {
+            attachment_lifetime: Default::default(),
             join: Default::default(),
             id: 0,
             position,
@@ -1432,6 +1438,7 @@ impl Game<'_> {
             // EndCrystal's constructor takes an id from the entity counter.
             self.next_entity += 1;
             self.crystals.push(Crystal {
+                attachment_lifetime: Default::default(),
                 join: Default::default(),
                 id: self.next_entity,
                 position: at,
@@ -2614,6 +2621,7 @@ impl Game<'_> {
                     }
                     let id = self.take_entity_id();
                     self.breath_clouds.push(Breath {
+                        attachment_lifetime: Default::default(),
                         join: Default::default(),
                         id,
                         at: [x, y.floor() + 1.0, z],
@@ -3290,6 +3298,7 @@ impl Game<'_> {
         let feet = [next.x, next.y - 0.5, next.z];
         let at = fireball_cloud_origin(feet, &snap_targets);
         self.breath_clouds.push(Breath {
+            attachment_lifetime: Default::default(),
             join: Default::default(),
             id,
             at,
@@ -3622,6 +3631,8 @@ fn breath_puffs(
     }
 }
 pub(super) struct Breath {
+    /// Entity-owned registration metadata; content clones are detached.
+    pub(super) attachment_lifetime: horizon_mod_runtime::attachments::AttachmentLifetime,
     pub(in crate::game) join: horizon_client::join_seq::JoinSeq,
     /// Its entity id once a server's players track it (0 until then).
     pub(super) id: u32,
@@ -3637,6 +3648,7 @@ pub(super) struct Breath {
 }
 
 horizon_client::impl_joined!(Breath, Dragon);
+horizon_mod_runtime::impl_attachment_lifetime!(Breath, Dragon);
 
 impl Breath {
     /// `AreaEffectCloud.isWaiting`: before its wait time (20 ticks, 10 for a
@@ -4083,6 +4095,7 @@ impl Crystal {
     pub(super) fn from_nbt(tag: &Tag, time: i32) -> Option<Self> {
         let (position, _, _) = horizon_client::entity_nbt::boat_from_nbt(tag)?;
         Some(Self {
+            attachment_lifetime: Default::default(),
             join: Default::default(),
             id: 0,
             position,
@@ -4347,6 +4360,7 @@ impl Game<'_> {
         // the crystal is an entity a command can name (`@e[type=end_crystal]`).
         self.next_entity += 1;
         self.crystals.push(Crystal {
+            attachment_lifetime: Default::default(),
             join: Default::default(),
             id: self.next_entity,
             position: at,
@@ -4652,6 +4666,7 @@ impl Game<'_> {
         let drawn = self.world.random.next_int_bound(100_000).unwrap_or(0);
         let time = Crystal::start_time(at, drawn, self.clock.still());
         self.crystals.push(Crystal {
+            attachment_lifetime: Default::default(),
             join: Default::default(),
             id: 0,
             position: at,

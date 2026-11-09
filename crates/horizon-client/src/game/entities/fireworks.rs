@@ -30,6 +30,8 @@ enum RocketHit {
 }
 
 pub(super) struct Rocket {
+    /// Entity-owned registration metadata; content clones are detached.
+    pub(super) attachment_lifetime: horizon_mod_runtime::attachments::AttachmentLifetime,
     /// `Entity.yRot` and `xRot` (`/tp`, `/data get ... Rotation`).
     pub rotation: [f32; 2],
     /// When it joined its list (`horizon_client::join_seq`); set by the list.
@@ -79,6 +81,7 @@ impl Rocket {
         let item = ItemStack::new("minecraft:firework_rocket", 1);
         let (_, explosions) = fireworks_of(&item);
         Self {
+            attachment_lifetime: Default::default(),
             rotation: [0.0, 0.0],
             join: Default::default(),
             id,
@@ -150,6 +153,7 @@ impl Rocket {
             .unwrap_or_else(|| ItemStack::new("minecraft:firework_rocket", 1));
         let (_, explosions) = fireworks_of(&item);
         Self {
+            attachment_lifetime: Default::default(),
             rotation: r.rotation,
             join: Default::default(),
             id: 0,
@@ -307,6 +311,7 @@ impl Game<'_> {
         // Entity.<init>: the id comes from the one counter at construction.
         let id = self.take_entity_id();
         Rocket {
+            attachment_lifetime: Default::default(),
             rotation: [0.0, 0.0],
             join: Default::default(),
             id,
@@ -1056,3 +1061,4 @@ mod tests {
     }
 }
 horizon_client::impl_joined!(Rocket);
+horizon_mod_runtime::impl_attachment_lifetime!(Rocket);

@@ -107,36 +107,7 @@ pub(super) enum SlotAccess<R> {
     UnsupportedKind(Kind),
 }
 
-// These physical owners have no attachment lifetime yet. Do not manufacture a
-// temporary slot or infer one from a sibling owner. Keep their residency intact.
 macro_rules! resident_lifetime_slot {
-    (Other, $list:expr, $join:expr, $visit:expr) => {
-        SlotAccess::UnsupportedKind(Kind::Other)
-    };
-    (Fangs, $list:expr, $join:expr, $visit:expr) => {
-        SlotAccess::UnsupportedKind(Kind::Fangs)
-    };
-    (Crystal, $list:expr, $join:expr, $visit:expr) => {
-        SlotAccess::UnsupportedKind(Kind::Crystal)
-    };
-    (Tnt, $list:expr, $join:expr, $visit:expr) => {
-        SlotAccess::UnsupportedKind(Kind::Tnt)
-    };
-    (Knot, $list:expr, $join:expr, $visit:expr) => {
-        SlotAccess::UnsupportedKind(Kind::Knot)
-    };
-    (Rocket, $list:expr, $join:expr, $visit:expr) => {
-        SlotAccess::UnsupportedKind(Kind::Rocket)
-    };
-    (Trident, $list:expr, $join:expr, $visit:expr) => {
-        SlotAccess::UnsupportedKind(Kind::Trident)
-    };
-    (Spawner, $list:expr, $join:expr, $visit:expr) => {
-        SlotAccess::UnsupportedKind(Kind::Spawner)
-    };
-    (Cloud, $list:expr, $join:expr, $visit:expr) => {
-        SlotAccess::UnsupportedKind(Kind::Cloud)
-    };
     ($kind:ident, $list:expr, $join:expr, $visit:expr) => {{
         let Some(index) = $list.locate($join) else {
             return SlotAccess::Missing;
@@ -168,7 +139,12 @@ macro_rules! define_resident_access {
             match at.owner.kind {
                 $(Kind::$kind => $crate::game::entity_residency::resident_lifetime_slot!($kind, $this$(.$field)+, at.join, visit),)*
                 Kind::Projectile => $crate::game::entity_residency::resident_lifetime_slot!(Projectile, $this$(.$projectiles)+, at.join, visit),
-                Kind::Dragon => SlotAccess::UnsupportedKind(Kind::Dragon),
+                Kind::Dragon => {
+                    $this.dragon.locate(at.join).map_or(SlotAccess::Missing, |_| {
+                        use horizon_mod_runtime::attachments::HasAttachmentLifetime;
+                        SlotAccess::Done(visit($this.dragon.as_mut().unwrap().attachment_lifetime()))
+                    })
+                },
             }
         }
         pub(super) fn locate_resident_owner(&$this, at: Location) -> Option<SourceEntity<(Target, bool)>> {
@@ -205,6 +181,10 @@ pub(crate) use define_resident_access;
 impl Game<'_> {
     resident_owners!(define_resident_access, self, creatures.projectiles);
 }
+
+#[cfg(test)]
+#[path = "entity_residency/lifetime_tests.rs"]
+mod lifetime_tests;
 
 #[cfg(test)]
 mod tests {
@@ -273,17 +253,13 @@ mod tests {
             game.lan_assign_ids();
             let tnt = id(game.tnts[0].id);
             assert_eq!(
-                game.with_resident_slot(&DimensionKey::OVERWORLD, tnt, |_| panic!(
-                    "no actual lifetime"
-                )),
-                SlotAccess::<()>::UnsupportedKind(Kind::Tnt)
+                game.with_resident_slot(&DimensionKey::OVERWORLD, tnt, |slot| slot.is_bound()),
+                SlotAccess::Done(false)
             );
             game.enter_level(Dim::Nether).unwrap();
             assert_eq!(
-                game.with_resident_slot(&DimensionKey::OVERWORLD, tnt, |_| panic!(
-                    "no parked lifetime"
-                )),
-                SlotAccess::<()>::UnsupportedKind(Kind::Tnt)
+                game.with_resident_slot(&DimensionKey::OVERWORLD, tnt, |slot| slot.is_bound()),
+                SlotAccess::Done(false)
             );
             assert_eq!(
                 game.with_resident_slot(&DimensionKey::OVERWORLD, id(410), |_| 11),

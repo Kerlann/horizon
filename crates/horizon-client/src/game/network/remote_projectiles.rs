@@ -322,6 +322,7 @@ impl Game<'_> {
         match kind {
             "minecraft:evoker_fangs" => self.insert_fangs(id, position, yaw, 0, 0),
             "minecraft:tnt" => self.tnts.push(super::tnt::PrimedTnt {
+                attachment_lifetime: Default::default(),
                 rotation: [0.0, 0.0],
                 join: Default::default(),
                 no_gravity: false,
@@ -399,6 +400,7 @@ impl Game<'_> {
                     .unwrap_or(0);
                 let time = super::dragon::Crystal::start_time(at, drawn, self.clock.still());
                 self.crystals.push(super::dragon::Crystal {
+                    attachment_lifetime: Default::default(),
                     join: Default::default(),
                     id,
                     position: at,

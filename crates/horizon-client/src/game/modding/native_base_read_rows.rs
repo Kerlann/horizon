@@ -161,6 +161,7 @@ mod tests {
             horizon_core::nbt::Tag::Byte(2),
         )]);
         let other = super::super::commands::OtherEntity {
+            attachment_lifetime: Default::default(),
             join: horizon_client::join_seq::JoinSeq::next(),
             id: 17,
             kind: "minecraft:marker".into(),
