@@ -243,6 +243,15 @@ impl Game<'_> {
         stack: &ItemStack,
         attacker: mod_api::LivingRef,
     ) -> Option<mod_api::ItemAttackRange> {
+        self.read_item_resource_entity_attack_range(None, stack, attacker)
+    }
+
+    pub(in crate::game) fn read_item_resource_entity_attack_range(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        stack: &ItemStack,
+        attacker: mod_api::LivingRef,
+    ) -> Option<mod_api::ItemAttackRange> {
         self.items().get(&stack.item)?;
         let (player, creative, _, _) = self.item_combat_actor(attacker)?;
         let default =
@@ -251,6 +260,15 @@ impl Game<'_> {
     }
     pub(in crate::game) fn item_resource_damage_source(
         &self,
+        stack: &ItemStack,
+        attacker: mod_api::LivingRef,
+    ) -> Option<mod_api::ItemDamageSource> {
+        self.read_item_resource_damage_source(None, stack, attacker)
+    }
+
+    pub(in crate::game) fn read_item_resource_damage_source(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         stack: &ItemStack,
         attacker: mod_api::LivingRef,
     ) -> Option<mod_api::ItemDamageSource> {
@@ -323,6 +341,17 @@ impl Game<'_> {
     }
     pub(in crate::game) fn item_resource_attack_damage_bonus(
         &self,
+        stack: &ItemStack,
+        attacker: mod_api::LivingRef,
+        target: mod_api::EntityRef,
+        base_damage: f32,
+    ) -> Option<f32> {
+        self.read_item_resource_attack_damage_bonus(None, stack, attacker, target, base_damage)
+    }
+
+    pub(in crate::game) fn read_item_resource_attack_damage_bonus(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         stack: &ItemStack,
         attacker: mod_api::LivingRef,
         target: mod_api::EntityRef,

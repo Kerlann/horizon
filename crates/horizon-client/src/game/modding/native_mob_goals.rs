@@ -138,45 +138,101 @@ impl Game<'_> {
     /// selector as a `MobGoalEntry` (the priority, the kind id and
     /// whether it runs), in registration order. None for a stale or
     /// unavailable mob, a client, and the dragon.
-    pub(super) fn mob_goals(&self, mob: MobRef) -> Result<Option<Vec<MobGoalEntry>>, mod_api::EntityReadError> {
-use super::{native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
-let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::OrdinaryMob(mob), &[EntityReadDependency::Goals]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
-Ok((|| {
-        let Target::Mob(id)=target else {return None;};
-        let m = self.mobs.iter().find(|m| m.id == id)?;
-        Some(
-            m.ai.goals
-                .entries()
-                .map(|(priority, name, running)| MobGoalEntry {
-                    priority,
-                    id: goal_id(name),
-                    running,
-                })
-                .collect(),
-        )
-    })())
-}
+    pub(super) fn mob_goals(
+        &self,
+        mob: MobRef,
+    ) -> Result<Option<Vec<MobGoalEntry>>, mod_api::EntityReadError> {
+        self.read_mob_goals(None, mob)
+    }
+
+    pub(super) fn read_mob_goals(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        mob: MobRef,
+    ) -> Result<Option<Vec<MobGoalEntry>>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::OrdinaryMob(mob),
+            &[EntityReadDependency::Goals],
+        ) {
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
+            None => return Ok(None),
+        };
+        Ok((|| {
+            let Target::Mob(id) = target else {
+                return None;
+            };
+            let m = self.mobs.iter().find(|m| m.id == id)?;
+            Some(
+                m.ai.goals
+                    .entries()
+                    .map(|(priority, name, running)| MobGoalEntry {
+                        priority,
+                        id: goal_id(name),
+                        running,
+                    })
+                    .collect(),
+            )
+        })())
+    }
 
     /// Every goal of the target selector, as `goals` reads the goal
     /// selector's.
-    pub(super) fn mob_target_goals(&self, mob: MobRef) -> Result<Option<Vec<MobGoalEntry>>, mod_api::EntityReadError> {
-use super::{native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
-let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::OrdinaryMob(mob), &[EntityReadDependency::TargetGoals]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
-Ok((|| {
-        let Target::Mob(id)=target else {return None;};
-        let m = self.mobs.iter().find(|m| m.id == id)?;
-        Some(
-            m.ai.targets
-                .entries()
-                .map(|(priority, name, running)| MobGoalEntry {
-                    priority,
-                    id: goal_id(name),
-                    running,
-                })
-                .collect(),
-        )
-    })())
-}
+    pub(super) fn mob_target_goals(
+        &self,
+        mob: MobRef,
+    ) -> Result<Option<Vec<MobGoalEntry>>, mod_api::EntityReadError> {
+        self.read_mob_target_goals(None, mob)
+    }
+
+    pub(super) fn read_mob_target_goals(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        mob: MobRef,
+    ) -> Result<Option<Vec<MobGoalEntry>>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::OrdinaryMob(mob),
+            &[EntityReadDependency::TargetGoals],
+        ) {
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
+            None => return Ok(None),
+        };
+        Ok((|| {
+            let Target::Mob(id) = target else {
+                return None;
+            };
+            let m = self.mobs.iter().find(|m| m.id == id)?;
+            Some(
+                m.ai.targets
+                    .entries()
+                    .map(|(priority, name, running)| MobGoalEntry {
+                        priority,
+                        id: goal_id(name),
+                        running,
+                    })
+                    .collect(),
+            )
+        })())
+    }
 
     /// One `removeGoal` pass over the mob's selector: the mob list comes
     /// out, as the mob tick takes it, so the goal's `stop` sees the world

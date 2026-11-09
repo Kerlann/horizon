@@ -17,6 +17,15 @@ impl Game<'_> {
         living: LivingRef,
         target: EntityRef,
     ) -> Option<bool> {
+        self.read_living_has_line_of_sight(None, living, target)
+    }
+
+    pub(super) fn read_living_has_line_of_sight(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        target: EntityRef,
+    ) -> Option<bool> {
         let viewer = self.native_living_target(living)?;
         let seen = self.native_entity_target(target)?;
         if self.target_level(viewer) != self.dim {
@@ -44,6 +53,15 @@ impl Game<'_> {
     /// a stale or unavailable handle.
     pub(super) fn living_dimensions_for_pose(
         &self,
+        living: LivingRef,
+        pose: Pose,
+    ) -> Option<[f64; 3]> {
+        self.read_living_dimensions_for_pose(None, living, pose)
+    }
+
+    pub(super) fn read_living_dimensions_for_pose(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         living: LivingRef,
         pose: Pose,
     ) -> Option<[f64; 3]> {

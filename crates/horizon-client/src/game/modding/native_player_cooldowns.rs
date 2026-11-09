@@ -49,32 +49,87 @@ impl Game<'_> {
         &self,
         player: PlayerRef,
     ) -> Result<Option<Vec<ItemCooldown>>, mod_api::EntityReadError> {
-use super::{native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
-if !self.is_logical_server(){return Ok(None)}
-let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::Cooldowns]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
-Ok((||{
-        let mut out: Vec<ItemCooldown> = self
-            .raw_cooldowns_of(target)?
-            .remaining()
-            .filter(|(_, left)| *left > 0)
-            .map(|(group, left)| ItemCooldown {
-                group: group.to_string(),
-                ticks_left: left,
-            })
-            .collect();
-        out.sort_by(|a, b| a.group.cmp(&b.group));
-        Some(out)
-    })())
-}
+        self.read_player_item_cooldowns(None, player)
+    }
+
+    pub(super) fn read_player_item_cooldowns(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+    ) -> Result<Option<Vec<ItemCooldown>>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Cooldowns],
+        ) {
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
+            None => return Ok(None),
+        };
+        Ok((|| {
+            let mut out: Vec<ItemCooldown> = self
+                .raw_cooldowns_of(target)?
+                .remaining()
+                .filter(|(_, left)| *left > 0)
+                .map(|(group, left)| ItemCooldown {
+                    group: group.to_string(),
+                    ticks_left: left,
+                })
+                .collect();
+            out.sort_by(|a, b| a.group.cmp(&b.group));
+            Some(out)
+        })())
+    }
     /// `ItemCooldowns.isOnCooldown`: whether `group` still has time to run.
-    pub(super) fn player_has_item_cooldown(&self, player: PlayerRef, group: &str) -> Result<Option<bool>, mod_api::EntityReadError> {
-use super::{native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
-if !self.is_logical_server(){return Ok(None)}
-let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::Cooldowns]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
-Ok((||{
-        Some(self.raw_cooldowns_of(target)?.is_on_cooldown(group))
-    })())
-}
+    pub(super) fn player_has_item_cooldown(
+        &self,
+        player: PlayerRef,
+        group: &str,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        self.read_player_has_item_cooldown(None, player, group)
+    }
+
+    pub(super) fn read_player_has_item_cooldown(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+        group: &str,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Cooldowns],
+        ) {
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
+            None => return Ok(None),
+        };
+        Ok((|| {
+            Some(self.raw_cooldowns_of(target)?.is_on_cooldown(group))
+        })())
+    }
     /// `ItemCooldowns.getCooldownPercent(group, 0)`: what is left of the
     /// group's cooldown, from 1 (just started) to 0 (none).
     pub(super) fn player_item_cooldown_percent(
@@ -82,13 +137,39 @@ Ok((||{
         player: PlayerRef,
         group: &str,
     ) -> Result<Option<f32>, mod_api::EntityReadError> {
-use super::{native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
-if !self.is_logical_server(){return Ok(None)}
-let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::Cooldowns]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
-Ok((||{
-        Some(self.raw_cooldowns_of(target)?.percent(group, 0.0))
-    })())
-}
+        self.read_player_item_cooldown_percent(None, player, group)
+    }
+
+    pub(super) fn read_player_item_cooldown_percent(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+        group: &str,
+    ) -> Result<Option<f32>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Cooldowns],
+        ) {
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
+            None => return Ok(None),
+        };
+        Ok((|| {
+            Some(self.raw_cooldowns_of(target)?.percent(group, 0.0))
+        })())
+    }
     /// `ItemCooldowns.addCooldown(group, ticks)`: starts (or restarts) the
     /// group's cooldown, and the player's client draws it on every item of the
     /// group (`ServerItemCooldowns.onCooldownStarted`).

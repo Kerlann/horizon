@@ -76,6 +76,17 @@ impl Game<'_> {
         face: BlockFace,
         stack: &ItemStack,
     ) -> Option<bool> {
+        self.read_player_may_use_item_at(None, player, pos, face, stack)
+    }
+
+    pub(super) fn read_player_may_use_item_at(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+        pos: [i32; 3],
+        face: BlockFace,
+        stack: &ItemStack,
+    ) -> Option<bool> {
         if let PlayerRead::Guest(guest) = self.player_handle_read(player)?
             && guest.dimension != self.dim.id()
         {
@@ -88,6 +99,15 @@ impl Game<'_> {
     /// players' teams, as an attack, an arrow or a trident asks them
     /// (`player_may_harm`). None when either handle is stale or unavailable.
     pub(super) fn player_can_harm(&self, player: PlayerRef, other: PlayerRef) -> Option<bool> {
+        self.read_player_can_harm(None, player, other)
+    }
+
+    pub(super) fn read_player_can_harm(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+        other: PlayerRef,
+    ) -> Option<bool> {
         self.player_handle_read(player)?;
         self.player_handle_read(other)?;
         let attacker = self.native_target_team(self.native_entity_target(player.entity())?)?;

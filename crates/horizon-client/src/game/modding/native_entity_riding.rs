@@ -81,15 +81,39 @@ impl Game<'_> {
     /// What the entity rides (`Entity.getVehicle`): `None` when it rides
     /// nothing, or for a stale handle.
     pub(super) fn entity_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
+        self.read_entity_vehicle(None, entity)
+    }
+
+    pub(super) fn read_entity_vehicle(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Option<EntityRef> {
         self.native_vehicle(entity).flatten()
     }
     /// Whether the entity rides another (`Entity.isPassenger`).
     pub(super) fn entity_is_passenger(&self, entity: EntityRef) -> Option<bool> {
+        self.read_entity_is_passenger(None, entity)
+    }
+
+    pub(super) fn read_entity_is_passenger(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Option<bool> {
         Some(self.native_vehicle(entity)?.is_some())
     }
     /// The lowest vehicle under the entity (`Entity.getRootVehicle`): the
     /// entity itself when it rides nothing.
     pub(super) fn entity_root_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
+        self.read_entity_root_vehicle(None, entity)
+    }
+
+    pub(super) fn read_entity_root_vehicle(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Option<EntityRef> {
         let mut root = entity;
         // A chain of riders is short; the bound only guards against a loop.
         for _ in 0..64 {
@@ -102,17 +126,41 @@ impl Game<'_> {
     }
     /// The entities riding this one (`Entity.getPassengers`), in `addPassenger`'s order.
     pub(super) fn entity_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
+        self.read_entity_passengers(None, entity)
+    }
+
+    pub(super) fn read_entity_passengers(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Option<Vec<EntityRef>> {
         self.native_entity_target(entity)?;
         let seats = self.seated_passengers(entity.id()).into_iter();
         Some(seats.filter_map(|(_, id, _)| self.entity(id)).collect())
     }
     /// Whether anything rides the entity (`Entity.isVehicle`).
     pub(super) fn entity_is_vehicle(&self, entity: EntityRef) -> Option<bool> {
+        self.read_entity_is_vehicle(None, entity)
+    }
+
+    pub(super) fn read_entity_is_vehicle(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Option<bool> {
         Some(!self.entity_passengers(entity)?.is_empty())
     }
     /// Every entity riding this one, at any depth (`Entity.getIndirectPassengers`): each
     /// passenger in `passengers` order, followed by those riding it.
     pub(super) fn entity_indirect_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
+        self.read_entity_indirect_passengers(None, entity)
+    }
+
+    pub(super) fn read_entity_indirect_passengers(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Option<Vec<EntityRef>> {
         let mut all = Vec::new();
         let mut next = self.entity_passengers(entity)?;
         next.reverse();
@@ -169,6 +217,14 @@ impl Game<'_> {
     /// unless `#non_controlling_rider` names it. `None` when nothing steers it, or for a stale
     /// handle.
     pub(super) fn entity_controlling_passenger(&self, entity: EntityRef) -> Option<LivingRef> {
+        self.read_entity_controlling_passenger(None, entity)
+    }
+
+    pub(super) fn read_entity_controlling_passenger(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Option<LivingRef> {
         let vehicle = self.native_entity_target(entity)?;
         let passengers = self.entity_passengers(entity)?;
         let first = *passengers.first()?;
@@ -200,6 +256,15 @@ impl Game<'_> {
         entity: EntityRef,
         other: EntityRef,
     ) -> Option<bool> {
+        self.read_entity_is_passenger_of_same_vehicle(None, entity, other)
+    }
+
+    pub(super) fn read_entity_is_passenger_of_same_vehicle(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+        other: EntityRef,
+    ) -> Option<bool> {
         Some(self.entity_root_vehicle(entity)? == self.entity_root_vehicle(other)?)
     }
     /// Where getting off this vehicle puts `passenger` as it stands now, riding it or not. This
@@ -215,6 +280,15 @@ impl Game<'_> {
     /// or a mob, a player with no motion state, or a vehicle whose box Horizon does not keep.
     pub(super) fn entity_dismount_location(
         &self,
+        vehicle: EntityRef,
+        passenger: LivingRef,
+    ) -> Option<[f64; 3]> {
+        self.read_entity_dismount_location(None, vehicle, passenger)
+    }
+
+    pub(super) fn read_entity_dismount_location(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         vehicle: EntityRef,
         passenger: LivingRef,
     ) -> Option<[f64; 3]> {

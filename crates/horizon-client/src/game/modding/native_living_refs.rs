@@ -166,6 +166,15 @@ impl Game<'_> {
         living: LivingRef,
         id: &str,
     ) -> Result<Option<f64>, mod_api::EntityReadError> {
+        self.read_living_attribute_value(None, living, id)
+    }
+
+    pub(super) fn read_living_attribute_value(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        id: &str,
+    ) -> Result<Option<f64>, mod_api::EntityReadError> {
         let target = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Living(living),
             &[
@@ -173,7 +182,13 @@ impl Game<'_> {
                 EntityReadDependency::Equipment,
             ],
         ) {
-            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
             None => return Ok(None),
         };
         Ok(self.native_target_attribute(
@@ -190,6 +205,15 @@ impl Game<'_> {
         living: LivingRef,
         id: &str,
     ) -> Result<Option<f64>, mod_api::EntityReadError> {
+        self.read_living_attribute_base(None, living, id)
+    }
+
+    pub(super) fn read_living_attribute_base(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        id: &str,
+    ) -> Result<Option<f64>, mod_api::EntityReadError> {
         let target = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Living(living),
             &[
@@ -197,7 +221,13 @@ impl Game<'_> {
                 EntityReadDependency::Equipment,
             ],
         ) {
-            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
             None => return Ok(None),
         };
         Ok(self.native_target_attribute(target, id, horizon_world::attribute_map::ValueKind::Base))
@@ -213,6 +243,14 @@ impl Game<'_> {
         &self,
         living: LivingRef,
     ) -> Result<Option<Vec<Identifier>>, mod_api::EntityReadError> {
+        self.read_living_attributes(None, living)
+    }
+
+    pub(super) fn read_living_attributes(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+    ) -> Result<Option<Vec<Identifier>>, mod_api::EntityReadError> {
         let target = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Living(living),
             &[
@@ -220,7 +258,13 @@ impl Game<'_> {
                 EntityReadDependency::Equipment,
             ],
         ) {
-            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
             None => return Ok(None),
         };
         Ok((|| {
@@ -249,6 +293,15 @@ impl Game<'_> {
         living: LivingRef,
         id: &str,
     ) -> Result<Option<Vec<AttributeModifier>>, mod_api::EntityReadError> {
+        self.read_living_attribute_modifiers(None, living, id)
+    }
+
+    pub(super) fn read_living_attribute_modifiers(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        id: &str,
+    ) -> Result<Option<Vec<AttributeModifier>>, mod_api::EntityReadError> {
         let target = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Living(living),
             &[
@@ -256,7 +309,13 @@ impl Game<'_> {
                 EntityReadDependency::Equipment,
             ],
         ) {
-            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
             None => return Ok(None),
         };
         Ok(self.native_target_attribute_modifiers(target, id))
@@ -515,6 +574,15 @@ impl Game<'_> {
         living: LivingRef,
         target: EntityRef,
     ) -> Option<bool> {
+        self.read_living_in_melee_range(None, living, target)
+    }
+
+    pub(super) fn read_living_in_melee_range(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        target: EntityRef,
+    ) -> Option<bool> {
         let Target::Mob(id) = self.native_living_read_target(living)? else {
             return None;
         };
@@ -534,6 +602,14 @@ impl Game<'_> {
     /// not a spectator, no immune armor). None for a stale handle, an armor
     /// stand or the dragon.
     pub(super) fn living_can_freeze(&self, living: LivingRef) -> Option<bool> {
+        self.read_living_can_freeze(None, living)
+    }
+
+    pub(super) fn read_living_can_freeze(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+    ) -> Option<bool> {
         match self.native_living_read_target(living)? {
             Target::Mob(id) => {
                 let m = self.mobs.iter().find(|m| m.id == id && !m.removed)?;
@@ -573,6 +649,14 @@ impl Game<'_> {
     /// one of `#minecraft:beds`. None where the sleeper keeps no position,
     /// the block is not a bed, or the handle is stale.
     pub(super) fn living_bed_orientation(&self, living: LivingRef) -> Option<Direction> {
+        self.read_living_bed_orientation(None, living)
+    }
+
+    pub(super) fn read_living_bed_orientation(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+    ) -> Option<Direction> {
         let pos = self.living_sleeping_pos(living)?;
         let w = self.mob_world_base(&[]);
         let name = w.block_name(pos[0], pos[1], pos[2]);
@@ -796,11 +880,26 @@ impl Game<'_> {
         living: LivingRef,
         slot: EquipmentSlot,
     ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+        self.read_living_equipment(None, living, slot)
+    }
+
+    pub(super) fn read_living_equipment(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        slot: EquipmentSlot,
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
         let target = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Living(living),
             &[EntityReadDependency::Equipment],
         ) {
-            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
             None => return Ok(None),
         };
         Ok(self.raw_living_equipment(target, slot))
@@ -948,6 +1047,15 @@ impl Game<'_> {
     /// The stack in hand `hand` (`LivingEntity.getItemInHand`). API 382.
     pub(super) fn living_hand_item(
         &self,
+        living: LivingRef,
+        hand: Hand,
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+        self.read_living_hand_item(None, living, hand)
+    }
+
+    pub(super) fn read_living_hand_item(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         living: LivingRef,
         hand: Hand,
     ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {

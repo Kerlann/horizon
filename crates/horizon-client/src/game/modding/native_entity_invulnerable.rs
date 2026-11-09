@@ -298,6 +298,15 @@ impl Game<'_> {
         entity: EntityRef,
         damage_type: &str,
     ) -> Option<bool> {
+        self.read_entity_invulnerable_to_damage(None, entity, damage_type)
+    }
+
+    pub(super) fn read_entity_invulnerable_to_damage(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+        damage_type: &str,
+    ) -> Option<bool> {
         let Target::Mob(id) = self.native_entity_target(entity)? else {
             return None;
         };
@@ -312,6 +321,15 @@ impl Game<'_> {
     /// cannot. Entities without a team always can. None for a stale handle.
     pub(super) fn entity_entities_team_damage_allowed(
         &self,
+        entity: EntityRef,
+        source: EntityRef,
+    ) -> Option<bool> {
+        self.read_entity_entities_team_damage_allowed(None, entity, source)
+    }
+
+    pub(super) fn read_entity_entities_team_damage_allowed(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         entity: EntityRef,
         source: EntityRef,
     ) -> Option<bool> {

@@ -65,6 +65,14 @@ impl Game<'_> {
         &self,
         entity: EntityRef,
     ) -> Result<Option<Vec<String>>, mod_api::EntityReadError> {
+        self.read_entity_tags(None, entity)
+    }
+
+    pub(super) fn read_entity_tags(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Result<Option<Vec<String>>, mod_api::EntityReadError> {
         if self.remote.is_some() {
             return Ok(None);
         }
@@ -72,7 +80,13 @@ impl Game<'_> {
             EntityReadSubject::Entity(entity),
             &[EntityReadDependency::Tags],
         ) {
-            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
             None => return Ok(None),
         };
         Ok(Some(self.tags_of(target)))
@@ -118,6 +132,14 @@ impl Game<'_> {
         &self,
         entity: EntityRef,
     ) -> Result<Option<String>, mod_api::EntityReadError> {
+        self.read_entity_name(None, entity)
+    }
+
+    pub(super) fn read_entity_name(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
         let target = match self.entity_read_dependency::<core::convert::Infallible>(
             EntityReadSubject::Entity(entity),
             &[
@@ -126,7 +148,13 @@ impl Game<'_> {
                 EntityReadDependency::ItemStack,
             ],
         ) {
-            Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
             None => return Ok(None),
         };
         if let Some(remote) = &self.remote {

@@ -395,10 +395,38 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.getText`; None for another kind of display.
-    pub(super) fn display_text(&self, display: DisplayRef) -> Result<Option<Text>, mod_api::EntityReadError<mod_api::TextFormError>> {
-        use super::{native_live_entity_reads::EntityReadSubject, native_read_dependencies::EntityReadDependency};
-        let target = match self.entity_read_dependency::<mod_api::TextFormError>(EntityReadSubject::TextDisplay(display), &[EntityReadDependency::DisplayText]) { Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target }, None => return Ok(None) };
-        let Target::Other(id) = target else { return Ok(None); };
+    pub(super) fn display_text(
+        &self,
+        display: DisplayRef,
+    ) -> Result<Option<Text>, mod_api::EntityReadError<mod_api::TextFormError>> {
+        self.read_display_text(None, display)
+    }
+
+    pub(super) fn read_display_text(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        display: DisplayRef,
+    ) -> Result<Option<Text>, mod_api::EntityReadError<mod_api::TextFormError>> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        let target = match self.entity_read_dependency::<mod_api::TextFormError>(
+            EntityReadSubject::TextDisplay(display),
+            &[EntityReadDependency::DisplayText],
+        ) {
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
+            None => return Ok(None),
+        };
+        let Target::Other(id) = target else {
+            return Ok(None);
+        };
         let empty = Tag::Compound(Compound::new());
         let tag = self.persist.raw.get(&id).unwrap_or(&empty);
         Ok(match entry(DisplayKind::Text, tag, 23) {
@@ -539,11 +567,44 @@ impl Game<'_> {
     }
 
     /// `ItemDisplay.getItemStack`; None for another kind of display or an empty stack.
-    pub(super) fn display_item(&self, display: DisplayRef) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
-        use super::{native_live_entity_reads::EntityReadSubject, native_read_dependencies::EntityReadDependency};
-        let target = match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::ItemDisplay(display), &[EntityReadDependency::ItemStack]) { Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target }, None => return Ok(None) };
-        let Target::Other(id) = target else { return Ok(None); };
-        Ok(self.persist.raw.get(&id).and_then(|tag| tag.get("item")).and_then(item_from_nbt))
+    pub(super) fn display_item(
+        &self,
+        display: DisplayRef,
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+        self.read_display_item(None, display)
+    }
+
+    pub(super) fn read_display_item(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        display: DisplayRef,
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::ItemDisplay(display),
+            &[EntityReadDependency::ItemStack],
+        ) {
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
+            None => return Ok(None),
+        };
+        let Target::Other(id) = target else {
+            return Ok(None);
+        };
+        Ok(self
+            .persist
+            .raw
+            .get(&id)
+            .and_then(|tag| tag.get("item"))
+            .and_then(item_from_nbt))
     }
 
     /// `ItemDisplay.setItemStack`; None empties it. False for another kind of display.

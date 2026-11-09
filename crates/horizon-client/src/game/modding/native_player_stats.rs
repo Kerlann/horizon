@@ -29,11 +29,45 @@ impl Game<'_> {
         stat_type: StatType,
         key: &str,
     ) -> Result<Option<i32>, mod_api::EntityReadError> {
-use super::{commands::Target,native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
-if !self.is_logical_server(){return Ok(None)}
-let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::Stats]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
-Ok((||{let stats=match target {Target::Player=>Some(&self.stats),Target::Guest(conn)=>self.lan.as_ref()?.play.get(&conn).map(|play|&play.stats),_=>return None}; Some(stats.map_or(0, |stats|stats.get(stat_type.path(), &qualified(key))))})())
-}
+        self.read_player_stat(None, player, stat_type, key)
+    }
+
+    pub(super) fn read_player_stat(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+        stat_type: StatType,
+        key: &str,
+    ) -> Result<Option<i32>, mod_api::EntityReadError> {
+        use super::{
+            commands::Target, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Stats],
+        ) {
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
+            None => return Ok(None),
+        };
+        Ok((|| {
+            let stats = match target {
+                Target::Player => Some(&self.stats),
+                Target::Guest(conn) => self.lan.as_ref()?.play.get(&conn).map(|play| &play.stats),
+                _ => return None,
+            };
+            Some(stats.map_or(0, |stats| stats.get(stat_type.path(), &qualified(key))))
+        })())
+    }
     /// `Player.awardStat(stat, amount)`: adds `amount`, as the game does
     /// for its own counts, so `player_stat_award` hears it and may cancel
     /// it, and scoreboard criteria follow. False for a player it can't
@@ -71,19 +105,87 @@ Ok((||{let stats=match target {Target::Player=>Some(&self.stats),Target::Guest(c
         player: PlayerRef,
         recipe: &str,
     ) -> Result<Option<bool>, mod_api::EntityReadError> {
-use super::{commands::Target,native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
-if !self.is_logical_server(){return Ok(None)}
-let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::Recipes]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
-Ok((||{let book=match target {Target::Player=>&self.level.recipe_book,Target::Guest(conn)=>&self.command_guest(conn)?.recipe_book,_=>return None}; Some(book.recipes.contains(&qualified(recipe)))})())
-}
+        self.read_player_has_discovered_recipe(None, player, recipe)
+    }
+
+    pub(super) fn read_player_has_discovered_recipe(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+        recipe: &str,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        use super::{
+            commands::Target, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Recipes],
+        ) {
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
+            None => return Ok(None),
+        };
+        Ok((|| {
+            let book = match target {
+                Target::Player => &self.level.recipe_book,
+                Target::Guest(conn) => &self.command_guest(conn)?.recipe_book,
+                _ => return None,
+            };
+            Some(book.recipes.contains(&qualified(recipe)))
+        })())
+    }
     /// Every recipe the player's recipe book knows (`ServerRecipeBook.recipes`), qualified ids in
     /// order. None for a player it can't reach.
-    pub(super) fn player_discovered_recipes(&self, player: PlayerRef) -> Result<Option<Vec<String>>, mod_api::EntityReadError> {
-use super::{commands::Target,native_live_entity_reads::EntityReadSubject,native_read_dependencies::EntityReadDependency};
-if !self.is_logical_server(){return Ok(None)}
-let target=match self.entity_read_dependency::<core::convert::Infallible>(EntityReadSubject::Player(player), &[EntityReadDependency::Recipes]) {Some(read) => { let read = read?; if read.location.owner.dimension != self.dim.key() { return Ok(None); } read.target },None=>return Ok(None)};
-Ok((||{let book=match target {Target::Player=>&self.level.recipe_book,Target::Guest(conn)=>&self.command_guest(conn)?.recipe_book,_=>return None}; Some(book.recipes.iter().cloned().collect())})())
-}
+    pub(super) fn player_discovered_recipes(
+        &self,
+        player: PlayerRef,
+    ) -> Result<Option<Vec<String>>, mod_api::EntityReadError> {
+        self.read_player_discovered_recipes(None, player)
+    }
+
+    pub(super) fn read_player_discovered_recipes(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+    ) -> Result<Option<Vec<String>>, mod_api::EntityReadError> {
+        use super::{
+            commands::Target, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let target = match self.entity_read_dependency::<core::convert::Infallible>(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Recipes],
+        ) {
+            Some(read) => {
+                let read = read?;
+                if read.location.owner.dimension != self.dim.key() {
+                    return Ok(None);
+                }
+                read.target
+            }
+            None => return Ok(None),
+        };
+        Ok((|| {
+            let book = match target {
+                Target::Player => &self.level.recipe_book,
+                Target::Guest(conn) => &self.command_guest(conn)?.recipe_book,
+                _ => return None,
+            };
+            Some(book.recipes.iter().cloned().collect())
+        })())
+    }
     /// `ServerPlayer.awardRecipes`, as `/recipe give` does: the recipes
     /// unlock in the player's book, with their toasts and the
     /// `player_recipe_discovered` hook, and the client hears of them.

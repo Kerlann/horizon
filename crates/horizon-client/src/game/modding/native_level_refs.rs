@@ -448,6 +448,19 @@ impl Game<'_> {
         pos: [i32; 3],
         hit: BlockHit,
     ) -> Option<BlockTransformPreview> {
+        self.read_level_block_transform(None, level, player, hand, stack, pos, hit)
+    }
+
+    pub(super) fn read_level_block_transform(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        level: LevelRef,
+        player: PlayerRef,
+        hand: Hand,
+        stack: &ItemStack,
+        pos: [i32; 3],
+        hit: BlockHit,
+    ) -> Option<BlockTransformPreview> {
         use super::native_server::PlayerRead;
         let world = self.native_level_read_world(level)?;
         if level.dimension() != self.dim.key()

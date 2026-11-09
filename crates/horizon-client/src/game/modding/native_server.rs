@@ -1274,6 +1274,14 @@ impl Game<'_> {
         &self,
         player: PlayerRef,
     ) -> Result<Option<String>, mod_api::EntityReadError> {
+        self.read_player_name(None, player)
+    }
+
+    pub(super) fn read_player_name(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
         use crate::game::{
             commands::Target, native_live_entity_reads::EntityReadSubject,
             native_read_dependencies::EntityReadDependency,
@@ -1322,6 +1330,14 @@ impl Game<'_> {
         &self,
         player: PlayerRef,
     ) -> Result<Option<String>, mod_api::EntityReadError> {
+        self.read_player_address(None, player)
+    }
+
+    pub(super) fn read_player_address(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
         use crate::game::{
             commands::Target, native_live_entity_reads::EntityReadSubject,
             native_read_dependencies::EntityReadDependency,
@@ -1356,6 +1372,14 @@ impl Game<'_> {
     /// no known connection has an empty one. None for a stale or unavailable player.
     pub(super) fn player_client_brand(
         &self,
+        player: PlayerRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
+        self.read_player_client_brand(None, player)
+    }
+
+    pub(super) fn read_player_client_brand(
+        &self,
+        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         player: PlayerRef,
     ) -> Result<Option<String>, mod_api::EntityReadError> {
         use crate::game::{
