@@ -15,6 +15,14 @@ pub trait ItemEntitiesHost {
 #[doc(hidden)]
 #[horizon_mod_api_macros::host_area]
 pub trait ItemEntitiesBackend {
+    /// Side: both.
+    /// Materializes the cached row and its capture metadata, possibly stale.
+    /// Physical lifting does not hide an existing row. None means no available
+    /// row for this validated identity, never a live-read Lifted refusal.
+    /// Owned payloads are materialized on request, not cloned every capture pass.
+    #[access(WorldOnly)]
+    fn item_entity_cached_row(&self, entity: ItemEntityRef) -> Option<ItemEntityReadRow>;
+
     /// Side: server.
     /// `ItemEntity.getItem`: the complete stack, or None if unavailable.
     #[access(WorldOnly)]
