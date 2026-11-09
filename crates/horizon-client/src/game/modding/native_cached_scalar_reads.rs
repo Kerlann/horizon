@@ -426,6 +426,265 @@ impl Game<'_> {
         .unwrap_or_else(|| self.uncached_living_stinger_count(living))
     }
 
+    // merchant
+    pub(super) fn merchant_trading_player(&self, merchant: MerchantRef) -> Option<PlayerRef> {
+        self.with_entity_read_publication(merchant.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob {
+                    merchant: Some(merchant),
+                    ..
+                } => merchant.trading_player,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_merchant_trading_player(merchant))
+    }
+
+    pub(super) fn merchant_profession(&self, merchant: MerchantRef) -> Option<String> {
+        self.with_entity_read_publication(merchant.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob {
+                    merchant: Some(merchant),
+                    ..
+                } => merchant.profession.as_ref().map(|p| match p {
+                    RetainedProfession::Vanilla(i) => format!(
+                        "minecraft:{}",
+                        horizon_client::mobs::villager::profession(*i).id
+                    ),
+                    RetainedProfession::Unresolved(id) => id.to_string(),
+                }),
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_merchant_profession(merchant))
+    }
+
+    pub(super) fn merchant_level(&self, merchant: MerchantRef) -> Option<i32> {
+        self.with_entity_read_publication(merchant.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob {
+                    merchant: Some(merchant),
+                    ..
+                } => merchant.level,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_merchant_level(merchant))
+    }
+
+    pub(super) fn merchant_villager_type(&self, merchant: MerchantRef) -> Option<String> {
+        self.with_entity_read_publication(merchant.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob {
+                    merchant: Some(merchant),
+                    ..
+                } => merchant
+                    .villager_type
+                    .map(|name| format!("minecraft:{name}")),
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_merchant_villager_type(merchant))
+    }
+
+    pub(super) fn merchant_xp(&self, merchant: MerchantRef) -> Option<i32> {
+        self.with_entity_read_publication(merchant.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob {
+                    merchant: Some(merchant),
+                    ..
+                } => merchant.xp,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_merchant_xp(merchant))
+    }
+
+    // mob
+    pub(super) fn mob_is_done(&self, mob: MobRef) -> Option<bool> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.is_done,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_is_done(mob))
+    }
+
+    pub(super) fn mob_navigation_speed(&self, mob: MobRef) -> Option<f64> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.navigation_speed,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_navigation_speed(mob))
+    }
+
+    pub(super) fn mob_pathfinding_malus(&self, mob: MobRef, kind: PathType) -> Option<f32> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob
+                    .pathfinding_malus
+                    .iter()
+                    .find(|(path, _)| *path == kind)
+                    .map(|(_, value)| *value),
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_pathfinding_malus(mob, kind))
+    }
+
+    pub(super) fn mob_can_use_portal(&self, mob: MobRef) -> Option<bool> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.can_use_portal,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_can_use_portal(mob))
+    }
+
+    pub(super) fn mob_target(&self, mob: MobRef) -> Option<LivingRef> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.target,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_target(mob))
+    }
+
+    pub(super) fn mob_is_aggressive(&self, mob: MobRef) -> Option<bool> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.is_aggressive,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_is_aggressive(mob))
+    }
+
+    pub(super) fn mob_persistence_required(&self, mob: MobRef) -> Option<bool> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.persistence_required,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_persistence_required(mob))
+    }
+
+    pub(super) fn mob_requires_custom_persistence(&self, mob: MobRef) -> Option<bool> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.requires_custom_persistence,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_requires_custom_persistence(mob))
+    }
+
+    pub(super) fn mob_no_ai(&self, mob: MobRef) -> Option<bool> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.no_ai,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_no_ai(mob))
+    }
+
+    pub(super) fn mob_restrict_center(&self, mob: MobRef) -> Option<[i32; 3]> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.restrict_center,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_restrict_center(mob))
+    }
+
+    pub(super) fn mob_restrict_radius(&self, mob: MobRef) -> Option<i32> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.restrict_radius,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_restrict_radius(mob))
+    }
+
+    pub(super) fn mob_has_restriction(&self, mob: MobRef) -> Option<bool> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.has_restriction,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_has_restriction(mob))
+    }
+
+    pub(super) fn mob_left_handed(&self, mob: MobRef) -> Option<bool> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.left_handed,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_left_handed(mob))
+    }
+
+    pub(super) fn mob_can_pick_up_loot(&self, mob: MobRef) -> Option<bool> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.can_pick_up_loot,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_can_pick_up_loot(mob))
+    }
+
+    pub(super) fn mob_no_action_time(&self, mob: MobRef) -> Option<i32> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.no_action_time,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_no_action_time(mob))
+    }
+
+    pub(super) fn mob_raid(&self, mob: MobRef) -> Option<RaidRef> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => mob.raid,
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_raid(mob))
+    }
+
+    pub(super) fn mob_is_within_restriction(&self, mob: MobRef, at: [i32; 3]) -> Option<bool> {
+        self.with_entity_read_publication(mob.entity(), |row| {
+            Some(match &row.details {
+                NativeReadDetails::Mob { mob, .. } => match mob.has_restriction {
+                    Some(false) => Some(true),
+                    Some(true) => {
+                        mob.restrict_center
+                            .zip(mob.restrict_radius)
+                            .map(|(center, radius)| {
+                                horizon_client::mobs::goals::within_home(center, radius, at)
+                            })
+                    }
+                    None => None,
+                },
+                _ => None,
+            })
+        })
+        .unwrap_or_else(|| self.uncached_mob_is_within_restriction(mob, at))
+    }
+
     // player
     pub(super) fn player_selected_slot(&self, player: PlayerRef) -> Option<usize> {
         self.with_entity_read_publication(player.entity(), |row| {
