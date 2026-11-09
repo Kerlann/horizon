@@ -43,7 +43,6 @@ impl Game<'_> {
                     kind: Kind::Mob,
                 },
                 join: source.join_seq(),
-                source: Default::default(),
             },
             phase,
         )

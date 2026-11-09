@@ -162,7 +162,6 @@ impl Game<'_> {
                     kind,
                 },
                 join,
-                source: Default::default(),
             },
             source,
             phase,

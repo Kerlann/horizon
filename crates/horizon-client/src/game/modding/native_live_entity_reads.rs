@@ -187,7 +187,7 @@ impl Game<'_> {
             ),
             EntityReadSubject::ActingPlayer(_) => match location.source {
                 Source::LocalPlayer => true,
-                Source::Guest(conn) => self.lan_acting_conn == Some(conn),
+                Source::Guest(conn) => self.lan_acting == Some(conn),
                 _ => false,
             },
             EntityReadSubject::Mob(_) => matches!(target, Target::Mob(_) | Target::Dragon(_)),

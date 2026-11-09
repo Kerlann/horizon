@@ -538,7 +538,11 @@ fn borrowed_host_forwarders(area: &Area, tier: Tier, entries: &[Entry]) -> Resul
         };
         let foreign =
             format!("<Game<'_> as mod_api::prelude::{trait_name}>::{name}({forwarded_args})");
-        let own = if area.stem == "minecarts" && tier == Tier::Backend {
+        let own = if tier == Tier::Backend
+            && (area.stem == "minecarts"
+                || (area.stem == "living"
+                    && matches!(name.as_str(), "living_effect" | "living_effects" | "living_potion_affected")))
+        {
             let required = match name.as_str() {
                 "minecart_fuel" | "minecart_push" => {
                     "Some(crate::game::minecarts::CartKind::Furnace)"

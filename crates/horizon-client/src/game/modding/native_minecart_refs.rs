@@ -442,7 +442,8 @@ impl Game<'_> {
     /// the new command. False for another kind of cart.
     pub(super) fn minecart_set_command(&mut self, cart: MinecartRef, command: &str) -> bool {
         let Some(id) = self
-            .native_minecart(cart)
+            .native_minecart_index(cart)
+            .and_then(|index| self.carts.get(index))
             .filter(|c| c.kind == CartKind::CommandBlock)
             .map(|c| c.id)
         else {

@@ -5522,7 +5522,6 @@ impl Game<'_> {
                             kind: horizon_client::join_seq::residency::Kind::Item,
                         },
                         join: item.join,
-                        source: Default::default(),
                     },
                     native_base_read_rows::BaseReadSource::Item(item),
                     mod_api::EntityReadCapturePhase::AfterEntityTick,

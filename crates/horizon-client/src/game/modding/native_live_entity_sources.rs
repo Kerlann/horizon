@@ -96,7 +96,7 @@ impl Game<'_> {
             }
         }?;
         let cart_spawner = match raw.source {
-            BaseReadSource::Cart(cart) => cart.spawner.as_ref(),
+            BaseReadSource::Cart(cart) => cart.spawner.as_deref(),
             _ => None,
         };
         Some(EntityReadSource {
