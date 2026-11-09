@@ -57,7 +57,7 @@ def arguments(text):
     return [part for part in chunks if part]
 
 
-def main():
+def heavy_names():
     names = set()
     for path in HOST.rglob('*.rs'):
         source = path.read_text()
@@ -75,6 +75,11 @@ def main():
             if re.search(r'\bEntityReadError\b', source[match.start():end]):
                 names.add(match[1])
     assert len(names) == 66, f'Expected the signed 66 H rows, got {len(names)}'
+    return names
+
+
+def main():
+    names = heavy_names()
     files = {path: path.read_text() for path in GAME.rglob('*.rs')}
     edits = {}
     for name in sorted(names):
