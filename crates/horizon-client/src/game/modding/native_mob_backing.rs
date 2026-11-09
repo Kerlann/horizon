@@ -317,14 +317,55 @@ impl Game<'_> {
                     }
                 }
             }
-            let mut state = self.entity_read_state.borrow_mut();
-            for (id, owner) in state.mob_owner_writes.drain() {
+            let (dimension, mut writes) = {
+                let mut state = self.entity_read_state.borrow_mut();
+                (
+                    state.mob_ai_level,
+                    std::mem::take(&mut state.mob_owner_writes),
+                )
+            };
+            for (id, mut owner) in writes.drain() {
+                if owner.is_some() {
+                    use horizon_client::join_seq::residency::{Source, table::EntityLookup};
+                    let admission = self
+                        .entity_residency
+                        .borrow_mut()
+                        .server_admitted_identity(id, |at| self.locate_server_resident_owner(at));
+                    let admitted = admission.is_some_and(|(at, state, _)| {
+                        Some(at.owner.dimension) == dimension
+                            && matches!(at.source, Source::Ordinary | Source::Hook { .. })
+                            && matches!(
+                                state,
+                                EntityLookup::Taken
+                                    | EntityLookup::Found {
+                                        value: (_, true),
+                                        ..
+                                    }
+                            )
+                    });
+                    if !admitted {
+                        owner = None;
+                    }
+                }
+                let before = facts.identities.get(&id).map(|uuid| MobOwnerFact {
+                    uuid: *uuid,
+                    owner: facts.owners.get(uuid).copied(),
+                });
+                if before == owner {
+                    continue;
+                }
                 facts.set_identity(id, owner.map(|fact| fact.uuid));
-                if let Some(MobOwnerFact { uuid, owner: Some(owner) }) = owner {
+                if let Some(MobOwnerFact {
+                    uuid,
+                    owner: Some(owner),
+                }) = owner
+                {
                     facts.owners.insert(uuid, owner);
                 }
                 applied += 1;
             }
+            let mut state = self.entity_read_state.borrow_mut();
+            state.mob_owner_writes = writes;
             if applied != 0 {
                 state.mob_backing.teams_changed();
             }

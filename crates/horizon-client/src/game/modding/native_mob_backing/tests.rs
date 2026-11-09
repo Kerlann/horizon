@@ -532,3 +532,120 @@ fn real_saved_uuid_path_tracks_active_backing_not_temporary_game_dimension() {
         game.score.board.end_ai_changes();
     });
 }
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn backing_terminal_owners_require_admitted_current_sources_and_retain_taken() {
+    with_guests(|game| {
+        game.native_lifecycle.world_open_ready().unwrap();
+        game.native_lifecycle.server_tick_start(true).unwrap();
+        prepare(game);
+        add(game, 71, "minecraft:wolf", Vec3::new(1.0, 70.0, 1.0), true);
+        add(game, 72, "minecraft:wolf", Vec3::new(2.0, 70.0, 1.0), true);
+        add(game, 73, "minecraft:wolf", Vec3::new(3.0, 70.0, 1.0), true);
+        game.mobs[0].extra.tame = true;
+        let live = [4, 0, 0, 72];
+        let removed = [4, 0, 0, 73];
+        let stale = [4, 0, 0, 777];
+        game.persist.uuids.insert(777, stale);
+        game.mobs[2].removed = true;
+        game.score.board.add_team("red");
+        game.score.board.add_team("blue");
+        for uuid in [live, removed, stale] {
+            game.score.board.add_to_team(&uuid_text(uuid), "red");
+        }
+        game.score.board.add_to_team("guest13", "blue");
+        game.reset_entity_residency();
+        for owner in [removed, stale] {
+            game.mobs[0].extra.owner = Some(owner);
+            let teams = game.mob_team_rules();
+            assert!(
+                teams.of(Who::Mob(71)).is_none(),
+                "a saved key alone is not a terminal owner: {owner:?}"
+            );
+        }
+        game.mobs[0].extra.owner = Some(live);
+        assert!(game.mob_team_rules().of(Who::Mob(71)).is_some());
+        let held = game.mobs.lift();
+        assert!(
+            game.mob_team_rules_for(&held).of(Who::Mob(71)).is_some(),
+            "admitted taken sources retain their identities"
+        );
+        game.mobs
+            .restore(held, horizon_client::join_seq::RestoreOrder::SurvivorsFirst);
+        game.mobs.retain(|mob| mob.id != 72);
+        assert!(game.persist.uuids.contains_key(&72));
+        assert!(
+            game.mob_team_rules().of(Who::Mob(71)).is_none(),
+            "removed physical owner cannot survive through a stale saved key"
+        );
+        game.enter_level(crate::game::Dim::Nether).unwrap();
+        add(game, 74, "minecraft:wolf", Vec3::new(2.0, 70.0, 1.0), true);
+        game.score
+            .board
+            .add_to_team(&uuid_text([4, 0, 0, 74]), "red");
+        game.enter_level(crate::game::Dim::Overworld).unwrap();
+        game.mobs[0].extra.owner = Some([4, 0, 0, 74]);
+        assert!(
+            game.mob_team_rules().of(Who::Mob(71)).is_none(),
+            "a parked foreign entity is not a current-level terminal owner"
+        );
+        let unbound = [4, 0, 0, 778];
+        game.score.board.add_to_team(&uuid_text(unbound), "red");
+        game.mobs[0].extra.owner = Some(unbound);
+        let teams = game.mob_team_backing_for(&game.mobs);
+        game.score.board.begin_ai_changes();
+        assert_eq!(game.set_saved_entity_uuid(777, unbound), Some(stale));
+        assert_eq!(
+            game.refresh_mob_team_deltas(&teams),
+            0,
+            "a real saved-map write cannot admit a nonexistent source"
+        );
+        assert!(teams.of(Who::Mob(71)).is_none());
+        game.score.board.end_ai_changes();
+        game.lan
+            .as_mut()
+            .unwrap()
+            .hub
+            .update_guest(13, |guest| guest.dimension = "minecraft:the_nether".into());
+        game.mobs[0].extra.owner = Some([0, 0, 0, 13]);
+        assert_eq!(
+            game.mob_team_rules().of(Who::Mob(71)).unwrap().identity,
+            game.score.board.team("blue").unwrap().ai_identity(),
+            "global online owner names precede current-level saved sources"
+        );
+    });
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn backing_excludes_real_admitted_dragon_parts() {
+    with_guests(|game| {
+        game.native_lifecycle.world_open_ready().unwrap();
+        game.native_lifecycle.server_tick_start(true).unwrap();
+        prepare(game);
+        add(game, 71, "minecraft:wolf", Vec3::new(1.0, 70.0, 1.0), true);
+        game.mobs[0].extra.tame = true;
+        game.reset_entity_residency();
+        assert!(game.as_console(|game| game.run_command("summon minecraft:ender_dragon 5 70 5")));
+        let part = game.dragon.as_ref().unwrap().id + 1;
+        assert!(
+            game.entity_residency
+                .borrow_mut()
+                .admitted_metadata()
+                .any(|(id, at, _)| id == part
+                    && matches!(
+                        at.source,
+                        horizon_client::join_seq::residency::Source::DragonPart(_)
+                    ))
+        );
+        let part_uuid = [6, 0, 0, 999];
+        game.persist.uuids.insert(part, part_uuid);
+        game.score.board.add_to_team(&uuid_text(part_uuid), "red");
+        game.mobs[0].extra.owner = Some(part_uuid);
+        assert!(
+            game.mob_team_rules().of(Who::Mob(71)).is_none(),
+            "dragon parts cannot become saved terminal owners"
+        );
+    });
+}

@@ -20,6 +20,11 @@ use std::{
 pub(super) struct NativeReadState {
     pub(super) passes: Rc<RefCell<ReadPasses>>,
     pub(super) mob_ai_level: Option<mod_api::DimensionKey>,
+    pub(super) mob_identity_candidates: Vec<(
+        u32,
+        horizon_client::join_seq::residency::table::Location,
+        horizon_client::join_seq::residency::IdentityDetails,
+    )>,
     pub(super) mob_ai_teams: horizon_client::mobs::SharedAiTeams,
     pub(super) mob_backing: super::native_mob_backing::MobBackingRevision,
     pub(super) mob_player_writes: HashMap<[i32; 4], Option<u32>>,

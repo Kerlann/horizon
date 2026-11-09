@@ -738,15 +738,67 @@ impl Game<'_> {
         facts.members.clear();
         facts.owners.clear();
         facts.rules.clear();
-        for (&id, &uuid) in &self.persist.uuids {
-            facts.set_identity(id, Some(uuid));
-        }
-        for guest in self.guests_placed_in(self.dim.id()) {
-            if let Ok(id) = u32::try_from(guest.entity_id) {
-                let uuid = horizon_client::lan::playerdata::uuid_ints(guest.uuid);
-                facts.set_identity(id, Some(uuid));
-                facts.active_players.insert(uuid);
+        use horizon_client::join_seq::residency::{Source, table::EntityLookup};
+        let mut candidates =
+            std::mem::take(&mut self.entity_read_state.borrow_mut().mob_identity_candidates);
+        candidates.clear();
+        candidates.extend(self.entity_residency.borrow_mut().admitted_metadata());
+        // Metadata is only a candidate list. Resolve after releasing the table
+        // iterator, then require the same admission and a real canonical UUID.
+        for &(id, expected, expected_details) in &candidates {
+            if expected.owner.dimension != self.dim.key()
+                || matches!(expected.source, Source::DragonPart(_))
+            {
+                continue;
             }
+            let admission = self
+                .entity_residency
+                .borrow_mut()
+                .server_admitted_identity(id, |at| self.locate_server_resident_owner(at));
+            let Some((at, state, details)) = admission else {
+                continue;
+            };
+            if at != expected
+                || details != expected_details
+                || matches!(
+                    state,
+                    EntityLookup::Missing
+                        | EntityLookup::Found {
+                            value: (_, false),
+                            ..
+                        }
+                        | EntityLookup::Found {
+                            value: (super::commands::Target::DragonPart(_), _),
+                            ..
+                        }
+                )
+            {
+                continue;
+            }
+            let uuid = match at.source {
+                Source::LocalPlayer => details
+                    .known_uuid
+                    .filter(|uuid| !self.lan_acting_fake && self.level.player_uuid == Some(*uuid)),
+                Source::Guest(conn) => self
+                    .lan
+                    .as_ref()
+                    .and_then(|host| host.hub.guest(conn))
+                    .filter(|guest| guest.participates_online())
+                    .and_then(|guest| {
+                        let uuid = horizon_client::lan::playerdata::uuid_ints(guest.uuid);
+                        (details.known_uuid == Some(uuid)).then_some(uuid)
+                    }),
+                Source::Ordinary | Source::Hook { .. } => self.persist.uuids.get(&id).copied(),
+                Source::DragonPart(_) => None,
+            };
+            facts.set_identity(id, uuid);
+        }
+        candidates.clear();
+        self.entity_read_state.borrow_mut().mob_identity_candidates = candidates;
+        for guest in self.guests_placed_in(self.dim.id()) {
+            facts
+                .active_players
+                .insert(horizon_client::lan::playerdata::uuid_ints(guest.uuid));
         }
         let local = (self.player.is_some() && !self.lan_acting_fake)
             .then(|| (self.acting_player_name(), self.acting_uuid()));
