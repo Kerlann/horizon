@@ -1221,6 +1221,7 @@ pub fn main() -> horizon_client::Result<()> {
                     dragon: None,
                     leash_boats: &[],
                     who_lookup: None,
+                    team_lookup: None,
                     others_grid: $grid,
                     others_index: None,
                     others_villagers: None,

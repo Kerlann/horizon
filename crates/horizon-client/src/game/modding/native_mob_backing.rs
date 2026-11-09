@@ -5,7 +5,7 @@
 //! position, visibility, inventory/equipment/effects, mode, lifecycle and guest
 //! membership changes represented by PlayerView or LevelPlayer. Team membership,
 //! collision/friendly-fire rules and tame/root-owner relationship changes use
-//! `mark_mob_team_backing_dirty` (which also invalidates player allies). Canonical
+//! `mark_mob_team_backing_dirty`; alliances are read canonically, not projected into every player. Canonical
 //! scoreboard mutation and command paths must use that team marker too. Chat,
 //! sounds and unrelated scalar entity writes such as set_silent mark neither.
 //!
@@ -30,7 +30,6 @@ impl MobBackingRevision {
             .teams
             .checked_add(1)
             .expect("mob team backing revision exhausted");
-        self.players_changed();
     }
 }
 impl Game<'_> {
@@ -66,7 +65,7 @@ mod tests {
         assert_eq!(
             revision,
             MobBackingRevision {
-                players: 2,
+                players: 1,
                 teams: 1
             }
         );

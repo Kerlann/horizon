@@ -564,20 +564,7 @@ impl Game<'_> {
     /// Online profile identities stop owner traversal even when they have no
     /// team. A saved NPC with the same UUID must not redirect that player.
     pub(super) fn admitted_online_owner_name(&self, uuid: [i32; 4]) -> Option<&str> {
-        use horizon_client::join_seq::residency::Source;
-        if self.player.is_some() && !self.lan_acting_fake && self.acting_uuid() == uuid {
-            let id = u32::try_from(self.own_entity_id()).ok()?;
-            let source = self.lan_acting.map_or(Source::LocalPlayer, Source::Guest);
-            if self.admitted_profile_uuid(id, source, uuid) {
-                return Some(self.acting_player_name());
-            }
-        }
-        self.lan.as_ref()?.hub.online_players().find_map(|guest| {
-            let id = u32::try_from(guest.entity_id).ok()?;
-            (horizon_client::lan::playerdata::uuid_ints(guest.uuid) == uuid
-                && self.admitted_profile_uuid(id, Source::Guest(guest.conn), uuid))
-            .then_some(guest.name.as_str())
-        })
+        self.with_prepared_mob_relations(|index| self.indexed_online_owner_name(uuid, index))?
     }
 
     /// `TamableAnimal.getTeam` of a mob or another player: its own team, else,
@@ -588,9 +575,7 @@ impl Game<'_> {
         }
         // The mob is looked up only when its own name has no team: the
         // owner's team is the fallback.
-        self.team_with_owner(id, || {
-            self.mobs.iter().find(|m| m.id == id).and_then(tame_owner)
-        })
+        self.team_with_owner(id, || self.current_mob_owner(id))
     }
     /// [`mob_team`](Self::mob_team) of a mob at hand, without looking it up.
     pub(super) fn mob_team_of(&self, m: &horizon_client::mobs::Mob) -> Option<&sb::Team> {
@@ -606,7 +591,7 @@ impl Game<'_> {
         &self,
         m: &horizon_client::mobs::Mob,
         actor: &horizon_client::mobs::Mob,
-        world: &horizon_client::mobs::MobWorld<'_>,
+        _world: &horizon_client::mobs::MobWorld<'_>,
     ) -> Option<&sb::Team> {
         if self.score.board.teams.is_empty() {
             return None;
@@ -620,29 +605,18 @@ impl Game<'_> {
             return Some(team);
         }
         let owner = tame_owner(m)?;
-        let loaned = |uuid: [i32; 4]| {
-            let id = self.current_admitted_saved_id(uuid)?;
-            if id == actor.id {
-                (!actor.removed).then_some(actor)
-            } else {
-                world
-                    .live_mobs
-                    .and_then(|mobs| mobs.find(id))
-                    .filter(|mob| !mob.removed)
-            }
-        };
         let root = root_owner(owner, |uuid| {
             if self.admitted_online_owner_name(uuid).is_some() {
                 return None;
             }
-            if let Some(mob) = loaned(uuid) {
-                return tame_owner(mob);
-            }
             let id = self.current_admitted_saved_id(uuid)?;
-            self.mobs
-                .iter()
-                .find(|mob| mob.id == id && !mob.removed)
-                .and_then(tame_owner)
+            if id == m.id {
+                tame_owner(m)
+            } else if id == actor.id {
+                (!actor.removed).then(|| tame_owner(actor)).flatten()
+            } else {
+                self.current_mob_owner(id)
+            }
         });
         let owner_name = if let Some(name) = self.admitted_online_owner_name(root) {
             name.to_owned()
@@ -672,12 +646,7 @@ impl Game<'_> {
             if self.admitted_online_owner_name(uuid).is_some() {
                 return None;
             }
-            let pet = self.current_admitted_saved_id(uuid)?;
-            self.mobs
-                .iter()
-                .find(|m| m.id == pet && m.extra.tame)?
-                .extra
-                .owner
+            self.current_mob_owner(self.current_admitted_saved_id(uuid)?)
         };
         let root = root_owner(owner, pet_owner);
         if let Some(name) = self.admitted_online_owner_name(root) {

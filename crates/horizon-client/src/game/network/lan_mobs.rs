@@ -177,7 +177,7 @@ impl Game<'_> {
             .collect();
         let mut views = Vec::new();
         for (conn, uuid, moved) in conns {
-            if let Some(Some(v)) = self.as_guest(conn, |g| g.player_view()) {
+            if let Some(Some(v)) = self.as_guest(conn, |g| g.ai_player_view()) {
                 views.push((conn, guest_view(v, uuid, moved)));
             }
         }

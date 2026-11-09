@@ -241,8 +241,10 @@ impl Game<'_> {
                 .map(|(slot, &join)| (join, slot))
                 .collect::<horizon_client::fast_hash::FxHashMap<_, _>>()
         });
-        let mut teams = std::sync::Arc::new(self.mob_team_rules_for(&mobs));
-        let mut player_backing = self.player_view();
+        // Team decisions read canonical sources on demand; one member/owner
+        // write must never rebuild every entity's inherited team.
+        let teams = std::sync::Arc::default();
+        let mut player_backing = self.ai_player_view();
         let mut players = self.level_players();
         let mut nearest = super::super::natural_spawning::NearestPlayers::new(&players);
         let mut backing_revision = self.entity_read_state.borrow().mob_backing;
@@ -328,11 +330,8 @@ impl Game<'_> {
             // world. Mutation owners bump only the affected projection after
             // real apply; unrelated callbacks reuse every owned index.
             let revision = self.entity_read_state.borrow().mob_backing;
-            if revision.teams != backing_revision.teams {
-                teams = std::sync::Arc::new(self.mob_team_rules_for(&mobs));
-            }
             if revision.players != backing_revision.players {
-                player_backing = self.player_view();
+                player_backing = self.ai_player_view();
                 drop(nearest);
                 players = self.level_players();
                 nearest = super::super::natural_spawning::NearestPlayers::new(&players);
@@ -956,8 +955,7 @@ impl Game<'_> {
             lent = horizon_client::health::LentLevel::take(&mut self.world);
             // A full-host consumption callback can edit player/team state. This
             // is the explicit refresh seam for those owned AI projections.
-            teams = std::sync::Arc::new(self.mob_team_rules_for(&mobs));
-            player_backing = self.player_view();
+            player_backing = self.ai_player_view();
             drop(nearest);
             players = self.level_players();
             nearest = super::super::natural_spawning::NearestPlayers::new(&players);

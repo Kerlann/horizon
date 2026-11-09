@@ -540,6 +540,16 @@ impl Game<'_> {
         }
     }
     pub(super) fn player_view(&self) -> Option<PlayerView> {
+        self.player_view_with_allies(true)
+    }
+
+    /// AI asks canonical teams on demand; projecting one player must not scan
+    /// every entity just to materialize an ally set.
+    pub(super) fn ai_player_view(&self) -> Option<PlayerView> {
+        self.player_view_with_allies(false)
+    }
+
+    fn player_view_with_allies(&self, include_allies: bool) -> Option<PlayerView> {
         if self.lan_acting_fake {
             return None;
         }
@@ -589,7 +599,11 @@ impl Game<'_> {
             hero: self.potions.effects.get("hero_of_the_village").is_some(),
             effects: self.potions.effects.list.iter().map(|e| e.id).collect(),
             uuid: self.acting_uuid(),
-            allies: std::sync::Arc::new(self.player_allies()),
+            allies: if include_allies {
+                std::sync::Arc::new(self.player_allies())
+            } else {
+                Default::default()
+            },
             remote: false,
             sleeping: self.sleeping.is_some(),
             sleep_timer: self.sleep_timer,
@@ -1292,6 +1306,11 @@ impl Game<'_> {
                 && mod_api::__private::listened(mod_api::HookId::BabyEntitySpawn),
             // A warden's away suspects are UUIDs: on the server side, where the
             // entity UUIDs live, they resolve back to the mobs that are here.
+            team_lookup: if self.remote.is_none() {
+                Some(self)
+            } else {
+                None
+            },
             who_lookup: if self.remote.is_none() {
                 Some(self)
             } else {
@@ -11939,6 +11958,7 @@ mod pearl_tests {
             dragon: None,
             leash_boats: &[],
             who_lookup: None,
+            team_lookup: None,
             others_grid: None,
             others_index: None,
             others_villagers: None,

@@ -167,6 +167,34 @@ struct PlayerTargetSource<'a> {
     bounds: Aabb,
     team: Option<&'a horizon_client::scoreboard::Team>,
 }
+impl mobs::TeamLookup for Game<'_> {
+    fn team(
+        &self,
+        actor: &Mob,
+        who: Who,
+        player: Option<[i32; 4]>,
+    ) -> Option<&horizon_client::scoreboard::Team> {
+        let level = LevelRef::new(self.native_lifecycle.epoch()?, self.dim.key());
+        self.with_prepared_mob_relations(|index| match who {
+            Who::Player => {
+                let name = self.indexed_online_owner_name(player?, index)?;
+                self.score.board.players_team(name)
+            }
+            Who::Mob(id) => {
+                let facts = if id == actor.id {
+                    if actor.removed {
+                        return None;
+                    }
+                    NativeMobTargetFacts::capture(actor)
+                } else {
+                    self.read_mob_facts(id, level)?
+                };
+                self.read_mob_team(facts, level, index)
+            }
+        })?
+    }
+}
+
 impl Game<'_> {
     /// Resolve a saved UUID only after canonical admission. A loose saved-map
     /// key, removed body, foreign level or dragon-part alias is not an identity.
@@ -209,6 +237,11 @@ impl Game<'_> {
             .map(|(_, _, uuid)| uuid)
     }
 
+    pub(super) fn current_mob_owner(&self, id: u32) -> Option<[i32; 4]> {
+        let level = LevelRef::new(self.native_lifecycle.epoch()?, self.dim.key());
+        self.read_mob_facts(id, level)?.owner
+    }
+
     pub(super) fn admitted_profile_uuid(&self, id: u32, source: Source, uuid: [i32; 4]) -> bool {
         let mut table = self.entity_residency.borrow_mut();
         table
@@ -231,26 +264,10 @@ impl Game<'_> {
     /// the primary table. Small writes update affected keys, not this population.
     pub(super) fn current_admitted_saved_id(&self, uuid: [i32; 4]) -> Option<u32> {
         let level = LevelRef::new(self.native_lifecycle.epoch()?, self.dim.key());
-        let tick = self.native_lifecycle.capture_tick()?;
-        let mut pass = {
-            let mut state = self.entity_read_state.borrow_mut();
-            let pass = state.mob_relations.entry(level).or_default();
-            if pass.tick == Some(tick) {
-                let id = *pass.index.saved_ids.get(&uuid)?;
-                drop(state);
-                return (self.read_saved_uuid(id, level)? == uuid).then_some(id);
-            }
-            std::mem::take(pass)
-        };
-        self.rebuild_mob_read_relations(level, &mut pass.index);
-        pass.tick = Some(tick);
-        let id = pass.index.saved_ids.get(&uuid).copied();
-        self.entity_read_state
-            .borrow_mut()
-            .mob_relations
-            .insert(level, pass);
-        let id = id?;
-        (self.read_saved_uuid(id, level)? == uuid).then_some(id)
+        self.with_prepared_mob_relations(|index| {
+            let id = *index.saved_ids.get(&uuid)?;
+            (self.read_saved_uuid(id, level)? == uuid).then_some(id)
+        })?
     }
 
     /// The primary table enumerates candidates only. Resolve each after dropping
@@ -345,6 +362,27 @@ impl Game<'_> {
             _ => None,
         }
     }
+    pub(super) fn indexed_online_owner_name<'a>(
+        &'a self,
+        uuid: [i32; 4],
+        index: &NativeMobRelations,
+    ) -> Option<&'a str> {
+        if self.player.is_some() && !self.lan_acting_fake && self.acting_uuid() == uuid {
+            let id = u32::try_from(self.own_entity_id()).ok()?;
+            let source = self.lan_acting.map_or(Source::LocalPlayer, Source::Guest);
+            if self.admitted_profile_uuid(id, source, uuid) {
+                return Some(self.acting_player_name());
+            }
+        }
+        let conn = *index
+            .players_by_uuid
+            .get(&horizon_client::lan::playerdata::ints_uuid(uuid))?;
+        let guest = self.read_guest(index, conn)?;
+        let id = u32::try_from(guest.entity_id).ok()?;
+        self.admitted_profile_uuid(id, Source::Guest(conn), uuid)
+            .then_some(guest.name.as_str())
+    }
+
     fn read_mob_team<'a>(
         &'a self,
         facts: NativeMobTargetFacts,
@@ -358,7 +396,7 @@ impl Game<'_> {
         }
         let mut root = facts.owner?;
         for _ in 0..64 {
-            if let Some(name) = self.admitted_online_owner_name(root) {
+            if let Some(name) = self.indexed_online_owner_name(root, index) {
                 return self.score.board.players_team(name);
             }
             let next = index
@@ -372,7 +410,7 @@ impl Game<'_> {
                 None => break,
             }
         }
-        if let Some(name) = self.admitted_online_owner_name(root) {
+        if let Some(name) = self.indexed_online_owner_name(root, index) {
             return self.score.board.players_team(name);
         }
         let id = *index.saved_ids.get(&root)?;

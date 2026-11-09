@@ -251,7 +251,7 @@ fn nearest_target(m: &mut Mob, w: &MobWorld) -> Option<Who> {
         && p.alive
         && !p.creative
         && !p.spectator
-        && !p.allies.contains(&m.id)
+        && !w.allied_to_player(m)
         && m.distance_sqr(p.position) <= SENSE_RANGE * SENSE_RANGE
         && m.sees(w, Who::Player)
     {
@@ -472,7 +472,7 @@ fn rammed(m: &Mob, w: &MobWorld) -> Option<Who> {
         && p.alive
         && !p.creative
         && !p.spectator
-        && !p.allies.contains(&m.id)
+        && !w.allied_to_player(m)
         && p.bounds.intersects(bounds)
     {
         return Some(Who::Player);

@@ -978,7 +978,7 @@ impl Mob {
             return false;
         }
         // TargetingConditions.isCombat: never an ally.
-        if p.creative || p.allies.contains(&self.id) {
+        if p.creative || w.allied_to_player(self) {
             return false;
         }
         self.player_in_range(w, range, check_sight, true)
@@ -992,7 +992,7 @@ impl Mob {
         if self.spares_players(w) {
             return false;
         }
-        if p.creative || p.allies.contains(&self.id) {
+        if p.creative || w.allied_to_player(self) {
             return false;
         }
         self.player_in_range(w, range, true, false)
