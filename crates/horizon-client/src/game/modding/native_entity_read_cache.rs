@@ -19,7 +19,10 @@ use std::{
 #[derive(Default)]
 pub(super) struct NativeReadState {
     pub(super) passes: Rc<RefCell<ReadPasses>>,
+    pub(super) mob_ai_teams: horizon_client::mobs::SharedAiTeams,
     pub(super) mob_backing: super::native_mob_backing::MobBackingRevision,
+    pub(super) mob_player_writes: HashMap<[i32; 4], Option<u32>>,
+    pub(super) mob_owner_writes: HashMap<u32, Option<([i32; 4], Option<[i32; 4]>)>>,
     pub(super) identities: HashSet<Arc<str>>,
     pub(super) player_identifiers: NativeReadIdentifiers,
     pub(super) raids: HashMap<RaidRef, RaidReadRow>,
@@ -36,7 +39,10 @@ pub(super) struct NativeMobRelationPass {
 impl NativeReadState {
     pub(super) fn reset(&mut self) {
         self.passes.borrow_mut().reset();
+        self.mob_ai_teams = Default::default();
         self.mob_backing = Default::default();
+        self.mob_owner_writes.clear();
+        self.mob_player_writes.clear();
         self.identities.clear();
         self.player_identifiers = NativeReadIdentifiers::default();
         self.raids.clear();

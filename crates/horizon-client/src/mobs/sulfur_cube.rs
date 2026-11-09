@@ -1197,8 +1197,8 @@ pub fn mob_contacts(m: &Mob, w: &MobWorld, events: &mut Vec<MobEvent>) {
             && other.pushable
             && other.bounds.intersects(bounds)
             && crate::scoreboard::TeamRules::pushable_by(
-                own_team,
-                w.teams.of(super::Who::Mob(other.id)),
+                own_team.as_ref(),
+                w.teams.of(super::Who::Mob(other.id)).as_ref(),
                 true,
             )
         {

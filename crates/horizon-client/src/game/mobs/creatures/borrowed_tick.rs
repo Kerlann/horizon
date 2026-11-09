@@ -222,11 +222,34 @@ impl Game<'_> {
                 .map(|(slot, &join)| (join, slot))
                 .collect::<horizon_client::fast_hash::FxHashMap<_, _>>()
         });
-        let mut teams = std::sync::Arc::new(self.mob_team_rules_for(&mobs));
-        let mut player_backing = self.player_view();
+        let teams = std::sync::Arc::new(self.mob_team_backing_for(&mobs));
+        self.score.board.begin_ai_changes();
+        let mut player_backing = self.ai_player_view(&teams);
         let mut players = self.level_players();
         let mut nearest = super::super::natural_spawning::NearestPlayers::new(&players);
         let mut backing_revision = self.entity_read_state.borrow().mob_backing;
+        for (_, view) in &mut guests {
+            if let Some((shared, _)) = &teams.shared {
+                view.allies = std::sync::Arc::new(horizon_client::mobs::PlayerAllies::shared(
+                    shared.clone(),
+                    view.uuid,
+                ));
+            }
+        }
+        let mut player_index = super::super::native_mob_backing::PlayerBackingIndex::new(
+            &super::super::native_mob_backing::PlayerBackingLoans {
+                local: &mut player_backing,
+                players: &mut players,
+                nearest: &mut nearest,
+                guests: &mut guests,
+                spare: &mut spare,
+                guest_ids: &mut guest_ids,
+            },
+        );
+        self.entity_read_state
+            .borrow_mut()
+            .mob_player_writes
+            .clear();
         self.leash_boats = self
             .boats
             .iter()
@@ -285,28 +308,21 @@ impl Game<'_> {
             // Exactly one dirtiness check before reborrowing this actor's
             // world. Mutation owners bump only the affected projection after
             // real apply; unrelated callbacks reuse every owned index.
+            self.refresh_mob_team_deltas(&teams);
             let revision = self.entity_read_state.borrow().mob_backing;
-            if revision.teams != backing_revision.teams {
-                teams = std::sync::Arc::new(self.mob_team_rules_for(&mobs));
-            }
             if revision.players != backing_revision.players {
-                player_backing = self.player_view();
-                drop(nearest);
-                players = self.level_players();
-                nearest = super::super::natural_spawning::NearestPlayers::new(&players);
-                guests = self.lan_guest_views();
-                spare = guests.first().map(|g| g.1.clone());
-                guest_ids = self
-                    .lan
-                    .as_ref()
-                    .map(|host| {
-                        host.hub
-                            .guests
-                            .iter()
-                            .map(|g| (g.conn, g.entity_id as u32))
-                            .collect()
-                    })
-                    .unwrap_or_default();
+                self.refresh_mob_player_deltas(
+                    &teams,
+                    &mut player_index,
+                    super::super::native_mob_backing::PlayerBackingLoans {
+                        local: &mut player_backing,
+                        players: &mut players,
+                        nearest: &mut nearest,
+                        guests: &mut guests,
+                        spare: &mut spare,
+                        guest_ids: &mut guest_ids,
+                    },
+                );
             }
             backing_revision = revision;
             let mut post = None;
@@ -387,7 +403,7 @@ impl Game<'_> {
                         break 'actor;
                     }
                     let nearest_player = nearest
-                        .nearest(m.position.x, m.position.y, m.position.z)
+                        .nearest(&players, m.position.x, m.position.y, m.position.z)
                         .map(|p| p.position);
                     // `MobDespawnEvent`, before `checkDespawn`'s own draws; one branch
                     // with no listener. Cleared below: the tick may not reach the check.
@@ -873,11 +889,21 @@ impl Game<'_> {
             lent = horizon_client::health::LentLevel::take(&mut self.world);
             // A full-host consumption callback can edit player/team state. This
             // is the explicit refresh seam for those owned AI projections.
-            teams = std::sync::Arc::new(self.mob_team_rules_for(&mobs));
-            player_backing = self.player_view();
-            drop(nearest);
-            players = self.level_players();
-            nearest = super::super::natural_spawning::NearestPlayers::new(&players);
+            self.refresh_mob_team_deltas(&teams);
+            if self.entity_read_state.borrow().mob_backing.players != backing_revision.players {
+                self.refresh_mob_player_deltas(
+                    &teams,
+                    &mut player_index,
+                    super::super::native_mob_backing::PlayerBackingLoans {
+                        local: &mut player_backing,
+                        players: &mut players,
+                        nearest: &mut nearest,
+                        guests: &mut guests,
+                        spare: &mut spare,
+                        guest_ids: &mut guest_ids,
+                    },
+                );
+            }
             path_changes = {
                 let base = self.mob_world_reborrow(&[], None, teams.clone());
                 horizon_client::mobs::collision_changes(&base, &path_writes)
@@ -933,6 +959,7 @@ impl Game<'_> {
         *state.player_credit = player_credit;
         *state.path_writes = path_writes;
         *state.gone = gone;
+        self.score.board.end_ai_changes();
         (lent, dispatch_panic)
     }
 }

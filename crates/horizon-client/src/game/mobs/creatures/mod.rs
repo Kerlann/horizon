@@ -463,6 +463,12 @@ impl Game<'_> {
         }
     }
     pub(super) fn player_view(&self) -> Option<PlayerView> {
+        self.player_view_with_allies(std::sync::Arc::new(self.player_allies().into()))
+    }
+    pub(super) fn player_view_with_allies(
+        &self,
+        allies: std::sync::Arc<horizon_client::mobs::PlayerAllies>,
+    ) -> Option<PlayerView> {
         if self.lan_acting_fake {
             return None;
         }
@@ -512,7 +518,7 @@ impl Game<'_> {
             hero: self.potions.effects.get("hero_of_the_village").is_some(),
             effects: self.potions.effects.list.iter().map(|e| e.id).collect(),
             uuid: self.acting_uuid(),
-            allies: std::sync::Arc::new(self.player_allies()),
+            allies,
             remote: false,
             sleeping: self.sleeping.is_some(),
             sleep_timer: self.sleep_timer,

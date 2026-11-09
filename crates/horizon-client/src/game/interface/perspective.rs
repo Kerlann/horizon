@@ -1906,10 +1906,10 @@ mod preview_tests {
         );
         // Entity.isInvisibleTo: a team that sees friendly invisibles sees it.
         let mut board = Scoreboard::default();
-        let team = board.add_team("blue");
-        assert!(body_visible(invisible, Some(team)));
+        let mut team = board.add_team("blue");
+        assert!(body_visible(invisible, Some(&team)));
         team.see_friendly_invisibles = false;
-        assert!(!body_visible(invisible, Some(team)));
+        assert!(!body_visible(invisible, Some(&team)));
     }
 
     /// #3788: a pose plugin's `Player.setInvisible(true)` sets only the
@@ -1922,7 +1922,7 @@ mod preview_tests {
         assert!(!body_visible(own_invisible(&effects, true), None));
         let mut board = horizon_client::scoreboard::Scoreboard::default();
         let team = board.add_team("blue");
-        assert!(body_visible(own_invisible(&effects, true), Some(team)));
+        assert!(body_visible(own_invisible(&effects, true), Some(&team)));
     }
 
     /// LivingEntityRenderer.submit: an invisible body is not drawn, its

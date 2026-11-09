@@ -221,43 +221,76 @@ pub(super) fn nearest_player(
 /// square they stand in, searched ring by ring outwards from the position.
 /// Every mob asks each tick, and with players spread over the map that was a
 /// look at every player for every mob.
-pub(super) struct NearestPlayers<'p> {
-    players: &'p [LevelPlayer],
-    cells: horizon_client::fast_hash::FxHashMap<(i64, i64), Vec<usize>>,
-    /// The cells' bounding box: (x0, z0, x1, z1).
+pub(super) struct NearestPlayers {
+    cells: horizon_client::fast_hash::FxHashMap<
+        (i64, i64),
+        horizon_client::fast_hash::FxHashSet<usize>,
+    >,
+    // Positions in our owned LevelPlayer projection, never in Hub/source storage.
+    slots: Vec<Option<(i64, i64)>>,
+    bad: horizon_client::fast_hash::FxHashSet<usize>,
     bounds: (i64, i64, i64, i64),
-    /// Few players, or one too far out for cells: every question scans.
+    active: usize,
     scan: bool,
 }
-impl<'p> NearestPlayers<'p> {
+impl NearestPlayers {
     const CELL: f64 = 64.0;
-    /// Further out than any world border: such positions are answered by a scan.
     const FAR: f64 = 1.0e9;
-    pub(super) fn new(players: &'p [LevelPlayer]) -> Self {
-        let mut cells = horizon_client::fast_hash::FxHashMap::<(i64, i64), Vec<usize>>::default();
-        let mut bounds = (i64::MAX, i64::MAX, i64::MIN, i64::MIN);
-        let mut scan = players.len() <= 8;
-        for (i, p) in players.iter().enumerate().filter(|(_, p)| !p.spectator) {
-            if !(p.position.x.abs() < Self::FAR && p.position.z.abs() < Self::FAR) {
-                // Past any world border (or not a number): scans answer.
-                scan = true;
-                break;
+    pub(super) fn new(players: &[LevelPlayer]) -> Self {
+        let mut index = Self {
+            cells: Default::default(),
+            slots: vec![None; players.len()],
+            bad: Default::default(),
+            bounds: (i64::MAX, i64::MAX, i64::MIN, i64::MIN),
+            active: 0,
+            scan: true,
+        };
+        for slot in 0..players.len() {
+            index.update(players, slot);
+        }
+        index
+    }
+    /// Reindex just one changed owned projection. Crowded-cell removal is a
+    /// hash erase, not a scan over all players sharing that square.
+    pub(super) fn update(&mut self, players: &[LevelPlayer], slot: usize) {
+        if self.slots.len() <= slot {
+            self.slots.resize(slot + 1, None);
+        }
+        let old = self.slots[slot];
+        let was_bad = self.bad.remove(&slot);
+        if old.is_some() || was_bad {
+            self.active -= 1;
+        }
+        let player = &players[slot];
+        let new = if player.spectator {
+            None
+        } else {
+            self.active += 1;
+            if player.position.x.abs() < Self::FAR && player.position.z.abs() < Self::FAR {
+                Some(Self::cell(player.position.x, player.position.z))
+            } else {
+                self.bad.insert(slot);
+                None
             }
-            let key = Self::cell(p.position.x, p.position.z);
-            cells.entry(key).or_default().push(i);
-            bounds = (
-                bounds.0.min(key.0),
-                bounds.1.min(key.1),
-                bounds.2.max(key.0),
-                bounds.3.max(key.1),
-            );
+        };
+        if old != new {
+            if let Some(old) = old
+                && let Some(cell) = self.cells.get_mut(&old)
+            {
+                cell.remove(&slot);
+            }
+            if let Some(key) = new {
+                self.cells.entry(key).or_default().insert(slot);
+                self.bounds = (
+                    self.bounds.0.min(key.0),
+                    self.bounds.1.min(key.1),
+                    self.bounds.2.max(key.0),
+                    self.bounds.3.max(key.1),
+                );
+            }
+            self.slots[slot] = new;
         }
-        Self {
-            players,
-            cells,
-            bounds,
-            scan,
-        }
+        self.scan = players.len() <= 8 || !self.bad.is_empty();
     }
     fn cell(x: f64, z: f64) -> (i64, i64) {
         (
@@ -267,11 +300,17 @@ impl<'p> NearestPlayers<'p> {
     }
     /// The same player [`nearest_player`] finds: the nearest, the first in
     /// the list among equals.
-    pub(super) fn nearest(&self, x: f64, y: f64, z: f64) -> Option<&'p LevelPlayer> {
+    pub(super) fn nearest<'p>(
+        &self,
+        players: &'p [LevelPlayer],
+        x: f64,
+        y: f64,
+        z: f64,
+    ) -> Option<&'p LevelPlayer> {
         if self.scan || !(x.abs() < Self::FAR && z.abs() < Self::FAR) {
-            return nearest_player(self.players, x, y, z);
+            return nearest_player(players, x, y, z);
         }
-        if self.cells.is_empty() {
+        if self.active == 0 {
             return None;
         }
         let (qx, qz) = Self::cell(x, z);
@@ -287,7 +326,7 @@ impl<'p> NearestPlayers<'p> {
             let mut look = |kx: i64, kz: i64| {
                 looked += 1;
                 for &i in self.cells.get(&(kx, kz)).into_iter().flatten() {
-                    let d = self.players[i].distance_sqr(x, y, z);
+                    let d = players[i].distance_sqr(x, y, z);
                     if best.is_none_or(|(b, bd)| d < bd || d == bd && i < b) {
                         best = Some((i, d));
                     }
@@ -311,11 +350,11 @@ impl<'p> NearestPlayers<'p> {
             if best.is_some_and(|(_, d)| d <= bound * bound) {
                 break;
             }
-            if looked > self.players.len() * 4 {
-                return nearest_player(self.players, x, y, z);
+            if looked > players.len() * 4 {
+                return nearest_player(players, x, y, z);
             }
         }
-        best.map(|(i, _)| &self.players[i])
+        best.map(|(i, _)| &players[i])
     }
 }
 
@@ -1077,14 +1116,30 @@ impl<'a> Game<'a> {
                 spectator: g.spectator(),
             }))
     }
-    fn local_level_player(&self) -> Option<LevelPlayer> {
-        self.player_view().map(|p| LevelPlayer {
-            uuid: horizon_client::lan::playerdata::ints_uuid(p.uuid),
-            position: p.position,
-            bounds: p.bounds,
-            alive: p.alive,
-            creative: p.creative,
-            spectator: p.spectator,
+    pub(super) fn local_level_player(&self) -> Option<LevelPlayer> {
+        if self.lan_acting_fake {
+            return None;
+        }
+        let player = self.player.as_ref()?;
+        let half = f64::from(player.dimensions.width) / 2.0;
+        Some(LevelPlayer {
+            uuid: horizon_client::lan::playerdata::ints_uuid(self.acting_uuid()),
+            position: player.position,
+            bounds: Aabb::new(
+                Vec3::new(
+                    player.position.x - half,
+                    player.position.y,
+                    player.position.z - half,
+                ),
+                Vec3::new(
+                    player.position.x + half,
+                    player.position.y + f64::from(player.dimensions.height),
+                    player.position.z + half,
+                ),
+            ),
+            alive: !player.health.dead_or_dying(),
+            creative: self.creative || self.spectator(),
+            spectator: self.spectator(),
         })
     }
     /// The UUIDs of the players in level `dimension`, for a query that only
@@ -1109,7 +1164,7 @@ impl<'a> Game<'a> {
             .flat_map(|h| self.guests_placed_in(&h.hub.config.dimension))
     }
     /// The guests placed in level `dimension`, past the acting one.
-    fn guests_placed_in<'s>(
+    pub(super) fn guests_placed_in<'s>(
         &'s self,
         dimension: &'s str,
     ) -> impl Iterator<Item = &'s horizon_client::lan::guest::Guest> + 's {
@@ -1741,7 +1796,7 @@ mod tests {
         probes.extend([(0.0, 64.0, 0.0), (1.0e12, 0.0, 0.0), (f64::NAN, 0.0, 0.0)]);
         for (x, y, z) in probes {
             assert_eq!(
-                index(grid.nearest(x, y, z)),
+                index(grid.nearest(&players, x, y, z)),
                 index(nearest_player(&players, x, y, z)),
                 "({x}, {y}, {z})"
             );
@@ -1751,7 +1806,7 @@ mod tests {
         assert!(grid.scan);
         for x in [0.0, NearestPlayers::FAR * 2.0] {
             assert_eq!(
-                index(grid.nearest(x, 64.0, 0.0)),
+                index(grid.nearest(&players, x, 64.0, 0.0)),
                 index(nearest_player(&players, x, 64.0, 0.0))
             );
         }
@@ -1760,7 +1815,7 @@ mod tests {
             .collect();
         assert!(
             NearestPlayers::new(&spectators)
-                .nearest(0.0, 0.0, 0.0)
+                .nearest(&spectators, 0.0, 0.0, 0.0)
                 .is_none()
         );
     }

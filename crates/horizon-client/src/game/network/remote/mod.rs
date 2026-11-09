@@ -5948,7 +5948,7 @@ impl Game<'_> {
             board.add_team(&p.name);
         }
         if let Some(params) = &p.parameters
-            && let Some(team) = board.team_mut(&p.name)
+            && let Some(mut team) = board.team_mut(&p.name)
         {
             team.display_name = tag_to_json(&params.display_name);
             team.prefix = tag_to_json(&params.prefix);

@@ -3560,7 +3560,7 @@ pub fn apply_brain_events(
     }
 }
 /// The player as mobs see it.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PlayerView {
     pub position: Vec3,
     pub bounds: Aabb,
@@ -3605,7 +3605,7 @@ pub struct PlayerView {
     pub uuid: [i32; 4],
     /// The mobs on the player's team (`isAlliedTo`): combat targeting
     /// leaves the player alone.
-    pub allies: std::sync::Arc<std::collections::HashSet<u32>>,
+    pub allies: std::sync::Arc<PlayerAllies>,
     /// A LAN guest: its own client moves it, and touching mobs push it there
     /// (`EntitySelector.pushableBy` on the client).
     pub remote: bool,
@@ -3622,7 +3622,7 @@ pub struct PlayerView {
     pub vehicle: Option<Vehicle>,
 }
 /// What a player rides, for the mobs that follow it (`FollowPlayerRiddenEntityGoal`).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Vehicle {
     pub nautilus: bool,
     pub bounds: Aabb,
@@ -3958,17 +3958,104 @@ impl MobWorld<'_> {
 pub trait WhoLookup {
     fn who_by_uuid(&self, uuid: [i32; 4]) -> Option<Who>;
 }
+/// Bounded identity and rule facts shared by the owned player/team projections.
+/// No entity state, source positions, team strings or member sets are copied.
+#[derive(Debug, Default)]
+pub struct AiTeamFacts {
+    pub identities: HashMap<u32, [i32; 4]>,
+    pub names: HashMap<std::sync::Arc<str>, [i32; 4]>,
+    pub players: std::collections::HashSet<[i32; 4]>,
+    pub members: HashMap<[i32; 4], usize>,
+    pub owners: HashMap<[i32; 4], [i32; 4]>,
+    pub rules: HashMap<usize, crate::scoreboard::TeamRules<usize>>,
+}
+impl AiTeamFacts {
+    fn team(&self, uuid: [i32; 4]) -> Option<usize> {
+        if let Some(&team) = self.members.get(&uuid) {
+            return Some(team);
+        }
+        let mut owner = *self.owners.get(&uuid)?;
+        // Same bounded cycle handling as the authoritative root-owner resolver.
+        for _ in 0..64 {
+            match self.owners.get(&owner) {
+                Some(next) => owner = *next,
+                None => break,
+            }
+        }
+        self.members.get(&owner).copied()
+    }
+}
+pub type SharedAiTeams = std::sync::Arc<std::sync::RwLock<AiTeamFacts>>;
+/// Direct scoreboard allies, not tame-owner team inheritance.
+#[derive(Debug, Default)]
+pub struct PlayerAllies {
+    fixed: std::collections::HashSet<u32>,
+    shared: Option<(SharedAiTeams, [i32; 4])>,
+}
+// Equality names the backing, not mutable team rules. Canonical Player fact
+// comparisons deliberately use an empty ally projection; teams emit their own deltas.
+impl PartialEq for PlayerAllies {
+    fn eq(&self, other: &Self) -> bool {
+        self.fixed == other.fixed
+            && match (&self.shared, &other.shared) {
+                (None, None) => true,
+                (Some((a, player)), Some((b, other))) => {
+                    std::sync::Arc::ptr_eq(a, b) && player == other
+                }
+                _ => false,
+            }
+    }
+}
+impl From<std::collections::HashSet<u32>> for PlayerAllies {
+    fn from(fixed: std::collections::HashSet<u32>) -> Self {
+        Self {
+            fixed,
+            shared: None,
+        }
+    }
+}
+impl PlayerAllies {
+    pub fn shared(facts: SharedAiTeams, player: [i32; 4]) -> Self {
+        Self {
+            fixed: Default::default(),
+            shared: Some((facts, player)),
+        }
+    }
+    pub fn contains(&self, id: &u32) -> bool {
+        if let Some((shared, player)) = &self.shared {
+            let facts = shared.read().expect("AI team backing poisoned");
+            let Some(team) = facts.members.get(player) else {
+                return false;
+            };
+            return facts
+                .identities
+                .get(id)
+                .and_then(|uuid| facts.members.get(uuid))
+                == Some(team);
+        }
+        self.fixed.contains(id)
+    }
+}
 /// `Entity.getTeam` of the player and of the mobs on a team.
 #[derive(Clone, Debug, Default)]
 pub struct TeamRulesSnapshot {
     pub player: Option<crate::scoreboard::TeamRules<usize>>,
     pub mobs: HashMap<u32, crate::scoreboard::TeamRules<usize>>,
+    pub shared: Option<(SharedAiTeams, [i32; 4])>,
 }
 impl TeamRulesSnapshot {
-    pub fn of(&self, who: Who) -> Option<&crate::scoreboard::TeamRules<usize>> {
+    pub fn of(&self, who: Who) -> Option<crate::scoreboard::TeamRules<usize>> {
+        if let Some((shared, player)) = &self.shared {
+            let facts = shared.read().expect("AI team backing poisoned");
+            let uuid = match who {
+                Who::Player => *player,
+                Who::Mob(id) => *facts.identities.get(&id)?,
+            };
+            return facts.rules.get(&facts.team(uuid)?).copied();
+        }
         match who {
-            Who::Player => self.player.as_ref(),
-            Who::Mob(id) => self.mobs.get(&id),
+            Who::Player => self.player,
+            Who::Mob(id) => self.mobs.get(&id).copied(),
         }
     }
 }
@@ -5975,6 +6062,7 @@ mod teams_tests {
                     ))
                 })
                 .collect(),
+            shared: None,
         }
     }
 
@@ -6004,15 +6092,15 @@ mod teams_tests {
                 let own = teams.of(Who::Mob(a));
                 let other = teams.of(Who::Mob(b));
                 assert_eq!(
-                    crate::scoreboard::TeamRules::allied(own, other),
+                    crate::scoreboard::TeamRules::allied(own.as_ref(), other.as_ref()),
                     crate::scoreboard::teams_allied(old.get(&a), old.get(&b))
                 );
                 assert_eq!(
-                    crate::scoreboard::TeamRules::allows_damage(own, other),
+                    crate::scoreboard::TeamRules::allows_damage(own.as_ref(), other.as_ref()),
                     crate::scoreboard::teams_allow_damage(old.get(&a), old.get(&b))
                 );
                 assert_eq!(
-                    crate::scoreboard::TeamRules::pushable_by(own, other, true),
+                    crate::scoreboard::TeamRules::pushable_by(own.as_ref(), other.as_ref(), true),
                     crate::scoreboard::pushable_by(old.get(&a), old.get(&b), true)
                 );
             }

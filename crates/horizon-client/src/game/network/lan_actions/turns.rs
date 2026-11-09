@@ -431,6 +431,7 @@ impl Game<'_> {
         self.block_reach = self.interaction_range("minecraft:block_interaction_range", 4.5, 5.0);
         let building_boxes = std::mem::replace(&mut self.lan_building_boxes, other_boxes);
         Ok(GuestSwap {
+            ai_backing_before: self.player_ai_facts(),
             attachments,
             conn,
             i,
@@ -560,7 +561,9 @@ impl Game<'_> {
             Ok(totem) => (totem, None),
             Err(payload) => (None, Some(payload)),
         };
+        let ai_delta = self.player_ai_facts_delta(&swap.ai_backing_before);
         let GuestSwap {
+            ai_backing_before: _,
             attachments,
             conn,
             i,
@@ -1039,6 +1042,7 @@ impl Game<'_> {
                 self.lan_building_boxes
                     .for_turn(actor, None, building_players(host));
         }
+        self.publish_player_ai_delta(ai_delta);
         if let Some(payload) = panic {
             std::panic::resume_unwind(payload);
         }

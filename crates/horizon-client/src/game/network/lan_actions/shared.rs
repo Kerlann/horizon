@@ -137,6 +137,7 @@ pub(super) enum TurnRefused {
 /// The game's own state while a guest's is swapped in (`enter_guest`), and
 /// the guest's records that live outside `Guest`.
 pub(super) struct GuestSwap {
+    ai_backing_before: Option<crate::game::native_mob_backing::PlayerAiFacts>,
     attachments: horizon_mod_runtime::attachments::ResidentAttachments,
     conn: u32,
     i: usize,

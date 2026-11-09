@@ -709,44 +709,85 @@ impl Game<'_> {
         &self,
         mobs: &[horizon_client::mobs::Mob],
     ) -> horizon_client::mobs::TeamRulesSnapshot {
-        if self.score.board.teams.is_empty() {
-            return Default::default();
+        self.capture_mob_team_backing(mobs, Default::default())
+    }
+    pub(super) fn mob_team_backing_for(
+        &self,
+        mobs: &[horizon_client::mobs::Mob],
+    ) -> horizon_client::mobs::TeamRulesSnapshot {
+        let shared = self.entity_read_state.borrow().mob_ai_teams.clone();
+        self.capture_mob_team_backing(mobs, shared)
+    }
+    fn capture_mob_team_backing(
+        &self,
+        mobs: &[horizon_client::mobs::Mob],
+        shared: horizon_client::mobs::SharedAiTeams,
+    ) -> horizon_client::mobs::TeamRulesSnapshot {
+        use horizon_client::mobs::TeamRulesSnapshot;
+        let mut facts = shared.write().expect("AI team backing poisoned");
+        facts.identities.clear();
+        facts.names.clear();
+        facts.players.clear();
+        facts.members.clear();
+        facts.owners.clear();
+        facts.rules.clear();
+        facts
+            .identities
+            .extend(self.persist.uuids.iter().map(|(&id, &uuid)| (id, uuid)));
+        for guest in self.guests_placed_in(self.dim.id()) {
+            if let Ok(id) = u32::try_from(guest.entity_id) {
+                facts
+                    .identities
+                    .insert(id, horizon_client::lan::playerdata::uuid_ints(guest.uuid));
+            }
         }
-        // One pass over the mobs, not one per mob.
-        let tame_owners: HashMap<u32, [i32; 4]> = mobs
-            .iter()
-            .filter_map(|m| Some((m.id, tame_owner(m)?)))
-            .collect();
-        // Bounded combat/collision facts survive mutable Game hook boundaries;
-        // full member sets, display components and strings stay authoritative here.
-        let shared: HashMap<_, _> = self
-            .score
-            .board
-            .teams
-            .iter()
-            .enumerate()
-            .map(|(identity, team)| {
+        let local = (self.player.is_some() && !self.lan_acting_fake)
+            .then(|| (self.acting_player_name(), self.acting_uuid()));
+        for (name, uuid) in local
+            .into_iter()
+            .chain(self.guests_placed_in(self.dim.id()).map(|g| {
                 (
-                    team.name.as_str(),
-                    horizon_client::scoreboard::TeamRules {
-                        identity,
-                        allow_friendly_fire: team.allow_friendly_fire,
-                        collision_rule: team.collision_rule,
-                    },
+                    g.name.as_str(),
+                    horizon_client::lan::playerdata::uuid_ints(g.uuid),
                 )
-            })
-            .collect();
-        horizon_client::mobs::TeamRulesSnapshot {
-            player: self.player_team().map(|team| shared[team.name.as_str()]),
-            mobs: self
-                .persist
-                .uuids
-                .keys()
-                .filter_map(|id| {
-                    let owner = || tame_owners.get(id).copied();
-                    Some((*id, shared[self.team_with_owner(*id, owner)?.name.as_str()]))
-                })
-                .collect(),
+            }))
+        {
+            let mut state = self.entity_read_state.borrow_mut();
+            let name = match state.identities.get(name) {
+                Some(name) => name.clone(),
+                None => {
+                    let name: std::sync::Arc<str> = std::sync::Arc::from(name);
+                    state.identities.insert(name.clone());
+                    name
+                }
+            };
+            facts.names.insert(name, uuid);
+            facts.players.insert(uuid);
+        }
+        for team in &self.score.board.teams {
+            facts.rules.insert(team.ai_identity(), team.ai_rules());
+            for member in team.players.iter() {
+                let uuid = facts.names.get(member.as_str()).copied().or_else(|| {
+                    horizon_client::lan::arrivals::parse_uuid(member)
+                        .map(horizon_client::lan::playerdata::uuid_ints)
+                        .filter(|uuid| !facts.players.contains(uuid))
+                });
+                if let Some(uuid) = uuid {
+                    facts.members.insert(uuid, team.ai_identity());
+                }
+            }
+        }
+        for mob in mobs {
+            if let Some(uuid) = facts.identities.get(&mob.id).copied()
+                && let Some(owner) = tame_owner(mob)
+            {
+                facts.owners.insert(uuid, owner);
+            }
+        }
+        drop(facts);
+        TeamRulesSnapshot {
+            shared: Some((shared, self.acting_uuid())),
+            ..Default::default()
         }
     }
     /// The mobs on the player's team (`isAlliedTo`).

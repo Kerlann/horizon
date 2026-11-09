@@ -153,7 +153,6 @@ fn guest_view(mut v: PlayerView, uuid: u128, moved: [f64; 3]) -> PlayerView {
     v.hero = false;
     v.velocity = Vec3::new(moved[0], moved[1], moved[2]);
     v.uuid = horizon_client::lan::playerdata::uuid_ints(uuid);
-    v.allies = Default::default();
     v.remote = true;
     v
 }
@@ -177,11 +176,33 @@ impl Game<'_> {
             .collect();
         let mut views = Vec::new();
         for (conn, uuid, moved) in conns {
-            if let Some(Some(v)) = self.as_guest(conn, |g| g.player_view()) {
+            if let Some(Some(v)) =
+                self.as_guest(conn, |g| g.player_view_with_allies(Default::default()))
+            {
                 views.push((conn, guest_view(v, uuid, moved)));
             }
         }
         views
+    }
+
+    pub(super) fn ai_guest_view(
+        &mut self,
+        conn: u32,
+        teams: &horizon_client::mobs::TeamRulesSnapshot,
+    ) -> Option<PlayerView> {
+        let (uuid, moved) = {
+            let host = self.lan.as_ref()?;
+            let guest = host.hub.guest(conn)?;
+            if !host.hub.here(guest) || !guest.loaded || guest.dead || guest.is_fake() {
+                return None;
+            }
+            (
+                guest.uuid,
+                [0, 1, 2].map(|k| guest.position[k] - guest.previous_position[k]),
+            )
+        };
+        let view = self.as_guest(conn, |game| game.ai_player_view(teams))??;
+        Some(guest_view(view, uuid, moved))
     }
 
     /// The guest `conn`'s real identity — the uuid its lent view carries and

@@ -973,22 +973,24 @@ fn team_modify(id: &str, ctx: &Context, env: &mut dyn Env) -> CmdResult<i32> {
     match id {
         "team.modify.displayname" => {
             let display = component(ctx, "displayName", env)?;
-            let team = env.sb_mut().team_mut(&name).expect("checked");
+            let mut team = env.sb_mut().team_mut(&name).expect("checked");
             if team.display_name == display {
                 return Err(err("commands.team.option.name.unchanged", &[]));
             }
             team.display_name = display;
+            drop(team);
             let s = shown(env);
             env.feedback(tr("commands.team.option.name.success", &[s]));
         }
         "team.modify.color" | "team.modify.color.reset" => {
             let reset = id.ends_with("reset");
             let value = (!reset).then(|| string(ctx, "value"));
-            let team = env.sb_mut().team_mut(&name).expect("checked");
+            let mut team = env.sb_mut().team_mut(&name).expect("checked");
             if team.color == value {
                 return Err(err("commands.team.option.color.unchanged", &[]));
             }
             team.color.clone_from(&value);
+            drop(team);
             let s = shown(env);
             match value {
                 Some(c) => env.feedback(tr(
@@ -1001,7 +1003,7 @@ fn team_modify(id: &str, ctx: &Context, env: &mut dyn Env) -> CmdResult<i32> {
         "team.modify.friendlyfire" | "team.modify.seefriendlyinvisibles" => {
             let allowed = boolean(ctx, "allowed");
             let fire = id.ends_with("friendlyfire");
-            let team = env.sb_mut().team_mut(&name).expect("checked");
+            let mut team = env.sb_mut().team_mut(&name).expect("checked");
             let current = if fire {
                 team.allow_friendly_fire
             } else {
@@ -1030,6 +1032,7 @@ fn team_modify(id: &str, ctx: &Context, env: &mut dyn Env) -> CmdResult<i32> {
             } else {
                 team.see_friendly_invisibles = allowed;
             }
+            drop(team);
             let s = shown(env);
             env.feedback(tr(
                 &format!("{base}.{}", if allowed { "enabled" } else { "disabled" }),
@@ -1039,7 +1042,7 @@ fn team_modify(id: &str, ctx: &Context, env: &mut dyn Env) -> CmdResult<i32> {
         "team.modify.nametagvisibility" | "team.modify.deathmessagevisibility" => {
             let v = Visibility::by_name(&last).unwrap_or(Visibility::Always);
             let nametag = id.ends_with("nametagvisibility");
-            let team = env.sb_mut().team_mut(&name).expect("checked");
+            let mut team = env.sb_mut().team_mut(&name).expect("checked");
             let slot = if nametag {
                 &mut team.nametag_visibility
             } else {
@@ -1054,16 +1057,18 @@ fn team_modify(id: &str, ctx: &Context, env: &mut dyn Env) -> CmdResult<i32> {
                 return Err(err(&format!("{base}.unchanged"), &[]));
             }
             *slot = v;
+            drop(team);
             let s = shown(env);
             env.feedback(tr(&format!("{base}.success"), &[s, v.display_name()]));
         }
         "team.modify.collisionrule" => {
             let rule = sb::CollisionRule::by_name(&last).unwrap_or(sb::CollisionRule::Always);
-            let team = env.sb_mut().team_mut(&name).expect("checked");
+            let mut team = env.sb_mut().team_mut(&name).expect("checked");
             if team.collision_rule == rule {
                 return Err(err("commands.team.option.collisionRule.unchanged", &[]));
             }
             team.collision_rule = rule;
+            drop(team);
             let s = shown(env);
             env.feedback(tr(
                 "commands.team.option.collisionRule.success",
@@ -1073,12 +1078,13 @@ fn team_modify(id: &str, ctx: &Context, env: &mut dyn Env) -> CmdResult<i32> {
         "team.modify.prefix" | "team.modify.suffix" => {
             let prefix = id.ends_with("prefix");
             let value = component(ctx, if prefix { "prefix" } else { "suffix" }, env)?;
-            let team = env.sb_mut().team_mut(&name).expect("checked");
+            let mut team = env.sb_mut().team_mut(&name).expect("checked");
             if prefix {
                 team.prefix = value.clone();
             } else {
                 team.suffix = value.clone();
             }
+            drop(team);
             env.feedback(tr(
                 if prefix {
                     "commands.team.option.prefix.success"

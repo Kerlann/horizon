@@ -10,6 +10,7 @@ use crate::{
 use horizon_core::nbt::Tag;
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::sync::Arc;
 
 /// A text component in its JSON form (what `ComponentSerialization` holds).
 pub type Comp = Value;
@@ -492,8 +493,9 @@ impl CollisionRule {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Team {
+    ai_identity: usize,
     pub name: String,
     pub display_name: Comp,
     pub color: Option<String>,
@@ -507,9 +509,28 @@ pub struct Team {
     /// `Sets.newHashSet()`, in its iteration order.
     pub players: HashSetOrder,
 }
+impl PartialEq for Team {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+            && self.display_name == other.display_name
+            && self.color == other.color
+            && self.allow_friendly_fire == other.allow_friendly_fire
+            && self.see_friendly_invisibles == other.see_friendly_invisibles
+            && self.prefix == other.prefix
+            && self.suffix == other.suffix
+            && self.nametag_visibility == other.nametag_visibility
+            && self.death_message_visibility == other.death_message_visibility
+            && self.collision_rule == other.collision_rule
+            && self.players == other.players
+    }
+}
 impl Team {
+    pub fn ai_identity(&self) -> usize {
+        self.ai_identity
+    }
     fn new(name: &str) -> Self {
         Self {
+            ai_identity: 0,
             name: name.to_owned(),
             display_name: literal(name),
             color: None,
@@ -574,6 +595,51 @@ pub fn teams_allow_damage(own: Option<&Team>, other: Option<&Team>) -> bool {
     )
 }
 
+/// Changed combat/collision facts emitted by canonical team mutation owners.
+#[derive(Clone, Debug)]
+pub enum TeamAiChange {
+    Member {
+        member: Arc<str>,
+        team: Option<usize>,
+    },
+    Rules(TeamRules<usize>),
+    Removed(usize),
+}
+/// A mutable team projection records only actual AI rule changes on drop.
+pub struct TeamMut<'a> {
+    team: &'a mut Team,
+    before: (bool, CollisionRule),
+    changes: &'a mut Option<Vec<TeamAiChange>>,
+}
+impl std::ops::Deref for TeamMut<'_> {
+    type Target = Team;
+    fn deref(&self) -> &Team {
+        self.team
+    }
+}
+impl std::ops::DerefMut for TeamMut<'_> {
+    fn deref_mut(&mut self) -> &mut Team {
+        self.team
+    }
+}
+impl Drop for TeamMut<'_> {
+    fn drop(&mut self) {
+        if self.before != (self.team.allow_friendly_fire, self.team.collision_rule)
+            && let Some(changes) = self.changes
+        {
+            changes.push(TeamAiChange::Rules(self.team.ai_rules()));
+        }
+    }
+}
+impl Team {
+    pub fn ai_rules(&self) -> TeamRules<usize> {
+        TeamRules {
+            identity: self.ai_identity,
+            allow_friendly_fire: self.allow_friendly_fire,
+            collision_rule: self.collision_rule,
+        }
+    }
+}
 /// Bounded gameplay facts, with identity chosen by the owning snapshot.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TeamRules<I> {
@@ -780,7 +846,7 @@ impl ScoreEntry {
 
 /// `Scoreboard`: objectives, scores, display slots and teams, kept in the
 /// iteration orders of vanilla's hash maps.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Scoreboard {
     /// `objectivesByName` in its iterator order (`getObjectives()`).
     pub objectives: Vec<Objective>,
@@ -795,7 +861,22 @@ pub struct Scoreboard {
     /// `teamsByName` in its iterator order (`getPlayerTeams()`).
     pub teams: Vec<Team>,
     team_order: OpenOrder,
-    team_of: BTreeMap<String, String>,
+    team_of: BTreeMap<Arc<str>, String>,
+    next_team_identity: usize,
+    ai_changes: Option<Vec<TeamAiChange>>,
+}
+impl PartialEq for Scoreboard {
+    fn eq(&self, other: &Self) -> bool {
+        self.objectives == other.objectives
+            && self.objective_order == other.objective_order
+            && self.by_criteria == other.by_criteria
+            && self.scores == other.scores
+            && self.holder_order == other.holder_order
+            && self.display == other.display
+            && self.teams == other.teams
+            && self.team_order == other.team_order
+            && self.team_of == other.team_of
+    }
 }
 impl Default for Scoreboard {
     fn default() -> Self {
@@ -809,6 +890,8 @@ impl Default for Scoreboard {
             teams: Vec::new(),
             team_order: OpenOrder::default(),
             team_of: BTreeMap::new(),
+            next_team_identity: 0,
+            ai_changes: None,
         }
     }
 }
@@ -1000,23 +1083,61 @@ impl Scoreboard {
     }
     /// Every holder on a team (`teamsByPlayer.keySet()`).
     pub fn team_members(&self) -> impl Iterator<Item = &str> {
-        self.team_of.keys().map(String::as_str)
+        self.team_of.keys().map(AsRef::as_ref)
     }
 
     // teams
     pub fn team(&self, name: &str) -> Option<&Team> {
         self.teams.iter().find(|t| t.name == name)
     }
-    pub fn team_mut(&mut self, name: &str) -> Option<&mut Team> {
-        self.teams.iter_mut().find(|t| t.name == name)
+    pub fn team_mut(&mut self, name: &str) -> Option<TeamMut<'_>> {
+        let team = self.teams.iter_mut().find(|t| t.name == name)?;
+        let before = (team.allow_friendly_fire, team.collision_rule);
+        Some(TeamMut {
+            team,
+            before,
+            changes: &mut self.ai_changes,
+        })
     }
-    pub fn add_team(&mut self, name: &str) -> &mut Team {
+    pub fn add_team(&mut self, name: &str) -> TeamMut<'_> {
         if self.team(name).is_none() {
-            self.teams.push(Team::new(name));
+            let mut team = Team::new(name);
+            team.ai_identity = self.next_team_identity;
+            self.next_team_identity = self
+                .next_team_identity
+                .checked_add(1)
+                .expect("team identity exhausted");
+            if let Some(changes) = &mut self.ai_changes {
+                changes.push(TeamAiChange::Rules(team.ai_rules()));
+            }
+            self.teams.push(team);
             self.team_order.insert(name);
             self.reorder();
         }
         self.team_mut(name).expect("just added")
+    }
+    /// Collect deltas only during an AI pass. Outside it the next pass reads
+    /// canonical state, so mutations do not accumulate an unconsumed history.
+    pub fn is_ai_tracking(&self) -> bool {
+        self.ai_changes.is_some()
+    }
+    pub fn begin_ai_changes(&mut self) {
+        self.ai_changes = Some(Vec::new());
+    }
+    pub fn take_ai_changes(&mut self) -> Vec<TeamAiChange> {
+        self.ai_changes
+            .as_mut()
+            .map(std::mem::take)
+            .unwrap_or_default()
+    }
+    pub fn recycle_ai_changes(&mut self, mut changes: Vec<TeamAiChange>) {
+        changes.clear();
+        if let Some(current) = &mut self.ai_changes {
+            *current = changes;
+        }
+    }
+    pub fn end_ai_changes(&mut self) {
+        self.ai_changes = None;
     }
     /// `getPlayerTeams().stream()` (what saving uses).
     pub fn teams_streamed(&self) -> Vec<&Team> {
@@ -1032,7 +1153,14 @@ impl Scoreboard {
         };
         let team = self.teams.remove(at);
         for p in team.players.iter() {
-            self.team_of.remove(p);
+            if let Some((member, _)) = self.team_of.remove_entry(p.as_str())
+                && let Some(changes) = &mut self.ai_changes
+            {
+                changes.push(TeamAiChange::Member { member, team: None });
+            }
+        }
+        if let Some(changes) = &mut self.ai_changes {
+            changes.push(TeamAiChange::Removed(team.ai_identity));
         }
         self.team_order.remove(name);
         self.reorder();
@@ -1043,19 +1171,42 @@ impl Scoreboard {
     /// `addPlayerToTeam`: leaves the old team first (even when it is the
     /// same one); false when the team already listed the player.
     pub fn add_to_team(&mut self, player: &str, team: &str) -> bool {
-        self.remove_from_team(player);
-        self.team_of.insert(player.to_owned(), team.to_owned());
-        match self.team_mut(team) {
-            Some(t) => t.players.insert(player),
-            None => false,
+        if self.team(team).is_none() {
+            return false;
         }
+        let changed = self.team_of.get(player).is_none_or(|old| old != team);
+        let member = self
+            .team_of
+            .get_key_value(player)
+            .map(|(key, _)| key.clone())
+            .unwrap_or_else(|| Arc::from(player));
+        // Preserve vanilla's remove-then-add result, even on the same team.
+        if let Some(old) = self.team_of.remove(player)
+            && let Some(t) = self.teams.iter_mut().find(|t| t.name == old)
+        {
+            t.players.remove(player);
+        }
+        self.team_of.insert(member.clone(), team.to_owned());
+        let target = self.teams.iter_mut().find(|t| t.name == team);
+        let identity = target.as_ref().map(|t| t.ai_identity);
+        let added = target.is_some_and(|t| t.players.insert(player));
+        if changed && let Some(changes) = &mut self.ai_changes {
+            changes.push(TeamAiChange::Member {
+                member,
+                team: identity,
+            });
+        }
+        added
     }
     pub fn remove_from_team(&mut self, player: &str) -> bool {
-        let Some(team) = self.team_of.remove(player) else {
+        let Some((member, team)) = self.team_of.remove_entry(player) else {
             return false;
         };
-        if let Some(t) = self.team_mut(&team) {
+        if let Some(t) = self.teams.iter_mut().find(|t| t.name == team) {
             t.players.remove(player);
+        }
+        if let Some(changes) = &mut self.ai_changes {
+            changes.push(TeamAiChange::Member { member, team: None });
         }
         true
     }
@@ -1258,7 +1409,7 @@ impl Scoreboard {
             let Some(name) = string_of(t.get("Name")) else {
                 continue;
             };
-            let team = sb.add_team(&name);
+            let mut team = sb.add_team(&name);
             if let Some(d) = t.get("DisplayName") {
                 team.display_name = tag_to_json(d);
             }
@@ -1280,6 +1431,7 @@ impl Scoreboard {
             team.collision_rule = string_of(t.get("CollisionRule"))
                 .and_then(|v| CollisionRule::by_name(&v))
                 .unwrap_or(CollisionRule::Always);
+            drop(team);
             if let Some(Tag::List(players)) = t.get("Players") {
                 for p in players {
                     if let Tag::String(p) = p {
@@ -1553,12 +1705,13 @@ mod tests {
             Some(serde_json::json!({"text": "S", "color": "red"}));
         sb.score_mut("Steve", "kills").number_format = Some(NumberFormat::Fixed(literal("many")));
         sb.set_display_objective("sidebar.team.red", Some("kills"));
-        let t = sb.add_team("red");
+        let mut t = sb.add_team("red");
         t.color = Some("red".into());
         t.prefix = literal("[R] ");
         t.allow_friendly_fire = false;
         t.nametag_visibility = Visibility::HideForOtherTeams;
         t.collision_rule = CollisionRule::PushOwnTeam;
+        drop(t);
         sb.add_to_team("Steve", "red");
         sb.objective_mut("hp").unwrap().number_format = Some(NumberFormat::Styled(
             serde_json::json!({"color": "gold", "bold": true}),
@@ -1643,5 +1796,64 @@ mod death_message_tests {
         let (key, args) = death_message_args("death.attack.arrow", &victim, &cause, None);
         assert_eq!(key, "death.attack.arrow");
         assert_eq!(args.len(), 2);
+    }
+}
+
+#[cfg(test)]
+mod ai_change_tests {
+    use super::*;
+    #[test]
+    fn canonical_membership_reports_changes_not_remove_add_implementation() {
+        let mut board = Scoreboard::default();
+        let red = board.add_team("red").ai_identity();
+        let blue = board.add_team("blue").ai_identity();
+        board.begin_ai_changes();
+        assert!(board.add_to_team("Alex", "red"));
+        let changes = board.take_ai_changes();
+        assert!(
+            matches!(&changes[..], [TeamAiChange::Member { member, team: Some(id) }] if &**member == "Alex" && *id == red)
+        );
+        board.recycle_ai_changes(changes);
+        assert!(board.add_to_team("Alex", "red")); // vanilla's result is still true
+        assert!(!board.remove_from_team("missing"));
+        assert!(!board.add_to_team("Alex", "missing"));
+        assert_eq!(board.players_team("Alex").unwrap().name, "red");
+        assert!(board.take_ai_changes().is_empty());
+        assert!(board.add_to_team("Alex", "blue"));
+        assert!(
+            matches!(&board.take_ai_changes()[..], [TeamAiChange::Member { team: Some(id), .. }] if *id == blue)
+        );
+        board.remove_team("blue");
+        assert!(board.players_team("Alex").is_none());
+        assert!(
+            matches!(&board.take_ai_changes()[..], [TeamAiChange::Member { team: None, .. }, TeamAiChange::Removed(id)] if *id == blue)
+        );
+    }
+    #[test]
+    fn mutable_team_reports_only_applied_combat_rules_and_keeps_identity() {
+        let mut board = Scoreboard::default();
+        let identity = board.add_team("red").ai_identity();
+        board.begin_ai_changes();
+        {
+            let mut team = board.team_mut("red").unwrap();
+            team.color = Some("gold".to_owned());
+            team.allow_friendly_fire = true;
+        }
+        assert!(board.take_ai_changes().is_empty());
+        {
+            let mut team = board.team_mut("red").unwrap();
+            team.allow_friendly_fire = false;
+            team.collision_rule = CollisionRule::Never;
+        }
+        assert!(
+            matches!(&board.take_ai_changes()[..], [TeamAiChange::Rules(TeamRules { identity: id, allow_friendly_fire: false, collision_rule: CollisionRule::Never })] if *id == identity)
+        );
+        board.add_team("another");
+        board.remove_team("another");
+        assert_eq!(board.team("red").unwrap().ai_identity(), identity);
+        board.end_ai_changes();
+        board.add_to_team("Alex", "red");
+        board.begin_ai_changes();
+        assert!(board.take_ai_changes().is_empty());
     }
 }

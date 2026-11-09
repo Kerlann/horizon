@@ -417,7 +417,10 @@ pub(super) fn sting_touching_mobs(m: &mut Mob, w: &MobWorld, events: &mut Vec<Mo
             && o.alive
             && !not_scary_for_pufferfish(o.species)
             && o.bounds.intersects(area)
-            && crate::scoreboard::TeamRules::allows_damage(own, w.teams.of(Who::Mob(o.id)))
+            && crate::scoreboard::TeamRules::allows_damage(
+                own.as_ref(),
+                w.teams.of(Who::Mob(o.id)).as_ref(),
+            )
         {
             events.push(MobEvent::PufferfishSting {
                 mob: mob_id,

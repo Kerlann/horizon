@@ -1702,7 +1702,9 @@ impl Game<'_> {
             {
                 return false;
             }
+            let before = self.player_ai_facts();
             f(self);
+            self.player_ai_facts_applied(before);
             return true;
         };
         self.as_guest(conn, f).is_some()
@@ -1721,7 +1723,9 @@ impl Game<'_> {
             {
                 return false;
             }
+            let before = self.player_ai_facts();
             f(self);
+            self.player_ai_facts_applied(before);
             return true;
         }
         let Some(host) = self.lan.as_ref() else {
