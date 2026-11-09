@@ -41,6 +41,7 @@ impl fmt::Display for BlockEntityPartError {
 
 impl std::error::Error for BlockEntityPartError {}
 
+// no wire: borrowed host or registrar backend; access stays scoped to the owning call.
 /// Builds one native block entity type during mod registration.
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct BlockEntityTypeBuilder<'a> {

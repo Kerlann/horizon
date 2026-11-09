@@ -4,6 +4,7 @@ use crate::{BlockState, Compound};
 /// Rotation of a template about its origin.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum StructureRotation {
     /// No rotation.
     None,
@@ -18,6 +19,7 @@ pub enum StructureRotation {
 /// Mirror applied before rotating a template.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum StructureMirror {
     /// No mirror.
     None,
@@ -30,6 +32,7 @@ pub enum StructureMirror {
 /// The transformed template size and blocks in vanilla placement order.
 #[derive(Clone, Debug, PartialEq, Default)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct StructureTemplateSnapshot {
     /// Size after rotation.
     pub size: [i32; 3],
@@ -40,6 +43,7 @@ pub struct StructureTemplateSnapshot {
 /// A transformed block and its optional block-entity data.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct StructureTemplateBlock {
     /// Position in the level.
     pub pos: [i32; 3],

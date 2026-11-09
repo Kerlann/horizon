@@ -66,7 +66,7 @@ use crate::{Host, LegacyRandom, LivingRef, MobRef};
 /// `Goal.Flag` set does: at most one goal holding each flag runs at a time, and
 /// a goal's flags are what a higher priority interrupts.
 // exhaustive: its field is private, so mods cannot build or destructure it
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash, horizon_mod_api_macros::Wire)]
 pub struct GoalFlags(u8);
 impl GoalFlags {
     /// The empty set: a goal no other goal competes with.
@@ -139,6 +139,7 @@ pub trait Goal: Send + Sync + 'static {
     }
 }
 
+// no wire: borrowed host or registrar backend; access stays scoped to the owning call.
 /// What the game hands an [`crate::EntityPart`]: the two selectors of the mob being
 /// built, as vanilla's `registerGoals` fills them.
 // exhaustive: its fields are private, so mods cannot build or destructure it
@@ -169,6 +170,7 @@ impl<'a> GoalRegistrar<'a> {
     }
 }
 
+// no wire: borrowed call-scoped view; transport uses owned snapshots rather than serializing references.
 /// The entity a [`GoalRegistrar`] is building goals for, at construction: its
 /// type id, the datum vanilla's per-species `registerGoals` branches on.
 // exhaustive: its fields are private, so mods cannot build or destructure it
@@ -198,6 +200,7 @@ pub trait GoalRegistrarBackend {
     fn mob_id(&self) -> &str;
 }
 
+// no wire: borrowed host or registrar backend; access stays scoped to the owning call.
 /// What a [`Goal`] runs with: its mob, the world read view of the mob's tick,
 /// the mob's own random, and the writes a goal makes to its own mob.
 ///

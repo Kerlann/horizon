@@ -3,6 +3,7 @@ use crate::{BlockEntityTypeKey, BlockKey, DimensionKey, EffectKey, FluidKey, Ite
 
 impl BlockKey {
     /// Validate an incoming slot against declarations, not a world's resolved mappings.
+    #[cfg(any(not(target_arch = "wasm32"), test))]
     pub(crate) fn from_slot(slot: u32) -> Result<Self, &'static str> {
         crate::parts::with_registering_keys(|registering| {
             registering
@@ -16,6 +17,7 @@ impl BlockKey {
 }
 
 impl FluidKey {
+    #[cfg(any(not(target_arch = "wasm32"), test))]
     pub(crate) fn from_slot(slot: u32) -> Result<Self, &'static str> {
         crate::parts::with_registering_keys(|registering| {
             let names = match registering {
@@ -31,6 +33,7 @@ impl FluidKey {
 }
 
 impl ItemKey {
+    #[cfg(any(not(target_arch = "wasm32"), test))]
     pub(crate) fn from_slot(slot: u32) -> Result<Self, &'static str> {
         crate::parts::with_registering_keys(|registering| {
             let names = match registering {
@@ -121,6 +124,7 @@ pub fn item_key_by_identifier(id: &crate::Identifier) -> Option<ItemKey> {
 
 impl EffectKey {
     /// Resolved effects also expose registry entries no mod explicitly requested.
+    #[cfg(any(not(target_arch = "wasm32"), test))]
     pub(crate) fn from_slot(slot: u32) -> Result<Self, &'static str> {
         crate::parts::with_registering_keys(|registering| {
             let names = match registering {
@@ -138,6 +142,7 @@ impl EffectKey {
 }
 
 impl BlockEntityTypeKey {
+    #[cfg(any(not(target_arch = "wasm32"), test))]
     pub(crate) fn from_slot(slot: u32) -> Result<Self, &'static str> {
         crate::parts::with_registering_keys(|registering| {
             let names = match registering {
@@ -160,6 +165,7 @@ impl DimensionKey {
     /// `minecraft:the_end`.
     pub const END: Self = Self(2);
 
+    #[cfg(any(not(target_arch = "wasm32"), test))]
     pub(crate) fn from_slot(slot: u32) -> Result<Self, &'static str> {
         let key = Self(slot);
         dimension_id(key).ok_or("unknown DimensionKey slot")?;
@@ -177,6 +183,7 @@ pub fn dimension_id(key: DimensionKey) -> Option<&'static str> {
     horizon_mod_runtime::registry_keys::dimension_id(key.0)
 }
 
+// no wire: process-local registration diagnostic retains a static hook or mod identity.
 /// A fluid requested by a mod but absent from the completed registry.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -377,6 +384,7 @@ pub fn effect_key_by_index(index: usize) -> Option<EffectKey> {
 }
 
 impl crate::BoolGameRuleKey {
+    #[cfg(any(not(target_arch = "wasm32"), test))]
     pub(crate) fn from_slot(slot: u32) -> Result<Self, &'static str> {
         crate::parts::with_registering_keys(|keys| {
             keys.unwrap_or(crate::parts::requested_keys())

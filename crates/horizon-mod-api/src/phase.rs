@@ -2,6 +2,7 @@
 /// The owning boundary that starts a data load.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum DataLoadOrigin {
     /// Server data loading, including a reload.
     ServerDataLoad,
@@ -12,6 +13,7 @@ pub enum DataLoadOrigin {
 /// The side that owns a resource-generation loop.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum LoopSide {
     /// A server loop.
     Server,
@@ -26,6 +28,7 @@ use std::{
 /// The permission boundary of the current owning thread. Only the game advances it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum ModPhase {
     /// Package discovery, before declarations.
     Packages,
@@ -57,6 +60,7 @@ thread_local! {
 /// A refused engine transition never changes the phase or dispatches a hook.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum PhaseError {
     /// The token belongs to another thread.
     WrongThread,
@@ -75,6 +79,7 @@ impl std::fmt::Display for PhaseError {
 }
 impl std::error::Error for PhaseError {}
 
+// no wire: thread-bound phase authority or RAII restoration guard; never transferred as data.
 /// Engine-only authority for one thread; moving it does not transfer authority.
 #[derive(Clone)]
 #[non_exhaustive]
@@ -150,6 +155,7 @@ impl PhaseOwner {
     }
 }
 
+// no wire: thread-bound phase authority or RAII restoration guard; never transferred as data.
 /// A temporary loader context, not authority transferred to a worker.
 // exhaustive: engine-only constructor and private state
 pub struct PhaseScope {
@@ -169,6 +175,7 @@ impl Drop for PhaseScope {
     }
 }
 
+// no wire: thread-bound phase authority or RAII restoration guard; never transferred as data.
 /// Engine-only phase scope, restored during unwinding too.
 // exhaustive: only the engine constructs it
 pub struct PhaseGuard<'a> {
@@ -192,6 +199,7 @@ pub fn current_phase() -> ModPhase {
 /// The catalog-owned access class of a generated game operation.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum LoadAccess {
     /// No extra load access beyond the phase's metadata/settings exceptions.
     WorldOnly,
@@ -376,6 +384,7 @@ pub fn install_guest_packages(packages: Vec<PackageInfo>) {
     let _ = PACKAGES.set(packages.into());
 }
 
+// no wire: shared immutable loader inventory; contexts query it through LoadReader rather than transferring its Arc storage.
 /// The registries and settings registration reads: captured by the engine once, before the
 /// first registration hook runs, and the same for every registration step. Lookups are binary
 /// searches over sorted lists, so a clone of the context copies nothing.
@@ -494,6 +503,7 @@ impl LoadedMods {
 /// Why a registration read was refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum RegistrationReadError {
     /// The engine supplied no registry or settings data to this context.
     Unavailable,
@@ -651,6 +661,7 @@ pub trait LoadReader: Sync {
     fn setting(&self, mod_id: &str, key: &str) -> Option<String>;
 }
 
+// no wire: borrowed phase-scoped host readers; authority stays with their owning thread.
 /// The game's owning load, as a [`DataLoadContext`].
 // hidden: the game's side of the context, not part of the mod surface
 #[doc(hidden)]
@@ -732,6 +743,7 @@ pub trait LoopReader: Sync {
     fn setting(&self, mod_id: &str, key: &str) -> Option<String>;
 }
 
+// no wire: borrowed phase-scoped host readers; authority stays with their owning thread.
 /// The game's loop, as a [`LoopContext`].
 // hidden: the game's side of the context, not part of the mod surface
 #[doc(hidden)]
@@ -799,6 +811,7 @@ pub trait WorldgenHost {
     fn mods(&self) -> LoadedMods;
 }
 
+// no wire: borrowed phase-scoped host readers; authority stays with their owning thread.
 /// The server's world generation, as a [`WorldgenHost`].
 // hidden: the game's side of the context, not part of the mod surface
 #[doc(hidden)]

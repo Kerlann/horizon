@@ -17,6 +17,7 @@ use std::{
 
 /// Horizon's vanilla server reload listeners and ordering boundaries.
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct VanillaServerListeners;
 impl VanillaServerListeners {
     /// Boundary before every reload listener.
@@ -140,6 +141,7 @@ impl dyn ServerReloadListeners + '_ {
     }
 }
 
+// no wire: process-local listener or callback storage; trait objects are invoked through host dispatch, not serialized.
 /// The game's [`ServerReloadListeners`].
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct ServerListenerRegistry {
@@ -206,6 +208,7 @@ impl ServerListenerRegistry {
     }
 }
 
+// no wire: process-local listener or callback storage; trait objects are invoked through host dispatch, not serialized.
 /// The ordered listeners and retained entries of one completed registration.
 #[non_exhaustive]
 pub struct OrderedServerReload {
@@ -215,6 +218,7 @@ pub struct OrderedServerReload {
     pub retained: Vec<RetainedEntry>,
 }
 
+// no wire: process-local listener or callback storage; trait objects are invoked through host dispatch, not serialized.
 /// One listener retained in the reload resources, as NeoForge's
 /// `ReloadableServerResources` keeps a manager.
 // exhaustive: its fields are private, so mods cannot build or destructure it
@@ -223,6 +227,7 @@ pub struct RetainedEntry {
     pub(crate) any: Arc<dyn Any + Send + Sync>,
 }
 
+// no wire: typed lookup key for process-local retained trait objects; phantom type identity is not transferable.
 /// A typed key to a retained reload listener, built by the registering mod
 /// and read back through `ReloadResources`. `ListenerKey::new` accepts any
 /// id; a key whose id does not match a registration, or whose type differs
@@ -282,6 +287,7 @@ impl dyn ServerReloadResources + '_ {
     }
 }
 
+// no wire: process-local listener or callback storage; trait objects are invoked through host dispatch, not serialized.
 /// The game's [`ServerReloadResources`].
 #[derive(Default)]
 // exhaustive: its fields are private, so mods cannot build or destructure it

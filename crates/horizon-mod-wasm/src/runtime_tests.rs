@@ -85,7 +85,7 @@ fn guest(layout: u64, body: &str) -> Vec<u8> {
 }
 fn module(body: &str) -> WasmMod {
     let engine = engine().unwrap();
-    let bytes = guest(mod_api::wire::LAYOUT, body);
+    let bytes = guest(*mod_api::wire::LAYOUT, body);
     WasmMod::instantiate(
         &engine,
         &[Member {
@@ -116,6 +116,37 @@ fn hook_round_trip_and_malformed_reply_poison() {
     assert_eq!(call(&module), None);
     assert!(module.running.poisoned.load(Ordering::Relaxed));
     assert_eq!(call(&module), None);
+}
+/// The reply a hook names is read only where it lies inside guest memory.
+#[test]
+fn a_reply_reaching_past_guest_memory_is_refused_and_one_ending_at_its_edge_is_read() {
+    fn invoke(reply: impl Fn(u64) -> u64) -> (u64, Result<usize, String>) {
+        let size = {
+            let module = module("i64.const 0");
+            let group = module.running.group.lock().unwrap();
+            group.store.data().memory.unwrap().data_size(&group.store) as u64
+        };
+        let module = module(&format!("i64.const {}", reply(size) as i64));
+        let mut group = module.running.group.lock().unwrap();
+        group.store.set_epoch_deadline(30_000);
+        let mut input = Writer::new();
+        input.put(&42u32);
+        let mut output = Vec::new();
+        let result = module
+            .invoke(&mut group.store.as_context_mut(), 0, &input, &mut output)
+            .map(|()| output.len())
+            .map_err(|error| error.to_string());
+        (size, result)
+    }
+    // The reply starts at 512 and ends exactly at the end of memory.
+    let (size, result) = invoke(|size| 512 << 32 | (size - 512));
+    assert_eq!(result, Ok(size as usize - 512));
+    // One byte longer reaches past the end.
+    let (_, result) = invoke(|size| 512 << 32 | (size - 511));
+    assert_eq!(result, Err("reply outside memory".into()));
+    // An error reply (length u32::MAX) that starts past the end.
+    let (_, result) = invoke(|size| (size + 1) << 32 | u64::from(u32::MAX));
+    assert_eq!(result, Err("error reply outside memory".into()));
 }
 #[test]
 fn encoding_failure_refuses_partial_arguments() {
@@ -511,7 +542,7 @@ fn linker_heap_symbols_follow_all_members_static_data() {
 
 #[test]
 fn boundary_exports_are_per_member_but_other_horizon_symbols_are_not() {
-    let bytes = guest(mod_api::wire::LAYOUT, "i64.const 0");
+    let bytes = guest(*mod_api::wire::LAYOUT, "i64.const 0");
     let engine = engine().unwrap();
     let modules = WasmMod::instantiate(
         &engine,
@@ -562,7 +593,7 @@ fn loader_initializes_and_installs_a_wasm_entry() {
     )
     .unwrap();
     let module = guest(
-        mod_api::wire::LAYOUT,
+        *mod_api::wire::LAYOUT,
         r#"local.get 0 i32.const -256 i32.eq if (result i64)
             i32.const 4096 local.get 2 i32.store
             i32.const 2048 local.get 1 local.get 2 memory.copy
@@ -619,7 +650,7 @@ fn invalid_import_input_is_a_trap_not_a_host_panic() {
 #[test]
 fn layout_mismatch_is_a_mods_page_refusal() {
     let engine = engine().unwrap();
-    let bytes = guest(mod_api::wire::LAYOUT ^ 1, "i64.const 0");
+    let bytes = guest(*mod_api::wire::LAYOUT ^ 1, "i64.const 0");
     let refusal = WasmMod::instantiate(
         &engine,
         &[Member {
@@ -643,7 +674,7 @@ fn point_record_layout_mismatch_is_refused() {
         (func (export "horizon_layout_ext") (result i64) i64.const {})
         (func (export "horizon_in") (param i32) (result i32) i32.const 0)
         (func (export "horizon_hook") (param i32) (result i64) i64.const 0))"#,
-        mod_api::wire::LAYOUT,
+        *mod_api::wire::LAYOUT,
         mod_points::POINT_LAYOUT ^ 1
     ))
     .unwrap();

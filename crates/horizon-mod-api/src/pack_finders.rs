@@ -5,6 +5,7 @@ use crate::{Identifier, Text};
 /// Which repository is being discovered.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum PackType {
     /// Client assets selected in Resource Packs.
     ClientResources,
@@ -16,6 +17,7 @@ pub enum PackType {
 /// among the world's experiments when their metadata declares feature flags.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum PackSource {
     /// A pack supplied by a mod, labelled as built in.
     BuiltIn,
@@ -26,6 +28,7 @@ pub enum PackSource {
 /// Where an always-active pack enters a selection that does not already name it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum PackPosition {
     /// Above other packs, giving its resources higher priority.
     Top,
@@ -43,6 +46,7 @@ pub enum PackPosition {
 /// determines their default priority (later resource layers win).
 #[derive(Clone, Debug)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct PackRegistration {
     /// Mod id and logical directory beneath that mod's package root.
     pub location: Identifier,
@@ -74,6 +78,7 @@ impl PackRegistration {
 /// A registration that the repository could not accept. No partial pack is added.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum PackFinderError {
     /// The title failed component conversion; no pack was added.
     Text(crate::TextFormError),

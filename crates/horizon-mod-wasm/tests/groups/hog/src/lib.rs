@@ -2,12 +2,13 @@
 //! group's memory allows: `hold` keeps the buffer, `grab` asks for one as big, `grab_all` asks for
 //! more than the group's memory could ever hold.
 use mod_api::{Flow, Hooks, Registrar, RegistrationContext, ServerChatEvent, ServerHost, Text};
+use std::mem::MaybeUninit;
 use std::sync::atomic::{AtomicPtr, AtomicU32, AtomicUsize, Ordering::Relaxed};
 
 const MIB: usize = 1 << 20;
 
 /// The buffer this mod holds: a leaked slice, so the evictor frees it without allocating or locking.
-static HELD: AtomicPtr<u8> = AtomicPtr::new(std::ptr::null_mut());
+static HELD: AtomicPtr<MaybeUninit<u8>> = AtomicPtr::new(std::ptr::null_mut());
 static HELD_LEN: AtomicUsize = AtomicUsize::new(0);
 /// How many times the group's allocator asked this mod to give memory back.
 static EVICTED: AtomicU32 = AtomicU32::new(0);
@@ -35,7 +36,9 @@ impl Hooks for Mod {
         let answer = match event.raw_text {
             "" => return Flow::Continue,
             "hold" => {
-                let held = Box::leak(vec![1u8; 150 * MIB].into_boxed_slice());
+                // Exercise allocation and eviction, not a 150 MiB byte-fill loop inside a
+                // time-bounded hook. The fixture never reads the held allocation.
+                let held = Box::leak(Box::<[u8]>::new_uninit_slice(150 * MIB));
                 HELD_LEN.store(held.len(), Relaxed);
                 HELD.store(held.as_mut_ptr(), Relaxed);
                 "held"

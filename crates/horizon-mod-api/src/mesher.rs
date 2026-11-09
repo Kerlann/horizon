@@ -6,6 +6,7 @@ use crate::*;
 /// where the block is, or a fixed colour (0xRRGGBB).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TintSource {
     Grass,
     Foliage,

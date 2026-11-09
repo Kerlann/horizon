@@ -218,6 +218,17 @@ impl Game<'_> {
         self.native_level_world(level)?;
         DIFFICULTIES.get(usize::from(self.ui.difficulty)).copied()
     }
+    /// `ServerLevel.getCurrentDifficultyAt(pos)` in the level the handle names, in place or
+    /// parked.
+    pub(super) fn level_local_difficulty(
+        &self,
+        level: LevelRef,
+        pos: [i32; 3],
+    ) -> Option<mod_api::NativeDifficulty> {
+        let world = self.native_level_world(level)?;
+        let at = pos.map(f64::from);
+        Some(super::creatures::local_difficulty_in(world, at).into())
+    }
     /// Read a registered boolean game rule.
     pub(super) fn level_game_rule_bool(
         &self,

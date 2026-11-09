@@ -19,6 +19,7 @@ use horizon_core::{
 use horizon_world::{
     block_collision::BlockCollisionRegistry,
     level::portal_travel::{BorderBounds, find_free_position},
+    movement_properties::BoundMovementProperties,
 };
 
 /// Gravity applied each tick when the item is not in a fluid (`ItemEntity.tick`).
@@ -67,30 +68,21 @@ fn slime_support_name(block: &str, moving_moved: Option<&str>) -> bool {
     block == "minecraft:slime_block" || moving_moved == Some("minecraft:slime_block")
 }
 
-/// The block under an item, including `Entity.getOnPos` (~1e-5) as well as the
-/// friction sample (`y - 0.999999`). A piston-moved slime is `moving_piston`
-/// with `movedState = slime`, which has the bounce, not the moving piston.
-fn item_support_is_slime(world: &World, facts: &BlockFacts, position: Vec3) -> bool {
-    let x = position.x.floor() as i32;
-    let z = position.z.floor() as i32;
-    let friction_y = (position.y - 0.999_999).floor() as i32;
-    let on_y = (position.y - f64::from(1.0e-5_f32)).floor() as i32;
-    slime_at(world, facts, x, friction_y, z)
-        || (on_y != friction_y && slime_at(world, facts, x, on_y, z))
-}
-
-fn slime_at(world: &World, facts: &BlockFacts, x: i32, y: i32, z: i32) -> bool {
-    let block = &*facts.get(world.block(x, y, z)).name;
+/// A piston-moved slime is `moving_piston` with `movedState = slime`.
+fn slime_at(world: &World, facts: &BlockFacts, position: BlockPos) -> bool {
+    let block = &*facts
+        .get(world.block(position.x, position.y, position.z))
+        .name;
     let moving_moved = world
         .moving_pistons
         .iter()
-        .find(|(pos, _)| *pos == [x, y, z])
+        .find(|(pos, _)| *pos == [position.x, position.y, position.z])
         .map(|(_, piston)| &*facts.get(piston.moved_state).name);
     slime_support_name(block, moving_moved)
 }
 
 mod fluids;
-pub use fluids::{fluid_flow, update_entity_fluids};
+pub use fluids::{fluid_flow, update_entity_fluids, water_clip};
 
 #[cfg(test)]
 mod drop_motion_tests {
@@ -393,7 +385,7 @@ pub struct ItemStep {
     old_velocity: Vec3,
     landed: Option<(BlockPos, f64)>,
     movement: Option<Vec3>,
-    clipped_vertical: bool,
+    pub vertical_contact: Option<BlockPos>,
 }
 impl ItemStep {
     /// The landing position and accumulated fall distance, before block contact.
@@ -415,7 +407,7 @@ impl ItemEntity {
         fluids: &crate::motion::FluidResources,
         entity_boxes: &[Aabb],
         border: Option<&BorderGeometry>,
-        blocks: Option<&horizon_world::movement_properties::BoundMovementProperties>,
+        blocks: Option<&BoundMovementProperties>,
     ) -> bool {
         let (water, lava) =
             self.update_fluids(world, fluids, crate::test_resources::server_loop_context());
@@ -707,14 +699,15 @@ impl ItemEntity {
             heights,
             entity_boxes,
             border,
+            blocks,
         );
         self.finish_move_block_effects(world, facts, no_physics, blocks, step, context);
         step
     }
 
-    /// Resolve the item's move before the owner handles block contact and
-    /// resumes the normal block effects. `escape_speed`: with `no_physics` on
-    /// a server, the speed of `Entity.moveTowardsClosestSpace`
+    /// `Entity.move`: resolve the item's move before the owner handles block
+    /// contact and resumes block effects. `escape_speed`: with `no_physics`
+    /// on a server, the speed of `Entity.moveTowardsClosestSpace`
     /// (`nextFloat() * 0.2 + 0.1`).
     pub fn tick_move_before_block_effects(
         &mut self,
@@ -726,6 +719,7 @@ impl ItemEntity {
         (water_height, lava_height): (f64, f64),
         entity_boxes: &[Aabb],
         border: Option<&BorderGeometry>,
+        blocks: Option<&BoundMovementProperties>,
     ) -> ItemStep {
         self.ticks += 1;
         self.previous = self.position;
@@ -832,23 +826,25 @@ impl ItemEntity {
             if moved.z != wanted.z {
                 self.velocity.z = 0.0;
             }
-            if moved.y != wanted.y {
-                // Entity.move restitutes instead of zeroing Y. A slime block
-                // (or a moving piston carrying one) bounces a dropped item;
-                // MovingPistonBlock itself has no bounceRestitution.
-                let slime = item_support_is_slime(world, facts, self.position);
+            let vertical_contact = if self.vertical_collision && !no_physics {
+                let contact = self.vertical_contact(world, collision, blocks, moved);
+                let slime =
+                    self.on_ground && contact.is_some_and(|pos| slime_at(world, facts, pos));
                 self.velocity.y = vertical_collision_velocity(
                     wanted.y,
                     moved.y,
                     ITEM_GRAVITY,
-                    wanted.y < 0.0,
+                    self.on_ground,
                     slime,
                 );
-            }
+                contact
+            } else {
+                None
+            };
             return ItemStep {
                 old_velocity,
+                vertical_contact,
                 movement: Some(moved),
-                clipped_vertical: !no_physics && moved.y != wanted.y,
                 landed,
             };
         }
@@ -859,23 +855,21 @@ impl ItemEntity {
         ItemStep {
             old_velocity,
             landed: None,
+            vertical_contact: None,
             movement: None,
-            clipped_vertical: false,
         }
     }
 
-    /// The block at `Entity.getOnPosLegacy` for this tick's clipped move.
-    /// Idle ticks retain the entity's collision flags but have no contact.
-    pub fn vertical_contact(
+    /// `Entity.getOnPosLegacy` for a clipped move. Resolve the support under
+    /// the full item box: at a honey wall, its center can be outside the slime
+    /// block even though its box landed on it.
+    fn vertical_contact(
         &self,
         world: &World,
         collision: &BlockCollisionRegistry<'_>,
-        blocks: &horizon_world::movement_properties::BoundMovementProperties,
-        step: ItemStep,
+        blocks: Option<&BoundMovementProperties>,
+        movement: Vec3,
     ) -> Option<BlockPos> {
-        if !step.clipped_vertical {
-            return None;
-        }
         let mut scene = SceneCollisions {
             world,
             binding: collision,
@@ -883,7 +877,7 @@ impl ItemEntity {
         };
         let mut ground = horizon_world::ground_support::GroundState::default();
         ground
-            .check_support(self.on_ground, self.bounds(), step.movement, |bounds| {
+            .check_support(self.on_ground, self.bounds(), Some(movement), |bounds| {
                 horizon_world::ground_support::find_supporting_block(
                     &mut scene,
                     horizon_world::collision_context::CollisionContext::empty(false),
@@ -893,12 +887,19 @@ impl ItemEntity {
                 )
             })
             .ok()?;
-        Some(crate::motion::legacy_block_support_at(
-            world,
-            blocks,
-            self.position,
-            ground.supporting_block,
-        ))
+        if let Some(blocks) = blocks {
+            return Some(crate::motion::legacy_block_support_at(
+                world,
+                blocks,
+                self.position,
+                ground.supporting_block,
+            ));
+        }
+        // Standalone tests can omit the movement table and its fence/wall tags.
+        Some(ground.supporting_block.unwrap_or_else(|| {
+            let offset = f64::from(horizon_world::movement_support::LEGACY_SUPPORT_OFFSET);
+            BlockPos::containing(self.position.subtract(Vec3::new(0.0, offset, 0.0)))
+        }))
     }
 
     /// Resume the normal block effects after the collision response.
@@ -907,7 +908,7 @@ impl ItemEntity {
         world: &World,
         facts: &BlockFacts,
         no_physics: bool,
-        blocks: Option<&horizon_world::movement_properties::BoundMovementProperties>,
+        blocks: Option<&BoundMovementProperties>,
         step: ItemStep,
         context: &horizon_world::native_load_context::LoopContext,
     ) {
@@ -2532,7 +2533,7 @@ impl ArmorStand {
             position,
             previous: position,
             velocity: Vec3::ZERO,
-            on_ground: true,
+            on_ground: false,
             yaw,
             previous_yaw: yaw,
             equipment: Default::default(),
@@ -4285,8 +4286,8 @@ mod slime_bounce_tests {
             true,
             ItemStep {
                 old_velocity: item.velocity,
+                vertical_contact: None,
                 movement: Some(item.velocity),
-                clipped_vertical: false,
                 landed: None,
             },
         );

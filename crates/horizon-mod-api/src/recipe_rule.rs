@@ -4,6 +4,7 @@ use crate::{Ingredient, ItemStack, Tag};
 /// The explosion shape selected by a firework recipe.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum FireworkShape {
     /// Small spherical explosion.
     #[default]
@@ -63,6 +64,7 @@ mod shape_tests {
 /// actual grid's output and remainders.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct RecipeTemplate {
     /// Replacement item, or `None` to keep the rule's input item.
     pub item: Option<String>,
@@ -86,6 +88,7 @@ impl RecipeTemplate {
 /// An ingredient that chooses a firework star's explosion shape.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct FireworkShapeIngredient {
     /// Shape selected by this ingredient.
     pub shape: FireworkShape,
@@ -102,6 +105,7 @@ impl FireworkShapeIngredient {
 /// A trim pattern registry reference or an inline pattern definition.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum RecipeTrimPattern {
     /// Registry identifier.
     Reference(String),
@@ -126,6 +130,7 @@ pub enum RecipeTrimPattern {
 /// instead of inventing a vanilla rule.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum RecipeRule {
     /// A stonecutter input and fixed result.
     Stonecutting {
@@ -283,6 +288,7 @@ pub enum RecipeRule {
 /// Refusal when decoding a recipe-file field.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum RecipeJsonError {
     /// The text is not syntactically valid JSON.
     InvalidJson,

@@ -1,5 +1,6 @@
 use mod_api::Hooks;
 
+pub mod area_macros;
 pub mod shutdown;
 pub use shutdown::on_shutdown;
 

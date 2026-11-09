@@ -42,6 +42,7 @@ pub fn dedup_keep_order(items: &mut Vec<String>) {
     let mut seen = std::collections::HashSet::new();
     items.retain(|i| seen.insert(i.clone()));
 }
+// no wire: private parser working state includes engine NBT and unordered lookup sets; not an API transport value.
 /// The walk both ingredient kinds share: a string (an id or `#tag`, as
 /// `tags` resolves it), a list of them, or NeoForge's three shapes with
 /// their children walked the same way, each answered by the flat list of
@@ -65,11 +66,13 @@ pub struct WalkedIngredient {
     /// file wrote it, without the wrapper's answer.
     pub custom: Option<(String, horizon_core::nbt::Compound)>,
 }
+// no wire: borrowed parser or registration callbacks execute only in their owning process.
 /// The wrapper's answer for a kind outside the standard shapes: the ids it
 /// matches, taken out of its metadata, or none to fail the file.
 // hidden: the game-owned ingredient adapter supplies custom ids while walking JSON.
 #[doc(hidden)]
 pub type CustomIds<'a> = &'a dyn Fn(&mut horizon_core::nbt::Compound) -> Option<Vec<String>>;
+// no wire: borrowed parser or registration callbacks execute only in their owning process.
 /// Game-owned JSON-to-NBT boundary for the hidden recipe parser.
 // hidden: supplied by the game's ingredient adapter to the parser, not a mod-facing type.
 #[doc(hidden)]

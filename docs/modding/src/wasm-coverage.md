@@ -58,6 +58,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `ServerHost::boss_bars` | crosses | Wire call |
 | `ServerHost::create_boss_bar` | crosses | Wire call |
 | `ServerHost::tick_stats` | crosses | Wire call |
+| `ServerHost::set_tick_rate` | crosses | Wire call |
 | `ServerHost::reload_resources` | crosses | frame accessor; no bytes |
 | `ServerHost::display` | crosses | Wire call |
 | `ServerHost::summon` | crosses | Wire call |
@@ -376,6 +377,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `Backend::level_sea_level` | crosses | Wire call |
 | `Backend::level_seed` | crosses | Wire call |
 | `Backend::level_difficulty` | crosses | Wire call |
+| `Backend::level_local_difficulty` | crosses | Wire call |
 | `Backend::level_game_rule_bool` | crosses | Wire call |
 | `Backend::level_game_rule` | crosses | Wire call |
 | `Backend::level_game_rules` | crosses | Wire call |
@@ -672,6 +674,12 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `BackendMut::level_set_map_data` | crosses | Wire call |
 | `BackendMut::level_block_tick` | crosses | Wire call |
 | `BackendMut::level_request_save` | crosses | Wire call |
+| `BackendMut::level_set_world_border_center` | crosses | Wire call |
+| `BackendMut::level_set_world_border_size` | crosses | Wire call |
+| `BackendMut::level_set_world_border_damage` | crosses | Wire call |
+| `BackendMut::level_set_world_border_warning` | crosses | Wire call |
+| `BackendMut::level_set_weather` | crosses | Wire call |
+| `BackendMut::level_set_weather_levels` | crosses | Wire call |
 | `BackendMut::level_block_random_tick` | crosses | Wire call |
 | `BackendMut::level_fluid_tick` | crosses | Wire call |
 | `BackendMut::level_lightning_target` | crosses | Wire call |
@@ -1657,6 +1665,7 @@ Surface methods excluding unbound and Not on wasm. Generated from both sides' sh
 | `BlockPart::clone_item_stack` | crosses | Wire call |
 | `BlockPart::connects_to` | crosses | Wire call |
 | `BlockPart::contents_changed` | crosses | Wire call |
+| `BlockPart::dispense_method` | crosses | Wire call |
 | `BlockPart::entity_inside` | crosses | Wire call |
 | `BlockPart::is_pathfindable` | crosses | Wire call |
 | `BlockPart::item_after_vertical_collision` | crosses | Wire call |

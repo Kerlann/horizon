@@ -2,6 +2,7 @@
 use crate::ItemKey;
 use horizon_core::nbt::{Compound, JavaString, Tag};
 use std::num::NonZeroU32;
+use std::sync::Arc;
 
 /// A typed descriptor for one component in an item's component patch.
 /// Implementations own the conversion between their value and Minecraft NBT.
@@ -42,7 +43,9 @@ impl From<&Components> for Compound {
 
 /// A nonempty, owned item value. Maxima are checked when the game accepts a write,
 /// not by this record: item definitions and effective component overrides belong to the game.
-/// `Clone` deep-copies a nonempty component patch; an absent patch allocates nothing.
+/// The component patch is shared copy-on-write: `Clone` counts a reference instead of
+/// copying it, the first write through a shared stack copies the patch once, and equality
+/// of two stacks that still share it is a pointer comparison. An absent patch allocates nothing.
 ///
 /// An untouched mutable stack hook argument retains its engine value without
 /// write validation, even when the engine value exceeds effective maxima. Equality
@@ -57,12 +60,13 @@ pub struct ItemStack {
     item: ItemKey,
     count: NonZeroU32,
     damage: Option<u32>,
-    components: Option<Box<Components>>,
+    components: Option<Arc<Components>>,
 }
 
 /// A stack operation could not represent the requested count.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum StackError {
     /// Empty stacks are represented by `None`, not by a zero-count item.
     Empty,
@@ -88,6 +92,7 @@ impl std::error::Error for StackError {}
 /// Why the game refused to accept an owned stack at a write boundary.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum StackWriteError {
     /// A text field failed component conversion before this write.
     Text(crate::text::TextFormError),
@@ -135,6 +140,7 @@ impl crate::NoBackend for StackWriteError {
 /// The two nonempty portions of a consuming split. Either portion can be absent.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct StackSplit {
     /// Up to the requested number of items.
     pub taken: Option<ItemStack>,
@@ -188,12 +194,7 @@ impl ItemStack {
     /// Set damage. The game checks the effective maximum when accepting this value.
     pub fn set_damage(&mut self, damage: u32) {
         self.damage = Some(damage);
-        if let Some(patch) = &mut self.components {
-            patch.patch.remove(&JavaString::from("!minecraft:damage"));
-            if patch.patch.is_empty() {
-                self.components = None;
-            }
-        }
+        self.remove_patch_entries(&[JavaString::from("!minecraft:damage")]);
     }
     /// Remove the effective damage component, including an inherited default.
     /// The patch stores a real NBT removal, never a second numeric damage value.
@@ -283,7 +284,7 @@ impl ItemStack {
                 return Err(StackError::ConflictingDamage);
             }
         }
-        let patch = &mut self.components.get_or_insert_with(Default::default).patch;
+        let patch = &mut Arc::make_mut(self.components.get_or_insert_with(Default::default)).patch;
         patch.remove(&JavaString::from(format!("!{id}").as_str()));
         patch.insert(JavaString::from(id), value);
         Ok(())
@@ -296,23 +297,31 @@ impl ItemStack {
         if id == "minecraft:damage" {
             self.damage = None;
         }
+        let removed = JavaString::from(format!("!{id}").as_str());
         if removal {
-            self.components.get_or_insert_with(Default::default);
+            let patch =
+                &mut Arc::make_mut(self.components.get_or_insert_with(Default::default)).patch;
+            patch.remove(&JavaString::from(id));
+            patch.insert(removed, Tag::Compound(Compound::new()));
+            return;
         }
-        if let Some(components) = &mut self.components {
-            components.patch.remove(&JavaString::from(id));
-            components
-                .patch
-                .remove(&JavaString::from(format!("!{id}").as_str()));
-            if removal {
-                components.patch.insert(
-                    JavaString::from(format!("!{id}").as_str()),
-                    Tag::Compound(Compound::new()),
-                );
-            }
-            if components.patch.is_empty() {
-                self.components = None;
-            }
+        self.remove_patch_entries(&[JavaString::from(id), removed]);
+    }
+    /// Remove entries from an existing patch. A shared patch is copied only when one of
+    /// the keys is present; the patch is released when its last entry is removed.
+    fn remove_patch_entries(&mut self, keys: &[JavaString]) {
+        let Some(components) = &mut self.components else {
+            return;
+        };
+        if !keys.iter().any(|key| components.patch.contains_key(key)) {
+            return;
+        }
+        let patch = &mut Arc::make_mut(components).patch;
+        for key in keys {
+            patch.remove(key);
+        }
+        if patch.is_empty() {
+            self.components = None;
         }
     }
     /// The component patch, if this stack has overrides.
@@ -343,7 +352,7 @@ impl ItemStack {
             return Err(StackError::ConflictingDamage);
         }
         self.damage = next;
-        self.components = (!patch.is_empty()).then(|| Box::new(Components::from(patch)));
+        self.components = (!patch.is_empty()).then(|| Arc::new(Components::from(patch)));
         Ok(())
     }
     /// Decode the item NBT escape using this host's load-resolved item ids.
@@ -472,5 +481,67 @@ mod tests {
         assert!(other.components().is_none());
         stack.remove(&Number);
         assert!(stack.is_stackable_with(&other));
+    }
+
+    struct Other;
+    impl Component for Other {
+        type Value = i32;
+        fn id(&self) -> &str {
+            "test:other"
+        }
+        fn decode(&self, value: &Tag) -> Option<i32> {
+            Number.decode(value)
+        }
+        fn encode(&self, value: i32) -> Tag {
+            Number.encode(value)
+        }
+    }
+
+    fn patch(stack: &ItemStack) -> &Arc<Components> {
+        stack.components.as_ref().expect("stack has a patch")
+    }
+
+    #[test]
+    fn a_hook_snapshot_shares_the_patch_and_a_write_copies_it_once() {
+        let mut argument = ItemStack::of(ItemKey(0));
+        argument.set(&Number, 7).unwrap();
+        // The stack crossing snapshots a mutable argument before the listener runs.
+        let snapshot = argument.clone();
+        assert!(Arc::ptr_eq(patch(&argument), patch(&snapshot)));
+        assert_eq!(Arc::strong_count(patch(&snapshot)), 2);
+        assert_eq!(
+            argument, snapshot,
+            "an untouched argument compares unchanged"
+        );
+
+        argument.set(&Number, 8).unwrap();
+        assert!(!Arc::ptr_eq(patch(&argument), patch(&snapshot)));
+        assert_eq!(Arc::strong_count(patch(&snapshot)), 1);
+        let copied = Arc::as_ptr(patch(&argument));
+        argument.set(&Number, 9).unwrap();
+        assert_eq!(
+            Arc::as_ptr(patch(&argument)),
+            copied,
+            "the copy is made once"
+        );
+        assert_eq!(snapshot.get(&Number), Some(7));
+        assert_ne!(argument, snapshot);
+    }
+
+    #[test]
+    fn removing_absent_entries_keeps_the_patch_shared() {
+        let mut stack = ItemStack::of(ItemKey(0));
+        stack.set(&Number, 7).unwrap();
+        let snapshot = stack.clone();
+        stack.set_damage(3);
+        stack.remove(&Other);
+        assert!(Arc::ptr_eq(patch(&stack), patch(&snapshot)));
+
+        stack.remove(&Number);
+        assert!(
+            stack.components().is_none(),
+            "the last removal releases the patch"
+        );
+        assert_eq!(snapshot.get(&Number), Some(7));
     }
 }

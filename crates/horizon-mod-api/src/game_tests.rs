@@ -3,7 +3,7 @@ use crate::ServerHost;
 use std::{collections::BTreeMap, sync::Arc};
 
 /// The outcome of a function invocation. Pending keeps the runner's timeout active.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, horizon_mod_api_macros::Wire)]
 pub enum GameTestResult {
     /// Complete this attempt successfully.
     Pass,
@@ -16,6 +16,7 @@ pub enum GameTestResult {
 
 /// API-owned coordinates for one attempt, valid only during its callback.
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct GameTestContext {
     /// The server level containing this attempt.
     pub level: crate::LevelRef,
@@ -52,6 +53,7 @@ pub trait GameTestFunction: Send + Sync {
 /// Metadata for a function test added to the world's test-instance registry.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct GameTestDefinition {
     /// Structure template to place.
     pub structure: String,

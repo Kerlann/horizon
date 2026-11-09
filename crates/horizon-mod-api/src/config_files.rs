@@ -81,6 +81,7 @@ impl ConfigPath {
 /// What a path holds.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum ConfigEntryKind {
     /// A file.
     File,
@@ -91,6 +92,7 @@ pub enum ConfigEntryKind {
 /// A file's or folder's size and age (`java.io.File.length`/`lastModified`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ConfigStat {
     /// Whether the path is a file or a folder.
     pub kind: ConfigEntryKind,
@@ -103,6 +105,7 @@ pub struct ConfigStat {
 /// One entry of a folder.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ConfigEntry {
     /// The entry's name, without its folder.
     pub name: String,
@@ -113,6 +116,7 @@ pub struct ConfigEntry {
 /// Why a config file call was refused.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum ConfigFileError {
     /// Called outside any mod's hook or part, so no mod owns the call.
     NoCallingMod,
@@ -194,6 +198,7 @@ pub(crate) mod built {
     #[allow(unused_imports)]
     use super::*;
     // exhaustive: the game builds it with a literal; mods only read it
+    #[derive(horizon_mod_api_macros::Wire)]
     pub struct ConfigStat {
         pub kind: ConfigEntryKind,
         pub len: u64,
@@ -214,6 +219,7 @@ pub(crate) mod built {
         }
     }
     // exhaustive: the game builds it with a literal; mods only read it
+    #[derive(horizon_mod_api_macros::Wire)]
     pub struct ConfigEntry {
         pub name: String,
         pub stat: super::ConfigStat,

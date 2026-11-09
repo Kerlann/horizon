@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 /// A registered game rule's typed value. Case order is part of the wasm link contract.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum GameRuleValue {
     /// Boolean game rule value.
     Bool(bool),

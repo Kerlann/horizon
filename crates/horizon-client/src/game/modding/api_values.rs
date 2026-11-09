@@ -714,7 +714,8 @@ impl TryIntoEngine for mod_api::ItemResource {
     }
 }
 
-/// Encode an API value for a read-only engine predicate, without imposing resident maxima.
+/// Encode an API value for a read-only predicate or drawing, without imposing resident maxima.
+/// Unknown keys and unrepresentable/invalid effect payloads still refuse conversion.
 /// The write conversion below adds authoritative registry-dependent validation.
 pub(in crate::game) fn stack_value(value: &ApiStack) -> Result<EngineStack, StackWriteError> {
     let id = mod_api::__private::item_key_id(value.item()).ok_or(StackWriteError::UnknownItem)?;
@@ -1096,9 +1097,7 @@ impl mod_api::menu::SlotView for ApiSlot<'_> {
         self.engine.item().and_then(|s| s.try_into_api().ok())
     }
     fn may_place(&self, stack: &ApiStack) -> bool {
-        stack
-            .try_into_engine(self.engine.items())
-            .is_ok_and(|s| self.engine.may_place(&s))
+        stack_value(stack).is_ok_and(|s| self.engine.may_place(&s))
     }
     fn may_pickup(&self) -> bool {
         self.engine.may_pickup()
@@ -2244,6 +2243,10 @@ mod mutable_output_tests {
         );
     }
 }
+
+#[cfg(test)]
+#[path = "api_values/read_stack_tests.rs"]
+mod read_stack_tests;
 
 #[cfg(test)]
 mod stack_limit_tests {

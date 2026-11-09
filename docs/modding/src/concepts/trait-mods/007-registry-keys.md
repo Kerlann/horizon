@@ -172,6 +172,12 @@ predicate occurs anywhere in the tree; a displayed item list is not a safe subst
 The sample's `ProcessingRecipes::publish` retains these keys; `result` then checks
 `input.item()` locally, with no `Ingredient::test` host call per candidate.
 
+Stack placement predicates and drawing consumers (HUD items, GUI item decorations,
+block-entity items and tooltip images) encode API stacks without enforcing resident
+count or damage maxima. Engine-legal over-limit stacks can still be inspected and drawn.
+Unknown item keys and invalid/unrepresentable effect payloads still refuse encoding;
+this is not a total conversion. Insertion and other world writes retain strict validation.
+
 ### API-owned values: migration table
 
 | Previous engine value | API-owned value | Mod changes |

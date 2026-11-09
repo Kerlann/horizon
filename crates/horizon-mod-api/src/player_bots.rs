@@ -2,6 +2,7 @@
 /// (`ClientInput`, `LocalPlayer.aiStep`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct NativePlayerInput {
     /// Forward (1) or back (-1); in between is a stick's partial push.
     pub forward: f32,
@@ -25,6 +26,7 @@ pub struct NativePlayerInput {
 /// Where a bot's tick took it (`native_simulate_player_move`).
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct NativeSimulatedMove {
     /// Feet position after the simulated tick.
     pub position: [f64; 3],

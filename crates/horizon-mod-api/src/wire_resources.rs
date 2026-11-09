@@ -19,6 +19,7 @@ pub trait ResourceCodec {
 /// Typed resources never use this marker; their zero identity is still stale.
 #[doc(hidden)]
 #[derive(Debug)]
+// no wire: resource-table refusal sentinel, not an owned data value.
 pub struct Unsupported {
     pub reason: &'static str,
 }
@@ -39,6 +40,7 @@ impl Unsupported {
 // exhaustive: wasm boundary plumbing that generated code builds field by field
 /// A lease's scope ended, or the caller left its owning thread.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+// no wire: local resource-scope diagnostics.
 pub enum ScopeError {
     Stale,
     WrongThread,
@@ -55,6 +57,7 @@ impl std::error::Error for ScopeError {}
 // exhaustive: wasm boundary plumbing that generated code builds field by field
 /// A non-owning native lease. Checking it never retains the scope, codec, or pointee.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+// no wire: native resource-scope authority, never transferred as data.
 pub struct ScopeToken {
     slot: usize,
     generation: u64,
@@ -117,6 +120,7 @@ thread_local! { static ACTIVE: RefCell<Scopes> = RefCell::new(Scopes::default())
 // exhaustive: wasm boundary plumbing that generated code builds field by field
 /// A detached value lease. It never installs a codec or attests a native call root.
 /// Its lifetime is independent of the active resource scopes.
+// no wire: owns a native resource-scope lease.
 pub struct ScopeLease {
     token: ScopeToken,
     _thread: std::marker::PhantomData<Rc<()>>,
@@ -193,6 +197,7 @@ impl Drop for ScopeLease {
 /// Activates a call's codec, including guest-to-host-to-guest callbacks. Dropping scopes
 /// out of order unlinks them: a retained inner guard cannot revive an expired outer codec.
 /// Slots are reused, so steady-state calls allocate no scope bookkeeping.
+// no wire: native resource-table ownership and lifecycle state.
 pub struct ResourceScope {
     slot: usize,
     generation: u64,

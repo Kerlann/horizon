@@ -5,7 +5,7 @@ use horizon_client::{
     items::ItemStack,
     scoreboard_cmd::{Holder, Tracker},
     text::Text,
-    worldborder::MAX_SIZE,
+    worldborder::{MAX_CENTER, MAX_SIZE},
 };
 use horizon_core::{position::ChunkPos, random::RandomSource};
 
@@ -486,7 +486,7 @@ impl Game<'_> {
                 if self.border.center() == [x, z] {
                     return Err(err("commands.worldborder.center.failed", &[]));
                 }
-                if x.abs() > 2.999_998_4e7 || z.abs() > 2.999_998_4e7 {
+                if x.abs() > MAX_CENTER || z.abs() > MAX_CENTER {
                     return Err(err(
                         "commands.worldborder.set.failed.far",
                         &[&"2.9999984E7"],

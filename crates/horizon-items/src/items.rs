@@ -3069,6 +3069,38 @@ mod tests {
         fs::remove_dir_all(root).unwrap();
     }
 
+    /// Songs load under their own namespace beside vanilla's through the resource overlay.
+    #[test]
+    fn content_mod_songs_load_under_their_namespace() {
+        let root = std::env::temp_dir().join(format!("horizon-songs-{}", std::process::id()));
+        let _ = fs::remove_dir_all(&root);
+        for ns in ["minecraft", "mymod"] {
+            fs::create_dir_all(root.join(format!("data/{ns}/jukebox_song"))).unwrap();
+        }
+        fs::write(root.join("items.json"), "{}").unwrap();
+        let song = json!({"sound_event": "mymod:music_disc.tune", "length_in_seconds": 5.0, "comparator_output": 3, "description": "tune"});
+        fs::write(
+            root.join("data/mymod/jukebox_song/tune.json"),
+            song.to_string(),
+        )
+        .unwrap();
+        fs::write(
+            root.join("data/minecraft/jukebox_song/cat.json"),
+            json!({"sound_event": "minecraft:music_disc.cat", "length_in_seconds": 185.0, "comparator_output": 2, "description": "cat"}).to_string(),
+        )
+        .unwrap();
+
+        let songs = load_songs(&root, &PackOverlay::NONE);
+        assert!(songs.contains_key("minecraft:cat"));
+        assert!(songs.contains_key("mymod:tune"));
+        let tune = &songs["mymod:tune"];
+        assert_eq!(tune.sound, "mymod:music_disc.tune");
+        assert_eq!((tune.length_ticks, tune.comparator), (100, 3));
+        assert!(songs.contains_key("minecraft:cat"));
+        assert!(!songs.contains_key("minecraft:tune"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[test]
     fn server_json_conditions_filter_selected_songs_instruments_and_enchantments() {
         let root = std::env::temp_dir().join(format!("horizon-server-json-{}", std::process::id()));

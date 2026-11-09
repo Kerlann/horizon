@@ -6,6 +6,7 @@ use crate::{BlockState, Identifier, containers::ModBlockEntityFields};
 /// This is not a live entity: internal cache and revision identities never cross the API.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct SceneBlockEntity {
     /// The immutable type id of the temporary drawing entity.
     pub id: Identifier,
@@ -24,6 +25,7 @@ impl SceneBlockEntity {
 /// optional mod block entity drawn by its Part as in the world.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct NativeSceneBlock {
     /// Position in the scene, independent of the world's blocks.
     pub pos: [i32; 3],
@@ -45,6 +47,7 @@ impl NativeSceneBlock {
 /// the number of GUI pixels a block spans.
 #[derive(Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct NativeSceneView {
     /// Scene point placed at the GUI rectangle's center, in blocks.
     pub center: [f32; 3],

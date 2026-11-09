@@ -232,6 +232,7 @@ pub mod tests {
     /// A chemical, as Mekanism's: the test mods' own resource, which the game knows nothing of.
     #[derive(Clone, Debug, PartialEq)]
     // exhaustive: the game builds it with a literal; mods only read it
+    // no wire: testing-feature fixture state, not a mod boundary value.
     pub struct Chemical(pub String);
 
     /// The test mods' own capability, as Mekanism's `Capabilities.CHEMICAL`: the game has no
@@ -242,6 +243,7 @@ pub mod tests {
     /// A mod block entity's one tank of 1000 of a chemical, kept in its saved data (`chemical`
     /// and `amount`), whose writes the game's journal keeps for a transaction.
     // exhaustive: the game builds it with a literal; mods only read it
+    // no wire: testing-feature fixture state, not a mod boundary value.
     pub struct ChemTank(pub BlockSide);
     impl ChemTank {
         fn entity(&self, host: &dyn Host) -> Option<BlockEntityRef> {

@@ -39,6 +39,7 @@ impl Game<'_> {
         // empty: the mods hear each worn item again from empty (`native_players_equipment`).
         if let Some(play) = host.play.get_mut(&conn) {
             play.equipment_heard = None;
+            play.inventory_heard = None;
             play.level_up_sound = Default::default();
         }
         // PlayerList.respawn: a server's player comes back in its respawn

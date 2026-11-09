@@ -19,6 +19,7 @@ use std::sync::{Arc, LazyLock};
 /// block-entity render dispatchers, particles, the game renderer, the level
 /// extractor, clouds, the GPU warnlist, regional compliance and the GUI.
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct VanillaClientListeners;
 impl VanillaClientListeners {
     /// Boundary before every reload listener.
@@ -119,6 +120,7 @@ pub trait ClientReloadListeners {
     fn get_last_vanilla_listener(&self) -> Identifier;
 }
 
+// no wire: process-local listener or callback storage; trait objects are invoked through host dispatch, not serialized.
 /// The game's [`ClientReloadListeners`].
 // exhaustive: its fields are private, so mods cannot build or destructure it
 pub struct ClientListenerRegistry {

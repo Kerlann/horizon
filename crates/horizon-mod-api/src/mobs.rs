@@ -4,6 +4,7 @@ use crate::*;
 /// `PathComputationType`: what a path is computed for.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum PathComputationType {
     Land,
     Water,
@@ -17,6 +18,7 @@ impl PathComputationType {
 /// malus a mob may override (`Mob.setPathfindingMalus`). Vanilla 26.3's set.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum PathType {
     Blocked,
     Open,
@@ -106,6 +108,7 @@ impl PathType {
 /// standing box.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum Pose {
     Standing,
     FallFlying,

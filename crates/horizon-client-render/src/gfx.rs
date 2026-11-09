@@ -405,6 +405,8 @@ mod reuse;
 mod screenshot;
 pub use screenshot::PendingScreenshot;
 mod stars;
+mod surface_setup;
+use surface_setup::{AdapterChoice, AdapterFailure, open_adapter, pick_adapter, set_up_surface};
 pub mod submit;
 mod sunrise_fan;
 mod timing;
@@ -1431,6 +1433,10 @@ pub struct Renderer {
     debug_lines: wgpu::RenderPipeline,
     debug_lines_on_top: wgpu::RenderPipeline,
     debug_crosshair: Option<wgpu::RenderPipeline>,
+    /// The debug crosshair and the first-person hand in `overlay_format`, where it isn't the
+    /// frame's.
+    overlay_crosshair: Option<wgpu::RenderPipeline>,
+    overlay_hand: Option<wgpu::RenderPipeline>,
     debug_line_buffer: wgpu::Buffer,
     debug_line_capacity: u64,
     /// The terrain resources with the debug crosshair's projection
@@ -1699,8 +1705,11 @@ pub struct Renderer {
     /// device draws and blends into it, or `LINEAR_FRAME` (`frame_format`). A 16-bit frame
     /// with HDR off since reaches the swapchain through `readback`.
     frame_format: wgpu::TextureFormat,
-    /// The no-pack float HDR lane, with independent blending and an R8 coverage target.
+    /// The layered float HDR frame (no pack or a 0.2 one), with independent blending, an 8-bit
+    /// HUD target and an R8 coverage target.
     hud_coverage: bool,
+    /// What the hand, the camera overlays and the HUD draw on (`overlay_format`).
+    overlay_format: wgpu::TextureFormat,
     /// What `frame_format` was picked from besides the settings and the pack: whether the
     /// surface offers HDR output, the device draws the 16-bit and float frames, and it supports
     /// the HUD layer. The layer must follow the pack even when the format stays float.
@@ -2104,6 +2113,47 @@ fn mip_chain(
     // Exactly the chain's size: cached animation frames count their capacity.
     let chain_bytes: usize = (0..levels).map(|l| layer_bytes >> (2 * l)).sum();
     let mut out = Vec::with_capacity(chain_bytes * layers as usize);
+    // Every layer makes its own mips from its own pixels, and a pack's array holds
+    // thousands of them: the layers run on every thread, in chunks so a worker
+    // allocates one chain per chunk rather than one per layer. The chunks are
+    // appended in order, so the chain stays layer major.
+    const LAYERS_PER_CHUNK: u32 = 16;
+    let chunks: Vec<(u32, u32)> = (0..layers)
+        .step_by(LAYERS_PER_CHUNK as usize)
+        .map(|start| (start, (layers - start).min(LAYERS_PER_CHUNK)))
+        .collect();
+    let parts = crate::par::par_map(&chunks, |&(start, count)| {
+        mip_chain_layers(
+            &pixels[start as usize * layer_bytes..],
+            size,
+            settings,
+            first + start,
+            count,
+            levels - 1,
+            layer_bytes,
+        )
+    });
+    for part in parts {
+        out.extend_from_slice(&part);
+    }
+    debug_assert_eq!(out.len(), chain_bytes * layers as usize);
+    (out, levels)
+}
+
+/// The mip chain of `layers` layers from `pixels` that start at layer `first`:
+/// `layers`' base levels followed by their reductions, layer major.
+fn mip_chain_layers(
+    pixels: &[u8],
+    size: u32,
+    settings: &[crate::mipmap::Settings],
+    first: u32,
+    layers: u32,
+    levels: u32,
+    layer_bytes: usize,
+) -> Vec<u8> {
+    let mut out = Vec::with_capacity(
+        (0..=levels).map(|l| layer_bytes >> (2 * l)).sum::<usize>() * layers as usize,
+    );
     for layer in 0..layers as usize {
         let base = crate::mipmap::Image {
             width: size,
@@ -2120,7 +2170,7 @@ fn mip_chain(
         let has_transparent = s.has_transparent || base.pixels.iter().any(|p| p[3] == 0);
         for image in crate::mipmap::generate(
             base,
-            levels - 1,
+            levels,
             crate::mipmap::Settings {
                 has_transparent,
                 ..s
@@ -2129,8 +2179,7 @@ fn mip_chain(
             out.extend(image.pixels.iter().flatten());
         }
     }
-    debug_assert_eq!(out.len(), chain_bytes * layers as usize);
-    (out, levels)
+    out
 }
 /// The wgpu instance options, without wgpu's validation of indirect draws
 /// in release builds. That validation (meant for untrusted WebGPU content)
@@ -2208,7 +2257,7 @@ impl wgpu::rwh::HasDisplayHandle for WindowDisplay {
 }
 /// The backends to open a device on, each tried in turn until one gives a
 /// device. `api` is the player's choice (`GraphicsApi::with_env` applied);
-/// `os` is `std::env::consts::OS`; `arch` the machine's (`system::machine_arch`), not the
+/// `os` is `std::env::consts::OS`; `arch` the machine's (`horizon_system::machine_arch`), not the
 /// build's; `wgpu_backend`: whether `WGPU_BACKEND` is set, which picks the backends itself.
 /// Auto tries DirectX 12 first on Windows ARM64, the x64 build emulated there included,
 /// then Vulkan, based on the device losses seen there (#7513). Other
@@ -2259,6 +2308,9 @@ struct Opened {
     device: wgpu::Device,
     queue: wgpu::Queue,
     device_lost: Arc<std::sync::atomic::AtomicBool>,
+    /// The window surface's configuration, set on `device` during the search, and the
+    /// surface's capabilities on `adapter`. None offscreen.
+    configured: Option<(wgpu::SurfaceConfiguration, wgpu::SurfaceCapabilities)>,
 }
 /// Logs the adapter and records it for crash reports.
 fn describe_adapter(adapter: &wgpu::Adapter) {
@@ -2347,8 +2399,8 @@ fn draws_frame(format: wgpu::TextureFormatFeatures) -> bool {
 const LINEAR_FRAME: wgpu::TextureFormat = wgpu::TextureFormat::Rgba16Float;
 
 /// What a renderer's frame is drawn in: `LINEAR_FRAME` under the switch where the device draws
-/// it, for a 0.2 pack, or for HDR on without a pack where the surface offers HDR output
-/// (`linear`: `(a 0.2 pack picked, HDR on without a pack, the device draws it)`); else
+/// it, for a 0.2 pack, or for the layered HDR frame where the surface offers HDR output
+/// (`linear`: `(a 0.2 pack picked, the layered HDR frame, the device draws it)`); else
 /// `WIDE_FRAME` when it is made with HDR on and Smooth Gradients (`wide_frame`,
 /// `Graphics::wide_frame`), the surface offering HDR output (`hdr_offered`) and the device
 /// drawing it (`draws_wide_frame`): an 8-bit frame's steps band in dark gradients, and HDR
@@ -2369,6 +2421,9 @@ fn frame_format(
     }
 }
 
+/// The frame's format, and whether it is the layered HDR frame (HUD coverage): for HDR on
+/// under the switch (`hdr_float`), with no pack or a 0.2 one, where the device keeps the HUD
+/// on a layer of its own.
 fn frame_configuration(
     wide_frame: bool,
     device: (bool, bool, bool, bool),
@@ -2377,7 +2432,7 @@ fn frame_configuration(
     hdr_float: bool,
 ) -> (wgpu::TextureFormat, bool) {
     let (hdr_offered, wide_ok, linear_ok, coverage_ok) = device;
-    let layered = !linear_pack && hdr_float && hdr_offered && linear_ok && coverage_ok;
+    let layered = hdr_float && hdr_offered && linear_ok && coverage_ok;
     (
         frame_format(
             wide_frame,
@@ -2388,6 +2443,27 @@ fn frame_configuration(
         ),
         layered,
     )
+}
+
+/// What the hand, the camera overlays and the HUD draw on: the frame, except for a 0.2 pack's
+/// float frame without the HUD's layer, which is SDR: the pack's picture finishes on the
+/// swapchain's 8-bit format first, so they clip and blend per draw as on vanilla's frame.
+fn overlay_format(
+    frame: wgpu::TextureFormat,
+    layered: bool,
+    swapchain: wgpu::TextureFormat,
+) -> wgpu::TextureFormat {
+    if frame == LINEAR_FRAME && !layered {
+        swapchain.remove_srgb_suffix()
+    } else {
+        frame
+    }
+}
+
+/// Whether Horizon's tone curve (`Hdr::tonemap`) runs on this frame: on the layered frame's
+/// world, unless a 0.2 pack's `[tonemap]` already mapped it. One tone mapping, never two.
+fn horizon_tone_curve(layered: bool, world: bool, pack_tonemap: bool) -> bool {
+    layered && world && !pack_tonemap
 }
 
 fn frame_follows(
@@ -2621,91 +2697,57 @@ async fn open_backend(
             },
         );
     }
-    describe_adapter(&adapter);
-    let info = adapter.get_info();
-    let limits = adapter.limits();
-    if let Err(e) = check_layers(&adapter, layers) {
-        return Err(NoDevice::Failed(format!("{name}: {e}")));
-    }
-    // Mappable primary buffers: section pages that no longer fit in
-    // video memory go to system memory. Shader packs' 16-bit normalized buffers (render
-    // targets with the adapter's own format features) and R11F_G11F_B10F: a float
-    // stand-in neither clamps nor drops NaN. Subgroups: shader packs' compute programs
-    // (`MC_GL_KHR_shader_subgroup_*`); storage buffers in vertex shaders, clearing and
-    // atomics on images: their buffers and images. Filtering 32-bit float textures: shader
-    // packs' RGBA32F buffers, which GL filters and mipmaps. Count draws: GPU culling's (`gpu_culling`).
-    let features = timing::GpuTimer::features(&adapter)
-        | cull::Cull::features(&adapter)
-        | oit::features(&adapter)
-        | (adapter.features()
-            & (wgpu::Features::INDIRECT_FIRST_INSTANCE
-                | wgpu::Features::MULTI_DRAW_INDIRECT_COUNT
-                | wgpu::Features::MAPPABLE_PRIMARY_BUFFERS
-                | wgpu::Features::TEXTURE_FORMAT_16BIT_NORM
-                | wgpu::Features::TEXTURE_ADAPTER_SPECIFIC_FORMAT_FEATURES
-                | wgpu::Features::RG11B10UFLOAT_RENDERABLE
-                | wgpu::Features::SUBGROUP
-                | wgpu::Features::VERTEX_WRITABLE_STORAGE
-                | wgpu::Features::CLEAR_TEXTURE
-                | wgpu::Features::TEXTURE_ATOMIC
-                | wgpu::Features::FLOAT32_FILTERABLE));
-    let driver = format!("{} {}", info.driver, info.driver_info);
-    startup_step(format_args!(
-        "requesting the device (driver {}) with features [{features}] and the adapter's \
-         limits (buffers up to {} bytes, storage bindings up to {} bytes, {} texture layers)",
-        match driver.trim() {
-            "" => "unnamed",
-            driver => driver,
-        },
-        limits.max_buffer_size,
-        limits.max_storage_buffer_binding_size,
-        limits.max_texture_array_layers,
-    ));
-    let desc = wgpu::DeviceDescriptor {
-        label: Some("Horizon device"),
-        required_features: features,
-        required_limits: limits,
-        // Video memory in blocks of 8-64 MiB instead of 128-256 MiB (Vulkan and DirectX 12):
-        // with the larger blocks a few small buffers kept whole blocks the arena's pages had
-        // left, and over half the video memory reserved was unused (1,344 MiB for 500).
-        memory_hints: wgpu::MemoryHints::MemoryUsage,
-        ..Default::default()
-    };
-    #[cfg(not(target_os = "macos"))]
-    let opened = match info.backend {
-        wgpu::Backend::Vulkan => horizon_hdr::open_vulkan_device(&adapter, &desc),
-        _ => None,
-    };
-    #[cfg(target_os = "macos")]
-    let opened = None;
-    let opened = match opened {
-        Some(opened) => opened,
-        None => adapter.request_device(&desc).await,
-    };
-    match opened {
-        Ok((device, queue)) => {
-            let device_lost = Arc::new(std::sync::atomic::AtomicBool::new(false));
-            let lost = device_lost.clone();
-            device.set_device_lost_callback(move |reason, message| {
-                // A device destroyed on purpose was not lost.
-                if reason == wgpu::DeviceLostReason::Destroyed {
-                    return;
-                }
-                log::warn!(
-                    "Horizon renderer: the graphics device was lost ({reason:?}: {message})"
-                );
-                lost.store(true, std::sync::atomic::Ordering::Relaxed);
-            });
-            Ok(Opened {
-                instance,
-                surface,
-                adapter,
-                device,
-                queue,
-                device_lost,
+    // Adapters that could not present to the window: the next one of this backend
+    // that can is tried before the next backend (#13493).
+    let mut tried = Vec::new();
+    let mut adapter = adapter;
+    loop {
+        let why = match open_adapter(name, window, surface.as_ref(), &adapter, layers).await {
+            Ok(adapted) => {
+                return Ok(Opened {
+                    instance,
+                    surface,
+                    adapter,
+                    device: adapted.device,
+                    queue: adapted.queue,
+                    device_lost: adapted.device_lost,
+                    configured: adapted.configured,
+                });
+            }
+            Err(AdapterFailure::Failed(e)) => return Err(NoDevice::Failed(e)),
+            Err(AdapterFailure::CannotPresent(why)) => why,
+        };
+        let info = adapter.get_info();
+        tried.push(info.clone());
+        let others = instance.enumerate_adapters(wgpu::Backends::all()).await;
+        let choices: Vec<_> = others
+            .iter()
+            .map(|other| AdapterChoice {
+                kind: other.get_info().device_type,
+                presents: surface
+                    .as_ref()
+                    .is_some_and(|s| !s.get_capabilities(other).formats.is_empty()),
+                tried: tried.contains(&other.get_info()),
             })
-        }
-        Err(e) => Err(NoDevice::Failed(format!("{name} device: {e}"))),
+            .collect();
+        let Some(next) = pick_adapter(&choices, allow_cpu) else {
+            log::warn!(
+                "Horizon renderer: skipping {} on {name}: it can't present to the window \
+                 ({why}), and no other {name} adapter can",
+                info.name
+            );
+            return Err(NoDevice::Failed(format!(
+                "{name}: {} can't present to the window ({why})",
+                info.name
+            )));
+        };
+        adapter = others[next].clone();
+        log::warn!(
+            "Horizon renderer: skipping {} on {name}: it can't present to the window ({why}); \
+             trying {}",
+            info.name,
+            adapter.get_info().name
+        );
     }
 }
 /// A surface for `window` (none `offscreen`) and the adapter `open_backend`
@@ -3043,6 +3085,7 @@ impl Renderer {
             device,
             queue,
             device_lost,
+            configured,
         } = match previous {
             // Reload resources on the same device; replacing live Vulkan
             // devices can invalidate the driver's swapchain state on the same
@@ -3069,6 +3112,7 @@ impl Renderer {
                     device: renderer.device.clone(),
                     queue: renderer.queue.clone(),
                     device_lost: renderer.device_lost.clone(),
+                    configured: None,
                 }
             }
             None => {
@@ -3086,42 +3130,21 @@ impl Renderer {
         crate::graphics::suggest_reduced_far_detail(crate::graphics::lod_capped(&info));
         let size = window.inner_size();
         let max_side = device.limits().max_texture_dimension_2d;
-        let (config, present_modes, hdr_output) = if let Some(surface) = &surface {
-            let mut config = surface
-                .get_default_config(
-                    &adapter,
-                    size.width.clamp(1, max_side),
-                    size.height.clamp(1, max_side),
-                )
-                .ok_or("surface has no supported configuration")?;
-            let caps = surface.get_capabilities(&adapter);
-            config.format = surface_format(&caps.formats, config.format);
-            config.view_formats = vec![config.format.remove_srgb_suffix()];
-            // Screenshots copy the presented frame back from the swapchain, frame
-            // generation's present thread copies its frames in.
-            if caps.usages.contains(wgpu::TextureUsages::COPY_SRC) {
-                config.usage |= wgpu::TextureUsages::COPY_SRC;
-            }
-            if caps.usages.contains(wgpu::TextureUsages::COPY_DST) {
-                config.usage |= wgpu::TextureUsages::COPY_DST;
-            }
-            config.present_mode = previous
-                .map(|renderer| renderer.config.present_mode)
-                .filter(|mode| caps.present_modes.contains(mode))
-                .unwrap_or_else(|| {
-                    if caps.present_modes.contains(&wgpu::PresentMode::Mailbox) {
-                        wgpu::PresentMode::Mailbox
-                    } else {
-                        wgpu::PresentMode::Fifo
-                    }
-                });
-            if previous.is_none() {
-                startup_step(format_args!(
-                    "device ready; configuring the surface ({}x{} {:?}, {:?})",
-                    config.width, config.height, config.format, config.present_mode
-                ));
-            }
-            surface.configure(&device, &config);
+        let configured = match (&surface, configured) {
+            (Some(_), Some(configured)) => Some(configured),
+            (Some(surface), None) => Some(set_up_surface(
+                surface,
+                &adapter,
+                &device,
+                &device_lost,
+                surface.get_capabilities(&adapter),
+                size,
+                previous.map(|renderer| renderer.config.present_mode),
+                previous.is_none(),
+            )?),
+            (None, _) => None,
+        };
+        let (config, present_modes, hdr_output) = if let Some((config, caps)) = configured {
             let hdr_output = hdr::output(&caps);
             crate::graphics::offer_hdr(hdr_output.is_some());
             if previous.is_none() {
@@ -3130,7 +3153,7 @@ impl Renderer {
                     hdr_output.map_or("not offered by this display", hdr::Output::name)
                 );
             }
-            (config, caps.present_modes.clone(), hdr_output)
+            (config, caps.present_modes, hdr_output)
         } else {
             let format = wgpu::TextureFormat::Bgra8Unorm;
             let config = wgpu::SurfaceConfiguration {
@@ -3191,6 +3214,7 @@ impl Renderer {
             linear_pack,
             hdr_float,
         );
+        let overlay_format = overlay_format(frame_format, hud_coverage, config.format);
         if previous.is_none() {
             startup_step(format_args!("creating the pipelines"));
         }
@@ -3331,6 +3355,8 @@ impl Renderer {
             sprite_constants[1],
             ("HDR_LIGHTING", 0.0),
         ];
+        // `hud`: the debug crosshair, drawn with the HUD in the overlays' format, with its
+        // coverage or without.
         let pipeline_with = |constants: &[(&str, f64)],
                              layout: &wgpu::PipelineLayout,
                              label: &str,
@@ -3342,7 +3368,7 @@ impl Renderer {
                              depth_write: bool,
                              depth_test: bool,
                              blend: Option<wgpu::BlendState>,
-                             coverage: bool| {
+                             hud: Option<bool>| {
             let mut constants = constants.to_vec();
             constants.push((
                 "HDR_WRITE_LIGHT",
@@ -3382,7 +3408,11 @@ impl Renderer {
                         ..Default::default()
                     },
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: frame_format,
+                        format: if hud.is_some() {
+                            overlay_format
+                        } else {
+                            frame_format
+                        },
                         blend,
                         write_mask: wgpu::ColorWrites::ALL,
                     })],
@@ -3390,7 +3420,7 @@ impl Renderer {
                 multiview_mask: None,
                 cache: None,
             };
-            if coverage {
+            if hud == Some(true) {
                 hud_coverage::pipeline(
                     &device,
                     &desc,
@@ -3423,7 +3453,7 @@ impl Renderer {
                 depth_write,
                 depth_test,
                 blend,
-                false,
+                None,
             )
         };
         // A solid terrain pipeline (back faces culled, depth written, no blend) without HDR
@@ -3446,7 +3476,7 @@ impl Renderer {
                     true,
                     true,
                     None,
-                    false,
+                    None,
                 )
             };
             SolidPipeline {
@@ -3691,11 +3721,13 @@ impl Renderer {
             false,
             Some(alpha_blend),
         );
-        let debug_crosshair = hud_coverage.then(|| {
+        // The debug crosshair with the HUD: with its coverage on the layered frame, and in the
+        // overlays' format where that isn't the frame's.
+        let crosshair = |coverage| {
             pipeline_with(
                 &sprite_constants,
                 &layout,
-                "3d crosshair coverage",
+                "3d crosshair",
                 "vs_debug_line",
                 "fs_debug_line",
                 &debug_line_buffers,
@@ -3704,9 +3736,11 @@ impl Renderer {
                 false,
                 false,
                 Some(alpha_blend),
-                true,
+                Some(coverage),
             )
-        });
+        };
+        let debug_crosshair = hud_coverage.then(|| crosshair(true));
+        let overlay_crosshair = (overlay_format != frame_format).then(|| crosshair(false));
         drop(terrain_step);
         let globals = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Horizon globals"),
@@ -4063,9 +4097,10 @@ impl Renderer {
         let glint_armor_view = glint_armor_texture.create_view(&Default::default());
         let mut hud = HudRenderer::new(
             &device,
-            frame_format,
+            overlay_format,
             &atlas_view,
             &glint_view,
+            &glint_armor_view,
             &glint_sampler,
             hud_coverage,
         )?;
@@ -4429,6 +4464,28 @@ impl Renderer {
             alpha_blend,
             false,
         );
+        // The hand as `entity_pipeline` draws it, in the overlays' format.
+        let overlay_hand = (overlay_format != frame_format).then(|| {
+            entity_pipeline_factory(
+                &kept,
+                &entity_layout,
+                &cloud_layout,
+                &entity_shader,
+                &entity_vertex,
+                overlay_format,
+            )(EntityPipelineOptions {
+                label: "First-person hand",
+                cull_mode: None,
+                depth_write: true,
+                compare: wgpu::CompareFunction::GreaterEqual,
+                bias: entity_bias,
+                blend: alpha_blend,
+                clouds: false,
+                vertex: "vs_entity",
+                fragment: "fs_entity",
+                write_mask: wgpu::ColorWrites::ALL,
+            })
+        });
         let static_entity_pipeline =
             device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
                 label: Some("Static block entities"),
@@ -4916,7 +4973,7 @@ impl Renderer {
                     entry_point: Some(entry),
                     compilation_options,
                     targets: &[Some(wgpu::ColorTargetState {
-                        format: frame_format,
+                        format: overlay_format,
                         blend: Some(blend),
                         // 8 and up: colour only, for a tint of the world in HDR output.
                         write_mask: if i & 8 == 0 {
@@ -5148,7 +5205,7 @@ impl Renderer {
         let entity_outline = entity_outline::EntityOutline::new(
             &device,
             (&entity_shader, &entity_layout, &entity_vertex),
-            frame_format,
+            overlay_format,
         );
         let panorama = panorama::Panorama::new(&device, frame_format, panorama_faces);
         drop(pipelines_step);
@@ -5237,6 +5294,8 @@ impl Renderer {
             debug_lines,
             debug_lines_on_top,
             debug_crosshair,
+            overlay_crosshair,
+            overlay_hand,
             debug_line_buffer,
             debug_line_capacity: 4096,
             crosshair_group,
@@ -5406,6 +5465,7 @@ impl Renderer {
             hdr_output,
             frame_format,
             hud_coverage,
+            overlay_format,
             frame_device,
             frame_kept_logged: false,
             hdr_marker: None,
@@ -7239,9 +7299,11 @@ impl Renderer {
         ui: f32,
         marker: &std::path::Path,
     ) {
-        let output = self
-            .hdr_output
-            .filter(|_| on && (self.surface.is_some() || self.offscreen.is_some()));
+        // A 0.2 pack's frame without the HUD's layer is SDR (`overlay_format`).
+        let output = self.hdr_output.filter(|_| {
+            on && (self.surface.is_some() || self.offscreen.is_some())
+                && self.overlay_format == self.frame_format
+        });
         if output.is_some() != self.hdr.is_some() {
             // If the game dies before HDR output shows a frame, the marker is still there at
             // the next start, which then comes up with HDR off.
@@ -8257,16 +8319,22 @@ impl Renderer {
         let mut config = self.config.clone();
         [config.width, config.height] = size;
         config.usage |= wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC;
-        if self.frame_format != config.format.remove_srgb_suffix() {
-            // A 16-bit frame, read back through an 8-bit copy (`take_readback`).
+        // A frame the overlays draw on past 8 bits (16-bit, or the layered float frame), read
+        // back through an 8-bit copy (`take_readback`). A 0.2 pack's float frame in SDR keeps
+        // the swapchain's format here, which its picture finishes on (`Readback::finish`).
+        if self.overlay_format != config.format.remove_srgb_suffix() {
             config.format = self.frame_format;
             config.view_formats = vec![self.frame_format];
             config.usage |= wgpu::TextureUsages::TEXTURE_BINDING;
         }
+        // The layered float frame keeps HDR: its world's light and HUD layer make the picture
+        // (`Hdr::sdr_screenshot`), in HDR's own targets at `size`; it presents nothing, as the
+        // swapchain is set aside. Other frames draw without HDR, into a target of their own.
+        let layered = self.hdr.as_ref().is_some_and(hdr::Hdr::layered);
         // Out of video memory (an invalid texture's view is a validation error):
         // tried again at half the size next frame; the window keeps its last one.
         let checks = GpuChecks::push(&self.device);
-        let target = Self::offscreen_target(&self.device, &config);
+        let target = (!layered).then(|| Self::offscreen_target(&self.device, &config));
         let depth = Self::depth(&self.device, &config);
         if let Some(e) = checks.pop() {
             log::warn!(
@@ -8282,15 +8350,22 @@ impl Renderer {
         self.hud.zoom = size[0] as f32 / window[0] as f32;
         [self.config.width, self.config.height] = size;
         let surface = self.surface.take();
-        // HDR presents to the swapchain; this frame goes to a file.
-        let hdr = self.hdr.take();
-        let offscreen = self.offscreen.replace(target);
+        let hdr = self.hdr.take_if(|_| !layered);
+        let offscreen = std::mem::replace(&mut self.offscreen, target);
         let window_depth = std::mem::replace(&mut self.depth, depth);
         // The frame's own targets at `size` can run out of memory too.
         let drawn = self.draw_frame(frame, Some(GpuChecks::push(&self.device)));
         self.depth = window_depth;
         self.offscreen = offscreen;
-        self.hdr = hdr;
+        match hdr {
+            Some(hdr) => self.hdr = Some(hdr),
+            // Not kept for the window, which makes its own at its size next frame.
+            None => {
+                if let Some(hdr) = &mut self.hdr {
+                    hdr.release_targets();
+                }
+            }
+        }
         self.surface = surface;
         [self.config.width, self.config.height] = window;
         self.hud.zoom = 1.0;
@@ -10428,6 +10503,12 @@ impl Renderer {
                 .size()
                 .filter(|_| scaled.is_some())
                 .unwrap_or([self.config.width, self.config.height]);
+            // A 0.2 pack sees the HDR display where its picture goes to one: on the layered frame.
+            native.frame.display = self
+                .hdr
+                .as_ref()
+                .filter(|h| h.layered())
+                .map(hdr::Hdr::display);
             native.frame.write(&self.queue, frame, size);
             native.frame.block_light.update(
                 &self.queue,
@@ -12054,7 +12135,7 @@ impl Renderer {
                     encoder: &mut encoder,
                     color: &target_texture,
                     color_view: &view_target,
-                    color_format: self.frame_format,
+                    color_format: self.overlay_format,
                     size,
                     depth,
                     depth_size,
@@ -12078,6 +12159,29 @@ impl Renderer {
                 },
             ));
         }
+        // A 0.2 pack in SDR: its picture finishes on 8 bits before the hand, the camera overlays
+        // and the HUD draw over it (`overlay_format`).
+        let finished = (self.overlay_format != self.frame_format)
+            .then(|| {
+                let image = surface_frame.as_ref().map(|f| &f.texture);
+                image.or(self.offscreen.as_ref())
+            })
+            .flatten()
+            .and_then(|image| {
+                let screenshot = self.screenshot.is_some();
+                self.readback
+                    .finish(&self.device, &mut encoder, image, screenshot)
+            });
+        let (target_texture, view_target, overlay_format) = match finished {
+            Some(texture) => {
+                let view = texture.create_view(&wgpu::TextureViewDescriptor {
+                    format: Some(self.overlay_format),
+                    ..Default::default()
+                });
+                (texture, view, self.overlay_format)
+            }
+            None => (target_texture, view_target, self.frame_format),
+        };
         let overlay = Overlay {
             hand_quads: hand_quads * u32::from(!pack_draws_hand && !hand_in_world),
             first_hand_vertex: ((world_quads + additive_quads) * 4) as i32,
@@ -12098,11 +12202,7 @@ impl Renderer {
             gpu.copy_stats(&mut encoder, serial, cpu);
         }
         if let Some(timer) = &mut self.gpu_timer {
-            timer.end(
-                &self.device,
-                &mut encoder,
-                (&view_target, self.frame_format),
-            );
+            timer.end(&self.device, &mut encoder, (&view_target, overlay_format));
         }
         laps.lap("r_passes");
         // The clipped picture for offscreen SDR presentation. Layered screenshots reconstruct
@@ -12371,7 +12471,7 @@ impl Renderer {
                 }),
                 ..Default::default()
             });
-            pass.set_pipeline(&self.entity_pipeline);
+            pass.set_pipeline(self.overlay_hand.as_ref().unwrap_or(&self.entity_pipeline));
             pass.set_bind_group(0, &self.hand_group, &[]);
             pass.set_index_buffer(self.indices.slice(..), wgpu::IndexFormat::Uint32);
             pass.set_vertex_buffer(0, self.entity_buffer.slice(..));
@@ -12430,7 +12530,7 @@ impl Renderer {
                     encoder: &mut *encoder,
                     color: target_texture,
                     color_view: view_target,
-                    color_format: self.frame_format,
+                    color_format: self.overlay_format,
                     size: [self.config.width, self.config.height],
                     hand: if overlay.hand_drawn { frame.hand } else { &[] },
                     view_proj: overlay.hand_view_proj,
@@ -12489,9 +12589,14 @@ impl Renderer {
                 timing.as_mut(),
             );
         }
-        // The layered frame's light eases into the peak, before the camera overlays draw on it.
-        if layered
-            && !frame.title
+        // The layered frame's light eases into the peak, before the camera overlays draw on it,
+        // unless a 0.2 pack's own `[tonemap]` did.
+        let pack_tonemap = self
+            .native
+            .as_ref()
+            .and_then(|n| n.post.as_ref())
+            .is_some_and(native_post::NativePost::tonemaps);
+        if horizon_tone_curve(layered, !frame.title, pack_tonemap)
             && let Some(hdr) = &self.hdr
         {
             hdr.tonemap(encoder, timing.as_mut());
@@ -12605,10 +12710,12 @@ impl Renderer {
                 }),
                 ..Default::default()
             });
-            pass.set_pipeline(if coverage.is_some() {
-                self.debug_crosshair.as_ref().unwrap()
-            } else {
-                &self.debug_lines_on_top
+            pass.set_pipeline(match &coverage {
+                Some(_) => self.debug_crosshair.as_ref().unwrap(),
+                None => self
+                    .overlay_crosshair
+                    .as_ref()
+                    .unwrap_or(&self.debug_lines_on_top),
             });
             pass.set_bind_group(0, &self.crosshair_group, &[]);
             pass.set_vertex_buffer(0, self.debug_line_buffer.slice(..));
@@ -12630,7 +12737,7 @@ impl Renderer {
             timing.as_mut(),
         );
         if let Some(radius) = menu_blur {
-            let format = self.frame_format;
+            let format = self.overlay_format;
             let device = &self.device;
             let software = is_software(self.info.device_type);
             let blur = self
@@ -13401,10 +13508,11 @@ mod tests {
             let switch = bits & 32 != 0;
             let smooth = bits & 64 != 0;
             for pack in ["none", "0.1", "0.2", "shaders"] {
-                let expected = if switch && float_ok && pack == "0.2" {
-                    (LINEAR_FRAME, false)
-                } else if switch && float_ok && pack == "none" && hdr && offered && coverage_ok {
+                let float_hdr = matches!(pack, "none" | "0.2");
+                let expected = if switch && float_ok && float_hdr && hdr && offered && coverage_ok {
                     (LINEAR_FRAME, true)
+                } else if switch && float_ok && pack == "0.2" {
+                    (LINEAR_FRAME, false)
                 } else if hdr && smooth && offered && wide_ok {
                     (WIDE_FRAME, false)
                 } else {
@@ -13416,7 +13524,7 @@ mod tests {
                         (offered, wide_ok, float_ok, coverage_ok),
                         Bgra8UnormSrgb,
                         switch && pack == "0.2",
-                        switch && hdr && pack == "none",
+                        switch && hdr && float_hdr,
                     ),
                     expected,
                     "bits {bits}, pack {pack}"
@@ -13460,7 +13568,44 @@ mod tests {
                 frame_configuration(true, device, F::Bgra8Unorm, true, false),
                 (LINEAR_FRAME, false)
             );
+            // A 0.2 pack keeps its float frame, without the layer: SDR.
+            assert_eq!(
+                frame_configuration(true, device, F::Bgra8Unorm, true, true),
+                (LINEAR_FRAME, false)
+            );
         }
+    }
+
+    #[test]
+    fn a_0_2_pack_without_the_hud_layer_finishes_on_the_swapchains_8_bits() {
+        use super::{LINEAR_FRAME, WIDE_FRAME, overlay_format};
+        use wgpu::TextureFormat::{Bgra8Unorm, Bgra8UnormSrgb, Rgba8Unorm};
+        assert_eq!(
+            overlay_format(LINEAR_FRAME, false, Bgra8UnormSrgb),
+            Bgra8Unorm
+        );
+        assert_eq!(overlay_format(LINEAR_FRAME, false, Rgba8Unorm), Rgba8Unorm);
+        // Everything else draws its overlays on its frame: the layered frame's light, the
+        // 16-bit frame, the 8-bit frame.
+        for (frame, layered) in [
+            (LINEAR_FRAME, true),
+            (WIDE_FRAME, false),
+            (Bgra8Unorm, false),
+        ] {
+            assert_eq!(overlay_format(frame, layered, Bgra8UnormSrgb), frame);
+        }
+    }
+
+    #[test]
+    fn one_tone_curve_runs_on_the_layered_world() {
+        use super::horizon_tone_curve;
+        // No pack, or a 0.2 pack without `[tonemap]`: Horizon's curve.
+        assert!(horizon_tone_curve(true, true, false));
+        // A pack's `[tonemap]` mapped it already; never both.
+        assert!(!horizon_tone_curve(true, true, true));
+        // No world (the title screen), or no layered frame (SDR, the compatibility frames).
+        assert!(!horizon_tone_curve(true, false, false));
+        assert!(!horizon_tone_curve(false, true, false));
     }
 
     #[test]
@@ -13492,6 +13637,23 @@ mod tests {
             Bgra8Unorm,
             true,
             false
+        ));
+        // HDR turned on under a 0.2 pack: the layered frame.
+        assert!(!frame_follows(
+            (LINEAR_FRAME, false),
+            true,
+            device,
+            Bgra8Unorm,
+            true,
+            true
+        ));
+        assert!(frame_follows(
+            (LINEAR_FRAME, true),
+            true,
+            device,
+            Bgra8Unorm,
+            true,
+            true
         ));
         assert!(!frame_follows(
             (LINEAR_FRAME, false),
@@ -13862,14 +14024,6 @@ mod tests {
     }
 
     #[test]
-    fn a_reported_black_level_rounds_down() {
-        use super::hundredths_of_a_nit as h;
-        assert_eq!(h(0.005), 0);
-        assert_eq!(h(0.05), 5);
-        assert_eq!(h(5.0), 100);
-        assert_eq!(h(f32::NAN), 0);
-    }
-    #[test]
     fn os_luminances_become_auto_values() {
         use super::os_reported;
         use crate::graphics::Reported;
@@ -13887,7 +14041,6 @@ mod tests {
             Some(Reported {
                 paper_white: 240,
                 peak: 998,
-                black: 0
             })
         );
         assert_eq!(
@@ -13895,7 +14048,6 @@ mod tests {
             Some(Reported {
                 paper_white: 480,
                 peak: 480,
-                black: 0
             })
         );
         // White above the calibrated peak (a Samsung QD-OLED's 380, the slider at 456).
@@ -13904,7 +14056,6 @@ mod tests {
             Some(Reported {
                 paper_white: 456,
                 peak: 456,
-                black: 0
             })
         );
         assert_eq!(os_reported(&info(Some(1000.0), None)), None);
@@ -14368,9 +14519,6 @@ mod tests {
         // compile (#9448).
         let mut glsl_failed = Vec::new();
         let mut translated = std::collections::HashSet::new();
-        // naga's GLSL writer gives an image one sampler, and the HUD's glint
-        // samples one image through two; one failed entry does not hide the rest.
-        let known_unsupported = [("hud.wgsl", "fs_cit_glint")];
         for (path, text) in sources {
             // entity.wgsl comes after the overlay's constants (entity_shader).
             let module = naga::front::wgsl::parse_str(&text)
@@ -14473,13 +14621,11 @@ mod tests {
                     .and_then(|mut w| w.write());
                     let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
                     if let Err(e) = glsl_result {
-                        if !known_unsupported.contains(&(name, entry.name.as_str())) {
-                            glsl_failed.push(format!(
-                                "{} {} (GLSL {version}): {e}",
-                                path.display(),
-                                entry.name
-                            ));
-                        }
+                        glsl_failed.push(format!(
+                            "{} {} (GLSL {version}): {e}",
+                            path.display(),
+                            entry.name
+                        ));
                         continue;
                     }
                     translated.insert((name.to_owned(), entry.name.clone()));
@@ -14499,8 +14645,13 @@ mod tests {
             glsl_failed.join("\n")
         );
         // These read the world's depth through `textureLoad`; before #9448 their
-        // depth binding could not translate, so TAA and the blit never came up.
-        for (file, entry) in [("world_post.wgsl", "fs_taa"), ("pack_post.wgsl", "fs_blit")] {
+        // depth binding could not translate, so TAA and the blit never came up. The HUD's
+        // CIT glint sampled one image through two samplers until #2386.
+        for (file, entry) in [
+            ("world_post.wgsl", "fs_taa"),
+            ("pack_post.wgsl", "fs_blit"),
+            ("hud.wgsl", "fs_cit_glint"),
+        ] {
             assert!(
                 translated.contains(&(file.to_owned(), entry.to_owned())),
                 "{file} {entry} must translate to GLSL"
@@ -15280,6 +15431,67 @@ mod sprite_upload_tests {
         }
     }
 
+    /// The chains are made a chunk of layers at a time, each on its own thread. Their
+    /// bytes must be the ones one thread making every layer in turn gives, in layer
+    /// order, whichever layer a chunk starts at.
+    #[test]
+    fn mip_chains_match_one_thread_making_every_layer() {
+        let size: u32 = 8;
+        let layers: u32 = 40;
+        let pixels: Vec<u8> = (0..size * size * layers)
+            .flat_map(|i| [i as u8, (i * 7) as u8, 33, if i % 5 == 0 { 0 } else { 255 }])
+            .collect();
+        let settings: Vec<_> = (0..layers)
+            .map(|i| crate::mipmap::Settings {
+                strategy: match i % 3 {
+                    0 => crate::mipmap::Strategy::Mean,
+                    1 => crate::mipmap::Strategy::Cutout,
+                    _ => crate::mipmap::Strategy::DarkCutout,
+                },
+                alpha_cutoff_bias: (i % 4) as f32 / 4.0,
+                item: i % 7 == 0,
+                ..Default::default()
+            })
+            .collect();
+        let layer_bytes = (size * size * 4) as usize;
+        let levels = size.trailing_zeros();
+        let chain_bytes: usize = (0..=levels).map(|l| layer_bytes >> (2 * l)).sum();
+        let mut expected: Vec<u8> = Vec::new();
+        for (layer, s) in settings.iter().copied().enumerate() {
+            let base = crate::mipmap::Image {
+                width: size,
+                height: size,
+                pixels: pixels[layer * layer_bytes..(layer + 1) * layer_bytes]
+                    .as_chunks::<4>()
+                    .0
+                    .to_vec(),
+            };
+            let has_transparent = s.has_transparent || base.pixels.iter().any(|p| p[3] == 0);
+            for image in crate::mipmap::generate(
+                base,
+                levels,
+                crate::mipmap::Settings {
+                    has_transparent,
+                    ..s
+                },
+            ) {
+                expected.extend(image.pixels.iter().flatten());
+            }
+        }
+        assert_eq!(expected.len(), chain_bytes * layers as usize);
+        assert_eq!(mip_chain(&pixels, size, &settings, 0, layers).0, expected);
+        // From the middle: the chunk's settings still come from the global layer index.
+        let from = (layers / 2) as usize;
+        let chain = mip_chain(
+            &pixels[from * layer_bytes..],
+            size,
+            &settings,
+            from as u32,
+            layers / 2,
+        );
+        assert_eq!(chain.0, expected[from * chain_bytes..]);
+    }
+
     #[test]
     fn sprite_split_follows_the_adapters_layer_limit() {
         // The Discord report: 512 layers per array, 1291 block textures (3 arrays).
@@ -15529,15 +15741,6 @@ fn flush_display_log() {
         (log.last, log.at) = (line, Some(now));
     }
 }
-/// A reported black level, within the setting's range. Rounded down: OLEDs report a figure
-/// just above 0, like KWin's 0.005, which isn't worth lifting the shadows for.
-fn hundredths_of_a_nit(nits: f32) -> u32 {
-    if nits.is_finite() && nits > 0.0 {
-        ((nits * 100.0) as u32).min(100)
-    } else {
-        0
-    }
-}
 fn log_os_reported(reported: Option<crate::graphics::Reported>) {
     log_display(match reported {
         Some(r) => format!(
@@ -15560,7 +15763,6 @@ fn os_reported(info: &wgpu::DisplayHdrInfo) -> Option<crate::graphics::Reported>
     let paper_white = (white.round() as u32).clamp(80, 480);
     Some(crate::graphics::Reported {
         paper_white,
-        black: hundredths_of_a_nit(luminance.min_nits.unwrap_or(0.0)),
         // Windows' SDR brightness slider can set white above the reported peak (480 against
         // a calibrated 380): the highlights then stay at white instead of dropping below it.
         peak: (peak.round() as u32).clamp(200, 10_000).max(paper_white),
@@ -15599,7 +15801,6 @@ fn reported(l: horizon_hdr::wayland::Luminances) -> crate::graphics::Reported {
     crate::graphics::Reported {
         paper_white: 203,
         peak: peak.clamp(200, 10_000),
-        black: hundredths_of_a_nit(l.target_min * 203.0 / l.reference.max(1.0)),
     }
 }
 

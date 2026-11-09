@@ -574,13 +574,26 @@ impl Game<'_> {
     ) -> Result<Option<ItemStack>> {
         let mut answer = None;
         if self.serving.is_some() || self.options.dedicated.is_some() {
-            self.native_dispense_item(
+            // The block the dispenser faces has the first say (`dispense_method`), then the
+            // item's own part (`dispense_item`); the first answer wins.
+            let front = self.block_at(offset(pos, facing));
+            self.native_dispense_method(
                 self.dim.id(),
                 [pos.0, pos.1, pos.2],
                 facing,
+                front,
                 &stack,
                 &mut answer,
             );
+            if answer.is_none() {
+                self.native_dispense_item(
+                    self.dim.id(),
+                    [pos.0, pos.1, pos.2],
+                    facing,
+                    &stack,
+                    &mut answer,
+                );
+            }
         }
         if let Some((left, event)) = mod_dispensed(answer, self.items()) {
             if event == FAIL {
@@ -998,6 +1011,10 @@ impl Game<'_> {
         };
         // EntityType.create: `finalizeSpawn` first, the egg's components after.
         if let Some(m) = self.mobs.iter_mut().find(|m| m.id == id) {
+            // SpawnEggItemBehavior's `EntityType.spawn` never calls
+            // `setPersistenceRequired`, as a spawn egg used by hand doesn't;
+            // only the elder guardian's and copper golem's constructors do.
+            m.persistent = matches!(m.species(), Species::ElderGuardian | Species::CopperGolem);
             horizon_client::entity_nbt::apply_item_components(m, &stack);
         }
         // EntityType.updateCustomEntityTag: a configured egg
@@ -1147,6 +1164,8 @@ impl Game<'_> {
         // EntityType.create rolls a yaw from the level random before the stack config turns it.
         let _ = self.world.random.next_float();
         self.next_entity += 1;
+        let (_, uuid) = horizon_client::mobs::living_random();
+        self.persist.uuids.insert(self.next_entity, uuid);
         let mut stand =
             horizon_client::entities::ArmorStand::new(self.next_entity, foot, y_rot(facing));
         // Entity.applyImplicitComponents: a name from an anvil names the stand.
@@ -2293,6 +2312,161 @@ pub(super) fn tipped_effect(stack: &ItemStack) -> Option<(&'static str, i32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// What a dispense probe part heard: which part, and the dispenser it was for.
+    #[derive(Clone, Default)]
+    struct Heard(std::sync::Arc<std::sync::Mutex<Vec<(&'static str, [i32; 3], u32)>>>);
+
+    impl Heard {
+        fn record(&self, part: &'static str, pos: [i32; 3], state: u32) {
+            self.0.lock().unwrap().push((part, pos, state));
+        }
+        fn take(&self) -> Vec<(&'static str, [i32; 3], u32)> {
+            std::mem::take(&mut *self.0.lock().unwrap())
+        }
+    }
+
+    /// Answers for the faced block for dirt and cobblestone, whatever the item's own part says.
+    struct Front(Heard);
+    #[mod_api::horizon_part]
+    impl mod_api::BlockPart for Front {
+        fn dispense_method(
+            &self,
+            _: &mut dyn mod_api::ServerHost,
+            event: &mut mod_api::DispenseMethodEvent<'_>,
+        ) -> Option<NativeDispensed> {
+            let state = crate::game::api_values::TryIntoEngine::try_into_engine(&event.state, &())
+                .unwrap()
+                .0;
+            self.0.record("block", event.pos, state);
+            let item = event.stack.item();
+            let answers = ["minecraft:dirt", "minecraft:cobblestone"]
+                .iter()
+                .any(|name| item == mod_api::__private::item_key(name).unwrap());
+            answers.then_some((None, FAIL))
+        }
+    }
+
+    /// Answers for the item it is attached to, if the block in front let it.
+    struct Item(Heard);
+    #[mod_api::horizon_part]
+    impl mod_api::ItemPart for Item {
+        fn dispense_item(
+            &self,
+            _: &mut dyn mod_api::ServerHost,
+            event: &mut mod_api::DispenseItemEvent<'_>,
+        ) -> Option<NativeDispensed> {
+            self.0.record("item", event.pos, 0);
+            Some((None, CLICK))
+        }
+    }
+
+    struct Probe(Heard);
+    #[mod_api::__subscriptions]
+    impl mod_api::Hooks for Probe {
+        fn register(&self, r: &mut dyn mod_api::Registrar, _: &mod_api::RegistrationContext) {
+            let stone = r.block_key("minecraft:stone");
+            r.block_part(stone, Front(self.0.clone()));
+            for item in ["minecraft:stone", "minecraft:cobblestone"] {
+                let item = r.item_key(item);
+                r.item_part(item, Item(self.0.clone()));
+            }
+        }
+    }
+
+    /// `DispenserBlock.getDispenseMethod`: the block the dispenser faces
+    /// answers first and wins for any item; with no answer from it the item's
+    /// part decides; with neither, vanilla drops one item as before.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn the_faced_block_answers_before_the_item_and_vanilla_stands_when_no_part_listens() {
+        use horizon_client::chunk::Chunk;
+        use std::sync::Arc;
+
+        let heard = Heard::default();
+        let mods: mod_api::Mods = vec![mod_api::ModEntry::new(
+            "dispense_probe",
+            Box::new(Probe(heard.clone())),
+        )]
+        .into();
+        super::super::api_values::install_parts(&mods).unwrap();
+        mod_api::testing::with_mods(mods, || {
+            super::super::native_entity_refs::tests::with_game(|game| {
+                game.options.dedicated = Some(Vec::new());
+                game.world
+                    .chunks
+                    .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+                let stone = game
+                    .pack
+                    .assets
+                    .registry
+                    .default_state("minecraft:stone")
+                    .unwrap();
+                let air = game
+                    .pack
+                    .assets
+                    .registry
+                    .default_state("minecraft:air")
+                    .unwrap();
+                // The dispenser at (5, 64, 5) faces stone.
+                game.world.set(6, 64, 5, stone).unwrap();
+                game.audio.capture = Some(Vec::new());
+                let dispense = |game: &mut Game<'_>, item: &str| {
+                    game.dispense_item((5, 64, 5), Direction::East, ItemStack::new(item, 1))
+                        .unwrap()
+                };
+
+                // 1. The faced block answers for an item with no part of its own: it wins, and
+                //    the slot is emptied with the event it chose.
+                assert_eq!(dispense(game, "minecraft:dirt"), None);
+                assert_eq!(heard.take(), [("block", [5, 64, 5], stone.0)]);
+                assert_eq!(
+                    game.audio.capture.as_ref().unwrap().last().unwrap().event,
+                    "minecraft:block.dispenser.fail"
+                );
+                assert!(
+                    game.dropped.is_empty(),
+                    "the block's answer owns the dispense"
+                );
+                game.audio.capture.as_mut().unwrap().clear();
+
+                // 2. The faced block answers for an item that has its own part: its answer wins
+                //    and the item's part is never asked.
+                assert_eq!(dispense(game, "minecraft:cobblestone"), None);
+                assert_eq!(heard.take(), [("block", [5, 64, 5], stone.0)]);
+                assert_eq!(
+                    game.audio.capture.as_ref().unwrap().last().unwrap().event,
+                    "minecraft:block.dispenser.fail"
+                );
+                assert!(game.dropped.is_empty());
+                game.audio.capture.as_mut().unwrap().clear();
+
+                // 3. No block answer: the item's part decides.
+                assert_eq!(dispense(game, "minecraft:stone"), None);
+                assert_eq!(
+                    heard.take(),
+                    [("block", [5, 64, 5], stone.0), ("item", [5, 64, 5], 0)]
+                );
+                assert_eq!(
+                    game.audio.capture.as_ref().unwrap().last().unwrap().event,
+                    "minecraft:block.dispenser.dispense"
+                );
+                assert!(game.dropped.is_empty());
+                game.audio.capture.as_mut().unwrap().clear();
+
+                // 4. Neither the block in front nor the item has a part: vanilla drops one.
+                game.world.set(6, 64, 5, air).unwrap();
+                assert_eq!(dispense(game, "minecraft:stick"), None);
+                assert!(heard.take().is_empty());
+                assert_eq!(game.dropped.len(), 1);
+                assert_eq!(game.dropped[0].stack, ItemStack::new("minecraft:stick", 1));
+                assert_eq!(
+                    game.audio.capture.as_ref().unwrap().last().unwrap().event,
+                    "minecraft:block.dispenser.dispense"
+                );
+            });
+        });
+    }
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]

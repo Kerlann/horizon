@@ -3,6 +3,7 @@
 //! messages checked link by link, the acknowledged window, and messages
 //! relayed with each connection's numbering and signature cache.
 use super::{HostEvent, Hub};
+use crate::text::Text;
 use horizon_core::nbt::{JavaString, Tag};
 use horizon_protocol::{
     packets::play::{self, Clientbound as C},
@@ -74,6 +75,15 @@ impl ChatMessage {
             last_seen,
             unsigned_content: None,
         }
+    }
+    /// withUnsignedContent: what a mod's `native_chat_decorate` made of the
+    /// message is what clients show, as unsigned content beside the signed
+    /// body, which stays as the sender signed it (its content, signature,
+    /// time, salt and last seen), so the signature still verifies. None
+    /// leaves the message shown as signed.
+    pub fn decorate(&mut self, decorated: Option<Text>) {
+        self.unsigned_content =
+            decorated.map(|line| crate::lan::data::component_nbt(&line.component()));
     }
     /// hasExpiredServer.
     pub fn expired(&self, now: i64) -> bool {
@@ -410,6 +420,31 @@ impl Hub {
         }
     }
 
+    /// A chat line as a player who is on, disguised: no signature, named as the player is shown,
+    /// to the players who show chat (a mod's character or a bot's line). `message` is the
+    /// component. False when the player isn't on.
+    pub fn chat_as(&self, uuid: u128, message: Tag) -> bool {
+        let Some(name) = self
+            .guests
+            .iter()
+            .find(|g| g.placed && g.uuid == uuid)
+            .map(|g| g.name.clone())
+        else {
+            return false;
+        };
+        let bound = play::ChatTypeBound {
+            chat_type: self.chat_type,
+            name: self.player_display_name(uuid, &name),
+            target: None,
+        };
+        for k in 0..self.guests.len() {
+            if self.guests[k].placed {
+                self.send_disguised(k, message.clone(), bound.clone());
+            }
+        }
+        true
+    }
+
     /// collectSignedArguments, or collectUnsignedArguments when the client
     /// signed none: each of the command's message arguments (`parsed`, by
     /// name) through the sender's chain.
@@ -580,5 +615,44 @@ impl Hub {
         self.sync
             .id("minecraft:chat_type", &format!("minecraft:{name}"))
             .unwrap_or(self.chat_type)
+    }
+}
+
+#[cfg(test)]
+mod decorate_tests {
+    use super::*;
+
+    /// A decorated message keeps the body its sender signed and only adds the
+    /// line clients show; an undecorated one is shown as signed.
+    #[test]
+    fn decorating_keeps_the_signed_body() {
+        let seen = [[7u8; secure_chat::SIGNATURE_BYTES]];
+        let body = Body {
+            content: "hello",
+            timestamp: 1_000,
+            salt: 42,
+            last_seen: &seen,
+        };
+        let signed = Unpacked::Signed {
+            index: 3,
+            signature: [9u8; secure_chat::SIGNATURE_BYTES],
+        };
+        let mut message = ChatMessage::new(1, signed, &body, 2_000);
+        let before = message.clone();
+        message.decorate(None);
+        assert_eq!(message, before);
+        let line = Text::literal("[VIP] hello");
+        message.decorate(Some(line.clone()));
+        assert_eq!(
+            message.unsigned_content,
+            Some(crate::lan::data::component_nbt(&line.component()))
+        );
+        assert_eq!(
+            ChatMessage {
+                unsigned_content: None,
+                ..message
+            },
+            before
+        );
     }
 }

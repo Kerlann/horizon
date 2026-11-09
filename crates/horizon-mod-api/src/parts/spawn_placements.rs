@@ -4,6 +4,7 @@ use super::*;
 /// The game resolves it once, at load, into the tables its spawn checks read.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: only registration builds it; the game reads it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct SpawnPlacementDeclaration {
     /// The entity type the rule belongs to.
     pub id: String,

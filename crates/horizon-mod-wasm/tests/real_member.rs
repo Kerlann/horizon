@@ -13,13 +13,15 @@ impl mod_api::ServerHost for Quiet {}
 mod_api::impl_server_host_areas!(Quiet);
 
 #[test]
+#[ignore = "needs HORIZON_WASM_STD or HORIZON_WASM_FIXTURE_RAW; prints a member's sections"]
 fn dump_members() {
     for (name, path) in [
         ("std", "HORIZON_WASM_STD"),
         ("fixture", "HORIZON_WASM_FIXTURE_RAW"),
     ] {
         let Ok(path) = std::env::var(path) else {
-            return;
+            println!("=== {name} === skipped: {path} is not set");
+            continue;
         };
         let bytes = std::fs::read(path).unwrap();
         println!("=== {name} ===");
@@ -45,13 +47,15 @@ fn dump_members() {
 }
 
 #[test]
+#[ignore = "needs HORIZON_WASM_FIXTURE and HORIZON_WASM_STD, which the wasm-mods workflow builds"]
 fn real_member() {
     let (Ok(fixture), Ok(std)) = (
         std::env::var("HORIZON_WASM_FIXTURE"),
         std::env::var("HORIZON_WASM_STD"),
     ) else {
-        eprintln!("skipping: HORIZON_WASM_FIXTURE and HORIZON_WASM_STD are not set");
-        return;
+        panic!(
+            "HORIZON_WASM_FIXTURE and HORIZON_WASM_STD must be set: run with the wasm-mods workflow's environment"
+        );
     };
     let path = std::path::Path::new(&fixture);
     let manifest = Package::read(path).unwrap().manifest;

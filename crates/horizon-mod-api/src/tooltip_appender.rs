@@ -39,6 +39,7 @@ pub(crate) const TOOLTIP_DETAILS: &[&str] = &[
 /// the `registerAppender(TooltipLocation, ...)` overload is not represented.
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: a closed set the game matches without a wildcard
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum TooltipPlacement {
     /// Before every component's lines, after the item's own lines.
     BeforeAll,
@@ -53,6 +54,7 @@ pub enum TooltipPlacement {
 /// What a tooltip is about, as its appender gets it: the local player and the tooltip's flags.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct TooltipAppendContext {
     /// The local player's UUID, including for nested projectiles where vanilla passes no player.
     pub player: u128,

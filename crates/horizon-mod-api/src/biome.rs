@@ -3,6 +3,7 @@
 use crate::*;
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct SpawnEntry {
     pub entity: String,
     pub weight: u32,
@@ -17,6 +18,7 @@ pub struct SpawnEntry {
 /// water.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct BiomeColors {
     pub grass: u32,
     pub foliage: u32,

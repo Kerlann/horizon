@@ -315,7 +315,7 @@ fn dependency_tables(cargo: &toml::Table) -> impl Iterator<Item = (Option<&str>,
         .filter_map(|(target, table)| Some((target, table?.as_table()?)))
 }
 
-/// Add API packages and the generated executable to the fresh staged workspace.
+// Add API packages and the generated executable to the fresh staged workspace.
 pub(super) fn stage(
     stage: &Path,
     projects: &[Project<'_>],
@@ -375,7 +375,7 @@ pub(super) fn stage(
             });
             if let Some(old) = dependency.as_table() {
                 // A renamed dependency also needs its package name.
-                for key in ["package", "features"] {
+                for key in ["package", "features", "default-features"] {
                     if let Some(value) = old.get(key) {
                         rewritten.insert(key.into(), value.clone());
                     }

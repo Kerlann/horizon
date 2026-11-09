@@ -6,6 +6,7 @@ use crate::{BlockStateError, LevelReadError};
 /// unloaded or out-of-height position or an unchanged block.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum LevelWriteError {
     /// The level is gone or its handle belongs to an earlier lifetime.
     Stale,

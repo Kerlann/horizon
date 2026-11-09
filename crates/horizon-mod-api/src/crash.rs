@@ -24,6 +24,7 @@ pub fn current_native_call() -> Option<NativeModCall> {
 }
 /// What the game is doing, set as it goes: graphics adapter, settings, packs, world.
 static DETAILS: Mutex<Vec<(&'static str, String)>> = Mutex::new(Vec::new());
+// no wire: process-local crash attribution uses static runtime identities; not a hook payload.
 /// A call into one hook of a native mod.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 // exhaustive: the game builds it with a literal; mods only read it
@@ -66,6 +67,7 @@ pub fn current_native_mod() -> Option<&'static str> {
         .map(|call| call.id)
 }
 
+// no wire: process-local crash attribution uses static runtime identities; not a hook payload.
 /// A call into one package a native runtime hosts, beside the runtime's own [`NativeModCall`].
 #[derive(Clone, Debug, PartialEq, Eq)]
 // exhaustive: the game builds it with a literal; mods only read it
@@ -93,6 +95,7 @@ pub fn current_converted_call() -> Option<ConvertedCall> {
         .flatten()
 }
 
+// no wire: process-local crash attribution uses static runtime identities; not a hook payload.
 /// The packages one native runtime declared it loaded.
 ///
 /// A runtime that hosts converted code (Portizon's wasm packages, a Java interpreter running
@@ -132,6 +135,7 @@ impl ConvertedPackages {
     }
 }
 
+// no wire: borrowed crash attribution entry tied to its package inventory.
 /// One package a [`ConvertedPackages`] declared; only that registry makes one.
 #[derive(Clone, Copy, Debug)]
 // exhaustive: its fields are private, so only a registry creates it
@@ -188,6 +192,7 @@ struct ConvertedScope {
     token: u64,
 }
 
+// no wire: RAII crash attribution guard restores thread-local state on drop.
 /// Restores the previous live scope on this thread. This guard is not Send or Sync.
 /// Attribution ends when its native frame exits, even if the guard is retained.
 /// Worker threads have no scope unless the runtime enters one on that thread.
@@ -223,6 +228,7 @@ impl Drop for ConvertedPackageGuard {
     }
 }
 
+// no wire: RAII crash attribution guard restores thread-local state on drop.
 /// Puts back the call that `enter_native_mod` found.
 #[must_use]
 // exhaustive: its fields are private, so mods cannot build or destructure it

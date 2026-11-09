@@ -17,7 +17,7 @@
 //!   other side. Down over a result slot takes one craft or the whole furnace
 //!   output to the inventory; nothing ever goes into a result slot.
 //!
-//! Sorting draws a small button by the container's title and one by the
+//! Sorting draws a small button by a menu's storage slots and one by the
 //! inventory's (an optional key sorts the part under the cursor); the
 //! clicks come from `inv_sort::plan`.
 use super::{Creative, Game, Screen};

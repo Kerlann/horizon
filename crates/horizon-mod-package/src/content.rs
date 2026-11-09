@@ -914,8 +914,10 @@ impl FileReader<'_> {
     /// the size), for a caller that copies it without reading it; `None` in an archive.
     pub fn path(&self, name: &str) -> Result<Option<std::path::PathBuf>, String> {
         check_path(name)?;
-        let Self::Dir(root) = self else {
-            return Ok(None);
+        let root = match self {
+            Self::Dir(root) => root,
+            #[cfg(not(target_arch = "wasm32"))]
+            Self::Zip(_) => return Ok(None),
         };
         let path = root.join(name);
         let len = std::fs::metadata(&path)

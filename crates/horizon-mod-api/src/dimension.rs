@@ -16,6 +16,7 @@ fn hex_color(c: &str) -> bool {
 /// How a dimension chooses its biomes (`BiomeSource`): the level stem's `biome_source`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum BiomeSourceKind {
     /// The one `biome` of the settings everywhere (`minecraft:fixed`).
     #[default]
@@ -35,6 +36,7 @@ pub enum BiomeSourceKind {
 /// the Overworld's.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: mods build it themselves as register_dimension's settings
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct DimensionSettings {
     /// The lowest block's y: a multiple of 16, from -2032.
     pub min_y: i32,
@@ -191,6 +193,7 @@ impl Default for DimensionSettings {
 /// [`DimensionSettings`] that apply, plus the type's id.
 #[derive(Clone, Debug, PartialEq)]
 // exhaustive: the game builds it with a literal; mods only read it
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct LevelDimensionType {
     /// The dimension type's id (`minecraft:the_nether`, or a mod's or pack's).
     pub id: String,

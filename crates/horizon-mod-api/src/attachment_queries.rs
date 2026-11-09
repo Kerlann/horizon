@@ -37,6 +37,7 @@ pub trait AttachmentQueriesMut: ServerHost {
 }
 impl<H: ServerHost + ?Sized> AttachmentQueriesMut for H {}
 
+// no wire: borrowed runtime attachment rows retain storage lifetimes and write authority.
 /// A server write-through snapshot. Values and membership remain captured.
 #[non_exhaustive]
 pub struct AttachmentQueryMut<'key, T: 'static> {
@@ -54,6 +55,7 @@ impl<T: Clone + Send + Sync + 'static> AttachmentQueryMut<'_, T> {
     }
 }
 
+// no wire: borrowed runtime attachment rows retain storage lifetimes and write authority.
 /// A borrowed snapshot row with explicit journaled replacement/removal.
 #[non_exhaustive]
 pub struct AttachmentRowMut<'q, T: 'static> {

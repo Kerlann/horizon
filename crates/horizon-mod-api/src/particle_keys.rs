@@ -12,6 +12,7 @@ fn resolved() -> &'static OnceLock<Particles> {
     crate::parts::installed().map_or(&EMPTY, |parts| &parts.particles)
 }
 impl ParticleKey {
+    #[cfg(any(not(target_arch = "wasm32"), test))]
     pub(crate) fn from_slot(slot: u32) -> Result<Self, &'static str> {
         crate::parts::with_registering_keys(|registering| {
             let names = match registering {

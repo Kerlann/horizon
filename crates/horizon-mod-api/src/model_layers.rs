@@ -16,6 +16,7 @@ use horizon_core::geometry::Direction;
 /// texels, with its texture unchanged: a hat or an armour layer over a head.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, Default, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct CubeDeformation {
     /// Growth on the x axis, in texels.
     pub grow_x: f32,
@@ -59,6 +60,7 @@ impl CubeDeformation {
 /// then y, then x, as `ModelPart.translateAndRotate` turns it) and its scale.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct PartPose {
     /// Position on the x axis, in texels.
     pub x: f32,
@@ -146,6 +148,7 @@ impl PartPose {
 /// One box of a part (`CubeDefinition`), as a [`CubeListBuilder`] adds it.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct CubeDefinition {
     /// Its corner at the least x, y and z, in texels from the part's pivot.
     pub origin: [f32; 3],
@@ -168,6 +171,7 @@ pub struct CubeDefinition {
 /// the last `tex_offs` and mirrored after `mirror`.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, Default, PartialEq)]
 // exhaustive: private fields; use its constructors
+// no wire: transient model-construction state; publish the finished MeshDefinition.
 pub struct CubeListBuilder {
     cubes: Vec<CubeDefinition>,
     tex: [i32; 2],
@@ -349,6 +353,7 @@ impl CubeDefinition {
 /// (`PartDefinition`): a handle into that mesh only.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: private fields; use its constructors
+// no wire: index valid only inside the particular mesh builder that issued it.
 pub struct PartId(usize);
 
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
@@ -362,6 +367,8 @@ struct PartNode {
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 #[serde(try_from = "MeshDefinitionData")]
 // exhaustive: private fields; use the builder to create the tree
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(via = String)]
 pub struct MeshDefinition {
     parts: Vec<PartNode>,
 }
@@ -467,6 +474,7 @@ impl MeshDefinition {
 /// `LayerDefinition`: a mesh and the size of the texture its boxes are on.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct LayerDefinition {
     /// The model mesh to bake.
     pub mesh: MeshDefinition,
@@ -497,6 +505,7 @@ impl LayerDefinition {
 /// frame, and where it falls on the texture, 0 to 1 across it.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ModelVertex {
     /// The vertex position, in texels.
     pub pos: [f32; 3],
@@ -517,6 +526,7 @@ impl ModelVertex {
 /// part's frame.
 #[derive(serde::Serialize, serde::Deserialize, Clone, Copy, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct ModelPolygon {
     /// The four corners in winding order.
     pub vertices: [ModelVertex; 4],
@@ -536,6 +546,8 @@ impl ModelPolygon {
 /// with (`reset_pose`).
 #[derive(serde::Serialize, serde::Deserialize, Clone, Debug, PartialEq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(via = String)]
 pub struct ModelPart {
     /// Where it sits in its parent, in texels.
     pub x: f32,
@@ -709,6 +721,30 @@ impl ModelPart {
         self.x_scale += by[0];
         self.y_scale += by[1];
         self.z_scale += by[2];
+    }
+}
+
+impl From<&MeshDefinition> for String {
+    fn from(value: &MeshDefinition) -> Self {
+        serde_json::to_string(value).unwrap_or_default()
+    }
+}
+impl TryFrom<String> for MeshDefinition {
+    type Error = serde_json::Error;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        serde_json::from_str(&value)
+    }
+}
+
+impl From<&ModelPart> for String {
+    fn from(value: &ModelPart) -> Self {
+        serde_json::to_string(value).unwrap_or_default()
+    }
+}
+impl TryFrom<String> for ModelPart {
+    type Error = serde_json::Error;
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        serde_json::from_str(&value)
     }
 }
 

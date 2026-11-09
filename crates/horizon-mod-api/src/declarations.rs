@@ -3,6 +3,7 @@
 /// A boolean rule declared by a mod during registration.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct GameRuleDecl {
     /// Namespaced rule identifier.
     pub name: String,
@@ -12,6 +13,7 @@ pub struct GameRuleDecl {
     pub default: bool,
 }
 
+// no wire: borrowed parser or registration callbacks execute only in their owning process.
 /// The vanilla rule metadata supplied once by the owning game at registration.
 /// This is a borrowed view like `KnownIds`, not a second registration lifecycle.
 // exhaustive: the game supplies the complete schema with a literal
@@ -123,6 +125,7 @@ mod tests {
 /// A declared block entity type and the block identifiers it supports.
 #[derive(Clone, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct BlockEntityTypeDecl {
     /// Namespaced type identifier validated during registration.
     pub id: String,

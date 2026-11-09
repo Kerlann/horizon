@@ -2,6 +2,7 @@
 /// Atlas sprites to use for a world fluid during this resource load.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct FluidModel {
     /// Canonical world fluid registry name.
     pub fluid: String,

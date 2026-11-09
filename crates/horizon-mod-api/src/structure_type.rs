@@ -25,6 +25,7 @@ use std::sync::Arc;
 /// piece's own `Result` does in the engine.
 #[derive(Debug)]
 // exhaustive: mods build it themselves as a piece's error answer
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct StructureError(pub String);
 impl std::fmt::Display for StructureError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -42,6 +43,7 @@ impl From<(crate::Identifier, String)> for StructureError {
 /// found: the start's position (vanilla's `Structure.findGenerationPoint`
 /// answer) and its pieces (`Structure.generatePieces`), at least one.
 // exhaustive: mods build it themselves as find_generation_point's answer
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct FoundStructure {
     /// Where the start sits, in world blocks.
     pub position: [i32; 3],
@@ -115,6 +117,7 @@ pub trait StructureRandom {
 /// A noise-column block, classified by the questions structures ask.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum NoiseBlock {
     /// An air block.
     Air,
@@ -137,6 +140,7 @@ impl NoiseBlock {
 /// A noise column from its minimum Y upward; reads outside it are air.
 #[derive(Clone, Debug, Default)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub struct NoiseColumn {
     /// The minimum Y represented by the first block.
     pub min: i32,
@@ -160,6 +164,7 @@ impl NoiseColumn {
 /// The vanilla heightmap opacity predicates used by structure queries.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
 pub enum HeightmapType {
     /// Highest non-air block during world generation.
     WorldSurfaceWg,
