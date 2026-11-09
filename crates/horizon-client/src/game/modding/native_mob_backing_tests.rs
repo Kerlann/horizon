@@ -379,15 +379,22 @@ fn canonical_player_writes_refresh_only_changed_projection_and_ignore_noops() {
         );
         let axis = horizon_core::geometry::Axis::X;
         let width = vehicle.bounds.max(axis) - vehicle.bounds.min(axis);
-        assert!(game.living_set_attribute_base(nautilus, "minecraft:scale", 2.0));
+        assert!(game.living_set_attribute_base(nautilus, "minecraft:movement_speed", 0.5));
+        assert_eq!(
+            refresh!(),
+            0,
+            "an unrelated mount attribute is not geometry"
+        );
+        let mob = game.mob(nautilus.entity()).unwrap();
+        assert!(game.mob_set_baby(mob, true));
         assert_eq!(
             refresh!(),
             1,
-            "related mount dimensions after canonical attribute apply"
+            "related mount dimensions after canonical age apply"
         );
         let bounds = guests[0].1.vehicle.as_ref().unwrap().bounds;
-        assert_eq!(bounds.max(axis) - bounds.min(axis), width * 2.0);
-        assert!(game.living_set_attribute_base(nautilus, "minecraft:scale", 2.0));
+        assert_eq!(bounds.max(axis) - bounds.min(axis), width * 0.5);
+        assert!(game.mob_set_baby(mob, true));
         assert_eq!(refresh!(), 0, "same represented mount dimensions");
         assert!(game.as_console(|g| g.run_command("ride guest12 dismount")));
         assert_eq!(refresh!(), 1);
