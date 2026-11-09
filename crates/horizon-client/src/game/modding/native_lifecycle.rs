@@ -212,6 +212,7 @@ impl Game<'_> {
     }
 
     pub(super) fn native_lifecycle_open_started(&mut self) {
+        self.reset_entity_residency();
         self.entity_initialization = Default::default();
         if let Some(remote) = &mut self.remote {
             remote.attachments.clear();
@@ -237,6 +238,7 @@ impl Game<'_> {
             self.native_world_lifecycle(&context, WorldPhase::WorldOpenFailed, error_text);
         }
         self.attachment_indexes.clear();
+        self.entity_residency.get_mut().reset();
     }
 
     /// Report a server-loop or shutdown failure once and retire its epoch.
@@ -248,6 +250,7 @@ impl Game<'_> {
             self.native_world_lifecycle(&context, WorldPhase::WorldCloseFailed, error_text);
         }
         self.attachment_indexes.clear();
+        self.entity_residency.get_mut().reset();
     }
 
     /// After the final save, before the lock release. Client epochs retire
@@ -262,6 +265,7 @@ impl Game<'_> {
             self.native_world_lifecycle(&context, WorldPhase::WorldCloseFinal, "");
         }
         self.attachment_indexes.clear();
+        self.entity_residency.get_mut().reset();
         mod_api::__private::clear_game_parts();
     }
 

@@ -629,39 +629,29 @@ impl Game<'_> {
             });
         }
         let next = &mut self.next_entity;
-        self.tnts.iter_mut().for_each(|t| {
-            super::entity::assign_stored_id(next, &mut t.id, None);
-        });
-        self.falling.for_each_mut(|f| {
-            super::entity::assign_stored_id(next, &mut f.id, Some(&f.attachment_lifetime));
-        });
-        self.creatures.projectiles.for_each_mut(|p| {
-            super::entity::assign_stored_id(next, &mut p.id, Some(&p.attachment_lifetime));
-        });
-        self.tridents.iter_mut().for_each(|t| {
-            super::entity::assign_stored_id(next, &mut t.id, None);
-        });
-        self.rockets.iter_mut().for_each(|r| {
-            super::entity::assign_stored_id(next, &mut r.id, None);
-        });
-        self.crystals.iter_mut().for_each(|c| {
-            super::entity::assign_stored_id(next, &mut c.id, None);
-        });
+        use super::entity_residency::assign_resident_ids;
+        assign_resident_ids!(self.tnts, t, next, None);
+        assign_resident_ids!(self.falling, f, next, Some(&f.attachment_lifetime));
+        assign_resident_ids!(
+            self.creatures.projectiles,
+            p,
+            next,
+            Some(&p.attachment_lifetime)
+        );
+        assign_resident_ids!(self.tridents, t, next, None);
+        assign_resident_ids!(self.rockets, r, next, None);
+        assign_resident_ids!(self.crystals, c, next, None);
         self.bolts.iter_mut().for_each(|b| {
             assign_entity_id(next, &mut b.id);
         });
-        self.ominous_spawners.for_each_mut(|o| {
-            super::entity::assign_stored_id(next, &mut o.id, None);
-        });
+        assign_resident_ids!(self.ominous_spawners, o, next, None);
         self.potions.thrown_ids().for_each(|id| {
             assign_entity_id(next, id);
         });
         self.end.eye_ids().for_each(|id| {
             assign_entity_id(next, id);
         });
-        self.breath_clouds.for_each_mut(|b| {
-            super::entity::assign_stored_id(next, &mut b.id, None);
-        });
+        assign_resident_ids!(self.breath_clouds, b, next, None);
     }
 
     /// Primed TNT, falling blocks, projectiles, tridents, firework rockets and

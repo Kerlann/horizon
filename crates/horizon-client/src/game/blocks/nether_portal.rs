@@ -867,19 +867,31 @@ impl Game<'_> {
             Vec::new()
         };
         // A trident or rocket in flight gets its id here, before the walk.
-        for t in self
-            .tridents
-            .iter_mut()
-            .filter(|t| only.is_none() && (!t.in_ground || t.previous != t.position))
-        {
-            super::entity::assign_stored_id(&mut self.next_entity, &mut t.id, None);
-        }
-        for r in self
-            .rockets
-            .iter_mut()
-            .filter(|r| only.is_none() && r.attached_to.is_none() && !r.attached)
-        {
-            super::entity::assign_stored_id(&mut self.next_entity, &mut r.id, None);
+        if only.is_none() {
+            for index in 0..self.tridents.len() {
+                let t = &self.tridents[index];
+                if !t.in_ground || t.previous != t.position {
+                    super::entity_residency::assign_resident_id!(
+                        self.tridents,
+                        index,
+                        t,
+                        &mut self.next_entity,
+                        None
+                    );
+                }
+            }
+            for index in 0..self.rockets.len() {
+                let r = &self.rockets[index];
+                if r.attached_to.is_none() && !r.attached {
+                    super::entity_residency::assign_resident_id!(
+                        self.rockets,
+                        index,
+                        r,
+                        &mut self.next_entity,
+                        None
+                    );
+                }
+            }
         }
         let mut inside: Vec<(u32, BlockPos)> = Vec::new();
         let mut portal_sections = std::mem::take(&mut self.portals.sections);

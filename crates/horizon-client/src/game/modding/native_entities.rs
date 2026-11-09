@@ -96,25 +96,36 @@ impl Game<'_> {
         let target = self.spawn_entity_from_nbt(tag);
         // These roots take their id as they load, and a rocket has no command
         // Target variant. Select the newly appended root, never an older waiting entity.
-        let root =
-            match kind {
-                "minecraft:tnt" => self.tnts.get_mut(deferred.0).map(|e| {
-                    super::entity::assign_stored_id(&mut self.next_entity, &mut e.id, None)
-                }),
-                "minecraft:falling_block" if deferred.1 < self.falling.len() => {
-                    Some(self.falling.update(deferred.1, |f| {
-                        super::entity::assign_stored_id(
-                            &mut self.next_entity,
-                            &mut f.id,
-                            Some(&f.attachment_lifetime),
-                        )
-                    }))
-                }
-                "minecraft:firework_rocket" => self.rockets.get_mut(deferred.2).map(|e| {
-                    super::entity::assign_stored_id(&mut self.next_entity, &mut e.id, None)
-                }),
-                _ => None,
-            };
+        let root = match kind {
+            "minecraft:tnt" if deferred.0 < self.tnts.len() => {
+                Some(super::entity_residency::assign_resident_id!(
+                    self.tnts,
+                    deferred.0,
+                    e,
+                    &mut self.next_entity,
+                    None
+                ))
+            }
+            "minecraft:falling_block" if deferred.1 < self.falling.len() => {
+                Some(super::entity_residency::assign_resident_id!(
+                    self.falling,
+                    deferred.1,
+                    f,
+                    &mut self.next_entity,
+                    Some(&f.attachment_lifetime)
+                ))
+            }
+            "minecraft:firework_rocket" if deferred.2 < self.rockets.len() => {
+                Some(super::entity_residency::assign_resident_id!(
+                    self.rockets,
+                    deferred.2,
+                    e,
+                    &mut self.next_entity,
+                    None
+                ))
+            }
+            _ => None,
+        };
         self.native_mobs_joined(from, false);
         // Otherwise the root is the first entity spawned, also for kinds no
         // command target stands for (experience orbs, end crystals, cushions). An id handed out to an
@@ -205,29 +216,22 @@ impl Game<'_> {
 
     fn assign_pending_join_ids(&mut self) {
         self.assign_dragon_and_crystal_ids();
-        for t in &mut self.tnts {
-            super::entity::assign_stored_id(&mut self.next_entity, &mut t.id, None);
-        }
-        self.falling.for_each_mut(|f| {
-            super::entity::assign_stored_id(
-                &mut self.next_entity,
-                &mut f.id,
-                Some(&f.attachment_lifetime),
-            );
-        });
-        self.creatures.projectiles.for_each_mut(|p| {
-            super::entity::assign_stored_id(
-                &mut self.next_entity,
-                &mut p.id,
-                Some(&p.attachment_lifetime),
-            );
-        });
-        for t in &mut self.tridents {
-            super::entity::assign_stored_id(&mut self.next_entity, &mut t.id, None);
-        }
-        for r in &mut self.rockets {
-            super::entity::assign_stored_id(&mut self.next_entity, &mut r.id, None);
-        }
+        use super::entity_residency::assign_resident_ids;
+        assign_resident_ids!(self.tnts, t, &mut self.next_entity, None);
+        assign_resident_ids!(
+            self.falling,
+            f,
+            &mut self.next_entity,
+            Some(&f.attachment_lifetime)
+        );
+        assign_resident_ids!(
+            self.creatures.projectiles,
+            p,
+            &mut self.next_entity,
+            Some(&p.attachment_lifetime)
+        );
+        assign_resident_ids!(self.tridents, t, &mut self.next_entity, None);
+        assign_resident_ids!(self.rockets, r, &mut self.next_entity, None);
     }
     /// The entity inserted earliest after the last one announced.
     fn next_unannounced(&self) -> Option<(Slot, u32, horizon_client::join_seq::JoinSeq)> {
