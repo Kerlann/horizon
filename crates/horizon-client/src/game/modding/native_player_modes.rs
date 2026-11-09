@@ -15,7 +15,7 @@ impl Game<'_> {
     /// single-player owner's 4 with commands allowed. A displaced connected
     /// player keeps their permission level even while their body is unavailable.
     /// None for a stale or unavailable player.
-    pub(super) fn player_permission_level(&self, player: PlayerRef) -> Option<u8> {
+    pub(super) fn uncached_player_permission_level(&self, player: PlayerRef) -> Option<u8> {
         let read = self
             .player_handle_read(player)
             .or_else(|| self.online_player_record(player).map(PlayerRead::Guest))?;
@@ -28,20 +28,26 @@ impl Game<'_> {
     }
     /// `Player.hasInfiniteMaterials`: the `instabuild` ability, which
     /// creative mode gives.
-    pub(super) fn player_has_infinite_materials(&self, player: PlayerRef) -> Option<bool> {
-        self.player_is_creative(player)
+    pub(super) fn uncached_player_has_infinite_materials(&self, player: PlayerRef) -> Option<bool> {
+        self.uncached_player_is_creative(player)
     }
     /// `Player.canUseGameMasterBlocks`: creative and a permission level of
     /// at least 2, as command blocks, structure blocks and jigsaws ask.
-    pub(super) fn player_can_use_game_master_blocks(&self, player: PlayerRef) -> Option<bool> {
-        let creative = self.player_is_creative(player)?;
-        Some(creative && self.player_permission_level(player)? >= 2)
+    pub(super) fn uncached_player_can_use_game_master_blocks(
+        &self,
+        player: PlayerRef,
+    ) -> Option<bool> {
+        let creative = self.uncached_player_is_creative(player)?;
+        Some(creative && self.uncached_player_permission_level(player)? >= 2)
     }
     /// `ServerPlayerGameMode.getPreviousGameModeForPlayer`: the mode the
     /// player last left (`previousPlayerGameType`, saved with the player), or
     /// `Some(None)` when they never changed mode. None for a stale or
     /// unavailable player.
-    pub(super) fn player_previous_game_mode(&self, player: PlayerRef) -> Option<Option<GameMode>> {
+    pub(super) fn uncached_player_previous_game_mode(
+        &self,
+        player: PlayerRef,
+    ) -> Option<Option<GameMode>> {
         Some(match self.player_handle_read(player)? {
             // The acting player's own: a guest's turn swaps theirs in.
             PlayerRead::Acting { .. } => self.previous_mode,
@@ -52,8 +58,11 @@ impl Game<'_> {
     /// blocks as with sneak held, as vanilla reads it from the shift-key
     /// flag (the same read as `EntityRef::is_shift_key_down`). None for a
     /// stale or unavailable player.
-    pub(super) fn player_is_secondary_use_active(&self, player: PlayerRef) -> Option<bool> {
-        self.entity_is_shift_key_down(player.entity())
+    pub(super) fn uncached_player_is_secondary_use_active(
+        &self,
+        player: PlayerRef,
+    ) -> Option<bool> {
+        self.uncached_entity_is_shift_key_down(player.entity())
     }
     /// `Player.mayUseItemAt(pos, face, stack)`: the game's own check for an
     /// item used on a block (`Game::may_use_item_at`), with the player's

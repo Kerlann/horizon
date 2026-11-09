@@ -98,7 +98,7 @@ impl Game<'_> {
     }
     /// `Player.takeXpDelay`: the ticks before the player can take the next
     /// experience orb.
-    pub(super) fn player_exp_cooldown(&self, player: PlayerRef) -> Option<u32> {
+    pub(super) fn uncached_player_exp_cooldown(&self, player: PlayerRef) -> Option<u32> {
         match self.player_handle_read(player)? {
             super::native_server::PlayerRead::Acting { .. } => Some(self.xp_delay),
             super::native_server::PlayerRead::Guest(g) => Some(

@@ -61,7 +61,10 @@ impl Game<'_> {
 
     /// The local player's predicted breaking state, including Idle. None for
     /// stale, nonlocal or fake handles and outside a logged-in client world.
-    pub(super) fn player_block_breaking(&self, player: PlayerRef) -> Option<BlockBreakingState> {
+    pub(super) fn uncached_player_block_breaking(
+        &self,
+        player: PlayerRef,
+    ) -> Option<BlockBreakingState> {
         self.native_local_status(player)?;
         Some(
             self.mining
@@ -78,7 +81,7 @@ impl Game<'_> {
 
     /// The local player's existing cave ambience mood, normally 0 through 1.
     /// None for stale, nonlocal or fake handles and outside a client world.
-    pub(super) fn player_ambient_mood(&self, player: PlayerRef) -> Option<f32> {
+    pub(super) fn uncached_player_ambient_mood(&self, player: PlayerRef) -> Option<f32> {
         self.native_local_status(player)?;
         Some(self.ambience.moodiness)
     }
