@@ -842,13 +842,14 @@ impl Mob {
         }
         match who {
             Who::Player => self.spares_players(w),
-            Who::Mob(id) => {
-                // `Mob.canAttack` refuses a Ghast for every mob.
-                w.seen(id).is_some_and(|s| s.species == Species::Ghast)
-                    || (self.species() == Species::IronGolem
-                        && w.seen(id).is_some_and(|s| s.species == Species::Creeper))
-            }
+            Who::Mob(id) => self.spares_mob_species(w.seen(id).map(|s| s.species)),
         }
+    }
+    /// The mob-only part of spares_target, also used by source-lane reads.
+    fn spares_mob_species(&self, species: Option<Species>) -> bool {
+        (self.species() == Species::Dolphin && self.is_baby())
+            || species == Some(Species::Ghast)
+            || (self.species() == Species::IronGolem && species == Some(Species::Creeper))
     }
     /// The setter's own refusal (#1175), one rule both the write handle and
     /// a goal tick's `set_target` ask: a brain-backed species' target is its
@@ -898,9 +899,23 @@ impl Mob {
     /// scoreboard and the world border, so the write handle answers it around
     /// this; a goal tick refuses the brain-backed warden before it.
     pub fn valid_target(&self, w: &MobWorld, target: &TargetFacts) -> bool {
+        let seen_species = match target {
+            TargetFacts::Mob { id, .. } => w.seen(*id).map(|s| s.species),
+            TargetFacts::Player { .. } => None,
+        };
+        self.valid_target_facts(i32::from(w.difficulty.base), target, seen_species)
+    }
+    /// Shared target rules over captured facts, without constructing a MobWorld.
+    /// seen_species preserves the caller's original spares_target visibility.
+    pub fn valid_target_facts(
+        &self,
+        difficulty: i32,
+        target: &TargetFacts,
+        seen_species: Option<Species>,
+    ) -> bool {
         match target {
             TargetFacts::Mob {
-                id,
+                id: _,
                 species,
                 alive,
                 invulnerable,
@@ -928,7 +943,7 @@ impl Mob {
                 if self.species() == Species::Creeper && *species == Species::Goat {
                     return false;
                 }
-                !self.spares_target(w, Who::Mob(*id))
+                !self.spares_mob_species(seen_species)
             }
             TargetFacts::Player {
                 alive,
@@ -944,7 +959,7 @@ impl Mob {
                     && !*invulnerable
                     && !*creative
                     && !*spectator
-                    && w.difficulty.base != 0
+                    && difficulty != 0
                     && !self.built_by_player()
                     && !(self.is_tamable_animal()
                         && self.extra.tame
