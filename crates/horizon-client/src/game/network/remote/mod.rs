@@ -3306,6 +3306,7 @@ impl Game<'_> {
                 rotation: [0.0, 0.0],
                 join: Default::default(),
                 no_gravity: false,
+                needs_sync: false,
                 id: id as u32,
                 position: at,
                 previous: at,

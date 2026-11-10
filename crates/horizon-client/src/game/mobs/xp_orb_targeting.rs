@@ -89,6 +89,7 @@ mod tests {
             rotation: [0.0, 0.0],
             join: Default::default(),
             no_gravity: false,
+            needs_sync: false,
             id,
             position: at,
             previous: at,

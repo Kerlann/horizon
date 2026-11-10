@@ -179,6 +179,7 @@ mod tests {
             rotation: [0.0, 0.0],
             join: Default::default(),
             no_gravity: false,
+            needs_sync: false,
             id: 0,
             position: at,
             previous: at,

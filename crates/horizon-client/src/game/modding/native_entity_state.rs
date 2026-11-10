@@ -645,6 +645,7 @@ mod tests {
                 ticks: 21,
                 health: 5,
                 no_gravity: true,
+                needs_sync: false,
                 following: None,
             });
             let orb = game.entity(43).unwrap();
@@ -727,6 +728,7 @@ mod tests {
                 rotation: [0.0, 0.0],
                 join: Default::default(),
                 no_gravity: false,
+                needs_sync: false,
                 id: 41,
                 position: Vec3::ZERO,
                 previous: Vec3::ZERO,

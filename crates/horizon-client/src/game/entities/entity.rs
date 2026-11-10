@@ -2420,6 +2420,7 @@ mod set_rotation_tests {
             attachment_lifetime: Default::default(),
             join: Default::default(),
             no_gravity: false,
+            needs_sync: false,
             id: 0,
             position: horizon_core::geometry::Vec3::ZERO,
             previous: horizon_core::geometry::Vec3::ZERO,
