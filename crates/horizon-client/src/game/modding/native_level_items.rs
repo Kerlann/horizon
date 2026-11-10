@@ -332,6 +332,7 @@ mod tests {
                         ticks,
                         health: 5,
                         no_gravity: true,
+                        needs_sync: false,
                         following: None,
                     }
                 };

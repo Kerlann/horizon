@@ -5521,6 +5521,7 @@ pub(super) mod particle_count_tests {
             rotation: [0.0, 0.0],
             join: Default::default(),
             no_gravity: false,
+            needs_sync: false,
             id: 1,
             position: at,
             previous: at,

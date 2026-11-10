@@ -2801,6 +2801,7 @@ impl Game<'_> {
                         rotation: [0.0, 0.0],
                         join: Default::default(),
                         no_gravity: false,
+                        needs_sync: false,
                         id: self.next_entity,
                         position: Vec3::new(at[0], at[1], at[2]),
                         previous: Vec3::new(at[0], at[1], at[2]),

@@ -13335,6 +13335,7 @@ impl Game<'_> {
             rotation: [0.0, 0.0],
             join: Default::default(),
             no_gravity: false,
+            needs_sync: false,
             id: self.next_entity,
             position: p,
             previous: p,

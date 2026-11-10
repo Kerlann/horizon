@@ -1662,6 +1662,8 @@ pub const ORB_QUAD_SCALE: f32 = 0.3;
 /// ExperienceOrb: gravity 0.03, homing towards the player within 8 blocks.
 #[derive(Clone, Debug)]
 pub struct ExperienceOrb {
+    /// Synched data changed outside normal ticking; cleared after tracking.
+    pub needs_sync: bool,
     /// Entity-owned registration metadata; content clones are detached.
     pub attachment_lifetime: horizon_mod_runtime::attachments::AttachmentLifetime,
     /// `Entity.yRot` and `xRot` (`/tp`, `/data get ... Rotation`).
@@ -4135,6 +4137,7 @@ mod world_border_tests {
                 rotation: [0.0, 0.0],
                 join: Default::default(),
                 no_gravity: false,
+                needs_sync: false,
                 id: 2,
                 position: Vec3::new(24.0, 4.0, 20.5),
                 previous: Vec3::new(24.0, 4.0, 20.5),
@@ -5654,6 +5657,7 @@ mod orb_underwater_tests {
                     rotation: [0.0, 0.0],
                     join: Default::default(),
                     no_gravity: false,
+                    needs_sync: false,
                     id: 1,
                     position: Vec3::ZERO,
                     previous: Vec3::ZERO,
@@ -5689,6 +5693,7 @@ mod render_light_tests {
             rotation: [0.0, 0.0],
             join: Default::default(),
             no_gravity: false,
+            needs_sync: false,
             id: 1,
             position: Vec3::new(0.5, y, 0.5),
             previous: Vec3::new(0.5, y, 0.5),
@@ -5916,6 +5921,7 @@ mod orb_lava_tests {
             rotation: [0.0, 0.0],
             join: Default::default(),
             no_gravity: false,
+            needs_sync: false,
             id: 1,
             position: at,
             previous: at,
