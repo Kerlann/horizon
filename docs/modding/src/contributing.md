@@ -53,3 +53,15 @@ A reviewer runs your change in game at your head only when a test can't cover on
 If your PR changes or removes something mods already use, the reviewer also runs
 [horizon-machine-sample](https://github.com/arismoko/horizon-machine-sample) against it. A new item's `///` doc is its
 reference.
+
+## A catalog point and the wasm fixture
+
+A new or changed catalog point is proven by the wasm fixture: real wasm mods (`crates/horizon-mod-wasm/tests/fixture`,
+`library-fixture` and `groups`) built with `cargo horizon-mod build --wasm` and loaded by the real loader. The
+`wasm-mods` CI job does all of it on a PR that touches `crates/cargo-horizon-mod/`, a `crates/horizon-mod-*` crate or
+`Cargo.lock`, once the PR is ready for review (drafts skip it). That job is the answer; you don't need a local build.
+
+To run it yourself, on Linux or Windows, follow the steps of `.github/workflows/wasm-mods.yml` from the repository
+root; the tool installs its pinned toolchain through rustup. One wasm compile of `horizon-mod-points` takes about
+10 GiB of memory, so set `CARGO_BUILD_JOBS=1` on a 16 GiB machine. To check one change, build only the member that
+uses the point and run its test. The build rewrites files in the fixture folders; don't commit them.

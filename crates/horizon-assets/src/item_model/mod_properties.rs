@@ -14,22 +14,25 @@ static TINT: RwLock<BTreeSet<String>> = RwLock::new(BTreeSet::new());
 /// resources load. An id that is not `<namespace>:<path>` in a namespace other than
 /// vanilla's is logged and left out. Returns the ids kept, in registration order.
 pub fn register_range_properties(ids: Vec<String>) -> Vec<String> {
-    register(&RANGE, "range select item model property", ids)
+    keep_mod_ids(&RANGE, "range select item model property", ids)
 }
 
 /// Keeps the categorical `select` properties native mods registered, before resources
 /// load, checked as [`register_range_properties`] checks its ids.
 pub fn register_select_properties(ids: Vec<String>) -> Vec<String> {
-    register(&SELECT, "select item model property", ids)
+    keep_mod_ids(&SELECT, "select item model property", ids)
 }
 
 /// Keeps the item tint sources native mods registered, before resources load, checked as
 /// [`register_range_properties`] checks its ids.
 pub fn register_tint_sources(ids: Vec<String>) -> Vec<String> {
-    register(&TINT, "item tint source", ids)
+    keep_mod_ids(&TINT, "item tint source", ids)
 }
 
-fn register(table: &RwLock<BTreeSet<String>>, kind: &str, ids: Vec<String>) -> Vec<String> {
+/// Adds to `table` the ids a mod registered as `kind`: an id that is not `<namespace>:<path>` in a
+/// namespace other than vanilla's, or one registered already, is logged and left out. Returns the
+/// ids kept, in registration order.
+pub fn keep_mod_ids(table: &RwLock<BTreeSet<String>>, kind: &str, ids: Vec<String>) -> Vec<String> {
     let mut kept = Vec::new();
     let mut set = table.write().unwrap_or_else(|e| e.into_inner());
     for id in ids {

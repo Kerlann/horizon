@@ -110,6 +110,10 @@ fn scaling(sprite: &str, r: &Rect) -> NineSlice {
             | "horizon/jei/button_disabled_v2"
             | "horizon/jei/button_highlight_v2" => [6; 4],
             "horizon/jei/search_background_v2" => [6; 4],
+            "horizon/jei/interactive_ingredient_tooltip_background" => [16; 4],
+            "horizon/jei/recipe_preview_background_v2" => [16; 4],
+            "horizon/jei/scrollbar_background_v2" => [6; 4],
+            "horizon/jei/scrollbar_marker_v2" => [2, 2, 2, 1],
             "gui/sprites/widget/button"
             | "gui/sprites/widget/button_highlighted"
             | "gui/sprites/widget/button_disabled" => [3; 4],
@@ -1225,6 +1229,13 @@ pub struct EditBox {
     /// Grey completion shown after the text (EditBox.setSuggestion).
     pub suggestion: Option<String>,
     pub text_color: u32,
+    /// `EditBox.textColorUneditable`: the colour of a box `setEditable(false)`
+    /// made read-only, which still shows its value and caret.
+    pub text_color_uneditable: u32,
+    /// `EditBox.isEditable`: a read-only box keeps the focus, the caret keys
+    /// and copy, but takes no typed text, Backspace/Delete or paste (`AnvilScreen`
+    /// sets it by its input slot).
+    pub editable: bool,
     /// `getMessage`: what the narrator calls the box ("<message> edit box:
     /// <value>").
     pub message: String,
@@ -1467,6 +1478,8 @@ impl EditBox {
             focused_at: Instant::now(),
             suggestion: None,
             text_color: rgba(224, 224, 224, 255),
+            text_color_uneditable: rgba(112, 112, 112, 255),
+            editable: true,
             message: String::new(),
             frame: None,
         }
@@ -1507,11 +1520,18 @@ impl EditBox {
     }
     /// EditBox.insertText: replace the selection, respecting the maximum length.
     pub fn insert_text(&mut self, text: &str) {
+        if !self.editable {
+            return;
+        }
         self.edit.insert_text(text);
         self.moved();
     }
-    /// Delete `n` characters (negative: backwards) or the selection.
+    /// Delete `n` characters (negative: backwards) or the selection. A
+    /// read-only box consumes the key without changing its value.
     pub fn delete_chars(&mut self, n: isize) {
+        if !self.editable {
+            return;
+        }
         self.edit.delete_chars(n);
         self.moved();
     }
@@ -1603,6 +1623,9 @@ impl EditBox {
             K::KeyA => EditKey::SelectAll,
             _ => return false,
         };
+        if !self.editable && matches!(key, EditKey::Backspace | EditKey::Delete) {
+            return true;
+        }
         let handled = self.edit.key(key, ctrl, shift);
         if handled {
             self.moved();
@@ -1615,6 +1638,19 @@ impl EditBox {
         shortcut: crate::clipboard::EditShortcut,
         clipboard: &mut dyn crate::clipboard::Clipboard,
     ) -> bool {
+        use crate::clipboard::EditShortcut;
+        if !self.editable {
+            match shortcut {
+                // EditBox.keyPressed: Cut copies the selection, then does not
+                // take it out of a read-only box.
+                EditShortcut::Cut => {
+                    clipboard.set(&self.selected_text());
+                    return false;
+                }
+                EditShortcut::Paste => return false,
+                EditShortcut::SelectAll | EditShortcut::Copy => {}
+            }
+        }
         let before = self.value.clone();
         crate::clipboard::apply(self, shortcut, clipboard);
         self.reset_blink();
@@ -1706,7 +1742,11 @@ impl EditBox {
                 u32::MAX,
             );
         }
-        let color = self.text_color;
+        let color = if self.editable {
+            self.text_color
+        } else {
+            self.text_color_uneditable
+        };
         let rest: String = self.value.chars().skip(self.display).collect();
         let shown_len = atlas.font.fit(&rest, self.inner_width());
         let displayed: String = rest.chars().take(shown_len).collect();
@@ -2582,5 +2622,52 @@ mod tests {
                 (box_, [0.5, 0.0, 0.75, 0.25])
             ]
         );
+    }
+
+    /// `EditBox.setEditable(false)`: the box keeps the focus, the caret keys
+    /// and copy, but `charTyped`/paste/Backspace/Delete do nothing, and Cut
+    /// copies without taking the text out. A value and the caret still show,
+    /// in `textColorUneditable`.
+    #[test]
+    fn a_read_only_edit_box_keeps_the_caret_and_copy_but_refuses_editing() {
+        use crate::clipboard::{EditShortcut, MemoryClipboard};
+        let mut edit = EditBox::new(0.0, 0.0, 100.0, 20.0);
+        edit.set_value("name");
+        edit.editable = false;
+        let mut clipboard = MemoryClipboard("pasted".into());
+        // The caret keys still work.
+        assert!(edit.key(winit::keyboard::KeyCode::ArrowLeft, false, false));
+        assert_eq!(edit.cursor, 3);
+        assert!(edit.key(winit::keyboard::KeyCode::Home, false, false));
+        assert_eq!(edit.cursor, 0);
+        // Backspace and Delete are consumed but change nothing.
+        assert!(edit.key(winit::keyboard::KeyCode::Backspace, false, false));
+        assert!(edit.key(winit::keyboard::KeyCode::Delete, false, false));
+        assert_eq!(edit.value, "name");
+        // Typed text (and an IME commit) goes through insert_text: refused.
+        edit.insert_text("typed");
+        assert_eq!(edit.value, "name");
+        edit.delete_chars(-1);
+        assert_eq!(edit.value, "name");
+        // Paste changes nothing; Cut copies and keeps the text; Copy copies.
+        edit.set_cursor(0, false);
+        edit.set_cursor(4, true);
+        assert!(!edit.shortcut(EditShortcut::Paste, &mut clipboard));
+        assert_eq!(edit.value, "name");
+        assert!(!edit.shortcut(EditShortcut::Cut, &mut clipboard));
+        assert_eq!(edit.value, "name");
+        assert_eq!(clipboard.0, "name");
+        edit.set_cursor(0, false);
+        edit.set_cursor(4, true);
+        assert!(!edit.shortcut(EditShortcut::Copy, &mut clipboard));
+        assert_eq!(clipboard.0, "name");
+        // An editable box does all of it again. (Set the caret past the
+        // selection first: insertion replaces a selection.)
+        edit.editable = true;
+        edit.set_cursor(4, false);
+        edit.insert_text("x");
+        assert_eq!(edit.value, "namex");
+        assert!(edit.key(winit::keyboard::KeyCode::Backspace, false, false));
+        assert_eq!(edit.value, "name");
     }
 }

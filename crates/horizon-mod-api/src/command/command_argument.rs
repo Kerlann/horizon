@@ -16,7 +16,9 @@ use crate::Text;
 #[non_exhaustive]
 #[derive(horizon_mod_api_macros::Wire)]
 pub enum CommandArgumentKind {
-    /// One word: the text up to the next space.
+    /// One word, as Brigadier's `word` string: ASCII letters and digits, and `_ - . +`. The word
+    /// ends at the first other character, a space included, so a value containing `:` or `/`
+    /// needs [`Greedy`](Self::Greedy) as the usage's last argument.
     #[default]
     Word,
     /// The rest of the line, spaces included: the argument must be the usage's last.
@@ -104,9 +106,10 @@ pub trait CommandArgumentType: Send + Sync + 'static {
 
     /// Validate the text a client wrote and return the value `run_mod_command` receives.
     ///
-    /// `input` is one word, or the rest of the line for [`CommandArgumentKind::Greedy`]. Return
-    /// the canonical text to deliver (an id, a lower-cased name, `"3"` for `"03"`), or the
-    /// message shown to the player when the input is not valid.
+    /// `input` is one word (see [`CommandArgumentKind::Word`] for its characters), or the rest
+    /// of the line for [`CommandArgumentKind::Greedy`]. Return the canonical text to deliver (an
+    /// id, a lower-cased name, `"3"` for `"03"`), or the message shown to the player when the
+    /// input is not valid.
     fn parse(&self, input: &str) -> Result<String, CommandArgumentError>;
 
     /// The completions for the text `prefix` being typed at this argument.

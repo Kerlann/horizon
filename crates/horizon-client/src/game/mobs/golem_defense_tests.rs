@@ -16,7 +16,7 @@ use std::sync::{Arc, atomic::AtomicI32, mpsc};
 const GUEST: &str = "GolemGuest";
 
 /// A host on a stone floor with one connected, placed guest (conn 2).
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -38,7 +38,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -166,7 +166,8 @@ fn targets_guest(game: &mut Game<'_>, ticks: usize) -> bool {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_golem_targets_the_guest_its_villager_hates() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     scene(&mut game, 20);
     assert!(
         targets_guest(&mut game, 40),
@@ -177,7 +178,8 @@ fn a_golem_targets_the_guest_its_villager_hates() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_golem_leaves_a_guest_at_minus_95_alone() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     scene(&mut game, 19);
     assert!(!targets_guest(&mut game, 40), "-95 is above the threshold");
 }
@@ -187,7 +189,8 @@ fn a_golem_leaves_a_guest_at_minus_95_alone() {
 fn control_with_the_guest_as_the_level_player_the_golem_targets_it() {
     // The same scene, the mobs' reputation snapshot keyed by the guest: the
     // goal itself works, only the identity it reads differs.
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     game.level.player_uuid = Some([0, 0, 0, 2]);
     scene(&mut game, 20);
     assert!(targets_guest(&mut game, 40));
@@ -199,7 +202,8 @@ fn control_with_the_guest_as_the_level_player_the_golem_targets_it() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn control_a_hated_host_does_not_turn_the_golem_on_the_selected_guest() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     game.level.player_uuid = Some([0, 0, 0, 1]);
     for command in [
         "summon iron_golem 10.5 100 10.5 {PersistenceRequired:1b,PlayerCreated:0b,UUID:[I;2305,0,0,1]}"

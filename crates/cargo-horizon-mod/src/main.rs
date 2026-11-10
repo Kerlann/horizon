@@ -26,6 +26,7 @@ mod inject;
 mod inject_sync;
 mod internals;
 mod jar;
+mod layouts;
 mod registry;
 mod wasm;
 
@@ -34,11 +35,18 @@ use std::{
     process::{Command, ExitCode},
 };
 
+fn is_compiler_wrapper(name: &str) -> bool {
+    name.strip_suffix(".exe").unwrap_or(name).ends_with("rustc")
+}
+
 fn main() -> ExitCode {
     // Cargo runs `cargo-horizon-mod horizon-mod <args>`.
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     if std::env::var_os("HORIZON_GROUP_WRAPPER").is_some()
-        && args.first().is_some_and(|a| a.ends_with("rustc"))
+        // `rustc`, or `rustc.exe` on Windows.
+        && args
+            .first()
+            .is_some_and(|a| is_compiler_wrapper(a))
     {
         return match wasm::rustc(args) {
             Ok(()) => ExitCode::SUCCESS,
@@ -329,6 +337,9 @@ fn build_in(root: &Path) -> Result<PathBuf, String> {
 
 fn pack_into(root: &Path, dir: &Path) -> Result<PathBuf, String> {
     let package = Package::read(root)?;
+    if package.manifest.native.is_some() || package.manifest.wasm.is_some() {
+        layouts::build(root)?;
+    }
     let bytes = Package::pack_directory(root)?;
     std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
     let path = dir.join(format!("{}.hmod", package.manifest.id));
@@ -602,5 +613,26 @@ mod tests {
         ]);
         assert_eq!(newest_prebuilt(&releases).as_deref(), Some(old));
         assert_eq!(newest_prebuilt(&serde_json::json!([])), None);
+    }
+}
+
+#[cfg(test)]
+mod wrapper_suffix_tests {
+    #[test]
+    fn compiler_names_keep_suffix_contract() {
+        for (name, expected) in [
+            ("diagnostic-rustc", true),
+            ("xrustc", true),
+            ("rustc", true),
+            ("/path/to/rustc", true),
+            ("rustc.exe", true),
+            ("diagnostic-rustc.exe", true),
+            ("rustc.custom", false),
+            ("rustc-wrapper", false),
+            ("cargo-horizon-mod", false),
+            ("/rustc/tool", false),
+        ] {
+            assert_eq!(super::is_compiler_wrapper(name), expected, "{name}");
+        }
     }
 }

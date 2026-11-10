@@ -586,12 +586,6 @@ const GL_DEPTH_WGSL: &str = r#"
 /// A chain [`PostEffects::preload`] loaded, by id.
 type Preloaded = (String, Result<Option<Chain>, String>);
 
-/// The chains a spectated entity applies (`GameRenderer.checkEntityPostEffect`): the
-/// first frame through a creeper's eyes compiled its pipelines, a 0.1-0.9 s freeze on
-/// the Mac mini.
-pub const SPECTATOR_CHAINS: [&str; 3] =
-    ["minecraft:creeper", "minecraft:spider", "minecraft:invert"];
-
 fn empty_source() -> &'static ResourceSource {
     static EMPTY: std::sync::OnceLock<ResourceSource> = std::sync::OnceLock::new();
     EMPTY.get_or_init(|| ResourceSource::indexed(Default::default()))
@@ -600,6 +594,26 @@ fn empty_source() -> &'static ResourceSource {
 fn resource_path(id: &str) -> String {
     let (ns, path) = id.split_once(':').unwrap_or(("minecraft", id));
     format!("assets/{ns}/post_effect/{path}.json")
+}
+
+fn read_chain(
+    root: &ResourceSource,
+    id: &str,
+    shaders: &crate::spectator_shaders::SpectatorShaders,
+) -> Result<Option<String>, String> {
+    let resource = resource_path(id);
+    match root.read_to_string(&resource) {
+        Ok(text) => Ok(Some(text)),
+        Err(error) => {
+            let entities = shaders.entities_for_chain(id);
+            if entities.is_empty() {
+                return Ok(None);
+            }
+            Err(format!(
+                "Spectator entities {entities:?}, shader {id}, resource {resource}: {error}"
+            ))
+        }
+    }
 }
 
 impl PostEffects {
@@ -698,12 +712,12 @@ impl PostEffects {
     /// Loads the `ids` chains (namespaced) not loaded yet and compiles their pipelines for
     /// `format`, on a thread of their own: `apply` leaves a chain out until it has
     /// arrived instead of compiling it in the frame that first asks for it.
-    pub fn preload(
+    pub fn preload<'a>(
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
         root: &ResourceSource,
-        ids: &[&str],
+        ids: impl IntoIterator<Item = &'a str>,
         format: wgpu::TextureFormat,
     ) {
         self.use_root(root);
@@ -711,9 +725,9 @@ impl PostEffects {
             return;
         }
         let ids: Vec<String> = ids
-            .iter()
-            .filter(|id| !self.chains.contains_key(**id) && !self.failed.contains(**id))
-            .map(|id| normalise(id))
+            .into_iter()
+            .filter(|id| !self.chains.contains_key(*id) && !self.failed.contains(*id))
+            .map(normalise)
             .collect();
         if ids.is_empty() {
             return;
@@ -820,7 +834,8 @@ impl PostEffects {
             })
     }
 
-    /// `PostChain.load` for the file of `id`: `Ok(None)` when it does not exist.
+    /// `PostChain.load` for the file of `id`: `Ok(None)` when it does not exist,
+    /// except registered spectator chains, whose missing resources are diagnosed.
     fn load(
         root: &ResourceSource,
         device: &wgpu::Device,
@@ -828,7 +843,7 @@ impl PostEffects {
         id: &str,
         extras: &Extras,
     ) -> Result<Option<Chain>, String> {
-        let Ok(text) = root.read_to_string(&resource_path(id)) else {
+        let Some(text) = read_chain(root, id, crate::spectator_shaders::table())? else {
             return Ok(None);
         };
         let mut config = Config::parse(&text)?;
@@ -2410,7 +2425,7 @@ mod tests {
         std::fs::remove_dir_all(root.join("assets")).unwrap();
         let mut effects = PostEffects::new(&device);
         let format = wgpu::TextureFormat::Rgba8Unorm;
-        effects.preload(&device, &queue, &source, &["minecraft:preloaded"], format);
+        effects.preload(&device, &queue, &source, ["minecraft:preloaded"], format);
         assert!(effects.pending.contains("minecraft:preloaded"));
         let started = std::time::Instant::now();
         while !effects.pending.is_empty() {
@@ -2515,5 +2530,34 @@ mod tests {
             )
             .is_err()
         );
+    }
+}
+
+#[cfg(test)]
+mod missing_resource_test {
+    #[test]
+    fn an_unregistered_missing_chain_stays_optional() {
+        let source = super::ResourceSource::indexed(Default::default());
+        let shaders = crate::spectator_shaders::SpectatorShaders::default();
+        assert_eq!(
+            super::read_chain(&source, "example:optional", &shaders),
+            Ok(None)
+        );
+        assert!(super::read_chain(&source, "minecraft:creeper", &shaders).is_err());
+    }
+
+    #[test]
+    fn missing_registered_resource_is_diagnosed() {
+        let source = super::ResourceSource::indexed(Default::default());
+        let shaders =
+            crate::spectator_shaders::SpectatorShaders::new(vec![mod_api::EntitySpectatorShader {
+                entity: "minecraft:cow".into(),
+                shader: "example:cow_vison".into(),
+            }]);
+        let error = super::read_chain(&source, shaders.chain("minecraft:cow").unwrap(), &shaders)
+            .unwrap_err();
+        assert!(error.contains("minecraft:cow"));
+        assert!(error.contains("example:cow_vison"));
+        assert!(error.contains("assets/example/post_effect/cow_vison.json"));
     }
 }

@@ -116,12 +116,17 @@ impl Game<'_> {
             }
         };
         let entity = EntityRef::new(epoch, source.id);
+        let merchant_sources_available = self.merchant_sources_available();
         let publication = {
             let mut state = self.entity_read_state.borrow_mut();
             let state = &mut *state;
             let relations = state.mob_relations.entry(level).or_default();
             if relations.tick != Some(tick) {
-                self.rebuild_mob_read_relations(level, &mut relations.index);
+                self.rebuild_mob_read_relations(
+                    level,
+                    &mut relations.index,
+                    merchant_sources_available,
+                );
                 relations.tick = Some(tick);
             }
             relations.index.update_mob_rider(source);
@@ -203,7 +208,7 @@ impl Game<'_> {
                 &mut state.identities,
             );
             NativeReadPublication {
-                silent_overlay: Default::default(),
+                scalar_overlay: Default::default(),
                 capture,
                 base,
                 details: NativeReadDetails::Mob {
@@ -216,10 +221,15 @@ impl Game<'_> {
                 mob_target_facts: Some(NativeMobTargetFacts::capture(source)),
             }
         };
-        let published = self.entity_residency.borrow_mut().publish_rows_merging(
-            [(source.id, location, publication)],
-            NativeReadPublication::merge_pending_silent,
-        ) == 1;
+        let published = self
+            .resident_entities
+            .table
+            .borrow_mut()
+            .publish_rows_merging(
+                [(source.id, location, publication)],
+                NativeReadPublication::merge_pending_scalars,
+            )
+            == 1;
         drop(scope);
         published
     }

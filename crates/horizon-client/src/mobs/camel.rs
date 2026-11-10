@@ -541,6 +541,7 @@ mod tests {
                     w,
                     level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 started = (0..64).any(|_| RandomSitting.can_use(&mut m, &mut cx));
             });
@@ -601,6 +602,7 @@ mod tests {
             step_sound: None,
             food: Arc::default(),
             tempt: Arc::default(),
+            passenger_attachments: Vec::new(),
         });
         Mob::new(1, kind, horizon_core::geometry::Vec3::ZERO, 0.0)
     }
@@ -712,6 +714,7 @@ mod tests {
                 w,
                 level: &mut fixture.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
             let mut breed = Breed::new(1.0);
             assert!(
@@ -783,6 +786,7 @@ mod tests {
                     w,
                     level: &mut fixture.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 let mut goal = RandomSitting;
                 // The random gate fires within a few asks when it is reached.

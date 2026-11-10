@@ -11,18 +11,6 @@ use crate::mobs::Mob;
 use mod_api::{EntityRef, MobCategory};
 
 impl GoalCx<'_, '_> {
-    pub(super) fn r_entity_tags(&self, entity: EntityRef) -> Option<Vec<String>> {
-        self.w.goal_host?.mob_tags(self.entity_mob(entity)?)
-    }
-
-    pub(super) fn r_entity_name(&self, entity: EntityRef) -> Option<String> {
-        Some(
-            self.w
-                .goal_host?
-                .mob_name(self.entity_mob(entity)?, self.m, self.w),
-        )
-    }
-
     pub(super) fn r_entity_added_to_level(&self, entity: EntityRef) -> Option<bool> {
         Some(
             self.w
@@ -39,17 +27,6 @@ impl GoalCx<'_, '_> {
         )
     }
 
-    pub(super) fn r_entity_invulnerable_to_damage(
-        &self,
-        entity: EntityRef,
-        damage_type: &str,
-    ) -> Option<bool> {
-        Some(
-            self.w
-                .goal_host?
-                .mob_invulnerable_to_damage(self.entity_mob(entity)?, damage_type),
-        )
-    }
     pub(super) fn entity_mob(&self, entity: EntityRef) -> Option<&Mob> {
         self.is_own_entity(entity).then_some(&*self.m)
     }
@@ -204,15 +181,6 @@ impl GoalCx<'_, '_> {
         self.host.level(self.w.level.id())
     }
 
-    pub(super) fn r_entity_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
-        let id = self.entity_mob(entity)?.extra.mount?;
-        self.lookup_entity(id)
-    }
-
-    pub(super) fn r_entity_is_passenger(&self, entity: EntityRef) -> Option<bool> {
-        self.entity_mob(entity)?;
-        Some(self.r_entity_vehicle(entity).is_some())
-    }
     pub(super) fn r_entity_sound_source(&self, entity: EntityRef) -> Option<mod_api::SoundSource> {
         let mob = self.entity_mob(entity)?;
         let evil = mob.species() == crate::mobs::Species::Rabbit
@@ -241,30 +209,5 @@ impl GoalCx<'_, '_> {
                 mod_api::LeashHolder::Entity(self.host.player(uuid)?.entity())
             }
         })
-    }
-
-    pub(super) fn r_entity_pick(
-        &self,
-        entity: EntityRef,
-        distance: f64,
-    ) -> Option<mod_api::ClipHit> {
-        if !(distance.is_finite() && distance >= 0.0) {
-            return None;
-        }
-        let mob = self.entity_mob(entity)?;
-        let from = [mob.position.x, mob.eye_y(), mob.position.z];
-        let look = self.r_entity_view_vector(entity)?;
-        let to = std::array::from_fn(|i| from[i] + look[i] * distance);
-        let level = self.r_entity_level(entity)?;
-        mod_api::__private::backend_read(self.host, |backend| {
-            backend.level_clip(
-                level,
-                from,
-                to,
-                mod_api::ClipBlock::Outline,
-                mod_api::ClipFluid::None,
-            )
-        })
-        .flatten()
     }
 }

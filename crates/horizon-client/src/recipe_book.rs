@@ -13,6 +13,9 @@ use horizon_world::loot::PackOverlay;
 pub use mod_api::item::recipe_book::RecipeBookCategory;
 use std::collections::{BTreeSet, HashMap};
 
+mod custom_books;
+pub use custom_books::{BookError, BookFlags, CustomBooks, read_saved};
+
 /// Validate declarations once per recipe table. The first valid declaration
 /// owns its category id and recipe type; vanilla categories are never replaced.
 pub fn mod_categories(
@@ -1143,6 +1146,8 @@ pub struct Settings {
     pub recipes: BTreeSet<String>,
     /// Recipes not yet shown in the book (`toBeDisplayed`): they animate once.
     pub to_be_displayed: BTreeSet<String>,
+    /// The flags of mods' own books, beside the four vanilla pairs (#2415).
+    pub custom: CustomBooks,
 }
 impl Settings {
     /// `ServerRecipeBook.addRecipes`: the displays added (the count
@@ -1219,8 +1224,12 @@ impl Settings {
     }
     /// `ServerRecipeBook.loadUntrusted`: unknown recipes are dropped. Without
     /// both lists the compound does not decode and nothing is read.
+    /// Mods' book flags are read on their own, so lists that do not decode keep them.
     pub fn read_valid(tag: Option<&Tag>, valid: &dyn Fn(&str) -> bool) -> Self {
-        let mut s = Self::default();
+        let mut s = Self {
+            custom: CustomBooks::read(tag),
+            ..Self::default()
+        };
         let Some(tag) = tag else { return s };
         let ids = |key: &str| match tag.get(key) {
             Some(Tag::List(list)) => Some(
@@ -1273,6 +1282,9 @@ impl Settings {
         };
         entries.push(("recipes", list(&self.recipes)));
         entries.push(("toBeDisplayed", list(&self.to_be_displayed)));
+        if let Some(custom) = self.custom.write() {
+            entries.push((custom_books::EXTENSION, custom));
+        }
         Tag::compound(entries)
     }
 }

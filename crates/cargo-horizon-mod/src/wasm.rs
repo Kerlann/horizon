@@ -36,7 +36,7 @@ struct Toolchain {
 
 /// `tool` (`cargo`, `rustc`) of the pinned toolchain: through rustup when there is one, else
 /// the one on `PATH`, which must then be that toolchain.
-fn pinned(tool: &str) -> Command {
+pub(crate) fn pinned(tool: &str) -> Command {
     let mut command = if rustup_found() {
         let mut c = Command::new("rustup");
         c.args(["run", TOOLCHAIN, tool]);
@@ -276,10 +276,8 @@ fn registrations(
         let points: Vec<horizon_mod_point_emit::Point> =
             serde_json::from_value(json["points"].clone())
                 .map_err(|e| format!("{}: {e}", path.display()))?;
+        wasm_route(&parsed.inject)?;
         let expressions = horizon_mod_point_emit::api(&parsed, &points, "crate::")?;
-        if expressions.len() != parsed.inject.len() {
-            return Err("wasm supports API head and return injections only".into());
-        }
         let names = horizon_mod_point_emit::places(&parsed, &points)?;
         let registrations = expressions
             .iter()
@@ -293,6 +291,32 @@ fn registrations(
         )
     };
     Ok((registrations, point_names))
+}
+
+/// A wasm module gets a guest listener for each API head, return, `modify_arg` and `replace`
+/// injection, which the shared emitter builds; `access = "internals"` and the call-site kinds
+/// exist only natively. The first that can't be built is refused, named with its reason.
+fn wasm_route(injects: &[horizon_mod_package::manifest::inject::Inject]) -> Result<(), String> {
+    use horizon_mod_package::manifest::inject::Access;
+    let Some(entry) = injects
+        .iter()
+        .find(|entry| entry.access != Access::Api || entry.call.is_some())
+    else {
+        return Ok(());
+    };
+    let kind = serde_json::to_value(entry.kind)
+        .ok()
+        .and_then(|kind| kind.as_str().map(str::to_owned))
+        .unwrap_or_default();
+    let why = if entry.access != Access::Api {
+        "`access = \"internals\"` is native-only".to_owned()
+    } else {
+        format!("the call-site kind `{kind}` is native-only")
+    };
+    Err(format!(
+        "{}: wasm takes API head, return, modify_arg and replace injections; {why}",
+        entry.id
+    ))
 }
 
 /// `build --wasm`: builds `mod.wasm` beside `horizon-mod.toml` and records it in `[wasm]`.
@@ -325,6 +349,49 @@ fn group_export(name: &str, krate: &str) -> bool {
                 .is_some_and(|receiver| receiver.contains(&format!("{krate}::"))))
 }
 
+/// One argument of the response file rustc hands the linker, one per line. On Windows rustc
+/// quotes each line the Windows way (`"D:\dir\a b.rlib"`, a quote inside as `\"`, backslashes
+/// doubled only in front of a quote); elsewhere
+/// it escapes `\` and space with a backslash.
+fn response_file_arg(line: &str) -> String {
+    let mut arg = String::new();
+    if let Some(quoted) = line
+        .strip_prefix('"')
+        .and_then(|rest| rest.strip_suffix('"'))
+    {
+        // A run of backslashes is literal unless a quote follows it: then each pair is one
+        // backslash and an odd one left over escapes the quote.
+        let mut backslashes = 0;
+        for c in quoted.chars() {
+            match c {
+                '\\' => backslashes += 1,
+                '"' => {
+                    arg.extend(std::iter::repeat_n('\\', backslashes / 2));
+                    arg.push('"');
+                    backslashes = 0;
+                }
+                _ => {
+                    arg.extend(std::iter::repeat_n('\\', backslashes));
+                    arg.push(c);
+                    backslashes = 0;
+                }
+            }
+        }
+        // The closing quote follows these, so they were doubled too.
+        arg.extend(std::iter::repeat_n('\\', backslashes / 2));
+        return arg;
+    }
+    let mut chars = line.chars();
+    while let Some(c) = chars.next() {
+        arg.push(if c == '\\' {
+            chars.next().unwrap_or(c)
+        } else {
+            c
+        });
+    }
+    arg
+}
+
 /// The link step, run by cargo as the linker: rust-lld linking a shared module, then rustc's
 /// own metadata sections dropped.
 pub fn link(role: &str, args: Vec<String>) -> Result<(), String> {
@@ -351,7 +418,7 @@ pub fn link(role: &str, args: Vec<String>) -> Result<(), String> {
         .into_iter()
         .flat_map(|arg| match arg.strip_prefix('@') {
             Some(file) => std::fs::read_to_string(file)
-                .map(|t| t.lines().map(str::to_owned).collect())
+                .map(|t| t.lines().map(response_file_arg).collect())
                 .unwrap_or_else(|_| vec![arg]),
             None => vec![arg],
         });
@@ -525,6 +592,77 @@ pub fn link(role: &str, args: Vec<String>) -> Result<(), String> {
         });
     }
     std::fs::write(&output, module.finish()).map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+mod response_file_tests {
+    use super::response_file_arg;
+    #[test]
+    fn windows_quoted_lines_lose_their_quotes_and_keep_path_backslashes() {
+        assert_eq!(response_file_arg(r#""--export""#), "--export");
+        assert_eq!(
+            response_file_arg(r#""D:\dir\a b\libx-1.rlib""#),
+            r"D:\dir\a b\libx-1.rlib"
+        );
+        assert_eq!(response_file_arg(r#""a\"b""#), r#"a"b"#);
+        assert_eq!(response_file_arg(r#""a\\\"b""#), r#"a\"b"#);
+        assert_eq!(response_file_arg(r#""dir\\""#), r"dir\");
+    }
+    #[test]
+    fn gnu_escaped_lines_lose_their_escapes() {
+        assert_eq!(response_file_arg("--export"), "--export");
+        assert_eq!(
+            response_file_arg(r"/tmp/a\ b/libx.rlib"),
+            "/tmp/a b/libx.rlib"
+        );
+        assert_eq!(response_file_arg(r"a\\b"), r"a\b");
+    }
+}
+
+#[cfg(test)]
+mod route_tests {
+    use super::wasm_route;
+    use horizon_mod_package::manifest::inject::{Access, Inject, Kind};
+
+    fn inject(id: &str, kind: Kind, access: Access, call: Option<&str>) -> Inject {
+        Inject {
+            id: id.into(),
+            at: "game::tick".into(),
+            kind,
+            with: "listen".into(),
+            access,
+            priority: 0,
+            hash: "pin".into(),
+            call: call.map(Into::into),
+            nth: call.map(|_| 0),
+            ctx: call.map(|_| "context".into()),
+        }
+    }
+
+    #[test]
+    fn wasm_takes_the_api_head_kinds_and_names_the_first_it_cant() {
+        let head_kinds = [Kind::Head, Kind::Return, Kind::ModifyArg, Kind::Replace]
+            .map(|kind| inject("ok", kind, Access::Api, None));
+        assert_eq!(wasm_route(&head_kinds), Ok(()));
+        let internals = inject("raw", Kind::Head, Access::Internals, None);
+        assert_eq!(
+            wasm_route(&[head_kinds[0].clone(), internals]),
+            Err(
+                "raw: wasm takes API head, return, modify_arg and replace injections; \
+                 `access = \"internals\"` is native-only"
+                    .into()
+            )
+        );
+        let site = inject("site", Kind::BeforeCall, Access::Api, Some("game::step"));
+        assert_eq!(
+            wasm_route(&[site]),
+            Err(
+                "site: wasm takes API head, return, modify_arg and replace injections; \
+                 the call-site kind `before_call` is native-only"
+                    .into()
+            )
+        );
+    }
 }
 
 #[cfg(test)]

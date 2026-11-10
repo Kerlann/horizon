@@ -106,6 +106,9 @@ impl Game<'_> {
         conn: u32,
         outer_dimension: Dim,
     ) -> Result<GuestSwap, TurnRefused> {
+        // Before the outer body becomes Taken, preserve its current relation
+        // candidate independently of R publication and AI projection refresh.
+        self.with_prepared_mob_relations(|_| ());
         let spawn_protection = self.lan.as_ref().and_then(|host| {
             host.hub
                 .guests
@@ -135,14 +138,6 @@ impl Game<'_> {
         let other_boxes =
             self.lan_building_boxes
                 .for_turn(conn, Some(outer), building_players(host));
-        host.hub.guests[i].residency.extract();
-        self.lan_guest_swaps.push(conn);
-        // `ServerPlayer.permissions()`: the guest's own command level for its
-        // turn, so game-master checks see it (not the host's).
-        let permission = std::mem::replace(
-            &mut self.ui.registries.permission,
-            host.hub.guests[i].permission,
-        );
         let fresh = host.hub.guests[i].motion.is_none();
         if fresh {
             let p = Vec3::new(
@@ -151,8 +146,12 @@ impl Game<'_> {
                 host.hub.guests[i].position[2],
             );
             {
-                let value = PlayerMotion::new(self.motion, p).ok().map(Box::new);
-                host.hub.guests.update(i, |guest| guest.motion = value);
+                let value = PlayerMotion::new(self.motion, p)
+                    .map(Box::new)
+                    .map_err(|_| TurnRefused::Gone)?;
+                host.hub
+                    .guests
+                    .update(i, |guest| guest.motion = Some(value));
             }
             // The first body after joining burns, breathes and falls on as saved.
             host.hub.guests.update(i, |g| {
@@ -188,6 +187,18 @@ impl Game<'_> {
                 }
             });
         }
+        // Refusal must leave canonical records and loan state untouched.
+        let Some(mut motion) = host.hub.guests.update(i, |g| g.motion.take()) else {
+            return Err(TurnRefused::Gone);
+        };
+        host.hub.guests[i].residency.extract();
+        self.lan_guest_swaps.push(conn);
+        // `ServerPlayer.permissions()`: the guest's own command level for its
+        // turn, so game-master checks see it (not the host's).
+        let permission = std::mem::replace(
+            &mut self.ui.registries.permission,
+            host.hub.guests[i].permission,
+        );
         let mut play = host.play.remove(&conn).unwrap_or_default();
         play.hook.begin_loan();
         if fresh {
@@ -199,12 +210,6 @@ impl Game<'_> {
             // A new ServerPlayer has everything to record again.
             play.score_recorded = Default::default();
         }
-        // The guest's body.
-        let Some(mut motion) = host.hub.guests.update(i, |g| g.motion.take()) else {
-            self.ui.registries.permission = permission;
-            host.play.insert(conn, play);
-            return Err(TurnRefused::Gone);
-        };
         let attachments = std::mem::replace(
             &mut self.player_attachments,
             std::mem::take(host.hub.guests.attachments_mut(conn).unwrap()),
@@ -248,7 +253,7 @@ impl Game<'_> {
                     guest.residency.extract();
                 }
             }
-            None => self.local_player_residency.extract(),
+            None => self.resident_entities.local_player.extract(),
         }
         std::mem::swap(&mut self.player, &mut player);
         let eye = (g.eye_height() as f32, self.eye);
@@ -445,6 +450,7 @@ impl Game<'_> {
         self.block_reach = self.interaction_range("minecraft:block_interaction_range", 4.5, 5.0);
         let building_boxes = std::mem::replace(&mut self.lan_building_boxes, other_boxes);
         Ok(GuestSwap {
+            before_ai: self.player_ai_facts(),
             attachments,
             conn,
             i,
@@ -574,7 +580,9 @@ impl Game<'_> {
             Ok(totem) => (totem, None),
             Err(payload) => (None, Some(payload)),
         };
+        let ai_delta = self.player_ai_facts_delta(&swap.before_ai);
         let GuestSwap {
+            before_ai: _,
             attachments,
             conn,
             i,
@@ -991,6 +999,15 @@ impl Game<'_> {
                 g.send(&g.abilities_packet());
             }
         });
+        if let Some(epoch) = self.native_lifecycle.epoch()
+            && let Some(pass) = self
+                .entity_read_state
+                .borrow_mut()
+                .mob_relations
+                .get_mut(&mod_api::LevelRef::new(epoch, self.dim.key()))
+        {
+            pass.index.update_guest(&host.hub.guests[i]);
+        }
         // LivingEntity.checkTotemDeathProtection's entity event, to every
         // client tracking the guest and its own; this window draws it too.
         if let Some(body) = totem {
@@ -1014,7 +1031,7 @@ impl Game<'_> {
                     guest.residency.put_back();
                 }
             }
-            None => self.local_player_residency.put_back(),
+            None => self.resident_entities.local_player.put_back(),
         }
         self.hook.finish_loan();
         self.bind_current_hook_residency();
@@ -1056,6 +1073,7 @@ impl Game<'_> {
         if let Some(mob) = guest_mount {
             self.lan_open_mount(conn, mob);
         }
+        self.publish_player_ai_delta(ai_delta);
         // The turn's teleports are in the hub now: the mods hear them.
         self.flush_teleport_notes();
         if let Some(host) = self.lan.as_ref() {

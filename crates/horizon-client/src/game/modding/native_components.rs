@@ -1,5 +1,8 @@
 //! Native item data component helpers.
-use super::Game;
+use super::{
+    Game, native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
+    native_read_dependencies::EntityReadDependency,
+};
 use horizon_client::items::ItemStack;
 use horizon_core::nbt::Tag;
 
@@ -204,24 +207,25 @@ impl Game<'_> {
             .unwrap()
     }
     /// Actor state shared by detached stack queries, without swapping equipment or players.
-    fn item_combat_actor(&self, actor: mod_api::LivingRef) -> Option<(bool, bool, f64, bool)> {
-        use super::commands::Target;
-        let target = self.native_living_read_target(actor)?;
-        Some(match target {
-            Target::Player => {
-                let p = self.player.as_ref()?;
-                (true, self.creative, p.fall_distance, p.fall_flying)
+    fn item_combat_actor(&self, source: BaseReadSource<'_>) -> Option<(bool, bool, f64, bool)> {
+        Some(match source {
+            BaseReadSource::Player(player) => (
+                true,
+                self.creative,
+                player.fall_distance,
+                player.fall_flying,
+            ),
+            BaseReadSource::Guest(guest) => {
+                let player = guest.motion.as_ref()?;
+                (
+                    true,
+                    guest.creative(),
+                    player.fall_distance,
+                    player.fall_flying,
+                )
             }
-            Target::Guest(conn) => {
-                let guest = self.command_guest(conn)?;
-                let p = guest.motion.as_ref()?;
-                (true, guest.creative(), p.fall_distance, p.fall_flying)
-            }
-            Target::Mob(id) => {
-                let mob = self.mobs.iter().find(|m| m.id == id && !m.removed)?;
-                (false, false, mob.fall_distance, mob.extra.fall_flying)
-            }
-            Target::Stand(_) | Target::Dragon(_) => (false, false, 0.0, false),
+            BaseReadSource::Mob(mob) => (false, false, mob.fall_distance, mob.extra.fall_flying),
+            BaseReadSource::Stand(_) | BaseReadSource::Dragon(_) => (false, false, 0.0, false),
             _ => return None,
         })
     }
@@ -242,27 +246,73 @@ impl Game<'_> {
         &self,
         stack: &ItemStack,
         attacker: mod_api::LivingRef,
-    ) -> Option<mod_api::ItemAttackRange> {
-        self.items().get(&stack.item)?;
-        let (player, creative, _, _) = self.item_combat_actor(attacker)?;
-        let default =
-            self.living_attribute_value(attacker, "minecraft:entity_interaction_range")?;
-        Some(self.stack_attack_range(Some(stack), player, creative, default))
+    ) -> Result<Option<mod_api::ItemAttackRange>, mod_api::EntityReadError> {
+        self.read_item_resource_entity_attack_range(None, stack, attacker)
+    }
+
+    pub(in crate::game) fn read_item_resource_entity_attack_range(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        stack: &ItemStack,
+        attacker: mod_api::LivingRef,
+    ) -> Result<Option<mod_api::ItemAttackRange>, mod_api::EntityReadError> {
+        if self.items().get(&stack.item).is_none() {
+            return Ok(None);
+        }
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Living(attacker),
+            &[
+                EntityReadDependency::Attributes,
+                EntityReadDependency::PlayerState,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(admitted, provider, |source| {
+            let (player, creative, _, _) = self.item_combat_actor(source.body)?;
+            let default = self.native_source_attribute(
+                source.body,
+                "minecraft:entity_interaction_range",
+                horizon_world::attribute_map::ValueKind::Computed,
+            )?;
+            Some(self.stack_attack_range(Some(stack), player, creative, default))
+        })
     }
     pub(in crate::game) fn item_resource_damage_source(
         &self,
         stack: &ItemStack,
         attacker: mod_api::LivingRef,
-    ) -> Option<mod_api::ItemDamageSource> {
-        self.items().get(&stack.item)?;
-        let (player, _, fall, flying) = self.item_combat_actor(attacker)?;
-        let name = self.stack_melee_damage_type(Some(stack), (fall, flying), player);
-        self.health_resources.damage.id(&name)?;
-        Some(mod_api::ItemDamageSource {
-            damage_type: mod_api::Identifier::parse(&name).ok()?,
-            direct: Some(attacker.entity()),
-            causing: Some(attacker.entity()),
-            position: None,
+    ) -> Result<Option<mod_api::ItemDamageSource>, mod_api::EntityReadError> {
+        self.read_item_resource_damage_source(None, stack, attacker)
+    }
+
+    pub(in crate::game) fn read_item_resource_damage_source(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        stack: &ItemStack,
+        attacker: mod_api::LivingRef,
+    ) -> Result<Option<mod_api::ItemDamageSource>, mod_api::EntityReadError> {
+        if self.items().get(&stack.item).is_none() {
+            return Ok(None);
+        }
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Living(attacker),
+            &[EntityReadDependency::AttackState],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(admitted, provider, |source| {
+            let (player, _, fall, flying) = self.item_combat_actor(source.body)?;
+            let name = self.stack_melee_damage_type(Some(stack), (fall, flying), player);
+            self.health_resources.damage.id(&name)?;
+            Some(mod_api::ItemDamageSource {
+                damage_type: mod_api::Identifier::parse(&name).ok()?,
+                direct: Some(attacker.entity()),
+                causing: Some(attacker.entity()),
+                position: None,
+            })
         })
     }
     pub(in crate::game) fn item_resource_can_be_hurt_by(
@@ -327,36 +377,72 @@ impl Game<'_> {
         attacker: mod_api::LivingRef,
         target: mod_api::EntityRef,
         base_damage: f32,
-    ) -> Option<f32> {
-        let (_, _, fall, flying) = self.item_combat_actor(attacker)?;
-        if self.entity_level(attacker.entity())?.dimension() != self.dim.key()
-            || self.entity_level(target)?.dimension() != self.dim.key()
-        {
-            return None;
+    ) -> Result<Option<f32>, mod_api::EntityReadError> {
+        self.read_item_resource_attack_damage_bonus(None, stack, attacker, target, base_damage)
+    }
+
+    pub(in crate::game) fn read_item_resource_attack_damage_bonus(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        stack: &ItemStack,
+        attacker: mod_api::LivingRef,
+        target: mod_api::EntityRef,
+        base_damage: f32,
+    ) -> Result<Option<f32>, mod_api::EntityReadError> {
+        if self.items().get(&stack.item).is_none() {
+            return Ok(None);
         }
-        self.native_entity_read_target(target)?;
-        let target = self.entity_kind(target)?;
-        let actor = self.entity_kind(attacker.entity())?;
-        let source = self.item_resource_damage_source(stack, attacker)?;
-        let source = source.damage_type.to_string();
-        let effective = self.item_combat_stack(stack);
-        let ctx = horizon_items::enchant::EffectContext {
-            this: Some(&target),
-            attacker: Some(&actor),
-            direct_attacker: Some(&actor),
-            is_direct: true,
-            damage_type: Some(&source),
-            items: Some(world_items!(self)),
-            direct_motion: Some((fall, flying)),
-            ..Default::default()
+        let Some(attacker) = self.entity_read_admission(
+            EntityReadSubject::Living(attacker),
+            &[EntityReadDependency::AttackState],
+            provider,
+        ) else {
+            return Ok(None);
         };
-        Some(stack_attack_bonus_preview(
-            &world_stations!(self).enchantments,
-            &effective,
-            &ctx,
-            &self.world.random,
-            base_damage,
-        ))
+        let Some(target) =
+            self.entity_read_admission(EntityReadSubject::Entity(target), &[], provider)
+        else {
+            return Ok(None);
+        };
+        if attacker.location().owner.dimension != target.location().owner.dimension {
+            return Ok(None);
+        }
+        self.with_admitted_entity_sources(
+            attacker,
+            target,
+            provider,
+            |actor_source, target_source| {
+                let (player, _, fall, flying) = self.item_combat_actor(actor_source.body)?;
+                let source = self.stack_melee_damage_type(Some(stack), (fall, flying), player);
+                self.health_resources.damage.id(&source)?;
+                let (actor, target) = {
+                    let mut state = self.entity_read_state.borrow_mut();
+                    use super::native_base_read_source::base_read_source_kind;
+                    (
+                        base_read_source_kind(actor_source.body, &mut state.kind_pool),
+                        base_read_source_kind(target_source.body, &mut state.kind_pool),
+                    )
+                };
+                let effective = self.item_combat_stack(stack);
+                let ctx = horizon_items::enchant::EffectContext {
+                    this: Some(&target),
+                    attacker: Some(&actor),
+                    direct_attacker: Some(&actor),
+                    is_direct: true,
+                    damage_type: Some(&source),
+                    items: Some(world_items!(self)),
+                    direct_motion: Some((fall, flying)),
+                    ..Default::default()
+                };
+                Some(stack_attack_bonus_preview(
+                    &world_stations!(self).enchantments,
+                    &effective,
+                    &ctx,
+                    &actor_source.level.world.random,
+                    base_damage,
+                ))
+            },
+        )
     }
 
     /// Whether enchantments `a` and `b` may share an item (`Enchantment.areCompatible`), by the

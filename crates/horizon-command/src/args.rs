@@ -12,7 +12,8 @@ pub use horizon_core::game_mode::GameMode;
 /// How much of the command line a registered custom argument takes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CustomArgumentKind {
-    /// One word: the text up to the next space.
+    /// One word, as Brigadier's `word` string: ASCII letters and digits, and `_ - . +`. It ends
+    /// at the first other character, a space included.
     Word,
     /// The rest of the line, spaces included.
     Greedy,

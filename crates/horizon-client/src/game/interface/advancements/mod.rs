@@ -214,6 +214,10 @@ impl adv::World for View<'_, '_> {
             .unwrap_or_default();
         (name, props)
     }
+    fn block_property_values(&self, block: &str, property: &str) -> Option<Vec<String>> {
+        let values = self.0.pack.assets.registry.property_values(block, property);
+        (!values.is_empty()).then(|| values.into_iter().map(str::to_owned).collect())
+    }
     fn fluid(&self, p: [i32; 3]) -> Option<String> {
         match self
             .0
@@ -2009,7 +2013,6 @@ impl Game<'_> {
             adv::conditions(&c["player"], &ctx, w) && adv::block(c, pos, w)
         });
     }
-
     /// `TargetBlockTrigger`: signal and projectile conditions are evaluated in
     /// the shooter's context, including distance from the shooter.
     pub(super) fn trigger_target_hit(&mut self, projectile: &EntityView, strength: i32) {
@@ -2031,7 +2034,6 @@ impl Game<'_> {
                 && adv::conditions(&c["projectile"], &target, w)
         });
     }
-
     /// `ItemUsedOnLocationTrigger` (placed_block, item_used_on_block).
     pub(super) fn trigger_block(&mut self, name: &str, pos: [i32; 3], stack: &ItemStack) {
         let me = self.player_entity_for(name);

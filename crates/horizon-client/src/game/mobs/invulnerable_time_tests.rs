@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 const EDIT: &str = "00006095-0000-0000-0000-000000000002";
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -31,7 +31,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -76,7 +76,8 @@ fn health(game: &mut Game<'_>) -> f32 {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_hurt_cooldown_survives_an_edit_and_is_not_saved() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     assert!(game.run_command(&format!("damage {EDIT} 2 minecraft:generic")));
     assert_eq!(health(&mut game), 18.0, "the hit");
     for _ in 0..4 {
@@ -130,7 +131,8 @@ fn step(game: &mut Game<'_>, ticks: u32) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn the_hurt_cooldown_and_invulnerable_time_are_separate_fields() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     let i = mob(&mut game);
     // A hit: the cooldown only.
     assert!(game.run_command(&format!("damage {EDIT} 2 minecraft:generic")));

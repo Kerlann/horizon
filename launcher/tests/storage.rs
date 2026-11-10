@@ -50,9 +50,8 @@ impl Home {
         let output = self.run(&["storage", "--clear", row]);
         assert!(!output.status.success(), "{output:?}");
         assert!(
-            String::from_utf8_lossy(&output.stderr).contains(
-                "Game cache cleanup is unavailable because running games cannot be reliably excluded."
-            ),
+            String::from_utf8_lossy(&output.stderr)
+                .contains("An older game build can use this cache without runtime leases."),
             "{output:?}"
         );
     }
@@ -416,9 +415,8 @@ fn explicit_version_removal_refuses_before_changing_install_metadata() {
     let output = home.run(&["remove", "spare"]);
     assert!(!output.status.success(), "{output:?}");
     assert!(
-        String::from_utf8_lossy(&output.stderr).contains(
-            "Game cache cleanup is unavailable because running games cannot be reliably excluded."
-        ),
+        String::from_utf8_lossy(&output.stderr)
+            .contains("An older game build can use this cache without runtime leases."),
         "{output:?}"
     );
     assert_eq!(fs::read(marker).unwrap(), b"installed");

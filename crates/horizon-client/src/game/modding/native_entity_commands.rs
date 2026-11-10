@@ -16,9 +16,10 @@ struct RuntimeIssuers {
     packages: HashMap<Arc<str>, Issuer>,
 }
 
-pub(super) enum EntityOperation {
-    SetSilent(bool),
-}
+include!(concat!(
+    env!("CARGO_MANIFEST_DIR"),
+    "/entity_operations_generated.rs"
+));
 #[derive(Clone, Copy)]
 pub(super) struct WriterFrame {
     pub(super) turn: WriterTurn,
@@ -149,7 +150,8 @@ impl Game<'_> {
     pub(super) fn enter_native_callback_actor(&self, id: u32) -> Option<EntityWriterScope> {
         self.active_entity_writer()?;
         let (location, _) = self
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_admitted_location(id, |at| self.locate_server_resident_owner(at))?;
         self.enter_entity_callback_actor(Target {

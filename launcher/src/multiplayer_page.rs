@@ -1,6 +1,7 @@
 //! The selected instance's server list on Home (`horizon_launcher::server_list`, the game's own
 //! `servers.dat`): each server with the picture the game last saw, Join (the game starts straight
-//! into it), Remove after a confirmation, and a line to add one.
+//! into it), Remove after a confirmation, and a line to add one. The official server is put on top
+//! once, as the game does, at the address links.json gives (`server_list::add_official`).
 use super::*;
 use gpui::{Image, ImageFormat};
 use horizon_launcher::server_list::{self, Server};
@@ -37,19 +38,6 @@ impl Multiplayer {
     }
 }
 
-/// A server's players by its server-list status ping, as the game's Multiplayer list sends it
-/// (through the address's SRV record), with a 3-second timeout. None when it doesn't answer.
-fn server_players(address: &str) -> Option<horizon_protocol::server_status::Players> {
-    let (host, port) = horizon_protocol::server_status::split_address(address)?;
-    let (host, port) = horizon_protocol::server_redirect(&host, port);
-    horizon_protocol::server_status::players_at(
-        address,
-        (&host, port),
-        std::time::Duration::from_secs(3),
-    )
-    .ok()
-}
-
 impl Launcher {
     /// Asks each listed server for its players once, as the game's Multiplayer list does when it
     /// opens; the rows show the answer (the mockup's dot and "3 of 10" or "Offline").
@@ -66,7 +54,7 @@ impl Launcher {
             let address = ip.clone();
             let task = cx
                 .background_executor()
-                .spawn(async move { server_players(&address) });
+                .spawn(async move { horizon_launcher::telemetry::server_players(&address) });
             cx.spawn(async move |this, cx| {
                 let answer = task.await;
                 let _ = this.update(cx, |this, cx| {
@@ -95,6 +83,12 @@ impl Launcher {
         if self.multiplayer.fresh {
             return;
         }
+        // A list that can't be read is the game's to report: the page shows it empty.
+        let _ = server_list::add_official(
+            &home,
+            &self.links.official_server,
+            &self.links.official_server_previous,
+        );
         // A few servers and their 64×64 pictures: small enough to read while drawing.
         self.multiplayer.list = server_list::List::load(&home)
             .servers()

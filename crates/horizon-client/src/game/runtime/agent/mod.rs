@@ -476,6 +476,7 @@ impl Game<'_> {
             Screen::Mod => "mod",
             Screen::HudEditor => "hud-editor",
             Screen::Studio => "studio",
+            Screen::EmoteWheel => "emote-wheel",
         }
     }
     pub(super) fn inventory_counts(&self) -> BTreeMap<String, i64> {
@@ -643,7 +644,7 @@ impl Game<'_> {
                 "hardcore": options.hardcore,
                 "difficulty": horizon_client::title::DIFFICULTIES[options.difficulty()],
                 "allow_commands": options.commands(*creative),
-                "world_type": options.world_type.id(),
+                "world_type": options.preset_id(),
                 "generate_structures": options.structures,
                 "bonus_chest": options.bonus_chest(),
             }),
@@ -667,6 +668,9 @@ impl Game<'_> {
                 "mode": "customize-single-biome",
                 "biome": buffet.biome(),
                 "query": buffet.query(),
+            }),
+            Mode::CreatePreset { editor, .. } => json!({
+                "mode": "world-preset-editor", "preset": editor.preset, "editor": editor.screen,
             }),
             Mode::Edit {
                 world,

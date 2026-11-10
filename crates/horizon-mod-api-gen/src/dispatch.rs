@@ -106,13 +106,17 @@ pub(super) fn emit<'a>(
                 },
             )
         } else {
-            if !target.starts_with("horizon_client::game::native_hooks::")
+            if !target.starts_with("horizon_client::game::")
                 || !target.ends_with(&format!("::{native}"))
             {
                 return Err(format!("wrong target for {name}"));
             }
             (
-                one_function(methods.iter(), &native)?.clone(),
+                if target.starts_with("horizon_client::game::native_hooks::") {
+                    one_function(methods.iter(), &native)?.clone()
+                } else {
+                    super::named_hooks::resolve(root, target, name)?
+                },
                 format!("dispatch_{name}"),
             )
         };

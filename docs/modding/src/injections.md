@@ -5,7 +5,7 @@ the mod API has no hook for, and **every injection is a request for a hook**: wr
 by renaming its target, then [ask for the hook](#ask-for-the-hook).
 
 Choose `access = "api"` for API-owned records, or `access = "internals"` for a declared
-internals facade. Both use the same `[[inject]]` fields. Native internals listeners use a
+internals facade. API injections never rebuild the game: a missing prebuilt slot is refused, and source rebuilds and call-site injections require internals access or a hook request. Both use the same `[[inject]]` fields. Native internals listeners use a
 compiled slot when available; an unlisted function or supported call requires a source rebuild.
 The launcher generates the private horizon-mixins input; mods name a Rust `with` function,
 not a source payload file or expression selector.
@@ -126,8 +126,7 @@ answer `Ok(())`; a wasm module built without `cargo horizon-mod` is held to the 
 loads. A second `replace` at one point is refused at registration, naming both mods. A replacing
 mod that stops or is disabled hands the function back: it runs as written again.
 Native and wasm share it through `mod_points::replace!`.
-Native API call sites, API source injects, internals `replace`, locals and extension fields remain
-refused.
+API call sites are refused; internals `replace`, locals and extension fields are also refused.
 The `native` table accepts only build pins and supporting modules; unknown fields are rejected.
 API head/return functions also load from wasm, with the same record.
 

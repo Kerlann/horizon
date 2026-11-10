@@ -114,7 +114,7 @@ fn resolve<'a, 'p>(
                 Kind::Head | Kind::ModifyArg | Kind::Replace | Kind::Return
             ) {
                 return Err(format!(
-                    "{}: expected an API head/return injection",
+                    "{}: expected an API head, return, modify_arg or replace injection",
                     entry.id
                 ));
             }

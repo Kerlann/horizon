@@ -9,6 +9,7 @@ use horizon_client::{join_seq::residency::write_queue::Target, mobs::spawner::Sp
 pub(super) struct LentEntityReadSource<'a> {
     pub(super) body: BaseReadSource<'a>,
     pub(super) cart_spawner: Option<&'a Spawner>,
+    pub(super) selectors: horizon_client::mobs::goals::GoalSelectorSources<'a>,
 }
 
 /// A host may expose only a concrete loan it actually received. The requested
@@ -21,6 +22,48 @@ pub(super) trait EntityBodyProvider {
         address: Target,
         visit: &mut dyn FnMut(LentEntityReadSource<'_>),
     ) -> bool;
+}
+
+/// The explicit GoalCx actor, borrowed directly from its actual roster loan.
+/// The engine callback boundary supplies the validated canonical address.
+pub(super) struct MobBodyProvider<'a> {
+    address: Target,
+    mob: &'a horizon_client::mobs::Mob,
+    selectors: horizon_client::mobs::goals::GoalSelectorSources<'a>,
+}
+impl<'a> MobBodyProvider<'a> {
+    pub(super) fn new(
+        address: Target,
+        mob: &'a horizon_client::mobs::Mob,
+        selectors: horizon_client::mobs::goals::GoalSelectorSources<'a>,
+    ) -> Self {
+        Self {
+            address,
+            mob,
+            selectors: horizon_client::mobs::goals::GoalSelectorSources {
+                goals: selectors.goals.or_else(|| mob.ai.goals.read_source()),
+                targets: selectors.targets.or_else(|| mob.ai.targets.read_source()),
+                active: selectors.active,
+            },
+        }
+    }
+}
+impl EntityBodyProvider for MobBodyProvider<'_> {
+    fn with_read_source(
+        &self,
+        address: Target,
+        visit: &mut dyn FnMut(LentEntityReadSource<'_>),
+    ) -> bool {
+        if address != self.address {
+            return false;
+        }
+        visit(LentEntityReadSource {
+            body: BaseReadSource::Mob(self.mob),
+            cart_spawner: None,
+            selectors: self.selectors,
+        });
+        true
+    }
 }
 
 /// The cart and its evolving spawner are borrowed together only for the
@@ -52,6 +95,7 @@ impl EntityBodyProvider for CartSpawnerBodyProvider<'_> {
         visit(LentEntityReadSource {
             body: BaseReadSource::Cart(self.cart),
             cart_spawner: Some(self.spawner),
+            selectors: Default::default(),
         });
         true
     }

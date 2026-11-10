@@ -169,7 +169,7 @@ impl Game<'_> {
             .hub
             .guests
             .iter()
-            .filter(|g| host.hub.here(g) && g.loaded && !g.dead && !g.is_fake())
+            .filter(|g| host.hub.here(g) && g.loaded && !g.dead && !g.is_fake() && !g.released)
             .map(|g| {
                 let moved = [0, 1, 2].map(|k| g.position[k] - g.previous_position[k]);
                 (g.conn, g.uuid, moved)
@@ -177,11 +177,37 @@ impl Game<'_> {
             .collect();
         let mut views = Vec::new();
         for (conn, uuid, moved) in conns {
-            if let Some(Some(v)) = self.as_guest(conn, |g| g.player_view()) {
+            if let Some(Some(v)) = self.as_guest(conn, |g| g.ai_player_view()) {
                 views.push((conn, guest_view(v, uuid, moved)));
             }
         }
         views
+    }
+
+    /// Project one canonical body after a real change, without visiting peers.
+    pub(super) fn ai_guest_view(
+        &mut self,
+        conn: u32,
+        mobs: &horizon_client::join_seq::JoinList<horizon_client::mobs::Mob>,
+    ) -> Option<PlayerView> {
+        let (uuid, moved) = {
+            let host = self.lan.as_ref()?;
+            let guest = host.hub.guest(conn)?;
+            if !host.hub.here(guest)
+                || !guest.loaded
+                || guest.dead
+                || guest.is_fake()
+                || guest.released
+            {
+                return None;
+            }
+            (
+                guest.uuid,
+                [0, 1, 2].map(|k| guest.position[k] - guest.previous_position[k]),
+            )
+        };
+        let view = self.as_guest(conn, |g| g.ai_player_view_for_pass(mobs))??;
+        Some(guest_view(view, uuid, moved))
     }
 
     /// The guest `conn`'s real identity — the uuid its lent view carries and

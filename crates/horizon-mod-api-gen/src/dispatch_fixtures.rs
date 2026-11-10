@@ -84,7 +84,13 @@ fn collect(
 pub(crate) fn generate(root: &Path, out: &Path) -> Result<(), String> {
     let dir = root.join(DIRECTORY);
     println!("cargo:rerun-if-changed={}", dir.display());
-    let areas = Catalog::modules(&root.join(DECLARATIONS))?;
+    let mut areas = Catalog::modules(&root.join(DECLARATIONS))?;
+    // A fixture can support an engine entry-point module as well as a declaration.
+    // Their boundaries need not match when declarations are split per hook.
+    let native_dir = root.join("crates/horizon-client/src/game/native_hooks");
+    if native_dir.is_dir() {
+        areas.extend(Catalog::modules(&native_dir)?);
+    }
     let mut output = BTreeMap::new();
     let mut seen = BTreeSet::new();
     for area in Catalog::modules(&dir)? {

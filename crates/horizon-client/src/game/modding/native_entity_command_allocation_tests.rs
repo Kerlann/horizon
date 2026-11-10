@@ -21,7 +21,9 @@ impl Hooks for Runtime {
         mod_api::__private::with_current_converted_package(|package| {
             assert_eq!(package, Some(self.package.as_ref()))
         });
-        let EntityWriteCompletion::EntitySetSilent(done) = event.completion;
+        let EntityWriteCompletion::EntitySetSilent(done) = event.completion else {
+            panic!("unexpected operation completion in SetSilent test")
+        };
         assert_eq!(
             done.id.query(host),
             Ok(EntityCommandStatus::Completed(event.completion.clone()))
@@ -58,7 +60,8 @@ fn silent_warm_converted_acceptance_and_queries_allocate_no_package_text() {
                 let epoch = game.native_lifecycle.epoch().unwrap();
                 let other = EntityRef::new(epoch, 72);
                 let (location, _) = game
-                    .entity_residency
+                    .resident_entities
+                    .table
                     .borrow_mut()
                     .server_admitted_location(71, |at| game.locate_server_resident_owner(at))
                     .unwrap();

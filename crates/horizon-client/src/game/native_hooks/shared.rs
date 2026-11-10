@@ -367,19 +367,7 @@ impl Game<'_> {
         title.set_rule_registry(Arc::new(crate::game::api_values::game_rule_registry()));
         self.show_title_with_registry(title);
     }
-    pub(super) fn show_title_with_registry(&mut self, mut title: horizon_client::title::Title) {
-        title.set_additional_data_packs(self.pack.additional_data.clone());
-        if !self.screen_hooks_heard() {
-            self.title = Some(title);
-            return;
-        }
-        let id = title.mode.id();
-        self.title_change(Some(id));
-        self.title = Some(title);
-        self.observed_screen = self.observed_now();
-        let none = self.screen_change_view(Screen::Playing);
-        self.native_screen_init_post(&screen_view_with_id(&none, id));
-    }
+
     /// Takes the title down as a world opens over it (`setScreen` to the
     /// loading screen, then null): `screen_opening` to no screen, then
     /// `screen_closing` for the title's screen, before it goes. The world
@@ -2939,6 +2927,9 @@ impl Game<'_> {
     /// The mobs from index `from` on are new in the world.
     pub(super) fn native_mobs_joined(&mut self, from: usize, natural: bool) {
         self.join_spawn_tags(from);
+        for source in self.mobs.iter().skip(from) {
+            self.record_ai_mob_owner(source);
+        }
         // A mod can keep a mob out; it is then taken out and not told of.
         self.native_joins_flush(false, 0);
         for i in from..self.mobs.len() {

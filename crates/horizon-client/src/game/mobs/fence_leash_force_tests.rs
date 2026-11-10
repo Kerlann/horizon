@@ -25,7 +25,7 @@ const SLACK: &str = "00006099-0000-0000-0000-000000000002";
 
 /// A host with one placed guest (conn 2), so the server tracks the level and
 /// gives its fence knots their entities.
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -47,7 +47,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -159,7 +159,8 @@ fn vectors(game: &mut Game<'_>, uuid: &str) -> ([f64; 3], f32) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_fence_leash_pulls_a_pig_as_vanilla_does() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     let (elastic, slack) = (pig(&mut game, ELASTIC), pig(&mut game, SLACK));
     // Before any tick: the saved leash is only pending; the pig is at rest
     // on stone, with gravity.

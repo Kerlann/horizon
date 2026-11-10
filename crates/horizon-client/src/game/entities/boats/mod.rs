@@ -1577,7 +1577,16 @@ impl Game<'_> {
     /// `getDismountLocationForPassenger` for a passenger `width` wide
     /// facing `yaw`.
     pub(super) fn boat_dismount_target(&self, i: usize, width: f64, yaw: f32) -> Vec3 {
-        let b = &self.boats[i];
+        self.boat_dismount_target_at(&self.world, &self.boats[i], width, yaw)
+    }
+
+    pub(super) fn boat_dismount_target_at(
+        &self,
+        world: &horizon_client::world::World,
+        b: &Boat,
+        width: f64,
+        yaw: f32,
+    ) -> Vec3 {
         let r = yaw.to_radians();
         let distance = (WIDTH * std::f64::consts::SQRT_2 + width + 1.0e-5) / 2.0;
         let (s, c) = (-(r.sin()) as f64, r.cos() as f64);
@@ -1588,8 +1597,8 @@ impl Game<'_> {
         );
         let top = b.bounds().max_position().y;
         let (bx, by, bz) = (x.floor() as i32, top.floor() as i32, z.floor() as i32);
-        let below = self.res.facts().get(self.world.block(bx, by - 1, bz));
-        let here = self.res.facts().get(self.world.block(bx, by, bz));
+        let below = self.res.facts().get(world.block(bx, by - 1, bz));
+        let here = self.res.facts().get(world.block(bx, by, bz));
         if below.fluid != Fluid::Water
             && !here.full_collision
             && (below.full_collision || below.legacy_solid)

@@ -113,7 +113,7 @@ fn placements<'a>(
             TemplateBlock {
                 pos: std::array::from_fn(|i| relative[i].wrapping_add(at[i])),
                 state: transforms.rotate(transforms.mirror(block.state, mirror), rotation),
-                nbt: block.nbt.as_ref(),
+                nbt: block.nbt.as_deref(),
             }
         })
         .collect();

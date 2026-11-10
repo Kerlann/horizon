@@ -7,12 +7,13 @@ use std::fs::{self, File, Metadata};
 use std::io;
 use std::path::{Path, PathBuf};
 
-const PROFILES: [&str; 2] = ["fast", "release"];
+pub(crate) const PROFILES: [&str; 2] = ["fast", "release"];
 
 #[derive(Debug)]
 pub enum Error {
     Busy,
     UnprovenExclusion,
+    IncompleteUnit,
     UnsupportedFilesystem,
     Unsafe(PathBuf),
     Io(io::Error),
@@ -27,7 +28,7 @@ impl From<io::Error> for Error {
 pub(crate) struct Cache {
     root: PathBuf,
     directory: Dir,
-    _lease: Locked,
+    _lease: std::sync::Arc<Locked>,
 }
 
 pub(crate) use horizon_mod_package::locks::{LockMode, Locked, Release};
@@ -85,6 +86,14 @@ fn size(path: &Path) -> Result<u64, Error> {
 }
 
 impl Cache {
+    pub(crate) fn share(&self) -> Result<Self, Error> {
+        Ok(Self {
+            root: self.root.clone(),
+            directory: self.directory.try_clone()?,
+            _lease: self._lease.clone(),
+        })
+    }
+
     /// One cross-process lease covers staging, Cargo, installation/export and cleanup.
     /// OS locks release on exit, including a crash; a leftover lock file is not a busy marker.
     pub(crate) fn acquire(build_dir: &Path) -> Result<Self, Error> {
@@ -102,7 +111,7 @@ impl Cache {
         Ok(Self {
             root,
             directory,
-            _lease: lease,
+            _lease: std::sync::Arc::new(lease),
         })
     }
 
@@ -124,9 +133,10 @@ impl Cache {
         self.process(None, false)
     }
     pub(crate) fn clear(&self) -> Result<u64, Error> {
-        crate::cache_cleanup::Access::UninstrumentedGame.check()?;
+        crate::cache_cleanup::Access::IncompleteGame.check()?;
         self.process(None, true)
     }
+    #[cfg(test)]
     pub(crate) fn trim(&self, limit: u64) -> Result<u64, Error> {
         if limit == 0 {
             return Ok(0);
@@ -134,7 +144,7 @@ impl Cache {
         if self.bytes()? <= limit {
             return Ok(0);
         }
-        crate::cache_cleanup::Access::UninstrumentedGame.check()?;
+        crate::cache_cleanup::Access::IncompleteGame.check()?;
         self.process(Some(limit), true)
     }
 

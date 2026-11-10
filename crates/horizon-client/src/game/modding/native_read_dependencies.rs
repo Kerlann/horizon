@@ -1,6 +1,46 @@
-//! Source-owned heavy-read dependency keys. Domains extend this one set; an
-//! unrelated light patch must never poison every heavy read.
+//! Semantic source dependencies of live entity reads. These are not a global
+//! unsettled bit: a write marks only the source values it can actually change.
+//! The first set_silent domain marks Nbt (full entity serialization) only.
+//! Reading Tags or CustomName from a saved compound does not make either
+//! dependent on every other field stored in that compound.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum EntityReadDependency {
     Nbt,
+    Tags,
+    Name,
+    DisplayText,
+    Teams,
+    Ownership,
+    VitalState,
+    Invulnerability,
+    Geometry,
+    Riding,
+    ItemStack,
+    Attributes,
+    Equipment,
+    Effects,
+    PlayerState,
+    Sleeping,
+    Offers,
+    Goals,
+    TargetGoals,
+    Session,
+    Cooldowns,
+    AttackState,
+    Inventory,
+    Stats,
+    Recipes,
+    MinecartKind,
+    MinecartPush,
+    MinecartSpeed,
+    MinecartRails,
+    MinecartFlipped,
+    VehicleDamage,
+    VehicleHurtTicks,
+    MinecartDisplay,
+    MinecartFuel,
+    MinecartFuse,
+    MinecartHopper,
+    MinecartCommand,
+    AiState,
 }

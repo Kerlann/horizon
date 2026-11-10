@@ -488,5 +488,20 @@
   "horizon.splitscreen.setup.window": "Prozor %s",
   "horizon.splitscreen.setup.window_empty": "Prozor %s: prazan",
   "horizon.splitscreen.setup.window_place": "Prozor %s (%s od %s)",
-  "horizon.title.not_affiliated": "Nije povezano sa Mojang-om ili Microsoft-om"
+  "horizon.title.not_affiliated": "Nije povezano sa Mojang-om ili Microsoft-om",
+  "horizon.mods.empty": "Bez modova: stavite .hmod datoteke u fasciklu horizon-mods",
+  "horizon.mods.stopped": " (zaustavljeno)",
+  "horizon.mods.dev": " (Dev)",
+  "horizon.mods.in_world": " (ostavi svet da se promeni)",
+  "horizon.extras.discord_presence.tooltip": "Prikazuje „Igra Horizon“ na vašem Discord profilu dok Discord radi: meniji, jedan ili više igrača, dimenzija i vreme igranja. Nikada ime sveta ili adresu servera.",
+  "horizon.extras.header.cosmetics": "Kozmetika",
+  "horizon.extras.cosmetics_mine": "Moja kozmetika",
+  "horizon.extras.cosmetics_mine.tooltip": "Skriveno: svaki Horizon igrač vas vidi bez kozmetike, uključujući i vas. Isti prekidač kao Garderoba u pokretaču.",
+  "horizon.extras.cosmetics_others": "Kozmetika drugih igrača",
+  "horizon.extras.cosmetics_others.tooltip": "Šta nose drugi Horizon igrači: sve, samo stilove oznaka imena ili ništa. Kada je skriveno, igra nikada ne pita šta nose.",
+  "horizon.extras.cosmetics_hide_fx": "Sakrij tragove i aure drugih igrača",
+  "horizon.extras.cosmetics_hide_fx.tooltip": "Tragovi i aure drugih igrača ostaju skriveni; njihova ostala kozmetika se i dalje vidi. Isključeno po zadanom.",
+  "horizon.extras.cosmetics.shown": "Pokazano",
+  "horizon.extras.cosmetics.hidden": "Skriveno",
+  "horizon.extras.cosmetics.name_tags": "Samo oznake sa imenom"
 }

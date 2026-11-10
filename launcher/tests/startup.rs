@@ -11,12 +11,14 @@ use std::{
 
 fn fixture() -> PathBuf {
     let root = std::env::temp_dir().join(format!("horizon-startup-{}", std::process::id()));
-    for folder in ["launcher", "data", "config", "probes"] {
+    for folder in ["game/telemetry", "launcher", "data", "config", "probes"] {
         fs::create_dir_all(root.join(folder)).unwrap();
     }
+    fs::write(root.join("launcher/settings.json"), r#"{"skip_opening":true,"install_new_versions":false,"desktop_entry":false,"ping_notice_seen":true}"#).unwrap();
+    let consent = serde_json::json!({"version":horizon_telemetry::CONSENT_VERSION,"choices":{}});
     fs::write(
-        root.join("launcher/settings.json"),
-        r#"{"skip_opening":true,"install_new_versions":false,"desktop_entry":false}"#,
+        root.join("game/telemetry/consent.json"),
+        consent.to_string(),
     )
     .unwrap();
     fs::copy(support::console_probe(), root.join("probes/powershell.exe")).unwrap();
@@ -35,6 +37,7 @@ fn launch(root: &Path) -> Child {
         .env("XDG_CONFIG_HOME", root.join("config"))
         .env("HORIZON_LAUNCHER_NO_SELF_UPDATE", "1")
         .env("HORIZON_NO_AUDIO", "1")
+        .env("HORIZON_TELEMETRY_URL", "off")
         .env("HORIZON_STARTUP_PROBE_LOG", root.join("probes.log"))
         .env("HORIZON_LAUNCHER_BENCH", root.join("timing.json"))
         .stdout(Stdio::piped())
@@ -69,7 +72,11 @@ fn hardware_probes_run_hidden_after_the_first_frame() {
     let timing: serde_json::Value =
         serde_json::from_slice(&fs::read(root.join("timing.json")).unwrap()).unwrap();
     let first_frame = timing["first_frame_epoch_ms"].as_f64().unwrap().floor();
-    let probes = fs::read_to_string(root.join("probes.log")).unwrap_or_default();
+    let probes = fs::read_to_string(root.join("probes.log")).unwrap();
+    // Rust resolves cmd.exe to the system directory, so instrument the seven PowerShell
+    // probes, which exercise both shared helpers (the cmd probes use those same helpers).
+    const POWERSHELL_PROBES: usize = 7;
+    assert_eq!(probes.lines().count(), POWERSHELL_PROBES, "{probes}");
     for probe in probes.lines() {
         let fields: Vec<_> = probe.split('|').collect();
         assert!(
@@ -78,8 +85,4 @@ fn hardware_probes_run_hidden_after_the_first_frame() {
         );
         assert_eq!(fields[1], "false", "probe opened a terminal: {probe}");
     }
-    assert!(
-        !root.join("game/telemetry").exists(),
-        "startup made a data-collection folder"
-    );
 }

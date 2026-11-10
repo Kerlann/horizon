@@ -35,18 +35,29 @@ jobs:
             ln -s "$target" "$GITHUB_WORKSPACE/target"
           fi
           echo "CARGO_TARGET_DIR=$target" >> "$GITHUB_ENV"
+          if [[ '${{ runner.environment }}' != 'github-hosted' ]]; then
+            # build-std fingerprints rust-src mtimes, including its build scripts.
+            # Keep the toolchain beside its artifacts across ephemeral runners.
+            echo "RUSTUP_HOME=$target/rustup" >> "$GITHUB_ENV"
+          fi
           cache="$target/wasm-fixtures"
           if [[ '${{ runner.environment }}' == 'github-hosted' ]]; then
             cache="$GITHUB_WORKSPACE/.wasm-fixture-targets"
           fi
           # Keep generated workspaces real: Cargo cannot discover their members
-          # through a target symlink. Only independent compiler artifacts persist.
+          # through a target symlink. Each member still has its own workspace and
+          # link invocation. PRs reuse dependency artifacts; main also exercises
+          # independent dependency compilation in the original per-member targets.
           for member in fixture library-fixture/{library,observer,dependent} groups/{counter_lib,alpha,beta,gamma,hog}; do
             root="$GITHUB_WORKSPACE/crates/horizon-mod-wasm/tests/$member/target/horizon-mod"
             mkdir -p "$root"
+            artifacts="$cache/shared"
+            if [[ "$GITHUB_REF" == refs/heads/main ]]; then
+              artifacts="$cache/$member"
+            fi
             for artifact in horizon-wasm wasm32-unknown-unknown std-artifacts; do
-              mkdir -p "$cache/$member/$artifact"
-              ln -s "$cache/$member/$artifact" "$root/$artifact"
+              mkdir -p "$artifacts/$artifact"
+              ln -s "$artifacts/$artifact" "$root/$artifact"
             done
           done
       - uses: dtolnay/rust-toolchain@master
@@ -76,8 +87,8 @@ jobs:
           HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
         run: |
           cargo test -p horizon-mod-api --features wasm-guest --lib guest_pool_
-          cargo test -p horizon-mod-wasm --test real_member -- --ignored --nocapture
-          cargo test -p horizon-mod-wasm --lib guest_input_pool_stays_flat_for_100k_no_import_calls -- --ignored --nocapture
+          cargo test -p horizon-mod-wasm --features listener-fixture --test real_member --test native_listener --test no_wire_registration -- --include-ignored --nocapture
+          cargo test -p horizon-mod-wasm --features listener-fixture --lib guest_input_pool_stays_flat_for_100k_no_import_calls -- --ignored --nocapture
       - name: Build independent library members
         run: |
           tool="$GITHUB_WORKSPACE/target/debug/cargo-horizon-mod"
@@ -110,4 +121,4 @@ jobs:
         env:
           HORIZON_WASM_FIXTURE: ${{ github.workspace }}/crates/horizon-mod-wasm/tests/fixture/target/horizon-mod/wasm_fixture.hmod
           HORIZON_WASM_STD: ${{ github.workspace }}/target/horizon-wasm-std.wasm
-        run: cargo test --release -p horizon-mod-wasm --test bench block_entity_ticks -- --ignored --nocapture
+        run: cargo test --release -p horizon-mod-wasm --features listener-fixture --test bench block_entity_ticks -- --ignored --nocapture

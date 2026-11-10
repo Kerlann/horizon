@@ -71,6 +71,7 @@ impl Hooks for Probe {
 }
 
 fn main() {
+    let startup = horizon_client::entry::prepare();
     horizon_client::entry::main_with(
         vec![ModEntry::new(
             "gui_overlay_probe",
@@ -81,6 +82,6 @@ fn main() {
         )],
         &[],
         &[],
-        None,
+        startup,
     );
 }

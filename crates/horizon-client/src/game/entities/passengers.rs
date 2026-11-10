@@ -94,6 +94,7 @@ impl Game<'_> {
                 let m = &mut self.mobs[i];
                 m.extra.mount = None;
                 m.extra.passenger = false;
+                self.record_ai_mob_owner_id(self.mobs[i].id);
             }
         }
         for m in &mut self.mobs {
@@ -214,6 +215,12 @@ impl Game<'_> {
                         .filter(|r| r.extra.mount == Some(v))
                         .count();
                     attach = riders::happy_ghast_attachment(seat);
+                } else if vehicle.kind.passenger_attachments.len() > 1 {
+                    let seat = self.mobs[..i]
+                        .iter()
+                        .filter(|r| r.extra.mount == Some(v))
+                        .count();
+                    attach = riders::passenger_attachment_at(vehicle, seat);
                 }
                 let (pos, prev) = (vehicle.position, vehicle.previous);
                 let (yaw, prev_yaw) = (vehicle.yaw, vehicle.previous_yaw);
@@ -501,6 +508,7 @@ impl Game<'_> {
         horse.extra.tame = true;
         horse.extra.age = 0;
         let at = [horse.position.x, horse.position.y, horse.position.z];
+        self.record_ai_mob_owner_id(id);
         self.spawn_bolt(at, true);
         let Some(skeleton) = self.trap_skeleton(at) else {
             return;
@@ -527,6 +535,7 @@ impl Game<'_> {
                 h.extra.age = 0;
                 h.velocity = Vec3::new(h.velocity.x + dx, h.velocity.y, h.velocity.z + dz);
             }
+            self.record_ai_mob_owner_id(other);
             if let Some(rider) = self.trap_skeleton(at) {
                 self.mount_mob(rider, other);
             }
@@ -567,5 +576,30 @@ impl Game<'_> {
             }
         }
         Some(id)
+    }
+}
+
+#[cfg(test)]
+mod content_seat_tests {
+    use super::*;
+
+    #[test]
+    #[ignore = "needs prepared resources"]
+    fn content_seats_keep_independent_offsets() {
+        super::super::native_entity_refs::tests::with_game(|game| {
+            use std::sync::Arc;
+            let mut kind = game.res.mob_types().get("minecraft:cow").unwrap().clone();
+            Arc::make_mut(&mut kind).passenger_attachments =
+                vec![[1.0, 2.0, 3.0], [-1.0, 4.0, 5.0]];
+            let vehicle = horizon_client::mobs::Mob::new(1, kind, Vec3::ZERO, 0.0);
+            assert_eq!(
+                riders::passenger_attachment_at(&vehicle, 0),
+                [1.0, 2.0, 3.0]
+            );
+            assert_eq!(
+                riders::passenger_attachment_at(&vehicle, 1),
+                [-1.0, 4.0, 5.0]
+            );
+        });
     }
 }

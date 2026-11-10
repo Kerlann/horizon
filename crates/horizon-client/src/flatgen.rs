@@ -212,6 +212,23 @@ impl FlatTerrain {
 /// DimensionType.Y_SIZE: the most layers FlatLevelGeneratorSettings takes.
 const Y_SIZE: i64 = 4064;
 
+/// Check layer block identifiers and heights before `from_settings` expands them.
+pub(crate) fn valid_layer_heights(settings: &Tag) -> bool {
+    let Some(Tag::List(layers)) = settings.get("layers") else {
+        return false;
+    };
+    layers
+        .iter()
+        .try_fold(0i64, |total, layer| {
+            horizon_core::identifier::Identifier::parse(&crate::save::text(layer.get("block"))?)
+                .ok()?;
+            let height = crate::save::number(layer.get("height"))?;
+            let total = total.checked_add(height)?;
+            (height >= 0 && total <= Y_SIZE).then_some(total)
+        })
+        .is_some()
+}
+
 /// FlatLevelGeneratorSettings.CODEC reading a dedicated server's
 /// `generator-settings` (DedicatedServerProperties.WorldDimensionData for
 /// the `minecraft:flat` preset): the settings as `world_gen_settings` stores
@@ -372,6 +389,27 @@ mod tests {
     use super::*;
     use crate::save::{number, text};
     use crate::server::json::{self, Json};
+
+    #[test]
+    fn preset_editor_flat_layers_allow_void_but_reject_malformed_blocks_and_heights() {
+        let valid = |layers| {
+            valid_layer_heights(&crate::save::json_tag(
+                &serde_json::json!({"layers": layers}),
+            ))
+        };
+        assert!(valid(serde_json::json!([])));
+        assert!(valid(
+            serde_json::json!([{"block":"minecraft:air","height":0}])
+        ));
+        for layers in [
+            serde_json::json!([{"height":1}]),
+            serde_json::json!([{"block":"bad:block:id","height":1}]),
+            serde_json::json!([{"block":"minecraft:stone","height":-1}]),
+            serde_json::json!([{"block":"minecraft:stone","height":4065}]),
+        ] {
+            assert!(!valid(layers));
+        }
+    }
 
     fn read(text: &str) -> (Option<Tag>, Vec<String>) {
         let json: Json = json::parse(text, false).unwrap();

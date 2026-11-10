@@ -88,8 +88,18 @@ impl Game<'_> {
         vehicle: u32,
         rider: &horizon_client::mobs::Mob,
     ) -> Option<Vec3> {
+        let cart = self.carts.iter().find(|cart| cart.id == vehicle)?;
+        self.cart_dismount_mob_at(&self.world, &self.border, cart, rider)
+    }
+
+    pub(super) fn cart_dismount_mob_at(
+        &self,
+        world: &horizon_client::world::World,
+        border: &horizon_client::worldborder::WorldBorder,
+        cart: &super::minecarts::Minecart,
+        rider: &horizon_client::mobs::Mob,
+    ) -> Option<Vec3> {
         use horizon_core::geometry::Aabb;
-        let cart = self.carts.iter().find(|c| c.id == vehicle)?;
         let direction =
             (f64::from(cart.yaw) / 90.0 + 0.5).floor() as i32 + if cart.flipped { 3 } else { 1 };
         let (fx, fz) = [(0, 1), (-1, 0), (0, -1), (1, 0)][(direction & 3) as usize];
@@ -110,8 +120,8 @@ impl Game<'_> {
         for dy in [0, 1, -1] {
             for (dx, dz) in offsets {
                 let p = [bx + dx, by + dy, bz + dz];
-                let shape = self.block_collision_shape(p);
-                let below = self.block_collision_shape([p[0], p[1] - 1, p[2]]);
+                let shape = self.block_collision_shape_in(world, p);
+                let below = self.block_collision_shape_in(world, [p[0], p[1] - 1, p[2]]);
                 let floor = horizon_core::geometry::block_floor_height(&shape, || &below);
                 if !floor.is_infinite() && floor < 1.0 {
                     let at = Vec3::new(
@@ -123,7 +133,7 @@ impl Game<'_> {
                         Vec3::new(at.x - half, at.y, at.z - half),
                         Vec3::new(at.x + half, at.y + f64::from(rider.height()), at.z + half),
                     );
-                    if self.can_dismount_to(bounds) {
+                    if self.can_dismount_to_at(world, border, bounds) {
                         return Some(at);
                     }
                 }
@@ -152,6 +162,16 @@ impl Game<'_> {
         mount: &horizon_client::mobs::Mob,
         rider: &horizon_client::mobs::Mob,
     ) -> Option<Vec3> {
+        self.horse_dismount_mobs_at(&self.world, &self.border, mount, rider)
+    }
+
+    pub(super) fn horse_dismount_mobs_at(
+        &self,
+        world: &horizon_client::world::World,
+        border: &horizon_client::worldborder::WorldBorder,
+        mount: &horizon_client::mobs::Mob,
+        rider: &horizon_client::mobs::Mob,
+    ) -> Option<Vec3> {
         use horizon_core::geometry::{Aabb, trig};
         if !is_horse(mount.species()) {
             return None;
@@ -169,8 +189,8 @@ impl Game<'_> {
             let mut y = mount.position.y.floor() as i32;
             loop {
                 let p = [x.floor() as i32, y, z.floor() as i32];
-                let shape = self.block_collision_shape(p);
-                let below = self.block_collision_shape([p[0], p[1] - 1, p[2]]);
+                let shape = self.block_collision_shape_in(world, p);
+                let below = self.block_collision_shape_in(world, [p[0], p[1] - 1, p[2]]);
                 let floor = horizon_core::geometry::block_floor_height(&shape, || &below);
                 if f64::from(y) + floor > limit {
                     break;
@@ -182,7 +202,7 @@ impl Game<'_> {
                         Vec3::new(x - half, at.y, z - half),
                         Vec3::new(x + half, at.y + f64::from(rider.height()), z + half),
                     );
-                    if self.can_dismount_to(bounds) {
+                    if self.can_dismount_to_at(world, border, bounds) {
                         return Some(at);
                     }
                 }
@@ -216,6 +236,7 @@ impl Game<'_> {
                 m.extra.mount = Some(root);
                 m.extra.passenger = true;
             }
+            self.record_ai_mob_owner_id(rider);
         }
     }
 

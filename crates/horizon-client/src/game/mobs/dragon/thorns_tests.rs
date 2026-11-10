@@ -217,7 +217,12 @@ fn dragon_takes_player_thorns_through_its_body() {
                 Some(("minecraft:thorns", Some(77), Some(77)))
             );
             assert_eq!(d.hurt_by_player, Some((FightWho::Host, 0)));
-            assert_eq!(g.armor[1].as_ref().unwrap().damage, 2);
+            // Player.hurtArmor adds floor(max(1, damage / 4)) before
+            // Thorns' two durability: 10-point head hit = 4, 5-point wing = 3.
+            assert_eq!(
+                g.armor[1].as_ref().unwrap().damage,
+                if wing { 3 } else { 4 }
+            );
             assert_eq!(
                 g.audio
                     .capture
@@ -235,10 +240,54 @@ fn dragon_takes_player_thorns_through_its_body() {
         let health = g.player.as_ref().unwrap().health.health();
         g.dragon_hurts_player("minecraft:mob_attack", 1.0);
         assert_eq!(g.player.as_ref().unwrap().health.health(), health);
-        assert_eq!(g.armor[1].as_ref().unwrap().damage, 4);
+        // The refused head hit adds only Thorns wear to the wing's 3;
+        // the refused breath hit adds neither ordinary armor wear nor Thorns.
+        assert_eq!(g.armor[1].as_ref().unwrap().damage, 5);
         let before = g.dragon.as_ref().unwrap().health;
         g.dragon_hurts_player("minecraft:indirect_magic", 1.0);
         assert_eq!(g.dragon.as_ref().unwrap().health, before);
-        assert_eq!(g.armor[1].as_ref().unwrap().damage, 4);
+        assert_eq!(g.armor[1].as_ref().unwrap().damage, 5);
+
+        // Move past knockBack's two-tick recent-attacker exclusion, but stay
+        // inside the ten-tick damage cooldown so this is an actual refused hurt.
+        for _ in 0..3 {
+            g.player.as_mut().unwrap().health.advance_clock();
+            g.world.game_time += 1;
+        }
+        // A refused wing still retaliates, but neither wears ordinary armor
+        // nor retains its nonzero push or a new velocity-sync marker.
+        let d = g.dragon.as_mut().unwrap();
+        d.invulnerable = 0;
+        d.last_source = None;
+        let before = d.health;
+        g.audio.capture.as_mut().unwrap().clear();
+        let p = g.player.as_mut().unwrap();
+        p.health.sync_velocity = false;
+        let velocity = Vec3::new(0.25, -0.125, 0.75);
+        p.velocity = velocity;
+        g.dragon_wing_knock_back(Vec3::new(0.5, 0.2, -0.25), false);
+        let p = g.player.as_ref().unwrap();
+        assert_eq!(p.health.health(), health);
+        assert_eq!(p.velocity, velocity);
+        assert!(!p.health.sync_velocity);
+        assert_eq!(g.armor[1].as_ref().unwrap().damage, 7);
+        let d = g.dragon.as_ref().unwrap();
+        assert!(d.health < before);
+        assert_eq!(
+            d.last_source,
+            Some(("minecraft:thorns", Some(77), Some(77)))
+        );
+        // Attribution stores the dragon's age, not the world's game time.
+        assert_eq!(d.hurt_by_player, Some((FightWho::Host, 0)));
+        assert_eq!(
+            g.audio
+                .capture
+                .as_ref()
+                .unwrap()
+                .iter()
+                .filter(|s| s.event == "minecraft:enchant.thorns.hit")
+                .count(),
+            1
+        );
     });
 }

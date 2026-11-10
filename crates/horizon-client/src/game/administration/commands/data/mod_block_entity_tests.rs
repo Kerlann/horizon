@@ -1,5 +1,5 @@
-//! Actual command execution with prepared resources. No native mod bundle or
-//! process-wide trait hooks are installed; this is a generic content fixture.
+//! Actual command execution with prepared resources. Canonical membership is
+//! installed only in a fresh process; no native mod bundle or trait hooks are used.
 use super::*;
 use crate::game::{Audio, Options, Progress, Settings, load_resources};
 use horizon_client::{
@@ -51,6 +51,13 @@ fn run(game: &mut Game<'_>, command: &str) -> ModRevision {
 #[test]
 #[ignore = "requires private prepared 26.3 resources in HORIZON_TEST_RESOURCES"]
 fn actual_data_commands_preserve_same_mod_entity_runtime_state() {
+    if crate::game::native_entity_refs::tests::run_fresh_cases(
+        "game::commands::data::mod_block_entity_tests::actual_data_commands_preserve_same_mod_entity_runtime_state",
+        "HORIZON_MOD_DATA_COMMAND_CHILD",
+        &["saved-data"],
+    ) {
+        return;
+    }
     let base = PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
     let root =
         PathBuf::from(std::env::var_os("HORIZON_HOME").unwrap()).join("data-command-resources");
@@ -85,6 +92,15 @@ fn actual_data_commands_preserve_same_mod_entity_runtime_state() {
             .name
             .clone()
     }));
+    // Normal mod startup freezes canonical membership before loading resources.
+    // This fixture bypasses that startup, but saved-data commands still validate
+    // the entity against the block before loading its fields in place.
+    let mut types = horizon_client::block_entity_types::BlockEntityTypes::new(
+        [(BLOCK.to_owned(), ENTITY.to_owned())].into(),
+        vec![ENTITY.to_owned(), "fixture:replacement".to_owned()],
+    );
+    types.add_valid(BLOCK, "fixture:replacement").unwrap();
+    horizon_client::block_entity_types::install(types).unwrap();
     let settings = Settings::default();
     let loaded = load_resources(
         horizon_assets::resource_source::ResourceRoot::directory(root.clone()),
@@ -193,8 +209,8 @@ fn actual_data_commands_preserve_same_mod_entity_runtime_state() {
     changed(&game, before);
     assert!(!entity(&game).nbt.contains_key(&"Items".into()));
 
-    // Keep the pre-existing type-changing behavior: this patch adds no new
-    // block/type validation policy to /data, and a new type has fresh state.
+    // A registered additional valid type can replace the current entity;
+    // the replacement has fresh runtime state and identity.
     let before = run(
         &mut game,
         r#"data merge block 2 64 2 {id:"fixture:replacement",fuel:12}"#,

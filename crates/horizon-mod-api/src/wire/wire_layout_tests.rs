@@ -882,6 +882,16 @@ fn every_attachment_error_and_write_case_has_declared_tag_type() {
     ] {
         fields(value, (tag,));
     }
+    fields(AttachmentError::HolderBusy, (7u32,));
+    fields(
+        AttachmentError::UnsupportedHolder("dragonpart"),
+        (8u32, "dragonpart"),
+    );
+    fields(AttachmentRowError::HolderBusy, (2u32,));
+    fields(
+        AttachmentRowError::UnsupportedHolder("dragonpart"),
+        (3u32, "dragonpart"),
+    );
     fields(AttachmentWrite::Decoded, (0u32,));
     fields(AttachmentWrite::Default, (1u32,));
     fields(AttachmentWrite::Set, (2u32,));

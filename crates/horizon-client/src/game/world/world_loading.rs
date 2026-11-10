@@ -215,13 +215,7 @@ impl WorldRequest {
             level.hardcore = o.hardcore;
             level.difficulty = horizon_client::title::DIFFICULTIES[o.difficulty()].into();
             level.allow_commands = Some(o.commands(creative));
-            horizon_client::save::write_world_gen_settings_with(
-                &save_root,
-                level.seed,
-                o.world_gen(),
-                o.flat_settings(),
-                o.single_biome(),
-            )?;
+            o.write_world_gen(&save_root, level.seed)?;
             // The DataPackConfig the screen chose: the picked packs on,
             // everything else disabled — the feature packs left out, and the
             // world packs the Data Packs screen held back (`install` copies
@@ -696,7 +690,7 @@ fn worldgen_overrides_of(
 }
 
 /// The shapes of the world's levels: their dimension types, the world's
-/// enabled data packs' over vanilla's. A type the codec refuses keeps the
+/// enabled packs' stems, then saved preset/editor stems, over vanilla's. A refused type keeps the
 /// vanilla shape, with a warning.
 pub(super) fn level_shapes(
     world_root: &std::path::Path,
@@ -714,8 +708,9 @@ pub(super) fn level_shapes(
         .filter_map(|id| packs.iter().find(|p| &p.id == id))
         .collect();
     // What the packs leave out is logged when the generator reads them.
-    let (overrides, _) =
+    let (mut overrides, _) =
         horizon_client::datapack::worldgen_overrides(&enabled, |b| biomes.contains(b));
+    horizon_client::save::merge_saved_world_gen_dimensions(world_root, &mut overrides);
     let shapes = shapes_of(&overrides);
     set_level_sea_levels(
         &overrides,

@@ -989,21 +989,7 @@ pub struct CreateWorldRequest {
     pub creation: Option<(String, String)>,
 }
 
-/// What the Create New World screen decided, for the temporary world
-/// `RealmsCreateWorldFlow.createTemporaryWorldFolder` writes before the upload.
-#[derive(Clone, Debug)]
-pub struct CreatedWorld {
-    /// The world's level data, its name, game type, difficulty, game rules and features.
-    pub level: crate::save::Level,
-    pub world_gen: crate::save::WorldGen,
-    pub flat_settings: Option<horizon_core::nbt::Tag>,
-    pub single_biome: Option<String>,
-    /// level.dat's `DataPacks`: enabled and disabled ids.
-    pub data_packs: (Vec<String>, Vec<String>),
-    /// The Create World screen's temporary pack folder, moved into the world
-    /// (`Files.move(tempDataPackDir, worldFolder.resolve("datapacks"))`).
-    pub pack_dir: Option<PathBuf>,
-}
+include!("realms/preset_world.rs");
 
 impl TemplateGroup {
     const ALL: [Self; 4] = [
@@ -1567,6 +1553,7 @@ fn create_temporary_world(world: &CreatedWorld) -> std::result::Result<PathBuf, 
             world.world_gen,
             world.flat_settings.clone(),
             world.single_biome.as_deref(),
+            world.dimensions.clone(),
         )
         .map_err(|e| e.to_string())?;
         if let Some(pack_dir) = &world.pack_dir {
@@ -12723,6 +12710,7 @@ mod tests {
             level,
             world_gen: crate::save::WorldGen::default(),
             flat_settings: None,
+            dimensions: None,
             single_biome: None,
             data_packs: (vec!["vanilla".into()], Vec::new()),
             pack_dir: None,

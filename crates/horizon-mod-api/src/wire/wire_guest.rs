@@ -729,6 +729,35 @@ mod tests {
     #[test]
     fn attachment_refusals_decode_in_guest_reply_without_reinterning() {
         let mut writer = Writer::new();
+        for value in [
+            crate::AttachmentRowError::HolderBusy,
+            crate::AttachmentRowError::UnsupportedHolder("dragonpart"),
+        ] {
+            writer.clear();
+            writer.put(&value);
+            assert_eq!(Reply(writer.bytes().to_vec()).take(), Ok(value));
+        }
+        let bound: &'static str = Box::leak("é".repeat(128).into_boxed_str());
+        writer.clear();
+        writer.put(&crate::AttachmentRowError::UnsupportedHolder(bound));
+        assert_eq!(
+            Reply(writer.bytes().to_vec()).take(),
+            Ok(crate::AttachmentRowError::UnsupportedHolder(bound))
+        );
+        writer.clear();
+        writer.put(&crate::AttachmentError::UnsupportedHolder(bound));
+        assert_eq!(
+            Reply(writer.bytes().to_vec()).take(),
+            Ok(crate::AttachmentError::UnsupportedHolder(bound))
+        );
+        writer.clear();
+        writer.put(&3u32);
+        writer.put(&"é".repeat(129));
+        assert_eq!(
+            Reply(writer.bytes().to_vec()).take::<crate::AttachmentRowError>(),
+            Err(WireError::Invalid("static string too long"))
+        );
+        writer.clear();
         writer.put(&crate::AttachmentError::UnsupportedHolder("dragon"));
         let reply = Reply(writer.bytes().to_vec());
         let crate::AttachmentError::UnsupportedHolder(first) = reply.take().unwrap() else {

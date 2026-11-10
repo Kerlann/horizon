@@ -10,7 +10,9 @@ tools/addresses.json says where each host may be:
 - `vanilla`: the endpoints vanilla itself contacts; allowed anywhere;
 - `not_addresses`: strings that look like hosts but are not contacted (a suffix matcher, a translation key);
 - `allowed`: today's addresses outside a home, "path host". They only go away: with --base, a branch may move
-  an entry to another file but may not add a host nor grow the list.
+  an entry to another file but may not add a host nor grow the list. A changed sync-baseline declaration,
+  verified by check_file_size.sync_provenance, may restore exact rows from that upstream commit's inventory;
+  only those newly restored rows are excluded from the growth comparison.
 
     python3 tools/check_addresses.py                     # the check
     python3 tools/check_addresses.py --base origin/main  # and nothing added since the base
@@ -223,7 +225,7 @@ def scan(files=None):
     return found
 
 
-def check(config, found, base=None):
+def check(config, found, base=None, upstream_rows=frozenset()):
     """(problems, notes)."""
     homes = set(config.get("homes", []))
     vanilla = set(config.get("vanilla", []))
@@ -242,10 +244,12 @@ def check(config, found, base=None):
                         f"'vanilla', anything else in the Horizon layer's address home ({DOC})")
     if base is not None:
         before = {tuple(entry.split(" ", 1)) for entry in base.get("allowed", [])}
-        new_hosts = {host for _, host in allowed} - {host for _, host in before}
+        restored = (allowed - before) & upstream_rows
+        effective = allowed - restored
+        new_hosts = {host for _, host in effective} - {host for _, host in before}
         for host in sorted(new_hosts):
             problems.append(f"{host}: added to 'allowed' in {CONFIG_PATH}; new addresses go in a home ({DOC})")
-        if len(allowed) > len(before):
+        if len(effective) > len(before):
             problems.append(f"'allowed' in {CONFIG_PATH} grew from {len(before)} to {len(allowed)} entries; it only "
                             f"shrinks ({DOC})")
     notes = [f"{rel} {host}: no longer there; you can remove it from 'allowed' in {CONFIG_PATH}"
@@ -256,6 +260,17 @@ def check(config, found, base=None):
 def base_config(base):
     shown = subprocess.run(["git", "show", f"{base}:{CONFIG_PATH}"], capture_output=True, text=True, cwd=ROOT)
     return json.loads(shown.stdout) if shown.returncode == 0 else None
+
+
+def restored_upstream_rows(base):
+    """Allow exact upstream rows only for a changed, verified sync declaration."""
+    if __package__:
+        from . import check_file_size
+    else:
+        import check_file_size
+    config, errors = check_file_size.verified_sync_config(base, CONFIG_PATH)
+    rows = {tuple(row.split(" ", 1)) for row in config.get("allowed", [])} if config is not None else set()
+    return rows, errors
 
 
 def main(argv=None):
@@ -272,7 +287,9 @@ def main(argv=None):
         for host in sorted(by_host):
             print(f"{host}: {', '.join(sorted(by_host[host]))}")
         return 0
-    problems, notes = check(config, found, base_config(args.base) if args.base else None)
+    upstream_rows, provenance = restored_upstream_rows(args.base) if args.base else (set(), [])
+    problems, notes = check(config, found, base_config(args.base) if args.base else None, upstream_rows)
+    problems = provenance + problems
     for note in notes:
         print(f"note: {note}")
     if problems:

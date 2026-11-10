@@ -1,0 +1,475 @@
+//! Validated subjects for source-live entity reads. Handle-family and player
+//! UUID checks belong at this boundary, before physical or pending refusal.
+use super::{Game, commands::Target, native_read_dependencies::EntityReadDependency};
+use horizon_client::join_seq::residency::{
+    EntitySubtype, IdentityDetails, Source,
+    table::{EntityLookup, Location},
+};
+use mod_api::*;
+
+/// A typed expected family, including properties supported by only a subtype.
+/// Keeping the handle intact prevents losing PlayerRef's UUID before validation.
+#[derive(Clone, Copy)]
+pub(super) enum EntityReadSubject {
+    Entity(EntityRef),
+    Living(LivingRef),
+    Mob(MobRef),
+    OrdinaryMob(MobRef),
+    MobOrPlayer(LivingRef),
+    ActingPlayer(LivingRef),
+    Player(PlayerRef),
+    Merchant(MerchantRef),
+    ItemEntity(ItemEntityRef),
+    Display(DisplayRef),
+    TextDisplay(DisplayRef),
+    ItemDisplay(DisplayRef),
+    Minecart(MinecartRef),
+    FurnaceMinecart(MinecartRef),
+    TntMinecart(MinecartRef),
+    HopperMinecart(MinecartRef),
+    CommandMinecart(MinecartRef),
+    Dragon(DragonRef),
+    Projectile(ProjectileRef),
+    FishingHook(FishingHookRef),
+}
+
+impl EntityReadSubject {
+    pub(super) fn entity(self) -> EntityRef {
+        match self {
+            Self::Entity(entity) => entity,
+            Self::Living(living) | Self::MobOrPlayer(living) | Self::ActingPlayer(living) => {
+                living.entity()
+            }
+            Self::Mob(mob) | Self::OrdinaryMob(mob) => mob.entity(),
+            Self::Player(player) => player.entity(),
+            Self::Merchant(merchant) => merchant.entity(),
+            Self::ItemEntity(item) => item.entity(),
+            Self::Display(display) | Self::TextDisplay(display) | Self::ItemDisplay(display) => {
+                display.entity()
+            }
+            Self::Minecart(cart)
+            | Self::FurnaceMinecart(cart)
+            | Self::TntMinecart(cart)
+            | Self::HopperMinecart(cart)
+            | Self::CommandMinecart(cart) => cart.entity(),
+            Self::Dragon(dragon) => dragon.entity(),
+            Self::Projectile(projectile) => projectile.entity(),
+            Self::FishingHook(hook) => hook.entity(),
+        }
+    }
+}
+
+/// Identity and physical address admitted by the sole read boundary. The
+/// address travels with the target so callers never infer a world from Game's
+/// currently borrowed level. An OWN caller must still supply its actual loan.
+#[derive(Clone, Copy)]
+pub(super) struct EntityReadTarget {
+    pub(super) entity: EntityRef,
+    pub(super) target: Target,
+    pub(super) location: Location,
+}
+
+/// Metadata admission separated from refusal selection so a multi-input read
+/// validates every input and relational domain before selecting a physical error.
+#[derive(Clone, Copy)]
+pub(super) struct EntityReadAdmission {
+    read: EntityReadTarget,
+    lifted: bool,
+    owns: bool,
+    pending: Option<CommandId>,
+    known_uuid: Option<[i32; 4]>,
+}
+/// A call-local dependency choice, never a retained entity value or R row.
+/// Physical selection may discover more sources; pending wins only at the end.
+#[derive(Default)]
+pub(super) struct EntityReadSelection {
+    pending: Option<CommandId>,
+}
+impl EntityReadSelection {
+    pub(super) fn include(&mut self, admission: EntityReadAdmission) {
+        self.pending = self
+            .pending
+            .into_iter()
+            .chain(admission.pending)
+            .max_by_key(|id| id.sequence);
+    }
+    pub(super) fn project<R, E>(
+        self,
+        project: impl FnOnce() -> R,
+    ) -> Result<R, EntityReadError<E>> {
+        if let Some(id) = self.pending {
+            return Err(EntityReadError::Pending(id));
+        }
+        Ok(project())
+    }
+}
+
+impl EntityReadAdmission {
+    /// Choose pending only after the caller selected every actual source part.
+    pub(super) fn project_actual<R, E>(
+        self,
+        project: impl FnOnce() -> R,
+    ) -> Result<R, EntityReadError<E>> {
+        EntityReadSelection {
+            pending: self.pending,
+        }
+        .project(project)
+    }
+    pub(super) fn known_uuid(self) -> Option<[i32; 4]> {
+        self.known_uuid
+    }
+    pub(super) fn entity(self) -> EntityRef {
+        self.read.entity
+    }
+    pub(super) fn target(self) -> Target {
+        self.read.target
+    }
+    pub(super) fn location(self) -> Location {
+        self.read.location
+    }
+    pub(super) fn finish<E>(self) -> Result<EntityReadTarget, EntityReadError<E>> {
+        if self.lifted {
+            return Err(EntityReadError::Lifted);
+        }
+        if let Some(id) = self.pending {
+            return Err(EntityReadError::Pending(id));
+        }
+        Ok(self.read)
+    }
+}
+
+impl Game<'_> {
+    /// Extend a call's dependency choice after an actual relational source has
+    /// selected its inputs. The admitted address is reused without revalidation.
+    pub(super) fn entity_read_add_dependencies(
+        &self,
+        mut admission: EntityReadAdmission,
+        dependencies: &[EntityReadDependency],
+    ) -> EntityReadAdmission {
+        if admission.owns {
+            return admission;
+        }
+        let pending = self
+            .resident_entities
+            .table
+            .borrow_mut()
+            .cached_row_at(admission.entity().id(), admission.location())
+            .and_then(|row| row.pending_dependency(dependencies));
+        admission.pending = admission
+            .pending
+            .into_iter()
+            .chain(pending)
+            .max_by_key(|id| id.sequence);
+        admission
+    }
+
+    /// Select a real body before choosing pending work. Actor permission alone
+    /// cannot turn a missing OWN loan into a Pending error or payload absence.
+    pub(super) fn with_admitted_entity_source<R, E>(
+        &self,
+        admission: EntityReadAdmission,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        project: impl for<'s> FnOnce(super::native_live_entity_sources::EntityReadSource<'s>) -> R,
+    ) -> Result<R, EntityReadError<E>> {
+        let finish = |source: super::native_live_entity_sources::EntityReadSource<'_>| {
+            admission.project_actual(|| project(source))
+        };
+        self.with_entity_read_storage(admission, provider, finish)
+            .unwrap_or(Err(EntityReadError::Lifted))
+    }
+
+    /// Every input is already admitted, including its relational domain. Both
+    /// actual sources must exist before a pending command can win selection.
+    pub(super) fn with_admitted_entity_sources<R, E>(
+        &self,
+        first: EntityReadAdmission,
+        second: EntityReadAdmission,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        project: impl for<'a, 'b> FnOnce(
+            super::native_live_entity_sources::EntityReadSource<'a>,
+            super::native_live_entity_sources::EntityReadSource<'b>,
+        ) -> R,
+    ) -> Result<R, EntityReadError<E>> {
+        self.with_entity_read_storage(first, provider, |left| {
+            self.with_entity_read_storage(second, provider, |right| {
+                if let Some(id) = first
+                    .pending
+                    .into_iter()
+                    .chain(second.pending)
+                    .max_by_key(|id| id.sequence)
+                {
+                    return Err(EntityReadError::Pending(id));
+                }
+                Ok(project(left, right))
+            })
+        })
+        .flatten()
+        .unwrap_or(Err(EntityReadError::Lifted))
+    }
+
+    pub(super) fn with_entity_read_storage<R>(
+        &self,
+        admission: EntityReadAdmission,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        project: impl for<'s> FnOnce(super::native_live_entity_sources::EntityReadSource<'s>) -> R,
+    ) -> Option<R> {
+        if admission.lifted {
+            // Only the exact actual callback loan can supply a Taken body.
+            self.with_borrowed_entity_source(admission.read, provider, project)
+        } else {
+            self.with_live_entity_source(admission.read, provider, project)
+        }
+    }
+
+    pub(super) fn entity_read_dependency<E>(
+        &self,
+        subject: EntityReadSubject,
+        dependencies: &[EntityReadDependency],
+    ) -> Option<Result<EntityReadTarget, EntityReadError<E>>> {
+        self.entity_read_admission(subject, dependencies, None)
+            .map(EntityReadAdmission::finish)
+    }
+
+    /// Validate one subject once. No UUID creation, serialization, world RNG,
+    /// heavy payload construction or speculative light projection runs here.
+    pub(super) fn entity_read_admission(
+        &self,
+        subject: EntityReadSubject,
+        dependencies: &[EntityReadDependency],
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+    ) -> Option<EntityReadAdmission> {
+        let entity = subject.entity();
+        let server = self.is_logical_server();
+        if !server {
+            let remote = self.remote.as_ref().filter(|remote| remote.logged_in)?;
+            let id = i32::try_from(entity.id()).ok()?;
+            if id != remote.entity_id {
+                remote.tracked(id)?;
+            }
+            // Only these client families have an actual backend. Family and
+            // UUID proof below still uses the same canonical admitted row.
+            if !matches!(
+                subject,
+                EntityReadSubject::Entity(_)
+                    | EntityReadSubject::Living(_)
+                    | EntityReadSubject::MobOrPlayer(_)
+                    | EntityReadSubject::ActingPlayer(_)
+                    | EntityReadSubject::Player(_)
+            ) {
+                return None;
+            }
+        }
+        if self.native_lifecycle.epoch() != Some(entity.epoch()) {
+            return None;
+        }
+        let mut table = self.resident_entities.table.borrow_mut();
+        let (location, state, cached, details) = table
+            .server_admitted_read_lookup(entity.id(), |at| self.locate_server_resident_owner(at))?;
+        let target = match state {
+            EntityLookup::Found {
+                value: (target, true),
+                ..
+            } => target,
+            EntityLookup::Found {
+                value: (_, false), ..
+            }
+            | EntityLookup::Missing => return None,
+            EntityLookup::Taken => {
+                super::entity_residency::residency_target_at(location, entity.id())
+            }
+        };
+        if !server
+            && !matches!(subject, EntityReadSubject::Entity(_))
+            && !matches!(target, Target::Player)
+        {
+            return None;
+        }
+        if !self.server_read_target_visible(location.owner.dimension, target)
+            || !self.entity_read_subject_matches(subject, target, location, details)
+        {
+            return None;
+        }
+        let pending = cached.and_then(|row| row.pending_dependency(dependencies));
+        drop(table);
+        let provided = provider.is_some_and(|provider| {
+            let mut actual = false;
+            provider.with_read_source(
+                horizon_client::join_seq::residency::write_queue::Target {
+                    runtime_id: entity.id(),
+                    location,
+                },
+                &mut |_| actual = true,
+            );
+            actual
+        });
+        let owns = self.entity_read_actor_owns(entity.id(), location) || provided;
+        Some(EntityReadAdmission {
+            read: EntityReadTarget {
+                entity,
+                target,
+                location,
+            },
+            lifted: (matches!(state, EntityLookup::Taken) || self.held_out.contains(&entity.id()))
+                && !provided,
+            owns,
+            pending: if owns { None } else { pending },
+            known_uuid: details.known_uuid,
+        })
+    }
+
+    fn entity_read_subject_matches(
+        &self,
+        subject: EntityReadSubject,
+        target: Target,
+        location: Location,
+        details: IdentityDetails,
+    ) -> bool {
+        use EntitySubtype::*;
+        match subject {
+            EntityReadSubject::Entity(_) => true,
+            EntityReadSubject::Living(_) => matches!(
+                target,
+                Target::Player
+                    | Target::Guest(_)
+                    | Target::Mob(_)
+                    | Target::Stand(_)
+                    | Target::Dragon(_)
+            ),
+            EntityReadSubject::ActingPlayer(_) => match location.source {
+                Source::LocalPlayer => true,
+                Source::Guest(conn) => self.lan_acting == Some(conn),
+                _ => false,
+            },
+            EntityReadSubject::Mob(_) => matches!(target, Target::Mob(_) | Target::Dragon(_)),
+            EntityReadSubject::OrdinaryMob(_) => matches!(target, Target::Mob(_)),
+            EntityReadSubject::MobOrPlayer(_) => {
+                matches!(target, Target::Player | Target::Guest(_) | Target::Mob(_))
+            }
+            EntityReadSubject::Player(player) => {
+                matches!(target, Target::Player | Target::Guest(_))
+                    && details.known_uuid.is_some_and(|uuid| {
+                        horizon_client::lan::playerdata::ints_uuid(uuid) == player.uuid()
+                    })
+            }
+            EntityReadSubject::Merchant(_) => {
+                matches!(target, Target::Mob(_)) && details.subtype == Merchant
+            }
+            EntityReadSubject::ItemEntity(_) => matches!(target, Target::Item(_)),
+            EntityReadSubject::Display(_) => {
+                matches!(target, Target::Other(_))
+                    && matches!(details.subtype, BlockDisplay | ItemDisplay | TextDisplay)
+            }
+            EntityReadSubject::TextDisplay(_) => {
+                matches!(target, Target::Other(_)) && details.subtype == TextDisplay
+            }
+            EntityReadSubject::ItemDisplay(_) => {
+                matches!(target, Target::Other(_)) && details.subtype == ItemDisplay
+            }
+            EntityReadSubject::Minecart(_) => matches!(target, Target::Cart(_)),
+            EntityReadSubject::FurnaceMinecart(_) => {
+                matches!(target, Target::Cart(_)) && details.subtype == FurnaceCart
+            }
+            EntityReadSubject::TntMinecart(_) => {
+                matches!(target, Target::Cart(_)) && details.subtype == TntCart
+            }
+            EntityReadSubject::HopperMinecart(_) => {
+                matches!(target, Target::Cart(_)) && details.subtype == HopperCart
+            }
+            EntityReadSubject::CommandMinecart(_) => {
+                matches!(target, Target::Cart(_)) && details.subtype == CommandCart
+            }
+            EntityReadSubject::Dragon(_) => matches!(target, Target::Dragon(_)),
+            EntityReadSubject::Projectile(_) => {
+                matches!(target, Target::Projectile(_) | Target::Trident(_))
+            }
+            EntityReadSubject::FishingHook(_) => matches!(target, Target::Hook(_)),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::{
+        native_entity_body_provider::MobBodyProvider,
+        native_entity_command_lifecycle_tests::{with_fixture, writer},
+    };
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn frame_permission_without_an_actual_loan_still_refuses_lifted() {
+        with_fixture(|game, _| {
+            let _native = mod_api::__private::enter("silent-runtime", "test");
+            let _scope = writer(game);
+            let entity = EntityRef::new(game.native_lifecycle.epoch().unwrap(), 71);
+            let EntityLookup::Found { location, .. } = game.server_resident_entity(71) else {
+                panic!("actual actor missing");
+            };
+            let index = game.mobs.locate(location.join).unwrap();
+            let body = game.mobs.extract(location.join).unwrap();
+            let admission = game
+                .entity_read_admission(
+                    EntityReadSubject::Entity(entity),
+                    &[EntityReadDependency::Nbt],
+                    None,
+                )
+                .unwrap();
+            assert!(matches!(
+                admission.finish::<core::convert::Infallible>(),
+                Err(EntityReadError::Lifted)
+            ));
+            assert!(matches!(
+                game.with_admitted_entity_source::<_, core::convert::Infallible>(
+                    admission,
+                    None,
+                    |_| ()
+                ),
+                Err(EntityReadError::Lifted),
+            ));
+            game.mobs.put_back(index, body);
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn exact_actual_mob_loan_selects_body_without_a_writer_frame() {
+        with_fixture(|game, _| {
+            assert!(game.active_entity_writer().is_none());
+            let entity = EntityRef::new(game.native_lifecycle.epoch().unwrap(), 72);
+            let EntityLookup::Found { location, .. } = game.server_resident_entity(72) else {
+                panic!("actual source missing");
+            };
+            let index = game.mobs.locate(location.join).unwrap();
+            let body = game.mobs.extract(location.join).unwrap();
+            let provider = MobBodyProvider::new(
+                horizon_client::join_seq::residency::write_queue::Target {
+                    runtime_id: 72,
+                    location,
+                },
+                &body,
+                Default::default(),
+            );
+            let admission = game
+                .entity_read_admission(
+                    EntityReadSubject::Entity(entity),
+                    &[EntityReadDependency::Nbt],
+                    Some(&provider),
+                )
+                .unwrap();
+            let same_body = game.with_admitted_entity_source::<_, core::convert::Infallible>(
+                admission,
+                Some(&provider),
+                |source| {
+                    let super::super::native_base_read_rows::BaseReadSource::Mob(actual) =
+                        source.body
+                    else {
+                        panic!("wrong source family");
+                    };
+                    std::ptr::eq(actual, &body)
+                },
+            );
+            assert_eq!(same_body, Ok(true));
+            game.mobs.put_back(index, body);
+        });
+    }
+}

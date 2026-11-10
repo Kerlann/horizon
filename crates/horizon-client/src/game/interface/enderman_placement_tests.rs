@@ -10,7 +10,7 @@ use std::sync::Arc;
 /// The production tick lends the level's RNG and attachments to goals while
 /// they read its blocks. Keep that ownership boundary in the registered-goal test.
 fn tick_registered_goals(game: &mut Game<'_>, mob: &mut Mob) -> Vec<MobEvent> {
-    let mut goals = std::mem::take(&mut mob.ai.goals);
+    let mut goals = mob.ai.goals.take();
     let snapshot = [super::creatures::seen(mob, None)];
     let mut events = Vec::new();
     let mut lent = horizon_client::health::LentLevel::take(&mut game.world);
@@ -30,6 +30,7 @@ fn tick_registered_goals(game: &mut Game<'_>, mob: &mut Mob) -> Vec<MobEvent> {
                 w: &world,
                 level: &mut level,
                 events: &mut events,
+                selectors: Default::default(),
             },
         );
     }

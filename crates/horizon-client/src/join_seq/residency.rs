@@ -10,16 +10,14 @@ use std::{
     },
 };
 
+#[path = "residency/member.rs"]
+pub mod member;
 #[path = "residency/read_pass.rs"]
 pub mod read_pass;
 #[path = "residency/table.rs"]
 pub mod table;
-
 #[path = "residency/write_queue.rs"]
 pub mod write_queue;
-
-#[path = "residency/member.rs"]
-pub mod member;
 
 /// Authoritative entity storage families, including specialized semantic sources.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]

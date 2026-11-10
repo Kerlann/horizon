@@ -366,6 +366,7 @@ impl Game<'_> {
                     && event.physical_key == PhysicalKey::Code(KeyCode::Escape))
         {
             self.pending_entry = None;
+            self.perf.cancel_world_opening();
             return;
         }
         if (self.pending_entry.is_some() || self.integrated_starting.is_some())
@@ -513,6 +514,10 @@ impl Game<'_> {
                 && !self.pad_synthetic_input()
             {
                 self.track_drag_button(*button, *state == ElementState::Pressed);
+            }
+            // The emote key let go over the wheel, a click on it.
+            if self.screen == Screen::EmoteWheel && self.emote_wheel_event(&event) {
+                return Ok(());
             }
             if let WindowEvent::KeyboardInput { event, .. } = &event
                 && event.state == ElementState::Released
@@ -1231,6 +1236,7 @@ impl Game<'_> {
                             self.stats_click(size);
                         }
                         Screen::Stats if button == MouseButton::Left => self.stats_release(),
+                        Screen::GameModeSwitcher if !pressed => self.switcher_release(button),
                         _ => {}
                     }
                 }
@@ -1598,10 +1604,15 @@ impl Game<'_> {
                     let updated = Instant::now();
                     self.track_toggle_screens();
                     self.heal_hold_latches();
+                    horizon_hooks::engine::published(self.is_published());
+                    #[cfg(feature = "discord")]
+                    self.update_discord_presence();
                     let target = self.tick_target_millis();
                     let steps = self.clock.advance(elapsed, target);
                     for _ in 0..steps {
                         let started = Instant::now();
+                        horizon_client::social::set_presence_status(self.presence_status());
+                        horizon_client::social::tick();
                         // Minecraft.tick: every client tick, paused or not, in menus too.
                         self.native_client_tick_pre();
                         if self.title.is_none() && !self.pause {
@@ -1800,10 +1811,15 @@ impl Game<'_> {
                                 self.started.elapsed().as_millis()
                             );
                         }
+                        if self.title.is_some() {
+                            self.perf.title_shown();
+                        }
                         if self.title.is_none()
                             && self.screen == Screen::Playing
                             && self.player.is_some()
                         {
+                            self.perf
+                                .frame(elapsed.as_secs_f32() * 1000.0, &frame_spans);
                             if startup::filling() {
                                 let mut fill: Vec<(&'static str, usize)> =
                                     self.streaming.stages().to_vec();
@@ -1864,6 +1880,11 @@ impl Game<'_> {
 
     /// The loop ended: close the pads' output, save the world.
     pub(super) fn shut_down(&mut self) {
+        if self.error.is_none()
+            && let Some(renderer) = &mut self.renderer
+        {
+            renderer.drop_hdr_marker();
+        }
         self.end_screenshot_sequence(Err("cancelled: the game is closing".into()));
         self.pad_close_output();
         if let Err(e) = self.save_for_exit() {

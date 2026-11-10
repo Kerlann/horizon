@@ -7,12 +7,40 @@ use super::{
     native_mob_read_rows::{MerchantReadContext, MobReadContext},
 };
 use horizon_client::{
-    join_seq::residency::table::EntityLookup,
+    join_seq::residency::{
+        IdentityDetails, Source,
+        table::{EntityLookup, Location},
+    },
     mobs::{self, Mob, Species, Who, ai::brain_target},
 };
 use horizon_core::geometry::{Aabb, Axis};
 use mod_api::{EntityRef, LevelRef, LivingRef, WorldEpoch};
 use std::collections::HashMap;
+
+#[cfg(test)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub(super) struct BackingWork {
+    pub(super) population_visits: usize,
+    pub(super) source_lookups: usize,
+    pub(super) owner_changes: usize,
+    pub(super) player_projections: usize,
+}
+#[cfg(test)]
+thread_local! {
+    static BACKING_WORK: std::cell::Cell<BackingWork> = Default::default();
+}
+#[cfg(test)]
+pub(super) fn record_backing_work(update: impl FnOnce(&mut BackingWork)) {
+    BACKING_WORK.with(|work| {
+        let mut value = work.get();
+        update(&mut value);
+        work.set(value);
+    });
+}
+#[cfg(test)]
+pub(super) fn backing_work() -> BackingWork {
+    BACKING_WORK.with(std::cell::Cell::get)
+}
 
 /// The minimal extra mob facts retained on the authoritative publication.
 #[derive(Clone, Copy)]
@@ -46,59 +74,79 @@ impl NativeMobTargetFacts {
 }
 #[derive(Default)]
 pub(super) struct NativeMobRelations {
-    players_by_uuid: HashMap<u128, u32>,
-    players_by_id: HashMap<u32, u32>,
     guest_riders: HashMap<u32, std::collections::HashSet<u32>>,
     guest_vehicles: HashMap<u32, u32>,
-    guest_identities: HashMap<u32, (u128, u32)>,
     merchant_by_conn: HashMap<u32, u32>,
-    merchants: HashMap<u32, u32>,
-    saved_ids: HashMap<[i32; 4], u32>,
+    merchants: HashMap<u32, std::collections::HashSet<u32>>,
+    merchant_sessions_complete: bool,
+    saved_ids: HashMap<[i32; 4], std::collections::HashSet<u32>>,
+    saved_uuids_complete: bool,
+    /// Minimal ownership edges, like rider_vehicles. AI still needs these when
+    /// the real roster is lent and no mod requested an R publication.
+    tame_owners: HashMap<u32, [i32; 4]>,
+    identity_candidates: Vec<(u32, Location, IdentityDetails)>,
     mob_riders: HashMap<u32, std::collections::HashSet<u32>>,
     rider_vehicles: HashMap<u32, u32>,
+    mob_riders_complete: bool,
 }
 impl NativeMobRelations {
     pub(super) fn clear(&mut self) {
-        self.players_by_uuid.clear();
-        self.players_by_id.clear();
         for riders in self.guest_riders.values_mut() {
             riders.clear();
         }
         self.guest_vehicles.clear();
-        self.guest_identities.clear();
-        self.merchants.clear();
+        for customers in self.merchants.values_mut() {
+            customers.clear();
+        }
         self.merchant_by_conn.clear();
-        self.saved_ids.clear();
+        self.merchant_sessions_complete = false;
+        for ids in self.saved_ids.values_mut() {
+            ids.clear();
+        }
+        self.saved_uuids_complete = false;
+        self.tame_owners.clear();
+        self.identity_candidates.clear();
         for riders in self.mob_riders.values_mut() {
             riders.clear();
         }
         self.rider_vehicles.clear();
+        self.mob_riders_complete = false;
     }
-    /// Call at guest insert and identity/placement/vehicle writes.
+    /// None means the real roster was unavailable before any complete seed.
+    /// Empty is meaningful only after a complete actual-source traversal.
+    pub(super) fn mob_rider_candidates(
+        &self,
+        vehicle: u32,
+    ) -> Option<impl Iterator<Item = u32> + '_> {
+        self.mob_riders_complete.then(|| {
+            self.mob_riders
+                .get(&vehicle)
+                .into_iter()
+                .flat_map(|riders| riders.iter().copied())
+        })
+    }
+    pub(super) fn guest_riders_of(&self, vehicle: u32) -> impl Iterator<Item = u32> + '_ {
+        self.guest_riders
+            .get(&vehicle)
+            .into_iter()
+            .flat_map(|riders| riders.iter().copied())
+    }
+    /// Call after canonical guest vehicle commits. Identity belongs to GuestList.
     pub(super) fn update_guest(&mut self, guest: &horizon_client::lan::guest::Guest) {
-        self.remove_guest(guest.conn);
-        if guest.placed {
-            self.players_by_uuid.insert(guest.uuid, guest.conn);
+        self.update_guest_vehicle(guest.conn, guest.vehicle);
+    }
+    pub(super) fn update_guest_vehicle(&mut self, conn: u32, vehicle: Option<u32>) {
+        if self.guest_vehicles.get(&conn).copied() == vehicle {
+            return;
         }
-        if let Ok(id) = u32::try_from(guest.entity_id) {
-            self.players_by_id.insert(id, guest.conn);
-            self.guest_identities.insert(guest.conn, (guest.uuid, id));
-        }
-        if let Some(id) = guest.vehicle {
-            self.guest_vehicles.insert(guest.conn, id);
-            self.guest_riders.entry(id).or_default().insert(guest.conn);
+        self.remove_guest(conn);
+        if let Some(id) = vehicle {
+            self.guest_vehicles.insert(conn, id);
+            self.guest_riders.entry(id).or_default().insert(conn);
         }
     }
     /// Call before guest removal. Hub owns positional indexing.
     pub(super) fn remove_guest(&mut self, conn: u32) {
-        if let Some((uuid, id)) = self.guest_identities.remove(&conn) {
-            if self.players_by_uuid.get(&uuid) == Some(&conn) {
-                self.players_by_uuid.remove(&uuid);
-            }
-            if self.players_by_id.get(&id) == Some(&conn) {
-                self.players_by_id.remove(&id);
-            }
-        }
         if let Some(id) = self.guest_vehicles.remove(&conn)
             && let Some(count) = self.guest_riders.get_mut(&id)
         {
@@ -107,29 +155,64 @@ impl NativeMobRelations {
     }
     /// Call at merchant session open/close/rebinding, including disconnect.
     pub(super) fn update_merchant(&mut self, conn: u32, mob: Option<u32>) {
+        if self.merchant_by_conn.get(&conn).copied() == mob {
+            return;
+        }
         if let Some(old) = self.merchant_by_conn.remove(&conn)
-            && self.merchants.get(&old) == Some(&conn)
+            && let Some(customers) = self.merchants.get_mut(&old)
         {
-            self.merchants.remove(&old);
+            customers.remove(&conn);
         }
         if let Some(id) = mob {
             self.merchant_by_conn.insert(conn, id);
-            self.merchants.insert(id, conn);
+            self.merchants.entry(id).or_default().insert(conn);
         }
     }
+    fn merchant_connections(&self, mob: u32) -> Option<impl Iterator<Item = u32> + '_> {
+        self.merchant_sessions_complete.then(|| {
+            self.merchants
+                .get(&mob)
+                .into_iter()
+                .flat_map(|customers| customers.iter().copied())
+        })
+    }
+    pub(super) fn update_mob_owner(&mut self, source: &Mob) {
+        let owner = (!source.removed && source.extra.tame)
+            .then_some(source.extra.owner)
+            .flatten();
+        self.update_owner(source.id, owner);
+    }
+
+    fn update_owner(&mut self, id: u32, owner: Option<[i32; 4]>) {
+        if self.tame_owners.get(&id).copied() == owner {
+            return;
+        }
+        #[cfg(test)]
+        record_backing_work(|work| work.owner_changes += 1);
+        if let Some(owner) = owner {
+            self.tame_owners.insert(id, owner);
+        } else {
+            self.tame_owners.remove(&id);
+        }
+    }
+
     /// Call in source publication order and at canonical mount/remove boundaries.
     /// The relation index contains identities only; current facts stay in the row.
     pub(super) fn update_mob_rider(&mut self, source: &Mob) {
-        self.remove_mob_rider(source.id);
-        if !source.removed
-            && source.alive()
-            && let Some(vehicle) = source.extra.mount
-        {
-            self.rider_vehicles.insert(source.id, vehicle);
-            self.mob_riders
-                .entry(vehicle)
-                .or_default()
-                .insert(source.id);
+        self.update_mob_owner(source);
+        self.update_rider(
+            source.id,
+            (!source.removed).then_some(source.extra.mount).flatten(),
+        );
+    }
+    fn update_rider(&mut self, id: u32, vehicle: Option<u32>) {
+        if self.rider_vehicles.get(&id).copied() == vehicle {
+            return;
+        }
+        self.remove_mob_rider(id);
+        if let Some(vehicle) = vehicle {
+            self.rider_vehicles.insert(id, vehicle);
+            self.mob_riders.entry(vehicle).or_default().insert(id);
         }
     }
     pub(super) fn remove_mob_rider(&mut self, id: u32) {
@@ -139,6 +222,17 @@ impl NativeMobRelations {
             riders.remove(&id);
         }
     }
+    /// A nomination only: outer None means the actual owning saved store has
+    /// not been seeded. No body or primary identity is proved by a hit.
+    pub(super) fn saved_uuid_candidates(&self, uuid: [i32; 4]) -> Option<Vec<u32>> {
+        self.saved_uuids_complete.then(|| {
+            self.saved_ids
+                .get(&uuid)
+                .into_iter()
+                .flat_map(|ids| ids.iter().copied())
+                .collect()
+        })
+    }
     /// Canonical persisted UUID assignment/removal/travel must update both levels.
     pub(super) fn update_saved_uuid(
         &mut self,
@@ -146,14 +240,26 @@ impl NativeMobRelations {
         old: Option<[i32; 4]>,
         new: Option<[i32; 4]>,
     ) {
+        if old == new {
+            return;
+        }
         if let Some(old) = old
-            && self.saved_ids.get(&old) == Some(&id)
+            && let Some(ids) = self.saved_ids.get_mut(&old)
         {
-            self.saved_ids.remove(&old);
+            ids.remove(&id);
         }
         if let Some(new) = new {
-            self.saved_ids.insert(new, id);
+            self.saved_ids.entry(new).or_default().insert(id);
         }
+    }
+}
+pub(super) struct MerchantSessionLoan {
+    active: std::rc::Rc<std::cell::RefCell<std::collections::HashSet<u32>>>,
+    conn: u32,
+}
+impl Drop for MerchantSessionLoan {
+    fn drop(&mut self) {
+        self.active.borrow_mut().remove(&self.conn);
     }
 }
 struct PlayerTargetSource<'a> {
@@ -162,53 +268,404 @@ struct PlayerTargetSource<'a> {
     bounds: Aabb,
     team: Option<&'a horizon_client::scoreboard::Team>,
 }
+impl mobs::TeamLookup for Game<'_> {
+    fn team(
+        &self,
+        actor: &Mob,
+        who: Who,
+        player: Option<[i32; 4]>,
+    ) -> Option<&horizon_client::scoreboard::Team> {
+        let level = LevelRef::new(self.native_lifecycle.epoch()?, self.dim.key());
+        self.with_prepared_mob_relations(|index| match who {
+            Who::Player => {
+                let name = self.indexed_online_owner_name(player?, index)?;
+                self.score.board.players_team(name)
+            }
+            Who::Mob(id) => {
+                let owner = if id == actor.id {
+                    if actor.removed {
+                        return None;
+                    }
+                    actor.extra.tame.then_some(actor.extra.owner).flatten()
+                } else {
+                    index.tame_owners.get(&id).copied()
+                };
+                self.read_mob_team_owner(id, owner, level, index)
+            }
+        })?
+    }
+}
+
 impl Game<'_> {
+    /// Resolve a saved UUID only after canonical admission. A loose saved-map
+    /// key, removed body, foreign level or dragon-part alias is not an identity.
+    fn admitted_saved_uuid_at(
+        &self,
+        id: u32,
+        dimension: mod_api::DimensionKey,
+    ) -> Option<(Location, IdentityDetails, [i32; 4])> {
+        #[cfg(test)]
+        record_backing_work(|work| work.source_lookups += 1);
+        let (at, state, details) = {
+            let mut table = self.resident_entities.table.borrow_mut();
+            let (at, state, _, details) = table
+                .server_admitted_read_lookup(id, |at| self.locate_server_resident_owner(at))?;
+            (at, state, details)
+        };
+        if at.owner.dimension != dimension
+            || !matches!(at.source, Source::Ordinary | Source::Hook { .. })
+            || !matches!(
+                state,
+                EntityLookup::Taken
+                    | EntityLookup::Found {
+                        value: (_, true),
+                        ..
+                    }
+            )
+        {
+            return None;
+        }
+        let uuid = if dimension == self.dim.key() {
+            self.persist.uuids.get(&id).copied()
+        } else {
+            self.levels
+                .parked_of(LevelRef::new(self.native_lifecycle.epoch()?, dimension).dimension_id())?
+                .saved_entity_uuid(id)
+        }?;
+        Some((at, details, uuid))
+    }
+
+    /// Seed only ownership edges from the actual pass roster. This also works
+    /// without mods/read publications; no foreign H payload is materialized.
+    pub(super) fn prepare_ai_mob_relations(&self, mobs: &[Mob]) {
+        if self.with_prepared_mob_relations(|index| index.mob_riders_complete) != Some(false) {
+            return;
+        }
+        let level = LevelRef::new(self.native_lifecycle.epoch().unwrap(), self.dim.key());
+        let mut state = self.entity_read_state.borrow_mut();
+        let pass = state.mob_relations.get_mut(&level).unwrap();
+        #[cfg(test)]
+        record_backing_work(|work| work.population_visits += mobs.len());
+        for source in mobs {
+            pass.index.update_mob_rider(source);
+        }
+        pass.index.mob_riders_complete = true;
+    }
+
+    pub(super) fn record_ai_mob_owner(&self, source: &Mob) {
+        let Some(epoch) = self.native_lifecycle.epoch() else {
+            return;
+        };
+        let level = LevelRef::new(epoch, self.dim.key());
+        if let Some(pass) = self
+            .entity_read_state
+            .borrow_mut()
+            .mob_relations
+            .get_mut(&level)
+        {
+            pass.index.update_mob_rider(source);
+        }
+    }
+
+    pub(super) fn record_ai_mob_owner_id(&self, id: u32) {
+        let Some(epoch) = self.native_lifecycle.epoch() else {
+            return;
+        };
+        let level = LevelRef::new(epoch, self.dim.key());
+        let facts = self.read_mob_facts(id, level);
+        if let Some(pass) = self
+            .entity_read_state
+            .borrow_mut()
+            .mob_relations
+            .get_mut(&level)
+        {
+            pass.index
+                .update_owner(id, facts.and_then(|facts| facts.owner));
+            pass.index
+                .update_rider(id, facts.and_then(|facts| facts.mount));
+        }
+    }
+
+    pub(super) fn merchant_sources_available(&self) -> bool {
+        self.lan_guest_swaps.is_empty()
+            && self
+                .entity_read_state
+                .borrow()
+                .merchant_session_loans
+                .borrow()
+                .is_empty()
+    }
+    /// Mark the actual session extraction, not a logical close. The candidate
+    /// survives until a canonical close/removal, including across callbacks.
+    pub(super) fn begin_merchant_session_loan(&self, conn: u32) -> Option<MerchantSessionLoan> {
+        self.with_prepared_mob_relations(|_| ());
+        let active = self
+            .entity_read_state
+            .borrow()
+            .merchant_session_loans
+            .clone();
+        if !active.borrow_mut().insert(conn) {
+            return None;
+        }
+        Some(MerchantSessionLoan { active, conn })
+    }
+    /// None is incomplete, not no customer. Values nominate connections only;
+    /// H must validate each actual guest and actual merchant session itself.
+    pub(super) fn merchant_customer_connections(
+        &self,
+        level: LevelRef,
+        mob_id: u32,
+    ) -> Option<Vec<u32>> {
+        self.entity_read_state
+            .borrow()
+            .mob_relations
+            .get(&level)?
+            .index
+            .merchant_connections(mob_id)
+            .map(|customers| customers.collect())
+    }
+
+    /// Canonical GuestList nominations plus only the explicit selected-body
+    /// loan edges. Neither branch supplies identity proof or H data.
+    pub(super) fn mob_guest_rider_connections(
+        &self,
+        level: LevelRef,
+        vehicle: u32,
+    ) -> Option<Vec<u32>> {
+        let mut candidates = self
+            .lan
+            .as_ref()
+            .into_iter()
+            .flat_map(|host| host.hub.guests.rider_connections(vehicle))
+            .filter(|conn| !self.lan_guest_swaps.contains(conn))
+            .collect::<Vec<_>>();
+        if !self.lan_guest_swaps.is_empty() {
+            let state = self.entity_read_state.borrow();
+            let index = &state.mob_relations.get(&level)?.index;
+            candidates.extend(
+                index
+                    .guest_riders_of(vehicle)
+                    .filter(|conn| self.lan_guest_swaps.contains(conn)),
+            );
+        }
+        Some(candidates)
+    }
+
+    pub(super) fn current_admitted_saved_uuid(&self, id: u32) -> Option<[i32; 4]> {
+        self.admitted_saved_uuid_at(id, self.dim.key())
+            .map(|(_, _, uuid)| uuid)
+    }
+
+    pub(super) fn current_mob_owner(&self, id: u32) -> Option<[i32; 4]> {
+        let level = LevelRef::new(self.native_lifecycle.epoch()?, self.dim.key());
+        self.with_prepared_mob_relations(|index| {
+            self.read_saved_uuid(id, level)?;
+            index.tame_owners.get(&id).copied()
+        })?
+    }
+
+    pub(super) fn admitted_profile_uuid(&self, id: u32, source: Source, uuid: [i32; 4]) -> bool {
+        #[cfg(test)]
+        record_backing_work(|work| work.source_lookups += 1);
+        let mut table = self.resident_entities.table.borrow_mut();
+        table
+            .server_admitted_read_lookup(id, |at| self.locate_server_resident_owner(at))
+            .is_some_and(|(at, state, _, details)| {
+                at.source == source
+                    && details.known_uuid == Some(uuid)
+                    && matches!(
+                        state,
+                        EntityLookup::Taken
+                            | EntityLookup::Found {
+                                value: (_, true),
+                                ..
+                            }
+                    )
+            })
+    }
+
+    /// Reuse the once-per-pass relation index, then validate its candidate at
+    /// the primary table. Small writes update affected keys, not this population.
+    /// Candidate metadata only: H never rebuilds or scans populations here.
+    /// None explicitly means this owning level has no complete prepared index.
+    pub(super) fn relation_identity_candidates_at(
+        &self,
+        level: LevelRef,
+        uuid: [i32; 4],
+    ) -> (Option<Vec<u32>>, Option<(u32, u32)>) {
+        let profile = self
+            .lan
+            .as_ref()
+            .and_then(|host| {
+                host.hub
+                    .guests
+                    .online_profile(horizon_client::lan::playerdata::ints_uuid(uuid))
+            })
+            .and_then(|guest| Some((u32::try_from(guest.entity_id).ok()?, guest.conn)));
+        let saved = self
+            .entity_read_state
+            .borrow()
+            .mob_relations
+            .get(&level)
+            .and_then(|state| state.index.saved_uuid_candidates(uuid));
+        (saved, profile)
+    }
+
+    pub(super) fn current_admitted_saved_id(&self, uuid: [i32; 4]) -> Option<u32> {
+        let level = LevelRef::new(self.native_lifecycle.epoch()?, self.dim.key());
+        self.with_prepared_mob_relations(|index| self.validated_saved_id(uuid, level, index))?
+    }
+
+    /// The primary table enumerates candidates only. Resolve each after dropping
+    /// its iterator borrow, then require the same immutable admission. The reused
+    /// scratch is returned empty; no second identity/facts authority is retained.
+    pub(super) fn for_admitted_saved_uuids(
+        &self,
+        dimension: mod_api::DimensionKey,
+        candidates: &mut Vec<(u32, Location, IdentityDetails)>,
+        mut visit: impl FnMut(u32, [i32; 4]),
+    ) {
+        candidates.clear();
+        candidates.extend(
+            self.resident_entities
+                .table
+                .borrow_mut()
+                .admitted_metadata(),
+        );
+        #[cfg(test)]
+        record_backing_work(|work| work.population_visits += candidates.len());
+        for &(id, expected, expected_details) in candidates.iter() {
+            if expected.owner.dimension != dimension {
+                continue;
+            }
+            if let Some((at, details, uuid)) = self.admitted_saved_uuid_at(id, dimension)
+                && at == expected
+                && details == expected_details
+            {
+                visit(id, uuid);
+            }
+        }
+        candidates.clear();
+    }
+
     /// Rebuild once per pass, preserving allocation capacity. This is not a
     /// callback refresh: canonical changes use NativeMobRelations update methods.
     pub(super) fn rebuild_mob_read_relations(
         &self,
         level: LevelRef,
         index: &mut NativeMobRelations,
+        merchant_sources_available: bool,
     ) {
         index.clear();
+        let owner = horizon_client::join_seq::residency::Owner {
+            dimension: level.dimension(),
+            kind: horizon_client::join_seq::residency::Kind::Mob,
+        };
+        if self
+            .resident_entities
+            .table
+            .borrow_mut()
+            .owner_physically_available(owner, None)
+        {
+            let roster = if level.dimension() == self.dim.key() {
+                Some(&self.mobs)
+            } else {
+                self.levels
+                    .parked_of(level.dimension_id())
+                    .map(|parked| &parked.mobs)
+            };
+            if let Some(roster) = roster {
+                #[cfg(test)]
+                record_backing_work(|work| work.population_visits += roster.len());
+                for source in roster {
+                    index.update_mob_rider(source);
+                }
+                index.mob_riders_complete = true;
+            }
+        }
         if let Some(host) = &self.lan {
             for guest in host.hub.guests.iter() {
                 index.update_guest(guest);
             }
-            for (&conn, play) in &host.play {
-                index.update_merchant(conn, play.merchant.as_ref().and_then(|m| m.merchant.mob));
+            if merchant_sources_available {
+                for (&conn, play) in &host.play {
+                    index
+                        .update_merchant(conn, play.merchant.as_ref().and_then(|m| m.merchant.mob));
+                }
+                index.merchant_sessions_complete = true;
+            }
+        } else {
+            index.merchant_sessions_complete = true;
+        }
+        // Saved keys are only candidates, never admission proof. Preserve keys
+        // whose real source arrives later in this same pass; each lookup still
+        // resolves the exact primary member and rereads its canonical UUID.
+        let mut seed = |id, uuid| {
+            #[cfg(test)]
+            record_backing_work(|work| work.population_visits += 1);
+            index.saved_ids.entry(uuid).or_default().insert(id);
+        };
+        if self.native_lifecycle.epoch() == Some(level.epoch()) {
+            if level.dimension() == self.dim.key() {
+                for (&id, &uuid) in &self.persist.uuids {
+                    seed(id, uuid);
+                }
+                index.saved_uuids_complete = true;
+            } else if let Some(parked) = self.levels.parked_of(level.dimension_id()) {
+                for (id, uuid) in parked.saved_entity_uuids() {
+                    seed(id, uuid);
+                }
+                index.saved_uuids_complete = true;
             }
         }
-        if level.dimension() == self.dim.key() {
-            index
-                .saved_ids
-                .extend(self.persist.uuids.iter().map(|(&id, &uuid)| (uuid, id)));
-        } else if let Some(parked) = self.levels.parked_of(level.dimension_id()) {
-            index
-                .saved_ids
-                .extend(parked.saved_entity_uuids().map(|(id, uuid)| (uuid, id)));
+        self.for_admitted_saved_uuids(
+            level.dimension(),
+            &mut index.identity_candidates,
+            |id, uuid| {
+                index.saved_ids.entry(uuid).or_default().insert(id);
+                if let Some(owner) = self.read_mob_facts(id, level).and_then(|facts| facts.owner) {
+                    index.tame_owners.insert(id, owner);
+                }
+            },
+        );
+    }
+    fn validated_saved_id(
+        &self,
+        uuid: [i32; 4],
+        level: LevelRef,
+        index: &NativeMobRelations,
+    ) -> Option<u32> {
+        if !index.saved_uuids_complete {
+            return None;
         }
+        index
+            .saved_ids
+            .get(&uuid)?
+            .iter()
+            .copied()
+            .find(|&id| self.read_saved_uuid(id, level) == Some(uuid))
     }
     fn read_saved_uuid(&self, id: u32, level: LevelRef) -> Option<[i32; 4]> {
-        if level.dimension() == self.dim.key() {
-            self.persist.uuids.get(&id).copied()
-        } else {
-            self.levels
-                .parked_of(level.dimension_id())?
-                .saved_entity_uuid(id)
-        }
+        self.admitted_saved_uuid_at(id, level.dimension())
+            .map(|(_, _, uuid)| uuid)
     }
     fn read_guest<'a>(
         &'a self,
-        index: &NativeMobRelations,
+        _index: &NativeMobRelations,
         conn: u32,
     ) -> Option<&'a horizon_client::lan::guest::Guest> {
         let guest = self.lan.as_ref()?.hub.guest(conn)?;
-        let (uuid, id) = *index.guest_identities.get(&conn)?;
-        (guest.uuid == uuid && u32::try_from(guest.entity_id).ok() == Some(id)).then_some(guest)
+        let id = u32::try_from(guest.entity_id).ok()?;
+        (guest.participates_online()
+            && self.admitted_profile_uuid(
+                id,
+                Source::Guest(conn),
+                horizon_client::lan::playerdata::uuid_ints(guest.uuid),
+            ))
+        .then_some(guest)
     }
     fn read_mob_facts(&self, id: u32, level: LevelRef) -> Option<NativeMobTargetFacts> {
-        let mut table = self.entity_residency.borrow_mut();
+        let mut table = self.resident_entities.table.borrow_mut();
         let (state, cached) =
             table.server_entity_read_lookup(id, |at| self.locate_server_resident_owner(at));
         match state {
@@ -234,43 +691,78 @@ impl Game<'_> {
             _ => None,
         }
     }
+    pub(super) fn indexed_online_owner_name<'a>(
+        &'a self,
+        uuid: [i32; 4],
+        _index: &NativeMobRelations,
+    ) -> Option<&'a str> {
+        if self.player.is_some() && !self.lan_acting_fake && self.acting_uuid() == uuid {
+            let id = u32::try_from(self.own_entity_id()).ok()?;
+            let source = self.lan_acting.map_or(Source::LocalPlayer, Source::Guest);
+            if self.admitted_profile_uuid(id, source, uuid) {
+                return Some(self.acting_player_name());
+            }
+        }
+        let guest = self
+            .lan
+            .as_ref()?
+            .hub
+            .guests
+            .online_profile(horizon_client::lan::playerdata::ints_uuid(uuid))?;
+        let id = u32::try_from(guest.entity_id).ok()?;
+        self.admitted_profile_uuid(id, Source::Guest(guest.conn), uuid)
+            .then_some(guest.name.as_str())
+    }
+
     fn read_mob_team<'a>(
         &'a self,
         facts: NativeMobTargetFacts,
         level: LevelRef,
         index: &NativeMobRelations,
     ) -> Option<&'a horizon_client::scoreboard::Team> {
-        let uuid = self.read_saved_uuid(facts.id, level)?;
-        let own = horizon_client::save::uuid_text(uuid);
-        if let Some(team) = self.score.board.players_team(&own) {
+        self.read_mob_team_owner(facts.id, facts.owner, level, index)
+    }
+
+    fn read_mob_team_owner<'a>(
+        &'a self,
+        id: u32,
+        owner: Option<[i32; 4]>,
+        level: LevelRef,
+        index: &NativeMobRelations,
+    ) -> Option<&'a horizon_client::scoreboard::Team> {
+        let uuid = self.read_saved_uuid(id, level)?;
+        let mut text = [0; 36];
+        let own = horizon_client_core::uuid::uuid_text_into(uuid, &mut text);
+        if let Some(team) = self.score.board.players_team(own) {
             return Some(team);
         }
-        let mut root = facts.owner?;
-        for _ in 0..64 {
-            let next = index
-                .saved_ids
-                .get(&root)
-                .and_then(|&id| self.read_mob_facts(id, level))
-                .and_then(|f| f.owner);
-            match next {
-                Some(next) => root = next,
-                None => break,
+        let next_owner = |uuid| {
+            if self.indexed_online_owner_name(uuid, index).is_some() {
+                return None;
+            }
+            let id = self.validated_saved_id(uuid, level, index)?;
+            index.tame_owners.get(&id).copied()
+        };
+        let mut root = owner?;
+        let mut fast = Some(root);
+        loop {
+            if let Some(name) = self.indexed_online_owner_name(root, index) {
+                return self.score.board.players_team(name);
+            }
+            let id = self.validated_saved_id(root, level, index)?;
+            let Some(&next) = index.tame_owners.get(&id) else {
+                return self
+                    .score
+                    .board
+                    .players_team(horizon_client_core::uuid::uuid_text_into(root, &mut text));
+            };
+            root = next;
+            // Floyd's guard needs no allocation or arbitrary chain-length limit.
+            fast = fast.and_then(next_owner).and_then(next_owner);
+            if fast == Some(root) {
+                return None;
             }
         }
-        let uuid = horizon_client::lan::playerdata::ints_uuid(root);
-        if self.player.is_some() && root == self.acting_uuid() {
-            return self.score.board.players_team(self.acting_player_name());
-        }
-        if let Some(&conn) = index.players_by_uuid.get(&uuid) {
-            return self
-                .score
-                .board
-                .players_team(&self.read_guest(index, conn)?.name);
-        }
-        self.read_relation_entity(*index.saved_ids.get(&root)?, level, index)?;
-        self.score
-            .board
-            .players_team(&horizon_client::save::uuid_text(root))
     }
     pub(super) fn mob_read_context(
         &self,
@@ -437,13 +929,17 @@ impl Game<'_> {
         epoch: WorldEpoch,
         index: &NativeMobRelations,
     ) -> MerchantReadContext<'a> {
-        let conn = index.merchants.get(&source.id).copied().filter(|conn| {
-            self.lan
-                .as_ref()
-                .and_then(|host| host.play.get(conn))
-                .and_then(|play| play.merchant.as_ref())
-                .is_some_and(|m| m.merchant.mob == Some(source.id))
-        });
+        let conn = index
+            .merchants
+            .get(&source.id)
+            .and_then(|customers| customers.iter().next().copied())
+            .filter(|conn| {
+                self.lan
+                    .as_ref()
+                    .and_then(|host| host.play.get(conn))
+                    .and_then(|play| play.merchant.as_ref())
+                    .is_some_and(|m| m.merchant.mob == Some(source.id))
+            });
         let session = conn
             .and_then(|conn| self.lan.as_ref()?.play.get(&conn)?.merchant.as_ref())
             .filter(|m| m.merchant.mob == Some(source.id))
@@ -471,22 +967,9 @@ impl Game<'_> {
         &self,
         id: u32,
         level: LevelRef,
-        index: &NativeMobRelations,
+        _index: &NativeMobRelations,
     ) -> Option<EntityRef> {
-        // Players are not JoinList owners: validate against the authoritative
-        // Hub identity index, or the acting player body, not the entity table.
-        if self.player.is_some() && u32::try_from(self.own_entity_id()).ok() == Some(id) {
-            return (level.dimension() == self.dim.key())
-                .then(|| EntityRef::new(level.epoch(), id));
-        }
-        if let Some(&conn) = index.players_by_id.get(&id) {
-            let guest = self.read_guest(index, conn)?;
-            return (guest.placed
-                && guest.dimension == level.dimension_id()
-                && !self.lan_guest_swaps.contains(&conn))
-            .then(|| EntityRef::new(level.epoch(), id));
-        }
-        let mut table = self.entity_residency.borrow_mut();
+        let mut table = self.resident_entities.table.borrow_mut();
         let (at, state, _, _) =
             table.server_admitted_read_lookup(id, |at| self.locate_server_resident_owner(at))?;
         let visible = match state {
@@ -521,7 +1004,7 @@ impl Game<'_> {
             }
             return u32::try_from(self.own_entity_id()).ok();
         }
-        let conn = *index.players_by_uuid.get(&credit.0)?;
+        let conn = self.lan.as_ref()?.hub.guests.online_profile(credit.0)?.conn;
         if self.lan_acting == Some(conn) {
             return self.lan_acting_entity;
         }
@@ -627,7 +1110,16 @@ impl Game<'_> {
                         );
                     (uuid, valid)
                 } else {
-                    let conn = *index.players_by_id.get(&id)?;
+                    let conn = {
+                        let mut table = self.resident_entities.table.borrow_mut();
+                        let (at, _, _, _) = table.server_admitted_read_lookup(id, |at| {
+                            self.locate_server_resident_owner(at)
+                        })?;
+                        let Source::Guest(conn) = at.source else {
+                            return None;
+                        };
+                        conn
+                    };
                     let guest = self.read_guest(index, conn)?;
                     self.read_relation_entity(id, level, index)?;
                     if guest.is_fake() {
@@ -667,7 +1159,7 @@ impl Game<'_> {
         }
         let epoch = self.native_lifecycle.epoch()?;
         let level = {
-            let mut table = self.entity_residency.borrow_mut();
+            let mut table = self.resident_entities.table.borrow_mut();
             let (state, cached) = table
                 .server_entity_read_lookup(actor.id, |at| self.locate_server_resident_owner(at));
             match state {
@@ -679,12 +1171,13 @@ impl Game<'_> {
                 _ => return None,
             }
         };
+        let guest_candidates = self.mob_guest_rider_connections(level, actor.id)?;
         self.with_mob_read_relations(level, |index| {
             self.read_relation_entity(actor.id, level, index)?;
             let mut seats = Vec::new();
             let acting = self.lan_acting.filter(|_| self.player.is_some());
-            if let Some(riders) = index.guest_riders.get(&actor.id) {
-                for &conn in riders {
+            {
+                for conn in guest_candidates {
                     if acting == Some(conn) {
                         continue;
                     }
@@ -727,8 +1220,8 @@ impl Game<'_> {
                     ));
                 }
             }
-            if let Some(riders) = index.mob_riders.get(&actor.id) {
-                for &id in riders {
+            {
+                for id in index.mob_rider_candidates(actor.id)? {
                     let facts = if id == actor.id {
                         NativeMobTargetFacts::capture(actor)
                     } else {
@@ -816,10 +1309,12 @@ impl Game<'_> {
                 index,
             );
         }
-        let conn = *index
-            .players_by_uuid
-            .get(&horizon_client::lan::playerdata::ints_uuid(uuid))?;
-        let guest = self.read_guest(index, conn)?;
+        let guest = self
+            .lan
+            .as_ref()?
+            .hub
+            .guests
+            .online_profile(horizon_client::lan::playerdata::ints_uuid(uuid))?;
         if !guest.participates_online()
             || horizon_client::lan::playerdata::uuid_ints(guest.uuid) != uuid
         {
@@ -844,10 +1339,7 @@ impl Game<'_> {
         if let Some(player) = self.resolve_mob_read_player(uuid, level, index) {
             return Some(player);
         }
-        let id = *index.saved_ids.get(&uuid)?;
-        if self.read_saved_uuid(id, level) != Some(uuid) {
-            return None;
-        }
+        let id = self.validated_saved_id(uuid, level, index)?;
         self.read_relation_entity(id, level, index)
     }
     pub(super) fn read_relation_guest(
@@ -980,7 +1472,7 @@ mod tests {
             let mut actor = mob(game, 42, "minecraft:iron_golem");
             actor.ai.target = Some(Who::Mob(40));
             let mut index = NativeMobRelations::default();
-            game.rebuild_mob_read_relations(level, &mut index);
+            game.rebuild_mob_read_relations(level, &mut index, game.merchant_sources_available());
             assert_eq!(
                 game.mob_read_context(&actor, level, &index)
                     .target
@@ -996,6 +1488,10 @@ mod tests {
             );
             game.mobs[0].invulnerable_flag = false;
             let warden = mob(game, 42, "minecraft:warden");
+            let warden_slot = game.mobs.len();
+            game.mobs.push(warden);
+            let join = game.mobs[warden_slot].join;
+            let warden = game.mobs.extract(join).unwrap();
             assert!(
                 game.read_mob_target(&warden, Who::Mob(40), level, &index)
                     .is_some()
@@ -1006,8 +1502,8 @@ mod tests {
                     .is_none()
             );
             game.mobs[0].position.x = 0.0;
-            game.persist.uuids.insert(40, [0, 0, 0, 40]);
-            game.persist.uuids.insert(42, [0, 0, 0, 42]);
+            game.set_saved_entity_uuid(40, [0, 0, 0, 40]);
+            game.set_saved_entity_uuid(42, [0, 0, 0, 42]);
             index.update_saved_uuid(40, None, Some([0, 0, 0, 40]));
             index.update_saved_uuid(42, None, Some([0, 0, 0, 42]));
             game.score.board.add_team("allies");
@@ -1021,6 +1517,7 @@ mod tests {
                 game.read_mob_target(&warden, Who::Mob(40), level, &index)
                     .is_none()
             );
+            game.mobs.put_back(warden_slot, warden);
             let mut session = horizon_client::merchant::Session::new(Vec::new(), true);
             session.xp = 17;
             session.level = 3;
@@ -1060,6 +1557,13 @@ mod tests {
                     .is_none()
             );
             index.remove_guest(13);
+            assert!(
+                game.read_guest(&index, 13).is_some(),
+                "a candidate index is not identity authority"
+            );
+            let host = game.lan.as_mut().unwrap();
+            let slot = host.hub.guests.connection_index(13).unwrap();
+            let _removed = host.hub.guests.remove(slot);
             assert!(game.read_guest(&index, 13).is_none());
         });
     }

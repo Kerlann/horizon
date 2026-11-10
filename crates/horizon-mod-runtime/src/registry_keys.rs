@@ -125,6 +125,7 @@ impl Names {
 
 /// A particle's resolved engine-independent provider identity.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+// no wire: local resolved provider metadata, not a cross-target particle payload.
 pub enum ParticleKind {
     /// An index supplied by the game's vanilla particle registry.
     Vanilla(u32),

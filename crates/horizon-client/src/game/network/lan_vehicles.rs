@@ -516,6 +516,16 @@ impl Game<'_> {
         let free_after = scene
             .unobstructed(moved_box.deflate(Vec3::new(1.0E-5, 1.0E-5, 1.0E-5)))
             .unwrap_or(true);
+        // Entity.move in `vehicle.move`, before the checks: a long move through
+        // water or a reset block resets the fall, which a move put back keeps
+        // (`absSnapTo` restores only the position).
+        if let Some(i) = mount {
+            self.mobs[i].fall_distance =
+                self.vehicle_fall_reset(self.mobs[i].fall_distance, old, resolved);
+        } else if let Some(i) = boat {
+            let reset = self.vehicle_fall_reset(self.boats[i].fall_distance, old, resolved);
+            self.boats.update(i, |boat| boat.fall_distance = reset);
+        }
         if free_before && (wrongly || !free_after) {
             log::warn!("vehicle {id} moved wrongly");
             back(self.lan.as_mut().unwrap(), old, yaw);
@@ -643,9 +653,7 @@ impl Game<'_> {
             .push_by_fluid(&self.world, &self.res.motion().fluids, &self.loop_context)
             .0
             > 0.0;
-        // Entity.move: a long move through water or a reset block resets it first.
-        let reset_fall = self.vehicle_fall_reset(self.boats[i].fall_distance, old, resolved);
-        self.boats.update(i, |boat| boat.fall_distance = reset_fall);
+        // The long move reset ran before collision validation.
         let fall = if in_water {
             0.0
         } else {
@@ -947,11 +955,24 @@ mod controller_tests {
             .default_state("minecraft:stone")
             .unwrap()
             .0;
+        let cobweb = game
+            .pack
+            .assets
+            .registry
+            .default_state("minecraft:cobweb")
+            .unwrap()
+            .0;
         let mut chunk = Chunk::empty(0, 0);
         for x in 0..16 {
             for z in 0..16 {
                 chunk.set(x, 199, z, stone);
             }
+        }
+        // Off the fall's line: only the long moves at the end cross them.
+        chunk.set(6, 205, 4, cobweb);
+        chunk.set(8, 205, 4, cobweb);
+        for y in 205..=207 {
+            chunk.set(10, y, 4, stone);
         }
         game.world.chunks.insert((0, 0), Arc::new(chunk));
         game.block_ticks
@@ -1050,5 +1071,43 @@ mod controller_tests {
             _ => false,
         });
         assert!(dust, "the guest sees the landing dust");
+
+        // Entity.move in `vehicle.move`: a move of a block or more casts along
+        // it (FALLDAMAGE_RESETTING, WATER), and the cobweb it crosses resets
+        // the fall (a fall loaded from its save, here) before the move counts.
+        game.guest_move_vehicle(2, &move_to(205.5, false));
+        assert_eq!(game.mobs[0].position.y, 205.5, "the guest lifts the horse");
+        game.mobs[0].fall_distance = 4.0;
+        game.guest_move_vehicle(
+            2,
+            &play::MoveVehicleRequest {
+                position: [6.5, 205.5, 4.5],
+                yaw: 0.0,
+                pitch: 0.0,
+                on_ground: false,
+            },
+        );
+        assert_eq!(game.mobs[0].position.x, 6.5, "the guest moves the horse on");
+        assert_eq!(
+            game.mobs[0].fall_distance, 0.0,
+            "a long move through a cobweb resets the fall"
+        );
+        // handleMoveVehicle moves the horse before it checks the move: one
+        // into a wall is put back (moved wrongly), and keeps the reset.
+        game.mobs[0].fall_distance = 4.0;
+        game.guest_move_vehicle(
+            2,
+            &play::MoveVehicleRequest {
+                position: [11.5, 205.5, 4.5],
+                yaw: 0.0,
+                pitch: 0.0,
+                on_ground: false,
+            },
+        );
+        assert_eq!(game.mobs[0].position.x, 6.5, "the move is put back");
+        assert_eq!(
+            game.mobs[0].fall_distance, 0.0,
+            "a move put back keeps the cobweb's reset"
+        );
     }
 }

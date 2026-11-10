@@ -30,15 +30,15 @@ impl Drop for Temp {
 }
 
 #[test]
-fn uninstrumented_targets_refuse_manual_and_automatic_cleanup_even_when_idle() {
+fn incomplete_targets_refuse_manual_and_automatic_cleanup_even_when_idle() {
     let home = Temp::new();
     let output = home.put(
         "native/target/fast/output",
         b"keep this game-accessible output",
     );
     let cache = Cache::acquire(&home.0).unwrap();
-    assert!(matches!(cache.clear(), Err(Error::UnprovenExclusion)));
-    assert!(matches!(cache.trim(1), Err(Error::UnprovenExclusion)));
+    assert!(matches!(cache.clear(), Err(Error::IncompleteUnit)));
+    assert!(matches!(cache.trim(1), Err(Error::IncompleteUnit)));
     assert_eq!(
         fs::read(output).unwrap(),
         b"keep this game-accessible output"

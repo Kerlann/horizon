@@ -44,15 +44,21 @@ pub(in crate::game) fn stage_texture_atlases(
             log::warn!("Horizon: texture atlas {atlas} skipped: {error}");
             continue;
         }
-        let Some(sources) = definition(source, &registration.definition) else {
-            log::warn!(
-                "Horizon: texture atlas {atlas} skipped: no valid definition {}",
-                registration.definition
-            );
+        let file = definition_file(&registration.definition);
+        let Ok(text) = source.read_to_string(&file) else {
+            log::warn!("Horizon: texture atlas {atlas} skipped: no definition {file}");
             continue;
         };
+        let sources = match atlas_sources::decode(&text) {
+            Ok(sources) => sources,
+            Err(error) => {
+                log::warn!("Horizon: texture atlas {atlas} skipped: {file}: {error}");
+                continue;
+            }
+        };
         seen.push(atlas.clone());
-        for (id, origin) in atlas_sources::list(&sources, &textures) {
+        let mut ask = horizon_client_render::mod_sprite_sources::ask(atlas);
+        for (id, origin) in atlas_sources::list(&sources, &textures, &mut ask) {
             if sprites == MAX_SPRITES {
                 log::warn!("Horizon: texture atlas {atlas}: sprites past {MAX_SPRITES} skipped");
                 break;
@@ -89,15 +95,11 @@ fn admit(registration: &TextureAtlasRegistration, seen: &[Identifier]) -> Result
     Ok(())
 }
 
-/// `assets/<namespace>/atlases/<path>.json`'s sources. The root already holds the file's
+/// The definition `assets/<namespace>/atlases/<path>.json`. The root already holds the file's
 /// whole resource stack (`packs::resources` merges every pack's copy, bottom first, after
 /// the pack filters, as `SpriteSourceList.load` does), so this one read sees all of them.
-fn definition(
-    source: &ResourceSource,
-    id: &Identifier,
-) -> Option<Vec<atlas_sources::SpriteSource>> {
-    let file = format!("assets/{}/atlases/{}.json", id.namespace(), id.path());
-    atlas_sources::decode(&source.read_to_string(&file).ok()?)
+fn definition_file(id: &Identifier) -> String {
+    format!("assets/{}/atlases/{}.json", id.namespace(), id.path())
 }
 
 fn stage_sprite(
@@ -461,5 +463,108 @@ mod tests {
         let base = root(&[("assets/icons_mod/atlases/icons.json", ICONS.into())]);
         let staged = stage_texture_atlases(base.clone(), &[]);
         assert!(staged.source().same_generation(base.source()));
+    }
+
+    /// A mod's sprite source, answering its entries in `icons_mod:icons`: a 2x2 sprite of the
+    /// entry's `shade`, and the removal of every listed star.
+    struct Checker;
+    #[mod_api::__subscriptions]
+    impl mod_api::Hooks for Checker {
+        fn register_sprite_sources(
+            &self,
+            _: &mod_api::RegistrationContext,
+            event: &mut mod_api::RegisterSpriteSourcesEvent<'_>,
+        ) {
+            event.sources.push("checker_mod:checker".into());
+        }
+        fn sprite_source(
+            &self,
+            _: &mod_api::RegistrationContext,
+            event: &mut mod_api::SpriteSourceEvent<'_>,
+        ) {
+            if event.source != "checker_mod:checker" || event.atlas.path() != "icons" {
+                return;
+            }
+            let shade = match event.config.get("shade") {
+                Some(horizon_core::nbt::Tag::Byte(shade)) => *shade as u8,
+                _ => 0,
+            };
+            event.output.push(mod_api::SpriteSourceOutput::Pixels {
+                sprite: Identifier::parse("icons_mod:checker").unwrap(),
+                width: 2,
+                height: 2,
+                rgba: [shade, shade, shade, 255].repeat(4),
+            });
+            for sprite in event.listed.iter().filter(|id| id.path().ends_with("star")) {
+                event.output.push(mod_api::SpriteSourceOutput::Remove {
+                    sprite: sprite.clone(),
+                });
+            }
+        }
+    }
+
+    /// A registered source type lists the mod's sprites where its entry stands, a reload asks
+    /// again with the definition as the packs now give it, and with no mod answering the entry
+    /// lists nothing.
+    #[test]
+    fn a_mods_sprite_source_lists_its_sprites_and_answers_again_on_reload() {
+        let stage = |shade: u8| {
+            let definition = format!(
+                r#"{{"sources":[
+                    {{"type":"directory","source":"icons","prefix":"icons/"}},
+                    {{"type":"checker_mod:checker","shade":{shade}}}
+                ]}}"#
+            );
+            stage_texture_atlases(
+                root(&[
+                    (
+                        "assets/icons_mod/atlases/icons.json",
+                        definition.into_bytes(),
+                    ),
+                    (
+                        "assets/icons_mod/textures/icons/heart.png",
+                        fixture_png(2, 2, 1),
+                    ),
+                    (
+                        "assets/icons_mod/textures/icons/star.png",
+                        fixture_png(2, 2, 2),
+                    ),
+                ]),
+                &[registration("icons_mod:icons", "icons_mod:icons")],
+            )
+        };
+        let gui = "assets/icons_mod/textures/gui/atlases/icons/icons_mod";
+        let (checker, heart, star) = (
+            format!("{gui}/checker.png"),
+            format!("{gui}/icons/heart.png"),
+            format!("{gui}/icons/star.png"),
+        );
+        let checker_pixels = |staged: &ResourceRoot| {
+            horizon_client::hud::decode_bytes(&staged.source().read(&checker).unwrap()).unwrap()
+        };
+        let mods: mod_api::Mods =
+            vec![mod_api::ModEntry::new("checker_mod", Box::new(Checker))].into();
+        mod_api::testing::with_mods(mods, || {
+            let mut types = Vec::new();
+            Game::native_register_sprite_sources(&mod_api::RegistrationContext::new(), &mut types);
+            assert_eq!(
+                horizon_client_render::mod_sprite_sources::register(types),
+                ["checker_mod:checker"]
+            );
+            let first = stage(40);
+            assert_eq!(checker_pixels(&first), (2, 2, [40, 40, 40, 255].repeat(4)));
+            assert!(first.source().contains(&heart));
+            assert!(
+                !first.source().contains(&star),
+                "the source removed the star"
+            );
+            let reloaded = stage(90);
+            assert_eq!(checker_pixels(&reloaded).2[..4], [90, 90, 90, 255]);
+        });
+        mod_api::testing::with_mods(Vec::new().into(), || {
+            let unanswered = stage(40);
+            assert!(!unanswered.source().contains(&checker));
+            assert!(unanswered.source().contains(&star) && unanswered.source().contains(&heart));
+        });
     }
 }

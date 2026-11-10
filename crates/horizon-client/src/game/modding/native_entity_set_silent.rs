@@ -49,7 +49,8 @@ impl Game<'_> {
             return Err(EntityWriteError::OutsideScope);
         }
         let (location, state) = self
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_admitted_location(entity.id(), |at| self.locate_server_resident_owner(at))
             .ok_or(EntityWriteError::Missing)?;
@@ -132,9 +133,11 @@ impl Game<'_> {
             return WriteReceipt::Refused(EntityWriteError::OutsideScope);
         };
         let mut cached = false;
-        self.entity_residency
-            .borrow_mut()
-            .edit_cached_row(entity.id(), target.location, |_| cached = true);
+        self.resident_entities.table.borrow_mut().edit_cached_row(
+            entity.id(),
+            target.location,
+            |_| cached = true,
+        );
         if !cached && !self.publish_silent_target(target, EntityReadCapturePhase::BeforeCallback) {
             return WriteReceipt::Refused(EntityWriteError::WorkLimit);
         }
@@ -155,7 +158,7 @@ impl Game<'_> {
         };
         // No callback or source mutation occurs between cache validation and
         // this exact-generation patch. The canonical table owns the projection.
-        let patched = self.entity_residency.borrow_mut().edit_cached_row(
+        let patched = self.resident_entities.table.borrow_mut().edit_cached_row(
             entity.id(),
             target.location,
             |row| row.queue_silent_overlay(id, silent),
@@ -173,7 +176,8 @@ impl Game<'_> {
             .epoch()
             .ok_or(EntityWriteError::StaleEpoch)?;
         let (location, state) = self
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_admitted_location(target.runtime_id, |at| {
                 self.locate_server_resident_owner(at)
@@ -238,24 +242,34 @@ impl Game<'_> {
             let Some(command) = command else {
                 break;
             };
-            let (completion, applied) = match command.operation {
+            let completion = match command.operation {
                 EntityOperation::SetSilent(silent) => {
                     let outcome = self.apply_silent(command.target, silent);
                     let applied = outcome.as_ref().ok().map(|_| silent);
-                    (
-                        EntityWriteCompletion::EntitySetSilent(CommandCompleted {
-                            id: command.id,
-                            outcome,
-                        }),
-                        applied,
-                    )
+                    self.resident_entities.table.borrow_mut().edit_cached_row(
+                        command.target.runtime_id,
+                        command.target.location,
+                        |row| row.finish_silent_overlay(command.id, applied),
+                    );
+                    EntityWriteCompletion::EntitySetSilent(CommandCompleted {
+                        id: command.id,
+                        outcome,
+                    })
+                }
+                EntityOperation::SetNoGravity(value) => {
+                    let outcome = self.apply_no_gravity(command.target, value);
+                    let applied = outcome.as_ref().ok().map(|_| value);
+                    self.resident_entities.table.borrow_mut().edit_cached_row(
+                        command.target.runtime_id,
+                        command.target.location,
+                        |row| row.finish_no_gravity_overlay(command.id, applied),
+                    );
+                    EntityWriteCompletion::EntitySetNoGravity(CommandCompleted {
+                        id: command.id,
+                        outcome,
+                    })
                 }
             };
-            self.entity_residency.borrow_mut().edit_cached_row(
-                command.target.runtime_id,
-                command.target.location,
-                |row| row.finish_silent_overlay(command.id, applied),
-            );
             let (issuer, terminal) = {
                 let mut state = self.entity_read_state.borrow_mut();
                 let commands = state.commands.as_mut().expect("applying queue exists");

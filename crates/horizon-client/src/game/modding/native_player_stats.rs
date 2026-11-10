@@ -3,7 +3,7 @@
 //! `ServerRecipeBook`. Reads return None for a stale handle or a player who
 //! isn't online here. Writes return false (or None) for those, for a dead
 //! player, and, inside another player's turn, for anyone but that player.
-use super::{Game, stats::Stats};
+use super::Game;
 use mod_api::{PlayerRef, StatType};
 
 /// An id with its namespace: `stone` is `minecraft:stone`.
@@ -16,32 +16,31 @@ fn qualified(id: &str) -> String {
 }
 
 impl Game<'_> {
+    fn with_player_recipe_source<R>(
+        &self,
+        admitted: super::native_live_entity_reads::EntityReadAdmission,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        project: impl FnOnce(&horizon_client::recipe_book::Settings) -> R,
+    ) -> Result<R, mod_api::EntityReadError> {
+        self.with_entity_read_storage(admitted, provider, |source| {
+            let book = match admitted.target() {
+                super::commands::Target::Player => Some(&self.level.recipe_book),
+                target @ super::commands::Target::Guest(_) => self
+                    .entity_read_guest(source.body, target)
+                    .map(|guest| &guest.recipe_book),
+                _ => None,
+            };
+            let Some(book) = book else {
+                return Err(mod_api::EntityReadError::Lifted);
+            };
+            admitted.project_actual(|| project(book))
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
+    }
     /// Whether `player` still names the same player on this server.
     fn native_player_current(&self, player: PlayerRef) -> bool {
         self.player_handle_read(player).is_some()
     }
-    /// The guest record `player` reads from outside their turn, or None
-    /// when their state is in the game (they act, or they are the host).
-    fn native_player_resting(
-        &self,
-        player: PlayerRef,
-    ) -> Option<&horizon_client::lan::guest::Guest> {
-        match self.player_handle_read(player)? {
-            super::native_server::PlayerRead::Guest(guest) => Some(guest),
-            super::native_server::PlayerRead::Acting { .. } => None,
-        }
-    }
-    /// The player's statistics, where they are kept now.
-    fn native_player_stats(&self, player: PlayerRef) -> Option<Option<&Stats>> {
-        if !self.native_player_current(player) {
-            return None;
-        }
-        Some(match self.native_player_resting(player) {
-            Some(g) => self.lan.as_ref()?.play.get(&g.conn).map(|p| &p.stats),
-            None => Some(&self.stats),
-        })
-    }
-
     /// The value of statistic `stat_type` for `key` (`minecraft:stone`,
     /// `minecraft:jump`...), as `ServerStatsCounter.getValue`: 0 when never
     /// counted.
@@ -50,10 +49,48 @@ impl Game<'_> {
         player: PlayerRef,
         stat_type: StatType,
         key: &str,
-    ) -> Option<i32> {
-        let ty = stat_type.path();
-        let stats = self.native_player_stats(player)?;
-        Some(stats.map_or(0, |s| s.get(ty, &qualified(key))))
+    ) -> Result<Option<i32>, mod_api::EntityReadError> {
+        self.read_player_stat(None, player, stat_type, key)
+    }
+
+    pub(super) fn read_player_stat(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+        stat_type: StatType,
+        key: &str,
+    ) -> Result<Option<i32>, mod_api::EntityReadError> {
+        use super::{
+            commands::Target, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Stats],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_entity_read_storage(admitted, provider, |_source| {
+            let stats = match admitted.target() {
+                Target::Player => Some(Some(&self.stats)),
+                Target::Guest(conn) => self
+                    .lan
+                    .as_ref()
+                    .map(|host| host.play.get(&conn).map(|play| &play.stats)),
+                _ => None,
+            };
+            let Some(stats) = stats else {
+                return Err(mod_api::EntityReadError::Lifted);
+            };
+            admitted.project_actual(|| {
+                Some(stats.map_or(0, |stats| stats.get(stat_type.path(), &qualified(key))))
+            })
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
     /// `Player.awardStat(stat, amount)`: adds `amount`, as the game does
     /// for its own counts, so `player_stat_award` hears it and may cancel
@@ -91,27 +128,65 @@ impl Game<'_> {
         &self,
         player: PlayerRef,
         recipe: &str,
-    ) -> Option<bool> {
-        if !self.native_player_current(player) {
-            return None;
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        self.read_player_has_discovered_recipe(None, player, recipe)
+    }
+
+    pub(super) fn read_player_has_discovered_recipe(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+        recipe: &str,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
         }
-        let id = qualified(recipe);
-        Some(match self.native_player_resting(player) {
-            Some(g) => g.recipe_book.recipes.contains(&id),
-            None => self.level.recipe_book.recipes.contains(&id),
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Recipes],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_player_recipe_source(admitted, provider, |book| {
+            Some(book.recipes.contains(&qualified(recipe)))
         })
     }
     /// Every recipe the player's recipe book knows (`ServerRecipeBook.recipes`), qualified ids in
     /// order. None for a player it can't reach.
-    pub(super) fn player_discovered_recipes(&self, player: PlayerRef) -> Option<Vec<String>> {
-        if !self.native_player_current(player) {
-            return None;
-        }
-        let book = match self.native_player_resting(player) {
-            Some(g) => &g.recipe_book.recipes,
-            None => &self.level.recipe_book.recipes,
+    pub(super) fn player_discovered_recipes(
+        &self,
+        player: PlayerRef,
+    ) -> Result<Option<Vec<String>>, mod_api::EntityReadError> {
+        self.read_player_discovered_recipes(None, player)
+    }
+
+    pub(super) fn read_player_discovered_recipes(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+    ) -> Result<Option<Vec<String>>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
         };
-        Some(book.iter().cloned().collect())
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Recipes],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_player_recipe_source(admitted, provider, |book| {
+            Some(book.recipes.iter().cloned().collect())
+        })
     }
     /// `ServerPlayer.awardRecipes`, as `/recipe give` does: the recipes
     /// unlock in the player's book, with their toasts and the

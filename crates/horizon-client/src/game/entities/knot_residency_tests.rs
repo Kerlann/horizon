@@ -25,13 +25,13 @@ fn natural_knot_owner_survives_active_parked_reset_and_retires_at_last_holder() 
         let (first, knot) = tie_player_mob(game, fence);
         let (second, same_knot) = tie_player_mob(game, fence);
         assert_eq!(knot, same_knot);
-        assert_eq!(game.knots.len(), 1);
-        let join = game.knots[0].join;
+        assert_eq!(game.resident_entities.knots.len(), 1);
+        let join = game.resident_entities.knots[0].join;
         // Leashable.dropLeash -> LeashFenceKnotEntity.notifyLeasheeRemoved:
         // one departing holder leaves the knot; the last discards it immediately.
         assert!(game.detach_leash(Target::Mob(first), false));
         assert_eq!(game.natural_knot(knot), Some(fence));
-        assert_eq!(game.knots[0].join, join);
+        assert_eq!(game.resident_entities.knots[0].join, join);
 
         game.enter_level(Dim::Nether).unwrap();
         let (nether_mob, nether_knot) = tie_player_mob(game, fence);
@@ -51,11 +51,11 @@ fn natural_knot_owner_survives_active_parked_reset_and_retires_at_last_holder() 
         }
         game.enter_level(Dim::Overworld).unwrap();
         assert_eq!(game.natural_knot(knot), Some(fence));
-        assert_eq!(game.knots[0].join, join);
+        assert_eq!(game.resident_entities.knots[0].join, join);
         assert!(game.detach_leash(Target::Mob(second), false));
         assert_eq!(game.server_resident_entity(knot), EntityLookup::Missing);
         assert!(!game.knot_ids.contains_key(&fence));
-        assert!(game.knots.is_empty());
+        assert!(game.resident_entities.knots.is_empty());
         assert!(matches!(
             game.server_resident_entity(nether_knot),
             EntityLookup::Found {
@@ -70,7 +70,7 @@ fn natural_knot_owner_survives_active_parked_reset_and_retires_at_last_holder() 
             game.server_resident_entity(nether_knot),
             EntityLookup::Missing
         );
-        assert_eq!(game.entity_residency.get_mut().end_tick(), Ok(()));
+        assert_eq!(game.resident_entities.table.get_mut().end_tick(), Ok(()));
     });
 }
 
@@ -90,7 +90,7 @@ fn natural_knot_tick_cleanup_retires_a_removed_holder_and_fresh_tie_gets_a_new_i
         let (_, replacement) = tie_player_mob(game, fence);
         assert_ne!(replacement, knot);
         assert_eq!(game.server_resident_entity(0), EntityLookup::Missing);
-        assert_eq!(game.entity_residency.get_mut().end_tick(), Ok(()));
+        assert_eq!(game.resident_entities.table.get_mut().end_tick(), Ok(()));
     });
 }
 
@@ -122,6 +122,6 @@ fn natural_knot_last_boat_notification_excludes_its_old_resident_payload() {
         assert!(game.detach_leash(Target::Mob(mob), false));
         game.release_stored_boat_leash(0, false);
         assert_eq!(game.server_resident_entity(knot), EntityLookup::Missing);
-        assert_eq!(game.entity_residency.get_mut().end_tick(), Ok(()));
+        assert_eq!(game.resident_entities.table.get_mut().end_tick(), Ok(()));
     });
 }

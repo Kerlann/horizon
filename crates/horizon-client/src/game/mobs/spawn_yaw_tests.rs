@@ -10,7 +10,7 @@ use horizon_client::chunk::Chunk;
 use horizon_core::position::ChunkPos;
 use std::sync::Arc;
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -32,7 +32,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -70,7 +70,8 @@ fn yaw_of(game: &Game<'_>, id: u32) -> f32 {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_summoned_mob_without_nbt_faces_south() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     let before = game.mobs.len();
     assert!(game.run_command("summon pig 4.5 100 8.5"));
     let pig = &game.mobs[before];
@@ -80,7 +81,8 @@ fn a_summoned_mob_without_nbt_faces_south() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_spawn_eggs_yaw_is_the_wrapped_level_draw() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     // Draws until one lands in [180, 360), where wrapping changes the value.
     let mut checked = false;
     for _ in 0..32 {
@@ -107,7 +109,8 @@ fn a_spawn_eggs_yaw_is_the_wrapped_level_draw() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_dispensed_mob_takes_the_wrapped_draw_too() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     let mut level = game.world.random.clone();
     let draw = level.next_float() * 360.0;
     let id = game.spawn_mob_at("pig", (4, 100, 8), false).expect("pig");

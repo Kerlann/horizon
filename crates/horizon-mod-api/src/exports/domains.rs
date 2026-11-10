@@ -7,8 +7,6 @@ pub mod entity;
 pub mod item;
 pub mod runtime;
 pub mod text;
-// hidden: the wasm boundary's encoding, used by generated code, not a mod's API
-#[doc(hidden)]
 pub mod wire;
 pub mod world;
 pub use backend::{

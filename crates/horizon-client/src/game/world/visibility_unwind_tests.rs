@@ -12,7 +12,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-fn with_save_game(root: &std::path::Path, test: impl FnOnce(&mut Game<'_>)) {
+pub(super) fn with_save_game(root: &std::path::Path, test: impl FnOnce(&mut Game<'_>)) {
     native_guest_turn_tests::with_guests(|game| {
         game.world_root = root.to_path_buf();
         game.save = Arc::new(SaveDir::new(root.to_path_buf(), LevelShape::OVERWORLD));

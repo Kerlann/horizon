@@ -26,6 +26,7 @@ mod connected_advancement_save_tests {
         let mut game_resources = None;
         let mut game = crate::game::game_tests::tests::server_game(&mut game_resources);
         game.options.execution_role = ExecutionRole::DedicatedServer;
+        game.options.dedicated = Some(Vec::new());
         let dir = std::env::temp_dir().join(format!(
             "horizon-connected-advancement-save-{}",
             std::process::id()
@@ -191,6 +192,8 @@ mod connected_advancement_preservation_tests {
         let mut game_resources = None;
         let mut game = crate::game::game_tests::tests::server_game(&mut game_resources);
         game.options.execution_role = ExecutionRole::DedicatedServer;
+        // Let a legacy launch-config gate reach the wrong-role control below.
+        game.options.dedicated = Some(Vec::new());
         let dir = std::env::temp_dir().join(format!(
             "horizon-advancement-preservation-{}",
             std::process::id()
@@ -239,6 +242,8 @@ mod connected_advancement_preservation_tests {
         assert!(game.adv.tree.find_id("minecraft:story/root").is_some());
         let path = stats::player_json(&dir, "advancements", [0, 0, 0, 1]);
         let stats_path = stats::player_json(&dir, "stats", [0, 0, 0, 1]);
+        let player_path = horizon_client::lan::playerdata::path(&dir, 1);
+        assert!(!player_path.exists());
         let read = || -> serde_json::Value {
             serde_json::from_str(&fs::read_to_string(&path).unwrap()).unwrap()
         };
@@ -266,6 +271,7 @@ mod connected_advancement_preservation_tests {
                     .iter()
                     .any(|m| m.translation_key() == Some("commands.save.success"))
             );
+            assert!(player_path.is_file(), "dedicated player snapshot saved too");
             let saved = read();
             if empty {
                 assert_eq!(
@@ -362,6 +368,17 @@ mod connected_advancement_preservation_tests {
             read()
         );
         game.lan = Some(host);
+
+        // Launch configuration cannot grant dedicated-only commands to another role.
+        game.options.dedicated = Some(Vec::new());
+        for role in [ExecutionRole::IntegratedServer, ExecutionRole::Client] {
+            game.options.execution_role = role;
+            let dispatcher = horizon_client::command::vanilla::build_for(false, true);
+            let parsed = dispatcher.parse("save-all", &game.ui.registries);
+            let (ctx, _) = parsed.executable().unwrap();
+            let error = game.run_chain(&parsed.context, ctx).unwrap_err();
+            assert_eq!(error.key, "command.unknown.command", "{role:?}");
+        }
         fs::remove_dir_all(&dir).unwrap();
     }
 }

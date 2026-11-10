@@ -1075,8 +1075,13 @@ fn a_panicking_behavior_leaves_the_rest_of_the_tick_working() {
         // The villager's own goal selector still ticks (the goal tests'
         // Counter part is not installed here; the selector itself answers).
         with_villager_tick(game, 8, 101, 3000, &mut level, |m, w, level, events| {
-            let mut cx = mobs::goals::Cx { w, level, events };
-            let mut selector = std::mem::take(&mut m.ai.goals);
+            let mut cx = mobs::goals::Cx {
+                w,
+                level,
+                events,
+                selectors: Default::default(),
+            };
+            let mut selector = m.ai.goals.take();
             selector.tick(m, &mut cx);
             m.ai.goals = selector;
         });

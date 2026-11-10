@@ -315,6 +315,7 @@ impl Game<'_> {
         name: &str,
         write: AttributeWrite,
     ) -> Option<bool> {
+        let before_vehicle = self.capture_ai_vehicle(t);
         let done = self.apply_attribute_write(t, name, write)?;
         // A finalize write drops the mob's live map (its seed changed), which
         // takes the equipment's modifiers with it: collect them again at
@@ -323,6 +324,7 @@ impl Game<'_> {
         if let Target::Mob(id) = t {
             self.collect_mob_equipment_attributes(id);
         }
+        self.ai_vehicle_applied(before_vehicle);
         Some(done)
     }
 

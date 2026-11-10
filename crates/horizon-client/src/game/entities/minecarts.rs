@@ -7,6 +7,8 @@
 #[cfg(test)]
 #[path = "minecarts/lifetime_tests.rs"]
 mod lifetime_tests;
+#[path = "minecarts/save_lending.rs"]
+mod save_lending;
 
 use super::native_base_read_rows::BaseReadSource;
 use super::{Game, Hit, InteractTarget, Keys, entity::Entity};
@@ -2103,6 +2105,7 @@ impl Game<'_> {
                     m.ai.nav.stop();
                     m.needs_sync = true;
                     occupied = true;
+                    self.record_ai_mob_owner_id(mob);
                     self.seat_mob(mob);
                     self.break_leash(mob, true, false);
                     self.note_started_riding(id);
@@ -2584,7 +2587,14 @@ impl Game<'_> {
     }
     /// Where the cart at `i` lets a player off.
     pub(super) fn cart_player_dismount_target(&self, i: usize) -> Vec3 {
-        let c = &self.carts[i];
+        self.cart_player_dismount_target_at(&self.world, &self.carts[i])
+    }
+
+    pub(super) fn cart_player_dismount_target_at(
+        &self,
+        world: &horizon_client::world::World,
+        c: &Minecart,
+    ) -> Vec3 {
         let (bx, by, bz) = (
             c.position.x.floor() as i32,
             c.position.y.floor() as i32,
@@ -2611,9 +2621,9 @@ impl Game<'_> {
         'search: for dy in [0, 1, -1] {
             for (dx, dz) in offsets {
                 let (x, y, z) = (bx + dx, by + dy, bz + dz);
-                let below = self.res.facts().get(self.world.block(x, y - 1, z));
-                let here = self.res.facts().get(self.world.block(x, y, z));
-                let head = self.res.facts().get(self.world.block(x, y + 1, z));
+                let below = self.res.facts().get(world.block(x, y - 1, z));
+                let here = self.res.facts().get(world.block(x, y, z));
+                let head = self.res.facts().get(world.block(x, y + 1, z));
                 if (below.full_collision || below.legacy_solid)
                     && !here.full_collision
                     && !head.full_collision
@@ -3009,106 +3019,6 @@ impl Game<'_> {
     }
 
     /// Accepted damage is distinct from survival, destruction, or TNT priming.
-    pub(super) fn hurt_cart_result(
-        &mut self,
-        i: usize,
-        mut damage: f32,
-        creative: bool,
-        fire: bool,
-    ) -> bool {
-        let join = self.carts[i].join;
-        let id = self.carts[i].id;
-        let kind = self.carts[i].kind.id();
-        let mut cancel = false;
-        self.native_vehicle_damage(kind, &mut damage, &mut cancel);
-        if cancel {
-            return false;
-        }
-        let Some(i) = self.carts.locate(join).filter(|_| {
-            !self
-                .persist
-                .removals
-                .contains(&super::commands::Target::Cart(id))
-        }) else {
-            return false;
-        };
-        let destroyed = self.carts.update(i, |c| {
-            c.hurt_dir = -c.hurt_dir;
-            c.hurt_time = 10;
-            c.damage += damage * 10.0;
-            // MinecartTNT.shouldSourceDestroy: fire and explosions destroy
-            // (so ignite) a TNT cart whatever damage it has taken.
-            cart_is_destroyed(creative, c.damage, fire && c.kind == CartKind::Tnt)
-        });
-        if destroyed {
-            let speed = self.carts[i].velocity.x * self.carts[i].velocity.x
-                + self.carts[i].velocity.z * self.carts[i].velocity.z;
-            let tnt_prime =
-                self.carts[i].kind == CartKind::Tnt && (fire || speed >= f64::from(0.01f32));
-            if !tnt_prime {
-                self.eject_cart_mobs(i);
-            }
-            let id = self.carts[i].id;
-            if !tnt_prime {
-                self.release_vehicle_container(id);
-            }
-            if !tnt_prime {
-                let at = [
-                    self.carts[i].position.x,
-                    self.carts[i].position.y,
-                    self.carts[i].position.z,
-                ];
-                self.native_vehicle_destroy(self.carts[i].kind.id(), at);
-            }
-            let Some(i) = self.carts.locate(join).filter(|_| {
-                !self
-                    .persist
-                    .removals
-                    .contains(&super::commands::Target::Cart(id))
-            }) else {
-                return true;
-            };
-            if tnt_prime {
-                // MinecartTNT.destroy: event and sound precede both fuse RNG draws.
-                if self.carts[i].fuse < 0 {
-                    self.prime_cart_join(join);
-                    if let Some(at) = self.carts.locate(join) {
-                        self.carts.update(at, |c| {
-                            c.fuse = c.random.next_int_bound(20).unwrap_or(0)
-                                + c.random.next_int_bound(20).unwrap_or(0)
-                        });
-                    }
-                }
-            } else {
-                let c = self.carts.remove(i);
-                let at = [c.position.x, c.position.y, c.position.z];
-                // AbstractMinecartContainer.remove: `Containers.dropContents`
-                // for every destroying removal (the kill below, and a creative
-                // hit's discard), with no `entity_drops` gate of its own.
-                self.drop_vehicle_contents(at, &c.items);
-                // VehicleEntity.destroy: `kill` (the cart's own ENTITY_DIE
-                // after that removal), then the drops; a creative hit only
-                // discards it.
-                if !creative {
-                    self.entity_killed_event(at, false);
-                }
-                if !creative
-                    && self
-                        .ui
-                        .rules
-                        .bool_at(horizon_client::gamerules::vanilla::ENTITY_DROPS)
-                {
-                    // `spawnAtLocation`: an ItemEntity's own motion.
-                    self.spawn_item_own(ItemStack::new(c.kind.item(), 1), at, 10);
-                    // `chestVehicleDestroyed` drops the emptied container
-                    // again, which only draws each slot's spot.
-                    let empty = vec![None; c.items.len()];
-                    self.drop_vehicle_contents(at, &empty);
-                }
-            }
-        }
-        true
-    }
     /// Baked block-state faces with default block tints and terrain shade or diffuse lighting.
     pub(super) fn block_model_vertices(
         &self,

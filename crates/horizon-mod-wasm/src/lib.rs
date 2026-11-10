@@ -3,6 +3,9 @@
 //! versions, one library copy shared by its dependents). Every refusal names its reason for the
 //! Mods page.
 pub mod link;
+#[cfg(test)]
+#[path = "../tests/support/no_hooks.rs"]
+mod no_hooks;
 mod points;
 mod runtime;
 #[allow(
@@ -339,12 +342,44 @@ pub fn refusal(id: &str) -> Option<Refusal> {
 /// `assets/` and `data/` load as content beside its code. Refusals are kept for [`refused`].
 pub fn load_installed(game_dir: &Path, dev: &[PathBuf]) -> Loaded {
     let enabled = horizon_mod_package::mod_list::ModList::load(game_dir).enabled;
-    let mut refused = Vec::new();
+    let mut refused: Vec<_> = horizon_mod_package::selection::package_errors(
+        horizon_mod_package::find(&game_dir.join(horizon_mod_package::mod_list::DIR))
+            .into_iter()
+            .chain(horizon_mod_package::find(
+                &game_dir.join(horizon_mod_package::mod_list::NATIVE_DIR),
+            ))
+            .chain(dev.iter().cloned()),
+    )
+    .into_iter()
+    .filter(|(id, _)| enabled.contains(id) || !dev.is_empty())
+    .map(|(id, why)| (id, Refusal::Package(why)))
+    .collect();
+    let native: Vec<_> =
+        horizon_mod_package::find(&game_dir.join(horizon_mod_package::mod_list::NATIVE_DIR))
+            .into_iter()
+            .chain(horizon_mod_package::find(
+                &game_dir.join(horizon_mod_package::mod_list::DIR),
+            ))
+            .chain(std::env::current_exe().ok().into_iter().flat_map(|exe| {
+                horizon_mod_package::find(
+                    &exe.with_file_name(horizon_mod_package::mod_list::NATIVE_DIR),
+                )
+            }))
+            .chain(dev.iter().cloned())
+            .filter_map(|path| horizon_mod_package::Package::read(&path).ok())
+            .filter(|package| package.is_native())
+            .collect();
     let packages: Vec<WasmPackage> =
         horizon_mod_package::selection::content_packages(game_dir, &enabled, dev)
             .filter(|selected| selected.package.manifest.wasm.is_some())
-            .filter_map(
-                |selected| match horizon_mod_package::Package::read_wasm(&selected.path) {
+            .filter_map(|selected| {
+                if let Some(reason) = native.iter().find_map(|library| {
+                    horizon_mod_package::layouts::mixed_refusal(&selected.package, library)
+                }) {
+                    refused.push((selected.package.manifest.id, Refusal::Package(reason)));
+                    return None;
+                }
+                match horizon_mod_package::Package::read_wasm(&selected.path) {
                     Ok(module) => Some(WasmPackage {
                         manifest: selected.package.manifest,
                         module,
@@ -353,8 +388,8 @@ pub fn load_installed(game_dir: &Path, dev: &[PathBuf]) -> Loaded {
                         refused.push((selected.package.manifest.id, Refusal::Package(why)));
                         None
                     }
-                },
-            )
+                }
+            })
             .collect();
     let mut loaded = match std::env::current_exe()
         .ok()
@@ -746,6 +781,91 @@ mod tests {
                     }
                 ),
             ]
+        );
+    }
+}
+
+#[cfg(test)]
+mod mixed_install_tests {
+    use super::*;
+    #[test]
+    fn malformed_layout_retains_identity() {
+        let why = refusal("malformed");
+        assert!(why.contains("layouts.json is malformed"), "{why}");
+    }
+    fn refusal(hash: &str) -> String {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!("wasm-mixed-{}-{nonce}", std::process::id()));
+        let addon = root.join("addon");
+        let library = root.join("lib");
+        std::fs::create_dir_all(&addon).unwrap();
+        std::fs::create_dir_all(library.join("src")).unwrap();
+        let header = |id| {
+            format!("id='{id}'\nname='{id}'\nversion='1'\napi='0.2'\ncapabilities=['registries']\n")
+        };
+        let module = b"\x00\x61\x73\x6d\x01\x00\x00\x00\x00\x0f\x08\x64\x79\x6c\x69\x6e\x6b\x2e\x30\x01\x04\x00\x00\x00\x00\x01\x04\x01\x60\x00\x00\x03\x02\x01\x00\x07\x2e\x03\x0e\x68\x6f\x72\x69\x7a\x6f\x6e\x5f\x6c\x61\x79\x6f\x75\x74\x00\x00\x0a\x68\x6f\x72\x69\x7a\x6f\x6e\x5f\x69\x6e\x00\x00\x0c\x68\x6f\x72\x69\x7a\x6f\x6e\x5f\x68\x6f\x6f\x6b\x00\x00\x0a\x04\x01\x02\x00\x0b";
+        std::fs::write(addon.join("mod.wasm"), module).unwrap();
+        std::fs::write(
+            addon.join("horizon-mod.toml"),
+            format!(
+                "{}[dependencies]\nlib='*'\n[wasm]\nsha512='{}'\ntoolchain='t'\nbuilt_with='t'\n",
+                header("addon"),
+                horizon_mod_package::manifest::sha512_of(module)
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            library.join("horizon-mod.toml"),
+            format!(
+                "{}[native]\ngame='26.3'\nhorizon='{}'\nmixins='{}'\n",
+                header("lib"),
+                "a".repeat(40),
+                "b".repeat(40)
+            ),
+        )
+        .unwrap();
+        std::fs::write(
+            library.join("Cargo.toml"),
+            "[package]\nname='lib'\nversion='1.0.0'\n",
+        )
+        .unwrap();
+        std::fs::write(library.join("src/lib.rs"), "pub fn run() {}\n").unwrap();
+        std::fs::write(
+            addon.join("layouts.json"),
+            br#"{"lib":{"T":"0123456789abcdef"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            library.join("layouts.json"),
+            format!(r#"{{"lib":{{"T":"{hash}"}}}}"#),
+        )
+        .unwrap();
+        if hash == "malformed" {
+            std::fs::write(addon.join("layouts.json"), b"{").unwrap();
+            std::fs::write(library.join("layouts.json"), b"{}").unwrap();
+        }
+        let loaded = load_installed(&root, &[addon, library]);
+        std::fs::remove_dir_all(root).unwrap();
+        assert!(loaded.mods.is_empty());
+        assert_eq!(loaded.refused.len(), 1);
+        assert_eq!(loaded.refused[0].0, "addon");
+        loaded.refused[0].1.to_string()
+    }
+    #[test]
+    fn wasm_to_native_layout_mismatch_names_the_type() {
+        assert_eq!(
+            refusal("1123456789abcdef"),
+            "addon: layout mismatch in library lib for type T"
+        );
+    }
+    #[test]
+    fn wasm_to_native_matching_layout_is_still_unsupported() {
+        assert_eq!(
+            refusal("0123456789abcdef"),
+            "lib is a native mod; wasm mod addon depends on it: mixed native and wasm dependencies aren't supported yet"
         );
     }
 }

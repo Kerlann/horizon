@@ -1189,7 +1189,15 @@ fn components_tag_inner(
     include_damage: bool,
 ) -> Option<Tag> {
     let mut entries: Vec<(&str, Tag)> = Vec::new();
-    if include_damage && (damage > 0 || data.is_some_and(|data| data.damage_set)) {
+    // Explicit damage patches survive even at zero; a custom max damage can
+    // also make its saved zero meaningful.
+    if include_damage
+        && (damage > 0
+            || data.is_some_and(|data| {
+                data.damage_set
+                    || (data.explicit_zero_damage && data.other("minecraft:max_damage").is_some())
+            }))
+    {
         entries.push(("minecraft:damage", Tag::Int(damage as i32)));
     }
     if let Some(d) = data {

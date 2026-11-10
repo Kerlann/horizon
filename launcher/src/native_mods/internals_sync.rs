@@ -95,6 +95,7 @@ fn discover(folder: &Path, cache_root: &Path) -> Result<Vec<ListedInternal>, Err
     if super::prebuilt::source_refusal(&game, &projects)?.is_some() {
         return Err(Error::SourceInjection);
     }
+    crate::storage::mark_used(&cache).map_err(super::cache_error)?;
     let stage = cache.join("stage");
     prepare_stage(&game, &stage)?;
     let mut listed = internals::Catalog::read(&stage)?;

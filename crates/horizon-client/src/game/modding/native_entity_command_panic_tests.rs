@@ -36,7 +36,9 @@ impl Hooks for Panics {
         host: &mut dyn ServerHost,
         event: &mut EntityCommandCompletedEvent<'_>,
     ) {
-        let EntityWriteCompletion::EntitySetSilent(done) = event.completion;
+        let EntityWriteCompletion::EntitySetSilent(done) = event.completion else {
+            panic!("unexpected operation completion in SetSilent test")
+        };
         assert_eq!(done.outcome, Ok(true));
         assert_eq!(
             done.id.query(host),

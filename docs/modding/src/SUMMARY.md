@@ -9,6 +9,8 @@
 
 # Concepts
 
+- [Wire types](how-to/wire-types.md)
+
 <!-- Per-concept child chapters are discovered at build time; keep these aggregate links for published anchors. -->
 
 - [Trait mods, Parts and attachments](concepts/trait-mods.md)
@@ -26,6 +28,7 @@
 - [Design: multi-block placement](concepts/multi-block-placement.md)
 - [Design: snapshot participants](concepts/snapshot-participants.md)
 - [Design: stale handle errors](concepts/stale-handle-errors.md)
+- [Design: attachment query joins](concepts/attachment-query-joins.md)
 - [Design: Part instance state](concepts/part-instance-state.md)
 - [Design: general entity types](concepts/general-entity-types.md)
 - [Design: offline players and selection](concepts/offline-players-and-selection.md)
@@ -36,6 +39,7 @@
 - [Design: custom recipe-book settings](concepts/recipe-book-types.md)
 - [Design: main target configuration](concepts/main-target-config.md)
 - [Design: resource-backed special item renderers](concepts/resource-renderers.md)
+- [Design: unified fluid declaration](concepts/unified-fluid-declaration.md)
 - [Design: section meshing](concepts/section-meshing.md)
 - [Design: entity render state](concepts/entity-render-state.md)
 - [Design: section geometry](concepts/section-geometry.md)

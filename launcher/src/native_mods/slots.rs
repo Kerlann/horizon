@@ -131,6 +131,10 @@ pub(super) fn routes(catalog: &Catalog, manifest: &Manifest) -> Result<Vec<Route
             &places,
         )?;
         let pending = match (route, inject.kind, inject.access) {
+            (Route::Source(reason), _, Access::Api) => Some(reason),
+            (Route::Slot(SlotKind::Site), _, Access::Api) => {
+                Some(NoSlotReason::ApiSitesUnsupported)
+            }
             (_, Kind::ModifyCallArg, _) => Some(NoSlotReason::SourcePending),
             (
                 Route::Source(_),
@@ -145,7 +149,6 @@ pub(super) fn routes(catalog: &Catalog, manifest: &Manifest) -> Result<Vec<Route
             ) => None,
             (Route::Source(_), _, _) => Some(NoSlotReason::SourcePending),
             (_, Kind::Replace, Access::Internals) => Some(NoSlotReason::ReplacePending),
-            (Route::Slot(SlotKind::Site), _, Access::Api) => Some(NoSlotReason::ApiSitesPending),
             _ => None,
         };
         if let Some(reason) = pending {

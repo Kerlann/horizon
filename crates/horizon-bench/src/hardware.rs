@@ -1,7 +1,7 @@
 //! The machine a report was measured on. CPU, RAM and OS are detected here; the GPU and the display
 //! come from the program that rendered (the game knows its adapter, the launcher its window).
 
-use horizon_system::system::command_output as output;
+use horizon_telemetry::system::command_output as output;
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -84,13 +84,13 @@ impl Hardware {
     /// [`Hardware::detect`] with the kind of drive `game_dir` is on.
     pub fn detect_in(game_dir: &std::path::Path) -> Hardware {
         Hardware {
-            storage: horizon_system::system::storage(game_dir).map(str::to_owned),
+            storage: horizon_telemetry::system::storage(game_dir).map(str::to_owned),
             ..Hardware::detect()
         }
     }
 }
 
-/// What the machine probes read (`horizon_system::system`).
+/// What the telemetry probes read (`horizon_telemetry::system`).
 struct Probes {
     cores: Option<u16>,
     base: Option<u32>,
@@ -99,7 +99,7 @@ struct Probes {
 }
 
 fn probes() -> Probes {
-    let s = horizon_system::system::System::detect();
+    let s = horizon_telemetry::payload::System::detect();
     let some = |n: u32| (n > 0).then_some(n);
     Probes {
         cores: (s.cores > 0).then_some(s.cores),
@@ -131,7 +131,7 @@ pub fn load_average() -> Option<f64> {
 
 /// `ac` or `battery`; `None` where it can't be read (and on machines without a battery on Linux).
 pub fn power_source() -> Option<&'static str> {
-    horizon_system::system::power()
+    horizon_telemetry::system::power()
 }
 
 /// Resident memory of a process, in bytes (macOS, Linux).
@@ -203,7 +203,7 @@ fn os_version() -> Option<String> {
 fn cpu() -> Option<String> {
     let info = std::fs::read_to_string("/proc/cpuinfo").ok()?;
     // x86 names the CPU per core; arm64 only gives the core's implementer and part.
-    horizon_system::system::linux_cpu_name(&info)
+    horizon_telemetry::system::linux_cpu_name(&info)
 }
 
 #[cfg(target_os = "linux")]
@@ -225,12 +225,12 @@ fn key_value<'a>(text: &'a str, key: &str, sep: char) -> Option<&'a str> {
 
 #[cfg(target_os = "windows")]
 fn os_version() -> Option<String> {
-    horizon_system::system::windows_version()
+    horizon_telemetry::system::windows_version()
 }
 
 #[cfg(target_os = "windows")]
 fn cpu() -> Option<String> {
-    horizon_system::system::windows_cpu()
+    horizon_telemetry::system::windows_cpu()
 }
 
 #[cfg(target_os = "windows")]

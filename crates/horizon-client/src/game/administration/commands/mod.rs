@@ -3,6 +3,7 @@
 mod admin;
 pub(super) mod compute;
 mod data;
+mod difficulty;
 pub(super) use data::place_summoned;
 mod effects;
 pub(super) mod execute;
@@ -109,7 +110,7 @@ pub(super) fn entity_pitch(pitch: f32) -> f32 {
 }
 
 /// `PositionMoveRotation.calculateAbsolute` and `TeleportCommand.performTeleport`.
-fn teleport_velocity(velocity: Vec3, relative: [bool; 3], fall_flying: bool) -> Vec3 {
+pub(super) fn teleport_velocity(velocity: Vec3, relative: [bool; 3], fall_flying: bool) -> Vec3 {
     Vec3::new(
         if relative[0] { velocity.x } else { 0.0 },
         if relative[1] && fall_flying {
@@ -776,44 +777,22 @@ impl Game<'_> {
             },
             // ItemEntity.getName: its CustomName, else the stack's item name
             // (`getItemName`: `minecraft:item_name`, else the item's own).
-            Target::Item(id) => {
-                if let Some(c) = self.persist_raw(id).and_then(|r| r.get("CustomName")) {
-                    return horizon_client::scoreboard::comp_text(
-                        &horizon_client::scoreboard::tag_to_json(c),
-                    );
-                }
-                let stack = self.dropped.iter().find(|i| i.id == id).map(|i| &i.stack);
-                match stack.and_then(|s| s.item_name()) {
-                    Some(name) => Text::literal(name),
-                    None => {
-                        let item = stack.map(|s| s.item.to_string()).unwrap_or_default();
-                        Text::literal(self.pack.names.display_item(&item))
-                    }
-                }
-            }
+            Target::Item(id) => self.item_entity_name(
+                self.dropped
+                    .iter()
+                    .find(|item| item.id == id)
+                    .map(|item| &item.stack),
+                self.persist_raw(id).and_then(|raw| raw.get("CustomName")),
+            ),
             // FallingBlockEntity.getTypeName: `entity.minecraft.falling_block_type`
             // with the block's name.
             Target::Falling(id) => {
-                let custom = self
-                    .falling
-                    .iter()
-                    .find(|f| f.id == id)
-                    .and_then(|f| f.saved.as_ref())
+                let falling = self.falling.iter().find(|falling| falling.id == id);
+                let custom = falling
+                    .and_then(|falling| falling.saved.as_ref())
                     .and_then(|saved| saved.1.get("CustomName"))
-                    .or_else(|| self.persist_raw(id).and_then(|r| r.get("CustomName")));
-                if let Some(c) = custom {
-                    return horizon_client::scoreboard::comp_text(
-                        &horizon_client::scoreboard::tag_to_json(c),
-                    );
-                }
-                let block = self
-                    .falling
-                    .iter()
-                    .find(|f| f.id == id)
-                    .map(|f| self.res.facts().get(f.state).name.replace(':', "."))
-                    .unwrap_or_default();
-                let block = Text::translate(&format!("block.{block}"), &[]);
-                Text::translate("entity.minecraft.falling_block_type", &[block])
+                    .or_else(|| self.persist_raw(id).and_then(|raw| raw.get("CustomName")));
+                self.falling_entity_name(falling.map(|falling| falling.state), custom)
             }
             Target::Mob(id) => self.mobs.iter().find(|m| m.id == id).map_or_else(
                 || Text::translate("entity.", &[]),
@@ -827,16 +806,62 @@ impl Game<'_> {
                 let custom = super::native_entities::target_id(other)
                     .and_then(|id| self.persist_raw(id))
                     .and_then(|r| r.get("CustomName"));
-                if let Some(c) = custom {
-                    return horizon_client::scoreboard::comp_text(
-                        &horizon_client::scoreboard::tag_to_json(c),
-                    );
-                }
-                let ty = self.target_type(other);
-                Text::translate(&format!("entity.{}", ty.replace(':', ".")), &[])
+                self.default_entity_name(&self.target_type(other), custom)
             }
         }
     }
+    /// Shared name kernels take actual source values, not target lookups.
+    pub(super) fn item_entity_name(
+        &self,
+        stack: Option<&ItemStack>,
+        custom: Option<&horizon_core::nbt::Tag>,
+    ) -> Text {
+        if let Some(custom) = custom {
+            return horizon_client::scoreboard::comp_text(
+                &horizon_client::scoreboard::tag_to_json(custom),
+            );
+        }
+        match stack.and_then(|stack| stack.item_name()) {
+            Some(name) => Text::literal(name),
+            None => {
+                let item = stack
+                    .map(|stack| stack.item.to_string())
+                    .unwrap_or_default();
+                Text::literal(self.pack.names.display_item(&item))
+            }
+        }
+    }
+
+    pub(super) fn falling_entity_name(
+        &self,
+        state: Option<BlockStateId>,
+        custom: Option<&horizon_core::nbt::Tag>,
+    ) -> Text {
+        if let Some(custom) = custom {
+            return horizon_client::scoreboard::comp_text(
+                &horizon_client::scoreboard::tag_to_json(custom),
+            );
+        }
+        let block = state
+            .map(|state| self.res.facts().get(state).name.replace(':', "."))
+            .unwrap_or_default();
+        let block = Text::translate(&format!("block.{block}"), &[]);
+        Text::translate("entity.minecraft.falling_block_type", &[block])
+    }
+
+    pub(super) fn default_entity_name(
+        &self,
+        kind: &str,
+        custom: Option<&horizon_core::nbt::Tag>,
+    ) -> Text {
+        if let Some(custom) = custom {
+            return horizon_client::scoreboard::comp_text(
+                &horizon_client::scoreboard::tag_to_json(custom),
+            );
+        }
+        Text::translate(&format!("entity.{}", kind.replace(':', ".")), &[])
+    }
+
     /// EntitySelector.findEntities.
     pub(super) fn select(&mut self, s: &Selector) -> Vec<Target> {
         if let Some(name) = &s.player_name {
@@ -1403,9 +1428,7 @@ impl Game<'_> {
             }
         }
         self.set_mode(mode);
-        if self.screen == Screen::Inventory && (self.creative || self.spectator()) {
-            self.set_screen(Screen::Playing);
-        }
+
         true
     }
     fn cmd_gamemode(&mut self, ctx: &Context) -> R<i32> {
@@ -1667,13 +1690,15 @@ impl Game<'_> {
     /// (An end gateway's or a vehicle's transition carries its motion.)
     pub(super) fn teleport_stops(&mut self, t: Target) {
         let _ = self.in_target_level(t, |g| {
+            let before = g.capture_ai_vehicle(t);
             target_entity_mut!(g, t, e => *e.velocity_mut() = Vec3::ZERO);
             // The dragon's flight builds on the motion it carries.
             if let Target::Dragon(id) = t
                 && let Some(d) = g.dragon.as_mut().filter(|d| d.id == id)
             {
-                d.stop();
+                d.teleport_motion([false; 3]);
             }
+            g.ai_vehicle_applied(before);
         });
     }
     /// `TeleportCommand.performTeleport` after a successful `teleportTo` in
@@ -1682,7 +1707,10 @@ impl Game<'_> {
     /// stops (`PathfinderMob`; the others hold no path). The players' own
     /// ground is their clients'.
     fn tp_lands(&mut self, t: Target) {
-        self.teleport_stops(t);
+        // Player placement already handles motion and fall-flying ground state.
+        if matches!(t, Target::Player | Target::Guest(_)) {
+            return;
+        }
         let _ = self.in_target_level(t, |g| {
             if let Target::Mob(id) = t
                 && let Some(m) = g.mobs.iter_mut().find(|m| m.id == id)
@@ -1748,6 +1776,7 @@ impl Game<'_> {
         turn_riders: bool,
     ) -> Option<[f64; 3]> {
         use super::entity::Entity;
+        let before_vehicle = self.capture_ai_vehicle(t);
         let from = self.target_position(t);
         // Entity.calculatePassengerTransition compares a rider's angle with the
         // vehicle's own, so the vehicle's angles are read before the teleport,
@@ -2017,6 +2046,17 @@ impl Game<'_> {
             | Target::DragonPart(_)
             | Target::Knot(_) => {}
         }
+        if !matches!(t, Target::Player | Target::Guest(_) | Target::Mob(_)) {
+            target_entity_mut!(self, t, entity => {
+                let velocity = entity.velocity_mut();
+                *velocity = teleport_velocity(*velocity, relative, false);
+            });
+            if let Target::Dragon(id) = t
+                && let Some(dragon) = self.dragon.as_mut().filter(|dragon| dragon.id == id)
+            {
+                dragon.teleport_motion(relative);
+            }
+        }
         // Entity.teleportSameDimension: the riders go with their vehicle at
         // once, by the offset it took and the turn it was given.
         if let (Some(from), Some(to)) = (from, self.target_position(t)) {
@@ -2028,6 +2068,7 @@ impl Game<'_> {
             });
             self.teleport_passengers(t, from, to, placed);
         }
+        self.ai_vehicle_applied(before_vehicle);
         from
     }
 
@@ -3874,54 +3915,6 @@ impl Game<'_> {
             Value::Int(i) => i,
         })
     }
-    fn cmd_difficulty(&mut self, ctx: &Context) -> R<i32> {
-        let name = |d: u8| {
-            Text::translate(
-                &format!("options.difficulty.{}", DIFFICULTIES[d as usize]),
-                &[],
-            )
-        };
-        let Some(i) = DIFFICULTIES.iter().position(|d| ctx.has(d)) else {
-            let current = self.ui.difficulty;
-            self.feedback_unbroadcast(Text::translate(
-                "commands.difficulty.query",
-                &[name(current)],
-            ));
-            return Ok(i32::from(current));
-        };
-        let i = i as u8;
-        if self.ui.difficulty == i {
-            return Err(CommandError::new(Text::translate(
-                "commands.difficulty.failure",
-                &[name(i)],
-            )));
-        }
-        self.set_difficulty_forced(i);
-        self.feedback(Text::translate("commands.difficulty.success", &[name(i)]));
-        Ok(0)
-    }
-    /// `MinecraftServer.setDifficulty(difficulty, true)`.
-    pub(super) fn set_difficulty_forced(&mut self, i: u8) {
-        let from = self.ui.difficulty;
-        self.ui.difficulty = i;
-        // The level data holds the world's difficulty: it survives the
-        // reopen, so it follows the command.
-        self.level.set_difficulty(i);
-        self.sync_rules();
-        // MinecraftServer.setDifficulty: every player, guests included, is
-        // sent the new difficulty.
-        if let Some(host) = self.lan.as_ref() {
-            host.hub
-                .broadcast(&C::ChangeDifficulty(play::ChangeDifficulty {
-                    difficulty: i32::from(i),
-                    locked: self.level.difficulty_locked,
-                }));
-        }
-        if from != i {
-            let (from, to) = difficulty_names(from, i);
-            self.native_difficulty_changed(from, to);
-        }
-    }
     fn cmd_spawnpoint(&mut self, ctx: &Context) -> R<i32> {
         let targets = if ctx.get("targets").is_some() {
             self.entities(ctx, "targets", true)?
@@ -4985,83 +4978,12 @@ mod percent_f_tests {
 }
 
 #[cfg(test)]
-mod teleport_mob_tests {
-    use crate::game::native_entity_refs::tests::with_game;
-    use horizon_client::mobs::{Mob, path::Path};
-    use horizon_core::geometry::Vec3;
+#[path = "teleport_mob_tests.rs"]
+mod teleport_mob_tests;
 
-    #[test]
-    #[ignore = "needs prepared resources"]
-    fn command_stops_navigation_and_dismounts() {
-        with_game(|game| {
-            let kind = game
-                .res
-                .mob_types()
-                .get("minecraft:zombie")
-                .unwrap()
-                .clone();
-            let mut mob = Mob::new(12, kind, Vec3::new(0.0, 64.0, 0.0), 0.0);
-            mob.ai.nav.path = Some(Path {
-                nodes: Vec::new(),
-                next: 0,
-                target: [1, 64, 1],
-                dist_to_target: 0.0,
-                reached: true,
-            });
-            mob.extra.mount = Some(42);
-            mob.extra.passenger = true;
-            mob.velocity = Vec3::new(1.0, -2.0, 3.0);
-            mob.fall_distance = 7.0;
-            game.mobs.push(mob);
-            let kind = game
-                .res
-                .mob_types()
-                .get("minecraft:skeleton")
-                .unwrap()
-                .clone();
-            let mut vehicle = Mob::new(42, kind, Vec3::new(0.0, 64.0, 0.0), 0.0);
-            vehicle.extra.rider = Some(12);
-            game.mobs.push(vehicle);
-            game.ui.registries.permission = 4;
-            assert!(game.run_command("tp @e[type=minecraft:zombie] 10 70 10"));
-            let mob = &game.mobs[0];
-            assert_eq!(mob.position, Vec3::new(10.5, 70.0, 10.5));
-            assert!(mob.ai.nav.path.is_none());
-            assert!(mob.extra.mount.is_none());
-            assert!(!mob.extra.passenger);
-            assert_eq!(mob.fall_distance, 7.0);
-            assert_eq!(mob.velocity, Vec3::ZERO);
-            assert!(mob.on_ground);
-            assert!(game.mobs[1].extra.rider.is_none());
-            let mob = &mut game.mobs[0];
-            mob.extra.fall_flying = true;
-            mob.velocity = Vec3::new(1.0, -3.0, 2.0);
-            mob.on_ground = false;
-            assert!(game.run_command("tp @e[type=minecraft:zombie] ~ 70 ~"));
-            let mob = &game.mobs[0];
-            assert_eq!(mob.velocity, Vec3::new(1.0, 0.0, 2.0));
-            assert!(!mob.on_ground);
-            game.mobs[0].velocity = Vec3::new(1.0, -3.0, 2.0);
-            assert!(game.run_command("tp @e[type=minecraft:zombie] 12 ~ 12"));
-            assert_eq!(game.mobs[0].velocity, Vec3::new(0.0, -3.0, 0.0));
-            game.mobs[0].extra.fall_flying = false;
-            assert!(game.run_command("tp @e[type=minecraft:zombie] ~ ~ ~"));
-            assert_eq!(game.mobs[0].velocity.y, 0.0);
-            assert!(game.mobs[0].on_ground);
-            assert!(
-                game.run_command(
-                    "tp @e[type=minecraft:zombie] -30000000.0 -20000000.0 -30000000.0"
-                )
-            );
-            assert_eq!(
-                game.mobs[0].position,
-                Vec3::new(-30_000_000.0, -20_000_000.0, -30_000_000.0)
-            );
-            game.run_command("tp @e[type=minecraft:zombie] 30000000.0 70 0");
-            assert_eq!(game.mobs[0].position.x, -30_000_000.0);
-        });
-    }
-}
+#[cfg(test)]
+#[path = "teleport_item_tests.rs"]
+mod teleport_item_tests;
 
 #[cfg(test)]
 mod teleport_player_tests {

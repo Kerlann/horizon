@@ -50,7 +50,44 @@ pub(super) fn projectile_predicate_supported(tag: &horizon_core::nbt::Tag) -> bo
         _ => false,
     }
 }
+/// `InventoryScreen.containerTick`: a survival inventory left open when the
+/// player gains infinite materials becomes the creative one, so the player
+/// stays in a menu. A spectator's inventory is closed (`Playing`), which is
+/// what Horizon did for every mode before; vanilla has no spectator branch
+/// and leaves it open.
+fn inventory_after_mode(screen: Screen, creative: bool, spectator: bool) -> Screen {
+    if screen != Screen::Inventory {
+        return screen;
+    }
+    if creative {
+        Screen::Creative
+    } else if spectator {
+        Screen::Playing
+    } else {
+        screen
+    }
+}
+
 impl Game<'_> {
+    /// `InventoryScreen.containerTick` on a mode change: the inventory the player has
+    /// open follows the mode. (`CreativeModeInventoryScreen.containerTick`, the way back
+    /// to survival, is not ported yet.)
+    fn mode_changed_under_inventory(&mut self) {
+        match inventory_after_mode(self.screen, self.creative, self.spectator()) {
+            Screen::Creative => {
+                if let Some(c) = self.carried.take() {
+                    let _ = self.add_stack_to_inventory(c);
+                }
+                self.screen = Screen::Creative;
+                self.refresh_creative_tabs();
+                self.creative_screen.reopen();
+                self.refresh_saved_hotbars();
+            }
+            next if next != self.screen => self.screen = next,
+            _ => {}
+        }
+    }
+
     pub(super) fn spectator(&self) -> bool {
         self.mode == GameMode::Spectator
     }
@@ -135,9 +172,10 @@ impl Game<'_> {
                 }
             }
         }
-        if mode == GameMode::Spectator && self.screen == Screen::Inventory {
-            self.set_screen(Screen::Playing);
-        }
+        // InventoryScreen.containerTick: the open inventory follows the mode. Here, not in
+        // the command, so the window hears it too: it changes mode through the server's
+        // game event (`set_mode_id`), never through `set_game_mode`.
+        self.mode_changed_under_inventory();
     }
 }
 impl Game<'_> {
@@ -154,10 +192,19 @@ impl Game<'_> {
     }
     /// `adventure_predicate` for any `stack`, not only the main hand's.
     fn stack_adventure_predicate(&self, stack: &ItemStack, component: &str, pos: [i32; 3]) -> bool {
+        self.stack_adventure_predicate_in(&self.world, stack, component, pos)
+    }
+    fn stack_adventure_predicate_in(
+        &self,
+        world: &horizon_client::world::World,
+        stack: &ItemStack,
+        component: &str,
+        pos: [i32; 3],
+    ) -> bool {
         let Some(tag) = stack.data().and_then(|d| d.other(component)) else {
             return false;
         };
-        self.adventure_predicate_at(tag, pos)
+        self.adventure_predicate_in(world, tag, pos)
     }
     /// The existing supported block/state portion of `AdventureModePredicate.test`.
     /// The held-item wrapper and the projectile caller supply their own live value.
@@ -166,8 +213,16 @@ impl Game<'_> {
         tag: &horizon_core::nbt::Tag,
         pos: [i32; 3],
     ) -> bool {
+        self.adventure_predicate_in(&self.world, tag, pos)
+    }
+    pub(super) fn adventure_predicate_in(
+        &self,
+        world: &horizon_client::world::World,
+        tag: &horizon_core::nbt::Tag,
+        pos: [i32; 3],
+    ) -> bool {
         use horizon_core::nbt::Tag;
-        let state = self.world.block(pos[0], pos[1], pos[2]);
+        let state = world.block(pos[0], pos[1], pos[2]);
         let name = &self.res.facts().get(state).name;
         let properties = self
             .pack
@@ -276,8 +331,19 @@ impl Game<'_> {
         face: horizon_core::geometry::Direction,
         stack: &ItemStack,
     ) -> bool {
+        self.may_use_item_at_in(&self.world, may_build, pos, face, stack)
+    }
+    pub(super) fn may_use_item_at_in(
+        &self,
+        world: &horizon_client::world::World,
+        may_build: bool,
+        pos: [i32; 3],
+        face: horizon_core::geometry::Direction,
+        stack: &ItemStack,
+    ) -> bool {
         may_build
-            || self.stack_adventure_predicate(
+            || self.stack_adventure_predicate_in(
+                world,
                 stack,
                 "minecraft:can_place_on",
                 relative(pos, face.opposite()),
@@ -340,7 +406,7 @@ mod tests {
         }
     }
 
-    use super::{loads_chunks, projectile_predicate_supported};
+    use super::{Screen, inventory_after_mode, loads_chunks, projectile_predicate_supported};
 
     // Added after the frozen old Game proof: unsupported conjuncts must not
     // become permission from their otherwise matching blocks portion.
@@ -365,6 +431,29 @@ mod tests {
         )
         .unwrap();
         assert!(projectile_predicate_supported(&tag));
+    }
+
+    /// `InventoryScreen.containerTick`: the survival inventory becomes the
+    /// creative one when the player gets infinite materials, and any other
+    /// screen is left where it is.
+    #[test]
+    fn a_survival_inventory_becomes_the_creative_one() {
+        assert!(inventory_after_mode(Screen::Inventory, true, false) == Screen::Creative);
+        let stays = inventory_after_mode(Screen::Inventory, false, false);
+        assert!(stays == Screen::Inventory, "survival keeps its inventory");
+        // A spectator's inventory is closed, which is what Horizon did for
+        // both before; vanilla has no spectator branch and leaves it open.
+        let closed = inventory_after_mode(Screen::Inventory, false, true);
+        assert!(closed == Screen::Playing);
+        for screen in [
+            Screen::Playing,
+            Screen::Creative,
+            Screen::Paused,
+            Screen::Stats,
+            Screen::Advancements,
+        ] {
+            assert!(inventory_after_mode(screen, true, false) == screen);
+        }
     }
 
     /// `ChunkMap.skipPlayer`: only a spectator with `spectators_generate_chunks`

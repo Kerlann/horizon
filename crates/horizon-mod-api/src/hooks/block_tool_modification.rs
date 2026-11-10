@@ -8,6 +8,7 @@ pub trait Hooks {
         contract = "cancel",
         out = "cancel",
         host = "read",
+        target = "horizon_client::game::native_hooks::NativeHookHost<'_>::native_block_tool_modification",
         neoforge = "BlockEvent.BlockToolModificationEvent",
         cancellable = true
     )]

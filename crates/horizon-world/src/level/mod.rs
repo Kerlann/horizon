@@ -423,6 +423,12 @@ pub trait LevelAccess {
     ) -> Option<BlockStateId> {
         Some(state)
     }
+    /// Whether the fluid at `pos` may run its scheduled tick (`FlowingFluid.tick`): a native mod
+    /// that simulates a fluid itself refuses, and the tick changes nothing and schedules nothing.
+    /// The default allows.
+    fn allow_fluid_tick(&self, _pos: BlockPos, _fluid: &'static str) -> bool {
+        true
+    }
     fn allow_fluid_level_change(
         &self,
         _pos: BlockPos,
@@ -1685,10 +1691,39 @@ impl Behaviours {
 mod dimension_key_tests {
     use super::*;
 
+    static SEA_LEVEL_TEST_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    struct SeaLevelTestGuard {
+        _lock: std::sync::MutexGuard<'static, ()>,
+        previous: HashMap<LevelKey, i32>,
+    }
+
+    impl SeaLevelTestGuard {
+        fn new() -> Self {
+            let lock = SEA_LEVEL_TEST_LOCK
+                .lock()
+                .unwrap_or_else(|e| e.into_inner());
+            let previous =
+                std::mem::take(&mut *SEA_LEVELS.write().unwrap_or_else(|e| e.into_inner()));
+            Self {
+                _lock: lock,
+                previous,
+            }
+        }
+    }
+
+    impl Drop for SeaLevelTestGuard {
+        fn drop(&mut self) {
+            *SEA_LEVELS.write().unwrap_or_else(|e| e.into_inner()) =
+                std::mem::take(&mut self.previous);
+        }
+    }
+
     /// A registered level has its own sea level; any other has its built-in level's, and the
     /// table clears.
     #[test]
     fn a_registered_level_has_its_own_sea_level() {
+        let _guard = SeaLevelTestGuard::new();
         let pocket = LevelKey::parse("test:sea_pocket").unwrap();
         assert_eq!(sea_level_of(pocket), 63);
         assert_eq!(registered_sea_level(pocket), None);
@@ -1702,6 +1737,7 @@ mod dimension_key_tests {
 
     #[test]
     fn a_built_in_level_keeps_the_sea_level_its_generator_registered() {
+        let _guard = SeaLevelTestGuard::new();
         // A superflat Overworld builds with -63, not the Overworld's 63.
         register_sea_level(LevelKey::OVERWORLD, -63);
         assert_eq!(sea_level_of(LevelKey::OVERWORLD), -63);

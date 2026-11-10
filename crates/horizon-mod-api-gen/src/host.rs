@@ -28,27 +28,14 @@ pub(super) const GOAL_VIEW_READS: &[&str] = &[
     "living_health",
     "living_max_health",
     "living_alive",
-    "merchant_offers",
     "merchant_trading_player",
     "merchant_profession",
     "merchant_level",
     "merchant_villager_type",
     "merchant_xp",
-    "entity_dismount_location",
-    "entity_root_vehicle",
-    "entity_is_passenger_of_same_vehicle",
-    "entity_passengers",
-    "entity_is_vehicle",
-    "entity_indirect_passengers",
-    "entity_controlling_passenger",
-    "entity_on_block",
-    "entity_entities_team_damage_allowed",
     "living_can_use_portal",
-    "entity_tags",
-    "entity_name",
     "entity_added_to_level",
     "entity_portal_cooldown",
-    "entity_invulnerable_to_damage",
     "living_is_climbing",
     "living_last_attacker",
     "living_kill_credit",
@@ -58,15 +45,8 @@ pub(super) const GOAL_VIEW_READS: &[&str] = &[
     "entity_view_vector",
     "entity_up_vector",
     "entity_level",
-    "entity_vehicle",
-    "entity_is_passenger",
     "entity_sound_source",
     "entity_leash_holder",
-    "entity_pick",
-    "living_attribute_value",
-    "living_attribute_base",
-    "living_attributes",
-    "living_attribute_modifiers",
     "living_used_item_hand",
     "mob_can_use_portal",
     "mob_target",
@@ -96,27 +76,15 @@ pub(super) const GOAL_VIEW_READS: &[&str] = &[
     "entity_is_multipart",
     "entity_parts",
     "entity_dimensions",
-    "living_effect",
-    "living_effects",
-    "living_potion_affected",
     "living_gliding_ticks",
     "living_is_gliding",
     "living_is_sleeping",
     "living_sleeping_pos",
     "living_is_jumping",
     "living_baby",
-    "living_equipment",
-    "living_hand_item",
     "living_is_tamed",
     "living_owner",
-    "living_dimensions_for_pose",
-    "living_can_freeze",
     "living_can_breathe_underwater",
-    "living_has_line_of_sight",
-    "living_in_melee_range",
-    "living_bed_orientation",
-    "mob_goals",
-    "mob_target_goals",
     "mob_is_done",
     "mob_navigation_speed",
     "mob_pathfinding_malus",
@@ -414,7 +382,7 @@ pub(super) fn game_forwarders(root: &Path) -> Result<String, String> {
                 ) {
                     return Err(format!("{name}: unknown access level {level}"));
                 }
-                let (setup, args, checked_write) = boundary_arguments(&entry.sig, name)?;
+                let (setup, args, checked_write) = boundary_arguments(&entry.sig, name, "self")?;
                 let static_call = entry.attrs.iter().any(|a| a.path().is_ident("static_call"));
                 let args = if static_call {
                     args
@@ -439,7 +407,11 @@ pub(super) fn game_forwarders(root: &Path) -> Result<String, String> {
                 };
                 let text_result = result_error(&entry.sig.output)
                     .is_some_and(|error| outer_type(error, "TextFormError"));
-                let call = if text_output {
+                let entity_read = result_error(&entry.sig.output)
+                    .is_some_and(|error| outer_type(error, "EntityReadError"));
+                let call = if entity_read {
+                    entity_read_result(&entry.sig.output, &call)
+                } else if text_output {
                     if text_result {
                         format!("{call}.try_into_api().map_err(Into::into)")
                     } else {
@@ -504,10 +476,22 @@ pub(super) fn game_forwarders(root: &Path) -> Result<String, String> {
     Ok(prettyplease::unparse(&parsed))
 }
 
-/// API records whose game representation is owned by another crate. Conversions are
-/// implemented once by the game; this rule only selects the boundary, never its behaviour.
-/// Shared callback Host forwarding. Only concrete lent cart reads select the
-/// source projection; every other service uses Game's existing typed adapter.
+/// Adapt heavy payloads at the API boundary, preserving physical, dependency,
+/// and domain errors before converting a successful engine value.
+fn entity_read_result(output: &syn::ReturnType, call: &str) -> String {
+    match output {
+        syn::ReturnType::Type(_, ty) if text_value(ty) => format!(
+            "{call}.and_then(|value| value.try_into_api().map_err(|error| mod_api::EntityReadError::Domain(error.into())))"
+        ),
+        syn::ReturnType::Type(_, ty) if boundary_value(ty) => {
+            format!("{call}.map(|value| value.try_into_api().unwrap_or_default())")
+        }
+        _ => call.to_owned(),
+    }
+}
+
+/// One forwarding rule for every signed heavy read, including its shared
+/// argument and result conversion. Non-heavy services keep Game's adapter.
 fn borrowed_host_forwarders(area: &Area, tier: Tier, entries: &[Entry]) -> Result<String, String> {
     let trait_name = area.trait_name(tier);
     let mut code = format!(
@@ -520,24 +504,8 @@ fn borrowed_host_forwarders(area: &Area, tier: Tier, entries: &[Entry]) -> Resul
         }
         let name = &entry.name;
         let sig = entry.sig.to_token_stream();
-        let args = signature_args(&entry.sig, name)?;
-        let forwarded_args = if args.is_empty() {
-            "self.game".to_owned()
-        } else {
-            format!("self.game, {args}")
-        };
-        let foreign =
-            format!("<Game<'_> as mod_api::prelude::{trait_name}>::{name}({forwarded_args})");
-        let own = if area.stem == "minecarts" && tier == Tier::Backend {
-            let required = match name.as_str() {
-                "minecart_fuel" | "minecart_push" => {
-                    "Some(crate::game::minecarts::CartKind::Furnace)"
-                }
-                "minecart_fuse" => "Some(crate::game::minecarts::CartKind::Tnt)",
-                "minecart_hopper_enabled" => "Some(crate::game::minecarts::CartKind::Hopper)",
-                "minecart_command" => "Some(crate::game::minecarts::CartKind::CommandBlock)",
-                _ => "None",
-            };
+        if result_error(&entry.sig.output).is_some_and(|error| outer_type(error, "EntityReadError"))
+        {
             let level = entry
                 .attrs
                 .iter()
@@ -545,26 +513,26 @@ fn borrowed_host_forwarders(area: &Area, tier: Tier, entries: &[Entry]) -> Resul
                 .expect("Game forwarding validated the access declaration")
                 .parse_args::<syn::Ident>()
                 .map_err(|error| error.to_string())?;
-            let converted = match &entry.sig.output {
-                syn::ReturnType::Type(_, ty) if boundary_value(ty) => {
-                    "value.try_into_api().unwrap_or_default()"
-                }
-                _ => "value",
-            };
-            let returned = if result_error(&entry.sig.output)
-                .is_some_and(|error| outer_type(error, "EntityReadError"))
-            {
-                format!("Ok({converted})")
-            } else {
-                converted.to_owned()
-            };
-            format!(
-                "if let Some(value) = self.with_owned_cart(cart.entity(), {required}, |read, _spawner| {{ mod_api::__private::check_access({name:?}, mod_api::__private::LoadAccess::{level}); read.{name}() }}) {{ return {returned}; }}"
-            )
+            let (setup, args, checked_write) = boundary_arguments(&entry.sig, name, "self.game")?;
+            if checked_write {
+                return Err(format!("{name}: heavy read cannot be a checked write"));
+            }
+            let call = entity_read_result(
+                &entry.sig.output,
+                &format!("Game::read_{name}(self.game, Some(self.provider), {args})"),
+            );
+            code.push_str(&format!("{sig} {{ mod_api::__private::check_access({name:?}, mod_api::__private::LoadAccess::{level}); {setup} {call} }}\n"));
         } else {
-            String::new()
-        };
-        code.push_str(&format!("{sig} {{ {own} {foreign} }}\n"));
+            let args = signature_args(&entry.sig, name)?;
+            let forwarded = if args.is_empty() {
+                "self.game".to_owned()
+            } else {
+                format!("self.game, {args}")
+            };
+            code.push_str(&format!(
+                "{sig} {{ <Game<'_> as mod_api::prelude::{trait_name}>::{name}({forwarded}) }}\n"
+            ));
+        }
     }
     code.push_str("}\n");
     Ok(code)
@@ -651,6 +619,7 @@ fn outer_type(ty: &Type, expected: &str) -> bool {
 fn boundary_arguments(
     sig: &syn::Signature,
     method: &str,
+    receiver: &str,
 ) -> Result<(String, String, bool), String> {
     let mutable = sig
         .receiver()
@@ -687,7 +656,7 @@ fn boundary_arguments(
             // maximum, say) still answers a read.
             format!("crate::game::api_values::stack_value({name})")
         } else {
-            format!("{name}.try_into_engine(self.items())")
+            format!("{name}.try_into_engine({receiver}.items())")
         };
         let value = if contains_value(&arg.ty, &["ParticleOptions"]) {
             format!(
@@ -695,6 +664,8 @@ fn boundary_arguments(
             )
         } else if text || checked_write {
             format!("{conversion}?")
+        } else if let Some(unavailable) = entity_read_unavailable(sig) {
+            format!("match {conversion} {{ Ok(value) => value, Err(_) => return {unavailable} }}")
         } else if result_error(&sig.output).is_some() {
             format!(
                 "match {conversion} {{ Ok(value) => value, Err(_) => return Err(mod_api::NoBackend::no_backend()) }}"
@@ -764,6 +735,45 @@ fn signature_args(sig: &syn::Signature, name: &str) -> Result<String, String> {
         .join(", "))
 }
 
+/// A missing backend or unsupported OWN adapter is ordinary unavailability,
+/// never proof of physical lifting or pending work. Preserve the old successful
+/// absence, or the existing typed domain's no-backend error.
+fn entity_read_unavailable(sig: &syn::Signature) -> Option<&'static str> {
+    let error = result_error(&sig.output)?;
+    if !outer_type(error, "EntityReadError") {
+        return None;
+    }
+    let Type::Path(error) = error else {
+        return None;
+    };
+    if let syn::PathArguments::AngleBracketed(args) = &error.path.segments.last()?.arguments
+        && args.args.iter().any(
+            |arg| matches!(arg, syn::GenericArgument::Type(ty) if !outer_type(ty, "Infallible")),
+        )
+    {
+        return Some("Err(mod_api::EntityReadError::Domain(mod_api::NoBackend::no_backend()))");
+    }
+    let syn::ReturnType::Type(_, ty) = &sig.output else {
+        return None;
+    };
+    let Type::Path(result) = &**ty else {
+        return None;
+    };
+    let syn::PathArguments::AngleBracketed(args) = &result.path.segments.last()?.arguments else {
+        return None;
+    };
+    let syn::GenericArgument::Type(value) = args.args.first()? else {
+        return None;
+    };
+    if outer_type(value, "Option") {
+        Some("Ok(None)")
+    } else if outer_type(value, "bool") {
+        Some("Ok(false)")
+    } else {
+        None
+    }
+}
+
 /// How a read answers where there is no backend to ask: its typed refusal, or `None` where only
 /// a `String` forwards.
 fn refusal(sig: &syn::Signature, name: &str) -> Result<Option<&'static str>, String> {
@@ -775,6 +785,9 @@ fn refusal(sig: &syn::Signature, name: &str) -> Result<Option<&'static str>, Str
             "{name}: the goal view cannot refuse its return type"
         ));
     };
+    if let Some(unavailable) = entity_read_unavailable(sig) {
+        return Ok(Some(unavailable));
+    }
     let last = path.path.segments.last().map(|seg| seg.ident.to_string());
     Ok(match last.as_deref() {
         Some("Option") => Some("None"),
@@ -850,7 +863,9 @@ fn handle_method(
     sig.inputs = rest.into_iter().collect();
     let mut docs = doc_comments(&entry.attrs, name, true)?;
     // Document the ownership routing where mods read these generated methods.
-    if GOAL_VIEW_READS.contains(&name) {
+    if entity_read_unavailable(&sig).is_some() {
+        docs.push_str("///\n/// In a mob's goal tick this reads the explicit actor's actual loan.\n/// Other handles use fresh resident or Parked sources, never AI snapshots\n/// or cached publication payloads. Physical and dependency refusals remain typed.\n");
+    } else if GOAL_VIEW_READS.contains(&name) {
         docs.push_str("///\n/// In a mob's goal tick ([`GoalContext::host`](crate::GoalContext::host)) this reads\n/// the explicit active mob loan. Foreign handles use the shared game host\n/// publication; unsupported OWN reads retain their typed refusal.\n");
     }
     let backend = match (mutable, tier.client()) {
@@ -869,6 +884,8 @@ fn handle_method(
         format!("{backend}(host).expect(\"registry key metadata requires a game host\").{call}")
     } else if returns("bool") {
         format!("{backend}(host).map(|backend| backend.{call}).unwrap_or(false)")
+    } else if let Some(unavailable) = entity_read_unavailable(&sig) {
+        format!("{backend}(host).map_or_else(|| {unavailable}, |backend| backend.{call})")
     } else if returns("WriteReceipt") {
         format!(
             "{backend}(host).map_or_else(crate::NoBackend::no_backend, |backend| backend.{call})"
@@ -1001,10 +1018,10 @@ fn goal_view(
         // string of a metadata read.
         let forwarded = match refusal {
             Some("None") => ".flatten()".to_string(),
-            // A `Result` read's no-backend answer is its error type's own `NoBackend` value,
-            // wrapped back in the `Err`.
+            // Preserve the declared refusal, including a heavy read's Domain
+            // wrapper rather than requiring EntityReadError itself to be NoBackend.
             Some(refusal) if refusal.starts_with("Err(") => {
-                ".unwrap_or_else(|| Err(mod_api::NoBackend::no_backend()))".to_string()
+                format!(".unwrap_or_else(|| {refusal})")
             }
             Some(refusal) => format!(".unwrap_or({refusal})"),
             None => ".unwrap_or_default()".to_string(),
@@ -1052,7 +1069,11 @@ fn goal_view(
         let foreign = format!(
             "mod_api::__private::backend_read(self.host, |backend| backend.{name}({args})){forwarded}"
         );
-        let body = if own_entities.is_empty() {
+        let body = if let Some(unavailable) = entity_read_unavailable(&sig) {
+            format!(
+                "self.with_heavy_backend(|backend| backend.{name}({args})).unwrap_or_else(|| {unavailable})"
+            )
+        } else if own_entities.is_empty() {
             foreign
         } else {
             let own_condition = own_entities
@@ -1061,7 +1082,11 @@ fn goal_view(
                 .collect::<Vec<_>>()
                 .join(" || ");
             let own = if GOAL_VIEW_READS.contains(&name) {
-                format!("self.r_{name}({args})")
+                if entity_read_unavailable(&sig).is_some() {
+                    format!("Ok(self.r_{name}({args}))")
+                } else {
+                    format!("self.r_{name}({args})")
+                }
             } else {
                 let Some(refusal) = refusal else {
                     return Err(format!(
@@ -1103,7 +1128,9 @@ fn goal_view(
             continue;
         }
         let args = signature_args(&sig, name)?;
-        let body = if GOAL_VIEW_LOOKUPS.contains(&name) {
+        let body = if entity_read_unavailable(&sig).is_some() {
+            format!("self.with_heavy_host(|host| host.{name}({args}))")
+        } else if GOAL_VIEW_LOOKUPS.contains(&name) {
             format!("self.lookup_{name}({args})")
         } else {
             format!("self.host.{name}({args})")
@@ -1195,11 +1222,48 @@ mod tests {
     }
 
     #[test]
+    fn heavy_read_unavailability_keeps_absence_and_original_domain() {
+        let handles = handles("pub struct EntityRef; pub struct LivingRef; pub struct DisplayRef;");
+        for (source, expected) in [
+            (
+                "fn entity_tags(&self, entity: EntityRef) -> Result<Option<Vec<String>>, EntityReadError>;",
+                "Ok(None)",
+            ),
+            (
+                "fn living_potion_affected(&self, living: LivingRef, effect: EffectKey) -> Result<bool, EntityReadError>;",
+                "Ok(false)",
+            ),
+            (
+                "fn display_text(&self, display: DisplayRef) -> Result<Option<Text>, EntityReadError<TextFormError>>;",
+                "Err(mod_api::EntityReadError::Domain(mod_api::NoBackend::no_backend()))",
+            ),
+        ] {
+            let method = entry(source);
+            assert_eq!(entity_read_unavailable(&method.sig), Some(expected));
+            assert_eq!(refusal(&method.sig, &method.name).unwrap(), Some(expected));
+            let (_, code) = handle_method(&method, Tier::Backend, &handles)
+                .unwrap()
+                .unwrap();
+            assert!(code.contains(expected));
+            assert!(!code.contains("EntityReadError::Lifted"));
+            assert!(!code.contains("EntityReadError::Pending"));
+        }
+        let method = entry(
+            "fn item_resource_entity_attack_range(&self, stack: &ItemStack, attacker: LivingRef) -> Result<Option<ItemAttackRange>, EntityReadError>;",
+        );
+        let (setup, _, checked_write) =
+            boundary_arguments(&method.sig, &method.name, "self").unwrap();
+        assert!(!checked_write);
+        assert!(setup.contains("Err(_) => return Ok(None)"));
+        assert!(!setup.contains("NoBackend"));
+    }
+
+    #[test]
     fn immutable_result_arguments_refuse_conversion_with_a_typed_error() {
         let method = entry(
             "fn read(&self, ingredient: &Ingredient) -> Result<Arc<[ItemKey]>, IngredientKeysError>;",
         );
-        let (setup, _, checked_write) = boundary_arguments(&method.sig, "read").unwrap();
+        let (setup, _, checked_write) = boundary_arguments(&method.sig, "read", "self").unwrap();
         assert!(!checked_write);
         assert!(setup.contains("return Err(mod_api::NoBackend::no_backend())"));
         assert!(!setup.contains("Default::default()"));
@@ -1208,7 +1272,7 @@ mod tests {
     #[test]
     fn borrowed_stacks_are_read_without_write_validation_outside_checked_writes() {
         let read = entry("fn item_resource_damageable(&self, stack: &ItemStack) -> bool;");
-        let (setup, args, checked_write) = boundary_arguments(&read.sig, "read").unwrap();
+        let (setup, args, checked_write) = boundary_arguments(&read.sig, "read", "self").unwrap();
         assert!(!checked_write);
         assert!(setup.contains("crate::game::api_values::stack_value(stack)"));
         assert!(!setup.contains("try_into_engine"));
@@ -1216,11 +1280,11 @@ mod tests {
         let write = entry(
             "fn living_apply_consume_effect(&mut self, stack: &ItemStack) -> Result<bool, StackWriteError>;",
         );
-        let (setup, _, checked_write) = boundary_arguments(&write.sig, "write").unwrap();
+        let (setup, _, checked_write) = boundary_arguments(&write.sig, "write", "self").unwrap();
         assert!(checked_write);
         assert!(setup.contains("stack.try_into_engine(self.items())?"));
         let owned = entry("fn drop_at(&mut self, stack: ItemStack) -> bool;");
-        let (setup, _, _) = boundary_arguments(&owned.sig, "owned").unwrap();
+        let (setup, _, _) = boundary_arguments(&owned.sig, "owned", "self").unwrap();
         assert!(setup.contains("stack.try_into_engine(self.items())"));
     }
 
@@ -1352,14 +1416,14 @@ mod tests {
     #[test]
     fn text_arguments_refuse_before_even_checked_stack_writes() {
         let text = entry("fn set_text(&mut self, text: &Text) -> Result<(), TextFormError>;");
-        let (setup, args, checked) = boundary_arguments(&text.sig, "set_text").unwrap();
+        let (setup, args, checked) = boundary_arguments(&text.sig, "set_text", "self").unwrap();
         assert!(!checked);
         assert!(setup.contains("text.try_into_engine(&())?"));
         assert_eq!(args, "&text");
         let mixed = entry(
             "fn update(&mut self, stack: ItemStack, text: Option<&Text>) -> Result<Text, Refused>;",
         );
-        let (setup, args, checked) = boundary_arguments(&mixed.sig, "update").unwrap();
+        let (setup, args, checked) = boundary_arguments(&mixed.sig, "update", "self").unwrap();
         assert!(checked);
         assert!(setup.contains("stack.try_into_engine(self.items())?"));
         assert!(setup.contains("text.try_into_engine(&())?"));

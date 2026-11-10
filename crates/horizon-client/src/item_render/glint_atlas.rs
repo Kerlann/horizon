@@ -28,7 +28,7 @@ pub(super) fn load(
     };
     let mut entries = vec![("minecraft:missingno".into(), 16, 16)];
     let mut names = Vec::new();
-    for (id, origin) in atlas_sources::list(sources, &textures) {
+    for (id, origin) in atlas_sources::list(sources, &textures, &mut atlas_sources::unasked) {
         names.push(id.clone());
         let dimensions = match &origin {
             atlas_sources::SpriteOrigin::File(texture) => (|| {

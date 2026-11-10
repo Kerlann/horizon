@@ -445,18 +445,21 @@ pub(super) fn put_saved_entity(
 }
 
 impl GameLevel<'_> {
-    /// `Block.popResource(level, pos, stack)` with the broken block's copied components.
     fn pop_resource(&mut self, pos: [i32; 3], mut stack: ItemStack) {
         self.pending.attach(pos, &mut stack);
         let at = pop_position(&mut self.world.random, pos);
-        self.spill.spawns.push(Spawn {
-            random: None,
-            stack,
-            pos: at,
-            motion: None,
-            delay: 10,
-        });
+        if self.rules.block_drops {
+            self.spill.spawns.push(Spawn {
+                random: None,
+                stack,
+                pos: at,
+                motion: None,
+                delay: 10,
+            });
+        }
     }
+
+    /// `Block.popResource(level, pos, stack)` with the broken block's copied components.
     /// `Block.popResource(level, pos, new ItemStack(block))`.
     pub(super) fn pop_block_item(&mut self, pos: BlockPos, state: BlockStateId) {
         let item = self.facts.get(state).item.clone();
@@ -1039,6 +1042,7 @@ impl Game<'_> {
         if self.spill.is_empty() {
             return;
         }
+        let _save_lease = horizon_client::join_seq::visibility::PassLease::enter();
         let mut spill = std::mem::take(&mut self.spill);
         let used = std::mem::take(&mut spill.used);
         let tool = self.held().cloned();

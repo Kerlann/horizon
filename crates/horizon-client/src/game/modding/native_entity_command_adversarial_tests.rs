@@ -42,7 +42,8 @@ fn silent_nested_callback_own_actor_keeps_turn_and_restores_on_panic() {
     for panic in [false, true] {
         with_fixture(|game, _| {
             let (a, _) = game
-                .entity_residency
+                .resident_entities
+                .table
                 .borrow_mut()
                 .server_admitted_location(71, |at| game.locate_server_resident_owner(at))
                 .unwrap();
@@ -125,7 +126,9 @@ impl Hooks for Budget {
         host: &mut dyn ServerHost,
         event: &mut EntityCommandCompletedEvent<'_>,
     ) {
-        let EntityWriteCompletion::EntitySetSilent(done) = event.completion;
+        let EntityWriteCompletion::EntitySetSilent(done) = event.completion else {
+            panic!("unexpected operation completion in SetSilent test")
+        };
         assert_eq!(done.outcome, Ok(true));
         assert_eq!(
             done.id.query(host),

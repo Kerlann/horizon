@@ -6,9 +6,12 @@
 //! `hand_item`, `health`, `max_health`, `attribute_value`, `attribute_base`,
 //! `attributes` and `attribute_modifiers`), which on a client answer for the
 //! local player from the client's own copy; and `effect`/`effects`.
-use super::Game;
 use super::commands::{Target, items::Owner};
 use super::living_attributes::AttributeWrite;
+use super::{
+    Game, native_live_entity_reads::EntityReadSubject,
+    native_read_dependencies::EntityReadDependency,
+};
 use crate::mobs::Who;
 use horizon_client::items::ItemStack;
 use horizon_client::mobs::Mob;
@@ -158,18 +161,72 @@ impl Game<'_> {
     /// an armor stand and the dragon answer from their live attribute map: the
     /// type's defaults, the saved `attributes`, and the modifiers of what they
     /// wear or hold.
-    pub(super) fn living_attribute_value(&self, living: LivingRef, id: &str) -> Option<f64> {
-        self.native_living_attribute(
-            living,
-            id,
-            horizon_world::attribute_map::ValueKind::Computed,
-        )
+    pub(super) fn living_attribute_value(
+        &self,
+        living: LivingRef,
+        id: &str,
+    ) -> Result<Option<f64>, mod_api::EntityReadError> {
+        self.read_living_attribute_value(None, living, id)
+    }
+
+    pub(super) fn read_living_attribute_value(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        id: &str,
+    ) -> Result<Option<f64>, mod_api::EntityReadError> {
+        let Some(admission) = self.entity_read_admission(
+            EntityReadSubject::Living(living),
+            &[
+                EntityReadDependency::Attributes,
+                EntityReadDependency::Equipment,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(admission, provider, |source| {
+            self.native_source_attribute(
+                source.body,
+                id,
+                horizon_world::attribute_map::ValueKind::Computed,
+            )
+        })
     }
 
     /// The base value of an attribute, before modifiers
     /// (`AttributeMap.getBaseValue`), read as the effective value is.
-    pub(super) fn living_attribute_base(&self, living: LivingRef, id: &str) -> Option<f64> {
-        self.native_living_attribute(living, id, horizon_world::attribute_map::ValueKind::Base)
+    pub(super) fn living_attribute_base(
+        &self,
+        living: LivingRef,
+        id: &str,
+    ) -> Result<Option<f64>, mod_api::EntityReadError> {
+        self.read_living_attribute_base(None, living, id)
+    }
+
+    pub(super) fn read_living_attribute_base(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        id: &str,
+    ) -> Result<Option<f64>, mod_api::EntityReadError> {
+        let Some(admission) = self.entity_read_admission(
+            EntityReadSubject::Living(living),
+            &[
+                EntityReadDependency::Attributes,
+                EntityReadDependency::Equipment,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(admission, provider, |source| {
+            self.native_source_attribute(
+                source.body,
+                id,
+                horizon_world::attribute_map::ValueKind::Base,
+            )
+        })
     }
 
     /// The ids of the attributes the entity's type has
@@ -178,17 +235,39 @@ impl Game<'_> {
     /// unavailable entity; on a client, for any entity but the local player
     /// (the client keeps no attribute map of another entity's, only the few
     /// fields it draws).
-    pub(super) fn living_attributes(&self, living: LivingRef) -> Option<Vec<Identifier>> {
-        let catalog = &self.motion.attributes;
-        let entity = self.native_living_attribute_entity(living)?;
-        Some(
-            catalog
-                .attributes()
-                .filter(|(id, _)| catalog.default_base(entity, *id).is_some())
-                // The catalog's names are canonical, so none is dropped.
-                .filter_map(|(_, a)| Identifier::parse(&a.name).ok())
-                .collect(),
-        )
+    pub(super) fn living_attributes(
+        &self,
+        living: LivingRef,
+    ) -> Result<Option<Vec<Identifier>>, mod_api::EntityReadError> {
+        self.read_living_attributes(None, living)
+    }
+
+    pub(super) fn read_living_attributes(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+    ) -> Result<Option<Vec<Identifier>>, mod_api::EntityReadError> {
+        let Some(admission) = self.entity_read_admission(
+            EntityReadSubject::Living(living),
+            &[
+                EntityReadDependency::Attributes,
+                EntityReadDependency::Equipment,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(admission, provider, |source| {
+            let catalog = &self.motion.attributes;
+            let entity = Self::native_source_attribute_entity(source.body)?;
+            Some(
+                catalog
+                    .attributes()
+                    .filter(|(id, _)| catalog.default_base(entity, *id).is_some())
+                    .filter_map(|(_, attribute)| Identifier::parse(&attribute.name).ok())
+                    .collect(),
+            )
+        })
     }
 
     /// The modifiers on the entity's attribute `id`
@@ -202,8 +281,29 @@ impl Game<'_> {
         &self,
         living: LivingRef,
         id: &str,
-    ) -> Option<Vec<AttributeModifier>> {
-        self.native_target_attribute_modifiers(self.native_living_read_target(living)?, id)
+    ) -> Result<Option<Vec<AttributeModifier>>, mod_api::EntityReadError> {
+        self.read_living_attribute_modifiers(None, living, id)
+    }
+
+    pub(super) fn read_living_attribute_modifiers(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        id: &str,
+    ) -> Result<Option<Vec<AttributeModifier>>, mod_api::EntityReadError> {
+        let Some(admission) = self.entity_read_admission(
+            EntityReadSubject::Living(living),
+            &[
+                EntityReadDependency::Attributes,
+                EntityReadDependency::Equipment,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(admission, provider, |source| {
+            self.native_source_attribute_modifiers(source.body, id)
+        })
     }
 
     /// Adds an attribute modifier (`AttributeInstance.addTransientModifier`
@@ -305,45 +405,35 @@ impl Game<'_> {
             .unwrap_or(false)
     }
 
-    fn native_living_attribute(
-        &self,
-        living: LivingRef,
-        name: &str,
-        kind: horizon_world::attribute_map::ValueKind,
-    ) -> Option<f64> {
-        self.native_target_attribute(self.native_living_read_target(living)?, name, kind)
-    }
-
     /// The entity's type key, for the catalog's attribute defaults: the same
     /// set the value and base reads answer for. On a client only the local
     /// player resolves (`native_living_read_target`).
-    fn native_living_attribute_entity(&self, living: LivingRef) -> Option<&str> {
-        match self.native_living_read_target(living)? {
-            Target::Player | Target::Guest(_) => Some("minecraft:player"),
-            Target::Mob(id) => self
-                .mobs
-                .iter()
-                .find(|m| m.id == id && !m.removed)
-                .map(|m| m.kind.id.as_str()),
-            Target::Stand(_) => Some("minecraft:armor_stand"),
-            Target::Dragon(_) => Some("minecraft:ender_dragon"),
+    fn native_source_attribute_entity(
+        source: super::native_base_read_rows::BaseReadSource<'_>,
+    ) -> Option<&str> {
+        use super::native_base_read_rows::BaseReadSource;
+        match source {
+            BaseReadSource::Player(_) | BaseReadSource::Guest(_) => Some("minecraft:player"),
+            BaseReadSource::Mob(mob) => Some(mob.kind.id.as_str()),
+            BaseReadSource::Stand(_) => Some("minecraft:armor_stand"),
+            BaseReadSource::Dragon(_) => Some("minecraft:ender_dragon"),
             _ => None,
         }
     }
 
     /// The modifiers of `name` on `target`'s attribute map, as
     /// `native_target_attribute` reads its value.
-    fn native_target_attribute_modifiers(
+    fn native_source_attribute_modifiers(
         &self,
-        target: Target,
+        source: super::native_base_read_rows::BaseReadSource<'_>,
         name: &str,
     ) -> Option<Vec<AttributeModifier>> {
+        use super::native_base_read_rows::BaseReadSource;
         let catalog = &self.motion.attributes;
-        let player = match target {
-            Target::Player => self.player.as_ref()?,
-            Target::Guest(conn) => self.command_guest(conn)?.motion.as_deref()?,
-            Target::Mob(id) => {
-                let m = self.mobs.iter().find(|m| m.id == id && !m.removed)?;
+        let player = match source {
+            BaseReadSource::Player(player) => player,
+            BaseReadSource::Guest(guest) => guest.motion.as_deref()?,
+            BaseReadSource::Mob(m) => {
                 return m
                     .extra
                     .live
@@ -355,15 +445,13 @@ impl Game<'_> {
                     })
                     .map(attribute_modifiers);
             }
-            Target::Stand(id) => {
-                let a = self.armor_stands.iter().find(|a| a.id == id)?;
+            BaseReadSource::Stand(a) => {
                 return a
                     .live
                     .modifiers(catalog, "minecraft:armor_stand", name, Vec::new)
                     .map(attribute_modifiers);
             }
-            Target::Dragon(id) => {
-                let d = self.dragon.as_ref().filter(|d| d.id == id)?;
+            BaseReadSource::Dragon(d) => {
                 return d
                     .live
                     .modifiers(catalog, "minecraft:ender_dragon", name, Vec::new)
@@ -393,34 +481,66 @@ impl Game<'_> {
         )
     }
 
+    fn native_living_source(
+        &self,
+        target: Target,
+    ) -> Option<super::native_base_read_rows::BaseReadSource<'_>> {
+        use super::native_base_read_rows::BaseReadSource;
+        Some(match target {
+            Target::Player => BaseReadSource::Player(self.player.as_ref()?),
+            Target::Guest(conn) => BaseReadSource::Guest(self.command_guest(conn)?),
+            Target::Mob(id) => BaseReadSource::Mob(self.mobs.iter().find(|mob| mob.id == id)?),
+            Target::Stand(id) => {
+                BaseReadSource::Stand(self.armor_stands.iter().find(|stand| stand.id == id)?)
+            }
+            Target::Dragon(id) => {
+                BaseReadSource::Dragon(self.dragon.as_ref().filter(|dragon| dragon.id == id)?)
+            }
+            _ => return None,
+        })
+    }
+
     pub(super) fn native_target_attribute(
         &self,
         target: Target,
         name: &str,
         kind: horizon_world::attribute_map::ValueKind,
     ) -> Option<f64> {
+        let source = self.native_living_source(target)?;
+        if matches!(source, super::native_base_read_rows::BaseReadSource::Mob(mob) if mob.removed) {
+            return None;
+        }
+        self.native_source_attribute(source, name, kind)
+    }
+
+    /// The same attribute kernel for canonical resident, Parked and actual
+    /// callback loans. Only the catalog is borrowed from Game.
+    pub(super) fn native_source_attribute(
+        &self,
+        source: super::native_base_read_rows::BaseReadSource<'_>,
+        name: &str,
+        kind: horizon_world::attribute_map::ValueKind,
+    ) -> Option<f64> {
+        use super::native_base_read_rows::BaseReadSource;
         let catalog = &self.motion.attributes;
-        let player = match target {
-            Target::Player => self.player.as_ref()?,
-            Target::Guest(conn) => self.command_guest(conn)?.motion.as_deref()?,
-            Target::Mob(id) => {
-                let m = self.mobs.iter().find(|m| m.id == id && !m.removed)?;
-                return m.extra.live.read(catalog, &m.kind.id, name, kind, || {
-                    horizon_client::entity_nbt::attribute_entries(m)
+        let player = match source {
+            BaseReadSource::Player(player) => player,
+            BaseReadSource::Guest(guest) => guest.motion.as_deref()?,
+            BaseReadSource::Mob(mob) => {
+                return mob.extra.live.read(catalog, &mob.kind.id, name, kind, || {
+                    horizon_client::entity_nbt::attribute_entries(mob)
                         .into_iter()
                         .map(|(_, entry)| entry)
                         .collect()
                 });
             }
-            Target::Stand(id) => {
-                let a = self.armor_stands.iter().find(|a| a.id == id)?;
-                return a
+            BaseReadSource::Stand(stand) => {
+                return stand
                     .live
                     .read(catalog, "minecraft:armor_stand", name, kind, Vec::new);
             }
-            Target::Dragon(id) => {
-                let d = self.dragon.as_ref().filter(|d| d.id == id)?;
-                return d
+            BaseReadSource::Dragon(dragon) => {
+                return dragon
                     .live
                     .read(catalog, "minecraft:ender_dragon", name, kind, Vec::new);
             }
@@ -467,18 +587,86 @@ impl Game<'_> {
         &self,
         living: LivingRef,
         target: EntityRef,
-    ) -> Option<bool> {
-        let Target::Mob(id) = self.native_living_read_target(living)? else {
-            return None;
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        self.read_living_in_melee_range(None, living, target)
+    }
+
+    pub(super) fn read_living_in_melee_range(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        target: EntityRef,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        use super::{
+            native_base_read_rows::{BaseReadGeometry, BaseReadSource},
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
         };
-        let m = self.mobs.iter().find(|m| m.id == id && !m.removed)?;
-        let [min, max] = self.entity_bounding_box(target)?;
-        let bounds = horizon_core::geometry::Aabb::new(
-            horizon_core::geometry::Vec3::new(min[0], min[1], min[2]),
-            horizon_core::geometry::Vec3::new(max[0], max[1], max[2]),
-        );
-        let w = self.mob_world_base(&[]);
-        Some(m.melee_reaches(&w, bounds))
+        let Some(attacker) = self.entity_read_admission(
+            EntityReadSubject::Living(living),
+            &[
+                EntityReadDependency::Geometry,
+                EntityReadDependency::Attributes,
+                EntityReadDependency::Equipment,
+                EntityReadDependency::Riding,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        if !matches!(attacker.target(), Target::Mob(_)) {
+            return Ok(None);
+        }
+        let Some(seen) = self.entity_read_admission(
+            EntityReadSubject::Entity(target),
+            &[
+                EntityReadDependency::Geometry,
+                EntityReadDependency::Attributes,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        let dimension = attacker.location().owner.dimension;
+        self.with_admitted_entity_sources(attacker, seen, provider, |source, target| {
+            let BaseReadSource::Mob(mob) = source.body else {
+                return Ok(None);
+            };
+            let bounds = |geometry: BaseReadGeometry| {
+                let [lo, hi] = geometry.bounding_box;
+                horizon_core::geometry::Aabb::new(
+                    horizon_core::geometry::Vec3::new(lo[0], lo[1], lo[2]),
+                    horizon_core::geometry::Vec3::new(hi[0], hi[1], hi[2]),
+                )
+            };
+            let Some(target) = self.live_source_geometry(target.body) else {
+                return Ok(None);
+            };
+            let target = bounds(target);
+            let Some(vehicle) = mob.extra.mount else {
+                return Ok(Some(mob.melee_reaches_beside(None, target)));
+            };
+            let vehicle = EntityRef::new(living.entity().epoch(), vehicle);
+            let Some(vehicle) = self.entity_read_admission(
+                EntityReadSubject::Entity(vehicle),
+                &[
+                    EntityReadDependency::Geometry,
+                    EntityReadDependency::Attributes,
+                ],
+                provider,
+            ) else {
+                return Ok(None);
+            };
+            if vehicle.location().owner.dimension != dimension {
+                return Ok(None);
+            }
+            self.with_admitted_entity_source(vehicle, provider, |vehicle| {
+                Some(mob.melee_reaches_beside(
+                    Some(bounds(self.live_source_geometry(vehicle.body)?)),
+                    target,
+                ))
+            })
+        })?
     }
 
     /// `LivingEntity.canFreeze`: the decision the freeze tick itself runs — a
@@ -486,15 +674,44 @@ impl Game<'_> {
     /// `#freeze_immune_wearables` worn), a player's (`PlayerMotion::can_freeze`:
     /// not a spectator, no immune armor). None for a stale handle, an armor
     /// stand or the dragon.
-    pub(super) fn living_can_freeze(&self, living: LivingRef) -> Option<bool> {
-        match self.native_living_read_target(living)? {
-            Target::Mob(id) => {
-                let m = self.mobs.iter().find(|m| m.id == id && !m.removed)?;
-                let w = self.mob_world_base(&[]);
-                Some(horizon_client::mobs::ai::can_freeze(m, &w))
+    pub(super) fn living_can_freeze(
+        &self,
+        living: LivingRef,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        self.read_living_can_freeze(None, living)
+    }
+
+    pub(super) fn read_living_can_freeze(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        use super::native_base_read_rows::BaseReadSource;
+        let Some(admission) = self.entity_read_admission(
+            EntityReadSubject::MobOrPlayer(living),
+            &[
+                EntityReadDependency::Equipment,
+                EntityReadDependency::PlayerState,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(admission, provider, |source| match source.body {
+            BaseReadSource::Mob(mob) => {
+                // can_freeze consults only immutable type/item tags and the
+                // actual mob's equipment, not any world/AI snapshot values.
+                Some(horizon_client::mobs::ai::can_freeze(
+                    mob,
+                    &self.mob_world_base(&[]),
+                ))
             }
-            t => Some(self.native_player_body(t)?.can_freeze()),
-        }
+            BaseReadSource::Player(player) => Some(player.can_freeze()),
+            BaseReadSource::Guest(guest) => {
+                guest.motion.as_deref().map(|player| player.can_freeze())
+            }
+            _ => None,
+        })
     }
 
     /// `LivingEntity.canBreatheUnderwater`: the species' own breath — a
@@ -525,20 +742,50 @@ impl Game<'_> {
     /// the block at the sleeping position, its `facing` where that block is
     /// one of `#minecraft:beds`. None where the sleeper keeps no position,
     /// the block is not a bed, or the handle is stale.
-    pub(super) fn living_bed_orientation(&self, living: LivingRef) -> Option<Direction> {
-        let pos = self.living_sleeping_pos(living)?;
-        let w = self.mob_world_base(&[]);
-        let name = w.block_name(pos[0], pos[1], pos[2]);
-        if !w.has_tag("minecraft:beds", name) {
-            return None;
-        }
-        match w.prop(pos[0], pos[1], pos[2], "facing") {
-            Some("north") => Some(Direction::North),
-            Some("south") => Some(Direction::South),
-            Some("west") => Some(Direction::West),
-            Some("east") => Some(Direction::East),
-            _ => None,
-        }
+    pub(super) fn living_bed_orientation(
+        &self,
+        living: LivingRef,
+    ) -> Result<Option<Direction>, mod_api::EntityReadError> {
+        self.read_living_bed_orientation(None, living)
+    }
+
+    pub(super) fn read_living_bed_orientation(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+    ) -> Result<Option<Direction>, mod_api::EntityReadError> {
+        use super::native_base_read_rows::BaseReadSource;
+        let Some(admission) = self.entity_read_admission(
+            EntityReadSubject::MobOrPlayer(living),
+            &[
+                EntityReadDependency::Sleeping,
+                EntityReadDependency::Geometry,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(admission, provider, |source| {
+            let pos = match source.body {
+                BaseReadSource::Mob(mob) => horizon_client::mobs::villager::sleeping_pos(mob),
+                BaseReadSource::Player(_) => self.sleeping,
+                BaseReadSource::Guest(guest) => guest.bed.filter(|_| guest.sleeping),
+                _ => None,
+            }?;
+            let mut world = self.mob_world_base(&[]);
+            world.world = source.level.world;
+            let name = world.block_name(pos[0], pos[1], pos[2]);
+            if !world.has_tag("minecraft:beds", name) {
+                return None;
+            }
+            match world.prop(pos[0], pos[1], pos[2], "facing") {
+                Some("north") => Some(Direction::North),
+                Some("south") => Some(Direction::South),
+                Some("west") => Some(Direction::West),
+                Some("east") => Some(Direction::East),
+                _ => None,
+            }
+        })
     }
 
     /// The entity's health (`LivingEntity.getHealth`; Paper's
@@ -748,9 +995,40 @@ impl Game<'_> {
         &self,
         living: LivingRef,
         slot: EquipmentSlot,
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+        self.read_living_equipment(None, living, slot)
+    }
+
+    pub(super) fn read_living_equipment(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        slot: EquipmentSlot,
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+        let Some(admission) = self.entity_read_admission(
+            EntityReadSubject::Living(living),
+            &[EntityReadDependency::Equipment],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(admission, provider, |source| {
+            self.native_source_equipment(source.body, slot)
+        })
+    }
+
+    fn raw_living_equipment(&self, target: Target, slot: EquipmentSlot) -> Option<ItemStack> {
+        self.native_source_equipment(self.native_living_source(target)?, slot)
+    }
+
+    pub(super) fn native_source_equipment(
+        &self,
+        source: super::native_base_read_rows::BaseReadSource<'_>,
+        slot: EquipmentSlot,
     ) -> Option<ItemStack> {
-        match self.native_living_read_target(living)? {
-            Target::Player => player_slot(
+        use super::native_base_read_rows::BaseReadSource;
+        match source {
+            BaseReadSource::Player(_) => player_slot(
                 &self.inventory,
                 self.selected,
                 &self.armor,
@@ -758,34 +1036,17 @@ impl Game<'_> {
                 &self.equipment,
                 slot,
             ),
-            Target::Guest(conn) => {
-                let g = self.command_guest(conn)?;
-                player_slot(
-                    &g.inventory,
-                    g.selected,
-                    &g.armor,
-                    &g.offhand,
-                    &g.equipment,
-                    slot,
-                )
-            }
-            Target::Mob(id) => {
-                self.mobs.iter().find(|m| m.id == id)?.equipment_stacks()[slot as usize].clone()
-            }
-            Target::Stand(id) => self
-                .armor_stands
-                .iter()
-                .find(|a| a.id == id)?
-                .equipment
-                .get(slot as usize)
-                .cloned(),
-            Target::Dragon(id) => self
-                .dragon
-                .as_ref()
-                .filter(|d| d.id == id)?
-                .equipment
-                .get(slot as usize)
-                .cloned(),
+            BaseReadSource::Guest(guest) => player_slot(
+                &guest.inventory,
+                guest.selected,
+                &guest.armor,
+                &guest.offhand,
+                &guest.equipment,
+                slot,
+            ),
+            BaseReadSource::Mob(mob) => mob.equipment_stacks()[slot as usize].clone(),
+            BaseReadSource::Stand(stand) => stand.equipment.get(slot as usize).cloned(),
+            BaseReadSource::Dragon(dragon) => dragon.equipment.get(slot as usize).cloned(),
             _ => None,
         }
     }
@@ -802,12 +1063,12 @@ impl Game<'_> {
                 .for_player(target, |game| game.damage_player_equipment(slot, amount))
                 .flatten();
         }
-        let stack = self.living_equipment(living, slot)?;
+        let stack = self.raw_living_equipment(target, slot)?;
         let (updated, broken) = self.damage_stack(&stack, amount, false);
         if updated.as_ref() == Some(&stack) {
             return None;
         }
-        if self.living_equipment(living, slot).as_ref() != Some(&stack) {
+        if self.raw_living_equipment(target, slot).as_ref() != Some(&stack) {
             return None;
         }
         match target {
@@ -889,8 +1150,21 @@ impl Game<'_> {
     }
 
     /// The stack in hand `hand` (`LivingEntity.getItemInHand`). API 382.
-    pub(super) fn living_hand_item(&self, living: LivingRef, hand: Hand) -> Option<ItemStack> {
-        self.living_equipment(living, hand_slot(hand))
+    pub(super) fn living_hand_item(
+        &self,
+        living: LivingRef,
+        hand: Hand,
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+        self.read_living_hand_item(None, living, hand)
+    }
+
+    pub(super) fn read_living_hand_item(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        hand: Hand,
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+        self.read_living_equipment(provider, living, hand_slot(hand))
     }
     /// Puts `stack` in hand `hand` (`LivingEntity.setItemInHand`): the main
     /// hand's slot or the off hand's, written as `set_equipment`

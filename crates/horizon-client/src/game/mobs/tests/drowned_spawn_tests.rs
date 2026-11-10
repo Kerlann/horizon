@@ -7,6 +7,17 @@
 use crate::game::*;
 fn game(resources: &mut Option<std::sync::Arc<Resources>>) -> Game<'_> {
     let mut game = crate::game::game_tests::tests::server_game(resources);
+    game.build_registries();
+    game.set_allow_commands(true);
+    // The fixture does not start streaming: make every forced column resident.
+    for x in -1..=0 {
+        for z in -1..=0 {
+            game.world.chunks.insert(
+                (x, z),
+                std::sync::Arc::new(horizon_client::chunk::Chunk::empty(x, z)),
+            );
+        }
+    }
     for command in [
         "difficulty easy",
         "gamerule spawn_mobs false",

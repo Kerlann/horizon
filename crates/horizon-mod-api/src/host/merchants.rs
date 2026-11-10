@@ -27,8 +27,15 @@ pub trait MerchantsBackend {
     /// `AbstractVillager.getOffers`, as they are now (a copy). Offers not
     /// rolled yet read as empty: they are rolled when a player first trades,
     /// or by `add_offer`; reading never draws a random.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn merchant_offers(&self, merchant: MerchantRef) -> Option<Vec<MerchantOffer>>;
+    fn merchant_offers(
+        &self,
+        merchant: MerchantRef,
+    ) -> Result<Option<Vec<MerchantOffer>>, EntityReadError>;
     /// Side: server.
     /// `Merchant.getTradingPlayer`: the player whose trading screen is open on
     /// it. None when nobody trades, or the screen is the host window's.

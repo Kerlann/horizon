@@ -6,6 +6,8 @@ Usage: ignored_tests.py SHARD...  (HORIZON_TEST_RESOURCES points at the prepared
 A SHARD is a package, or one leg of it written `PACKAGE#NofM` (tools/ci/ignored_shards.py splits the biggest
 package so one process does not hold every test's memory). A leg runs the tests whose name hashes to its
 number, so every test runs in exactly one leg, and only judges the list's entries for those same tests.
+An unqualified horizon-client-lib runs two such selections consecutively on the same runner, releasing
+retained fixture memory between processes without adding a matrix job.
 
 Each package's library tests run with `--include-ignored`: the #[ignore]d ones that need the data, and the
 ones that return early without it, which `verify` (no data) passes without checking anything. The packages
@@ -174,7 +176,18 @@ def main(shards):
     if "gpu" in skipped:
         print("no Vulkan driver on this runner: the tests marked `gpu` are skipped")
     problems = []
-    for shard in shards:
+    # Reuse the hash selection in two consecutive processes on the same runner.
+    # Resource-backed client-lib families retain registries across tests; releasing
+    # the process between halves bounds that retention without another CI leg.
+    selections = [
+        selection
+        for shard in shards
+        for selection in (
+            ("horizon-client-lib#1of2", "horizon-client-lib#2of2")
+            if shard == "horizon-client-lib" else (shard,)
+        )
+    ]
+    for shard in selections:
         package, number, count = parse_shard(shard)
         skip = [test for (listed, test), mark in known.items() if listed == package and mark in skipped]
         results = run(package, skip, number, count) if number is not None else run(package, skip)

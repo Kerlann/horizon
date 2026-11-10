@@ -78,9 +78,16 @@ pub trait DisplaysBackend {
     fn display_teleport_duration(&self, display: DisplayRef) -> Option<i32>;
     /// Side: server.
     /// `TextDisplay.getText`; None for another kind of display.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
     /// Refuses text deeper than 512 component nodes before applying any changes.
-    fn display_text(&self, display: DisplayRef) -> Result<Option<Text>, TextFormError>;
+    fn display_text(
+        &self,
+        display: DisplayRef,
+    ) -> Result<Option<Text>, EntityReadError<TextFormError>>;
     /// Side: server.
     /// `TextDisplay.getLineWidth`.
     #[access(WorldOnly)]
@@ -115,8 +122,12 @@ pub trait DisplaysBackend {
     fn display_block_state(&self, display: DisplayRef) -> Option<BlockState>;
     /// Side: server.
     /// `ItemDisplay.getItemStack`; None for another kind of display or an empty stack.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn display_item(&self, display: DisplayRef) -> Option<ItemStack>;
+    fn display_item(&self, display: DisplayRef) -> Result<Option<ItemStack>, EntityReadError>;
     /// Side: server.
     /// `ItemDisplay.getItemTransform`: how the item is displayed.
     #[access(WorldOnly)]

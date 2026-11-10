@@ -70,6 +70,7 @@ impl Game<'_> {
     /// A trading screen the guest's interaction opened (it opened as a
     /// station while the guest acted): handed to the guest.
     pub(super) fn lan_open_merchant(&mut self, conn: u32, mut state: MerchantState) {
+        self.with_prepared_mob_relations(|_| ());
         let Some(uuid) = self
             .lan
             .as_ref()
@@ -113,7 +114,11 @@ impl Game<'_> {
         self.lan_send_offers(conn, &mut gm, true);
         self.lan_send_merchant_content(conn, &mut gm);
         if let Some(host) = self.lan.as_mut() {
+            let merchant = gm.merchant.mob;
             host.play.entry(conn).or_default().merchant = Some(gm);
+            self.entity_read_state
+                .borrow_mut()
+                .record_merchant_connection(conn, merchant);
         }
     }
     /// `Entity.getDisplayName` of the merchant, the screen's title: its name
@@ -249,6 +254,9 @@ impl Game<'_> {
         window: Option<i32>,
         op: impl FnOnce(&mut Menu, &Env),
     ) -> bool {
+        let Some(_loan) = self.begin_merchant_session_loan(conn) else {
+            return false;
+        };
         let Some(mut gm) = self
             .lan
             .as_mut()
@@ -268,6 +276,9 @@ impl Game<'_> {
             .as_ref()
             .and_then(|host| host.hub.guests.iter().position(|g| g.conn == conn))
         else {
+            self.entity_read_state
+                .borrow_mut()
+                .record_merchant_connection(conn, None);
             return false;
         };
         let mut session = gm.merchant.session.clone();
@@ -383,7 +394,11 @@ impl Game<'_> {
         self.lan_send_offers(conn, &mut gm, false);
         self.lan_send_merchant_content(conn, &mut gm);
         if let Some(host) = self.lan.as_mut() {
+            let merchant = gm.merchant.mob;
             host.play.entry(conn).or_default().merchant = Some(gm);
+            self.entity_read_state
+                .borrow_mut()
+                .record_merchant_connection(conn, merchant);
         }
         true
     }
@@ -471,6 +486,9 @@ impl Game<'_> {
         else {
             return false;
         };
+        self.entity_read_state
+            .borrow_mut()
+            .record_merchant_connection(conn, None);
         self.merchant_closed(&mut gm.merchant);
         true
     }

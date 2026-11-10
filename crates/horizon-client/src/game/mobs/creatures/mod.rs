@@ -7,7 +7,10 @@ mod borrowed_panic_tests;
 mod borrowed_tick;
 #[cfg(test)]
 mod mob_dispatch_panic_tests;
+
+mod projectile_world;
 mod pufferfish_player;
+mod residency;
 #[cfg(test)]
 mod retained_limits_tests;
 use super::api_values::{TryIntoApi, TryIntoEngine};
@@ -273,90 +276,6 @@ pub(super) struct ProjWorld<'a, 'w> {
     /// block would (`clipIncludingBorder`); None: no border.
     pub border: Option<[f64; 4]>,
 }
-impl ProjectileWorld for ProjWorld<'_, '_> {
-    fn block_contacts(&self, entity: i32, from: Vec3, to: Vec3, bounds: Aabb) {
-        horizon_client::block_contact::swept_inside(entity, from, to, bounds, |p| {
-            self.w.world.block(p.x, p.y, p.z)
-        });
-    }
-    fn clip(&self, from: Vec3, to: Vec3) -> Option<(Vec3, [i32; 3], [i32; 3])> {
-        let mut scene = SceneCollisions {
-            world: self.w.world,
-            binding: self.w.collision,
-            subject: None,
-        };
-        let context = horizon_world::collision_context::CollisionContext::position(from.y);
-        let r = traverse_blocks(from, to, 256, |p: BlockPos| {
-            let state = self.w.world.block(p.x, p.y, p.z);
-            if self.w.facts.is_air(state) {
-                return None;
-            }
-            // ClipContext hands CollisionContext.of(projectile): scaffolding
-            // is open for a projectile below it.
-            let shape = self
-                .w
-                .collision
-                .collision_shape_with_context(&mut scene, state, p, &context)
-                .ok()?;
-            shape.clip(from, to, p)
-        });
-        let hit = r.ok().flatten().map(|hit| {
-            (
-                hit.location,
-                [hit.block.x, hit.block.y, hit.block.z],
-                hit.direction.normal(),
-            )
-        });
-        match self.border {
-            Some(bounds) => clip_including_border(hit, from, to, bounds),
-            None => hit,
-        }
-    }
-    /// Entity.updateFluidInteraction over the projectile's box, not the
-    /// block at its feet (#3072).
-    fn in_water(&self, bounds: Aabb) -> bool {
-        self.w.fluids(bounds, bounds.max_position().y).in_water
-    }
-    fn targets(&self) -> &[(Who, Aabb)] {
-        &self.targets
-    }
-    /// `BaseFireBlock.entityInside` for a thrown projectile: fire and soul
-    /// fire set it alight for 160 ticks.
-    fn ignites(&self, p: [i32; 3]) -> bool {
-        let state = self.w.world.block(p[0], p[1], p[2]);
-        matches!(
-            &*self.w.facts.get(state).name,
-            "minecraft:fire" | "minecraft:soul_fire"
-        )
-    }
-    fn empty(&self, p: [i32; 3]) -> bool {
-        self.w.facts.is_air(self.w.world.block(p[0], p[1], p[2]))
-    }
-    /// `WebBlock.entityInside` and `PowderSnowBlock.entityInside`.
-    fn stuck_speed(&self, p: [i32; 3]) -> Option<Vec3> {
-        horizon_client::projectiles::stuck_speed_of(
-            &self.w.facts.get(self.w.world.block(p[0], p[1], p[2])).name,
-        )
-    }
-    fn bubble_column(&self, p: [i32; 3]) -> Option<(bool, bool)> {
-        horizon_client::motion::bubble_column_at(
-            self.w.world,
-            self.w.registry,
-            self.w.facts,
-            self.w.collision,
-            BlockPos::new(p[0], p[1], p[2]),
-        )
-        .map(|c| (c.drag, c.surface))
-    }
-    fn can_stand_on(&self, p: [i32; 3], entity_y: f64) -> bool {
-        horizon_client::collisions::projectile_can_stand_on(
-            self.w.world,
-            self.w.collision,
-            BlockPos::new(p[0], p[1], p[2]),
-            entity_y,
-        )
-    }
-}
 
 /// `Projectile.isPickable`: a projectile in `#minecraft:redirectable_projectile`
 /// (a ghast's fireball and both wind charges) is pickable, so another
@@ -511,10 +430,6 @@ enum OrbOrder {
 }
 
 impl Game<'_> {
-    pub(super) fn clear_pending_mob_actions(&mut self) {
-        self.creatures.pending.clear();
-    }
-
     /// The game's own player's uuid and entity id — the identity behind
     /// [`Self::player_view`], so a tick that lends no guest's view names its
     /// player (#1077). None where the view stands for nobody: no player of
@@ -540,6 +455,18 @@ impl Game<'_> {
         }
     }
     pub(super) fn player_view(&self) -> Option<PlayerView> {
+        self.player_view_with_allies(true)
+    }
+
+    /// AI asks canonical teams on demand; projecting one player must not scan
+    /// every entity just to materialize an ally set.
+    pub(super) fn ai_player_view(&self) -> Option<PlayerView> {
+        #[cfg(test)]
+        super::native_mob_read_context::record_backing_work(|work| work.player_projections += 1);
+        self.player_view_with_allies(false)
+    }
+
+    fn player_view_with_allies(&self, include_allies: bool) -> Option<PlayerView> {
         if self.lan_acting_fake {
             return None;
         }
@@ -589,34 +516,17 @@ impl Game<'_> {
             hero: self.potions.effects.get("hero_of_the_village").is_some(),
             effects: self.potions.effects.list.iter().map(|e| e.id).collect(),
             uuid: self.acting_uuid(),
-            allies: std::sync::Arc::new(self.player_allies()),
+            allies: if include_allies {
+                std::sync::Arc::new(self.player_allies())
+            } else {
+                Default::default()
+            },
             remote: false,
             sleeping: self.sleeping.is_some(),
             sleep_timer: self.sleep_timer,
             passenger: self.riding.is_some(),
             riding_vehicle: self.riding,
-            vehicle: self.riding.and_then(|id| {
-                if let Some(b) = self.boats.iter().find(|b| b.id == id) {
-                    // A boat's box: 1.375 wide and 0.5625 high around its position.
-                    let w = 0.6875;
-                    return Some(horizon_client::mobs::Vehicle {
-                        nautilus: false,
-                        bounds: Aabb::new(
-                            Vec3::new(b.position.x - w, b.position.y, b.position.z - w),
-                            Vec3::new(b.position.x + w, b.position.y + 0.5625, b.position.z + w),
-                        ),
-                        velocity: b.velocity,
-                    });
-                }
-                let m = self.mobs.iter().find(|m| m.id == id)?;
-                matches!(m.species(), Species::Nautilus | Species::ZombieNautilus).then(|| {
-                    horizon_client::mobs::Vehicle {
-                        nautilus: true,
-                        bounds: m.bounds(),
-                        velocity: m.velocity,
-                    }
-                })
-            }),
+            vehicle: self.ai_player_vehicle_view(&self.mobs),
         })
     }
     /// Biome facts at a position for finalizeSpawn and variant rules.
@@ -744,10 +654,7 @@ impl Game<'_> {
         match site {
             SpawnSite::Raw => return Some(mob),
             SpawnSite::Finalizing(reason) => match self.finalize_with(&mut mob, reason, None) {
-                Finalized::Cancelled => {
-                    self.forget_entity(mob.id);
-                    return None;
-                }
+                Finalized::Cancelled => return self.discard_unjoined_mob(mob.id),
                 Finalized::Skipped => return Some(mob),
                 Finalized::Done => {}
             },
@@ -1060,9 +967,10 @@ impl Game<'_> {
         let transformed = self.mobs.iter().find(|m| m.id == id)?;
         let transformed_kind = from_kind.as_ref().map(|_| transformed.kind.id.clone());
         // Only move passengers once the new mob's join has succeeded.
-        for rider in self.mobs.iter_mut() {
-            if rider.extra.mount == Some(from.id) {
-                rider.extra.mount = Some(id);
+        for i in 0..self.mobs.len() {
+            if self.mobs[i].extra.mount == Some(from.id) {
+                self.mobs[i].extra.mount = Some(id);
+                self.record_ai_mob_owner(&self.mobs[i]);
             }
         }
         if let (Some(from_kind), Some(transformed_kind)) = (from_kind, transformed_kind) {
@@ -1192,11 +1100,15 @@ impl Game<'_> {
         self.world.bottom_y()
     }
     pub(super) fn mob_world_base<'s>(&'s self, others: &'s [Seen]) -> MobWorld<'s> {
-        self.mob_world_reborrow(
-            others,
-            self.player_view(),
-            std::sync::Arc::new(self.mob_team_rules()),
-        )
+        if self.remote.is_none() {
+            self.mob_world_reborrow(others, self.ai_player_view(), Default::default())
+        } else {
+            self.mob_world_reborrow(
+                others,
+                self.player_view(),
+                std::sync::Arc::new(self.mob_team_rules()),
+            )
+        }
     }
     /// Reborrow the live level without rebuilding the pass's owned player/team backing.
     pub(super) fn mob_world_reborrow<'s>(
@@ -1292,6 +1204,11 @@ impl Game<'_> {
                 && mod_api::__private::listened(mod_api::HookId::BabyEntitySpawn),
             // A warden's away suspects are UUIDs: on the server side, where the
             // entity UUIDs live, they resolve back to the mobs that are here.
+            team_lookup: if self.remote.is_none() {
+                Some(self)
+            } else {
+                None
+            },
             who_lookup: if self.remote.is_none() {
                 Some(self)
             } else {
@@ -1520,8 +1437,8 @@ impl Game<'_> {
     /// `DistanceManager.inEntityTickingRange` in an entity-ticking chunk
     /// (block coordinates), from every player's tickets (`update_chunk_tickets`).
     pub(super) fn entity_ticking_area(&self) -> impl Fn(i32, i32) -> bool + use<> {
-        let levels = self.tickets.levels();
-        move |x, z| levels.entity_ticking_at(x, z)
+        self.tickets
+            .entity_ticking_area(&self.world.chunks, self.remote.is_none())
     }
     /// The entity phase of `tick_creatures`: every mob's tick, deaths, and the
     /// projectiles and effects that follow from them.
@@ -2735,19 +2652,15 @@ impl Game<'_> {
     fn launch_mob_projectile(&mut self, mut p: Projectile) {
         self.next_entity += 1;
         p.id = self.next_entity;
-        let (owner, at) = (p.owner, [p.position.x, p.position.y, p.position.z]);
+        let at = [p.position.x, p.position.y, p.position.z];
         // LlamaSpit.recreateFromPacket: the spit's burst on the client.
         if p.kind == ProjectileKind::LlamaSpit {
             let v = p.velocity;
             self.particles.llama_spit_burst(at, [v.x, v.y, v.z]);
         }
-        // Ordinary arrows post from ArrowState's first tick, including loaded arrows.
-        // Keep the existing immediate post for the other arrow-state kind (tridents).
-        let immediate = p.arrow.is_some() && !p.is_arrow();
+        // Projectile.tick posts on the first tick, through the shared arrow-state
+        // continuation for ordinary arrows and tridents, including loaded ones.
         self.add_projectile(p);
-        if immediate {
-            self.projectile_event("minecraft:projectile_shoot", owner, at);
-        }
     }
     /// `LivingDestroyBlockEvent` for the mob `id` about to destroy the block at
     /// `pos`: false when a mod canceled. Nothing is built when no mod is loaded.
@@ -5293,11 +5206,9 @@ impl Game<'_> {
                         );
                     }
                     let events_from = arrow_events.len();
-                    let ordinary_arrow = p.is_arrow();
                     if let Some(a) = p.arrow.as_mut() {
                         arrow_events.extend(a.events.drain(..).map(|e| {
-                            if ordinary_arrow && e == horizon_client::arrows::ArrowEvent::ShootEvent
-                            {
+                            if e == horizon_client::arrows::ArrowEvent::ShootEvent {
                                 shoot_events.push((p.owner, p.guest, p.position.components()));
                             }
                             (p.position, e)
@@ -5324,9 +5235,7 @@ impl Game<'_> {
                             );
                             let a = p.arrow.as_mut().expect("an arrow");
                             arrow_events.extend(a.events.drain(..).map(|e| {
-                                if ordinary_arrow
-                                    && e == horizon_client::arrows::ArrowEvent::ShootEvent
-                                {
+                                if e == horizon_client::arrows::ArrowEvent::ShootEvent {
                                     shoot_events.push((p.owner, p.guest, p.position.components()));
                                 }
                                 (p.position, e)
@@ -5712,7 +5621,7 @@ impl Game<'_> {
     }
     /// `BellBlock.onProjectileHit`: a projectile that strikes the bell proper
     /// rings it, and a player's shot counts as the player's ring.
-    fn bell_projectile_hit(
+    pub(super) fn bell_projectile_hit(
         &mut self,
         p: &ProjectileHitter,
         pos: [i32; 3],
@@ -5734,7 +5643,7 @@ impl Game<'_> {
     }
     /// `AmethystBlock.onProjectileHit`: a projectile that strikes an amethyst
     /// block rings `block.amethyst_block.chime` there, pitched by the level random.
-    fn amethyst_projectile_hit(&mut self, pos: [i32; 3]) {
+    pub(super) fn amethyst_projectile_hit(&mut self, pos: [i32; 3]) {
         let state = self.world.block(pos[0], pos[1], pos[2]);
         if &*self.res.facts().get(state).name != "minecraft:amethyst_block" {
             return;
@@ -6010,7 +5919,7 @@ impl Game<'_> {
         for event in events {
             if event == horizon_client::arrows::ArrowEvent::Drop {
                 self.spawn_at_location(arrow.position, f64::from(0.1f32), item.clone());
-            } else if arrow.is_arrow() && event == horizon_client::arrows::ArrowEvent::ShootEvent {
+            } else if event == horizon_client::arrows::ArrowEvent::ShootEvent {
                 self.projectile_shoot_event(arrow.owner, arrow.guest, arrow.position.components());
             } else {
                 self.arrow_event(arrow.position, event);
@@ -6018,30 +5927,6 @@ impl Game<'_> {
         }
         if keep {
             self.add_projectile(arrow);
-        }
-    }
-    /// `TargetBlock.onProjectileHit`: a target block takes its power from
-    /// where the projectile landed and resets after 20 ticks for an arrow, 8
-    /// for any other projectile. A player's shot counts as a target hit.
-    fn target_block_hit(&mut self, p: &ProjectileHitter, pos: [i32; 3], at: Vec3, face: [i32; 3]) {
-        let block = BlockPos::new(pos[0], pos[1], pos[2]);
-        let arrow = p.arrow;
-        let location = [at.x, at.y, at.z];
-        let hit = self.with_level(|b, level, ticks| {
-            b.target_projectile_hit(level, ticks, block, location, face, arrow)
-        });
-        if let Some(strength) = hit {
-            let _ = self.process_level_events();
-            self.native_target_hit(self.dim.id(), pos, strength);
-            if p.owner == Some(Who::Player) && (p.guest.is_none() || p.guest == self.lan_acting) {
-                self.award_custom_stat("target_hit", 1);
-                let projectile = horizon_client::advancements::EntityView {
-                    kind: p.kind.to_owned(),
-                    position: [p.position.x, p.position.y, p.position.z],
-                    ..Default::default()
-                };
-                self.trigger_target_hit(&projectile, strength);
-            }
         }
     }
     /// `ThrownEnderpearl.onHit` for a living non-player owner: the same hook,
@@ -6131,13 +6016,7 @@ impl Game<'_> {
         if let Hit::Block { pos, at, face } = hit
             && face != [0; 3]
         {
-            self.bell_projectile_hit(&ProjectileHitter::of(p), pos, at, face);
-            self.amethyst_projectile_hit(pos);
-            if self.with_level(|b, level, ticks| {
-                b.big_dripleaf_projectile_hit(level, ticks, BlockPos::new(pos[0], pos[1], pos[2]))
-            }) {
-                self.process_level_events()?;
-            }
+            self.projectile_block_impact(&ProjectileHitter::of(p), pos, at, face)?;
             self.projectile_breaks_block(p, pos);
         }
         self.combat.projectile_owner = match p.owner {
@@ -7223,6 +7102,13 @@ impl Game<'_> {
         let Some(index) = self.mob_interaction_target(target) else {
             return Ok(false);
         };
+        let id = self.mobs[index].id;
+        let result = self.interact_mob_at(index);
+        self.record_ai_mob_owner_id(id);
+        result
+    }
+
+    fn interact_mob_at(&mut self, index: usize) -> Result<bool> {
         // PlayerInteractTrigger: the name tag as it was before it named the mob.
         let used = self.held().cloned();
         if self.name_mob(index) {
@@ -8946,6 +8832,32 @@ impl Game<'_> {
                 self.shoulder_parrots_geometry(mob, camera, alpha as f32, packed, out);
                 self.spin_attack_geometry(mob, camera, alpha as f32, packed, out);
                 self.stuck_in_body_geometry(mob, mob.id as i32, camera, alpha as f32, packed, out);
+            }
+            // Cosmetics (game/cosmetics.rs), posed on the GPU with the mob's own jobs: culled
+            // with it.
+            if !layers_only
+                && super::cosmetics::enabled()
+                && (is_player || &*mob.kind.id == "minecraft:mannequin")
+            {
+                let mark = self.skin_frame.borrow().mark();
+                let base = horizon_client::mobs::render::base_transform(mob, alpha as f32, camera);
+                let gpu = skinning;
+                if let Some((lo, hi)) = self.cosmetics_geometry(
+                    mob,
+                    false,
+                    base,
+                    Some(camera),
+                    alpha as f32,
+                    packed,
+                    gpu,
+                    out,
+                ) {
+                    skinned = Some(match skinned {
+                        Some((first, Some((l, h)))) => (first, Some((l.min(lo), h.max(hi)))),
+                        Some((first, None)) => (first, Some((lo, hi))),
+                        None => (mark, Some((lo, hi))),
+                    });
+                }
             }
             // CustomHeadLayer (a pumpkin, skull or head item) included.
             if layers {
@@ -11958,6 +11870,7 @@ mod pearl_tests {
             dragon: None,
             leash_boats: &[],
             who_lookup: None,
+            team_lookup: None,
             others_grid: None,
             others_index: None,
             others_villagers: None,
@@ -13765,30 +13678,60 @@ mod loaded_arrow_shot_tests {
         natural("mob")
     }
     #[test]
-    #[ignore = "prepared resources; non-arrow launch posts remain unchanged"]
-    fn non_arrow_rocket_and_mob_trident_keep_their_immediate_posts() {
+    #[ignore = "prepared resources; actual rocket and mob trident ticks"]
+    fn rocket_and_mob_trident_post_only_on_their_first_tick() {
         with_game(|game| {
             assert!(game.run_command("item replace entity @s weapon.mainhand with crossbow[charged_projectiles=[{id:\"minecraft:firework_rocket\",count:1}]]"));
             start_events();
             let bow = game.held().unwrap().clone();
             assert!(game.use_crossbow(&bow));
             assert_eq!(game.rockets.len(), 1);
-            assert_eq!(take_shots().len(), 1);
-            game.tick_projectiles().unwrap();
-            assert!(take_shots().is_empty());
+            assert!(take_shots().is_empty(), "no rocket shot before its tick");
+            game.tick_rockets();
+            assert_eq!(take_shots().len(), 1, "rocket first tick");
+            game.tick_rockets();
+            assert!(take_shots().is_empty(), "no repeated rocket shot");
             stop_events();
-            let mut p = Projectile::new(
-                ProjectileKind::Trident,
-                Vec3::new(6.5, 201.5, 6.5),
-                Some(Who::Mob(owner(game))),
-            );
-            p.velocity = Vec3::new(0.0, 0.0, 1.0);
-            start_events();
-            game.launch_mob_projectile(p);
-            assert_eq!(take_shots().len(), 1);
-            game.tick_projectiles().unwrap();
-            assert!(take_shots().is_empty());
-            stop_events();
+            for route in ["flight", "finish_hit", "breeze"] {
+                if route == "breeze" {
+                    assert!(game.run_command("summon breeze 6.5 201.5 7.5 {NoAI:1b,NoGravity:1b}"));
+                }
+                let mut p = Projectile::new(
+                    ProjectileKind::Trident,
+                    Vec3::new(6.5, 201.5, 6.5),
+                    Some(Who::Mob(owner(game))),
+                );
+                p.velocity = Vec3::new(0.0, 0.0, 1.0);
+                start_events();
+                game.launch_mob_projectile(p);
+                let id = game.creatures.projectiles.last().unwrap().id;
+                assert!(
+                    take_shots().is_empty(),
+                    "no trident shot before its tick: {route}"
+                );
+                if route == "finish_hit" {
+                    let p = game.creatures.projectiles.pop().unwrap();
+                    game.finish_arrow_hit(p, super::EntityHit::Deflected);
+                } else {
+                    game.tick_projectiles().unwrap();
+                }
+                assert_eq!(take_shots().len(), 1, "trident first tick: {route}");
+                if route == "breeze" {
+                    let p = game
+                        .creatures
+                        .projectiles
+                        .iter()
+                        .find(|p| p.id == id)
+                        .unwrap();
+                    assert!(
+                        p.velocity.z < 0.0,
+                        "the actual breeze deflected the trident"
+                    );
+                }
+                game.tick_projectiles().unwrap();
+                assert!(take_shots().is_empty(), "no repeated trident shot: {route}");
+                stop_events();
+            }
         });
     }
     #[test]

@@ -282,6 +282,15 @@ impl Game<'_> {
             ) {
                 continue;
             }
+            let marks = if player || self.cosmetics_local() {
+                self.cosmetics_marks(m, Some(m.id) == own_id)
+            } else {
+                Marks::default()
+            };
+            let at = match marks.top {
+                Some(top) => p + glam::DVec3::Y * cosmetic_lift(top, m.model_scale()),
+                None => p,
+            };
             // A player's scores and team go by name, a mob's by UUID.
             let holder = if player {
                 Some(name.clone())
@@ -347,6 +356,7 @@ impl Game<'_> {
                         lines: vec![(text, 0.0)],
                         light: l,
                         discrete,
+                        marks: Marks::default(),
                     });
                 }
                 continue;
@@ -398,10 +408,11 @@ impl Game<'_> {
                 m.position.z.floor() as i32,
             );
             tags.push(NameTag {
-                at: p,
+                at,
                 lines,
                 light: l,
                 discrete,
+                marks,
             });
         }
         drop(player_ids);
@@ -503,6 +514,7 @@ impl Game<'_> {
                 lines,
                 light: l,
                 discrete: false,
+                marks: Marks::default(),
             });
         }
         // ItemFrameRenderer.shouldShowName/getNameTag: only the targeted
@@ -565,6 +577,7 @@ impl Game<'_> {
                         center.z.floor() as i32,
                     ),
                     discrete: false,
+                    marks: Marks::default(),
                 });
             }
         }
@@ -598,7 +611,7 @@ impl Game<'_> {
             if tag.discrete {
                 self.mark_translucent_entity(out.len(), "minecraft:name_tag");
                 let light = vertex_light(tag.light);
-                patches.extend(self.cached_name_tag_quads(
+                patches.extend(self.styled_name_tag_quads(
                     o,
                     &tag.lines,
                     FADED,
@@ -607,6 +620,7 @@ impl Game<'_> {
                     light,
                     NAME_TAG_UNIT,
                     out,
+                    tag.marks,
                     Some(&mut layouts),
                 ));
                 continue;
@@ -615,7 +629,7 @@ impl Game<'_> {
             let lit = (tag.light >> 4).max(2) << 4 | (tag.light & 15).max(2);
             self.mark_entity(out.len(), "minecraft:name_tag");
             let light = vertex_light(lit);
-            patches.extend(self.cached_name_tag_quads(
+            patches.extend(self.styled_name_tag_quads(
                 o,
                 &tag.lines,
                 0xFF,
@@ -624,10 +638,11 @@ impl Game<'_> {
                 light,
                 NAME_TAG_UNIT,
                 out,
+                tag.marks,
                 Some(&mut layouts),
             ));
             // RenderPipelines.TEXT_SEE_THROUGH: no depth test, no lightmap.
-            patches.extend(self.cached_name_tag_quads(
+            patches.extend(self.styled_name_tag_quads(
                 o,
                 &tag.lines,
                 FADED,
@@ -636,6 +651,7 @@ impl Game<'_> {
                 0,
                 NAME_TAG_UNIT,
                 see_through,
+                tag.marks,
                 Some(&mut layouts),
             ));
         }
@@ -659,11 +675,25 @@ impl Game<'_> {
         unit: f32,
         out: &mut Vec<Vertex>,
     ) -> Vec<horizon_client::font::Patch> {
-        self.cached_name_tag_quads(
-            o, lines, text_alpha, background, text_layer, light, unit, out, None,
+        self.styled_name_tag_quads(
+            o,
+            lines,
+            text_alpha,
+            background,
+            text_layer,
+            light,
+            unit,
+            out,
+            Marks::default(),
+            None,
         )
     }
-    fn cached_name_tag_quads(
+
+    /// [`Self::name_tag_quads`], with Horizon's marks on the last line (the name): the Horizon
+    /// player's mark before the text, a name tag style's badge after it and its line under the
+    /// background.
+    #[allow(clippy::too_many_arguments)]
+    fn styled_name_tag_quads(
         &self,
         o: glam::DVec3,
         lines: &[(Text, f64)],
@@ -673,6 +703,7 @@ impl Game<'_> {
         light: u32,
         unit: f32,
         out: &mut Vec<Vertex>,
+        marks: Marks,
         mut layouts: Option<&mut NameTagLayouts>,
     ) -> Vec<horizon_client::font::Patch> {
         // Options.getBackgroundOpacity(0.25) black, as ARGB.color.
@@ -682,7 +713,7 @@ impl Game<'_> {
         let (view_yaw, view_pitch) = match self.posed_rotation {
             // The frame's camera, already turned round in front view.
             Some(rotation) => rotation,
-            None if self.camera_type == horizon_client::camera::CameraType::ThirdPersonFront => {
+            None if self.camera_type == mod_api::CameraType::ThirdPersonFront => {
                 (self.yaw + 180.0, -self.pitch)
             }
             None => (self.yaw, self.pitch),
@@ -691,8 +722,15 @@ impl Game<'_> {
         let right = forward.cross(glam::DVec3::Y).normalize_or_zero();
         let up = right.cross(forward).normalize_or_zero();
         let away = forward.as_vec3() * 0.002;
-        let mut batch = HudBatch::scratch([1, 1]);
-        for (text, lift) in lines {
+        let mut batch = HudBatch::new(
+            [1, 1],
+            horizon_client::hud::GuiScale {
+                requested: 1,
+                unicode: false,
+            },
+        );
+        let last = lines.len().saturating_sub(1);
+        for (n, (text, lift)) in lines.iter().enumerate() {
             let o = (o + glam::DVec3::new(0.0, *lift, 0.0)).as_vec3();
             let (r, u) = (right.as_vec3() * unit, up.as_vec3() * unit);
             // Text space: x right, y down (scale 0.025, -0.025).
@@ -722,6 +760,39 @@ impl Game<'_> {
                     if background { BACKGROUND } else { 0 },
                 ),
             };
+            if n == last && marks.horizon {
+                let x = -self.gui.atlas.font.width_text(text) / 2.0 - 10.0;
+                // 8 text pixels square, a pixel left of the background.
+                for &(mx, my, w, h, argb) in super::cosmetics::MARK {
+                    let a = text_alpha * (argb >> 24) / 255;
+                    batch.fill(
+                        &self.gui.atlas,
+                        x + f32::from(mx),
+                        y0 + f32::from(my),
+                        f32::from(w),
+                        f32::from(h),
+                        horizon_client::hud_layout::abgr(a << 24 | argb & 0xFF_FFFF),
+                    );
+                }
+            }
+            if let Some(style) = marks.style.filter(|_| n == last) {
+                let width = self.gui.atlas.font.width_text(text);
+                let x = -width / 2.0;
+                let alpha = text_alpha << 24;
+                // The badge, 8 text pixels square, a pixel right of the background.
+                batch.rect_uv(x + width + 2.0, y0, 8.0, 8.0, style.mark, alpha | 0xFF_FFFF);
+                // The line, a pixel tall, under the background (which runs from -1 to 9).
+                batch.fill(
+                    &self.gui.atlas,
+                    x - 1.0,
+                    y0 + 9.0,
+                    width + 1.0,
+                    1.0,
+                    // The batch takes RGBA: the line as ARGB, swapped.
+                    horizon_client::hud_layout::abgr(alpha | style.line),
+                );
+            }
+
             for (i, quad) in batch.vertices.as_chunks::<6>().0.iter().enumerate() {
                 let shift = if i * 6 < behind {
                     away
@@ -833,6 +904,20 @@ pub(super) fn name_tag_at(m: &Mob, alpha: f64) -> glam::DVec3 {
     )
 }
 
+/// Horizon: how far a player's name tag goes up so that it clears the tallest cosmetic drawn on
+/// them, `top` pixels above the model's neck (`Item::top`) on a player of `scale`
+/// (`LivingEntity.getScale`); 0 when the item stays under vanilla's tag. Measured standing: the
+/// model's neck is 1.501 blocks up, times `AvatarRenderer.scale`'s 0.9375 and `scale`; the tag's
+/// lowest pixel (the style's line under the background, 10 text pixels under the anchor) is at
+/// 1.8 + 0.5 - 10 × 0.025 = 2.05 blocks, and the lift leaves one text pixel between them. Other
+/// poses keep the same lift: crouching lowers the model more (0.39 blocks) than the tag (0.3).
+pub(super) fn cosmetic_lift(top: f32, scale: f32) -> f64 {
+    let item = f64::from(scale) * 0.9375 * (1.501 + f64::from(top) / 16.0);
+    let unit = f64::from(NAME_TAG_UNIT);
+    let bottom = 1.8 + 0.5 - 10.0 * unit;
+    (item + unit - bottom).max(0.0)
+}
+
 /// A name tag: where it hangs, its lines (text, lift), the packed light at
 /// the entity and whether it is discrete.
 struct NameTag {
@@ -840,13 +925,33 @@ struct NameTag {
     lines: Vec<(Text, f64)>,
     light: u8,
     discrete: bool,
+    marks: Marks,
+}
+
+/// What Horizon draws by a player's name: its mark (they play Horizon) and their name tag style.
+#[derive(Clone, Copy, Default)]
+pub(super) struct Marks {
+    pub horizon: bool,
+    pub style: Option<TagStyle>,
+    /// How high the cosmetics drawn on their body get above the neck, in model pixels: the tag
+    /// goes up over a tall one (`cosmetic_lift`).
+    pub top: Option<f32>,
+}
+
+/// A cosmetic name tag style: a badge after the name and a line under it.
+#[derive(Clone, Copy)]
+pub(super) struct TagStyle {
+    /// The mark's place in the GUI atlas.
+    pub mark: horizon_client::hud::Rect,
+    /// The line's colour, `0xrrggbb`.
+    pub line: u32,
 }
 
 /// `Entity.DATA_CUSTOM_NAME` of a mob named `name`: its component with its style (a name
 /// summoned or set as `{text: "..", color: "red"}` keeps its colour), else the plain text.
 pub(super) fn name_component(m: &Mob, name: &str) -> horizon_core::nbt::Tag {
     match &m.custom_name_text {
-        Some(text) => horizon_client::scoreboard::json_to_tag(&text.component()),
+        Some(text) => horizon_client::scoreboard::component_tag(&text.component()),
         None => horizon_protocol::text::literal(name),
     }
 }
@@ -1132,6 +1237,7 @@ mod tests {
             step_sound: None,
             food: Default::default(),
             tempt: Default::default(),
+            passenger_attachments: Vec::new(),
         };
         Mob::new(0, Arc::new(kind), Vec3::ZERO, 0.0)
     }

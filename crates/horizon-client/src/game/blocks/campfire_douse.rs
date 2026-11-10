@@ -76,7 +76,12 @@ impl Game<'_> {
         });
         let mut state = Some(unlit);
         let mut cancel = false;
-        self.native_block_tool_modification(stack, &tool, &mut state, &mut cancel);
+        super::native_hooks::NativeHookHost { host: self }.native_block_tool_modification(
+            stack,
+            &tool,
+            &mut state,
+            &mut cancel,
+        );
         if cancel { None } else { state }
     }
 

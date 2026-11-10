@@ -14,6 +14,53 @@ fn write(path: &Path, value: &toml::Table) -> Result<(), String> {
 }
 
 pub(super) const PACKAGE: &str = "horizon-native-game";
+/// The official game's package and executable (docs/layers.md, "How a Horizon crate plugs in"):
+/// horizon-client's game with Horizon's own parts, the one the release ships as `horizon-client`.
+pub(super) const OFFICIAL: &str = "horizon-official";
+
+/// Whether the staged revision has the official game. One from before it ships horizon-client's
+/// executable, as the release did then.
+pub(super) fn has_official(stage: &Path) -> bool {
+    stage.join("crates/horizon-official/Cargo.toml").is_file()
+}
+
+/// The package the game build compiles: the generated executable when trait mods need one, else
+/// the game the release ships for `target` (the server build is horizon-client's, without
+/// Horizon's parts, as `game-build.yml`'s).
+pub(super) fn game_package(stage: &Path, target: super::Target, has_api: bool) -> &'static str {
+    if has_api {
+        PACKAGE
+    } else if target == super::Target::Client && has_official(stage) {
+        OFFICIAL
+    } else {
+        "horizon-client"
+    }
+}
+
+/// The executable `package` builds.
+pub(super) fn executable(package: &str) -> &str {
+    if package == OFFICIAL {
+        OFFICIAL
+    } else {
+        "horizon-client"
+    }
+}
+
+/// The official game, once built into `out`, under the game's name, as the release ships it.
+pub(super) fn as_client(
+    stage: &Path,
+    target: super::Target,
+    has_api: bool,
+    out: &Path,
+) -> Result<(), String> {
+    if game_package(stage, target, has_api) != OFFICIAL {
+        return Ok(());
+    }
+    let official = format!("{OFFICIAL}{}", std::env::consts::EXE_SUFFIX);
+    fs::copy(out.join(official), out.join(crate::backend::CLIENT))
+        .map(drop)
+        .map_err(|e| format!("{}: {e}", out.display()))
+}
 /// Where the generated executable's package is staged, in the workspace.
 const GAME: &str = "crates/native-game";
 
@@ -470,6 +517,13 @@ pub(super) fn stage(
             ("path".into(), "src/main.rs".into()),
         ]))]),
     );
+    let official = has_official(stage);
+    if official {
+        let mut dep = toml::Table::new();
+        dep.insert("path".into(), "../horizon-official".into());
+        dep.insert("optional".into(), true.into());
+        deps.insert(OFFICIAL.into(), toml::Value::Table(dep));
+    }
     manifest.insert("dependencies".into(), toml::Value::Table(deps));
     manifest.insert(
         "features".into(),
@@ -478,16 +532,36 @@ pub(super) fn stage(
             toml::Value::Array(vec!["horizon-client/default".into()]),
         )])),
     );
+    if official {
+        let features = manifest
+            .get_mut("features")
+            .unwrap()
+            .as_table_mut()
+            .unwrap();
+        features
+            .get_mut("default")
+            .unwrap()
+            .as_array_mut()
+            .unwrap()
+            .push("official".into());
+        features.insert(
+            "official".into(),
+            toml::Value::Array(vec!["dep:horizon-official".into()]),
+        );
+    }
     write(&game.join("Cargo.toml"), &manifest)?;
     let manifests: Vec<_> = mods
         .iter()
         .map(|(_, project)| &project.bundle.manifest)
         .collect();
-    fs::write(
-        game.join("src/main.rs"),
-        main_rs(&template, &manifests, &catalog.points, &catalog.sites),
-    )
-    .map_err(|e| e.to_string())?;
+    let mut main = main_rs(&template, &manifests, &catalog.points, &catalog.sites);
+    if official {
+        main = main.replace(
+            "fn main() {",
+            "fn main() {\n    #[cfg(feature = \"official\")]\n    horizon_official::register();",
+        );
+    }
+    fs::write(game.join("src/main.rs"), main).map_err(|e| e.to_string())?;
     let root = stage.join("Cargo.toml");
     let mut workspace = read(&root)?;
     let list = workspace

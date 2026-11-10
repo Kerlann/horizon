@@ -44,9 +44,7 @@ fn paths(
     for (_, item) in table.iter_mut() {
         if let Some(child) = item.as_table_like_mut() {
             if let Some(path) = child.get("path").and_then(|i| i.as_str()) {
-                let original = root
-                    .join(path)
-                    .canonicalize()
+                let original = dunce::canonicalize(root.join(path))
                     .map_err(|e| format!("{}: {e}", root.join(path).display()))?;
                 let new = staged.get(&original).unwrap_or(&original);
                 child.insert("path", toml_edit::value(new.to_string_lossy().as_ref()));
@@ -170,7 +168,7 @@ pub(super) fn build(
     catalog: Option<&Path>,
     additional: &[PathBuf],
 ) -> Result<(), String> {
-    let root = root.canonicalize().map_err(|e| e.to_string())?;
+    let root = dunce::canonicalize(root).map_err(|e| e.to_string())?;
     let toolchain = toolchain()?;
     let target = root.join("target/horizon-mod");
     let stage = target.join("group");
@@ -211,7 +209,7 @@ pub(super) fn build(
             if source == root
                 || additional
                     .iter()
-                    .any(|p| p.canonicalize().ok().as_deref() == Some(source))
+                    .any(|p| dunce::canonicalize(p).ok().as_deref() == Some(source))
             {
                 return Err(format!("{}: native mod in wasm group", source.display()));
             }
@@ -219,7 +217,7 @@ pub(super) fn build(
         }
         let id = manifest["id"].as_str().ok_or("mod has no id")?;
         members.push(Member {
-            root: source.canonicalize().map_err(|e| e.to_string())?,
+            root: dunce::canonicalize(source).map_err(|e| e.to_string())?,
             stage: stage.join(id),
             krate: lib_name(package).ok_or("mod has no library")?,
             package: package["name"].as_str().ok_or("no package name")?.into(),
@@ -231,7 +229,7 @@ pub(super) fn build(
     let mut needed = std::collections::BTreeSet::new();
     for directory in std::iter::once(root.as_path()).chain(additional.iter().map(PathBuf::as_path))
     {
-        let directory = directory.canonicalize().map_err(|e| e.to_string())?;
+        let directory = dunce::canonicalize(directory).map_err(|e| e.to_string())?;
         let member = members
             .iter()
             .find(|m| m.root == directory)
@@ -559,8 +557,10 @@ pub fn rustc(mut args: Vec<String>) -> Result<(), String> {
     let package = std::env::var("CARGO_PKG_NAME").unwrap_or_default();
     let config = &configs[&package];
     if args.iter().any(|a| a == "feature=\"rustc-dep-of-std\"")
-        || std::env::var("CARGO_MANIFEST_DIR")
-            .is_ok_and(|p| p.contains("/lib/rustlib/src/rust/library/"))
+        || std::env::var("CARGO_MANIFEST_DIR").is_ok_and(|p| {
+            p.replace('\\', "/")
+                .contains("/lib/rustlib/src/rust/library/")
+        })
     {
         let krate = args
             .windows(2)
@@ -677,7 +677,7 @@ ordinary = { path = "ordinary", default-features = false }
 "#;
         let mut manifest: toml_edit::DocumentMut = source.parse().unwrap();
         let relocated = root.join("staged/library");
-        let staged = BTreeMap::from([(library.canonicalize().unwrap(), relocated.clone())]);
+        let staged = BTreeMap::from([(dunce::canonicalize(&library).unwrap(), relocated.clone())]);
         paths(manifest.as_table_mut(), &root, &staged).unwrap();
         let dependency = &manifest["dependencies"]["renamed"];
         assert_eq!(dependency["path"].as_str(), relocated.to_str());

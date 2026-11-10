@@ -13,7 +13,7 @@ const A: &str = "00006094-0000-0000-0000-000000000002";
 const B: &str = "00006094-0000-0000-0000-000000000003";
 const ECHO: &str = "00006094-0000-0000-0000-000000000004";
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -35,7 +35,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -91,7 +91,8 @@ fn saved(game: &mut Game<'_>, who: &str) -> (bool, bool, bool) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_mob_saves_the_mob_that_hurt_it_for_100_ticks() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     assert_eq!(
         saved(&mut game, VICTIM),
         (false, false, false),
@@ -150,7 +151,8 @@ fn fields(game: &mut Game<'_>, i: usize) -> (Option<Tag>, Option<Tag>) {
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn the_saved_hurt_by_mob_follows_the_live_record_only() {
     use horizon_client::mobs::Who;
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     let victim = index(&mut game, VICTIM);
     let a_index = index(&mut game, A);
     let a = game.mobs[a_index].id;

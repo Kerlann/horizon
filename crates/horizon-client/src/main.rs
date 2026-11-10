@@ -7,8 +7,8 @@ static GAME_IDENTITY: [u8; horizon_mod_package::game_identity::MARK.len()] =
     horizon_mod_package::game_identity::MARK;
 
 fn main() {
-    let (_capture, launch) = horizon_mod_package::holder::bootstrap();
+    let startup = horizon_client::entry::prepare();
     std::hint::black_box(&horizon_mod_package::holder::CAPABILITY);
     std::hint::black_box(&GAME_IDENTITY);
-    horizon_client::entry::main(launch);
+    horizon_client::entry::main(startup);
 }

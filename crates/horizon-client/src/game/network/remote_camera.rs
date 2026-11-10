@@ -53,16 +53,11 @@ pub(super) fn mob_camera_entity(m: &Mob) -> CameraEntity {
     }
 }
 
-/// `GameRenderer.checkEntityPostEffect`: the chain a spectated creeper, spider
-/// or enderman puts on the screen.
+/// `GameRenderer.checkEntityPostEffect`: the chain a spectated creeper, spider or
+/// enderman puts on the screen, or one a mod registered for its own entity type
+/// (`Hooks::register_entity_spectator_shaders`).
 pub(super) fn entity_post_effect(kind: &str) -> Option<&'static str> {
-    match kind.strip_prefix("minecraft:").unwrap_or(kind) {
-        "creeper" => Some("minecraft:creeper"),
-        // CaveSpider extends Spider.
-        "spider" | "cave_spider" => Some("minecraft:spider"),
-        "enderman" => Some("minecraft:invert"),
-        _ => None,
-    }
+    horizon_client_render::spectator_shaders::chain(kind)
 }
 
 impl Game<'_> {

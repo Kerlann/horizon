@@ -247,6 +247,9 @@ impl LevelAccess for TestLevel {
     fn emit(&mut self, event: LevelEvent) {
         self.events.push(event);
     }
+    fn allow_fluid_tick(&self, pos: BlockPos, _fluid: &'static str) -> bool {
+        !self.guarded.contains(&pos)
+    }
     fn allow_spread(&self, _kind: Spread, _from: BlockPos, to: BlockPos) -> bool {
         !self.guarded.contains(&to)
     }
@@ -1255,29 +1258,6 @@ fn sand_falls_and_concrete_solidifies() {
         landing,
         falling::Landing::Placed(w.id("white_concrete", &[]))
     );
-}
-
-#[test]
-fn water_spreads_on_a_floor() {
-    let mut w = world!();
-    w.floor(0, 10, "stone");
-    let water = w.id("water", &[]);
-    w.set(BlockPos::new(0, 1, 0), water);
-    for _ in 0..60 {
-        w.tick();
-    }
-    for d in 1..=7 {
-        let pos = BlockPos::new(d, 1, 0);
-        assert_eq!(
-            w.prop(pos, "level"),
-            d.to_string(),
-            "flow at distance {d}: {}",
-            w.name(pos)
-        );
-    }
-    assert_eq!(w.get(BlockPos::new(8, 1, 0)), w.b().air());
-    // Diagonals follow Manhattan distance.
-    assert_eq!(w.prop(BlockPos::new(2, 1, 2), "level"), "4");
 }
 
 #[test]
@@ -4844,3 +4824,4 @@ fn fresh_chunk_sculk_charge_does_not_wait_for_ticking_readiness() {
 }
 
 mod barrel;
+mod fluid_tick;

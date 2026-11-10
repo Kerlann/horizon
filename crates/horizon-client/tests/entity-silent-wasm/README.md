@@ -2,8 +2,10 @@
 
 This guest is loaded twice as independent wasm packages by the real Game test.
 Each package queues writes from A's Pre, queries Pending, receives only its own
-terminals, appends work from its first completion, and verifies all three terminals
-before B's Pre. Independent no-gravity/glowing markers prove both guests reached
+terminals, appends work from its first completion, and verifies all five terminals
+(two initial Silent, two initial NoGravity, one appended Silent) before B's Pre.
+Both scalar operations cross the generated receipt/query/completion Wire path;
+NoGravity uses discriminant 0 and Silent uses discriminant 1. Independent no-gravity/glowing markers prove both guests reached
 the end of their assertions. A native observer must receive neither guest's event
 nor query authority.
 

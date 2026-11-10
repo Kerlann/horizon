@@ -162,3 +162,107 @@ fn referenced_jar_and_uninstrumented_unused_jar_are_kept() {
     assert!(referenced.exists());
     assert!(unused.exists());
 }
+
+#[cfg(unix)]
+#[test]
+fn capable_units_delete_only_after_the_last_game_lease_and_mixed_builds_stay_residual() {
+    use std::process::Command;
+    let Some(root) = std::env::var_os("CLASSIFICATION_ROOT") else {
+        let root = tempfile::tempdir().unwrap();
+        let mut actor = Command::new(std::env::current_exe().unwrap());
+        actor.args(["--exact", "storage::inventory::regressions::capable_units_delete_only_after_the_last_game_lease_and_mixed_builds_stay_residual"])
+            .env("CLASSIFICATION_ROOT", root.path()).env("HORIZON_LAUNCHER_HOME", root.path().join("data"))
+            .env("HORIZON_HOME", root.path().join("data/cache"))
+            .env("XDG_DATA_HOME", root.path().join("xdg-data")).env("XDG_CONFIG_HOME", root.path().join("xdg-config"))
+            .env("HORIZON_LAUNCHER_TRASH", root.path().join("trash")).env("HORIZON_LAUNCHER_CLIPBOARD", root.path().join("clipboard"))
+            .env("HORIZON_LAUNCHER_DESKTOP", root.path().join("desktop"))
+            .env("HORIZON_LAUNCHER_NO_SELF_UPDATE", "1").env("HORIZON_NO_AUDIO", "1");
+        assert!(actor.status().unwrap().success());
+        return;
+    };
+    let root = PathBuf::from(root);
+    if std::env::var_os("CLASSIFICATION_GAME").is_some() {
+        horizon_mod_package::holder::enter();
+        let mut command = Command::new(std::env::current_exe().unwrap());
+        command.args(std::env::args_os().skip(1));
+        let selection =
+            horizon_mod_package::selection::LaunchArguments::for_command(&command).unwrap();
+        let _capture = horizon_mod_package::holder::acquire(&selection);
+        fs::write(root.join("ready"), b"").unwrap();
+        let end = std::time::Instant::now() + std::time::Duration::from_secs(15);
+        while !root.join("stop").exists() {
+            assert!(std::time::Instant::now() < end);
+            std::thread::yield_now();
+        }
+        return;
+    }
+    let cache = root.join("data/cache");
+    fs::create_dir_all(&cache).unwrap();
+    fs::write(cache.join("resource"), b"whole resource").unwrap();
+    fs::create_dir(root.join("work")).unwrap();
+    let install = backend::version_dir("modern");
+    fs::create_dir_all(&install).unwrap();
+    let image = install.join(backend::CLIENT);
+    assert!(Command::new("cp")
+        .arg(std::env::current_exe().unwrap())
+        .arg(&image)
+        .status()
+        .unwrap()
+        .success());
+    fs::write(install.join(".installed"), b"").unwrap();
+    crate::run_leases::publish(&install).unwrap();
+    crate::run_leases::publish(&cache).unwrap();
+    assert!(matches!(
+        Access::for_unit(&cache).unwrap(),
+        Access::LeasedGame
+    ));
+    let old = backend::version_dir("legacy");
+    fs::create_dir_all(&old).unwrap();
+    fs::write(old.join(".installed"), b"").unwrap();
+    fs::write(old.join(backend::CLIENT), b"uninstrumented actor").unwrap();
+    assert!(matches!(
+        Access::for_unit(&cache).unwrap(),
+        Access::UninstrumentedGame
+    ));
+    assert!(matches!(
+        Access::for_unit(&install).unwrap(),
+        Access::LeasedGame
+    ));
+    assert!(matches!(
+        crate::cache_cleanup::delete_game_unit(&cache),
+        Err(Error::UnprovenExclusion)
+    ));
+    assert_eq!(fs::read(cache.join("resource")).unwrap(), b"whole resource");
+    fs::remove_dir_all(&old).unwrap();
+    let command = || {
+        let mut game = Command::new(&image);
+        game.args(["--exact", "storage::inventory::regressions::capable_units_delete_only_after_the_last_game_lease_and_mixed_builds_stay_residual"])
+            .env("CLASSIFICATION_GAME", "1").current_dir(root.join("work"));
+        game
+    };
+    let mut game = command().spawn().unwrap();
+    let end = std::time::Instant::now() + std::time::Duration::from_secs(15);
+    while !root.join("ready").exists() {
+        assert!(std::time::Instant::now() < end);
+        std::thread::yield_now();
+    }
+    assert!(matches!(
+        crate::cache_cleanup::delete_game_unit(&cache),
+        Err(Error::Busy)
+    ));
+    fs::write(root.join("stop"), b"").unwrap();
+    assert!(game.wait().unwrap().success());
+    crate::cache_cleanup::delete_game_unit(&cache).unwrap();
+    assert!(!cache.exists());
+    assert_eq!(command().status().unwrap().code(), Some(78));
+    fs::remove_file(install.join(".installed")).unwrap();
+    let storage = Storage::at(&root.join("data")).unwrap();
+    assert!(
+        storage
+            .entries()
+            .unwrap()
+            .iter()
+            .any(|entry| entry.path == install),
+        "incomplete installs must stay visible for residual reporting and retry"
+    );
+}

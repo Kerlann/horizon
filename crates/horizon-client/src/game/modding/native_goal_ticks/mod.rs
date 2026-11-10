@@ -20,7 +20,6 @@ mod live_mob;
 #[cfg(test)]
 mod live_read_tests;
 mod live_support;
-mod live_vehicle;
 #[cfg(test)]
 mod redirect_tests;
 
@@ -30,6 +29,7 @@ pub(super) struct GoalCx<'a, 'w> {
     m: &'a mut Mob,
     w: &'a MobWorld<'w>,
     host: &'a dyn Host,
+    selectors: mobs::goals::GoalSelectorSources<'a>,
 }
 
 impl GoalCx<'_, '_> {
@@ -273,6 +273,46 @@ impl BehaviorCxBackend for GoalCx<'_, '_> {
 }
 
 impl mobs::part_goals::GoalHost for Game<'_> {
+    fn with_entity_read_host(
+        &self,
+        actor: &Mob,
+        selectors: mobs::goals::GoalSelectorSources<'_>,
+        visit: &mut dyn FnMut(&dyn mod_api::Host),
+    ) {
+        use horizon_client::join_seq::{
+            Joined as _,
+            residency::{Kind, table::EntityLookup, write_queue::Target},
+        };
+        let admitted = self
+            .resident_entities
+            .table
+            .borrow_mut()
+            .server_admitted_read_lookup(actor.id, |at| self.locate_server_resident_owner(at))
+            .map(|(location, state, _, _)| (location, matches!(state, EntityLookup::Taken)));
+        let Some((location, taken)) = admitted else {
+            visit(self);
+            return;
+        };
+        if location.owner.kind != Kind::Mob
+            || location.join != actor.join_seq()
+            || !(taken || self.held_out.contains(&actor.id))
+        {
+            // A resident/disjoint value is not OWN. Use only its canonical body.
+            visit(self);
+            return;
+        }
+        let provider = super::native_entity_body_provider::MobBodyProvider::new(
+            Target {
+                runtime_id: actor.id,
+                location,
+            },
+            actor,
+            selectors,
+        );
+        let host = super::native_borrowed_entity_host::BorrowedEntityHost::new(self, &provider);
+        visit(&host);
+    }
+
     fn refresh_mob_read_publication(
         &self,
         mob: &Mob,
@@ -318,16 +358,6 @@ impl mobs::part_goals::GoalHost for Game<'_> {
 
     fn mob_passengers_lent(&self, mob: &Mob) -> Option<Vec<EntityRef>> {
         self.lent_mob_passengers(mob)
-    }
-
-    fn mob_dismount_location(
-        &self,
-        vehicle: Option<&Mob>,
-        vehicle_id: u32,
-        rider: Option<&Mob>,
-        passenger: EntityRef,
-    ) -> Option<[f64; 3]> {
-        self.scoped_mob_dismount_location(vehicle, vehicle_id, rider, passenger)
     }
 
     fn mob_player_controls(&self, mob: &Mob, player: u32) -> bool {
@@ -427,11 +457,12 @@ impl mobs::part_goals::GoalHost for Game<'_> {
         &self,
         goal: &mut Box<dyn mod_api::Goal>,
         m: &mut Mob,
-        w: &MobWorld<'_>,
+        cx: &mobs::goals::Cx<'_, '_, '_>,
         op: GoalOp,
         mod_id: &'static str,
         part: &'static str,
     ) -> Option<bool> {
+        let w = cx.w;
         let call = match op {
             GoalOp::CanUse => "goal_can_use",
             GoalOp::CanContinue => "goal_can_continue",
@@ -440,7 +471,12 @@ impl mobs::part_goals::GoalHost for Game<'_> {
             GoalOp::Tick => "goal_tick",
         };
         self.publish_lent_mob_reads(m, w, mod_api::EntityReadCapturePhase::BeforeCallback);
-        let mut gcx = GoalCx { m, w, host: self };
+        let mut gcx = GoalCx {
+            m,
+            w,
+            host: self,
+            selectors: cx.selectors,
+        };
         let mut context = mod_api::GoalContext::new(&mut gcx);
         let _guard = enter_native_mod(ModCall {
             id: mod_id,
@@ -484,7 +520,12 @@ impl mobs::part_goals::GoalHost for Game<'_> {
         // The same view a goal runs on (#824): one boundary, the brain's
         // memories typed on top.
         self.publish_lent_mob_reads(m, w, mod_api::EntityReadCapturePhase::BeforeCallback);
-        let mut gcx = GoalCx { m, w, host: self };
+        let mut gcx = GoalCx {
+            m,
+            w,
+            host: self,
+            selectors: Default::default(),
+        };
         let mut context = mod_api::BehaviorCx::new(&mut gcx);
         let _guard = enter_native_mod(ModCall {
             id: mod_id,
@@ -546,6 +587,7 @@ impl Game<'_> {
             m: mob,
             w: world,
             host: self,
+            selectors: Default::default(),
         };
         let mut new_target = original;
         let mut cancel = false;

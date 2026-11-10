@@ -2320,13 +2320,23 @@ impl Game<'_> {
         position: Vec3,
         bounds: Aabb,
     ) -> Option<BlockPos> {
+        self.supporting_block_in(&self.world, position, bounds)
+    }
+
+    /// The same support query against the admitted body's actual level.
+    pub(in crate::game) fn supporting_block_in(
+        &self,
+        world: &horizon_client::world::World,
+        position: Vec3,
+        bounds: Aabb,
+    ) -> Option<BlockPos> {
         let (min, max) = (bounds.min_position(), bounds.max_position());
         let foot = Aabb::new(
             Vec3::new(min.x, min.y - 1.0e-6, min.z),
             Vec3::new(max.x, min.y, max.z),
         );
         let mut scene = horizon_client::collisions::SceneCollisions {
-            world: &self.world,
+            world,
             binding: self.collision,
             subject: None,
         };

@@ -1290,7 +1290,12 @@ pub(super) fn cx<'a, 'w, 'l>(
     level: &'a mut DamageLevel<'l>,
     events: &'a mut Vec<MobEvent>,
 ) -> Cx<'a, 'w, 'l> {
-    Cx { w, level, events }
+    Cx {
+        w,
+        level,
+        events,
+        selectors: Default::default(),
+    }
 }
 
 // ---- Printing ---------------------------------------------------------------

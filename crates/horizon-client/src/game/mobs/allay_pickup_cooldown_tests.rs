@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 const SUPPLIED: &str = "00006096-0000-0000-0000-000000000001";
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -32,7 +32,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -84,7 +84,8 @@ fn saved(game: &mut Game<'_>, i: usize) -> Option<Tag> {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn an_allay_keeps_its_item_pickup_cooldown_memory() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     let i = index(&mut game);
     // The supplied memory is loaded into the pickup cooldown and saved back.
     assert_eq!(game.mobs[i].extra.ints[3], 30, "loaded");
@@ -119,7 +120,8 @@ fn step(game: &mut Game<'_>, ticks: u32) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn the_saved_pickup_cooldown_follows_the_model() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     assert!(game.run_command(
         "summon allay 10.5 101 8.5 {PersistenceRequired:1b,NoGravity:1b,UUID:[I;24726,0,0,3]}"
     ));

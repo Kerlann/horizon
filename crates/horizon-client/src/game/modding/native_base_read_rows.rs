@@ -521,7 +521,7 @@ impl CompactEntityReadRow {
             )),
             is_silent: mob.map(|m| m.silent).or_else(|| player.map(|_| false)),
             glowing: mob.map(|m| m.glowing),
-            no_gravity: mob.map(|m| m.no_gravity),
+            no_gravity: source.no_gravity(),
             ticks_frozen: mob
                 .map(|m| m.ticks_frozen)
                 .or_else(|| player.map(|p| p.ticks_frozen)),

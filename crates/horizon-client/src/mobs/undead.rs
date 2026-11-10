@@ -905,6 +905,7 @@ mod use_overflow_tests {
                         w: &world,
                         level: &mut fixture.level(),
                         events: &mut events,
+                        selectors: Default::default(),
                     },
                 );
                 assert_eq!(m.extra.using_item, i32::MAX);
@@ -1386,6 +1387,7 @@ mod conversion_tests {
                 w,
                 level,
                 events: &mut events,
+                selectors: Default::default(),
             };
             custom_server_ai_step(&mut m, &mut cx);
             assert!(m.removed, "the {kind} is discarded");
@@ -1548,6 +1550,7 @@ mod go_to_water_tests {
                     w,
                     level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 assert_eq!(goal.can_use(&mut m, &mut cx), expect, "{block}");
             });
@@ -1624,6 +1627,7 @@ mod wither_arrow_tests {
                     w: &w,
                     level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 perform_ranged_attack(&mut m, Who::Player, &mut cx, 1.0);
                 let arrow = events
@@ -1711,8 +1715,9 @@ mod trident_continue_tests {
                 w: &world,
                 level: &mut fixture.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
-            let mut goals = std::mem::take(&mut m.ai.goals);
+            let mut goals = m.ai.goals.take();
             goals.tick(&mut m, &mut cx);
             let started = goals.is_running("DrownedTridentAttackGoal");
             // No path left to follow: only the trident used to keep it going.

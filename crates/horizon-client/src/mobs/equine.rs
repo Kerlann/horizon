@@ -378,7 +378,10 @@ pub fn controlled(m: &Mob) -> bool {
         Species::Nautilus | Species::ZombieNautilus => super::nautilus::controlled(m),
         // AbstractHorse.getControllingPassenger: saddled with a player on it. A
         // tamed skeleton horse (SkeletonTrapGoal only tames it) needs the saddle too.
-        _ => m.extra.saddled(),
+        s if is_equine(s) => m.extra.saddled(),
+        // Mob.getControllingPassenger: only a mob passenger steers any other mob,
+        // a player never does, whatever a (mod) mob keeps as its saddle (#13973).
+        _ => false,
     }
 }
 /// Saddled equines (not llamas), pigs and striders: the controlling player
@@ -1196,6 +1199,32 @@ mod tests {
         Mob::new(1, kind, Vec3::ZERO, 0.0)
     }
 
+    /// `AbstractHorse` takes a saddled player rider's input; any other mob
+    /// (`Mob.getControllingPassenger`) does not, even with a saddle set, as a
+    /// mod mob on a wandering trader template may set it for its own saddle.
+    #[test]
+    fn only_an_abstract_horse_is_steered_by_its_saddled_player_rider() {
+        for (species, expected) in [
+            (Species::Horse, true),
+            (Species::Donkey, true),
+            (Species::Mule, true),
+            (Species::SkeletonHorse, true),
+            (Species::ZombieHorse, true),
+            (Species::Camel, true),
+            (Species::CamelHusk, true),
+            (Species::Llama, true),
+            (Species::TraderLlama, true),
+            (Species::WanderingTrader, false),
+            (Species::Villager, false),
+        ] {
+            let mut m = horse(species);
+            m.rider = Some(Rider::default());
+            assert!(!controlled(&m), "{species:?} unsaddled");
+            m.extra.set_saddled(true);
+            assert_eq!(controlled(&m), expected, "{species:?} saddled");
+        }
+    }
+
     #[test]
     #[ignore = "needs prepared resources"]
     fn tame_listener_defers_the_successful_tame() {
@@ -1220,6 +1249,7 @@ mod tests {
                     w: &world,
                     level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 RunAroundLikeCrazy.tick(&mut m, &mut cx);
                 assert_eq!(m.extra.tame, !asks_animal_tame);
@@ -1285,6 +1315,7 @@ mod tests {
                             w,
                             level: &mut test_level.level(),
                             events: &mut events,
+                            selectors: Default::default(),
                         },
                     );
                     assert_eq!(m.extra.tame, value == 1000);
@@ -1565,10 +1596,11 @@ mod tests {
                     w,
                     level: &mut lr.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 for m in [&mut horse, &mut zombie] {
                     m.ai.goals.add(1, RunAroundLikeCrazy);
-                    let mut goals = std::mem::take(&mut m.ai.goals);
+                    let mut goals = m.ai.goals.take();
                     goals.tick(m, &mut cx);
                     outcomes.push(goals.is_running("RunAroundLikeCrazy"));
                     m.ai.goals = goals;

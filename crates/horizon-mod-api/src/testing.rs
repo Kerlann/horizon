@@ -236,12 +236,12 @@ impl ServerHost for FakeHost {
     }
 }
 impl crate::prelude::ModStateServerHost for FakeHost {
-    fn transaction_open(&mut self, _: TransactionSeal) {
+    fn transaction_open(&mut self) -> TransactionSeal {
         self.journal
-            .open((self.players.clone(), self.level.clone()));
+            .open((self.players.clone(), self.level.clone()))
     }
-    fn transaction_close(&mut self, _: TransactionSeal, commit: bool) {
-        if let Some((players, level)) = self.journal.close(commit) {
+    fn transaction_close(&mut self, seal: &TransactionSeal, commit: bool) {
+        if let Some((players, level)) = self.journal.close(seal, commit) {
             (self.players, self.level) = (players, level);
         }
     }
@@ -359,8 +359,11 @@ impl crate::prelude::PlayersBackend for FakeHost {
     fn player_selected_slot(&self, player: PlayerRef) -> Option<usize> {
         Some(self.players.get(player.uuid())?.selected_slot)
     }
-    fn player_name(&self, player: PlayerRef) -> Option<String> {
-        Some(self.players.get(player.uuid())?.name.clone())
+    fn player_name(&self, player: PlayerRef) -> Result<Option<String>, crate::EntityReadError> {
+        Ok(self
+            .players
+            .get(player.uuid())
+            .map(|player| player.name.clone()))
     }
 }
 crate::impl_backend_areas!(

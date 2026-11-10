@@ -8,6 +8,8 @@
 //! copy: the local player and the entities the server told it of, in the level
 //! it shows. The entities are those of the level in place (the one a hook runs
 //! in) and the server's players, whatever their level.
+#[path = "native_entity_refs/save_lending.rs"]
+mod save_lending;
 use super::{
     Game,
     commands::Target,
@@ -79,21 +81,6 @@ impl Game<'_> {
             return None;
         }
         remote.tracked_entity(i32::try_from(entity.id()).ok()?)
-    }
-
-    /// Keep a held-out entity inaccessible until its copy has been stored back.
-    pub(super) fn with_entity_held_out<R>(
-        &mut self,
-        id: u32,
-        action: impl FnOnce(&mut Self) -> R,
-    ) -> R {
-        if mod_api::__private::mods().is_empty() {
-            return action(self);
-        }
-        self.held_out.push(id);
-        let result = action(self);
-        self.held_out.pop();
-        result
     }
 
     /// What a handle names now, or None for a stale or foreign one.
@@ -592,13 +579,25 @@ impl Game<'_> {
         blocks: ClipBlock,
         fluids: ClipFluid,
     ) -> Option<ClipHit> {
+        let world = self.native_level_world(level)?;
+        self.clip_in_world(world, from, to, blocks, fluids)
+    }
+
+    /// Shared ray kernel for an already selected physical level.
+    pub(super) fn clip_in_world(
+        &self,
+        world: &horizon_client::world::World,
+        from: [f64; 3],
+        to: [f64; 3],
+        blocks: ClipBlock,
+        fluids: ClipFluid,
+    ) -> Option<ClipHit> {
         use horizon_client::collisions::SceneCollisions;
         use horizon_core::geometry::Direction;
         use horizon_world::{
             collision_context::CollisionContext,
             world_ray::{RayBlockMode, RayFluidMode, clip_world},
         };
-        let world = self.native_level_world(level)?;
         let mut rays = super::explosion::ColliderRays {
             scene: SceneCollisions {
                 world,
@@ -713,7 +712,7 @@ impl Game<'_> {
         }
         use horizon_client::join_seq::residency::{Source, table::EntityLookup};
         let (location, details) = {
-            let mut table = self.entity_residency.borrow_mut();
+            let mut table = self.resident_entities.table.borrow_mut();
             let (location, state, _, details) = table
                 .server_admitted_read_lookup(entity.id(), |at| {
                     self.locate_server_resident_owner(at)

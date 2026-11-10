@@ -748,7 +748,15 @@ pub fn tick_until_consumption(
     if m.species() == Species::ZombieVillager {
         // ZombieVillager.tick counts the cure down before super.tick, with
         // or without AI (NoAI only skips serverAiStep).
-        super::zombie_villager::step(m, &mut Cx { w, level, events });
+        super::zombie_villager::step(
+            m,
+            &mut Cx {
+                w,
+                level,
+                events,
+                selectors: Default::default(),
+            },
+        );
     }
     super::warden::pre_tick(m, w, events);
     if m.species() == Species::Strider {
@@ -1506,11 +1514,6 @@ fn base_tick(
     if m.invulnerable > 0 {
         m.invulnerable -= 1;
     }
-    // Entity.baseTick: the entity-level invulnerability window counts down
-    // too, its own timer (#916), never the damage cooldown above.
-    if m.invulnerable_time > 0 {
-        m.invulnerable_time -= 1;
-    }
     // LivingEntity.baseTick runs tickEffects after the timers count down.
     tick_effects(m, w.loop_context, level, w.mod_effects);
     // Entity.applyEffectsFromBlocks runs in LivingEntity.aiStep, after
@@ -2105,9 +2108,14 @@ fn push_entities(
         }
     }
     // EntitySelector.pushableBy(this): the teams' collision rules.
-    let own = w.teams.of(Who::Mob(m.id));
-    targets
-        .retain(|(who, ..)| crate::scoreboard::TeamRules::pushable_by(own, w.teams.of(*who), true));
+    let own = w.team_rules(m, Who::Mob(m.id));
+    targets.retain(|(who, ..)| {
+        crate::scoreboard::TeamRules::pushable_by(
+            own.as_ref(),
+            w.team_rules(m, *who).as_ref(),
+            true,
+        )
+    });
     // Cramming: a quarter of the ticks spent with `maxEntityCramming` or more
     // others around that are not riding anything hurts it by 6.
     let limit = w.max_entity_cramming;
@@ -2208,8 +2216,8 @@ struct BorrowedGoalSelectors<'a> {
 impl<'a> BorrowedGoalSelectors<'a> {
     fn new(mob: &'a mut Mob) -> Self {
         Self {
-            targets: std::mem::take(&mut mob.ai.targets),
-            goals: std::mem::take(&mut mob.ai.goals),
+            targets: mob.ai.targets.take(),
+            goals: mob.ai.goals.take(),
             mob,
         }
     }
@@ -2276,13 +2284,62 @@ mod selector_restore_tests {
             calls: Arc<Mutex<Vec<(usize, u32)>>>,
             panic: Arc<AtomicBool>,
             ticks: u32,
+            target: bool,
+        }
+        impl Probe {
+            fn inspect(&self, mob: &Mob, cx: &Cx, running: bool) {
+                assert!(mob.ai.goals.read_source().is_none());
+                assert!(mob.ai.targets.read_source().is_none());
+                let goals: Vec<_> = cx
+                    .selectors
+                    .goals
+                    .expect("actual action selector")
+                    .entries()
+                    .collect();
+                let targets: Vec<_> = cx
+                    .selectors
+                    .targets
+                    .expect("actual target selector")
+                    .entries()
+                    .collect();
+                assert_eq!(goals.len(), 1);
+                assert_eq!(targets.len(), 1);
+                assert_eq!((goals[0].0, goals[0].1), (21, "selector_read_probe"));
+                assert_eq!((targets[0].0, targets[0].1), (11, "selector_read_probe"));
+                assert_eq!(
+                    if self.target {
+                        targets[0].2
+                    } else {
+                        goals[0].2
+                    },
+                    running
+                );
+                assert_eq!(
+                    matches!(
+                        cx.selectors.active,
+                        super::super::goals::SelectorKind::Targets
+                    ),
+                    self.target
+                );
+            }
         }
         impl Goal for Probe {
             fn flags(&self) -> u8 {
                 0
             }
-            fn can_use(&mut self, _: &mut Mob, _: &mut Cx) -> bool {
+            fn name(&self) -> &'static str {
+                "selector_read_probe"
+            }
+            fn can_use(&mut self, mob: &mut Mob, cx: &mut Cx) -> bool {
+                self.inspect(mob, cx, false);
                 true
+            }
+            fn can_continue(&mut self, mob: &mut Mob, cx: &mut Cx) -> bool {
+                self.inspect(mob, cx, true);
+                true
+            }
+            fn start(&mut self, mob: &mut Mob, cx: &mut Cx) {
+                self.inspect(mob, cx, true);
             }
             fn every_tick(&self) -> bool {
                 true
@@ -2290,7 +2347,8 @@ mod selector_restore_tests {
             fn box_clone(&self) -> Box<dyn Goal> {
                 panic!("live goals must not clone")
             }
-            fn tick(&mut self, _: &mut Mob, _: &mut Cx) {
+            fn tick(&mut self, mob: &mut Mob, cx: &mut Cx) {
+                self.inspect(mob, cx, true);
                 self.ticks += 1;
                 self.calls
                     .lock()
@@ -2337,9 +2395,10 @@ mod selector_restore_tests {
                                     calls: calls[i].clone(),
                                     panic: panics[i].clone(),
                                     ticks: 0,
+                                    target: i == 0,
                                 });
                                 identities[i] = &*goal as *const Probe as usize;
-                                selector.add_boxed(1, goal);
+                                selector.add_boxed(if i == 0 { 11 } else { 21 }, goal);
                             }
                             let mut level = crate::health::TestLevel::new(0);
                             let mut events = Vec::new();
@@ -2463,13 +2522,40 @@ fn server_ai_step(
             targets,
             goals,
         } = &mut BorrowedGoalSelectors::new(m);
-        let mut cx = Cx { w, level, events };
-        if id_based % 2 != 0 && tick_count > 1 {
-            targets.tick_running(mob, &mut cx, false);
-            goals.tick_running(mob, &mut cx, false);
-        } else {
-            targets.tick(mob, &mut cx);
-            goals.tick(mob, &mut cx);
+        let running_only = id_based % 2 != 0 && tick_count > 1;
+        {
+            let mut cx = Cx {
+                w,
+                level,
+                events,
+                selectors: super::goals::GoalSelectorSources {
+                    goals: goals.read_source(),
+                    targets: None,
+                    active: super::goals::SelectorKind::Targets,
+                },
+            };
+            if running_only {
+                targets.tick_running(mob, &mut cx, false);
+            } else {
+                targets.tick(mob, &mut cx);
+            }
+        }
+        {
+            let mut cx = Cx {
+                w,
+                level,
+                events,
+                selectors: super::goals::GoalSelectorSources {
+                    goals: None,
+                    targets: targets.read_source(),
+                    active: super::goals::SelectorKind::Goals,
+                },
+            };
+            if running_only {
+                goals.tick_running(mob, &mut cx, false);
+            } else {
+                goals.tick(mob, &mut cx);
+            }
         }
     }
     // A creaking looked at stands still: its navigation, move, look and jump
@@ -2506,7 +2592,12 @@ fn server_ai_step(
         super::animal_brain::tick(m, w, level, events);
     }
     {
-        let mut cx = Cx { w, level, events };
+        let mut cx = Cx {
+            w,
+            level,
+            events,
+            selectors: Default::default(),
+        };
         custom_server_ai_step(m, &mut cx);
     }
     if frozen {
@@ -4391,6 +4482,7 @@ mod hit_effect_tests {
                     w,
                     level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 do_hurt_target(&mut m, Who::Mob(2), &mut cx);
                 carried.push((
@@ -4451,6 +4543,7 @@ mod hit_effect_tests {
                 w: &easy,
                 level,
                 events: &mut events,
+                selectors: Default::default(),
             };
             do_hurt_target(&mut m, Who::Mob(2), &mut cx);
             out = Some(
@@ -4500,6 +4593,7 @@ mod attack_sound_tests {
                 w,
                 level: &mut test_level.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
             do_hurt_target(&mut m, Who::Mob(2), &mut cx);
             heard = events
@@ -6176,6 +6270,7 @@ mod iron_golem_push_tests {
                     w,
                     level: &mut test_level.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 do_hurt_target(&mut m, Who::Player, &mut cx);
                 got.push((

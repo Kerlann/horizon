@@ -1,6 +1,12 @@
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
 import unittest
+from unittest import mock
 
-from tools import check_addresses
+from tools import check_addresses, check_file_size
 
 
 def strings(source):
@@ -92,6 +98,71 @@ class CheckTests(unittest.TestCase):
         config = dict(CONFIG, allowed=moved["allowed"])
         found = {("crates/horizon-telemetry/src/upload.rs", "telemetry.playhorizon.dev")}
         self.assertEqual(check_addresses.check(config, found, {"allowed": CONFIG["allowed"]}), ([], []))
+
+
+class UpstreamRestorationTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.git("init", "-q", "-b", "main")
+        self.git("config", "user.name", "Fixture")
+        self.git("config", "user.email", "fixture@example.invalid")
+        (self.root / "tools").mkdir()
+        (self.root / "tools/addresses.json").write_text('{"allowed": []}')
+        (self.root / "tools/file_size_baseline.txt").write_text("")
+        self.git("add", "tools")
+        self.git("commit", "-q", "-m", "base")
+        self.base = self.git("rev-parse", "HEAD").strip()
+        self.row = "crates/service/src/lib.rs telemetry.playhorizon.dev"
+        self.git("checkout", "-q", "-b", "upstream")
+        (self.root / "tools/addresses.json").write_text(json.dumps({"allowed": [self.row]}))
+        self.git("commit", "-q", "-am", "upstream address")
+        upstream = self.git("rev-parse", "HEAD").strip()
+        remote = self.root / "remote.git"
+        self.git("init", "-q", "--bare", str(remote))
+        self.git("push", "-q", str(remote), "HEAD:refs/heads/main")
+        self.git("checkout", "-q", "-b", "work", self.base)
+        (self.root / "fork").write_text("fork")
+        self.git("add", "fork")
+        self.git("commit", "-q", "-m", "fork")
+        self.git("merge", "-q", "--no-edit", "upstream")
+        (self.root / "tools/file_size_baseline.txt").write_text(f"# sync-baseline: {upstream}\n")
+        for patch in (mock.patch.object(check_addresses, "ROOT", self.root),
+                      mock.patch.object(check_file_size, "ROOT", self.root),
+                      mock.patch.dict(os.environ, {"HORIZON_UPSTREAM_URL": str(remote)})):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def git(self, *args):
+        return subprocess.run(["git", *args], cwd=self.root, check=True,
+                              capture_output=True, text=True).stdout
+
+    def problems(self, row):
+        upstream, errors = check_addresses.restored_upstream_rows(self.base)
+        self.assertEqual(errors, [])
+        found = {tuple(row.split(" ", 1))}
+        return check_addresses.check({"allowed": [row]}, found, {"allowed": []}, upstream)[0]
+
+    def test_verbatim_upstream_row_with_verified_sync_passes(self):
+        self.assertEqual(self.problems(self.row), [])
+
+    def test_fork_only_row_fails(self):
+        self.assertTrue(self.problems("crates/fork/src/lib.rs fork.playhorizon.dev"))
+
+    def test_one_character_change_to_upstream_row_fails(self):
+        self.assertTrue(self.problems(self.row.replace("service/", "service2/")))
+
+    def test_forged_sync_provenance_cannot_restore_rows(self):
+        marker = self.git("rev-parse", "HEAD").strip()
+        (self.root / "tools/file_size_baseline.txt").write_text(f"# sync-baseline: {marker}\n")
+        rows, errors = check_addresses.restored_upstream_rows(self.base)
+        self.assertEqual(rows, set())
+        self.assertTrue(errors)
+
+    def test_verbatim_row_without_changed_sync_declaration_fails(self):
+        (self.root / "tools/file_size_baseline.txt").write_text("")
+        self.assertTrue(self.problems(self.row))
 
 
 if __name__ == "__main__":

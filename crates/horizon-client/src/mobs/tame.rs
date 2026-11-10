@@ -624,7 +624,7 @@ impl Beg {
             i.as_deref()
                 .is_some_and(|i| i == "minecraft:bone" || self.food.iter().any(|f| f == i))
         };
-        p.alive && !p.spectator && (held(&p.main_hand) || held(&p.off_hand))
+        p.alive && (held(&p.main_hand) || held(&p.off_hand))
     }
 }
 impl Goal for Beg {
@@ -634,7 +634,7 @@ impl Goal for Beg {
     }
     fn can_use(&mut self, m: &mut Mob, cx: &mut Cx) -> bool {
         cx.w.selected_player()
-            .is_some_and(|p| m.distance_sqr(p.position) <= 64.0)
+            .is_some_and(|p| p.alive && !p.spectator && m.distance_sqr(p.position) <= 64.0)
             && self.interesting(cx.w)
     }
     fn can_continue(&mut self, m: &mut Mob, cx: &mut Cx) -> bool {
@@ -1846,6 +1846,7 @@ mod tests {
                 w,
                 level: &mut fixture.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
             let mut m = wolf();
             set_tame(&mut m, true);
@@ -2104,6 +2105,7 @@ mod tests {
                     w,
                     level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 let mut goal = Breed::new(1.0);
                 assert_eq!(
@@ -2113,6 +2115,52 @@ mod tests {
                 );
             });
         }
+    }
+
+    /// `BegGoal` finds its player with `TargetingConditions.forNonCombat()`,
+    /// which never picks a spectator or a dead player.
+    #[test]
+    fn a_spectator_holding_a_bone_does_not_make_a_wolf_beg() {
+        use crate::mobs::goals::Cx;
+        use crate::mobs::world::{test_player, with_test_world};
+        let mut outcomes = Vec::new();
+        if !with_test_world(&[], |w, _| {
+            for spectator in [false, true] {
+                let mut world = w.clone();
+                let mut p = test_player(Vec3::new(2.5, 64.0, 0.5));
+                p.main_hand = Some("minecraft:bone".into());
+                p.spectator = spectator;
+                world.player = Some(p);
+                let mut kind = (*kind()).clone();
+                kind.species = Species::Wolf;
+                let mut m = Mob::new(1, Arc::new(kind), Vec3::new(0.5, 64.0, 0.5), 0.0);
+                m.ai.goals.add(
+                    1,
+                    super::Beg {
+                        food: Arc::from(vec!["minecraft:bone".to_string()]),
+                        ticks: 0,
+                    },
+                );
+                let mut lr = crate::health::TestLevel::new(0);
+                let mut events = Vec::new();
+                let mut cx = Cx {
+                    w: &world,
+                    level: &mut lr.level(),
+                    events: &mut events,
+                };
+                let mut goals = std::mem::take(&mut m.ai.goals);
+                goals.tick(&mut m, &mut cx);
+                outcomes.push(goals.is_running("Beg"));
+                m.ai.goals = goals;
+            }
+        }) {
+            return;
+        }
+        assert_eq!(
+            outcomes,
+            vec![true, false],
+            "a survival player's bone makes it beg; a spectator's does not"
+        );
     }
 }
 
@@ -2147,7 +2195,7 @@ mod universal_anger_tests {
                 // nobody left that it was angered by.
                 m.extra.anger = 600;
                 m.extra.angry_at = None;
-                let mut goals = std::mem::take(&mut m.ai.targets);
+                let mut goals = m.ai.targets.take();
                 let mut events = Vec::new();
                 let mut test_level = crate::health::TestLevel::new(0);
                 let level = &mut test_level.level();
@@ -2155,6 +2203,7 @@ mod universal_anger_tests {
                     w: &w,
                     level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 for _ in 0..200 {
                     goals.tick(&mut m, &mut cx);
@@ -2202,8 +2251,9 @@ mod cat_tempt_tests {
                 w: &world,
                 level: &mut fixture.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
-            let mut goals = std::mem::take(&mut m.ai.goals);
+            let mut goals = m.ai.goals.take();
             goals.tick(&mut m, &mut cx);
             let started = goals.is_running("CatTempt");
             m.extra.tame = true;
@@ -2263,8 +2313,9 @@ mod tamable_panic_tests {
                     w,
                     level: &mut test_level.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
-                let mut goals = std::mem::take(&mut m.ai.goals);
+                let mut goals = m.ai.goals.take();
                 goals.tick(&mut m, &mut cx);
                 outcome = Some(goals.is_running("TamePanic"));
                 m.ai.goals = goals;
@@ -2332,8 +2383,9 @@ mod non_tame_tests {
                 w,
                 level: &mut lr.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
-            let mut goals = std::mem::take(&mut m.ai.goals);
+            let mut goals = m.ai.goals.take();
             goals.tick(m, &mut cx);
             let running = goals.is_running("NonTameRandomTargetGoal");
             m.ai.goals = goals;

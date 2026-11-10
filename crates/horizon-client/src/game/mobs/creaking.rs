@@ -123,6 +123,8 @@ impl Game<'_> {
             &mut Vec<HeartEvent>,
         ),
     ) -> Result<()> {
+        // Initialize from the canonical map before the heart temporarily owns it.
+        self.with_prepared_mob_relations(|_| ());
         let mut mobs = self.mobs.lift();
         #[cfg(test)]
         super::entity::taken_pass_tests::after_take(self);
@@ -155,10 +157,17 @@ impl Game<'_> {
         };
         // The heart's additions go after every slot the index holds.
         self.mob_index = index;
+        let added_uuids: Vec<_> = added
+            .iter()
+            .filter_map(|mob| uuids.get(&mob.id).copied().map(|uuid| (mob.id, uuid)))
+            .collect();
         mobs.extend(added);
         self.mobs
             .restore(mobs, horizon_client::join_seq::RestoreOrder::SurvivorsFirst);
         self.persist.uuids = uuids;
+        for (id, uuid) in added_uuids {
+            self.saved_entity_uuid_changed(self.dim.key(), id, None, Some(uuid));
+        }
         self.next_entity = next_entity;
         self.world.random = random;
         let mut mob_events = Vec::new();

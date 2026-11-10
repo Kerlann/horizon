@@ -171,6 +171,11 @@ may be running in the tick that is saving), and a level asked for twice before t
 answers whether the request was taken. `level_save` fires with the level's dimension once it was written; a
 save that fails fires nothing and is logged.
 
+Inside a hook, use `level.request_save(host)`, not a synchronous `save-all` command.
+While an entity pass or held-out row is borrowed, synchronous saving refuses with vanilla's
+`commands.save.failed` feedback and a failed command result, without writing a partial snapshot.
+Requested saves wait for a settled start-of-tick boundary.
+
 ### Chunk generators
 
 

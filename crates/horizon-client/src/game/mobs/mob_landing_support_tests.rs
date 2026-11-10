@@ -10,7 +10,7 @@ use horizon_client::chunk::Chunk;
 use horizon_core::position::ChunkPos;
 use std::sync::Arc;
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -32,7 +32,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -60,7 +60,8 @@ fn game() -> Game<'static> {
 /// A pig with AI that cannot walk dropped 6 blocks at `x`, over honey at 8
 /// and stone at 9; its Health, and the support it has, once it has landed.
 fn drop_pig(x: f64) -> (f32, Option<[i32; 3]>, f64) {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     for command in [
         "forceload add 0 0".to_owned(),
         "tick freeze".to_owned(),

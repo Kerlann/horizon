@@ -18,7 +18,7 @@ const PIG: &str = "0000609a-0000-0000-0000-000000000001";
 const OTHER_PIG: &str = "0000609a-0000-0000-0000-000000000003";
 const AT_FENCE: &str = "@e[type=minecraft:leash_knot,x=8.5,y=201.375,z=0.5,distance=..0.001]";
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -40,7 +40,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -174,7 +174,8 @@ fn host(game: &mut Game<'_>) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_server_that_starts_tracking_later_shows_the_same_knot() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     summon_pig(&mut game, 1, 16.5);
     step(&mut game);
     assert!(game.lan.is_none());
@@ -209,7 +210,8 @@ fn a_server_that_starts_tracking_later_shows_the_same_knot() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn two_leads_on_one_fence_share_one_knot() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     summon_pig(&mut game, 1, 16.5);
     summon_pig(&mut game, 3, 4.5);
     step(&mut game);
@@ -232,7 +234,8 @@ fn two_leads_on_one_fence_share_one_knot() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_knot_tied_again_after_its_last_lead_is_a_new_entity() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     summon_pig(&mut game, 1, 13.5);
     step(&mut game);
     let first = knots(&game)[0];
@@ -259,7 +262,8 @@ fn a_knot_tied_again_after_its_last_lead_is_a_new_entity() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn the_same_fence_position_in_another_level_is_another_knot() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     game.enter_command_level(Dim::Nether);
     assert_eq!(game.dim, Dim::Nether);
     for x in 0..2 {
@@ -309,7 +313,8 @@ fn the_same_fence_position_in_another_level_is_another_knot() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn commands_that_would_move_or_remove_a_natural_knot_fail() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     summon_pig(&mut game, 1, 16.5);
     step(&mut game);
     let id = knots(&game)[0];

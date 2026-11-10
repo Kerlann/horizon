@@ -1,6 +1,13 @@
 [workspace]
-exclude = ["launcher", "crates/horizon-mod-registry", "third_party/wgpu-hal", "third_party/naga", "third_party/libmimalloc-sys", "tools/fixtures/paper-trace-mod"]
+exclude = ["crates/horizon-telemetry-server", "launcher", "crates/horizon-mod-registry", "third_party/wgpu-hal", "third_party/naga", "third_party/libmimalloc-sys", "tools/fixtures/paper-trace-mod"]
 members = [
+    "crates/horizon-cosmetics",
+    "crates/horizon-telemetry",
+    "crates/horizon-hooks",
+    "crates/horizon-game",
+    "crates/horizon-official",
+    "crates/horizon-heartbeat",
+
     "crates/horizon-core",
     "crates/horizon-platform",
     "crates/horizon-addresses",
@@ -99,6 +106,20 @@ debug = "line-tables-only"
 # Likewise, the API generator repeatedly parses the game's sources with syn.
 # These dependencies stay cached in CI, unlike workspace test binaries.
 [profile.dev.package.sha2]
+opt-level = 3
+
+# Fixture tests compile real wasm modules with Cranelift at runtime. Keep the
+# compiler optimized without optimizing (or weakening) the tests themselves.
+[profile.dev.package.wasmtime]
+opt-level = 3
+[profile.dev.package.cranelift-codegen]
+opt-level = 3
+
+# Packaging validates each real module repeatedly. Optimize the validator, not
+# the fixture or guest code (which use their separate horizon-wasm profile).
+[profile.dev.package.horizon-mod-package]
+opt-level = 3
+[profile.dev.package.wasmparser]
 opt-level = 3
 
 [profile.dev.package.horizon-mod-api-gen]

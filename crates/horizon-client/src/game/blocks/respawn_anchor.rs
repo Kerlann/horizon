@@ -420,8 +420,17 @@ impl Game<'_> {
     /// `DismountHelper.canDismountTo(level, entity, box)`: no block collides
     /// with the box and it is inside the world border.
     pub(super) fn can_dismount_to(&self, bounds: Aabb) -> bool {
+        self.can_dismount_to_at(&self.world, &self.border, bounds)
+    }
+
+    pub(super) fn can_dismount_to_at(
+        &self,
+        world: &horizon_client::world::World,
+        border: &horizon_client::worldborder::WorldBorder,
+        bounds: Aabb,
+    ) -> bool {
         let mut scene = SceneCollisions {
-            world: &self.world,
+            world,
             binding: self.collision,
             subject: None,
         };
@@ -431,7 +440,7 @@ impl Game<'_> {
         // WorldBorder.isWithinBounds(box).
         let (lo, hi) = (bounds.min(Axis::X), bounds.max(Axis::X) - 1.0e-5);
         let (lz, hz) = (bounds.min(Axis::Z), bounds.max(Axis::Z) - 1.0e-5);
-        self.border.contains(lo, lz) && self.border.contains(hi, hz)
+        border.contains(lo, lz) && border.contains(hi, hz)
     }
     pub(super) fn named_block_in_tag(&self, tag: &str, block: &str) -> bool {
         self.res

@@ -100,16 +100,24 @@ pub trait EntitiesBackend {
     /// Side: server.
     /// The entity's tags (`Entity.getTags`), as `/tag <entity> list` shows
     /// them. API 386.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn entity_tags(&self, entity: EntityRef) -> Option<Vec<String>>;
+    fn entity_tags(&self, entity: EntityRef) -> Result<Option<Vec<String>>, EntityReadError>;
     /// Side: both.
     /// The entity's name as plain text (`Entity.getName`): its custom name,
     /// a player's name, else its type's name. On a client (API
     /// @API:client_entity_refs@), from the custom name the server synced
     /// (`Entity.DATA_CUSTOM_NAME`) and a player's profile name. API
     /// 386.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn entity_name(&self, entity: EntityRef) -> Option<String>;
+    fn entity_name(&self, entity: EntityRef) -> Result<Option<String>, EntityReadError>;
     /// Side: server.
     /// Whether the entity's name shows over it at any distance
     /// (`Entity.isCustomNameVisible`); false for the kinds that keep no name.
@@ -186,20 +194,32 @@ pub trait EntitiesBackend {
     /// `#bypasses_invulnerability` gets past. None for a stale handle or a
     /// kind with no such decision (the player's paths answer their refusals
     /// at hurt time). #924.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn entity_invulnerable_to_damage(&self, entity: EntityRef, damage_type: &str) -> Option<bool>;
+    fn entity_invulnerable_to_damage(
+        &self,
+        entity: EntityRef,
+        damage_type: &str,
+    ) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
     /// Whether `source`'s damage may hit `entity` through their teams
     /// (`Player.canHarmPlayer`, `Team.allowFriendlyFire`,
     /// `DamageSource.doTeamsAllowDamage`): allies without friendly fire
     /// cannot. Entities without a team always can. None for a stale handle.
     /// #924.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
     fn entity_entities_team_damage_allowed(
         &self,
         entity: EntityRef,
         source: EntityRef,
-    ) -> Option<bool>;
+    ) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
     /// `Entity.isInvulnerableToPiercingWeapon` (`isInvulnerable`): the
     /// `Invulnerable` flag; the temporary window `Entity.invulnerableTime`
@@ -256,8 +276,12 @@ pub trait EntitiesBackend {
     /// block under its box nearest its position), else the block just under
     /// its feet. A dragon part, which never stands, has the block under its
     /// feet. None for a stale handle.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn entity_on_block(&self, entity: EntityRef) -> Option<[i32; 3]>;
+    fn entity_on_block(&self, entity: EntityRef) -> Result<Option<[i32; 3]>, EntityReadError>;
     /// Side: server.
     /// A ray from the entity's eyes along its view vector, `distance` blocks
     /// long, against block outlines with an empty collision context and no
@@ -266,8 +290,16 @@ pub trait EntitiesBackend {
     /// `LevelRef::ray_trace_entities`. None for a stale handle, a
     /// `distance` that is negative or not finite, and where `LevelRef::clip`
     /// is None.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn entity_pick(&self, entity: EntityRef, distance: f64) -> Option<ClipHit>;
+    fn entity_pick(
+        &self,
+        entity: EntityRef,
+        distance: f64,
+    ) -> Result<Option<ClipHit>, EntityReadError>;
     /// Side: both.
     /// Whether the entity is made of parts that are entities of their own
     /// (`Entity.isMultipartEntity`): the ender dragon. Its parts are not the
@@ -317,47 +349,88 @@ pub trait EntitiesBackend {
     /// Side: server.
     /// What the entity rides (`Entity.getVehicle`): `None` when it rides
     /// nothing, or for a stale handle.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn entity_vehicle(&self, entity: EntityRef) -> Option<EntityRef>;
+    fn entity_vehicle(&self, entity: EntityRef) -> Result<Option<EntityRef>, EntityReadError>;
     /// Side: server.
     /// Whether the entity rides another (`Entity.isPassenger`).
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn entity_is_passenger(&self, entity: EntityRef) -> Option<bool>;
+    fn entity_is_passenger(&self, entity: EntityRef) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
     /// The lowest vehicle under the entity (`Entity.getRootVehicle`): the
     /// entity itself when it rides nothing.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn entity_root_vehicle(&self, entity: EntityRef) -> Option<EntityRef>;
+    fn entity_root_vehicle(&self, entity: EntityRef) -> Result<Option<EntityRef>, EntityReadError>;
     /// Side: server.
     /// The entities riding this one (`Entity.getPassengers`), in `addPassenger`'s order: each
     /// behind those aboard, except that a player goes first when the first is no player.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn entity_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>>;
+    fn entity_passengers(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<Vec<EntityRef>>, EntityReadError>;
     /// Side: server.
     /// Whether anything rides the entity (`Entity.isVehicle`).
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn entity_is_vehicle(&self, entity: EntityRef) -> Option<bool>;
+    fn entity_is_vehicle(&self, entity: EntityRef) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
     /// Every entity riding this one, at any depth (`Entity.getIndirectPassengers`): each
     /// passenger in `passengers` order, followed by those riding it.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn entity_indirect_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>>;
+    fn entity_indirect_passengers(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<Vec<EntityRef>>, EntityReadError>;
     /// Side: server.
     /// The first passenger, when it steers the entity (`Entity.getControllingPassenger`): a
     /// player in a boat, a player on a mount that is ready for one, or a mob on a mob with AI
     /// unless `#non_controlling_rider` names it. `None` when nothing steers it, or for a stale
     /// handle.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn entity_controlling_passenger(&self, entity: EntityRef) -> Option<LivingRef>;
+    fn entity_controlling_passenger(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<LivingRef>, EntityReadError>;
     /// Side: server.
     /// Whether both entities share a root vehicle (`Entity.isPassengerOfSameVehicle`): true for
     /// an entity and itself, false for two entities riding nothing. `None` for a stale handle.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
     fn entity_is_passenger_of_same_vehicle(
         &self,
         entity: EntityRef,
         other: EntityRef,
-    ) -> Option<bool>;
+    ) -> Result<Option<bool>, EntityReadError>;
     /// Side: server.
     /// Where getting off this vehicle puts `passenger` as it stands now, riding it or not. This
     /// is the game's own placement, from the code `stop_riding` runs, so it can differ from
@@ -370,12 +443,16 @@ pub trait EntitiesBackend {
     /// there it is the top of the box. Reads only: no `mob_ride` or dismount veto is asked and
     /// the passenger's pose stays. `None` for a stale handle, a passenger other than a player
     /// or a mob, a player with no motion state, or a vehicle whose box Horizon does not keep.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
     fn entity_dismount_location(
         &self,
         vehicle: EntityRef,
         passenger: LivingRef,
-    ) -> Option<[f64; 3]>;
+    ) -> Result<Option<[f64; 3]>, EntityReadError>;
     /// Side: server.
     /// The live holder of a mob's or boat's lead (`Leashable.getLeashHolder`), or `Unleashed`
     /// when no lead exists. `None` means an entity that takes no lead, or that the entity,
@@ -455,7 +532,10 @@ pub trait EntitiesBackend {
     #[access(WorldOnly)]
     fn entity_glowing(&self, entity: EntityRef) -> Option<bool>;
     /// Side: server.
-    /// Returns the mob's no-gravity flag (`Entity.isNoGravity`).
+    /// Returns the stored no-gravity flag (`Entity.isNoGravity`) for implemented
+    /// storage families. A foreign queued scalar projects its latest ordered
+    /// value; explicit OWN reads use the genuine owner instead. None denotes an
+    /// unavailable source or a family whose backing is not implemented.
     #[access(WorldOnly)]
     fn entity_no_gravity(&self, entity: EntityRef) -> Option<bool>;
     /// Side: server.
@@ -490,7 +570,7 @@ pub trait EntitiesBackendMut {
     /// (`Entity.saveWithoutId`): its compound without `id`. An entity with no
     /// UUID yet gets the one it will be saved with. API 386.
     #[access(WorldOnly)]
-    fn entity_nbt(&mut self, entity: EntityRef) -> Option<Compound>;
+    fn entity_nbt(&mut self, entity: EntityRef) -> Result<Option<Compound>, EntityReadError>;
     /// Side: server.
     /// Merges `nbt` into the entity's data and loads the entity from it, as
     /// `/data merge entity` does (`EntityDataAccessor.setData`): true when it
@@ -499,7 +579,7 @@ pub trait EntitiesBackendMut {
     /// frames), data nested too deep, or data that changes nothing. API
     /// 386.
     #[access(WorldOnly)]
-    fn entity_merge_nbt(&mut self, entity: EntityRef, nbt: Compound) -> bool;
+    fn entity_merge_nbt(&mut self, entity: EntityRef, nbt: Compound) -> Result<bool, EntityReadError>;
     /// Side: server.
     /// Adds tag `tag` (`Entity.addTag`): false when it has it already, holds
     /// 1024, its kind can't store tags yet, or the handle is stale. API 386.
@@ -646,7 +726,7 @@ pub trait EntitiesBackendMut {
     /// a boat its lead, as vanilla's `remove` does. False for a player, a dragon
     /// part (it leaves with its dragon), or a stale handle.
     #[access(WorldOnly)]
-    fn entity_discard(&mut self, entity: EntityRef) -> bool;
+    fn entity_discard(&mut self, entity: EntityRef) -> Result<bool, EntityReadError>;
     /// Side: server.
     /// Removes the entity for `reason` (`Entity.remove`): `Discarded`, as
     /// `discard`, or `Killed`, which also runs a mob's effects that act on
@@ -654,7 +734,7 @@ pub trait EntitiesBackendMut {
     /// still with no death and no loot. False for a player, a dragon part (it
     /// leaves with its dragon), or a stale handle.
     #[access(WorldOnly)]
-    fn entity_remove(&mut self, entity: EntityRef, reason: RemovalReason) -> bool;
+    fn entity_remove(&mut self, entity: EntityRef, reason: RemovalReason) -> Result<bool, EntityReadError>;
     /// Side: server.
     /// Drops `stack` at the entity's feet, `y_offset` above
     /// (`Entity.spawnAtLocation`), or 0.15 out along a frame or painting's
@@ -780,9 +860,23 @@ pub trait EntitiesBackendMut {
     #[access(WorldOnly)]
     fn entity_set_glowing(&mut self, entity: EntityRef, glowing: bool) -> bool;
     /// Side: server.
-    /// Sets the mob's no-gravity flag (`Entity.setNoGravity`). Returns false for players and guests.
+    /// Sets the stored no-gravity flag (`Entity.setNoGravity`).
+    /// Direct and explicit OWN calls apply immediately. Foreign calls during a
+    /// writer turn return Pending and execute in FIFO order after that writer.
+    /// Pending light reads project the latest ordered value without claiming
+    /// authoritative application. Completion event and issuer-only query expose
+    /// the actual result after generation/removal checks. An item transaction
+    /// refuses an enqueue with TransactionActive before creating an id/overlay.
+    /// Implemented storage: mobs, items, orbs, armor stands, boats, minecarts,
+    /// projectiles, primed TNT, tridents and falling blocks, active or parked.
+    /// A family without implemented storage refuses Unsupported; this does not
+    /// imply that vanilla forbids no-gravity for that entity kind.
     #[access(WorldOnly)]
-    fn entity_set_no_gravity(&mut self, entity: EntityRef, no_gravity: bool) -> bool;
+    fn entity_set_no_gravity(
+        &mut self,
+        entity: EntityRef,
+        no_gravity: bool,
+    ) -> WriteReceipt<bool, EntityWriteError>;
     /// Side: server.
     /// Sets the entity's frozen ticks (`Entity.setTicksFrozen`).
     #[access(WorldOnly)]

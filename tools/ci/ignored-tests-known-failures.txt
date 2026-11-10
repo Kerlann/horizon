@@ -45,3 +45,13 @@ horizon-client game::native_live_holder_tests::thousand_live_block_entity_ticks 
 horizon-client game::remote_vehicles::tests::steering_mount_control_matches_vanilla #2177 harness
 
 # Additional failures in the current-main honest run (42497697222).
+
+# #2474 dependency: external constructed 1.20.4 save with its partial ring removed; no committed recipe or CI provisioning.
+horizon-client game::levels::tests::features_write_a_full_neighbour_only_through_its_sections #2474
+# #2474 dependency: external constructed 1.20.4 save with its partial ring removed; no committed recipe or CI provisioning.
+horizon-client game::levels::tests::an_old_chunk_saves_the_heights_its_new_neighbour_calculated #2474
+# #2474 dependency: external constructed 1.20.4 save with its partial ring removed; no committed recipe or CI provisioning.
+horizon-client game::levels::tests::the_overworld_cache_holds_the_edge_chunks_calculated_heights #2474
+
+# #2505 dependency: canonical ignored-test runner lacks HORIZON_FISHING_RESOURCES and HORIZON_FISHING_REFERENCE; remove when real oracle inputs are provisioned there.
+horizon-client game::fishing::tests::fishing_retrieve_reference #2505

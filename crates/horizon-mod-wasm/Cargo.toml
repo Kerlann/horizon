@@ -21,6 +21,9 @@ wasmtime = { version = "50", default-features = false, features = ["anyhow", "cr
 horizon-mod-api-gen = { path = "../horizon-mod-api-gen" }
 
 [dev-dependencies]
+horizon-mod-api-gen = { path = "../horizon-mod-api-gen" }
+horizon-mod-runtime = { path = "../horizon-mod-runtime" }
+mod_points = { package = "horizon-mod-points", path = "../horizon-mod-points" }
 horizon-mod-api-macros = { path = "../horizon-mod-api-macros" }
 horizon-client-core = { path = "../horizon-client-core" }
 mod_api = { package = "horizon-mod-api", path = "../horizon-mod-api", features = ["wasm-guest", "testing"] }
@@ -28,3 +31,24 @@ wat = "1.261"
 
 [lints]
 workspace = true
+
+# Synthetic points are opt-in for the listener matrix only. Dev-dependencies
+# would unify them into every integration test's game layout.
+[features]
+listener-fixture = ["mod_points/listener-fixture", "horizon-mod-api-gen/listener-fixture"]
+
+[[test]]
+name = "real_member"
+required-features = ["listener-fixture"]
+
+[[test]]
+name = "native_listener"
+required-features = ["listener-fixture"]
+
+[[test]]
+name = "no_wire_registration"
+required-features = ["listener-fixture"]
+
+[[test]]
+name = "bench"
+required-features = ["listener-fixture"]

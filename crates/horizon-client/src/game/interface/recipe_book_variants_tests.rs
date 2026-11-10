@@ -16,7 +16,9 @@ use std::sync::{Arc, atomic::AtomicI32, mpsc};
 const GUEST: &str = "RecipeGuest";
 
 /// A host on a stone floor with one connected, placed guest (conn 2).
-fn game() -> (Game<'static>, mpsc::Receiver<horizon_client::lan::Out>) {
+fn game<'a>(
+    resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>,
+) -> (Game<'a>, mpsc::Receiver<horizon_client::lan::Out>) {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -38,7 +40,7 @@ fn game() -> (Game<'static>, mpsc::Receiver<horizon_client::lan::Out>) {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -169,7 +171,8 @@ fn grant(
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_recipe_with_eight_displays_sends_eight_entries() {
-    let (mut game, rx) = game();
+    let mut resources = None;
+    let (mut game, rx) = game(&mut resources);
     assert!(game.run_command("tick freeze"));
     // The join's own book (a new player knows the crafting table) settles on
     // these ticks; then the book is emptied.
@@ -218,7 +221,8 @@ fn ghosts(rx: &mpsc::Receiver<horizon_client::lan::Out>) -> usize {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn control_a_multi_display_recipe_still_has_no_ghost() {
-    let (mut game, rx) = game();
+    let mut resources = None;
+    let (mut game, rx) = game(&mut resources);
     let _ = ghosts(&rx);
     let hub = &mut game.lan.as_mut().unwrap().hub;
     hub.send_ghost_recipe(2, 0, "minecraft:map_cloning");

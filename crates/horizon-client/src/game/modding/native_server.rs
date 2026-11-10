@@ -1265,32 +1265,100 @@ impl Game<'_> {
 
     /// The stable name of a connected or acting player. None for a stale or
     /// unavailable player; displaced online players retain their identity.
-    pub(super) fn player_name(&self, player: PlayerRef) -> Option<String> {
-        if self.native_acting_player() == Some(player) {
-            return self.lan_acting_name.clone();
-        }
-        Some(self.online_player_record(player)?.name.clone())
+    pub(super) fn player_name(
+        &self,
+        player: PlayerRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
+        self.read_player_name(None, player)
     }
 
+    pub(super) fn read_player_name(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_live_player_sessions::PlayerSessionField,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Session],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.read_player_session_string(admitted, provider, PlayerSessionField::Name)
+    }
     /// The IP address the player connects from, without the port (behind a
     /// Velocity proxy, the address the proxy forwards). Displaced connected
     /// players keep their address; an acting player with no known connection
     /// has an empty address. None for a stale or unavailable player.
-    pub(super) fn player_address(&self, player: PlayerRef) -> Option<String> {
-        if let Some(guest) = self.online_player_record(player) {
-            return Some(guest.address.ip().to_string());
+    pub(super) fn player_address(
+        &self,
+        player: PlayerRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
+        self.read_player_address(None, player)
+    }
+
+    pub(super) fn read_player_address(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_live_player_sessions::PlayerSessionField,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
         }
-        (self.native_acting_player() == Some(player)).then(String::new)
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Session],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.read_player_session_string(admitted, provider, PlayerSessionField::Address)
     }
 
     /// The brand the player's client announced when it connected (`ServerPlayer.clientBrand`),
     /// empty when it sent none. Displaced connected players keep theirs; an acting player with
     /// no known connection has an empty one. None for a stale or unavailable player.
-    pub(super) fn player_client_brand(&self, player: PlayerRef) -> Option<String> {
-        if let Some(guest) = self.online_player_record(player) {
-            return Some(guest.brand.clone());
+    pub(super) fn player_client_brand(
+        &self,
+        player: PlayerRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
+        self.read_player_client_brand(None, player)
+    }
+
+    pub(super) fn read_player_client_brand(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+    ) -> Result<Option<String>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_live_player_sessions::PlayerSessionField,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
         }
-        (self.native_acting_player() == Some(player)).then(String::new)
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Player(player),
+            &[EntityReadDependency::Session],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.read_player_session_string(admitted, provider, PlayerSessionField::Brand)
     }
 
     /// Validate identity without requiring a live body: sending to an online
@@ -1814,7 +1882,9 @@ impl Game<'_> {
             {
                 return false;
             }
+            let before_ai = self.player_ai_facts();
             f(self);
+            self.player_ai_facts_applied(before_ai);
             return true;
         };
         self.as_guest(conn, f).is_some()
@@ -1833,7 +1903,9 @@ impl Game<'_> {
             {
                 return false;
             }
+            let before_ai = self.player_ai_facts();
             f(self);
+            self.player_ai_facts_applied(before_ai);
             return true;
         }
         let Some(host) = self.lan.as_ref() else {

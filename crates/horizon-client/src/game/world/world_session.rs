@@ -51,9 +51,17 @@ impl Game<'_> {
                 creative,
                 options,
             } => self.open_world(&folder, Some(&name), seed, creative, Some(&options))?,
-            Action::Connect { address, lan } => {
-                self.connect_server_with_options(&address, &self.options.player_name(), None, lan)?
-            }
+            Action::Connect {
+                address,
+                lan,
+                realm,
+            } => self.connect_server_with_options(
+                &address,
+                &self.options.player_name(),
+                None,
+                lan,
+                realm,
+            )?,
             Action::DataPacks { dir, selected } => {
                 self.keys.clear();
                 self.set_screen(Screen::Options);
@@ -157,6 +165,7 @@ impl Game<'_> {
     /// integrated-server selection. Server startup must use this entry point.
     pub(super) fn load_world(&mut self, request: world_loading::WorldRequest) -> Result<()> {
         self.join_world_rest()?;
+        self.perf.world_opening();
         let prepared = request.prepare(
             &self.res,
             &self.pack,
@@ -170,6 +179,33 @@ impl Game<'_> {
     /// Leaving the game with a world open (window closed, Quit, `quit`):
     /// menu items go back (Player.closeContainer), then the world is saved,
     /// once.
+    pub(super) fn finish_perf(&mut self) {
+        // One session per computer: P1's (a splitscreen player's would count it again).
+        if self.options.split_guest {
+            return;
+        }
+        let s = &self.settings;
+        let settings = horizon_telemetry::payload::Settings {
+            render_distance: s.render_distance.clamp(0, 255) as u8,
+            simulation_distance: s.simulation_distance.clamp(0, 255) as u8,
+            // 260 is the slider's "unlimited".
+            max_fps: if s.max_fps >= 260 {
+                0
+            } else {
+                s.max_fps.min(u32::from(u16::MAX)) as u16
+            },
+            vsync: s.vsync,
+            fullscreen: s.fullscreen,
+            graphics: s.graphics_preset.clone(),
+        };
+        // Again now: on Wayland the window is on a screen only once it has been shown.
+        if let Some(window) = &self.window {
+            horizon_client::telemetry::note_display(window);
+        }
+        self.perf
+            .finish(&horizon_client::logging::game_home(), settings);
+    }
+
     pub(super) fn save_for_exit(&mut self) -> Result<()> {
         // Native application termination can bypass CloseRequested. Finish any
         // save screen synchronously here, before the process can go away.
@@ -181,6 +217,7 @@ impl Game<'_> {
         }
         // A repro recording is finished and bundled before the process may go away.
         self.repro_on_exit();
+        self.finish_perf();
         if self.title.is_some() || self.saved_for_exit {
             return Ok(());
         }

@@ -502,6 +502,7 @@ pub struct MobType {
     pub food: Arc<[String]>,
     /// TemptGoal items when they differ from the food.
     pub tempt: Arc<[String]>,
+    pub passenger_attachments: Vec<[f32; 3]>,
 }
 impl MobType {
     pub fn inventory_stack_limit(&self, stack: &crate::items::ItemStack) -> u32 {
@@ -815,10 +816,7 @@ impl MobTypes {
             let defaults = exact.get(&id).cloned().unwrap_or_default();
             let fields = MobType::attribute_fields(|name| defaults.get(name).copied());
             let mut layers = crate::fast_hash::FxHashMap::default();
-            if let Some(all) = models
-                .as_ref()
-                .and_then(|models| models.value().as_object())
-            {
+            if let Some(all) = models.as_ref().and_then(|m| m.value().as_object()) {
                 for prefix in def.layer_prefixes() {
                     let start = format!("minecraft:{prefix}#");
                     for (k, v) in all.iter().filter(|(k, _)| k.starts_with(&start)) {
@@ -835,6 +833,8 @@ impl MobTypes {
             }
             let category = t["category"].as_str().unwrap_or("creature").to_owned();
             let flags = def.flags(t["fire_immune"].as_bool().unwrap_or(false));
+            let passenger_attachments =
+                riders::parse_passenger_attachments(&t["passenger_attachments"]);
             out.insert(
                 id.clone(),
                 MobType {
@@ -885,15 +885,12 @@ impl MobTypes {
                     anim: def.anim,
                     sounds: def.sounds,
                     step_sound: def.step_sound,
-                    food: def
-                        .food_tag()
-                        .map(tag)
-                        .unwrap_or_else(|| Arc::from(Vec::new())),
+                    food: def.food_tag().map_or_else(|| Arc::from(Vec::new()), tag),
                     tempt: def
                         .tempt_tag()
                         .or(def.food_tag())
-                        .map(tag)
-                        .unwrap_or_else(|| Arc::from(Vec::new())),
+                        .map_or_else(|| Arc::from(Vec::new()), tag),
+                    passenger_attachments,
                     category,
                     id,
                 },
@@ -1972,6 +1969,9 @@ pub struct Mob {
     /// `PlayerSkin.cape`: a player's cape texture, once every download of
     /// its skin is ready.
     pub cape: Option<String>,
+    /// A pose laid over this player's body after the vanilla animation (`anim::setup`), timed on
+    /// `age`: a Horizon emote (docs/cosmetics.md), given by the game. Visual only.
+    pub emote: Option<Arc<dyn anim::BodyPose>>,
     /// A mannequin's `DATA_PROFILE` (ResolvableProfile): the profile's
     /// `textures` property resolves to `skin` like a player's.
     pub profile: Option<horizon_protocol::entity_data::Profile>,
@@ -3569,7 +3569,7 @@ pub fn apply_brain_events(
     }
 }
 /// The player as mobs see it.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct PlayerView {
     pub position: Vec3,
     pub bounds: Aabb,
@@ -3631,7 +3631,7 @@ pub struct PlayerView {
     pub vehicle: Option<Vehicle>,
 }
 /// What a player rides, for the mobs that follow it (`FollowPlayerRiddenEntityGoal`).
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Vehicle {
     pub nautilus: bool,
     pub bounds: Aabb,
@@ -3792,6 +3792,8 @@ pub struct MobWorld<'a> {
     /// not in the level (a warden's anger, `AngerManagement.angerByUuid`).
     /// None: this world keeps no entity UUIDs, so nothing is resolved.
     pub who_lookup: Option<&'a dyn WhoLookup>,
+    /// Canonical team reads for production AI. Data-only worlds supply `teams`.
+    pub team_lookup: Option<&'a dyn TeamLookup>,
     /// The level's world border, whose walls stop a mob's moves
     /// (`Entity.collectColliders`); None: nothing stops them there.
     pub border: Option<&'a horizon_core::geometry::border::BorderGeometry>,
@@ -3847,6 +3849,42 @@ pub enum TargetChange {
     Keep,
 }
 impl MobWorld<'_> {
+    /// Read collision/combat rules at the decision, rather than rebuilding every
+    /// entity's inherited team after one membership or owner change.
+    pub fn team_rules(
+        &self,
+        actor: &Mob,
+        who: Who,
+    ) -> Option<crate::scoreboard::TeamRules<TeamIdentity<'_>>> {
+        if let Some(source) = self.team_lookup {
+            let team = source.team(actor, who, self.selected_player().map(|p| p.uuid))?;
+            Some(crate::scoreboard::TeamRules {
+                identity: TeamIdentity::Name(&team.name),
+                allow_friendly_fire: team.allow_friendly_fire,
+                collision_rule: team.collision_rule,
+            })
+        } else {
+            self.teams.of(who).map(|team| crate::scoreboard::TeamRules {
+                identity: TeamIdentity::Published(team.identity),
+                allow_friendly_fire: team.allow_friendly_fire,
+                collision_rule: team.collision_rule,
+            })
+        }
+    }
+
+    /// Current player alliance, including owner changes since the pass began.
+    pub fn allied_to_player(&self, actor: &Mob) -> bool {
+        if self.team_lookup.is_some() {
+            crate::scoreboard::TeamRules::allied(
+                self.team_rules(actor, Who::Mob(actor.id)).as_ref(),
+                self.team_rules(actor, Who::Player).as_ref(),
+            )
+        } else {
+            self.selected_player()
+                .is_some_and(|p| p.allies.contains(&actor.id))
+        }
+    }
+
     /// The currently selected player view. The ordinary tick uses `player`;
     /// target-change callbacks can switch a scoped selection during a tick.
     pub fn selected_player(&self) -> Option<&PlayerView> {
@@ -3967,6 +4005,24 @@ impl MobWorld<'_> {
 pub trait WhoLookup {
     fn who_by_uuid(&self, uuid: [i32; 4]) -> Option<Who>;
 }
+/// Canonical team lookup while AI has the current actor on loan. Only compact
+/// rules cross into the mob layer; no foreign entity or API snapshot is retained.
+pub trait TeamLookup {
+    fn team(
+        &self,
+        actor: &Mob,
+        who: Who,
+        player: Option<[i32; 4]>,
+    ) -> Option<&crate::scoreboard::Team>;
+}
+
+/// Team identities belong either to a live canonical board or a data-only world.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum TeamIdentity<'a> {
+    Name(&'a str),
+    Published(usize),
+}
+
 /// `Entity.getTeam` of the player and of the mobs on a team.
 #[derive(Clone, Debug, Default)]
 pub struct TeamRulesSnapshot {
@@ -4088,6 +4144,7 @@ impl Mob {
         random: LegacyRandom,
     ) -> Self {
         let mut mob = Self {
+            emote: None,
             attachment_lifetime: Default::default(),
             join: Default::default(),
             id,
@@ -6109,6 +6166,7 @@ pub(crate) mod sensor_scan_tests {
             step_sound: None,
             food: Arc::default(),
             tempt: Arc::default(),
+            passenger_attachments: Vec::new(),
         })
     }
     #[test]

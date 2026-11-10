@@ -2660,7 +2660,7 @@ mod brute_home_tests {
     /// selector out, ticks it and puts it back). Answers whether the walk home
     /// started and where its path ends.
     fn tick_goals(m: &mut Mob, cx: &mut Cx) -> (bool, Option<[i32; 3]>) {
-        let mut goals = std::mem::take(&mut m.ai.goals);
+        let mut goals = m.ai.goals.take();
         goals.tick(m, cx);
         let running = goals.is_running("BruteStrollHome");
         m.ai.goals = goals;
@@ -2688,6 +2688,7 @@ mod brute_home_tests {
                     w,
                     level: &mut test_level.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 let (running, target) = tick_goals(&mut m, &mut cx);
                 if walks {
@@ -2711,6 +2712,7 @@ mod brute_home_tests {
                 w,
                 level: &mut test_level.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
             let mut m = brute(Vec3::new(0.5, 0.0, 0.5), Some([24, 0, 0]));
             let mut goal = BruteStrollHome { next_ok: 0 };

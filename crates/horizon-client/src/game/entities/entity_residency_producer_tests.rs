@@ -90,7 +90,7 @@ fn every_family_survives_active_and_parked_epoch_rebinding() {
         game.reset_entity_residency();
         assert_visible(game, &overworld, Dim::Overworld);
         assert_visible(game, &nether, Dim::Nether);
-        assert_eq!(game.entity_residency.get_mut().end_tick(), Ok(()));
+        assert_eq!(game.resident_entities.table.get_mut().end_tick(), Ok(()));
     });
 }
 
@@ -135,7 +135,7 @@ fn portal_and_dragon_delayed_admission_and_terminal_kill() {
         );
         game.kill_dragon(id);
         assert_eq!(game.server_resident_entity(id), EntityLookup::Missing);
-        assert_eq!(game.entity_residency.get_mut().end_tick(), Ok(()));
+        assert_eq!(game.resident_entities.table.get_mut().end_tick(), Ok(()));
     });
 }
 
@@ -208,7 +208,7 @@ fn native_summon_roots_and_pending_joins_publish_admission() {
                 ],
                 game.dim,
             );
-            assert_eq!(game.entity_residency.get_mut().end_tick(), Ok(()));
+            assert_eq!(game.resident_entities.table.get_mut().end_tick(), Ok(()));
         })
     });
 }

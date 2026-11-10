@@ -382,6 +382,7 @@ fn plain_path(name: &str) -> bool {
 pub struct Package {
     pub manifest: Manifest,
     pub icon: Option<crate::icon::Icon>,
+    pub layouts: crate::layouts::Layouts,
 }
 impl Package {
     /// The kind of this validated package, independent of its install folder.
@@ -508,7 +509,15 @@ impl Package {
                 return Self::read_zip(&mut zip);
             }
         };
-        let package = Self::from_parts(&toml, icon, has_cargo, has_source, has_wasm)?;
+        let mut package = Self::from_parts(&toml, icon, has_cargo, has_source, has_wasm)?;
+        match std::fs::File::open(path.join(crate::layouts::FILE)) {
+            Ok(file) => {
+                check_folder_file(path, crate::layouts::FILE)?;
+                package.layouts = crate::layouts::Layouts::read(file)?;
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+            Err(e) => return Err(format!("layouts.json: {e}")),
+        }
         if let Some(wasm) = &package.manifest.wasm {
             let bytes = std::fs::read(path.join(WASM)).map_err(|e| format!("{WASM}: {e}"))?;
             wasm.check(&bytes).map_err(|e| e.to_string())?;
@@ -524,6 +533,7 @@ impl Package {
         let mut has_source = false;
         let mut has_wasm = false;
         let mut entries = Vec::new();
+        let mut layouts = None;
         for i in 0..zip.len() {
             let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
             let name = entry.name().map_err(|e| e.to_string())?.into_owned();
@@ -544,6 +554,13 @@ impl Package {
             // The one executable a package may carry, checked against `[wasm]` below.
             if name == WASM && matches!(mode & 0o170000, 0 | 0o100000) {
                 has_wasm = true;
+                continue;
+            }
+            if name == crate::layouts::FILE && matches!(mode & 0o170000, 0 | 0o100000) {
+                if layouts.is_some() {
+                    return Err("duplicate layouts.json".into());
+                }
+                layouts = Some(crate::layouts::Layouts::read(&mut entry)?);
                 continue;
             }
             check_file(&name, mode, || Ok(&mut entry)).map_err(|e| e.to_string())?;
@@ -573,7 +590,7 @@ impl Package {
         if toml.len() as u64 > MAX_MANIFEST {
             return Err(format!("{MANIFEST}: over {} MiB", MAX_MANIFEST >> 20));
         }
-        let package = Self::from_parts(&toml, icon, has_cargo, has_source, has_wasm)?;
+        let mut package = Self::from_parts(&toml, icon, has_cargo, has_source, has_wasm)?;
         if let Some(wasm) = &package.manifest.wasm {
             let mut bytes = Vec::new();
             zip.by_name(WASM)
@@ -583,6 +600,7 @@ impl Package {
                 .map_err(|e| format!("{WASM}: {e}"))?;
             wasm.check(&bytes).map_err(|e| e.to_string())?;
         }
+        package.layouts = layouts.unwrap_or_default();
         if package.has_source() || package.manifest.wasm.is_some() {
             let mut names = std::collections::HashSet::new();
             let mut source_count = 0usize;
@@ -600,6 +618,7 @@ impl Package {
                 }
                 if !directory {
                     if name != MANIFEST
+                        && name != crate::layouts::FILE
                         && name != "icon.png"
                         && !(name == WASM && package.manifest.wasm.is_some())
                         && !name.starts_with("assets/")
@@ -646,7 +665,11 @@ impl Package {
         has_wasm: bool,
     ) -> Result<Self, String> {
         let manifest = Manifest::parse(text)?;
-        let package = Package { manifest, icon };
+        let package = Package {
+            manifest,
+            icon,
+            layouts: Default::default(),
+        };
         if has_cargo != package.has_source() || has_source != has_cargo {
             return Err("inconsistent code declaration ([native] or [wasm]) and source".into());
         }
@@ -682,6 +705,14 @@ impl Package {
         let mut reader = content.reader()?;
         for name in &content.files {
             files.insert(name.clone(), reader.read(name)?);
+        }
+        if let Ok(file) = std::fs::File::open(root.join(crate::layouts::FILE)) {
+            let mut bytes = Vec::new();
+            file.take((1 << 20) + 1)
+                .read_to_end(&mut bytes)
+                .map_err(|e| e.to_string())?;
+            crate::layouts::Layouts::read(bytes.as_slice())?;
+            files.insert(crate::layouts::FILE.into(), bytes);
         }
         if let Some(icon) = &self.icon {
             files.insert("icon.png".to_string(), icon.bytes().to_vec());
@@ -773,6 +804,11 @@ impl Package {
         for (name, bytes) in files {
             let code = manifest.native.is_some() || manifest.wasm.is_some();
             let source = code && source_file(name) && plain_path(name);
+            if *name == crate::layouts::FILE {
+                crate::layouts::Layouts::read(*bytes)?;
+                put(name, bytes)?;
+                continue;
+            }
             if *name == WASM && manifest.wasm.is_some() {
                 put(name, bytes)?;
                 continue;
@@ -1201,6 +1237,26 @@ capabilities = ["registries"]
         ] {
             assert!(Manifest::parse(&bad).is_err());
         }
+    }
+
+    #[test]
+    fn layout_metadata_round_trips_and_malformed_archives_are_refused() {
+        let layouts = br#"{"ruby":{"ruby::T":"0123456789abcdef"}}"#;
+        let bytes = Package::write_files(EXAMPLE, &[("layouts.json", layouts)]).unwrap();
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        let package = Package::read_zip(&mut zip).unwrap();
+        let changed =
+            crate::layouts::Layouts::read(br#"{"ruby":{"ruby::T":"1123456789abcdef"}}"#.as_slice())
+                .unwrap();
+        assert_eq!(
+            package.layouts.first_difference("ruby", &changed),
+            Some("ruby::T")
+        );
+        assert!(
+            Package::write_files(EXAMPLE, &[("layouts.json", b"{")])
+                .unwrap_err()
+                .contains("layouts.json")
+        );
     }
 
     #[test]

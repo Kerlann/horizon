@@ -66,6 +66,17 @@ impl Game<'_> {
         mob: &horizon_client::mobs::Mob,
         read: impl FnOnce(&[MerchantOffer], i32, i32) -> T,
     ) -> T {
+        let session = self
+            .lan_trade_conn(mob.id)
+            .and_then(|conn| self.lan_trade_session(conn));
+        Self::merchant_read_sources(mob, session, read)
+    }
+
+    fn merchant_read_sources<T>(
+        mob: &horizon_client::mobs::Mob,
+        session: Option<&horizon_client::merchant::Session>,
+        read: impl FnOnce(&[MerchantOffer], i32, i32) -> T,
+    ) -> T {
         if mob.species() == Species::Villager && mob.extra.profession.index().is_none() {
             return read(
                 &[],
@@ -73,10 +84,7 @@ impl Game<'_> {
                 mob.extra.villager_level.max(1),
             );
         }
-        if let Some(session) = self
-            .lan_trade_conn(mob.id)
-            .and_then(|conn| self.lan_trade_session(conn))
-        {
+        if let Some(session) = session {
             return read(&session.offers, session.xp, session.level);
         }
         let level = mob.extra.villager_level.max(1);
@@ -149,9 +157,94 @@ impl Game<'_> {
     /// `AbstractVillager.getOffers`, as they are now (a copy). Offers not
     /// rolled yet read as empty: they are rolled when a player first trades,
     /// or by `add_offer`; reading never draws a random.
-    pub(super) fn merchant_offers(&self, merchant: MerchantRef) -> Option<Vec<MerchantOffer>> {
-        let index = self.native_merchant_index(merchant)?;
-        Some(self.merchant_read(index, |offers, _, _| offers.to_vec()))
+    pub(super) fn merchant_offers(
+        &self,
+        merchant: MerchantRef,
+    ) -> Result<Option<Vec<MerchantOffer>>, mod_api::EntityReadError> {
+        self.read_merchant_offers(None, merchant)
+    }
+
+    pub(super) fn read_merchant_offers(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        merchant: MerchantRef,
+    ) -> Result<Option<Vec<MerchantOffer>>, mod_api::EntityReadError> {
+        use super::{
+            native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Merchant(merchant),
+            &[EntityReadDependency::Offers, EntityReadDependency::Session],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_entity_read_storage(admitted, provider, |source| {
+            let BaseReadSource::Mob(mob) = source.body else {
+                return Err(mod_api::EntityReadError::Lifted);
+            };
+            let mut selection = super::native_live_entity_reads::EntityReadSelection::default();
+            selection.include(admitted);
+            let level = mod_api::LevelRef::new(
+                merchant.entity().epoch(),
+                admitted.location().owner.dimension,
+            );
+            let jobless =
+                mob.species() == Species::Villager && mob.extra.profession.index().is_none();
+            let mut session = None;
+            if !jobless {
+                let connections = self
+                    .merchant_customer_connections(level, mob.id)
+                    .ok_or(mod_api::EntityReadError::Lifted)?;
+                for conn in connections {
+                    let Some(guest) = self.lan.as_ref().and_then(|host| host.hub.guest(conn))
+                    else {
+                        continue;
+                    };
+                    let entity = EntityRef::new(merchant.entity().epoch(), guest.entity_id as u32);
+                    let Some(customer) = self.entity_read_admission(
+                        EntityReadSubject::Player(mod_api::__private::game::player_ref(
+                            entity, guest.uuid,
+                        )),
+                        &[EntityReadDependency::Session, EntityReadDependency::Offers],
+                        provider,
+                    ) else {
+                        continue;
+                    };
+                    if customer.location().source
+                        != horizon_client::join_seq::residency::Source::Guest(conn)
+                    {
+                        continue;
+                    }
+                    self.with_entity_read_storage(customer, provider, |_| ())
+                        .ok_or(mod_api::EntityReadError::Lifted)?;
+                    let menu = self
+                        .lan
+                        .as_ref()
+                        .and_then(|host| host.play.get(&conn))
+                        .and_then(|play| play.merchant.as_ref())
+                        .ok_or(mod_api::EntityReadError::Lifted)?;
+                    if menu.merchant.mob != Some(mob.id) {
+                        continue;
+                    }
+                    selection.include(customer);
+                    if session.is_none() {
+                        session = Some(menu.merchant.session.as_ref());
+                    }
+                }
+                // A missing actual session is not the mob's older saved offers.
+                if mob.extra.flag2 && session.is_none() {
+                    return Err(mod_api::EntityReadError::Lifted);
+                }
+            }
+            selection.project(|| {
+                Some(Self::merchant_read_sources(mob, session, |offers, _, _| {
+                    offers.to_vec()
+                }))
+            })
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
 
     /// Replaces offer `index` (a player trading with it is sent the new

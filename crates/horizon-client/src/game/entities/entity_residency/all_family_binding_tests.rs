@@ -103,7 +103,7 @@ fn every_ordinary_resident_family_binds_its_actual_owned_slot() {
             horizon_client::mobs::leash::Holder::Knot(fence),
             None,
         ));
-        let id = game.knots[0].id;
+        let id = game.resident_entities.knots[0].id;
         bind(game, id, Kind::Knot);
         game.summon_with_nbt("minecraft:ender_dragon", [0.5, 70.0, 0.5], "{}")
             .unwrap();

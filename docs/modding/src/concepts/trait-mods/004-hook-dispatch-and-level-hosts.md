@@ -7,6 +7,10 @@ Otherwise, trait mods run by priority, then in dependency order. Once a mod canc
 they receive cancelled events. For replacement hooks, the first `Some` wins. Collection hooks call every mod.
 Receiverless hooks have no `Host`.
 
+To save from inside a hook, use `level.request_save(host)` so the save runs at the next settled
+start-of-tick boundary. A synchronous `save-all` while an entity pass or held-out row is borrowed
+fails with vanilla's `commands.save.failed` feedback and a failed command result, without saving.
+
 `#[listener]` on a hook method sets both, as NeoForge's `EventPriority` and `receiveCanceled` do. Two mods, each
 its own crate:
 

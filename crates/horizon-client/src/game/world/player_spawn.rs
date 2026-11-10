@@ -113,7 +113,7 @@ impl Game<'_> {
         }
         self.hook.discard();
         self.player_attachments.retire();
-        self.local_player_residency.renew();
+        self.resident_entities.local_player.renew();
         self.player = Some(player);
         self.bind_local_player_residency();
         self.pad.player_replaced();

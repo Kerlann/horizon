@@ -7,7 +7,13 @@ A new hook needs its declaration in the area file of `crates/horizon-mod-api/src
 `#[hook(side = "server", contract = "cancel", out = "cancel")]` on `fn name();`; the argument list is in that folder's `mod.rs`), its `native_*` function with the placeholder body
 `let _ = (every, parameter);` (all its parameters, in order), and a run of `cargo run -p xtask -- mod-api`.
 Put that function in `crates/horizon-client/src/game/native_hooks/<area>.rs`, matching the declaration's
-area filename. The build discovers these modules automatically; do not add a module list entry. Shared
+area filename. Alternatively, a named hook may live in any logical module under `game/`, including
+area folders, `mod.rs` and `#[path]` modules. Its target must name that module and
+`Game<'_>::native_<name>`. Exactly one matching `Game` method must exist. Outside `native_hooks/`,
+the method must call `dispatch_<name>` itself: placeholders are not filled there. Remove macros,
+`cfg` and `cfg_attr` from that method so injections can patch it. A refusal names the hook and
+what to change. These checks run at build time and add no dispatch-time work.
+The build discovers native hook modules automatically; do not add a module list entry. Shared
 support lives in `shared.rs`; `fire.rs` includes generated dispatch entry points, not hook implementations.
 That command only replaces the placeholder in its owning area file with the `dispatch_<hook>` call; commit
 that source change and the declaration. Fills are idempotent; rerun the command after a failed write. The `horizon-mod-api-gen` build dependency generates the hook traits,

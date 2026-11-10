@@ -21,11 +21,11 @@ use std::{
     sync::atomic::{AtomicUsize, Ordering},
 };
 use {
-    horizon_core::{
+    horizon_platform::world::region::{ChunkRecord, RegionFile, RegionWriter, position_from_path},
+    horizon_platform::world::{
         nbt,
         nbt::{Limits, Tag},
     },
-    horizon_world::region::{ChunkRecord, RegionFile, RegionWriter, position_from_path},
 };
 
 mod transaction;
@@ -287,7 +287,7 @@ struct Tally {
 fn spawn_chunk(world: &Path) -> Chunk {
     let read = || -> Option<Chunk> {
         let bytes = fs::read(world.join("level.dat")).ok()?;
-        let bytes = horizon_world::compression::Compression::Gzip
+        let bytes = horizon_platform::world::compression::Compression::Gzip
             .decode(&bytes, Limits::saved().max_bytes)
             .ok()?;
         let (root, _) = nbt::read_named(&bytes, Limits::saved()).ok()?;
@@ -816,8 +816,10 @@ pub fn write_report(dir: &Path, outcome: &Outcome) -> io::Result<PathBuf> {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
-    use horizon_core::position::ChunkPos;
-    use {horizon_core::nbt::NamedTag, horizon_world::compression::Compression};
+    use horizon_platform::world::ChunkPos;
+    use {
+        horizon_platform::world::compression::Compression, horizon_platform::world::nbt::NamedTag,
+    };
 
     fn temp(name: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!("horizon-prune-{name}-{}", std::process::id()));

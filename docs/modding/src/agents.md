@@ -8,7 +8,7 @@ Rules for a coding agent making a Horizon mod. They are short on purpose; each l
    per-item or per-entity moment is a Part method ([Parts](concepts/trait-mods.md#parts)).
 3. **Otherwise follow the [injection ladder](injections.md#for-agents):** an API `[[inject]]` declaration
    naming a crate-root function and its `mod_points` record; use `access = "internals"` and declared internals only when the API cannot express it. Every injection comes
-   with a [hook request](injections.md#ask-for-the-hook).
+   with a [hook request](injections.md#ask-for-the-hook). API injections never rebuild the game: missing slots are refused, and source rebuilds and call-site injections require internals access or a hook request.
 4. **Names:** NeoForge 26.3 names for hooks that have a counterpart; no `on_` prefix; the event is `&mut`;
    handles come from the event; writes take `host`.
 5. **Layout:** `horizon-mod.toml`, `assets/`, `data/`, `Cargo.toml` and `src/` at the top. The id and version come

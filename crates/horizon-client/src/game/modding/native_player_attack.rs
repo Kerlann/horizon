@@ -2,11 +2,13 @@
 //! `Player.getAttackStrengthScale(partial)`, the charge `Player.attack` reads
 //! at its start (`attack_entity` fires before that, and before the swing
 //! resets the ticker). Reads return None for a stale handle or a player who
-//! isn't online here; a resting guest reads its saved body.
-use super::Game;
-use super::native_server::PlayerRead;
-use horizon_client::attack_strength::{BASE_ATTACK_SPEED, delay};
-use mod_api::PlayerRef;
+//! isn't online here; a resting guest reads its actual saved body.
+use super::{
+    Game, commands::Target, native_base_read_rows::BaseReadSource,
+    native_live_entity_reads::EntityReadSubject, native_read_dependencies::EntityReadDependency,
+};
+use horizon_client::attack_strength::delay;
+use mod_api::{EntityReadError, PlayerRef};
 
 impl Game<'_> {
     /// `Player.getAttackStrengthScale(partial)` for `player`.
@@ -15,61 +17,74 @@ impl Game<'_> {
         &self,
         player: PlayerRef,
         partial: f32,
-    ) -> Option<f32> {
-        if !partial.is_finite() {
-            return None;
+    ) -> Result<Option<f32>, EntityReadError> {
+        self.read_player_attack_strength_scale(None, player, partial)
+    }
+
+    pub(in crate::game) fn read_player_attack_strength_scale(
+        &self,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        player: PlayerRef,
+        partial: f32,
+    ) -> Result<Option<f32>, EntityReadError> {
+        if !partial.is_finite() || !self.is_logical_server() {
+            return Ok(None);
         }
-        let read = self.player_handle_read(player)?;
-        // 1.8.9 had no attack cooldown.
-        if self.legacy_rules() {
-            return Some(1.0);
-        }
-        Some(match read {
-            PlayerRead::Acting { .. } => return self.attack_strength_scale_at(partial),
-            PlayerRead::Guest(guest) => {
-                let (ticks, item) = self
-                    .lan
-                    .as_ref()?
-                    .play
-                    .get(&guest.conn)
-                    .map_or((0, None), |play| (play.attack_ticks(), play.attack_item()));
-                let speed = guest_attack_speed(self, guest, item);
-                ((ticks as f32 + partial) / delay(speed)).clamp(0.0, 1.0)
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Player(player),
+            &[
+                EntityReadDependency::AttackState,
+                EntityReadDependency::Attributes,
+                EntityReadDependency::Equipment,
+                EntityReadDependency::Effects,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_entity_read_storage(admitted, provider, |source| {
+            let motion = match source.body {
+                BaseReadSource::Player(player) => Some(player),
+                BaseReadSource::Guest(guest) => guest.motion.as_deref(),
+                _ => None,
+            }
+            .or_else(|| {
+                matches!(admitted.target(), Target::Player)
+                    .then_some(self.player.as_ref())
+                    .flatten()
+            })
+            .ok_or(EntityReadError::Lifted)?;
+            match admitted.target() {
+                Target::Player => admitted.project_actual(|| {
+                    if self.legacy_rules() {
+                        return Some(1.0);
+                    }
+                    let speed = self.attack_speed_for(
+                        Some(motion),
+                        self.attack_item.as_deref(),
+                        &self.potions.effects,
+                    );
+                    Some(((self.attack_ticks as f32 + partial) / delay(speed)).clamp(0.0, 1.0))
+                }),
+                target @ Target::Guest(conn) => {
+                    let guest = self
+                        .entity_read_guest(source.body, target)
+                        .ok_or(EntityReadError::Lifted)?;
+                    let host = self.lan.as_ref().ok_or(EntityReadError::Lifted)?;
+                    let play = host.play.get(&conn);
+                    admitted.project_actual(|| {
+                        if self.legacy_rules() {
+                            return Some(1.0);
+                        }
+                        let (ticks, item) = play
+                            .map_or((0, None), |play| (play.attack_ticks(), play.attack_item()));
+                        let speed = self.attack_speed_for(Some(motion), item, &guest.effects);
+                        Some(((ticks as f32 + partial) / delay(speed)).clamp(0.0, 1.0))
+                    })
+                }
+                _ => Ok(None),
             }
         })
+        .unwrap_or(Err(EntityReadError::Lifted))
     }
-}
-
-/// `Game.main_hand_attack_speed` for a guest between turns: its saved body's
-/// attack speed base, the main-hand item of its last tick, and its effects'
-/// modifiers.
-fn guest_attack_speed(
-    game: &Game<'_>,
-    guest: &horizon_client::lan::guest::Guest,
-    item: Option<&str>,
-) -> f64 {
-    let base = guest
-        .motion
-        .as_ref()
-        .and_then(|player| {
-            let key = player.attributes.key("minecraft:attack_speed")?;
-            let handle = player.attributes.lookup(Some(&key))?;
-            player
-                .attributes
-                .instance(&handle)
-                .ok()
-                .map(|value| value.base_value())
-        })
-        .unwrap_or(BASE_ATTACK_SPEED);
-    let value = base
-        + item
-            .and_then(|id| game.items().get(id))
-            .map_or(0.0, |info| f64::from(info.attack_speed));
-    guest
-        .effects
-        .modifiers()
-        .into_iter()
-        .filter(|modifier| modifier.0 == "minecraft:attack_speed")
-        .fold(value, |value, modifier| value * (1.0 + modifier.2))
-        .clamp(0.0, 1024.0)
 }

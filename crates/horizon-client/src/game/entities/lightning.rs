@@ -348,6 +348,7 @@ impl Game<'_> {
     }
     /// `LightningBolt.tick` for every bolt.
     pub(super) fn tick_bolts(&mut self) {
+        let _save_lease = horizon_client::join_seq::visibility::PassLease::enter();
         let mut bolts = std::mem::take(&mut self.bolts);
         bolts.retain_mut(|b| {
             if b.life == 2 {
@@ -1186,6 +1187,7 @@ mod tests {
                 step_sound: None,
                 food: Default::default(),
                 tempt: Default::default(),
+                passenger_attachments: Vec::new(),
             });
             let mut pig = Mob::new(1, kind, Vec3::ZERO, 45.0);
             if baby {

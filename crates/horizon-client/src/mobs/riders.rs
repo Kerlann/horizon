@@ -31,12 +31,31 @@ fn avatar(m: &Mob) -> bool {
 /// rider's attachment point sits relative to the vehicle's feet, in its
 /// scale (`getDimensions` scales the attachments with the box).
 pub fn passenger_attachment(v: &Mob) -> [f64; 3] {
-    let [x, y, z] = base_attachment(v);
+    passenger_attachment_at(v, 0)
+}
+/// Passenger attachment for seat `index`, clamped to the vehicle's last seat.
+pub fn passenger_attachment_at(v: &Mob, index: usize) -> [f64; 3] {
+    let [x, y, z] = base_attachment_at(v, index);
     let s = scale(v);
     // AbstractHorse.getPassengerAttachmentPoint: a rearing horse slides it,
     // after the scaled attachment (`rear_offset` scales with age itself).
     let rear = super::equine::rear_offset(v);
     [x * s + rear[0], y * s + rear[1], z * s + rear[2]]
+}
+pub(crate) fn parse_passenger_attachments(value: &serde_json::Value) -> Vec<[f32; 3]> {
+    value.as_array().map_or_else(Vec::new, |a| {
+        a.iter()
+            .filter_map(|p| match p {
+                serde_json::Value::Array(c) if c.len() == 3 => Some([
+                    c[0].as_f64()? as f32,
+                    c[1].as_f64()? as f32,
+                    c[2].as_f64()? as f32,
+                ]),
+                serde_json::Value::Number(y) => Some([0.0, y.as_f64()? as f32, 0.0]),
+                _ => None,
+            })
+            .collect()
+    })
 }
 /// An `EntityType` attachment point: the builder takes floats, so the double
 /// the position math sees is the float's widening (`Vec3(x, y, z)` of
@@ -62,11 +81,16 @@ pub fn happy_ghast_attachment(index: usize) -> [f64; 3] {
     pt(x, y, z)
 }
 /// `Pig.getDefaultDimensions` and other species' age-specific passenger attachments.
-fn base_attachment(v: &Mob) -> [f64; 3] {
+fn base_attachment_at(v: &Mob, index: usize) -> [f64; 3] {
     let baby = v.is_baby();
     // Players and mannequins have no `passengerAttachments`: their box top.
     if avatar(v) {
         return [0.0, f64::from(v.height()) / scale(v), 0.0];
+    }
+    if !v.kind.passenger_attachments.is_empty() {
+        let i = index.min(v.kind.passenger_attachments.len() - 1);
+        let [x, y, z] = v.kind.passenger_attachments[i];
+        return pt(x, y, z);
     }
     match v.species() {
         Species::Chicken => pt(0.0, 0.7, -0.1),
@@ -99,7 +123,7 @@ fn base_attachment(v: &Mob) -> [f64; 3] {
         Species::Endermite | Species::Silverfish => up(0.2375),
         Species::Enderman => up(2.80625),
         Species::Ghast => up(4.0625),
-        Species::HappyGhast => happy_ghast_attachment(0),
+        Species::HappyGhast => happy_ghast_attachment(index),
         Species::Warden => up(3.15),
         Species::Sniffer => up(2.09375),
         Species::Fox => pt(0.0, 0.6375, -0.25),
@@ -1109,5 +1133,37 @@ mod happy_ghast_seat_tests {
             assert!(seats[i + 1..].iter().all(|b| a != b));
         }
         assert_eq!(happy_ghast_attachment(9), seats[3]);
+    }
+
+    #[test]
+    fn content_mod_mob_uses_configured_passenger_attachments() {
+        let close = |a: f64, b: f64| (a - b).abs() < 1e-6;
+        let mut kind = (*crate::mobs::sensor_scan_tests::kind()).clone();
+        kind.id = "ruby:bird".into();
+        kind.species = super::Species::Zombie;
+        kind.passenger_attachments = vec![[0.0, 0.7, -0.1], [0.0, 0.9, 0.2]];
+        let kind = std::sync::Arc::new(kind);
+
+        let vehicle = super::Mob::new(1, kind.clone(), horizon_core::geometry::Vec3::ZERO, 0.0);
+        let first = super::passenger_attachment(&vehicle);
+        assert!(close(first[0], 0.0));
+        assert!(close(first[1], 0.7));
+        assert!(close(first[2], -0.1));
+
+        let second = super::passenger_attachment_at(&vehicle, 1);
+        assert!(close(second[0], 0.0));
+        assert!(close(second[1], 0.9));
+        assert!(close(second[2], 0.2));
+
+        // Clamps to last seat
+        let clamped = super::passenger_attachment_at(&vehicle, 5);
+        assert_eq!(clamped, second);
+
+        // Scale scales the attachments
+        let mut scaled = super::Mob::new(2, kind, horizon_core::geometry::Vec3::ZERO, 0.0);
+        scaled.extra.model_scale = 2.0;
+        let scaled_first = super::passenger_attachment(&scaled);
+        assert!(close(scaled_first[1], 1.4));
+        assert!(close(scaled_first[2], -0.2));
     }
 }

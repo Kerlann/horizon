@@ -1,5 +1,8 @@
 //! Title, world selection and world creation screens (TitleScreen,
 //! SelectWorldScreen, CreateWorldScreen layouts), drawn as HUD quads.
+#[path = "title/preset_buttons.rs"]
+mod preset_buttons;
+
 use crate::{
     dialog_screen::BOX,
     game_rules_screen::{Exit, RulesScreen},
@@ -22,6 +25,7 @@ mod create_world;
 mod experiments;
 mod flat;
 mod onboarding;
+pub mod preset_editors;
 #[cfg(test)]
 mod tests;
 pub mod world_management;
@@ -361,6 +365,12 @@ pub enum Mode {
         options: WorldOptions,
         buffet: buffet::State,
     },
+    /// A registered preset editor over an unchanged copy of Create World.
+    CreatePreset {
+        parent: Box<Mode>,
+        editor: mod_api::PresetEditor,
+        dimensions: RefCell<horizon_core::nbt::Tag>,
+    },
     /// AccessibilityOnboardingScreen: the first screen of a first launch.
     Onboarding(Onboarding),
     /// `BanNoticeScreens`: a ConfirmLinkScreen `Gui.addInitialScreens` queued.
@@ -396,6 +406,7 @@ pub enum Action {
     Connect {
         address: String,
         lan: bool,
+        realm: bool,
     },
     /// Create World's Data Packs screen on the new world's pack folder.
     DataPacks {
@@ -420,6 +431,8 @@ pub struct Title {
     /// The prepared resource root: the flat preset list and block registry.
     resources: PathBuf,
     additional_data_packs: std::sync::Arc<[std::sync::Arc<crate::datapack::DataPack>]>,
+    /// Game supplies this when screen hooks are available, even with no mod data.
+    preset_data: Option<std::sync::Arc<crate::datapack::DataPack>>,
     pub started: std::time::Instant,
     search: String,
     search_focused: bool,
@@ -779,6 +792,7 @@ impl Mode {
             Self::Create { .. } => "world_create",
             Self::CreateFlat { .. } => "world_create_flat",
             Self::CreateBuffet { .. } => "world_create_buffet",
+            Self::CreatePreset { .. } => "world_preset_editor",
             Self::Edit { .. } => "world_edit",
             Self::Backup { .. } => "world_backup",
             Self::BackupBeforeUpgrade { .. } => "world_backup_confirm",
@@ -804,6 +818,7 @@ impl Title {
     pub fn set_mode(&mut self, mut mode: Mode) {
         if let Mode::Create { options, .. } = &mut mode {
             options.set_additional_data_packs(self.additional_data_packs.clone());
+            options.refresh_presets(&self.resources, self.preset_data.as_deref());
         }
         if self.gated && mode.id() != self.mode.id() {
             self.requested = Some(mode);
@@ -825,6 +840,7 @@ impl Title {
                 | Mode::CreateBuffet { options, .. } => {
                     options.rules.rebind_registry(registry.clone())
                 }
+                Mode::CreatePreset { parent, .. } => rebind(parent, registry),
                 Mode::Error { return_to, .. } => rebind(return_to, registry),
                 _ => {}
             }
@@ -871,6 +887,7 @@ impl Title {
             saves,
             resources: resources.to_owned(),
             additional_data_packs: std::sync::Arc::from([]),
+            preset_data: None,
             started: now,
             search: String::new(),
             search_focused: false,
@@ -916,6 +933,7 @@ impl Title {
         self.additional_data_packs = packs.clone();
         if let Mode::Create { options, .. } = &mut self.mode {
             options.set_additional_data_packs(packs);
+            options.refresh_presets(&self.resources, self.preset_data.as_deref());
         }
     }
     /// Vanilla bypasses the selector when there are no saves.
@@ -1126,6 +1144,9 @@ impl Title {
         if !matches!(self.mode, Mode::Create { .. }) {
             self.set_mode(self.new_world());
         }
+        if let Mode::Create { options, .. } = &mut self.mode {
+            options.refresh_presets(&self.resources, self.preset_data.as_deref());
+        }
     }
     /// `PackSelectionScreen.onFilesDrop`: a pack dropped on the window joins
     /// the Create New World screen's data packs (the screen's watcher lists
@@ -1204,6 +1225,7 @@ impl Title {
     pub fn set_data_packs(&mut self, ids: Vec<String>) {
         if let Mode::Create { options, .. } = &mut self.mode {
             options.data_packs = ids;
+            options.refresh_presets(&self.resources, self.preset_data.as_deref());
         }
     }
     fn matches_search(&self, world: &WorldEntry) -> bool {
@@ -1322,7 +1344,8 @@ impl Title {
             && delta != 0.0
         {
             let (w, h) = size;
-            let buttons = create_world::buttons(w, h, *creative, options);
+            let buttons =
+                create_world::buttons(w, h, *creative, options, self.preset_data.is_some());
             if let Some(b) = buttons.iter().find(|b| {
                 b.enabled
                     && cursor.0 >= b.x
@@ -1468,6 +1491,7 @@ impl Title {
         Some(Action::Connect {
             address,
             lan: false,
+            realm: true,
         })
     }
     pub fn take_open_request(&mut self) -> Option<String> {
@@ -1912,6 +1936,7 @@ impl Title {
             level,
             world_gen: options.world_gen(),
             flat_settings: options.flat_settings(),
+            dimensions: options.dimensions(),
             single_biome: options.single_biome().map(str::to_owned),
             data_packs: (options.data_packs.clone(), disabled),
             pack_dir: options.pack_dir.clone(),
@@ -1947,514 +1972,6 @@ impl Title {
         }
         folder
     }
-    fn buttons(&self, w: f32, h: f32) -> Vec<Button> {
-        // The game rules draw and press their own.
-        if self.rules.borrow().is_some() {
-            return Vec::new();
-        }
-        let (w, h) = (w.ceil(), h.ceil());
-        let b = |x: f32, y: f32, w: f32, label: &str, enabled: bool, id: u8| Button {
-            x,
-            y,
-            w,
-            label: label.into(),
-            enabled,
-            id,
-            icon: None,
-            trailing: None,
-            action: None,
-        };
-        match &self.mode {
-            Mode::Main => {
-                let cx = (w / 2.0).floor();
-                let y = (h / 4.0).floor() + 48.0;
-                let mut buttons = vec![
-                    b(
-                        cx - 100.0,
-                        y,
-                        200.0,
-                        &lang::get_or("menu.singleplayer", "Singleplayer"),
-                        true,
-                        1,
-                    ),
-                    b(
-                        cx - 100.0,
-                        y + 24.0,
-                        200.0,
-                        &lang::get_or("menu.multiplayer", "Multiplayer"),
-                        self.allows_multiplayer,
-                        4,
-                    ),
-                    b(
-                        cx - 100.0,
-                        y + 48.0,
-                        200.0,
-                        &lang::get_or("menu.online", "Minecraft Realms"),
-                        // TitleScreen.createNormalMenuOptions: Realms is off when
-                        // multiplayer is.
-                        self.allows_multiplayer,
-                        8,
-                    ),
-                    b(
-                        cx - 100.0,
-                        y + 96.0,
-                        98.0,
-                        &lang::get_or("menu.options", "Options..."),
-                        true,
-                        3,
-                    )
-                    .does(crate::widgets::Action::Options),
-                    b(
-                        cx + 2.0,
-                        y + 96.0,
-                        98.0,
-                        &lang::get_or("menu.quit", "Quit Game"),
-                        true,
-                        2,
-                    )
-                    .does(crate::widgets::Action::Exit),
-                ];
-                // CommonButtons' icon buttons; Horizon's Join a Friend (an
-                // invite code) sits behind vanilla's Friends button.
-                for (i, (key, plain, id, icon)) in [
-                    ("horizon.mods.screen.title", "Mods", 9, "icon/mods"),
-                    ("gui.friends.open", "Friends", 5, "friends/friends"),
-                    ("options.language", "Language...", 6, "icon/language"),
-                    (
-                        "options.accessibility",
-                        "Accessibility Settings...",
-                        7,
-                        "icon/accessibility",
-                    ),
-                ]
-                .into_iter()
-                .enumerate()
-                {
-                    let mut button = b(
-                        cx - 46.0 + i as f32 * 24.0,
-                        y + 72.0,
-                        20.0,
-                        &lang::get_or(key, plain),
-                        true,
-                        id,
-                    );
-                    button.icon = Some((icon, 15.0));
-                    buttons.push(button);
-                }
-                buttons
-            }
-            Mode::Select { worlds, selected } => {
-                let world = selected.and_then(|i| worlds.get(i));
-                // SelectWorldScreen.updateButtonStatus: primaryActionMessage, canEdit, canRecreate.
-                let corrupted = world.is_some_and(|w| w.corrupted);
-                let editable = world.is_some_and(WorldEntry::can_edit);
-                let play = if corrupted {
-                    lang::get_or("recover_world.button", "Attempt to Recover")
-                } else if world.is_some_and(|w| w.file_fixing) {
-                    lang::get_or("selectWorld.upgrade_and_play", "Upgrade and Play")
-                } else {
-                    lang::get_or("selectWorld.select", "Play Selected World")
-                };
-                vec![
-                    b(
-                        (w / 2.0).floor() - 154.0,
-                        h - 52.0,
-                        150.0,
-                        &play,
-                        world.is_some_and(WorldEntry::can_play),
-                        10,
-                    ),
-                    b(
-                        (w / 2.0).floor() + 4.0,
-                        h - 52.0,
-                        150.0,
-                        &lang::get_or("selectWorld.create", "Create New World"),
-                        true,
-                        11,
-                    ),
-                    b(
-                        (w / 2.0).floor() - 154.0,
-                        h - 28.0,
-                        71.0,
-                        &lang::get_or("selectWorld.edit", "Edit"),
-                        editable,
-                        13,
-                    ),
-                    b(
-                        (w / 2.0).floor() - 75.0,
-                        h - 28.0,
-                        71.0,
-                        &lang::get_or("selectWorld.delete", "Delete"),
-                        selected.is_some(),
-                        14,
-                    ),
-                    b(
-                        (w / 2.0).floor() + 4.0,
-                        h - 28.0,
-                        71.0,
-                        &lang::get_or("selectWorld.recreate", "Re-Create"),
-                        editable,
-                        15,
-                    ),
-                    b(
-                        (w / 2.0).floor() + 83.0,
-                        h - 28.0,
-                        71.0,
-                        &lang::get_or("gui.back", "Back"),
-                        true,
-                        12,
-                    )
-                    .does(crate::widgets::Action::Back),
-                ]
-            }
-            Mode::Create {
-                creative, options, ..
-            } => create_world::buttons(w, h, *creative, options),
-            Mode::CreateFlat { flat, .. } => flat::buttons(w, h, flat),
-            Mode::CreateBuffet { buffet, .. } => buffet::buttons(w, h, buffet),
-            Mode::Edit { world, name, .. } => {
-                let x = (w / 2.0).floor() - 100.0;
-                let top = edit_top(h);
-                vec![
-                    b(
-                        x,
-                        top + 64.0,
-                        200.0,
-                        &lang::get_or("selectWorld.edit.resetIcon", "Reset Icon"),
-                        self.saves.join(&world.folder).join("icon.png").is_file(),
-                        30,
-                    ),
-                    b(
-                        x,
-                        top + 89.0,
-                        200.0,
-                        &lang::get_or("selectWorld.edit.openFolder", "Open World Folder"),
-                        true,
-                        31,
-                    ),
-                    b(
-                        x,
-                        top + 114.0,
-                        200.0,
-                        &lang::get_or("selectWorld.edit.backup", "Make Backup"),
-                        true,
-                        32,
-                    ),
-                    b(
-                        x,
-                        top + 139.0,
-                        200.0,
-                        &lang::get_or("selectWorld.edit.backupFolder", "Open Backups Folder"),
-                        true,
-                        33,
-                    ),
-                    b(
-                        x,
-                        top + 164.0,
-                        200.0,
-                        &lang::get_or("selectWorld.edit.optimize", "Optimize World"),
-                        true,
-                        34,
-                    ),
-                    b(
-                        x,
-                        top + 214.0,
-                        98.0,
-                        &lang::get_or("selectWorld.edit.save", "Save"),
-                        !name.trim().is_empty(),
-                        35,
-                    ),
-                    b(
-                        x + 102.0,
-                        top + 214.0,
-                        98.0,
-                        &lang::get_or("gui.cancel", "Cancel"),
-                        true,
-                        36,
-                    )
-                    .does(crate::widgets::Action::Cancel),
-                ]
-            }
-            Mode::Delete { .. } => {
-                let y = confirm_top(h, self.message_lines.get())
-                    + 41.0
-                    + self.message_lines.get() as f32 * 9.0;
-                vec![
-                    b(
-                        (w / 2.0).floor() - 152.0,
-                        y,
-                        150.0,
-                        &lang::get_or("selectWorld.deleteButton", "Delete"),
-                        true,
-                        37,
-                    ),
-                    b(
-                        (w / 2.0).floor() + 2.0,
-                        y,
-                        150.0,
-                        &lang::get_or("gui.cancel", "Cancel"),
-                        true,
-                        38,
-                    )
-                    .does(crate::widgets::Action::Cancel),
-                ]
-            }
-            Mode::LowDiskSpace { .. } => {
-                let y = confirm_top(h, self.message_lines.get())
-                    + 41.0
-                    + self.message_lines.get() as f32 * 9.0;
-                vec![
-                    b(
-                        (w / 2.0).floor() - 152.0,
-                        y,
-                        150.0,
-                        &lang::get_or("gui.continue", "Continue"),
-                        true,
-                        94,
-                    ),
-                    b(
-                        (w / 2.0).floor() + 2.0,
-                        y,
-                        150.0,
-                        &lang::get_or("gui.back", "Back"),
-                        true,
-                        95,
-                    )
-                    .does(crate::widgets::Action::Back),
-                ]
-            }
-            Mode::Recover { issues, .. } => {
-                let y = recover_buttons_top(h, self.message_lines.get());
-                // The restore button is active only when level.dat is the broken one
-                // and level.dat_old reads.
-                vec![
-                    b(
-                        (w / 2.0).floor() - 60.0,
-                        y,
-                        120.0,
-                        &lang::get_or("recover_world.restore", "Attempt to Restore"),
-                        issues[0].is_some() && issues[1].is_none(),
-                        90,
-                    ),
-                    b(
-                        (w / 2.0).floor() - 60.0,
-                        y + 28.0,
-                        120.0,
-                        &lang::get_or("gui.back", "Back"),
-                        true,
-                        91,
-                    )
-                    .does(crate::widgets::Action::Back),
-                ]
-            }
-            Mode::Recovered { success: true, .. } => {
-                let y = confirm_top(h, self.message_lines.get())
-                    + 41.0
-                    + self.message_lines.get() as f32 * 9.0;
-                vec![
-                    b(
-                        (w / 2.0).floor() - 152.0,
-                        y,
-                        150.0,
-                        &lang::get_or("gui.continue", "Continue"),
-                        true,
-                        92,
-                    ),
-                    b(
-                        (w / 2.0).floor() + 2.0,
-                        y,
-                        150.0,
-                        &lang::get_or("gui.back", "Back"),
-                        true,
-                        93,
-                    )
-                    .does(crate::widgets::Action::Back),
-                ]
-            }
-            Mode::Recovered { success: false, .. } => {
-                // AlertScreen.init: the button follows the text, kept inside the screen.
-                let y = (90.0 + self.message_lines.get() as f32 * 9.0 + 12.0)
-                    .max(h / 6.0 + 96.0)
-                    .min(h - 24.0);
-                vec![
-                    b(
-                        (w / 2.0).floor() - 75.0,
-                        y,
-                        150.0,
-                        &lang::get_or("gui.back", "Back"),
-                        true,
-                        93,
-                    )
-                    .does(crate::widgets::Action::Back),
-                ]
-            }
-            Mode::Error { alert, .. } => {
-                let lines = self.message_lines.get();
-                let y = if alert.is_some() {
-                    // AlertScreen.init: the button follows the text, kept inside the screen.
-                    (90.0 + lines as f32 * 9.0 + 12.0)
-                        .max(h / 6.0 + 96.0)
-                        .min(h - 24.0)
-                } else {
-                    confirm_top(h, lines) + 41.0 + lines as f32 * 9.0
-                };
-                vec![
-                    b(
-                        (w / 2.0).floor() - 75.0,
-                        y,
-                        150.0,
-                        &lang::get_or("gui.back", "Back"),
-                        true,
-                        39,
-                    )
-                    .does(crate::widgets::Action::Back),
-                ]
-            }
-            Mode::BackupBeforeUpgrade { .. } => {
-                // BackupConfirmScreen.init: the buttons sit under the text at fixed offsets.
-                let y = 109.0 + self.message_lines.get() as f32 * 9.0;
-                vec![
-                    b(
-                        (w / 2.0).floor() - 155.0,
-                        y,
-                        150.0,
-                        &lang::get_or(
-                            "selectWorld.backupJoinConfirmButton",
-                            "Create Backup and Load",
-                        ),
-                        true,
-                        40,
-                    ),
-                    b(
-                        (w / 2.0).floor() + 5.0,
-                        y,
-                        150.0,
-                        &lang::get_or("selectWorld.backupJoinSkipButton", "I Know What I'm Doing!"),
-                        true,
-                        41,
-                    ),
-                    b(
-                        (w / 2.0).floor() - 75.0,
-                        y + 24.0,
-                        150.0,
-                        &lang::get_or("gui.cancel", "Cancel"),
-                        true,
-                        42,
-                    )
-                    .does(crate::widgets::Action::Cancel),
-                ]
-            }
-            Mode::OptimizeConfirm { .. } => {
-                // BackupConfirmScreen.init with the Erase Cached Data box: the buttons sit
-                // under the text at fixed offsets.
-                let y = 100.0 + (self.message_lines.get() as f32 + 1.0) * 9.0;
-                vec![
-                    b(
-                        (w / 2.0).floor() - 155.0,
-                        y,
-                        150.0,
-                        &lang::get_or(
-                            "optimizeWorld.confirm.proceed",
-                            "Create Backup and Optimize",
-                        ),
-                        true,
-                        43,
-                    ),
-                    b(
-                        (w / 2.0).floor() + 5.0,
-                        y,
-                        150.0,
-                        &lang::get_or("selectWorld.backupJoinSkipButton", "I Know What I'm Doing!"),
-                        true,
-                        44,
-                    ),
-                    b(
-                        (w / 2.0).floor() - 75.0,
-                        y + 24.0,
-                        150.0,
-                        &lang::get_or("gui.cancel", "Cancel"),
-                        true,
-                        45,
-                    )
-                    .does(crate::widgets::Action::Cancel),
-                ]
-            }
-            // No `does`: Escape is inert here on purpose, so B is too. A on the button stops it.
-            Mode::Optimize { .. } => vec![b(
-                (w / 2.0).floor() - 100.0,
-                (h / 4.0).floor() + 150.0,
-                200.0,
-                &lang::get_or("gui.cancel", "Cancel"),
-                true,
-                46,
-            )],
-            Mode::MultiplayerWarning { .. } => {
-                let lines = self.message_lines.get();
-                let y = warning_top(h, lines) + 82.0 + lines as f32 * 9.0;
-                vec![
-                    b(
-                        (w / 2.0).floor() - 154.0,
-                        y,
-                        150.0,
-                        &lang::get_or("gui.proceed", "Proceed"),
-                        true,
-                        70,
-                    ),
-                    b(
-                        (w / 2.0).floor() + 4.0,
-                        y,
-                        150.0,
-                        &lang::get_or("gui.back", "Back"),
-                        true,
-                        71,
-                    )
-                    .does(crate::widgets::Action::Back),
-                ]
-            }
-            Mode::Onboarding(_) => self.onboarding_buttons(w, h),
-            Mode::BanNotice(_) => {
-                // ConfirmLinkScreen.addButtons: Open in Browser, Copy to Clipboard, then the
-                // notice's Acknowledge, 100 wide each.
-                let labels = [
-                    lang::get_or("chat.link.open", "Open in Browser"),
-                    lang::get_or("chat.copy", "Copy to Clipboard"),
-                    lang::get_or("gui.acknowledge", "Acknowledge"),
-                ];
-                let positions = self.ban_buttons.get();
-                (0..3)
-                    .map(|i| {
-                        b(
-                            positions[i].0,
-                            positions[i].1,
-                            100.0,
-                            &labels[i],
-                            true,
-                            120 + i as u8,
-                        )
-                    })
-                    .collect()
-            }
-            Mode::Backup { .. } => Vec::new(),
-            Mode::Multiplayer(screen) => screen
-                .buttons(w, h)
-                .into_iter()
-                .map(|(x, y, bw, label, enabled, id)| {
-                    let mut button = b(x, y, bw, &label, enabled, id);
-                    button.action = crate::multiplayer::button_action(id);
-                    button
-                })
-                .collect(),
-            Mode::Realms(screen) => screen
-                .buttons(w, h)
-                .into_iter()
-                .map(|(x, y, bw, label, enabled, id, icon)| {
-                    let mut btn = b(x, y, bw, &label, enabled, id);
-                    btn.icon = icon;
-                    btn
-                })
-                .collect(),
-        }
-    }
     /// The screen this mode is, as the narrator reads it: its id and
     /// `getNarrationMessage` (the title, or `joinForNarration(title, message)`
     /// for the confirm and alert screens). `None` for the screens that
@@ -2471,6 +1988,10 @@ impl Title {
             Mode::Create { .. } => ScreenInfo::new(
                 "create_world",
                 get("selectWorld.create", "Create New World"),
+            ),
+            Mode::CreatePreset { .. } => ScreenInfo::new(
+                "world_preset_editor",
+                lang::get("selectWorld.customizeType"),
             ),
             // PresetFlatWorldScreen over CreateFlatWorldScreen.
             Mode::CreateFlat { flat, .. } if flat.page == flat::Page::Presets => ScreenInfo::new(
@@ -3003,6 +2524,9 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             } => self.draw_create(atlas, batch, cursor, name, seed, *focus, options),
             Mode::CreateFlat { flat, .. } => flat::draw(self, atlas, items, batch, cursor, flat),
             Mode::CreateBuffet { buffet, .. } => buffet::draw(self, atlas, batch, cursor, buffet),
+            Mode::CreatePreset { .. } => {
+                crate::ui::menu_background(batch, atlas, 0.0, 0.0, w, h, false);
+            }
             Mode::Edit { name, focused, .. } => {
                 crate::ui::menu_background(batch, atlas, 0.0, 0.0, w, h, false);
                 centered(
@@ -3759,6 +3283,25 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
         }
     }
     fn click_action(&mut self, x: f32, y: f32, (w, h): (f32, f32), hit: Option<u8>) -> Action {
+        if matches!(self.mode, Mode::CreatePreset { .. }) {
+            if let Some(94 | 95) = hit {
+                self.close_preset_editor(hit == Some(94));
+            }
+            return Action::None;
+        }
+        if hit == Some(26)
+            && self.preset_data.is_some()
+            && let Mode::Create { options, .. } = &self.mode
+            && let Some(editor) = preset_editors::editor(options.preset_id())
+            && let Some(dimensions) = options.editor_dimensions()
+        {
+            self.set_mode(Mode::CreatePreset {
+                parent: Box::new(self.mode.clone()),
+                editor,
+                dimensions: RefCell::new(dimensions),
+            });
+            return Action::None;
+        }
         match (&mut self.mode, hit) {
             (Mode::Main, Some(1)) => {
                 // The title button is no longer part of the world-select screen.
@@ -3819,6 +3362,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                     crate::realms::Outcome::Connect(address) => Action::Connect {
                         address,
                         lan: false,
+                        realm: true,
                     },
                     crate::realms::Outcome::OpenUri(uri) => Action::OpenUri(uri),
                     crate::realms::Outcome::Copy(text) => Action::CopyText(text),
@@ -3842,9 +3386,11 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                     self.set_mode(Mode::Main);
                     Action::None
                 }
-                crate::multiplayer::Outcome::Connect { address, lan } => {
-                    Action::Connect { address, lan }
-                }
+                crate::multiplayer::Outcome::Connect { address, lan } => Action::Connect {
+                    address,
+                    lan,
+                    realm: false,
+                },
                 crate::multiplayer::Outcome::None | crate::multiplayer::Outcome::Open(_) => {
                     Action::None
                 }
@@ -4382,6 +3928,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                     Action::Connect {
                         address,
                         lan: false,
+                        realm: true,
                     },
                     true,
                 ),
@@ -4412,7 +3959,14 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                     if matches!(screen, crate::multiplayer::Screen::Direct { .. }) {
                         crate::multiplayer::remember_direct_join(&self.saves, &address);
                     }
-                    (Action::Connect { address, lan }, true)
+                    (
+                        Action::Connect {
+                            address,
+                            lan,
+                            realm: false,
+                        },
+                        true,
+                    )
                 }
                 _ => (Action::None, false),
             },
@@ -4980,6 +4534,12 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
             return;
         };
         self.allows_multiplayer = status.allows_multiplayer();
+        // `Minecraft`'s constructor: the account's `friendsPreferences` decide whether
+        // the friends service starts (`Minecraft.friendsEnabled`).
+        crate::social::init(
+            status.properties.friends_enabled,
+            status.properties.accept_friend_invites,
+        );
         if !QUEUED.swap(true, Ordering::Relaxed) {
             self.ban_queue
                 .extend(initial_notices(status, &session.name));
@@ -5051,6 +4611,7 @@ Would you like to enable the Narrator or visit the Accessibility Settings?",
                 }
             }
             Mode::CreateBuffet { .. } => self.close_buffet(false),
+            Mode::CreatePreset { .. } => self.close_preset_editor(false),
             Mode::Create { .. } => self.cancel_create(),
             // Screen.keyPressed: Escape closes the screen, which fades out.
             Mode::Onboarding(_) => self.onboarding_close(),

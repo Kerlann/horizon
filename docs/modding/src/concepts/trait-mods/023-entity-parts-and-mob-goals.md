@@ -84,9 +84,12 @@ acceptance. `EntityWriteError<E>` keeps authority, epoch, generation, removal an
 work-limit refusals separate from the operation's original `Domain(E)` error.
 
 `CommandCompleted<R, E> { id, outcome: Result<R, E> }` is terminal: Pending cannot
-be represented in it. `EntityRef::set_silent` is the first implemented queued
-domain: `EntityWriteCompletion::EntitySetSilent` carries the actual boolean result
-or typed apply-time refusal. `CommandId::query(&dyn Host)` returns
+be represented in it. `EntityRef::set_silent` and `EntityRef::set_no_gravity` are
+queued scalar domains. `EntityWriteCompletion::EntitySetSilent` and
+`EntityWriteCompletion::EntitySetNoGravity` carry their actual boolean result or
+typed apply-time refusal. The current generated Wire discriminants are NoGravity
+= 0 and Silent = 1; adding NoGravity intentionally changes the earlier one-variant
+layout, identically on native and wasm. `CommandId::query(&dyn Host)` returns
 `EntityCommandStatus::Pending` or `Completed(the_same_completion)`. Only the issuing
 native mod or wasm package receives `entity_command_completed`; converted packages
 hosted by one native runtime retain distinct issuer identities.
@@ -98,14 +101,22 @@ expire. `CommandQueryError::StaleEpoch` is distinct from `UnknownOrExpired`, whi
 also covers commands inaccessible to the calling mod without disclosing another
 mod's work.
 
-For `set_silent`, an explicit OWN actor or a call outside a writer turn applies
+For both scalar setters, an explicit OWN actor or a call outside a writer turn applies
 immediately and returns `Applied(true)`. A foreign target queues during a writer
 turn even when it is resident. Acceptance validates epoch, authority and admitted
 identity; application rechecks its exact generation, so removal or id reuse never
-retargets the write. The latest ordered silent value overlays authoritative light
-rows, including every materialized family header's `pending_overlay`. A source
-recapture preserves that overlay until completion. Only full entity NBT serialization
-depends on this pending silent patch; names, tags and unrelated heavy reads do not.
+retargets the write. Ordered silent and no-gravity patches overlay their respective
+authoritative light fields, including every materialized family header's shared
+`pending_overlay`. A source recapture preserves both overlays until completion;
+refusing one patch replays the remaining patches without losing the other field.
+Only full entity NBT serialization depends on these pending scalar patches; names,
+tags and unrelated heavy reads do not.
+
+NoGravity uses actual stored flags on mobs, items, experience orbs, armor stands,
+boats, minecarts, projectiles, primed TNT, tridents and falling blocks, including
+parked levels without dimension swaps. Other families currently lack implemented
+NoGravity storage and refuse `Unsupported`; that is a Horizon capability gap, not
+a claim that vanilla forbids the flag for those entity kinds.
 
 An active item transaction refuses a foreign write that would enqueue with
 `EntityWriteError::TransactionActive`, before creating an id, overlay or event.

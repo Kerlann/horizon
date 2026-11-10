@@ -6,7 +6,7 @@ use crate::game::*;
 use horizon_client::chunk::Chunk;
 use horizon_core::position::ChunkPos;
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -28,7 +28,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -85,7 +85,8 @@ fn property(game: &Game<'_>, at: [i32; 3], key: &str) -> Option<String> {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_bobber_powers_a_target_block_and_counts_the_hit() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     assert!(game.run_command("setblock 4 64 2 minecraft:target"));
     // Nothing under its flight: the target is the first block it meets.
     assert!(game.run_command("fill 0 63 0 3 63 4 minecraft:air"));
@@ -104,7 +105,8 @@ fn a_bobber_powers_a_target_block_and_counts_the_hit() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_bobber_rings_a_floor_bell_on_its_side() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     assert!(game.run_command("setblock 4 64 5 minecraft:bell[attachment=floor,facing=east]"));
     // Struck on the west face (the bell's axis), low enough for isProperHit.
     cast_east(&mut game, Vec3::new(2.5, 64.6, 5.5), "minecraft:bell_ring");

@@ -5,6 +5,20 @@ include!(concat!(env!("OUT_DIR"), "/records.rs"));
 #[cfg(test)]
 mod tests {
     use super::{changed, original};
+
+    /// The mod's hooks, which `wasm-guest` declares and `#[mod_api::horizon_mod]` defines in a real mod. The
+    /// native test binary needs a definition too: MSVC's linker refuses the unresolved symbol even though nothing
+    /// here calls it, where GNU ld drops the unused reference.
+    #[unsafe(no_mangle)]
+    fn __horizon_mod_hooks() -> Box<dyn mod_api::Hooks> {
+        struct Empty;
+        impl mod_api::Hooks for Empty {
+            fn subscribed(&self) -> &'static [Option<mod_api::HookId>] {
+                &[]
+            }
+        }
+        Box::new(Empty)
+    }
     use mod_api::wire::{Reader, Wire, WireError, Writer};
     use std::borrow::Cow;
 

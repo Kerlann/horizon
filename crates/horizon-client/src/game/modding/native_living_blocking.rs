@@ -23,7 +23,7 @@ impl Game<'_> {
         };
         let blocking = ticks.is_some_and(|ticks| {
             self.living_used_item_hand(living)
-                .and_then(|hand| self.living_hand_item(living, hand))
+                .and_then(|hand| self.living_hand_item(living, hand).ok().flatten())
                 .is_some_and(|stack| {
                     self.blocks_attacks(&stack)
                         .is_some_and(|component| block_delay_passed(&component, ticks))

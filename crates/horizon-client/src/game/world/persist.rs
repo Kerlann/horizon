@@ -3,6 +3,8 @@
 //! scheduled block/fluid ticks (chunk `block_ticks`/`fluid_ticks`).
 #[path = "persist/display.rs"]
 mod display;
+#[path = "persist/loaded_pass.rs"]
+mod loaded_pass;
 
 use super::{FallingBlock, Game};
 use horizon_client::{
@@ -620,89 +622,6 @@ impl Game<'_> {
             },
         ))
     }
-    /// Spawn the entities of chunks that finished loading.
-    pub(super) fn spawn_loaded_entities(&mut self) {
-        let loaded = std::mem::take(&mut self.world.loaded_entities);
-        let player_uuid = self.level.player_uuid;
-        for (key, tags) in loaded {
-            let count = tags.len();
-            for mut tag in tags {
-                // A world older builds named by the offline profile names the player that
-                // way in its entities too: migrate them as they load, so the next save of
-                // the chunk keeps the account's UUID (`playerdata::migrate_owner`).
-                if let Some((old, new)) = self.owner_migration {
-                    entity_nbt::migrate_player_uuid(
-                        &mut tag,
-                        horizon_client::lan::playerdata::uuid_ints(old),
-                        horizon_client::lan::playerdata::uuid_ints(new),
-                    );
-                }
-                // PersistentEntitySectionManager.addEntity's `loaded`.
-                let from_disk = !take_fresh(&mut tag);
-                // An End gateway's traveller never left the level: nothing joins.
-                let moved = take_moved(&mut tag);
-                // Whatever was added since the last tick joins before this one.
-                self.native_joins_flush(false, 0);
-                let kind = entity_nbt::kind(&tag).unwrap_or_default();
-                let is_mob = self.res.mob_types().contains_key(kind.as_str());
-                drop_unleashable_leash(&mut tag, &kind, is_mob);
-                let uuid = entity_nbt::uuid(&tag);
-                if uuid.is_some_and(|u| self.restored_vehicle(u).is_some()) {
-                    continue;
-                }
-                if (matches!(
-                    kind.as_str(),
-                    "minecraft:experience_orb"
-                        | "minecraft:arrow"
-                        | "minecraft:spectral_arrow"
-                        | "minecraft:llama_spit"
-                        | "minecraft:shulker_bullet"
-                        | "minecraft:experience_bottle"
-                        | "minecraft:fireball"
-                        | "minecraft:small_fireball"
-                        | "minecraft:dragon_fireball"
-                        | "minecraft:wind_charge"
-                        | "minecraft:breeze_wind_charge"
-                        | "minecraft:wither_skull"
-                        | "minecraft:snowball"
-                        | "minecraft:egg"
-                        | "minecraft:ender_pearl"
-                        | "minecraft:splash_potion"
-                        | "minecraft:lingering_potion"
-                        | "minecraft:falling_block"
-                        | "minecraft:firework_rocket"
-                        | "minecraft:trident"
-                        | "minecraft:end_crystal"
-                        | "minecraft:ender_dragon"
-                ) || horizon_client::projectiles::thrown_type(&kind).is_some())
-                    && let Some(at) = entity_nbt::position(&tag)
-                {
-                    self.persist
-                        .anon
-                        .insert(anon_key(&kind, at), (at, tag.clone()));
-                }
-                // Kinds outside `entity_lists!` first, then the listed kinds
-                // (`Entity::load_nbt`), then whatever else is a compound.
-                if let Err(tag) = self.load_unlisted(key, &kind, uuid, tag)
-                    && let Err(tag) = self.load_listed(&kind, uuid, player_uuid, tag)
-                {
-                    if !kind.is_empty() && entity_nbt::position(&tag).is_some() {
-                        self.load_other(tag, &kind);
-                    } else {
-                        self.persist.unknown.entry(key).or_default().push(tag);
-                    }
-                }
-                // PersistentEntitySectionManager.addEntity: every kind that
-                // just joined tells the mods; a moved one does not join.
-                if moved {
-                    self.native_joins_skip();
-                } else {
-                    self.native_joins_flush(from_disk, 0);
-                }
-            }
-            self.native_entities_load(self.dim.id(), [key.0, key.1], count);
-        }
-    }
     /// The kinds `entity_lists!` does not hold: `Err` hands the compound back
     /// when `kind` is not one of them.
     fn load_unlisted(
@@ -1272,6 +1191,7 @@ impl Game<'_> {
         self.remember(id, uuid, tag);
         self.bind_saved_entity_attachments(id, &mut m.attachment_lifetime);
         self.mobs.push(m);
+        self.record_ai_mob_owner_id(id);
         if restore_target {
             self.native_restore_loaded_target(id, anger_uuid);
         }
@@ -1343,56 +1263,7 @@ impl Game<'_> {
     /// `Passengers`, after the passengers it kept from loading. Discarded
     /// passengers cannot save even before their list entry is swept.
     pub(super) fn put_mob_passengers(&mut self, tag: &mut Tag, id: u32) {
-        let mut riders: Vec<Tag> = Vec::new();
-        let mut live_seen = HashSet::new();
-
-        let slots = self.persist.passenger_slots.get(&id).cloned();
-        if let Some(slots) = slots {
-            for slot in slots {
-                match slot {
-                    PassengerSlot::Live(rider_id) => {
-                        if let Some(pos) = self.mobs.iter().position(|m| {
-                            m.id == rider_id && m.extra.mount == Some(id) && m.alive() && !m.removed
-                        }) {
-                            live_seen.insert(rider_id);
-                            riders.push(self.mob_tree_nbt(pos));
-                        }
-                    }
-                    PassengerSlot::Saved(saved_tag) => {
-                        riders.push(saved_tag.clone());
-                    }
-                }
-            }
-        }
-
-        let mut extra_riders: Vec<usize> = (0..self.mobs.len())
-            .filter(|&j| {
-                self.mobs[j].extra.mount == Some(id)
-                    && self.mobs[j].alive()
-                    && !self.mobs[j].removed
-                    && !live_seen.contains(&self.mobs[j].id)
-            })
-            .collect();
-        extra_riders.sort_by_key(|&j| self.mobs[j].extra.vehicle_order);
-        if let Some(driver) = self
-            .mobs
-            .iter()
-            .find(|m| m.id == id)
-            .and_then(|m| m.extra.rider)
-            && let Some(pos) = extra_riders.iter().position(|&j| self.mobs[j].id == driver)
-            && pos != 0
-        {
-            let d = extra_riders.remove(pos);
-            extra_riders.insert(0, d);
-        }
-        for j in extra_riders {
-            riders.push(self.mob_tree_nbt(j));
-        }
-
-        if let Tag::Compound(c) = tag {
-            c.remove(&"Passengers".into());
-        }
-        add_passengers(tag, riders);
+        super::native_mob_nbt_save::MobNbtOwner::put_mob_passengers(self, tag, id)
     }
     /// Read an unsimulated entity without assigning it a new identity.
     pub(super) fn other_from_nbt(
@@ -1673,92 +1544,7 @@ impl Game<'_> {
     }
     /// A mob's entity tag with the mobs riding it under `Passengers`.
     pub(super) fn mob_tree_nbt(&mut self, i: usize) -> Tag {
-        let id = self.mobs[i].id;
-        let uuid = self.uuid_for(id);
-        // A warden's anger names each suspect by UUID. A mob that has never been
-        // loaded or saved has no UUID yet, so give it one, or the save would
-        // drop the anger at it (`who_uuid` writes nothing for a mob the map does
-        // not know).
-        let suspects: Vec<u32> = self.mobs[i]
-            .extra
-            .warden
-            .as_ref()
-            .map(|st| {
-                st.anger
-                    .suspects()
-                    .iter()
-                    .filter_map(|who| match who {
-                        Who::Mob(id) => Some(*id),
-                        Who::Player => None,
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        for suspect in suspects {
-            self.uuid_for(suspect);
-        }
-        // `NeutralMob.addPersistentAngerSaveData`: the anger ends at an
-        // absolute game time, so it goes on while the chunk is unloaded, and
-        // the target is the entity the mob is angry at.
-        let anger = self.mobs[i].extra.anger;
-        // A loaded NoAI Enderman owns an absolute NeutralMob timestamp;
-        // its skipped AI does not decrement the derived gameplay counter.
-        if !(self.mobs[i].species() == horizon_client::mobs::Species::Enderman
-            && self.mobs[i].no_ai)
-        {
-            self.mobs[i].extra.anger_end = if anger > 0 {
-                self.world.game_time + i64::from(anger)
-            } else {
-                -1
-            };
-        }
-        self.mobs[i].extra.angry_at = if anger > 0 {
-            // A wolf and an iron golem keep their anger's target themselves,
-            // also once the target is gone (`tame::update_persistent_anger`).
-            if matches!(
-                self.mobs[i].species(),
-                horizon_client::mobs::Species::Wolf | horizon_client::mobs::Species::IronGolem
-            ) {
-                self.mobs[i].extra.angry_at
-            } else {
-                self.mobs[i].ai.target
-            }
-        } else {
-            None
-        };
-        // A mob gets its UUID when it is first saved (`uuid_for`): the anger
-        // target still in the world gets it now, so `uuid_of` can name it.
-        if let Some(horizon_client::mobs::Who::Mob(target)) = self.mobs[i].extra.angry_at
-            && target != 0
-            && self.mobs.iter().any(|m| m.id == target)
-        {
-            self.uuid_for(target);
-        }
-        // The mob that last hurt it, still resident, gets its UUID now, as the
-        // anger target does, so `put_last_hurt_by_mob` can name it.
-        if let Some(horizon_client::mobs::Who::Mob(attacker)) = self.mobs[i].ai.last_hurt_by
-            && self.mobs.iter().any(|m| m.id == attacker)
-        {
-            self.uuid_for(attacker);
-        }
-        let mut tag = entity_nbt::mob_to_nbt(
-            &self.mobs[i],
-            uuid,
-            self.persist.raw.get(&id),
-            Some(self.pack.assets.registry),
-            |other| self.persist.uuid_of(other),
-        );
-        self.put_last_hurt_by_mob(&self.mobs[i], &mut tag);
-        if horizon_client::mobs::camel::is_camel(self.mobs[i].species())
-            && let Tag::Compound(c) = &mut tag
-        {
-            let tick =
-                horizon_client::mobs::camel::synced_pose_tick(&self.mobs[i], self.world.game_time);
-            c.insert("LastPoseTick".into(), Tag::Long(tick));
-        }
-        self.write_leash(&mut tag, i);
-        self.put_mob_passengers(&mut tag, id);
-        tag
+        super::native_mob_nbt_save::MobNbtOwner::mob_tree_nbt(self, i)
     }
     /// `LivingEntity.addAdditionalSaveData`'s `last_hurt_by_mob` and
     /// `ticks_since_last_hurt_by_mob`, a PARTIAL projection at save time: both
@@ -1769,32 +1555,7 @@ impl Game<'_> {
     /// is not written. This is not `baseTick`'s cleanup itself, the AI's
     /// record, `#no_anger`, or reading the keys back.
     pub(super) fn put_last_hurt_by_mob(&self, m: &horizon_client::mobs::Mob, tag: &mut Tag) {
-        let Tag::Compound(c) = tag else { return };
-        let since = i64::from(m.age) - i64::from(m.ai.last_hurt_by_time);
-        let reference = match m.ai.last_hurt_by {
-            Some(horizon_client::mobs::Who::Mob(attacker))
-                if (0..=100).contains(&since)
-                    && self.mobs.iter().any(|a| a.id == attacker && a.alive()) =>
-            {
-                self.persist.uuid_of(attacker)
-            }
-            _ => None,
-        };
-        match reference {
-            Some(uuid) => {
-                c.insert("last_hurt_by_mob".into(), Tag::IntArray(uuid.to_vec()));
-                c.insert(
-                    "ticks_since_last_hurt_by_mob".into(),
-                    Tag::Int(since as i32),
-                );
-            }
-            None => {
-                c.remove(&horizon_core::nbt::JavaString::from("last_hurt_by_mob"));
-                c.remove(&horizon_core::nbt::JavaString::from(
-                    "ticks_since_last_hurt_by_mob",
-                ));
-            }
-        }
+        super::native_mob_nbt_save::MobNbtOwner::put_last_hurt_by_mob(self, m, tag)
     }
     /// Forget an entity that left the world (its UUID and loaded compound).
     pub(super) fn forget_entity(&mut self, id: u32) {
@@ -1966,12 +1727,7 @@ impl Game<'_> {
     pub(super) fn uuid_for_at(&mut self, level: mod_api::LevelRef, id: u32) -> Option<[i32; 4]> {
         let dimension = level.dimension();
         if dimension == self.dim.key() {
-            if let Some(&uuid) = self.persist.uuids.get(&id) {
-                return Some(uuid);
-            }
-            let uuid = random_uuid();
-            self.set_saved_entity_uuid(id, uuid);
-            return Some(uuid);
+            return Some(self.uuid_for(id));
         }
         let parked = self.levels.parked_mut_of(level.dimension_id())?;
         if let Some(uuid) = parked.saved_entity_uuid(id) {
@@ -2754,42 +2510,7 @@ fn join_saved_team(board: &mut Scoreboard, name: &str, tag: &Tag) -> bool {
 mod tests {
     use super::*;
 
-    #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
-    fn neutral_mob_load_notifies_target_even_without_saved_anger() {
-        use std::sync::{Arc, Mutex};
-
-        struct Observe(Arc<Mutex<Vec<(u32, bool)>>>);
-        #[mod_api::__subscriptions]
-        impl mod_api::Hooks for Observe {
-            fn living_change_target(
-                &self,
-                host: &dyn mod_api::Host,
-                event: &mut mod_api::LivingChangeTargetEvent<'_>,
-            ) -> mod_api::Flow {
-                assert!(event.mob.living().health(host).is_some());
-                self.0
-                    .lock()
-                    .unwrap()
-                    .push((event.mob.entity().id(), event.original_target.is_none()));
-                mod_api::Flow::Continue
-            }
-        }
-        let observed = Arc::new(Mutex::new(Vec::new()));
-        let mods = vec![mod_api::ModEntry::new(
-            "observe",
-            Box::new(Observe(observed.clone())),
-        )]
-        .into();
-        mod_api::testing::with_mods(mods, || {
-            super::super::native_entity_refs::tests::with_game(|game| {
-                let wolf = game.load_mob(entity("minecraft:wolf"), None).unwrap();
-                let golem = game.load_mob(entity("minecraft:iron_golem"), None).unwrap();
-                game.load_mob(entity("minecraft:pig"), None).unwrap();
-                assert_eq!(*observed.lock().unwrap(), [(wolf, true), (golem, true)]);
-            });
-        });
-    }
+    include!("persist/position_load_tests.rs");
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]

@@ -448,24 +448,56 @@ pub(super) fn register_select_item_model_properties(role: ExecutionRole) {
     Game::native_register_select_item_model_property(&RegistrationContext::new(), &mut properties);
     horizon_assets::item_model::register_select_properties(properties);
 }
-/// The native mods' item tint sources (`native_register_item_tint_sources`), kept once at
-/// start, before resources load, so `tints` entries on them read the mod's colour.
-pub(super) fn register_item_tint_sources(role: ExecutionRole) {
+/// The source types native mods register for resource definitions, kept once at start, before
+/// resources load: item tint sources (`native_register_item_tint_sources`), so `tints` entries on
+/// them read the mod's colour, and atlas sprite sources (`native_register_sprite_sources`), so
+/// atlas definitions' entries on them list the mod's sprites.
+pub(super) fn register_resource_sources(role: ExecutionRole) {
     if !role.is_client() {
         return;
     }
     let mut sources = Vec::new();
     Game::native_register_item_tint_sources(&RegistrationContext::new(), &mut sources);
     horizon_assets::item_model::register_tint_sources(sources);
+    let mut sources = Vec::new();
+    Game::native_register_sprite_sources(&RegistrationContext::new(), &mut sources);
+    horizon_client_render::mod_sprite_sources::register(sources);
 }
+/// The client presentation registrations, resolved once before the first level opens: the
+/// dimension transition screens and the entity spectator shaders.
+pub(super) fn register_client_presentations(role: ExecutionRole) {
+    register_preset_editors(role);
+    register_dimension_transition_screens(role);
+    register_entity_spectator_shaders(role);
+}
+
 /// Resolve client dimension-transition registrations once, before the first level opens.
-pub(super) fn register_dimension_transition_screens(role: ExecutionRole) {
+fn register_dimension_transition_screens(role: ExecutionRole) {
     if !role.is_client() {
         return;
     }
     let mut screens = Vec::new();
     Game::native_register_dimension_transition_screen(&RegistrationContext::new(), &mut screens);
     horizon_client_render::dimension_transition::register(screens);
+}
+
+/// Resolve client spectator post-effect registrations once, before the first level opens.
+pub(super) fn register_entity_spectator_shaders(role: ExecutionRole) {
+    if !role.is_client() {
+        return;
+    }
+    let mut shaders = Vec::new();
+    Game::native_register_entity_spectator_shaders(&RegistrationContext::new(), &mut shaders);
+    horizon_client_render::spectator_shaders::register(shaders);
+}
+
+pub(super) fn register_preset_editors(role: ExecutionRole) {
+    if !role.is_client() {
+        return;
+    }
+    let mut editors = Vec::new();
+    Game::native_register_preset_editors(&RegistrationContext::new(), &mut editors);
+    horizon_client::title::preset_editors::register(editors);
 }
 
 /// The native mods' colour resolvers (`native_register_color_resolvers`), kept once at start,
@@ -1563,10 +1595,16 @@ mod tests {
         assert_eq!(verdict(&ruby, &manifest, true), switches_on_restart);
         assert_eq!(verdict(&ruby, &manifest, false), Some(Ok(())));
         let later = std::time::SystemTime::now() + std::time::Duration::from_secs(5);
-        std::fs::File::open(&ruby)
-            .unwrap()
-            .set_modified(later)
-            .unwrap();
+        let mut folder = std::fs::OpenOptions::new();
+        folder.read(true);
+        // Windows opens a folder only with FILE_FLAG_BACKUP_SEMANTICS, and sets its time only
+        // with write access.
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            folder.write(true).custom_flags(0x0200_0000);
+        }
+        folder.open(&ruby).unwrap().set_modified(later).unwrap();
         assert_eq!(verdict(&ruby, &manifest, false), switches_on_restart);
         std::fs::remove_dir_all(&dir).unwrap();
     }

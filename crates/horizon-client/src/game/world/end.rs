@@ -1344,6 +1344,7 @@ impl Game<'_> {
 
     /// EyeOfEnder.tick: fly, then drop (4 in 5) or shatter after 80 ticks.
     fn tick_eyes(&mut self) {
+        let _save_lease = horizon_client::join_seq::visibility::PassLease::enter();
         let mut eyes = std::mem::take(&mut self.end.eyes);
         let mut shattered = Vec::new();
         eyes.retain_mut(|eye| {

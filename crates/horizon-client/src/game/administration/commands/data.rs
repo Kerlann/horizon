@@ -65,6 +65,9 @@ impl Game<'_> {
     /// `NbtPredicate.getEntityTagToCompare`: the entity as saved. An entity
     /// in another level is read in the level that holds it.
     pub(in crate::game) fn command_target_nbt(&mut self, t: Target) -> Option<Tag> {
+        if let Target::Mob(id) = t {
+            return self.mob_owner_nbt(id);
+        }
         self.in_target_level(t, |g| g.entity_nbt_in_level(t))
             .flatten()
     }
@@ -113,27 +116,7 @@ impl Game<'_> {
                     .flatten();
             }
             Target::Player => return self.player_nbt(),
-            Target::Mob(id) => {
-                // `saveWithoutId` writes the entity as saved, riders under
-                // `Passengers`: `/data get` reads the same tree persistence does (#1519).
-                let i = self.mobs.iter().position(|m| m.id == id)?;
-                let mut tag = self.mob_tree_nbt(i);
-                let session = self
-                    .lan_trade_conn(id)
-                    .and_then(|conn| self.lan_trade_session(conn))
-                    .or_else(|| {
-                        self.station
-                            .as_ref()
-                            .and_then(|s| s.merchant.as_ref())
-                            .filter(|m| m.mob == Some(id))
-                            .map(|m| &*m.session)
-                    });
-                if let (Some(session), Tag::Compound(data)) = (session, &mut tag) {
-                    data.insert("Offers".into(), entity_nbt::offers_to_nbt(&session.offers));
-                    data.insert("Xp".into(), Tag::Int(session.xp));
-                }
-                tag
-            }
+            Target::Mob(id) => self.mob_owner_nbt(id)?,
             Target::Item(id) => {
                 let uuid = self.uuid_for(id);
                 let e = self.dropped.iter().find(|e| e.id == id)?;
@@ -391,6 +374,7 @@ impl Game<'_> {
     /// rebuilt from its compound, keeping its id and UUID. Also what
     /// `TypedEntityData.loadInto` is: a spawn egg's data on the mob it spawned.
     pub(in crate::game) fn apply_entity_nbt(&mut self, t: Target, mut tag: Tag) -> R<()> {
+        let before_vehicle = self.capture_ai_vehicle(t);
         let stale = || err("commands.data.merge.failed", &[]);
         // Entity.load does not read Passengers: the riders stay, and so do the
         // passengers the load kept raw (none, when it kept none).
@@ -421,7 +405,7 @@ impl Game<'_> {
                 if let Some(k) = kind {
                     set_key(&mut tag, "id", Tag::String(k.as_str().into()));
                 }
-                let mut new = entity_nbt::mob_from_nbt(
+                let new = entity_nbt::mob_from_nbt(
                     &tag,
                     self.res.mob_types(),
                     id,
@@ -432,64 +416,7 @@ impl Game<'_> {
                 self.warn_missing_profession(&new);
                 let unresolved = new.extra.profession.index().is_none();
                 if let Some(slot) = self.mobs.iter_mut().find(|m| m.id == id) {
-                    // LivingEntity.readAdditionalSaveData only replaces a decoded
-                    // Brain. Keep the Allay's modeled LIKED_PLAYER when the
-                    // required root memory map cannot load; valid empty maps clear it.
-                    let keep_liked_player = slot.species() == horizon_client::mobs::Species::Allay
-                        && !matches!(
-                            tag.get("Brain").and_then(|brain| brain.get("memories")),
-                            Some(Tag::Compound(_))
-                        );
-                    // Runtime identity and lifetime stay on the resident owner.
-                    new.join = slot.join;
-                    new.random = slot.random.clone();
-                    let old = horizon_client::join_seq::store_back(slot, new);
-                    // Runtime-only state (AI, animation) carries over.
-                    if keep_liked_player {
-                        slot.extra.tame = old.extra.tame;
-                        slot.extra.owner = old.extra.owner;
-                        if let (Some(st), Some(was)) =
-                            (slot.extra.allay.as_mut(), old.extra.allay.as_ref())
-                        {
-                            st.liked_player_ttl = was.liked_player_ttl;
-                        }
-                    }
-                    // LivingEntity's damage cooldown and previous-hit amount
-                    // are runtime state. Entity's separate immunity window is
-                    // loaded from the saved `invulnerable_time` key above.
-                    slot.invulnerable = old.invulnerable;
-                    slot.last_hurt = old.last_hurt;
-                    // Entity.isInPowderSnow isn't saved data either: a skeleton in
-                    // powder snow stays afflicted through a merge.
-                    slot.in_powder_snow = old.in_powder_snow;
-                    // Entity.load updates saved data on the existing entity;
-                    // lastTradedPlayer is transient and survives a live NoAI edit.
-                    if slot.species() == horizon_client::mobs::Species::Villager {
-                        horizon_client::mobs::villager::ext_mut(slot).last_traded_player =
-                            horizon_client::mobs::villager::ext(&old)
-                                .and_then(|ext| ext.last_traded_player);
-                    }
-                    if slot.species() == horizon_client::mobs::Species::Shulker {
-                        horizon_client::mobs::shulker::keep_eased_peek(slot, &old);
-                    }
-                    slot.ai = old.ai;
-                    // Mob.readAdditionalSaveData updates persistent home fields,
-                    // while retaining the rest of the live AI/runtime state.
-                    entity_nbt::read_mob_home(slot, &tag);
-                    slot.extra.armor_attributes = old.extra.armor_attributes;
-                    // LivingEntity.lastEquipmentItems is runtime state Entity.load
-                    // keeps: the next tick swaps the archetype modifiers.
-                    slot.extra.adopted_body = old.extra.adopted_body;
-                    slot.age = old.age;
-                    slot.previous = slot.position;
-                    // Wolf.readAdditionalSaveData initializes persistent anger at
-                    // the live level clock, just as load_mob does on admission.
-                    if slot.species() == horizon_client::mobs::Species::Wolf {
-                        slot.extra.anger = horizon_client::mobs::anger_left(
-                            slot.extra.anger_end,
-                            self.world.game_time,
-                        );
-                    }
+                    Self::reload_mob_runtime(slot, new, &tag, self.world.game_time);
                 }
                 if unresolved {
                     self.close_opaque_merchant(id);
@@ -792,6 +719,10 @@ impl Game<'_> {
             }
             self.persist.raw.insert(id, tag);
         }
+        if let Target::Mob(id) = t {
+            self.record_ai_mob_owner_id(id);
+        }
+        self.ai_vehicle_applied(before_vehicle);
         Ok(())
     }
     /// The block entity part of `BlockInput.place`: load the block entity

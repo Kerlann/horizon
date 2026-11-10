@@ -9,7 +9,7 @@ use horizon_client::chunk::Chunk;
 use horizon_core::position::ChunkPos;
 use std::sync::Arc;
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -31,7 +31,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -91,7 +91,8 @@ fn cube_on(game: &mut Game<'_>, under: &str) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_cube_loaded_with_a_tnt_body_on_power_primes_on_its_second_tick() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     cube_on(&mut game, "redstone_block");
     step(&mut game);
     assert_eq!(fuse(&game), -1, "its body is adopted after the power check");
@@ -104,7 +105,8 @@ fn a_cube_loaded_with_a_tnt_body_on_power_primes_on_its_second_tick() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_warmed_cube_primes_on_the_first_powered_tick() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     cube_on(&mut game, "stone");
     for _ in 0..5 {
         step(&mut game);
@@ -121,7 +123,8 @@ fn a_warmed_cube_primes_on_the_first_powered_tick() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn control_an_adopted_cube_without_power_stays_unprimed() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     cube_on(&mut game, "stone");
     for _ in 0..10 {
         step(&mut game);
@@ -132,7 +135,8 @@ fn control_an_adopted_cube_without_power_stays_unprimed() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn control_a_primed_cube_on_power_is_not_primed_again() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     assert!(game.run_command("forceload add 0 0"));
     assert!(game.run_command("fill 0 98 0 15 99 15 stone"));
     assert!(game.run_command("setblock 4 99 8 redstone_block"));
@@ -161,7 +165,8 @@ fn replace_body(game: &mut Game<'_>, with: &str) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_tnt_body_taken_off_this_tick_still_primes_with_its_cached_fuse() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     cube_on(&mut game, "stone");
     for _ in 0..5 {
         step(&mut game);

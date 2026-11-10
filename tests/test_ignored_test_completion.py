@@ -45,6 +45,29 @@ class IgnoredTests(unittest.TestCase):
             self.assertEqual(ignored_tests.main(["example"]), 1)
         self.assertIn("repaired: passes now; take it off", log.getvalue())
 
+    def test_client_lib_halves_run_serially_and_preserve_failure_policy(self):
+        package = "horizon-client-lib"
+        names = [f"suite::case_{n}" for n in range(20)]
+        seen = []
+
+        def run(package_arg, skip, number=None, count=None):
+            self.assertEqual(package_arg, package)
+            self.assertEqual(count, 2)
+            selected = [name for name in names if ignored_tests.in_leg(name, number, count)]
+            seen.extend(selected)
+            return {name: name != names[0] for name in selected}
+
+        with patch.object(ignored_tests, "known_failures", return_value={}), patch.object(ignored_tests, "run", side_effect=run) as execute, contextlib.redirect_stdout(io.StringIO()) as log:
+            self.assertEqual(ignored_tests.main([package]), 1)
+        self.assertEqual([call.args[2:] for call in execute.call_args_list], [(1, 2), (2, 2)])
+        self.assertCountEqual(seen, names)
+        self.assertIn(f"{names[0]}: failed, and isn't a known failure", log.getvalue())
+
+    def test_explicit_client_lib_selection_is_not_split_again(self):
+        with patch.object(ignored_tests, "known_failures", return_value={}), patch.object(ignored_tests, "run", return_value={}) as execute:
+            self.assertEqual(ignored_tests.main(["horizon-client-lib#2of3"]), 0)
+        self.assertEqual(execute.call_args.args, ("horizon-client-lib", [], 2, 3))
+
     def test_unexplained_nonzero_status(self):
         result, _ = self.run_output(target(1, "test good ... ok\n", summary(passed=1)), 101)
         self.assertIsNone(result)

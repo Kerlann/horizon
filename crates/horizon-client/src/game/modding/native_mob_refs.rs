@@ -555,6 +555,7 @@ impl Game<'_> {
         let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
             return false;
         };
+        let before_vehicle = self.capture_ai_vehicle(Target::Mob(id));
         let Some(mob) = self.mobs.iter_mut().find(|m| m.id == id) else {
             return false;
         };
@@ -562,6 +563,7 @@ impl Game<'_> {
             return false;
         }
         mobs::finalize::set_baby(mob, baby);
+        self.ai_vehicle_applied(before_vehicle);
         true
     }
 
