@@ -126,6 +126,13 @@ impl<T: EntityActor<DIRECT>, const DIRECT: bool> EntityActorLoan<T, DIRECT> {
         };
         let list = T::owner(game);
         let (ordinal, body) = list.extract_actor(join)?;
+        // Non-Mob discard marks removal before its physical sweep. Refuse
+        // callbacks, but preserve the canonical body for terminal work (for
+        // example, a vehicle's inventory spill) in that normal sweep.
+        if game.persist.removals.contains(&body.target()) {
+            T::owner(game).put_back_actor(ordinal, body);
+            return None;
+        }
         Some(Self {
             body: Some(body),
             location: Location {
@@ -179,7 +186,7 @@ impl<T: EntityActor<DIRECT>, const DIRECT: bool> EntityActorLoan<T, DIRECT> {
             .as_ref()
             .is_some_and(|body| game.persist.removals.contains(&body.target()))
         {
-            self.retire(game);
+            self.restore(game);
         }
         self.body.as_ref().map(|_| result)
     }

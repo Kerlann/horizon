@@ -41,7 +41,11 @@ impl Game<'_> {
             .dropped
             .iter()
             .filter(|d| {
-                d.pickup_delay == 0
+                !self
+                    .persist
+                    .removals
+                    .contains(&super::super::commands::Target::Item(d.id))
+                    && d.pickup_delay == 0
                     && d.target.is_none_or(|t| t == uuid)
                     && (d.position.x - position[0]).abs() < 1.5
                     && (d.position.z - position[2]).abs() < 1.5
@@ -52,51 +56,70 @@ impl Game<'_> {
             .collect();
         let mut taken = Vec::new();
         for (item_id, item_join) in near.into_iter().rev() {
-            let Some(index) = self.dropped.locate(item_join) else {
+            let Some(mut actor) = crate::game::entity_actor_loan::EntityActorLoan::<
+                horizon_client::entities::ItemEntity,
+            >::extract(self, item_join) else {
                 continue;
             };
-            let item = &self.dropped[index];
-            if item.id != item_id {
-                continue;
-            };
-            let stack = item.stack.clone();
-            let refused = self.as_guest(conn, |g| g.native_pickup_refused(&stack)) == Some(true);
-            // The hook can remove or change any item entity.
-            let Some(i) = self.dropped.locate(item_join) else {
+            let stack = actor.body_mut().unwrap().stack.clone();
+            let Some(Some(refused)) = actor.with_game(self, |game| {
+                game.as_guest(conn, |game| game.native_pickup_refused(&stack))
+            }) else {
+                actor.restore(self);
                 continue;
             };
             if refused {
-                self.dropped[i].pickup_delay = 10;
+                actor.body_mut().unwrap().pickup_delay = 10;
+                actor.restore(self);
+                actor.publish(self, mod_api::EntityReadCapturePhase::AfterAppliedWrite);
                 continue;
             }
-            let stack = self.dropped[i].stack.clone();
+            let item = actor.body_mut().unwrap();
+            let (stack, thrower) = (item.stack.clone(), item.thrower);
             let before = stack.count;
-            let thrower = self.dropped[i].thrower;
-            let rest = self
-                .as_guest(conn, |g| g.add_stack_to_inventory(stack))
-                .flatten();
+            let Some(Some(rest)) = actor.with_game(self, |game| {
+                game.as_guest(conn, |game| game.add_stack_to_inventory(stack))
+            }) else {
+                actor.restore(self);
+                continue;
+            };
             match rest {
                 None => {
-                    let item = self.remove_dropped(i);
-                    if let Some(thrower) = thrower {
-                        self.as_guest(conn, |g| {
-                            g.trigger_thrown_picked_up_by_player(&item.stack, thrower);
-                        });
+                    let join = actor.join();
+                    let mut consumed = None;
+                    actor.with_game(self, |game| {
+                        if let Some(index) = game.dropped.locate(join) {
+                            consumed = Some(game.remove_dropped(index).stack);
+                        }
+                    });
+                    if let Some(stack) = consumed {
+                        if let Some(thrower) = thrower {
+                            self.as_guest(conn, |game| {
+                                game.trigger_thrown_picked_up_by_player(&stack, thrower)
+                            });
+                        }
+                        taken.push((item_id, before));
                     }
-                    taken.push((item_id, before));
                 }
                 Some(rest) if rest.count < before => {
-                    self.dropped[i].stack = rest;
+                    let amount = before - rest.count;
+                    actor.body_mut().unwrap().stack = rest;
                     if let Some(thrower) = thrower {
-                        let left = self.dropped[i].stack.clone();
-                        self.as_guest(conn, |g| {
-                            g.trigger_thrown_picked_up_by_player(&left, thrower);
+                        let left = actor.body_mut().unwrap().stack.clone();
+                        actor.with_game(self, |game| {
+                            game.as_guest(conn, |game| {
+                                game.trigger_thrown_picked_up_by_player(&left, thrower)
+                            })
                         });
                     }
-                    taken.push((item_id, before - self.dropped[i].stack.count));
+                    // A post-pickup criterion may remove the actor; it cannot
+                    // change the amount already inserted into the inventory.
+                    taken.push((item_id, amount));
                 }
                 Some(_) => {}
             }
+            actor.restore(self);
+            actor.publish(self, mod_api::EntityReadCapturePhase::AfterAppliedWrite);
         }
         // Entity.take: the clients play the pickup sound themselves
         // (handleTakeItemEntity).
@@ -252,7 +275,11 @@ impl Game<'_> {
             .iter()
             .enumerate()
             .filter(|(_, o)| {
-                o.position.x + 0.25 > min[0]
+                !self
+                    .persist
+                    .removals
+                    .contains(&super::super::commands::Target::Orb(o.id))
+                    && o.position.x + 0.25 > min[0]
                     && o.position.x - 0.25 < max[0]
                     && o.position.y + 0.5 > min[1]
                     && o.position.y < max[1]
@@ -272,57 +299,71 @@ impl Game<'_> {
             .unwrap_or(0) as usize;
         // A merged orb gives its value once per count and goes at zero.
         let join = touching[pick];
-        let Some(index) = self.orbs.locate(join) else {
+        let Some(mut actor) = crate::game::entity_actor_loan::EntityActorLoan::<
+            horizon_client::entities::ExperienceOrb,
+        >::extract(self, join) else {
             return;
         };
-        let mut orb = self.orbs[index].clone();
+        let orb = actor.body_mut().unwrap();
+        let (orb_id, mut value, mut count) = (orb.id, orb.value, orb.count);
         let mut canceled = false;
         // Swapping the guest in costs: only when a mod hears the pickup.
         let listened = (self.serving.is_some() || self.options.dedicated.is_some())
             && mod_api::__private::listened(mod_api::HookId::PickupXp);
         if listened {
             let dimension = self.dim.id();
-            let called = self.as_guest(conn, |game| {
-                let player = game.native_acting_id();
-                game.native_pickup_xp(
-                    player,
-                    dimension,
-                    orb.id,
-                    &mut orb.value,
-                    &mut orb.count,
-                    &mut canceled,
-                );
+            let called = actor.with_game(self, |game| {
+                game.as_guest(conn, |game| {
+                    let player = game.native_acting_id();
+                    game.native_pickup_xp(
+                        player,
+                        dimension,
+                        orb_id,
+                        &mut value,
+                        &mut count,
+                        &mut canceled,
+                    );
+                })
             });
-            if called.is_none() || canceled {
+            if !matches!(called, Some(Some(()))) || canceled {
+                actor.restore(self);
                 return;
             }
-
-            orb.count = orb.count.max(1);
-            self.orbs[index].value = orb.value;
-            self.orbs[index].count = orb.count;
+            let orb = actor.body_mut().unwrap();
+            orb.value = value;
+            orb.count = count.max(1);
         }
+        let orb = actor.body_mut().unwrap();
+        let (value, position) = (orb.value, orb.position);
         if orb.count <= 1 {
-            self.remove_orb(index);
+            let join = actor.join();
+            actor.with_game(self, |game| {
+                if let Some(index) = game.orbs.locate(join) {
+                    game.remove_orb(index);
+                }
+            });
         } else {
-            self.orbs[index].count -= 1;
+            orb.count -= 1;
+            actor.restore(self);
+            actor.publish(self, mod_api::EntityReadCapturePhase::AfterAppliedWrite);
         }
         if let Some(host) = self.lan.as_mut() {
             host.play.entry(conn).or_default().xp_delay = 2;
         }
         self.native_player_exp_cooldown_change(player, &name, 2);
         if let Some(host) = self.lan.as_ref() {
-            host.hub.take_item(orb.id as i32, id, 1, at);
+            host.hub.take_item(orb_id as i32, id, 1, at);
         }
         // ClientPacketListener.handleTakeItemEntity's sound, at the orb.
         let pitch = (self.world.random.next_float() - self.world.random.next_float()) * 0.35 + 0.9;
-        let p = orb.position;
+        let p = position;
         self.audio.play(
             "minecraft:entity.experience_orb.pickup",
             Some([p.x, p.y, p.z]),
             0.1,
             pitch,
         );
-        let value = orb.value.max(0) as u32;
+        let value = value.max(0) as u32;
         self.as_guest(conn, |game| {
             let rest = game.mending(value);
             if rest > 0 {
