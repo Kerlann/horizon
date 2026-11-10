@@ -3346,21 +3346,56 @@ impl Game<'_> {
         self.end_dragon_flame();
         let mut harmed_mobs: Vec<(u32, i32, [f64; 3])> = Vec::new();
         let ticking = self.entity_ticking_area();
-        let mut clouds = self.breath_clouds.lift();
+        let _reads =
+            self.begin_resident_read_pass(horizon_client::join_seq::residency::Kind::Cloud);
+        let last_original = self
+            .breath_clouds
+            .iter()
+            .map(|c| c.join)
+            .max()
+            .unwrap_or_default();
         #[cfg(test)]
         super::entity::taken_pass_tests::after_take(self);
-        clouds.retain_mut(|c| {
-            // Lingering potions' clouds tick with the potions.
-            if c.potion.is_some() {
-                return true;
+        let pass = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut cursor = 0;
+            while let Some(c) = self.breath_clouds.get(cursor) {
+                if c.join > last_original {
+                    break;
+                }
+                if c.potion.is_some() || !ticking(c.at[0].floor() as i32, c.at[2].floor() as i32) {
+                    cursor += 1;
+                    continue;
+                }
+                let join = c.join;
+                let mut actor =
+                    super::entity_actor_loan::EntityActorLoan::<Breath, false>::extract(self, join)
+                        .unwrap();
+                let body = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    self.tick_breath_body(
+                        actor.body_mut().unwrap(),
+                        &players,
+                        &mobs,
+                        &mut harmed,
+                        &mut harmed_mobs,
+                    )
+                }));
+                if body.is_err() || matches!(body, Ok(true)) {
+                    actor.restore(self);
+                    actor.publish(self, mod_api::EntityReadCapturePhase::AfterEntityTick);
+                } else {
+                    actor.retire(self);
+                }
+                match body {
+                    Ok(true) => cursor += 1,
+                    Ok(false) => {}
+                    Err(panic) => std::panic::resume_unwind(panic),
+                }
             }
-            if !ticking(c.at[0].floor() as i32, c.at[2].floor() as i32) {
-                return true;
-            }
-            self.tick_breath_body(c, &players, &mobs, &mut harmed, &mut harmed_mobs)
-        });
-        self.breath_clouds
-            .restore(clouds, horizon_client::join_seq::RestoreOrder::SpawnsFirst);
+        }));
+        self.finish_cloud_pass(last_original);
+        if let Err(panic) = pass {
+            std::panic::resume_unwind(panic);
+        }
         for (who, amount) in harmed {
             self.as_fight_player(who, |g| {
                 g.dragon_hurts_player("minecraft:indirect_magic", amount);
