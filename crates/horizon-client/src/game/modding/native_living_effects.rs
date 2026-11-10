@@ -8,8 +8,11 @@
 //! keep no effects, as `/effect` skips them. `effect` and `effects` also read
 //! on a client, for the local player, from the effects the server sent it, and
 //! `effect_blend_factor` reads only there, from the fades the client ticks.
-use super::Game;
 use super::commands::Target;
+use super::{
+    Game, native_live_entity_reads::EntityReadSubject,
+    native_read_dependencies::EntityReadDependency,
+};
 use horizon_client::effects::{EffectInstance, PlayerEffects};
 use horizon_client::mobs::Mob;
 use horizon_items::items::ItemStack;
@@ -150,70 +153,135 @@ impl Game<'_> {
         &self,
         living: LivingRef,
         effect: EffectKey,
-    ) -> Option<ActiveEffect> {
-        let def = mod_api::__private::effect_index(effect)
-            .and_then(horizon_client_core::potions::effect_by_index)?;
-        match self.native_living_read_target(living)? {
-            t @ (Target::Player | Target::Guest(_)) => self
-                .native_living_player_effects(t)?
+    ) -> Result<Option<ActiveEffect>, mod_api::EntityReadError> {
+        self.read_living_effect(None, living, effect)
+    }
+
+    pub(super) fn read_living_effect(
+        &self,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        effect: EffectKey,
+    ) -> Result<Option<ActiveEffect>, mod_api::EntityReadError> {
+        use super::native_base_read_rows::BaseReadSource;
+        let Some(def) = mod_api::__private::effect_index(effect)
+            .and_then(horizon_client_core::potions::effect_by_index)
+        else {
+            return Ok(None);
+        };
+        let Some(read) = self.entity_read_admission(
+            EntityReadSubject::MobOrPlayer(living),
+            &[EntityReadDependency::Effects],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(read, provider, |source| match source.body {
+            BaseReadSource::Mob(mob) => mob
+                .extra
+                .effects
+                .iter()
+                .find(|effect| effect.registry_index == Some(def.index))
+                .map(|effect| mob_effect(mob, effect)),
+            BaseReadSource::Player(_) => self
+                .potions
+                .effects
                 .get_registered(def.index)
                 .map(active_effect),
-            Target::Mob(id) => {
-                let m = self.mobs.iter().find(|m| m.id == id && !m.removed)?;
-                let e = m
-                    .extra
-                    .effects
-                    .iter()
-                    .find(|e| e.registry_index == Some(def.index))?;
-                Some(mob_effect(m, e))
+            BaseReadSource::Guest(guest) => {
+                guest.effects.get_registered(def.index).map(active_effect)
             }
             _ => None,
-        }
+        })
     }
 
     /// The entity's active effects (`LivingEntity.getActiveEffects`), in the
     /// order their store keeps them, in `Some` even when it has none. None
     /// for an armor stand, the dragon, a stale handle or a client.
-    pub(super) fn living_effects(&self, living: LivingRef) -> Option<Vec<ActiveEffect>> {
-        match self.native_living_read_target(living)? {
-            t @ (Target::Player | Target::Guest(_)) => self
-                .native_living_player_effects(t)
-                .map(|effects| effects.list.iter().map(active_effect).collect()),
-            Target::Mob(id) => self
-                .mobs
-                .iter()
-                .find(|m| m.id == id && !m.removed)
-                .map(|m| m.extra.effects.iter().map(|e| mob_effect(m, e)).collect()),
+    pub(super) fn living_effects(
+        &self,
+        living: LivingRef,
+    ) -> Result<Option<Vec<ActiveEffect>>, mod_api::EntityReadError> {
+        self.read_living_effects(None, living)
+    }
+
+    pub(super) fn read_living_effects(
+        &self,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+    ) -> Result<Option<Vec<ActiveEffect>>, mod_api::EntityReadError> {
+        use super::native_base_read_rows::BaseReadSource;
+        let Some(read) = self.entity_read_admission(
+            EntityReadSubject::MobOrPlayer(living),
+            &[EntityReadDependency::Effects],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(read, provider, |source| match source.body {
+            BaseReadSource::Mob(mob) => Some(
+                mob.extra
+                    .effects
+                    .iter()
+                    .map(|effect| mob_effect(mob, effect))
+                    .collect(),
+            ),
+            BaseReadSource::Player(_) => Some(
+                self.potions
+                    .effects
+                    .list
+                    .iter()
+                    .map(active_effect)
+                    .collect(),
+            ),
+            BaseReadSource::Guest(guest) => {
+                Some(guest.effects.list.iter().map(active_effect).collect())
+            }
             _ => None,
-        }
+        })
     }
 
     /// Whether the entity has `effect` (`LivingEntity.hasEffect`), using its resolved key.
     /// False before effect resolution, for an armor stand, the dragon or a stale handle;
     /// on a client, for any entity but the local player, whose copy of what the server
     /// sent it is read.
-    pub(super) fn living_potion_affected(&self, living: LivingRef, effect: EffectKey) -> bool {
+    pub(super) fn living_potion_affected(
+        &self,
+        living: LivingRef,
+        effect: EffectKey,
+    ) -> Result<bool, mod_api::EntityReadError> {
+        self.read_living_potion_affected(None, living, effect)
+    }
+
+    pub(super) fn read_living_potion_affected(
+        &self,
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        effect: EffectKey,
+    ) -> Result<bool, mod_api::EntityReadError> {
+        use super::native_base_read_rows::BaseReadSource;
         let Some(def) = mod_api::__private::effect_index(effect)
             .and_then(horizon_client_core::potions::effect_by_index)
         else {
-            return false;
+            return Ok(false);
         };
-        match self.native_living_read_target(living) {
-            Some(t @ (Target::Player | Target::Guest(_))) => self
-                .native_living_player_effects(t)
-                .is_some_and(|effects| effects.get_registered(def.index).is_some()),
-            Some(Target::Mob(id)) => self
-                .mobs
+        let Some(read) = self.entity_read_admission(
+            EntityReadSubject::MobOrPlayer(living),
+            &[EntityReadDependency::Effects],
+            provider,
+        ) else {
+            return Ok(false);
+        };
+        self.with_admitted_entity_source(read, provider, |source| match source.body {
+            BaseReadSource::Mob(mob) => mob
+                .extra
+                .effects
                 .iter()
-                .find(|m| m.id == id && !m.removed)
-                .is_some_and(|m| {
-                    m.extra
-                        .effects
-                        .iter()
-                        .any(|e| e.registry_index == Some(def.index))
-                }),
+                .any(|effect| effect.registry_index == Some(def.index)),
+            BaseReadSource::Player(_) => self.potions.effects.get_registered(def.index).is_some(),
+            BaseReadSource::Guest(guest) => guest.effects.get_registered(def.index).is_some(),
             _ => false,
-        }
+        })
     }
 
     /// `LivingEntity.getEffectBlendFactor(effect, partialTick)` on a client:
@@ -233,24 +301,43 @@ impl Game<'_> {
         living: LivingRef,
         effect: EffectKey,
         partial: f32,
-    ) -> Option<f32> {
-        let def = mod_api::__private::effect_index(effect)
-            .and_then(horizon_client_core::potions::effect_by_index)?;
-        let Target::Player = self.native_living_read_target(living)? else {
-            return None;
+    ) -> Result<Option<f32>, mod_api::EntityReadError> {
+        self.read_living_effect_blend_factor(None, living, effect, partial)
+    }
+
+    pub(super) fn read_living_effect_blend_factor(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        living: LivingRef,
+        effect: EffectKey,
+        partial: f32,
+    ) -> Result<Option<f32>, mod_api::EntityReadError> {
+        let Some(def) = mod_api::__private::effect_index(effect)
+            .and_then(horizon_client_core::potions::effect_by_index)
+        else {
+            return Ok(None);
         };
-        let Some(e) = self.potions.effects.get_registered(def.index) else {
-            return Some(0.0);
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::ActingPlayer(living),
+            &[EntityReadDependency::Effects],
+            provider,
+        ) else {
+            return Ok(None);
         };
-        Some(match def.id {
-            "darkness" => self.darkness_blend(partial),
-            "nausea" => self.nausea_blend(partial),
-            _ => {
-                let (previous, current) = e.client_blend;
-                let previous = u8::from(previous) as f32;
-                let current = u8::from(current) as f32;
-                previous + partial * (current - previous)
-            }
+        self.with_admitted_entity_source(admitted, provider, |_source| {
+            let Some(e) = self.potions.effects.get_registered(def.index) else {
+                return Some(0.0);
+            };
+            Some(match def.id {
+                "darkness" => self.darkness_blend(partial),
+                "nausea" => self.nausea_blend(partial),
+                _ => {
+                    let (previous, current) = e.client_blend;
+                    let previous = u8::from(previous) as f32;
+                    let current = u8::from(current) as f32;
+                    previous + partial * (current - previous)
+                }
+            })
         })
     }
 

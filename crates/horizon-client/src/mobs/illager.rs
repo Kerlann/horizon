@@ -963,13 +963,14 @@ mod tests {
             ] {
                 let kind = Arc::new(types.types[name].clone());
                 let mut mob = Mob::new(1, kind, Vec3::new(0.5, 64.0, 0.5), 0.0);
-                let mut goals = std::mem::take(&mut mob.ai.targets);
+                let mut goals = mob.ai.targets.take();
                 let mut events = Vec::new();
                 let mut test_level = crate::health::TestLevel::new(0);
                 let mut cx = Cx {
                     w: &w,
                     level: &mut test_level.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 for _ in 0..100 {
                     mob.ai.seen_cache.clear();

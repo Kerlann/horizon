@@ -367,6 +367,7 @@ mod tests {
                         w: world,
                         level: &mut test_level.level(),
                         events: &mut events,
+                        selectors: Default::default(),
                     };
                     let dark = potion.can_use(m, &mut cx);
                     let day = milk.can_use(m, &mut cx);
@@ -435,8 +436,9 @@ mod trade_start_tests {
                     w: &world,
                     level: &mut fixture.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
-                let mut goals = std::mem::take(&mut m.ai.goals);
+                let mut goals = m.ai.goals.take();
                 goals.tick(&mut m, &mut cx);
                 outcomes.push((label, goals.is_running("TradeWithPlayer")));
                 m.ai.goals = goals;
@@ -483,6 +485,7 @@ mod use_overflow_tests {
                         w: &world,
                         level: &mut fixture.level(),
                         events: &mut events,
+                        selectors: Default::default(),
                     },
                 );
                 assert_eq!(m.extra.using_item, 0);

@@ -22,6 +22,16 @@ use mod_api::{
 /// the mob tick once beside `mob_world_base`, `None` in `MobWorld::goal_host`
 /// wherever no mod attached an entity part — so no other side runs one.
 pub trait GoalHost {
+    /// Supply a read Host backed by this explicit actor's actual loan. The
+    /// visitor cannot retain that host; unsupported engine doubles invoke none.
+    fn with_entity_read_host(
+        &self,
+        _actor: &Mob,
+        _selectors: super::goals::GoalSelectorSources<'_>,
+        _visit: &mut dyn FnMut(&dyn mod_api::Host),
+    ) {
+    }
+
     /// Refresh the explicit actor publication at a real callback/apply boundary.
     /// A host without publication support must return false, never claim success.
     fn refresh_mob_read_publication(
@@ -58,14 +68,6 @@ pub trait GoalHost {
     fn mob_passengers_lent(&self, mob: &Mob) -> Option<Vec<mod_api::EntityRef>>;
     /// Whether this player steers the lent mob.
     fn mob_player_controls(&self, mob: &Mob, player: u32) -> bool;
-    /// Dismount location using a mob lent out of the game list.
-    fn mob_dismount_location(
-        &self,
-        vehicle: Option<&Mob>,
-        vehicle_id: u32,
-        rider: Option<&Mob>,
-        passenger: mod_api::EntityRef,
-    ) -> Option<[f64; 3]>;
     /// The game's complete portal eligibility, including player passengers.
     fn mob_can_use_portal(&self, mob: &Mob) -> bool;
     /// Compute climbing from the game's collision and climbing registry.
@@ -107,7 +109,7 @@ pub trait GoalHost {
         &self,
         goal: &mut Box<dyn mod_api::Goal>,
         m: &mut Mob,
-        w: &MobWorld<'_>,
+        cx: &Cx<'_, '_, '_>,
         op: GoalOp,
         mod_id: &'static str,
         part: &'static str,
@@ -252,7 +254,7 @@ impl ModGoal {
     fn run(&mut self, m: &mut Mob, cx: &mut Cx, op: GoalOp) -> Option<bool> {
         let goal = self.goal.as_mut()?;
         cx.w.goal_host?
-            .run_goal(goal, m, cx.w, op, self.mod_id, self.part)
+            .run_goal(goal, m, cx, op, self.mod_id, self.part)
     }
 }
 

@@ -3,6 +3,9 @@
 use super::{
     Game,
     minecarts::{CartKind, Minecart, display_offset},
+    native_base_read_rows::BaseReadSource,
+    native_entity_body_provider::EntityBodyProvider,
+    native_live_entity_reads::EntityReadAdmission,
 };
 use horizon_world::registry::BlockStateId;
 use mod_api::MinecartKind;
@@ -11,6 +14,21 @@ pub(super) struct MinecartRead<'a, 'w> {
     pub(super) game: &'a Game<'w>,
     pub(super) cart: &'a Minecart,
 }
+impl<'w> Game<'w> {
+    pub(super) fn with_live_minecart_read<R>(
+        &self,
+        read: EntityReadAdmission,
+        provider: Option<&dyn EntityBodyProvider>,
+        project: impl for<'s> FnOnce(MinecartRead<'s, 'w>) -> R,
+    ) -> Result<R, mod_api::EntityReadError> {
+        self.with_admitted_entity_source(read, provider, |source| match source.body {
+            BaseReadSource::Cart(cart) => Some(project(MinecartRead { game: self, cart })),
+            _ => None,
+        })
+        .and_then(|value| value.ok_or(mod_api::EntityReadError::Lifted))
+    }
+}
+
 impl MinecartRead<'_, '_> {
     pub(super) fn minecart_kind(&self) -> MinecartKind {
         match self.cart.kind {

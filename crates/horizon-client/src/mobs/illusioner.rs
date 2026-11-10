@@ -354,6 +354,7 @@ mod tests {
                         w,
                         level: &mut level,
                         events: &mut events,
+                        selectors: Default::default(),
                     },
                 );
                 cast.push(events.into_iter().find_map(|e| match e {

@@ -32,13 +32,33 @@ impl Game<'_> {
     }
 
     /// `ItemEntity.getItem`: the complete stack, or None if unavailable.
-    pub(super) fn item_entity_stack(&self, item: ItemEntityRef) -> Option<ItemStack> {
-        Some(
-            self.dropped
-                .get(self.native_item_entity_index(item)?)?
-                .stack
-                .clone(),
-        )
+    pub(super) fn item_entity_stack(
+        &self,
+        item: ItemEntityRef,
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+        self.read_item_entity_stack(None, item)
+    }
+
+    pub(super) fn read_item_entity_stack(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        item: ItemEntityRef,
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        let Some(read) = self.entity_read_admission(
+            EntityReadSubject::ItemEntity(item),
+            &[EntityReadDependency::ItemStack],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(read, provider, |source| match source.body {
+            super::native_base_read_rows::BaseReadSource::Item(item) => Some(item.stack.clone()),
+            _ => None,
+        })
     }
 
     /// Writes a nonempty complete stack using `ItemEntity.setItem`. Empty

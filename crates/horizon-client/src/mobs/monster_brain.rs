@@ -813,6 +813,7 @@ impl B {
                     w,
                     level: cx.level,
                     events: cx.events,
+                    selectors: Default::default(),
                 };
                 super::ai::do_hurt_target(m, target, &mut gcx);
                 mem(m).attack_cooling_down.set_ttl(true, 40);

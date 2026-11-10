@@ -88,7 +88,11 @@ impl Game<'_> {
         &self,
     ) -> Option<horizon_client::join_seq::residency::read_pass::ReadScope> {
         use horizon_client::join_seq::residency::{Kind, Owner, read_pass::ReadScope};
-        if !mod_api::__private::entity_reads_listened() || !self.is_logical_server() {
+        if !self.is_logical_server() {
+            return None;
+        }
+        self.with_prepared_mob_relations(|_| ());
+        if !mod_api::__private::entity_reads_listened() {
             return None;
         }
         let tick = self.native_lifecycle.capture_tick()?;
@@ -241,11 +245,20 @@ impl Game<'_> {
                 .map(|(slot, &join)| (join, slot))
                 .collect::<horizon_client::fast_hash::FxHashMap<_, _>>()
         });
-        let mut teams = std::sync::Arc::new(self.mob_team_rules_for(&mobs));
-        let mut player_backing = self.player_view();
-        let mut players = self.level_players();
-        let mut nearest = super::super::natural_spawning::NearestPlayers::new(&players);
-        let mut backing_revision = self.entity_read_state.borrow().mob_backing;
+        // Team decisions read canonical sources on demand; one member/owner
+        // write must never rebuild every entity's inherited team.
+        let teams = std::sync::Arc::new(horizon_client::mobs::TeamRulesSnapshot::default());
+        self.prepare_ai_mob_relations(&mobs);
+        let mut player_backing = self.ai_player_view_for_pass(&mobs);
+        let mut nearest =
+            super::super::natural_spawning::NearestPlayers::new(&self.level_players());
+        let mut player_index =
+            super::super::native_mob_backing::PlayerBackingIndex::new(&guests, &guest_ids);
+        {
+            let mut read = self.entity_read_state.borrow_mut();
+            read.mob_ai_level = Some(self.dim.key());
+            read.mob_player_writes.clear();
+        }
         let mut writer_scope = None;
         self.leash_boats = self
             .boats
@@ -327,30 +340,17 @@ impl Game<'_> {
             // Exactly one dirtiness check before reborrowing this actor's
             // world. Mutation owners bump only the affected projection after
             // real apply; unrelated callbacks reuse every owned index.
-            let revision = self.entity_read_state.borrow().mob_backing;
-            if revision.teams != backing_revision.teams {
-                teams = std::sync::Arc::new(self.mob_team_rules_for(&mobs));
-            }
-            if revision.players != backing_revision.players {
-                player_backing = self.player_view();
-                drop(nearest);
-                players = self.level_players();
-                nearest = super::super::natural_spawning::NearestPlayers::new(&players);
-                guests = self.lan_guest_views();
-                spare = guests.first().map(|g| g.1.clone());
-                guest_ids = self
-                    .lan
-                    .as_ref()
-                    .map(|host| {
-                        host.hub
-                            .guests
-                            .iter()
-                            .map(|g| (g.conn, g.entity_id as u32))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-            }
-            backing_revision = revision;
+            self.refresh_ai_player_backing(
+                &mut player_index,
+                super::super::native_mob_backing::PlayerBackingLoans {
+                    mobs: &mobs,
+                    local: &mut player_backing,
+                    nearest: &mut nearest,
+                    guests: &mut guests,
+                    spare: &mut spare,
+                    guest_ids: &mut guest_ids,
+                },
+            );
             let mut post = None;
             let mut pause = None;
             {
@@ -768,6 +768,13 @@ impl Game<'_> {
                     keep[slot] = kept;
                     // ServerLevel ticks entities one after another: the ones
                     // after this mob see it as it is now.
+                    self.record_ai_mob_owner(m);
+                    if matches!(m.species(), Species::Nautilus | Species::ZombieNautilus)
+                        && (snapshot[slot].bounds != m.bounds()
+                            || snapshot[slot].velocity != m.velocity)
+                    {
+                        self.mark_ai_vehicle_riders_changed(m.id);
+                    }
                     snapshot[slot] = seen(m, uuid);
                     snapshot[slot].alive &= kept;
                     grid.update(slot, snapshot[slot].bounds);
@@ -956,16 +963,21 @@ impl Game<'_> {
             lent = horizon_client::health::LentLevel::take(&mut self.world);
             // A full-host consumption callback can edit player/team state. This
             // is the explicit refresh seam for those owned AI projections.
-            teams = std::sync::Arc::new(self.mob_team_rules_for(&mobs));
-            player_backing = self.player_view();
-            drop(nearest);
-            players = self.level_players();
-            nearest = super::super::natural_spawning::NearestPlayers::new(&players);
+            self.refresh_ai_player_backing(
+                &mut player_index,
+                super::super::native_mob_backing::PlayerBackingLoans {
+                    mobs: &mobs,
+                    local: &mut player_backing,
+                    nearest: &mut nearest,
+                    guests: &mut guests,
+                    spare: &mut spare,
+                    guest_ids: &mut guest_ids,
+                },
+            );
             path_changes = {
                 let base = self.mob_world_reborrow(&[], None, teams.clone());
                 horizon_client::mobs::collision_changes(&base, &path_writes)
             };
-            backing_revision = self.entity_read_state.borrow().mob_backing;
             cached_difficulty = None;
             resuming = true;
         }
@@ -1044,6 +1056,7 @@ impl Game<'_> {
         *state.player_credit = player_credit;
         *state.path_writes = path_writes;
         *state.gone = gone;
+        self.entity_read_state.borrow_mut().mob_ai_level = None;
         (lent, dispatch_panic)
     }
 }

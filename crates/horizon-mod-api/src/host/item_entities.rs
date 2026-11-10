@@ -25,8 +25,12 @@ pub trait ItemEntitiesBackend {
 
     /// Side: server.
     /// `ItemEntity.getItem`: the complete stack, or None if unavailable.
+    /// Live foreign reads refuse [`EntityReadError::Lifted`] while their source is
+    /// physically lifted, or [`EntityReadError::Pending`] for a relevant pending write.
+    /// Explicit OWN contexts read their live source. Ordinary absence or negative
+    /// answers remain successful; existing typed errors are preserved in `Domain`.
     #[access(WorldOnly)]
-    fn item_entity_stack(&self, item: ItemEntityRef) -> Option<ItemStack>;
+    fn item_entity_stack(&self, item: ItemEntityRef) -> Result<Option<ItemStack>, EntityReadError>;
     /// Side: server.
     /// The signed pickup delay; the legacy infinite sentinel reads as vanilla's
     /// 32767. None also covers a stored value outside i32.

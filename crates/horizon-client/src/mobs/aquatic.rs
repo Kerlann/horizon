@@ -406,7 +406,7 @@ pub(super) fn sting_touching_mobs(m: &mut Mob, w: &MobWorld, events: &mut Vec<Mo
         return;
     }
     let area = m.bounds().inflate(Vec3::new(0.3, 0.3, 0.3));
-    let own = w.teams.of(Who::Mob(m.id));
+    let own = w.team_rules(m, Who::Mob(m.id));
     let from = [m.position.x, m.position.y, m.position.z];
     let mob_id = m.id;
     let size = m.extra.size;
@@ -417,7 +417,10 @@ pub(super) fn sting_touching_mobs(m: &mut Mob, w: &MobWorld, events: &mut Vec<Mo
             && o.alive
             && !not_scary_for_pufferfish(o.species)
             && o.bounds.intersects(area)
-            && crate::scoreboard::TeamRules::allows_damage(own, w.teams.of(Who::Mob(o.id)))
+            && crate::scoreboard::TeamRules::allows_damage(
+                own.as_ref(),
+                w.team_rules(m, Who::Mob(o.id)).as_ref(),
+            )
         {
             events.push(MobEvent::PufferfishSting {
                 mob: mob_id,

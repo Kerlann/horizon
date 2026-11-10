@@ -540,6 +540,18 @@ impl Game<'_> {
         }
     }
     pub(super) fn player_view(&self) -> Option<PlayerView> {
+        self.player_view_with_allies(true)
+    }
+
+    /// AI asks canonical teams on demand; projecting one player must not scan
+    /// every entity just to materialize an ally set.
+    pub(super) fn ai_player_view(&self) -> Option<PlayerView> {
+        #[cfg(test)]
+        super::native_mob_read_context::record_backing_work(|work| work.player_projections += 1);
+        self.player_view_with_allies(false)
+    }
+
+    fn player_view_with_allies(&self, include_allies: bool) -> Option<PlayerView> {
         if self.lan_acting_fake {
             return None;
         }
@@ -589,34 +601,17 @@ impl Game<'_> {
             hero: self.potions.effects.get("hero_of_the_village").is_some(),
             effects: self.potions.effects.list.iter().map(|e| e.id).collect(),
             uuid: self.acting_uuid(),
-            allies: std::sync::Arc::new(self.player_allies()),
+            allies: if include_allies {
+                std::sync::Arc::new(self.player_allies())
+            } else {
+                Default::default()
+            },
             remote: false,
             sleeping: self.sleeping.is_some(),
             sleep_timer: self.sleep_timer,
             passenger: self.riding.is_some(),
             riding_vehicle: self.riding,
-            vehicle: self.riding.and_then(|id| {
-                if let Some(b) = self.boats.iter().find(|b| b.id == id) {
-                    // A boat's box: 1.375 wide and 0.5625 high around its position.
-                    let w = 0.6875;
-                    return Some(horizon_client::mobs::Vehicle {
-                        nautilus: false,
-                        bounds: Aabb::new(
-                            Vec3::new(b.position.x - w, b.position.y, b.position.z - w),
-                            Vec3::new(b.position.x + w, b.position.y + 0.5625, b.position.z + w),
-                        ),
-                        velocity: b.velocity,
-                    });
-                }
-                let m = self.mobs.iter().find(|m| m.id == id)?;
-                matches!(m.species(), Species::Nautilus | Species::ZombieNautilus).then(|| {
-                    horizon_client::mobs::Vehicle {
-                        nautilus: true,
-                        bounds: m.bounds(),
-                        velocity: m.velocity,
-                    }
-                })
-            }),
+            vehicle: self.ai_player_vehicle_view(&self.mobs),
         })
     }
     /// Biome facts at a position for finalizeSpawn and variant rules.
@@ -1060,9 +1055,10 @@ impl Game<'_> {
         let transformed = self.mobs.iter().find(|m| m.id == id)?;
         let transformed_kind = from_kind.as_ref().map(|_| transformed.kind.id.clone());
         // Only move passengers once the new mob's join has succeeded.
-        for rider in self.mobs.iter_mut() {
-            if rider.extra.mount == Some(from.id) {
-                rider.extra.mount = Some(id);
+        for i in 0..self.mobs.len() {
+            if self.mobs[i].extra.mount == Some(from.id) {
+                self.mobs[i].extra.mount = Some(id);
+                self.record_ai_mob_owner(&self.mobs[i]);
             }
         }
         if let (Some(from_kind), Some(transformed_kind)) = (from_kind, transformed_kind) {
@@ -1192,11 +1188,15 @@ impl Game<'_> {
         self.world.bottom_y()
     }
     pub(super) fn mob_world_base<'s>(&'s self, others: &'s [Seen]) -> MobWorld<'s> {
-        self.mob_world_reborrow(
-            others,
-            self.player_view(),
-            std::sync::Arc::new(self.mob_team_rules()),
-        )
+        if self.remote.is_none() {
+            self.mob_world_reborrow(others, self.ai_player_view(), Default::default())
+        } else {
+            self.mob_world_reborrow(
+                others,
+                self.player_view(),
+                std::sync::Arc::new(self.mob_team_rules()),
+            )
+        }
     }
     /// Reborrow the live level without rebuilding the pass's owned player/team backing.
     pub(super) fn mob_world_reborrow<'s>(
@@ -1292,6 +1292,11 @@ impl Game<'_> {
                 && mod_api::__private::listened(mod_api::HookId::BabyEntitySpawn),
             // A warden's away suspects are UUIDs: on the server side, where the
             // entity UUIDs live, they resolve back to the mobs that are here.
+            team_lookup: if self.remote.is_none() {
+                Some(self)
+            } else {
+                None
+            },
             who_lookup: if self.remote.is_none() {
                 Some(self)
             } else {
@@ -7223,6 +7228,13 @@ impl Game<'_> {
         let Some(index) = self.mob_interaction_target(target) else {
             return Ok(false);
         };
+        let id = self.mobs[index].id;
+        let result = self.interact_mob_at(index);
+        self.record_ai_mob_owner_id(id);
+        result
+    }
+
+    fn interact_mob_at(&mut self, index: usize) -> Result<bool> {
         // PlayerInteractTrigger: the name tag as it was before it named the mob.
         let used = self.held().cloned();
         if self.name_mob(index) {
@@ -11958,6 +11970,7 @@ mod pearl_tests {
             dragon: None,
             leash_boats: &[],
             who_lookup: None,
+            team_lookup: None,
             others_grid: None,
             others_index: None,
             others_villagers: None,

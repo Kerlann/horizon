@@ -126,6 +126,9 @@ impl Game<'_> {
     /// Open before lifting an owner. The guard owns only the shared clock;
     /// no storage or Game borrow survives the call.
     pub(super) fn begin_resident_read_pass(&self, kind: Kind) -> Option<ReadScope> {
+        if self.is_logical_server() {
+            self.with_prepared_mob_relations(|_| ());
+        }
         if kind == Kind::Mob
             || !self.is_logical_server()
             || !mod_api::__private::entity_reads_listened()
@@ -288,12 +291,13 @@ impl Game<'_> {
             Err(_) => return false,
         };
         let entity = EntityRef::new(epoch, raw.id);
+        let merchant_sources_available = self.merchant_sources_available();
         let publication = {
             let mut state = self.entity_read_state.borrow_mut();
             let state = &mut *state;
             let pass = state.mob_relations.entry(level).or_default();
             if pass.tick != Some(tick) {
-                self.rebuild_mob_read_relations(level, &mut pass.index);
+                self.rebuild_mob_read_relations(level, &mut pass.index, merchant_sources_available);
                 pass.tick = Some(tick);
             }
             let index = &pass.index;

@@ -154,10 +154,19 @@ impl Game<'_> {
     }
     /// `adventure_predicate` for any `stack`, not only the main hand's.
     fn stack_adventure_predicate(&self, stack: &ItemStack, component: &str, pos: [i32; 3]) -> bool {
+        self.stack_adventure_predicate_in(&self.world, stack, component, pos)
+    }
+    fn stack_adventure_predicate_in(
+        &self,
+        world: &horizon_client::world::World,
+        stack: &ItemStack,
+        component: &str,
+        pos: [i32; 3],
+    ) -> bool {
         let Some(tag) = stack.data().and_then(|d| d.other(component)) else {
             return false;
         };
-        self.adventure_predicate_at(tag, pos)
+        self.adventure_predicate_in(world, tag, pos)
     }
     /// The existing supported block/state portion of `AdventureModePredicate.test`.
     /// The held-item wrapper and the projectile caller supply their own live value.
@@ -166,8 +175,16 @@ impl Game<'_> {
         tag: &horizon_core::nbt::Tag,
         pos: [i32; 3],
     ) -> bool {
+        self.adventure_predicate_in(&self.world, tag, pos)
+    }
+    pub(super) fn adventure_predicate_in(
+        &self,
+        world: &horizon_client::world::World,
+        tag: &horizon_core::nbt::Tag,
+        pos: [i32; 3],
+    ) -> bool {
         use horizon_core::nbt::Tag;
-        let state = self.world.block(pos[0], pos[1], pos[2]);
+        let state = world.block(pos[0], pos[1], pos[2]);
         let name = &self.res.facts().get(state).name;
         let properties = self
             .pack
@@ -276,8 +293,19 @@ impl Game<'_> {
         face: horizon_core::geometry::Direction,
         stack: &ItemStack,
     ) -> bool {
+        self.may_use_item_at_in(&self.world, may_build, pos, face, stack)
+    }
+    pub(super) fn may_use_item_at_in(
+        &self,
+        world: &horizon_client::world::World,
+        may_build: bool,
+        pos: [i32; 3],
+        face: horizon_core::geometry::Direction,
+        stack: &ItemStack,
+    ) -> bool {
         may_build
-            || self.stack_adventure_predicate(
+            || self.stack_adventure_predicate_in(
+                world,
                 stack,
                 "minecraft:can_place_on",
                 relative(pos, face.opposite()),

@@ -446,6 +446,7 @@ mod tests {
                     location,
                 },
                 &body,
+                Default::default(),
             );
             let admission = game
                 .entity_read_admission(

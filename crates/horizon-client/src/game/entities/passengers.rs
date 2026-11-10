@@ -94,6 +94,7 @@ impl Game<'_> {
                 let m = &mut self.mobs[i];
                 m.extra.mount = None;
                 m.extra.passenger = false;
+                self.record_ai_mob_owner_id(self.mobs[i].id);
             }
         }
         for m in &mut self.mobs {
@@ -501,6 +502,7 @@ impl Game<'_> {
         horse.extra.tame = true;
         horse.extra.age = 0;
         let at = [horse.position.x, horse.position.y, horse.position.z];
+        self.record_ai_mob_owner_id(id);
         self.spawn_bolt(at, true);
         let Some(skeleton) = self.trap_skeleton(at) else {
             return;
@@ -527,6 +529,7 @@ impl Game<'_> {
                 h.extra.age = 0;
                 h.velocity = Vec3::new(h.velocity.x + dx, h.velocity.y, h.velocity.z + dz);
             }
+            self.record_ai_mob_owner_id(other);
             if let Some(rider) = self.trap_skeleton(at) {
                 self.mount_mob(rider, other);
             }

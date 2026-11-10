@@ -106,6 +106,9 @@ impl Game<'_> {
         conn: u32,
         outer_dimension: Dim,
     ) -> Result<GuestSwap, TurnRefused> {
+        // Before the outer body becomes Taken, preserve its current relation
+        // candidate independently of R publication and AI projection refresh.
+        self.with_prepared_mob_relations(|_| ());
         let spawn_protection = self.lan.as_ref().and_then(|host| {
             host.hub
                 .guests
@@ -445,6 +448,7 @@ impl Game<'_> {
         self.block_reach = self.interaction_range("minecraft:block_interaction_range", 4.5, 5.0);
         let building_boxes = std::mem::replace(&mut self.lan_building_boxes, other_boxes);
         Ok(GuestSwap {
+            before_ai: self.player_ai_facts(),
             attachments,
             conn,
             i,
@@ -574,7 +578,9 @@ impl Game<'_> {
             Ok(totem) => (totem, None),
             Err(payload) => (None, Some(payload)),
         };
+        let ai_delta = self.player_ai_facts_delta(&swap.before_ai);
         let GuestSwap {
+            before_ai: _,
             attachments,
             conn,
             i,
@@ -991,6 +997,15 @@ impl Game<'_> {
                 g.send(&g.abilities_packet());
             }
         });
+        if let Some(epoch) = self.native_lifecycle.epoch()
+            && let Some(pass) = self
+                .entity_read_state
+                .borrow_mut()
+                .mob_relations
+                .get_mut(&mod_api::LevelRef::new(epoch, self.dim.key()))
+        {
+            pass.index.update_guest(&host.hub.guests[i]);
+        }
         // LivingEntity.checkTotemDeathProtection's entity event, to every
         // client tracking the guest and its own; this window draws it too.
         if let Some(body) = totem {
@@ -1056,6 +1071,7 @@ impl Game<'_> {
         if let Some(mob) = guest_mount {
             self.lan_open_mount(conn, mob);
         }
+        self.publish_player_ai_delta(ai_delta);
         // The turn's teleports are in the hub now: the mods hear them.
         self.flush_teleport_notes();
         if let Some(host) = self.lan.as_ref() {

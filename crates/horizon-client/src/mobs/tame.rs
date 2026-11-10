@@ -1846,6 +1846,7 @@ mod tests {
                 w,
                 level: &mut fixture.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
             let mut m = wolf();
             set_tame(&mut m, true);
@@ -2104,6 +2105,7 @@ mod tests {
                     w,
                     level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 let mut goal = Breed::new(1.0);
                 assert_eq!(
@@ -2147,7 +2149,7 @@ mod universal_anger_tests {
                 // nobody left that it was angered by.
                 m.extra.anger = 600;
                 m.extra.angry_at = None;
-                let mut goals = std::mem::take(&mut m.ai.targets);
+                let mut goals = m.ai.targets.take();
                 let mut events = Vec::new();
                 let mut test_level = crate::health::TestLevel::new(0);
                 let level = &mut test_level.level();
@@ -2155,6 +2157,7 @@ mod universal_anger_tests {
                     w: &w,
                     level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 for _ in 0..200 {
                     goals.tick(&mut m, &mut cx);
@@ -2202,8 +2205,9 @@ mod cat_tempt_tests {
                 w: &world,
                 level: &mut fixture.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
-            let mut goals = std::mem::take(&mut m.ai.goals);
+            let mut goals = m.ai.goals.take();
             goals.tick(&mut m, &mut cx);
             let started = goals.is_running("CatTempt");
             m.extra.tame = true;
@@ -2263,8 +2267,9 @@ mod tamable_panic_tests {
                     w,
                     level: &mut test_level.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
-                let mut goals = std::mem::take(&mut m.ai.goals);
+                let mut goals = m.ai.goals.take();
                 goals.tick(&mut m, &mut cx);
                 outcome = Some(goals.is_running("TamePanic"));
                 m.ai.goals = goals;
@@ -2332,8 +2337,9 @@ mod non_tame_tests {
                 w,
                 level: &mut lr.level(),
                 events: &mut events,
+                selectors: Default::default(),
             };
-            let mut goals = std::mem::take(&mut m.ai.goals);
+            let mut goals = m.ai.goals.take();
             goals.tick(m, &mut cx);
             let running = goals.is_running("NonTameRandomTargetGoal");
             m.ai.goals = goals;

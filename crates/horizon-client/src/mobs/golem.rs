@@ -718,6 +718,7 @@ mod tests {
                     w: &w,
                     level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 if goal.can_use(&mut m, &mut cx) {
                     found = Some((m, goal));
@@ -766,6 +767,7 @@ mod tests {
                     w: &w,
                     level: &mut test_level.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 assert_eq!(goal.can_use(&mut golem, &mut cx), rule);
                 if !rule {
@@ -818,6 +820,7 @@ mod tests {
                 w,
                 level,
                 events: &mut events,
+                selectors: Default::default(),
             };
 
             golem.ai.last_hurt_by = Some(Who::Mob(2));
@@ -850,6 +853,7 @@ mod tests {
                 w: &w,
                 level,
                 events: &mut events,
+                selectors: Default::default(),
             };
             let mut goal = NearestTarget::player(true)
                 .interval(0)
@@ -872,12 +876,13 @@ mod created_golem_tests {
         let mut events = Vec::new();
         let mut test_level = crate::health::TestLevel::new(0);
         let level = &mut test_level.level();
-        let mut goals = std::mem::take(&mut m.ai.targets);
+        let mut goals = m.ai.targets.take();
         {
             let mut cx = Cx {
                 w,
                 level,
                 events: &mut events,
+                selectors: Default::default(),
             };
             for _ in 0..ticks {
                 goals.tick(m, &mut cx);

@@ -224,6 +224,8 @@ impl<R> EntityTable<R> {
         published
     }
 
+    /// Select dependency metadata at an already admitted storage address.
+    /// This does not admit a handle or require a populated read publication.
     pub fn cached_row_at(&mut self, id: u32, location: Location) -> Option<&R> {
         self.drain();
         let row = self.rows.get(&NonZeroU32::new(id)?)?;

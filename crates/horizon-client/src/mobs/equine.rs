@@ -1220,6 +1220,7 @@ mod tests {
                     w: &world,
                     level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 RunAroundLikeCrazy.tick(&mut m, &mut cx);
                 assert_eq!(m.extra.tame, !asks_animal_tame);
@@ -1285,6 +1286,7 @@ mod tests {
                             w,
                             level: &mut test_level.level(),
                             events: &mut events,
+                            selectors: Default::default(),
                         },
                     );
                     assert_eq!(m.extra.tame, value == 1000);
@@ -1565,10 +1567,11 @@ mod tests {
                     w,
                     level: &mut lr.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 for m in [&mut horse, &mut zombie] {
                     m.ai.goals.add(1, RunAroundLikeCrazy);
-                    let mut goals = std::mem::take(&mut m.ai.goals);
+                    let mut goals = m.ai.goals.take();
                     goals.tick(m, &mut cx);
                     outcomes.push(goals.is_running("RunAroundLikeCrazy"));
                     m.ai.goals = goals;

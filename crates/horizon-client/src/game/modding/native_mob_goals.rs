@@ -138,40 +138,94 @@ impl Game<'_> {
     /// selector as a `MobGoalEntry` (the priority, the kind id and
     /// whether it runs), in registration order. None for a stale or
     /// unavailable mob, a client, and the dragon.
-    pub(super) fn mob_goals(&self, mob: MobRef) -> Option<Vec<MobGoalEntry>> {
-        let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
-            return None;
+    pub(super) fn mob_goals(
+        &self,
+        mob: MobRef,
+    ) -> Result<Option<Vec<MobGoalEntry>>, mod_api::EntityReadError> {
+        self.read_mob_goals(None, mob)
+    }
+
+    pub(super) fn read_mob_goals(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        mob: MobRef,
+    ) -> Result<Option<Vec<MobGoalEntry>>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
         };
-        let m = self.mobs.iter().find(|m| m.id == id)?;
-        Some(
-            m.ai.goals
-                .entries()
-                .map(|(priority, name, running)| MobGoalEntry {
-                    priority,
-                    id: goal_id(name),
-                    running,
-                })
-                .collect(),
-        )
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::OrdinaryMob(mob),
+            &[EntityReadDependency::Goals],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_entity_read_storage(admitted, provider, |source| {
+            let selector = source
+                .selectors
+                .goals
+                .ok_or(mod_api::EntityReadError::Lifted)?;
+            admitted.project_actual(|| {
+                Some(
+                    selector
+                        .entries()
+                        .map(|(priority, name, running)| MobGoalEntry {
+                            priority,
+                            id: goal_id(name),
+                            running,
+                        })
+                        .collect(),
+                )
+            })
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
 
     /// Every goal of the target selector, as `goals` reads the goal
     /// selector's.
-    pub(super) fn mob_target_goals(&self, mob: MobRef) -> Option<Vec<MobGoalEntry>> {
-        let Some(Target::Mob(id)) = self.native_entity_target(mob.entity()) else {
-            return None;
+    pub(super) fn mob_target_goals(
+        &self,
+        mob: MobRef,
+    ) -> Result<Option<Vec<MobGoalEntry>>, mod_api::EntityReadError> {
+        self.read_mob_target_goals(None, mob)
+    }
+
+    pub(super) fn read_mob_target_goals(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        mob: MobRef,
+    ) -> Result<Option<Vec<MobGoalEntry>>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
         };
-        let m = self.mobs.iter().find(|m| m.id == id)?;
-        Some(
-            m.ai.targets
-                .entries()
-                .map(|(priority, name, running)| MobGoalEntry {
-                    priority,
-                    id: goal_id(name),
-                    running,
-                })
-                .collect(),
-        )
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::OrdinaryMob(mob),
+            &[EntityReadDependency::TargetGoals],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_entity_read_storage(admitted, provider, |source| {
+            let selector = source
+                .selectors
+                .targets
+                .ok_or(mod_api::EntityReadError::Lifted)?;
+            admitted.project_actual(|| {
+                Some(
+                    selector
+                        .entries()
+                        .map(|(priority, name, running)| MobGoalEntry {
+                            priority,
+                            id: goal_id(name),
+                            running,
+                        })
+                        .collect(),
+                )
+            })
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
 
     /// One `removeGoal` pass over the mob's selector: the mob list comes
@@ -203,14 +257,15 @@ impl Game<'_> {
             );
             let m = &mut mobs[index];
             let mut selector = if targets {
-                std::mem::take(&mut m.ai.targets)
+                m.ai.targets.take()
             } else {
-                std::mem::take(&mut m.ai.goals)
+                m.ai.goals.take()
             };
             let mut cx = Cx {
                 w: &w,
                 level: &mut level,
                 events: &mut events,
+                selectors: Default::default(),
             };
             let removed = selector.remove_all(|g| goal_id(g.name()) == id, m, &mut cx);
             if targets {
@@ -642,7 +697,7 @@ mod tests {
             let mut test_level = horizon_client::health::TestLevel::new(0);
             let mut level = test_level.level();
             let mut events = Vec::new();
-            let mut selector = std::mem::take(&mut mobs[0].ai.goals);
+            let mut selector = mobs[0].ai.goals.take();
             selector.clear();
             selector.add(0, StopProbe);
             {
@@ -651,6 +706,7 @@ mod tests {
                     w: &world,
                     level: &mut level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 selector.tick(&mut mobs[0], &mut cx);
             }
@@ -687,7 +743,7 @@ mod tests {
             let mut test_level = horizon_client::health::TestLevel::new(0);
             let mut level = test_level.level();
             let mut events = Vec::new();
-            let mut selector = std::mem::take(&mut mobs[0].ai.goals);
+            let mut selector = mobs[0].ai.goals.take();
             selector.clear();
             selector.add(0, HoldGroundAttack::new(8.0));
             {
@@ -696,6 +752,7 @@ mod tests {
                     w: &world,
                     level: &mut level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 selector.tick(&mut mobs[0], &mut cx);
             }
@@ -725,7 +782,7 @@ mod tests {
             let mut test_level = horizon_client::health::TestLevel::new(0);
             let mut level = test_level.level();
             let mut events = Vec::new();
-            let mut selector = std::mem::take(&mut mobs[0].ai.goals);
+            let mut selector = mobs[0].ai.goals.take();
             selector.clear();
             selector.add(0, FollowFlockLeader::new(0));
             {
@@ -734,6 +791,7 @@ mod tests {
                     w: &world,
                     level: &mut level,
                     events: &mut events,
+                    selectors: Default::default(),
                 };
                 selector.tick(&mut mobs[0], &mut context);
             }

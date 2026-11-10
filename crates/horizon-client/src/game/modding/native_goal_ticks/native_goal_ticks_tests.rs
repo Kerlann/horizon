@@ -161,11 +161,12 @@ fn tick_goals_as(
         w.others_index = Some(&index_by_id);
         w.player = player;
         w.player_identity = identity;
-        let mut selector = std::mem::take(&mut mobs[index].ai.goals);
+        let mut selector = mobs[index].ai.goals.take();
         let mut cx = Cx {
             w: &w,
             level: &mut level,
             events: &mut events,
+            selectors: Default::default(),
         };
         selector.tick(&mut mobs[index], &mut cx);
         mobs[index].ai.goals = selector;
@@ -1006,6 +1007,7 @@ fn mod_goal_tick_cost() {
             w: &w,
             level: &mut level,
             events: &mut events,
+            selectors: Default::default(),
         };
         // One plain engine goal of the same shape (always can_use, MOVE).
         let mut plain = GoalSelector::default();
@@ -1026,7 +1028,7 @@ fn mod_goal_tick_cost() {
             );
             mob.ai.goals.clear();
             mobs::part_goals::attach(&mut mob);
-            let mut wrapped = std::mem::take(&mut mob.ai.goals);
+            let mut wrapped = mob.ai.goals.take();
             spin(&mut wrapped, &mut mobs[0], &mut cx, 20_000)
         };
         println!(

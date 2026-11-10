@@ -119,6 +119,7 @@ fn disjoint_live_loan_is_foreign_and_not_a_snapshot_fallback() {
             m: &mut actor,
             w: &world,
             host: game,
+            selectors: Default::default(),
         };
         assert_eq!(entity.rotation(&context), None);
         assert_eq!(LivingRef::new(entity).max_health(&context), None);
@@ -178,6 +179,7 @@ fn scoped_host_resolves_other_real_players_from_the_game() {
             m: &mut actor,
             w: &world,
             host: game,
+            selectors: Default::default(),
         };
         let selected = context.player(12).expect("selected guest is online");
         assert_eq!(selected.selected_slot(&context), Some(0));
@@ -223,6 +225,7 @@ fn explicit_own_loan_reads_applied_navigation_and_rejects_player_forgery() {
             m: &mut actor,
             w: &world,
             host: game,
+            selectors: Default::default(),
         };
         let own = context.mob_handle();
         assert_eq!(own.is_done(&context), Some(false));
@@ -329,6 +332,7 @@ fn foreign_lifted_read_observes_shared_publication_updates_not_seen_or_live_view
                 m: &mut actor,
                 w: &world,
                 host: game,
+                selectors: Default::default(),
             };
             assert_eq!(entity.position(&context), Some([5.0, 2.0, 3.0]));
             game.entity_residency
@@ -368,6 +372,7 @@ fn acting_guest_reads_are_shared_host_reads_not_selected_world_player_reads() {
                 m: &mut actor,
                 w: &world,
                 host: game,
+                selectors: Default::default(),
             };
             let acting = context.player(13).expect("actual acting guest");
             assert_eq!(acting.entity().id(), 13);

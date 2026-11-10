@@ -12,51 +12,6 @@ use mod_api::{EntityRef, LeashHolder, LivingRef};
 
 impl Game<'_> {
     /// The dismount search with a vehicle or passenger lent out of `self.mobs`.
-    pub(super) fn scoped_mob_dismount_location(
-        &self,
-        vehicle: Option<&Mob>,
-        vehicle_id: u32,
-        rider: Option<&Mob>,
-        passenger: EntityRef,
-    ) -> Option<[f64; 3]> {
-        let at = if let Some(rider) = rider {
-            if let Some(index) = self.boats.iter().position(|boat| boat.id == vehicle_id) {
-                Some(self.boat_dismount_target(index, f64::from(rider.width()), rider.yaw))
-            } else if let Some(mount) = vehicle {
-                Some(
-                    self.horse_dismount_mobs(mount, rider)
-                        .unwrap_or_else(|| super::mounts::on_top(mount)),
-                )
-            } else {
-                self.cart_dismount_mob(vehicle_id, rider)
-            }
-        } else if let Some(mount) = vehicle {
-            match self.native_entity_target(passenger)? {
-                Target::Player => {
-                    Some(self.player_dismount_from_lent_mob(mount, self.yaw, self.player.as_ref()?))
-                }
-                Target::Guest(conn) => {
-                    let guest = self.command_guest(conn)?;
-                    Some(self.player_dismount_from_lent_mob(
-                        mount,
-                        guest.yaw,
-                        guest.motion.as_deref()?,
-                    ))
-                }
-                _ => None,
-            }
-        } else {
-            let vehicle = self.entity(vehicle_id)?;
-            return self.entity_dismount_location(vehicle, LivingRef::new(passenger));
-        };
-        if let Some(at) = at {
-            return Some([at.x, at.y, at.z]);
-        }
-        let vehicle = self.entity(vehicle_id)?;
-        let [x, _, z] = self.entity_position(vehicle)?;
-        let [_, [_, top, _]] = self.entity_bounding_box(vehicle)?;
-        Some([x, top, z])
-    }
 
     /// The id of the entity `t` rides, if it rides one.
     fn native_vehicle_id(&self, t: Target) -> Option<u32> {
@@ -73,60 +28,160 @@ impl Game<'_> {
             _ => None,
         }
     }
-    /// The entity's vehicle as a handle, if it rides one in this level.
-    fn native_vehicle(&self, entity: EntityRef) -> Option<Option<EntityRef>> {
-        let t = self.native_entity_target(entity)?;
-        Some(self.native_vehicle_id(t).and_then(|v| self.entity(v)))
-    }
     /// What the entity rides (`Entity.getVehicle`): `None` when it rides
     /// nothing, or for a stale handle.
-    pub(super) fn entity_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
-        self.native_vehicle(entity).flatten()
+    pub(super) fn entity_vehicle(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<EntityRef>, mod_api::EntityReadError> {
+        self.read_entity_vehicle(None, entity)
+    }
+
+    pub(super) fn read_entity_vehicle(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Result<Option<EntityRef>, mod_api::EntityReadError> {
+        self.read_vehicle_relation(provider, entity)
+            .map(Option::flatten)
     }
     /// Whether the entity rides another (`Entity.isPassenger`).
-    pub(super) fn entity_is_passenger(&self, entity: EntityRef) -> Option<bool> {
-        Some(self.native_vehicle(entity)?.is_some())
+    pub(super) fn entity_is_passenger(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        self.read_entity_is_passenger(None, entity)
+    }
+
+    pub(super) fn read_entity_is_passenger(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        self.read_vehicle_relation(provider, entity)
+            .map(|relation| relation.map(|vehicle| vehicle.is_some()))
     }
     /// The lowest vehicle under the entity (`Entity.getRootVehicle`): the
     /// entity itself when it rides nothing.
-    pub(super) fn entity_root_vehicle(&self, entity: EntityRef) -> Option<EntityRef> {
-        let mut root = entity;
-        // A chain of riders is short; the bound only guards against a loop.
-        for _ in 0..64 {
-            match self.native_vehicle(root)? {
-                Some(v) => root = v,
-                None => break,
-            }
-        }
-        Some(root)
+    pub(super) fn entity_root_vehicle(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<EntityRef>, mod_api::EntityReadError> {
+        self.read_entity_root_vehicle(None, entity)
+    }
+
+    pub(super) fn read_entity_root_vehicle(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Result<Option<EntityRef>, mod_api::EntityReadError> {
+        let Some(first) = self.read_vehicle_relation(provider, entity)? else {
+            return Ok(None);
+        };
+        self.root_vehicle_after_first(provider, entity, first)
     }
     /// The entities riding this one (`Entity.getPassengers`), in `addPassenger`'s order.
-    pub(super) fn entity_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
-        self.native_entity_target(entity)?;
-        let seats = self.seated_passengers(entity.id()).into_iter();
-        Some(seats.filter_map(|(_, id, _)| self.entity(id)).collect())
+    pub(super) fn entity_passengers(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<Vec<EntityRef>>, mod_api::EntityReadError> {
+        self.read_entity_passengers(None, entity)
+    }
+
+    pub(super) fn read_entity_passengers(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Result<Option<Vec<EntityRef>>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::{EntityReadSelection, EntityReadSubject},
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Entity(entity),
+            &[EntityReadDependency::Riding],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        let mut selection = EntityReadSelection::default();
+        let passengers = self.select_passenger_sources(admitted, provider, &mut selection)?;
+        selection.project(|| {
+            Some(
+                passengers
+                    .into_iter()
+                    .map(|input| input.admission.entity())
+                    .collect(),
+            )
+        })
     }
     /// Whether anything rides the entity (`Entity.isVehicle`).
-    pub(super) fn entity_is_vehicle(&self, entity: EntityRef) -> Option<bool> {
-        Some(!self.entity_passengers(entity)?.is_empty())
+    pub(super) fn entity_is_vehicle(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        self.read_entity_is_vehicle(None, entity)
+    }
+
+    pub(super) fn read_entity_is_vehicle(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        self.read_entity_passengers(provider, entity)
+            .map(|passengers| passengers.map(|passengers| !passengers.is_empty()))
     }
     /// Every entity riding this one, at any depth (`Entity.getIndirectPassengers`): each
     /// passenger in `passengers` order, followed by those riding it.
-    pub(super) fn entity_indirect_passengers(&self, entity: EntityRef) -> Option<Vec<EntityRef>> {
-        let mut all = Vec::new();
-        let mut next = self.entity_passengers(entity)?;
+    pub(super) fn entity_indirect_passengers(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<Vec<EntityRef>>, mod_api::EntityReadError> {
+        self.read_entity_indirect_passengers(None, entity)
+    }
+
+    pub(super) fn read_entity_indirect_passengers(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Result<Option<Vec<EntityRef>>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::{EntityReadSelection, EntityReadSubject},
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::Entity(entity),
+            &[EntityReadDependency::Riding],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        let mut selection = EntityReadSelection::default();
+        let mut next = self.select_passenger_sources(admitted, provider, &mut selection)?;
         next.reverse();
+        let mut all = Vec::new();
         while let Some(passenger) = next.pop() {
-            // A chain of riders is short; the check only guards against a loop.
-            if passenger == entity || all.contains(&passenger) {
+            let input = passenger.admission;
+            if input.entity() == entity
+                || all.iter().any(
+                    |previous: &super::native_live_entity_reads::EntityReadAdmission| {
+                        previous.entity() == input.entity()
+                    },
+                )
+            {
                 continue;
             }
-            all.push(passenger);
-            if let Some(riders) = self.entity_passengers(passenger) {
-                next.extend(riders.into_iter().rev());
-            }
+            all.push(input);
+            let riders = self.select_passenger_sources(input, provider, &mut selection)?;
+            next.extend(riders.into_iter().rev());
         }
-        Some(all)
+        selection.project(|| Some(all.into_iter().map(|input| input.entity()).collect()))
     }
     /// Whether the player `t` holds the stick that steers `species` in either hand.
     fn native_player_steers(&self, species: Species, t: Target) -> bool {
@@ -152,11 +207,14 @@ impl Game<'_> {
     /// The overrides of `getControllingPassenger` on `mob`: whether the player `rider`, its
     /// first passenger, steers it.
     pub(super) fn native_player_controls(&self, mob: &Mob, rider: Target) -> bool {
+        Self::player_controls_mount(mob, |species| self.native_player_steers(species, rider))
+    }
+
+    /// Shared engine policy; the caller supplies its actual held-item source.
+    pub(super) fn player_controls_mount(mob: &Mob, steers: impl FnOnce(Species) -> bool) -> bool {
         let species = mob.species();
         match species {
-            Species::Pig | Species::Strider => {
-                mob.extra.saddled() && self.native_player_steers(species, rider)
-            }
+            Species::Pig | Species::Strider => mob.extra.saddled() && steers(species),
             Species::HappyGhast => {
                 happy_ghast::wearing_harness(mob) && !happy_ghast::on_still_timeout(mob)
             }
@@ -168,30 +226,111 @@ impl Game<'_> {
     /// player in a boat, a player on a mount that is ready for one, or a mob on a mob with AI
     /// unless `#non_controlling_rider` names it. `None` when nothing steers it, or for a stale
     /// handle.
-    pub(super) fn entity_controlling_passenger(&self, entity: EntityRef) -> Option<LivingRef> {
-        let vehicle = self.native_entity_target(entity)?;
-        let passengers = self.entity_passengers(entity)?;
-        let first = *passengers.first()?;
-        let rider = self.native_entity_target(first)?;
-        let is_player = matches!(rider, Target::Player | Target::Guest(_));
-        match vehicle {
-            Target::Boat(_) if is_player => Some(LivingRef::new(first)),
-            Target::Mob(id) => {
-                let mob = self.mobs.iter().find(|m| m.id == id)?;
-                if is_player {
-                    return self
-                        .native_player_controls(mob, rider)
-                        .then(|| LivingRef::new(first));
-                }
-                let rider = self.mobs.iter().find(|m| m.id == first.id())?;
-                let tagged = self
-                    .res
-                    .mob_data()
-                    .entity_has("minecraft:non_controlling_rider", &rider.kind.id);
-                (!mob.no_ai && !tagged).then(|| LivingRef::new(first))
-            }
-            _ => None,
+    pub(super) fn entity_controlling_passenger(
+        &self,
+        entity: EntityRef,
+    ) -> Result<Option<LivingRef>, mod_api::EntityReadError> {
+        self.read_entity_controlling_passenger(None, entity)
+    }
+
+    pub(super) fn read_entity_controlling_passenger(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+    ) -> Result<Option<LivingRef>, mod_api::EntityReadError> {
+        use super::{
+            native_base_read_rows::BaseReadSource,
+            native_live_entity_reads::{EntityReadSelection, EntityReadSubject},
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
         }
+        let Some(vehicle) = self.entity_read_admission(
+            EntityReadSubject::Entity(entity),
+            &[EntityReadDependency::Riding],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        if !matches!(vehicle.target(), Target::Boat(_) | Target::Mob(_)) {
+            return Ok(None);
+        }
+        let mut selection = EntityReadSelection::default();
+        let passengers = self.select_passenger_sources(vehicle, provider, &mut selection)?;
+        let Some(first) = passengers.first().map(|input| input.admission) else {
+            return selection.project(|| None);
+        };
+        let is_player = matches!(first.target(), Target::Player | Target::Guest(_));
+        self.with_entity_read_storage(vehicle, provider, |source| {
+            self.with_entity_read_storage(first, provider, |rider| {
+                let mut hands = None;
+                if let BaseReadSource::Mob(mob) = source.body {
+                    let species = mob.species();
+                    let dependencies = if !is_player {
+                        &[EntityReadDependency::AiState][..]
+                    } else if species == Species::HappyGhast {
+                        &[
+                            EntityReadDependency::Equipment,
+                            EntityReadDependency::AiState,
+                        ][..]
+                    } else if matches!(species, Species::Pig | Species::Strider)
+                        || equine::is_equine(species)
+                        || nautilus::is_nautilus(species)
+                    {
+                        &[EntityReadDependency::Equipment][..]
+                    } else {
+                        &[][..]
+                    };
+                    selection.include(self.entity_read_add_dependencies(vehicle, dependencies));
+                    if is_player
+                        && mob.extra.saddled()
+                        && matches!(species, Species::Pig | Species::Strider)
+                    {
+                        hands = Some(match rider.body {
+                            BaseReadSource::Player(_) => (self.held(), self.offhand.as_ref()),
+                            BaseReadSource::Guest(guest) => (
+                                guest.inventory.get(guest.selected).and_then(Option::as_ref),
+                                guest.offhand.as_ref(),
+                            ),
+                            _ => return Err(mod_api::EntityReadError::Lifted),
+                        });
+                        selection.include(self.entity_read_add_dependencies(
+                            first,
+                            &[
+                                EntityReadDependency::Inventory,
+                                EntityReadDependency::Equipment,
+                            ],
+                        ));
+                    }
+                }
+                selection.project(|| match (source.body, rider.body) {
+                    (BaseReadSource::Boat(_), _) if is_player => {
+                        Some(LivingRef::new(first.entity()))
+                    }
+                    (BaseReadSource::Mob(mob), _) if is_player => {
+                        Self::player_controls_mount(mob, |species| {
+                            let (main, offhand) = hands.unwrap_or((None, None));
+                            steering_item(
+                                species,
+                                main.map(|stack| stack.item.as_ref()),
+                                offhand.map(|stack| stack.item.as_ref()),
+                            )
+                        })
+                        .then_some(LivingRef::new(first.entity()))
+                    }
+                    (BaseReadSource::Mob(mob), BaseReadSource::Mob(rider)) => (!mob.no_ai
+                        && !self
+                            .res
+                            .mob_data()
+                            .entity_has("minecraft:non_controlling_rider", &rider.kind.id))
+                    .then_some(LivingRef::new(first.entity())),
+                    _ => None,
+                })
+            })
+            .unwrap_or(Err(mod_api::EntityReadError::Lifted))
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
     /// Whether both entities share a root vehicle (`Entity.isPassengerOfSameVehicle`): true for
     /// an entity and itself, false for two entities riding nothing. `None` for a stale handle.
@@ -199,8 +338,52 @@ impl Game<'_> {
         &self,
         entity: EntityRef,
         other: EntityRef,
-    ) -> Option<bool> {
-        Some(self.entity_root_vehicle(entity)? == self.entity_root_vehicle(other)?)
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        self.read_entity_is_passenger_of_same_vehicle(None, entity, other)
+    }
+
+    pub(super) fn read_entity_is_passenger_of_same_vehicle(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        entity: EntityRef,
+        other: EntityRef,
+    ) -> Result<Option<bool>, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        if !self.is_logical_server() {
+            return Ok(None);
+        }
+        let dependencies = &[EntityReadDependency::Riding];
+        let Some(first) =
+            self.entity_read_admission(EntityReadSubject::Entity(entity), dependencies, provider)
+        else {
+            return Ok(None);
+        };
+        let Some(second) =
+            self.entity_read_admission(EntityReadSubject::Entity(other), dependencies, provider)
+        else {
+            return Ok(None);
+        };
+        let first_dimension = first.location().owner.dimension;
+        let second_dimension = second.location().owner.dimension;
+        let (first, second) =
+            self.with_admitted_entity_sources(first, second, provider, |first, second| {
+                (
+                    self.source_vehicle_id(first.body)
+                        .and_then(|id| self.admitted_relation_entity(first_dimension, id)),
+                    self.source_vehicle_id(second.body)
+                        .and_then(|id| self.admitted_relation_entity(second_dimension, id)),
+                )
+            })?;
+        let Some(first) = self.root_vehicle_after_first(provider, entity, first)? else {
+            return Ok(None);
+        };
+        let Some(second) = self.root_vehicle_after_first(provider, other, second)? else {
+            return Ok(None);
+        };
+        Ok(Some(first == second))
     }
     /// Where getting off this vehicle puts `passenger` as it stands now, riding it or not. This
     /// is the game's own placement, from the code `stop_riding` runs, so it can differ from
@@ -217,27 +400,109 @@ impl Game<'_> {
         &self,
         vehicle: EntityRef,
         passenger: LivingRef,
-    ) -> Option<[f64; 3]> {
-        self.native_entity_target(vehicle)?;
-        let id = vehicle.id();
-        let at = match self.native_entity_target(passenger.entity())? {
-            Target::Mob(rider) => {
-                let rider = self.mobs.iter().position(|m| m.id == rider)?;
-                self.mob_dismount_point(id, rider)
-            }
-            Target::Player => self.player_dismount_point(id, self.yaw, self.player.as_ref()?),
-            Target::Guest(conn) => {
-                let guest = self.command_guest(conn)?;
-                self.player_dismount_point(id, guest.yaw, guest.motion.as_deref()?)
-            }
-            _ => return None,
+    ) -> Result<Option<[f64; 3]>, mod_api::EntityReadError> {
+        self.read_entity_dismount_location(None, vehicle, passenger)
+    }
+
+    pub(super) fn read_entity_dismount_location(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        vehicle: EntityRef,
+        passenger: LivingRef,
+    ) -> Result<Option<[f64; 3]>, mod_api::EntityReadError> {
+        use super::{
+            native_base_read_rows::BaseReadSource,
+            native_live_entity_reads::{EntityReadSelection, EntityReadSubject},
+            native_read_dependencies::EntityReadDependency,
         };
-        if let Some(at) = at {
-            return Some([at.x, at.y, at.z]);
+        if !self.is_logical_server() {
+            return Ok(None);
         }
-        let [x, _, z] = self.entity_position(vehicle)?;
-        let [_, [_, top, _]] = self.entity_bounding_box(vehicle)?;
-        Some([x, top, z])
+        let Some(vehicle) = self.entity_read_admission(
+            EntityReadSubject::Entity(vehicle),
+            &[
+                EntityReadDependency::Geometry,
+                EntityReadDependency::MinecartFlipped,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        let Some(passenger) = self.entity_read_admission(
+            EntityReadSubject::MobOrPlayer(passenger),
+            &[
+                EntityReadDependency::Geometry,
+                EntityReadDependency::Equipment,
+                EntityReadDependency::PlayerState,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        enum Rider<'a> {
+            Mob(&'a Mob),
+            Player(&'a horizon_client::motion::PlayerMotion, f32),
+        }
+        self.with_entity_read_storage(passenger, provider, |rider| {
+            let rider = match rider.body {
+                BaseReadSource::Mob(mob) => Rider::Mob(mob),
+                BaseReadSource::Player(motion) => Rider::Player(motion, self.yaw),
+                BaseReadSource::Guest(guest) => {
+                    let Some(motion) = guest.motion.as_deref() else {
+                        return Ok(None);
+                    };
+                    Rider::Player(motion, guest.yaw)
+                }
+                _ => return Err(mod_api::EntityReadError::Lifted),
+            };
+            self.with_entity_read_storage(vehicle, provider, |source| {
+                let mut selection = EntityReadSelection::default();
+                selection.include(vehicle);
+                selection.include(passenger);
+                selection.project(|| {
+                    let world = source.level.world;
+                    let border = source.level.border;
+                    let at = match (source.body, rider) {
+                        (BaseReadSource::Boat(boat), Rider::Mob(rider)) => {
+                            Some(self.boat_dismount_target_at(
+                                world,
+                                boat,
+                                f64::from(rider.width()),
+                                rider.yaw,
+                            ))
+                        }
+                        (BaseReadSource::Cart(cart), Rider::Mob(rider)) => {
+                            self.cart_dismount_mob_at(world, border, cart, rider)
+                        }
+                        (BaseReadSource::Mob(mount), Rider::Mob(rider)) => Some(
+                            self.horse_dismount_mobs_at(world, border, mount, rider)
+                                .unwrap_or_else(|| super::mounts::on_top(mount)),
+                        ),
+                        (BaseReadSource::Boat(boat), Rider::Player(_, yaw)) => {
+                            Some(self.boat_dismount_target_at(world, boat, 0.6, yaw))
+                        }
+                        (BaseReadSource::Cart(cart), Rider::Player(_, _)) => {
+                            Some(self.cart_player_dismount_target_at(world, cart))
+                        }
+                        (BaseReadSource::Mob(mount), Rider::Player(motion, yaw)) => Some(
+                            self.player_dismount_from_mob_at(world, border, mount, yaw, motion),
+                        ),
+                        _ => None,
+                    };
+                    if let Some(at) = at {
+                        return Some([at.x, at.y, at.z]);
+                    }
+                    let geometry = self.live_source_geometry(source.body)?;
+                    Some([
+                        geometry.position[0],
+                        geometry.bounding_box[1][1],
+                        geometry.position[2],
+                    ])
+                })
+            })
+            .unwrap_or(Err(mod_api::EntityReadError::Lifted))
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
     /// A lead's live holder as a handle: `None` when it is out of reach.
     fn native_leash_holder(
@@ -514,6 +779,7 @@ impl Game<'_> {
             }
             Target::Mob(id) => {
                 horizon_client::mobs::riders::link(&mut self.mobs, id, vehicle_id);
+                self.record_ai_mob_owner_id(id);
                 self.seat_mob(id);
             }
             _ => return false,

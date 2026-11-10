@@ -395,11 +395,40 @@ impl Game<'_> {
     }
 
     /// `TextDisplay.getText`; None for another kind of display.
-    pub(super) fn display_text(&self, display: DisplayRef) -> Option<Text> {
-        match self.display_value(display, Some(DisplayKind::Text), 23)? {
-            Value::Text(tag) => Some(comp_text(&tag_to_json(&tag))),
-            _ => None,
-        }
+    pub(super) fn display_text(
+        &self,
+        display: DisplayRef,
+    ) -> Result<Option<Text>, mod_api::EntityReadError<mod_api::TextFormError>> {
+        self.read_display_text(None, display)
+    }
+
+    pub(super) fn read_display_text(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        display: DisplayRef,
+    ) -> Result<Option<Text>, mod_api::EntityReadError<mod_api::TextFormError>> {
+        use super::{
+            native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::TextDisplay(display),
+            &[EntityReadDependency::DisplayText],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(admitted, provider, |source| {
+            let BaseReadSource::Other(display) = source.body else {
+                return None;
+            };
+            let empty = Tag::Compound(Compound::new());
+            let tag = source.level.persist.raw.get(&display.id).unwrap_or(&empty);
+            match entry(DisplayKind::Text, tag, 23) {
+                Some(Value::Text(tag)) => Some(comp_text(&tag_to_json(&tag))),
+                _ => None,
+            }
+        })
     }
 
     /// `TextDisplay.setText`; false for another kind of display.
@@ -534,9 +563,41 @@ impl Game<'_> {
     }
 
     /// `ItemDisplay.getItemStack`; None for another kind of display or an empty stack.
-    pub(super) fn display_item(&self, display: DisplayRef) -> Option<ItemStack> {
-        let (_, tag) = self.display_tag(display, Some(DisplayKind::Item))?;
-        item_from_nbt(tag.get("item")?)
+    pub(super) fn display_item(
+        &self,
+        display: DisplayRef,
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+        self.read_display_item(None, display)
+    }
+
+    pub(super) fn read_display_item(
+        &self,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        display: DisplayRef,
+    ) -> Result<Option<ItemStack>, mod_api::EntityReadError> {
+        use super::{
+            native_base_read_rows::BaseReadSource, native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        let Some(admitted) = self.entity_read_admission(
+            EntityReadSubject::ItemDisplay(display),
+            &[EntityReadDependency::ItemStack],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        self.with_admitted_entity_source(admitted, provider, |source| {
+            let BaseReadSource::Other(display) = source.body else {
+                return None;
+            };
+            source
+                .level
+                .persist
+                .raw
+                .get(&display.id)
+                .and_then(|tag| tag.get("item"))
+                .and_then(item_from_nbt)
+        })
     }
 
     /// `ItemDisplay.setItemStack`; None empties it. False for another kind of display.

@@ -685,13 +685,14 @@ mod tests {
     /// Runs the goals of `m` for `ticks` ticks; the events.
     fn run_goals(m: &mut Mob, w: &MobWorld, ticks: u32) -> Vec<MobEvent> {
         let mut events = Vec::new();
-        let mut goals = std::mem::take(&mut m.ai.goals);
+        let mut goals = m.ai.goals.take();
         let mut test_level = crate::health::TestLevel::new(0);
         let level = &mut test_level.level();
         let mut cx = Cx {
             w,
             level,
             events: &mut events,
+            selectors: Default::default(),
         };
         for _ in 0..ticks {
             goals.tick(m, &mut cx);
@@ -810,6 +811,7 @@ mod tests {
                 w,
                 level,
                 events: &mut events,
+                selectors: Default::default(),
             };
             let mut tempt = ArmadilloTempt(Tempt::new(1.25, baby.kind.food.clone(), false));
             tempt.tick(&mut baby, &mut cx);

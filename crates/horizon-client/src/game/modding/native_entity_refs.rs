@@ -592,13 +592,25 @@ impl Game<'_> {
         blocks: ClipBlock,
         fluids: ClipFluid,
     ) -> Option<ClipHit> {
+        let world = self.native_level_world(level)?;
+        self.clip_in_world(world, from, to, blocks, fluids)
+    }
+
+    /// Shared ray kernel for an already selected physical level.
+    pub(super) fn clip_in_world(
+        &self,
+        world: &horizon_client::world::World,
+        from: [f64; 3],
+        to: [f64; 3],
+        blocks: ClipBlock,
+        fluids: ClipFluid,
+    ) -> Option<ClipHit> {
         use horizon_client::collisions::SceneCollisions;
         use horizon_core::geometry::Direction;
         use horizon_world::{
             collision_context::CollisionContext,
             world_ray::{RayBlockMode, RayFluidMode, clip_world},
         };
-        let world = self.native_level_world(level)?;
         let mut rays = super::explosion::ColliderRays {
             scene: SceneCollisions {
                 world,

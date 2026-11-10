@@ -473,8 +473,9 @@ mod spider_vehicle_tests {
                     w: &world,
                     level: &mut lr.level(),
                     events: &mut events,
+                    selectors: Default::default(),
                 };
-                let mut goals = std::mem::take(&mut m.ai.goals);
+                let mut goals = m.ai.goals.take();
                 goals.tick(&mut m, &mut cx);
                 truth.push(goals.is_running("SpiderAttack"));
                 m.ai.goals = goals;

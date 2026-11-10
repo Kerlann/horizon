@@ -28,7 +28,15 @@ impl Game<'_> {
         write: impl FnOnce(&mut Self) -> bool,
     ) -> bool {
         match target {
-            Target::Player => !self.lan_acting_fake && write(self),
+            Target::Player => {
+                if self.lan_acting_fake {
+                    return false;
+                }
+                let before = self.player_ai_facts();
+                let result = write(self);
+                self.player_ai_facts_applied(before);
+                result
+            }
             Target::Guest(conn) => {
                 let Some(gi) = self.guest_index(conn) else {
                     return false;

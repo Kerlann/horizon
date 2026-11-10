@@ -1272,6 +1272,7 @@ impl Game<'_> {
         self.remember(id, uuid, tag);
         self.bind_saved_entity_attachments(id, &mut m.attachment_lifetime);
         self.mobs.push(m);
+        self.record_ai_mob_owner_id(id);
         if restore_target {
             self.native_restore_loaded_target(id, anger_uuid);
         }
@@ -1791,9 +1792,6 @@ impl Game<'_> {
         self.uuid_for(id)
     }
     pub(super) fn uuid_for(&mut self, id: u32) -> [i32; 4] {
-        if let Some(uuid) = self.known_resident_entity_uuid_at(self.dim.key(), id) {
-            return uuid;
-        }
         if let Some(&uuid) = self.persist.uuids.get(&id) {
             return uuid;
         }
@@ -1807,12 +1805,7 @@ impl Game<'_> {
     pub(super) fn uuid_for_at(&mut self, level: mod_api::LevelRef, id: u32) -> Option<[i32; 4]> {
         let dimension = level.dimension();
         if dimension == self.dim.key() {
-            if let Some(&uuid) = self.persist.uuids.get(&id) {
-                return Some(uuid);
-            }
-            let uuid = random_uuid();
-            self.set_saved_entity_uuid(id, uuid);
-            return Some(uuid);
+            return Some(self.uuid_for(id));
         }
         let parked = self.levels.parked_mut_of(level.dimension_id())?;
         if let Some(uuid) = parked.saved_entity_uuid(id) {

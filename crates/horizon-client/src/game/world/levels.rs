@@ -135,6 +135,8 @@ impl Parked {
 }
 
 impl Game<'_> {
+    /// Borrow the exact level selected at entity admission, without swapping
+    /// Game or scanning loaded worlds. No handle or UUID is resolved here.
     pub(super) fn entity_read_level(
         &self,
         dimension: DimensionKey,
@@ -143,6 +145,7 @@ impl Game<'_> {
         if dimension == self.dim.key() {
             return Some(EntityReadLevel {
                 world: &self.world,
+                border: &self.border,
                 persist: &self.persist,
                 mobs: &self.mobs,
                 boats: &self.boats,
@@ -159,6 +162,7 @@ impl Game<'_> {
         let parked = self.levels.parked.get(&dim)?;
         Some(EntityReadLevel {
             world: &parked.world,
+            border: &parked.border,
             persist: &parked.persist,
             mobs: &parked.mobs,
             boats: &parked.boats,

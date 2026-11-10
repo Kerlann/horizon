@@ -704,6 +704,7 @@ impl Mining {
 #[derive(Clone, Copy)]
 struct TransformContext<'a> {
     world: &'a World,
+    host: &'a dyn mod_api::Host,
     player: Option<u32>,
     hand: mod_api::Hand,
     blocking: bool,
@@ -12755,6 +12756,7 @@ impl Game<'_> {
             hit,
             TransformContext {
                 world: &self.world,
+                host: self,
                 player: self.player.is_some().then(|| self.own_entity_id() as u32),
                 hand: self.hand,
                 blocking,
@@ -12772,6 +12774,7 @@ impl Game<'_> {
         use horizon_client::block_transform::Around;
         let TransformContext {
             world,
+            host,
             player,
             hand,
             blocking,
@@ -12861,7 +12864,12 @@ impl Game<'_> {
                 ability,
                 simulated,
             });
-            self.native_block_tool_modification(stack, &tool, &mut state, &mut cancel);
+            native_hooks::NativeHookHost { host }.native_block_tool_modification(
+                stack,
+                &tool,
+                &mut state,
+                &mut cancel,
+            );
             if cancel {
                 return None;
             }

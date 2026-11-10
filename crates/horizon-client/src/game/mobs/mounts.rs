@@ -698,17 +698,30 @@ impl Game<'_> {
         yaw: f32,
         p: &PlayerMotion,
     ) -> (Vec3, Option<Pose>) {
+        self.mount_player_dismount_at(&self.world, &self.border, mount, yaw, p)
+    }
+
+    fn mount_player_dismount_at(
+        &self,
+        world: &horizon_client::world::World,
+        border: &horizon_client::worldborder::WorldBorder,
+        mount: &Mount,
+        yaw: f32,
+        p: &PlayerMotion,
+    ) -> (Vec3, Option<Pose>) {
         let rider = Rider {
             yaw,
             width: p.dimensions.width,
             poses: rider_poses(p),
         };
-        dismount_location(mount, &rider, &GameDismountWorld(self))
+        dismount_location(mount, &rider, &GameDismountWorld(self, world, border))
     }
 
-    /// The same player search when the mount is lent out during a mob tick.
-    pub(super) fn player_dismount_from_lent_mob(
+    /// The same player search over an actual mount and owning world.
+    pub(super) fn player_dismount_from_mob_at(
         &self,
+        world: &horizon_client::world::World,
+        border: &horizon_client::worldborder::WorldBorder,
         mount: &Mob,
         yaw: f32,
         player: &PlayerMotion,
@@ -716,7 +729,8 @@ impl Game<'_> {
         if mount.species() == Species::HappyGhast {
             on_top(mount)
         } else {
-            self.mount_player_dismount(&Mount::of(mount), yaw, player).0
+            self.mount_player_dismount_at(world, border, &Mount::of(mount), yaw, player)
+                .0
         }
     }
     /// Where `stop_riding` sets a player in `p` facing `yaw` down off `vehicle`: None when
@@ -734,10 +748,7 @@ impl Game<'_> {
             return Some(self.cart_player_dismount_target(i));
         }
         let mount = self.mobs.iter().find(|m| m.id == vehicle)?;
-        if mount.species() == Species::HappyGhast {
-            return Some(on_top(mount));
-        }
-        Some(self.mount_player_dismount(&Mount::of(mount), yaw, p).0)
+        Some(self.player_dismount_from_mob_at(&self.world, &self.border, mount, yaw, p))
     }
     /// `AbstractHorse.tameWithName`: the acting player owns `mob`, then gets
     /// the `tame_animal` trigger.
@@ -764,6 +775,7 @@ impl Game<'_> {
             m.extra.tame = true;
             m.extra.owner = Some(owner);
             m.persistent = true;
+            self.record_ai_mob_owner_id(mob);
             // AbstractHorse.tameWithName: entity event 7, spawnTamingParticles(true).
             self.mob_event_particles(mob, 7);
         }
@@ -1037,28 +1049,35 @@ trait DismountWorld {
     /// `DismountHelper.canDismountTo(level, passenger, box)`.
     fn can_dismount_to(&self, bounds: Aabb) -> bool;
 }
-struct GameDismountWorld<'a, 'g>(&'a Game<'g>);
+struct GameDismountWorld<'a, 'g>(
+    &'a Game<'g>,
+    &'a horizon_client::world::World,
+    &'a horizon_client::worldborder::WorldBorder,
+);
 impl DismountWorld for GameDismountWorld<'_, '_> {
     fn full_collision(&self, p: [i32; 3]) -> bool {
         let g = self.0;
         g.res
             .facts()
-            .get(g.world.block(p[0], p[1], p[2]))
+            .get(self.1.block(p[0], p[1], p[2]))
             .full_collision
     }
     fn lava(&self, p: [i32; 3]) -> bool {
         let g = self.0;
-        g.res.facts().get(g.world.block(p[0], p[1], p[2])).fluid == Fluid::Lava
+        g.res.facts().get(self.1.block(p[0], p[1], p[2])).fluid == Fluid::Lava
     }
     fn floor_height(&self, p: [i32; 3]) -> f64 {
-        let shape = self.0.block_collision_shape(p);
+        let shape = self.0.block_collision_shape_in(self.1, p);
         let below = std::cell::OnceCell::<VoxelShape>::new();
         horizon_core::geometry::block_floor_height(&shape, || {
-            below.get_or_init(|| self.0.block_collision_shape([p[0], p[1] - 1, p[2]]))
+            below.get_or_init(|| {
+                self.0
+                    .block_collision_shape_in(self.1, [p[0], p[1] - 1, p[2]])
+            })
         })
     }
     fn can_dismount_to(&self, bounds: Aabb) -> bool {
-        self.0.can_dismount_to(bounds)
+        self.0.can_dismount_to_at(self.1, self.2, bounds)
     }
 }
 /// `getDismountLocationForPassenger`, and the pose the rider takes there.
