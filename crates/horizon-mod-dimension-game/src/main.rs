@@ -130,7 +130,7 @@ impl Hooks for DimProbe {
 
 fn main() {
     let startup = horizon_client::entry::prepare();
-    horizon_client::entry::main_with(
+    horizon_mod_host::main_with(
         vec![ModEntry::new("dimprobe", Box::<DimProbe>::default())],
         &[],
         BUILT,

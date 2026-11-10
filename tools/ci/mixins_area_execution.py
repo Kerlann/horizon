@@ -131,7 +131,7 @@ horizon-mod-api-gen={{path={generator}}}
     run("apply", [tool, "apply", "--workspace", prepared, "--mods", mods.parent, "--out", output])
     # Absolute includes back into prepared must not make this relocated build pass.
     shutil.rmtree(prepared)
-    run("build", ["cargo", "build", "--manifest-path", output / "Cargo.toml", "-p", "horizon-client"])
+    run("build", ["cargo", "build", "--manifest-path", output / "Cargo.toml", "-p", "horizon-game"])
     executable = "area-execution-proof.exe" if os.name == "nt" else "area-execution-proof"
     executed = run("execute", [build / "debug" / executable])
     if executed.stdout.strip() != "AREA_AND_NATIVE_HOOK_HELPERS=211":

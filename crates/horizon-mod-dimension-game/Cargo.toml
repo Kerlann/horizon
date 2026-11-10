@@ -12,5 +12,7 @@ horizon-mod-api = { path = "../horizon-mod-api" }
 horizon-mod-package = { path = "../horizon-mod-package", default-features = false, features = ["index"] }
 log = "0.4"
 
+horizon-mod-host = { path = "../horizon-mod-host" }
+
 [lints]
 workspace = true

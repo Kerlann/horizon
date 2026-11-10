@@ -1,5 +1,5 @@
 //! A real-renderer consumer of the public GUI API. Run in a disposable game home:
-//! `cargo run -p horizon-client --example native_gui_overlay_probe --
+//! `cargo run -p horizon-mod-host --example native_gui_overlay_probe --
 //! --resources PATH --world OverlayProbe --creative --world-frames 120`.
 //! Every world frame turns the camera 90 degrees; GUI callbacks assert that
 //! ClientHost::camera already sees that frame. A magenta square stays above menus/F1.
@@ -72,7 +72,7 @@ impl Hooks for Probe {
 
 fn main() {
     let startup = horizon_client::entry::prepare();
-    horizon_client::entry::main_with(
+    horizon_mod_host::main_with(
         vec![ModEntry::new(
             "gui_overlay_probe",
             Box::new(Probe {

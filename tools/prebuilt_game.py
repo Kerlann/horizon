@@ -77,8 +77,9 @@ def stage(target_dir: Path) -> Path:
               cwd=staged, env={**os.environ, "CARGO_TARGET_DIR": str(target_dir / "tools")}), end="")
     # Only the prebuilt game splits the wasm runtime out: normal source builds stay static. With
     # prefer-dynamic, rustc picks this dylib for the game rather than folding its runtime stack into it.
-    with (staged / "crates/horizon-mod-wasm/Cargo.toml").open("a") as manifest:
-        manifest.write('\n[lib]\ncrate-type = ["rlib", "dylib"]\n')
+    for crate in ("horizon-mod-wasm",):
+        with (staged / f"crates/{crate}/Cargo.toml").open("a") as manifest:
+            manifest.write('\n[lib]\ncrate-type = ["rlib", "dylib"]\n')
     return staged
 
 
@@ -107,7 +108,7 @@ def build(out: Path, server: bool) -> None:
     # the wasm runtime beside it. macOS's @rpath install names use the executable's rpath.
     link = ["--", "-C", "link-arg=-Wl,-rpath,$ORIGIN"] if sys.platform == "linux" else []
     messages = run(
-        ["cargo", "rustc", "--locked", "-p", "horizon-client", "--lib", "--crate-type", "dylib",
+        ["cargo", "rustc", "--locked", "-p", "horizon-mod-host", "--lib", "--crate-type", "dylib",
          "--profile", PROFILE, "--message-format", "json-render-diagnostics", *features, *link],
         cwd=staged,
         env={**os.environ, "RUSTFLAGS": rustflags, "CARGO_TARGET_DIR": str(target_dir)},
@@ -122,7 +123,12 @@ def build(out: Path, server: bool) -> None:
     deps.mkdir(parents=True)
     for file in sorted((target_dir / PROFILE / "deps").iterdir()):
         # Metadata, proc macros, the game and the wasm runtime; other code lives inside the two dylibs.
-        if file.name.endswith(SUFFIXES):
+        # Old cached builds may leave the previous top-level engine dylib beside
+        # the metadata. It must not override the engine now embedded in the host.
+        if file.name.endswith(SUFFIXES) and file.name not in {
+            'libhorizon_client.so', 'libhorizon_client.dylib', 'horizon_client.dll',
+            'libhorizon_client.dll', 'libhorizon_client.dll.a',
+        }:
             shutil.copy2(file, deps / file.name)
     native = out / NATIVE
     native.mkdir()
@@ -179,7 +185,7 @@ def check(out: Path) -> None:
     ]
     if stray:
         sys.exit(f"prebuilt folder holds files that aren't compiler outputs: {stray}")
-    for crate in ("horizon_client", "horizon_mod_wasm"):
+    for crate in ("horizon_mod_wasm", "horizon_mod_host"):
         if dylib(out / "deps", crate) is None:
             sys.exit(f"prebuilt folder has no {crate.replace('_', '-')} dylib")
 
@@ -210,7 +216,7 @@ def smoke(out: Path) -> None:
         link_args = json.loads((out / IDENTITY).read_text())["link_args"]
         run(["rustc", *common, "--crate-type", "bin", "--crate-name", "horizon_client_smoke",
              *(flag for arg in link_args for flag in ("-C", f"link-arg={arg}")),
-             "--extern", f"horizon_client={dylib(deps, 'horizon_client')}", *extern("mod_api"), *extern("horizon_mod_package"),
+             *extern("horizon_client"), *extern("mod_api"), *extern("horizon_mod_package"), "--extern", f"horizon_mod_host={dylib(deps, 'horizon_mod_host')}",
              "--extern", f"mod_0={scratch / 'libmod_0.rlib'}", "-L", f"dependency={scratch}",
              "-o", str(scratch / "horizon-client"), str(scratch / "main.rs")])
     print(f"smoke: the starter mod and the game executable built against {out} alone")

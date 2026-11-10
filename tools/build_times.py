@@ -5,7 +5,7 @@
     python3 tools/build_times.py run --profiles dev --only incremental --crates horizon-items
     python3 tools/build_times.py compare before.json after.json
 
-`run` builds the game (`cargo build --locked -p horizon-client --profile P --timings`) and writes a JSON
+`run` builds the game (`cargo build --locked -p horizon-game --profile P --timings`) and writes a JSON
 report and a Markdown table under .local/build-times/reports/:
 
 - cold: a build from an empty target folder of its own (never target/), per profile. The timings page of

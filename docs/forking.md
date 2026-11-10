@@ -17,7 +17,7 @@ Play with Friends remains independently selectable. For example, a client withou
 audio or controllers can be built with:
 
 ```sh
-cargo build --release -p horizon-client --no-default-features --features friends
+cargo build --release -p horizon-game --no-default-features --features friends
 ```
 
 The dedicated server uses `--no-default-features`. Neither build mode introduces

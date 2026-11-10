@@ -1,4 +1,4 @@
-//! Playable native API example. Run `cargo run -p horizon-client --example native_waypoints --`
+//! Playable native API example. Run `cargo run -p horizon-mod-host --example native_waypoints --`
 //! with prepared resources and a disposable game directory. In an owned single-player save,
 //! use `/waypoint_set` to place a cyan marker. The most recent death appears in red after respawn.
 use mod_api::{
@@ -132,7 +132,7 @@ impl Hooks for Waypoints {
 
 fn main() {
     let startup = horizon_client::entry::prepare();
-    horizon_client::entry::main_with(
+    horizon_mod_host::main_with(
         vec![ModEntry::new("waypoints", Box::<Waypoints>::default())],
         &[],
         &[],

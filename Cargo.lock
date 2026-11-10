@@ -1821,7 +1821,6 @@ dependencies = [
  "horizon-mod-points",
  "horizon-mod-render",
  "horizon-mod-runtime",
- "horizon-mod-wasm",
  "horizon-narrator",
  "horizon-optifine",
  "horizon-protocol",
@@ -2072,8 +2071,13 @@ name = "horizon-game"
 version = "0.1.0"
 dependencies = [
  "horizon-client",
+ "horizon-core",
+ "horizon-mod-host",
  "horizon-mod-package",
  "horizon-threads",
+ "serde_json",
+ "tempfile",
+ "winresource",
 ]
 
 [[package]]
@@ -2210,6 +2214,7 @@ version = "0.1.0"
 dependencies = [
  "horizon-client",
  "horizon-mod-api",
+ "horizon-mod-host",
  "horizon-mod-package",
  "log",
 ]
@@ -2219,6 +2224,11 @@ name = "horizon-mod-host"
 version = "0.1.0"
 dependencies = [
  "horizon-client",
+ "horizon-mod-api",
+ "horizon-mod-package",
+ "horizon-mod-wasm",
+ "log",
+ "serde_json",
 ]
 
 [[package]]

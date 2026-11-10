@@ -166,9 +166,7 @@ impl ModsState {
                     let id = &selected.package.manifest.id;
                     // A refused wasm mod's content stays out with its code.
                     !self.native.built().iter().any(|built| built.id == *id)
-                        && !horizon_mod_wasm::refused()
-                            .iter()
-                            .any(|(refused, _)| refused == id)
+                        && !crate::entry::code_startup_refused(id)
                 })
                 .collect();
         self.refused = Default::default();
@@ -1348,7 +1346,7 @@ impl Game<'_> {
                     }
                 };
                 let m = &package.manifest;
-                let refused = horizon_mod_wasm::refusal(&m.id);
+                let refused = crate::entry::code_refusal(&m.id);
                 live_switch_of(
                     path,
                     &package,

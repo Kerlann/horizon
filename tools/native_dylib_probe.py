@@ -134,6 +134,19 @@ def main():
         return ["--extern", f"{crate}={library}"]
 
     def run(command, **kwargs):
+        if command[0] == "rustc" and any(str(arg).startswith("horizon_client=") for arg in command):
+            # Engine metadata describes code carried by the top-level host dylib.
+            # Explicitly link that carrier in probes which otherwise only name internals.
+            command = list(command)
+            index = next(i for i, arg in enumerate(command) if str(arg).endswith(".rs"))
+            source = Path(command[index])
+            lines = source.read_text().splitlines(keepends=True)
+            insertion = next((i for i, line in enumerate(lines) if line.strip() and not line.startswith(("//", "#!["))), len(lines))
+            lines.insert(insertion, "extern crate horizon_mod_host;\n")
+            copied = output / (source.parent.name + "-" + source.name)
+            copied.write_text("".join(lines))
+            command[index] = str(copied)
+            command.extend(extern("horizon_mod_host"))
         with (output / "commands.log").open("a") as log:
             log.write(json.dumps(list(map(str, command))) + "\n")
             log.flush()
@@ -150,7 +163,7 @@ def main():
     host = next(line.split(": ", 1)[1] for line in compiler.splitlines() if line.startswith("host: "))
     runtime = sysroot / "lib/rustlib" / host / "lib"
     std_runtime = sorted(runtime.glob(f"{prefix}std-*{extension}"))
-    game = sdk_tools.dylib(deps, "horizon_client")
+    game = next(deps.glob("libhorizon_client-*.rmeta"))
     failures = []
 
     def runtime_env(*folders):
@@ -191,7 +204,7 @@ def main():
     shipped_exe = shipped / ("horizon-client.exe" if windows else "horizon-client")
     subprocess.run([*route, "--crate-type", "bin", "--crate-name", "horizon_native_game",
                     *(flag for arg in identity["link_args"] for flag in ("-C", f"link-arg={arg}")),
-                    "--extern", f"horizon_client={game}", *extern("mod_api"), *extern("mod_points"), *extern("horizon_mod_package"),
+                    "--extern", f"horizon_client={game}", "--extern", f"horizon_mod_host={sdk_tools.dylib(deps, 'horizon_mod_host')}", *extern("mod_api"), *extern("mod_points"), *extern("horizon_mod_package"),
                     "--extern", f"mod_0={shipped / 'libmod_0.rlib'}", "-o", str(shipped_exe), str(shipped / "main.rs")], check=True)
     if windows:
         # std's DLL always exports the allocator shim; the game exports one only if it has its own allocator.

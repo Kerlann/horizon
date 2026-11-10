@@ -404,7 +404,7 @@ def main():
     if args.bin_dir:
         bins = Path(args.bin_dir).resolve()
     else:
-        subprocess.run(['cargo', 'build', '--profile', 'fast', '-p', 'horizon-client', '-p', 'horizon-client-lib',
+        subprocess.run(['cargo', 'build', '--profile', 'fast', '-p', 'horizon-game', '-p', 'horizon-client-lib',
                         '-p', 'horizon-mod-dimension-game', '--bin', 'horizon-client', '--bin', 'horizon-ctl',
                         '--bin', 'horizon-mod-dimension-game'], cwd=ROOT, check=True)
         bins = Path(lab.cargo_target()).resolve() / 'fast'

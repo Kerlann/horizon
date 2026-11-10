@@ -22,5 +22,7 @@ fn main() {
     .expect("writing game modules");
     horizon_mod_api_gen::generate(&root, &out_dir, horizon_mod_api_gen::Target::Client)
         .expect("generating native mod API");
-    windows_exe::resources("horizon-client");
+    if std::env::var("CARGO_PKG_NAME").as_deref() != Ok("horizon-client") {
+        windows_exe::resources("horizon-client");
+    }
 }

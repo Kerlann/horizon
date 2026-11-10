@@ -264,7 +264,7 @@ jobs:
       - name: Lint the server build without sound or controllers
         if: steps.rust.outputs.required != 'false'
         id: server-lint
-        run: cargo +stable clippy $JOBS --keep-going -p horizon-client --all-targets --no-default-features -- -D warnings
+        run: cargo +stable clippy $JOBS --keep-going -p horizon-client -p horizon-game -p horizon-mod-host --all-targets --no-default-features -- -D warnings
       - name: The mod API builds for wasm32
         if: steps.rust.outputs.required != 'false'
         run: cargo +stable check $JOBS -p horizon-mod-api --target wasm32-unknown-unknown --locked
