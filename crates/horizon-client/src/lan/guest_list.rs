@@ -585,7 +585,7 @@ mod tests {
                     .unwrap();
                 let old = player.attachments.bind_index(&index, player.uuid);
                 let mut table =
-                    crate::join_seq::residency::table::EntityTable::new(Default::default());
+                    crate::join_seq::residency::table::EntityTable::<()>::new(Default::default());
                 let mut list = GuestList::default();
                 list.bind_residency(&table.producer(), |_| mod_api::DimensionKey::OVERWORLD);
                 list.push(player);
