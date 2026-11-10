@@ -2223,7 +2223,7 @@ impl Game<'_> {
     /// Only the entities whose id is above `after` (0: all of them). With
     /// `kept`, idle mobs and items no client can pair with are described bare
     /// (game/network/lan_idle.rs).
-    fn lan_entities(
+    pub(super) fn lan_entities(
         &mut self,
         out: &mut States,
         drain_minecart_steps: bool,
@@ -2300,6 +2300,7 @@ impl Game<'_> {
             // HappyGhast.aiStep: requiresPrecisePosition while on a still timeout.
             e.precise = m.species() == horizon_client::mobs::Species::HappyGhast
                 && horizon_client::mobs::happy_ghast::on_still_timeout(m);
+            e.no_gravity(m.no_gravity);
             mob_freeze_meta(m, &mut e.meta, &mut e.defaults);
             self.mob_attributes(m, &mut speeds, &mut e.attributes);
             let Some(host) = self.lan.as_mut() else {
@@ -2345,14 +2346,17 @@ impl Game<'_> {
             if self.tracked_entity_glowing(d.id) {
                 e.meta.push((0, serializer::BYTE, Value::Byte(0x40)));
             }
+            e.no_gravity(d.no_gravity);
             e.meta.push((8, serializer::ITEM_STACK, Value::Item(stack)));
         }
         for o in self.orbs.iter().filter(|o| o.id > after) {
             let e = out.add(o.id as i32, entity_uuid(o.id), "minecraft:experience_orb");
             e.position = [o.position.x, o.position.y, o.position.z];
             e.idle = idle_at(o.position);
+            e.needs_sync = o.needs_sync;
             e.on_ground = o.on_ground;
             e.velocity = [o.velocity.x, o.velocity.y, o.velocity.z];
+            e.no_gravity(o.no_gravity);
             // ExperienceOrb.DATA_VALUE.
             e.meta.push((8, serializer::INT, Value::Int(o.value)));
         }
@@ -3231,6 +3235,9 @@ impl Game<'_> {
                 .for_each_mut(|p| p.needs_sync = false);
             for d in &mut self.dropped {
                 d.needs_sync = false;
+            }
+            for o in &mut self.orbs {
+                o.needs_sync = false;
             }
             // The step command reaches clients before the events its tick
             // generated, as ServerTickRateManager.updateStepTicks does.

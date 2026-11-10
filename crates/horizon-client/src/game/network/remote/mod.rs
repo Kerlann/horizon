@@ -658,9 +658,9 @@ pub(super) struct Remote {
     pub(super) first_passenger: bool,
     /// The player's place in its vehicle's `getPassengers`.
     pub(super) passenger_index: usize,
-    /// Item entities waiting for their item data: where they are and their
-    /// motion.
-    pending_items: HashMap<i32, ([f64; 3], Vec3)>,
+    /// Item entities waiting for their stack: position, motion and any
+    /// NoGravity metadata received before their physical body can be built.
+    pending_items: HashMap<i32, ([f64; 3], Vec3, bool)>,
     health: (f32, i32, f32),
     /// `LocalPlayer.flashOnSetHealth`: set by the first health the server
     /// sends; from then on a drop starts the hurt animation.
@@ -3336,7 +3336,7 @@ impl Game<'_> {
             // armor stand's), even under an id the server used before.
             r.stepped.remove(&id);
             if kind == "minecraft:item" {
-                r.pending_items.insert(id, (position, Vec3::ZERO));
+                r.pending_items.insert(id, (position, Vec3::ZERO, false));
             }
             r.entities.insert(
                 id,
@@ -4680,6 +4680,9 @@ impl Game<'_> {
                 self.remote_object_data(p.id, &p.values);
                 self.remote_projectile_data(p.id, &p.values);
                 self.remote_dragon_data(p.id, &p.values);
+                // Item stack metadata constructs the body; apply shared flags
+                // afterwards, or retain them while its stack is still pending.
+                self.remote_no_gravity_data(p.id, &p.values);
             }
             // ClientPacketListener.handleSetEquipment: what a mob or another
             // player holds and wears (EquipmentSlot ordinals).
@@ -6471,6 +6474,18 @@ impl Game<'_> {
         let chat_type = r.registries.data("minecraft:chat_type", bound.chat_type);
         comp_text(&chat_type_decorate(chat_type, decoration, bound, content))
     }
+    pub(super) fn retain_pending_item_no_gravity(&mut self, id: i32, value: bool) -> bool {
+        let Some(pending) = self
+            .remote
+            .as_mut()
+            .and_then(|remote| remote.pending_items.get_mut(&id))
+        else {
+            return false;
+        };
+        pending.2 = value;
+        true
+    }
+
     fn remote_item_data(&mut self, id: i32, stack: &Option<Stack>) {
         let Some(stack) = self.to_stack(stack) else {
             return;
@@ -6483,7 +6498,7 @@ impl Game<'_> {
             item.stack = stack;
             return;
         }
-        let Some((p, velocity)) = position else {
+        let Some((p, velocity, no_gravity)) = position else {
             return;
         };
         let at = Vec3::new(p[0], p[1], p[2]);
@@ -6492,6 +6507,7 @@ impl Game<'_> {
         let bob_offset = random.next_float() * std::f32::consts::PI * 2.0;
         self.dropped.push(ItemEntity {
             random,
+            no_gravity,
             ..ItemEntity::new(id as u32, stack, at, velocity, bob_offset)
         });
     }
