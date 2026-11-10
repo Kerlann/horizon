@@ -19,7 +19,7 @@ impl Game<'_> {
     /// The entity's data as `/data get entity` shows it
     /// (`Entity.saveWithoutId`): its compound without `id`. An entity with no
     /// UUID yet gets the one it will be saved with. API 386.
-    pub(super) fn entity_nbt(&mut self, entity: EntityRef) -> Option<Compound> {
+    pub(super) fn entity_nbt(&mut self, entity: EntityRef) -> Result<Option<Compound>, EntityReadError> {
         if self.remote.is_some() {
             return None;
         }
@@ -42,7 +42,7 @@ impl Game<'_> {
     /// can't reload yet (only mobs, dropped items, armor stands and item
     /// frames), data nested too deep, or data that changes nothing. API
     /// 386.
-    pub(super) fn entity_merge_nbt(&mut self, entity: EntityRef, nbt: Compound) -> bool {
+    pub(super) fn entity_merge_nbt(&mut self, entity: EntityRef, nbt: Compound) -> Result<bool, EntityReadError> {
         if self.remote.is_some() {
             return false;
         }

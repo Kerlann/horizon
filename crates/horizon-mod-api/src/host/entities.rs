@@ -567,7 +567,7 @@ pub trait EntitiesBackendMut {
     /// (`Entity.saveWithoutId`): its compound without `id`. An entity with no
     /// UUID yet gets the one it will be saved with. API 386.
     #[access(WorldOnly)]
-    fn entity_nbt(&mut self, entity: EntityRef) -> Option<Compound>;
+    fn entity_nbt(&mut self, entity: EntityRef) -> Result<Option<Compound>, EntityReadError>;
     /// Side: server.
     /// Merges `nbt` into the entity's data and loads the entity from it, as
     /// `/data merge entity` does (`EntityDataAccessor.setData`): true when it
@@ -576,7 +576,7 @@ pub trait EntitiesBackendMut {
     /// frames), data nested too deep, or data that changes nothing. API
     /// 386.
     #[access(WorldOnly)]
-    fn entity_merge_nbt(&mut self, entity: EntityRef, nbt: Compound) -> bool;
+    fn entity_merge_nbt(&mut self, entity: EntityRef, nbt: Compound) -> Result<bool, EntityReadError>;
     /// Side: server.
     /// Adds tag `tag` (`Entity.addTag`): false when it has it already, holds
     /// 1024, its kind can't store tags yet, or the handle is stale. API 386.
@@ -723,7 +723,7 @@ pub trait EntitiesBackendMut {
     /// a boat its lead, as vanilla's `remove` does. False for a player, a dragon
     /// part (it leaves with its dragon), or a stale handle.
     #[access(WorldOnly)]
-    fn entity_discard(&mut self, entity: EntityRef) -> bool;
+    fn entity_discard(&mut self, entity: EntityRef) -> Result<bool, EntityReadError>;
     /// Side: server.
     /// Removes the entity for `reason` (`Entity.remove`): `Discarded`, as
     /// `discard`, or `Killed`, which also runs a mob's effects that act on
@@ -731,7 +731,7 @@ pub trait EntitiesBackendMut {
     /// still with no death and no loot. False for a player, a dragon part (it
     /// leaves with its dragon), or a stale handle.
     #[access(WorldOnly)]
-    fn entity_remove(&mut self, entity: EntityRef, reason: RemovalReason) -> bool;
+    fn entity_remove(&mut self, entity: EntityRef, reason: RemovalReason) -> Result<bool, EntityReadError>;
     /// Side: server.
     /// Drops `stack` at the entity's feet, `y_offset` above
     /// (`Entity.spawnAtLocation`), or 0.15 out along a frame or painting's
