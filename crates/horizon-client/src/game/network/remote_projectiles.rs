@@ -574,9 +574,6 @@ impl Game<'_> {
                                 a.no_physics = flags & 2 != 0;
                             }
                         }
-                        (ProjectileKind::Arrow { .. }, 5, Value::Bool(no_gravity)) => {
-                            p.no_gravity = *no_gravity;
-                        }
                         (ProjectileKind::Arrow { .. }, 10, Value::Bool(in_ground)) => {
                             // AbstractArrow.onSyncedDataUpdated: IN_GROUND turning true after
                             // the first tick starts the shake.

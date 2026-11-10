@@ -216,6 +216,7 @@ impl Game<'_> {
                 b.yaw,
                 b.on_ground,
             );
+            e.no_gravity(b.no_gravity);
             // Leashable.setLeashedTo / dropLeash: who holds the boat's lead.
             e.leash = leash;
             e.velocity = [b.velocity.x, b.velocity.y, b.velocity.z];
@@ -261,6 +262,7 @@ impl Game<'_> {
                 c.yaw,
                 c.on_ground(),
             );
+            e.no_gravity(c.no_gravity);
             e.pitch = c.pitch;
             e.velocity = [c.velocity.x, c.velocity.y, c.velocity.z];
             if improvements {
@@ -320,6 +322,7 @@ impl Game<'_> {
                 a.yaw,
                 a.on_ground,
             );
+            e.no_gravity(a.no_gravity);
             e.head_yaw = a.yaw;
             e.velocity = [a.velocity.x, a.velocity.y, a.velocity.z];
             let mut flags = 0i8;
@@ -731,6 +734,7 @@ impl Game<'_> {
         for t in self.tnts.iter().filter(|t| t.id > after) {
             let e = add_state(out, t.id, "minecraft:tnt", at(t.position), 0.0, t.on_ground);
             e.velocity = at(t.velocity);
+            e.no_gravity(t.no_gravity);
             // PrimedTnt.DATA_FUSE_ID, 80 by default; requiresPrecisePosition
             // while it touches a block.
             if t.fuse != 80 {
@@ -750,9 +754,7 @@ impl Game<'_> {
             e.velocity = at(f.velocity);
             // getAddEntityPacket: the block state; DATA_START_POS.
             e.data = f.state.0 as i32;
-            if f.no_gravity {
-                e.meta.push((5, serializer::BOOLEAN, Value::Bool(true)));
-            }
+            e.no_gravity(f.no_gravity);
             let start = [f.start_pos.x, f.start_pos.y, f.start_pos.z];
             if start != [0; 3] {
                 e.meta.push((8, serializer::BLOCK_POS, Value::Pos(start)));
@@ -767,6 +769,7 @@ impl Game<'_> {
                 None => owner(p.owner),
             };
             let e = add_state(out, p.id, kind, at(p.position), p.yaw, p.on_ground);
+            e.no_gravity(p.no_gravity);
             e.pitch = p.pitch;
             e.velocity = at(p.velocity);
             e.needs_sync = p.needs_sync;
@@ -914,6 +917,7 @@ impl Game<'_> {
                 t.yaw,
                 t.on_ground,
             );
+            e.no_gravity(t.no_gravity);
             e.pitch = t.pitch;
             e.velocity = at(t.velocity);
             e.needs_sync = t.needs_sync;

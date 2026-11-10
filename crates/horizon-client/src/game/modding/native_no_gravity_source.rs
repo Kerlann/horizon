@@ -3,6 +3,7 @@ macro_rules! no_gravity_slot {
     (@write, $list:expr, $at:expr, $id:expr, $value:expr, $sync:expr) => {{
         let index = $list.locate($at.join).ok_or(mod_api::EntityWriteError::OutsideScope)?;
         if $list[index].id != $id { return Err(mod_api::EntityWriteError::GenerationChanged); }
+        if $list[index].no_gravity == $value { return Ok(true); }
         $list.update(index, |entity| {
             entity.no_gravity = $value;
             ($sync)(entity);
@@ -12,8 +13,8 @@ macro_rules! no_gravity_slot {
     (Mob, $list:expr, $at:expr, $id:expr, $value:expr) => {
         $crate::game::native_no_gravity_source::no_gravity_slot!(@write, $list, $at, $id, $value, |entity: &mut horizon_client::mobs::Mob| entity.needs_sync = true)
     };
-    (Item, $list:expr, $at:expr, $id:expr, $value:expr) => { $crate::game::native_no_gravity_source::no_gravity_slot!(@write, $list, $at, $id, $value, |_| {}) };
-    (Orb, $list:expr, $at:expr, $id:expr, $value:expr) => { $crate::game::native_no_gravity_source::no_gravity_slot!(@write, $list, $at, $id, $value, |_| {}) };
+    (Item, $list:expr, $at:expr, $id:expr, $value:expr) => { $crate::game::native_no_gravity_source::no_gravity_slot!(@write, $list, $at, $id, $value, |entity: &mut horizon_client::entities::ItemEntity| entity.needs_sync = true) };
+    (Orb, $list:expr, $at:expr, $id:expr, $value:expr) => { $crate::game::native_no_gravity_source::no_gravity_slot!(@write, $list, $at, $id, $value, |entity: &mut horizon_client::entities::ExperienceOrb| entity.needs_sync = true) };
     (Stand, $list:expr, $at:expr, $id:expr, $value:expr) => { $crate::game::native_no_gravity_source::no_gravity_slot!(@write, $list, $at, $id, $value, |_| {}) };
     (Boat, $list:expr, $at:expr, $id:expr, $value:expr) => { $crate::game::native_no_gravity_source::no_gravity_slot!(@write, $list, $at, $id, $value, |_| {}) };
     (Cart, $list:expr, $at:expr, $id:expr, $value:expr) => { $crate::game::native_no_gravity_source::no_gravity_slot!(@write, $list, $at, $id, $value, |_| {}) };
