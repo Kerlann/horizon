@@ -27,3 +27,19 @@ b = s.index("impl Game<'_> {", a + 1)
 chunk = s[a:b].replace('    fn held(', '    pub(super) fn held(')
 Path('crates/horizon-client/src/game/items/held.rs').write_text('use super::*;\n\n' + chunk)
 game.write_text(s[:a] + s[b:])
+
+# Move the weather queries together; their callers remain in the game module.
+s = game.read_text()
+a = s.index("    fn dark_outside(&self)")
+b = s.index("    fn held_mut(&mut self)", a)
+chunk = s[a:b]
+for name in ("dark_outside", "can_have_weather", "weather_levels"):
+    chunk = chunk.replace("    fn " + name, "    pub(super) fn " + name)
+Path('crates/horizon-client/src/game/world/weather_queries.rs').write_text(
+    "use super::*;\n\nimpl Game<'_> {\n" + chunk + "}\n"
+)
+game.write_text(s[:a] + s[b:])
+
+baseline = Path('tools/file_size_baseline.txt')
+s = baseline.read_text()
+baseline.write_text(s.replace('crates/horizon-client/src/game/network/remote/mod.rs 12654\n', ''))
