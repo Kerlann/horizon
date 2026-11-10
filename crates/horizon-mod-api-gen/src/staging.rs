@@ -114,6 +114,11 @@ mod tests {
                 "[package]\nname = 'horizon-mod-points'\n",
             )
             .unwrap();
+            std::fs::write(
+                root.join("Cargo.lock"),
+                "version = 4\n[[package]]\nname = \"horizon-client\"\nversion = \"0.1.0\"\n",
+            )
+            .unwrap();
             let output = root.join("points.json");
             if copy == 2 {
                 // Refuse retries even when a late output failure leaves edited source.

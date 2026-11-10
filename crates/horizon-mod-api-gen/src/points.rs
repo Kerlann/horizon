@@ -1046,9 +1046,11 @@ pub(crate) fn stage_with(root: &Path, wire: &WireTypes) -> Result<Staged, String
         out.push_str(&source[from..]);
         fs::write(&file.path, out).map_err(|e| format!("{}: {e}", file.path.display()))?;
         staged.files += 1;
-        if let Some(package) = &file.package {
-            packages.insert(package.clone());
-        }
+        packages.insert(
+            file.package
+                .clone()
+                .unwrap_or_else(|| root.join("crates/horizon-client")),
+        );
     }
     dependencies(root, packages)?;
     Ok(staged)
@@ -1766,7 +1768,7 @@ mod tests {
         put(
             "Cargo.lock",
             // CRLF, as a Windows checkout writes it.
-            &"version = 4\n\n[[package]]\nname = \"horizon-client-render\"\nversion = \"0.1.0\"\ndependencies = [\n \"log\",\n]\n\n[[package]]\nname = \"log\"\nversion = \"0.4.0\"\n"
+            &"version = 4\n\n[[package]]\nname = \"horizon-client\"\nversion = \"0.1.0\"\n\n[[package]]\nname = \"horizon-client-render\"\nversion = \"0.1.0\"\ndependencies = [\n \"log\",\n]\n\n[[package]]\nname = \"log\"\nversion = \"0.4.0\"\n"
                 .replace('\n', "\r\n"),
         );
         put(

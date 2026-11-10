@@ -698,3 +698,28 @@ pub fn seal() {
         table.table.seal(listeners, slots, &stopped);
     }
 }
+
+#[cfg(test)]
+mod activity_tests {
+    use super::*;
+
+    #[test]
+    fn game_and_mod_activity_use_independent_backends_and_slot_domains() {
+        static POINTS: [AtomicBool; 2] = [AtomicBool::new(true), AtomicBool::new(false)];
+        static SITES: [AtomicBool; 2] = [AtomicBool::new(false), AtomicBool::new(true)];
+        let local = Table::new(&POINTS, &SITES);
+        horizon_engine_slots::POINTS.publish([false, true]);
+        horizon_engine_slots::SITES.publish([true, false]);
+        let game = Table::engine(2, 2);
+        assert!(local.active_point(0));
+        assert!(!local.active_point(1));
+        assert!(!local.active_site(0));
+        assert!(local.active_site(1));
+        assert!(!game.active_point(0));
+        assert!(game.active_point(1));
+        assert!(game.active_site(0));
+        assert!(!game.active_site(1));
+        assert!(!local.active_point(usize::MAX));
+        assert!(!game.active_site(usize::MAX));
+    }
+}

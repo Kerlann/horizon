@@ -239,6 +239,10 @@ fn private_rows_do_not_become_listed_and_handwritten_points_stay_refused() {
         fs::create_dir_all(path.parent().unwrap()).unwrap();
         fs::write(path, text).unwrap();
     };
+    put(
+        "Cargo.lock",
+        "version = 4\n[[package]]\nname = \"horizon-client\"\nversion = \"0.1.0\"\n",
+    );
     const GAME: &str = "crates/horizon-client/src/game.rs";
     fs::create_dir_all(root.join("crates/horizon-mod-api-gen/slots")).unwrap();
     put("crates/horizon-mod-api-gen/internals.txt", "");
