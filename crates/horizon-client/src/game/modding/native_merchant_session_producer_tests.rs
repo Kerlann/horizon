@@ -144,3 +144,33 @@ fn canonical_no_r_session_open_change_close_removal_and_loans_keep_nominations()
         );
     });
 }
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn parked_offers_use_actual_session_without_r_tick_or_caller_world() {
+    with_guests(|game| {
+        super::native_mob_backing_tests::prepare(game);
+        game.enter_level(super::Dim::Nether).unwrap();
+        let merchant = super::native_merchant_refs::tests::spawn(game, 40, "minecraft:villager");
+        game.mobs[0].extra.profession = horizon_client::mobs::villager::ProfessionState::from_id("minecraft:farmer");
+        let live = super::native_merchant_refs::tests::offer("minecraft:emerald", "minecraft:bread");
+        let mut menu = state(40, 17);
+        menu.session.offers = vec![live.clone()];
+        game.lan_open_merchant(13, menu);
+        game.with_prepared_mob_relations(|_| ());
+        let level = mod_api::LevelRef::new(merchant.entity().epoch(), game.dim.key());
+        game.enter_level(super::Dim::Overworld).unwrap();
+        game.with_prepared_mob_relations(|_| ());
+        game.entity_read_state.borrow_mut().mob_relations.get_mut(&level).unwrap().tick = None;
+        super::native_mob_read_context::record_backing_work(|work| *work = Default::default());
+        assert_eq!(game.merchant_offers(merchant), Ok(Some(vec![live.clone()])));
+        let loan = game.begin_merchant_session_loan(13).unwrap();
+        let held = game.lan.as_mut().unwrap().play.get_mut(&13).unwrap().merchant.take().unwrap();
+        assert_eq!(game.merchant_offers(merchant), Err(mod_api::EntityReadError::Lifted));
+        game.lan.as_mut().unwrap().play.get_mut(&13).unwrap().merchant = Some(held);
+        drop(loan);
+        assert_eq!(game.merchant_offers(merchant), Ok(Some(vec![live])));
+        assert_eq!(super::native_mob_read_context::backing_work().population_visits, 0);
+        assert_eq!(game.dim, super::Dim::Overworld);
+    });
+}

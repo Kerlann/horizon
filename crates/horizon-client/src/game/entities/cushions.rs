@@ -550,16 +550,43 @@ impl Game<'_> {
     /// `Cushion.removePassenger` plays none once the cushion is removed.
     pub(super) fn dismount_removed_vehicle(&mut self, vehicle_y: f64) {
         self.riding = None;
-        let border = self.border_bounds();
-        let b = self.res.behaviours();
         let Some(p) = self.player.as_ref() else {
             return;
         };
-        let (w, h) = (
+        let at = self.removed_vehicle_dismount_at(
+            &self.world,
+            &self.border,
+            p.position,
             f64::from(p.dimensions.width),
             f64::from(p.dimensions.height),
+            vehicle_y,
         );
-        let mut at = Vec3::new(p.position.x, p.position.y.max(vehicle_y), p.position.z);
+        if let Some(p) = self.player.as_mut() {
+            self.previous_position = p.position;
+            p.position = at;
+            p.velocity = Vec3::ZERO;
+            p.fall_distance = 0.0;
+        }
+    }
+    /// `LivingEntity.dismountVehicle` for a removed vehicle, in its owning world.
+    pub(super) fn removed_vehicle_dismount_at(
+        &self,
+        world: &horizon_client::world::World,
+        world_border: &horizon_client::worldborder::WorldBorder,
+        position: Vec3,
+        w: f64,
+        h: f64,
+        vehicle_y: f64,
+    ) -> Vec3 {
+        let [min_x, min_z, max_x, max_z] = world_border.bounds();
+        let border = horizon_world::level::portal_travel::BorderBounds {
+            min_x,
+            min_z,
+            max_x,
+            max_z,
+        };
+        let b = self.res.behaviours();
+        let mut at = Vec3::new(position.x, position.y.max(vehicle_y), position.z);
         // `getBbWidth() <= 4 && getBbHeight() <= 4`.
         if w <= 4.0 && h <= 4.0 {
             let center = at.add_vector(Vec3::new(0.0, h / 2.0, 0.0));
@@ -570,7 +597,7 @@ impl Game<'_> {
                 size,
                 &border,
                 |q| {
-                    b.collision_shape(self.world.block(q.x, q.y, q.z))
+                    b.collision_shape(world.block(q.x, q.y, q.z))
                         .map(|s| s.moved(Vec3::new(f64::from(q.x), f64::from(q.y), f64::from(q.z))))
                 },
             );
@@ -578,12 +605,7 @@ impl Game<'_> {
                 at = free.add_vector(Vec3::new(0.0, -h / 2.0, 0.0));
             }
         }
-        if let Some(p) = self.player.as_mut() {
-            self.previous_position = p.position;
-            p.position = at;
-            p.velocity = Vec3::ZERO;
-            p.fall_distance = 0.0;
-        }
+        at
     }
 
     /// `LivingEntity.dismountVehicle` from a live vehicle at `vehicle` whose

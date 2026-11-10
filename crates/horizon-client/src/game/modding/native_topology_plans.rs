@@ -19,7 +19,7 @@ pub(super) struct StopPlan {
     pub(super) rider: TopologyRelation,
     pub(super) vehicle: Option<EntityReadAdmission>,
     pub(super) vehicle_id: u32,
-    passengers: Vec<EntityReadAdmission>,
+    pub(super) passengers: Vec<EntityReadAdmission>,
 }
 
 impl Game<'_> {
@@ -192,9 +192,7 @@ impl Game<'_> {
         &mut self,
         plan: StopPlan,
     ) -> Result<bool, EntityReadError> {
-        use super::{
-            native_base_read_rows::BaseReadSource, native_base_read_source::base_read_source_kind,
-        };
+        use super::native_base_read_source::base_read_source_kind;
         let entity = plan.rider.admission.entity();
         let kind = self
             .with_entity_read_storage(plan.rider.admission, None, |source| {
@@ -257,6 +255,16 @@ impl Game<'_> {
         {
             return Ok(false);
         }
+        self.apply_topology_mob_stop(fresh, None)
+    }
+
+    pub(super) fn apply_topology_mob_stop(
+        &mut self,
+        fresh: StopPlan,
+        placement: Option<horizon_core::geometry::Vec3>,
+    ) -> Result<bool, EntityReadError> {
+        use super::native_base_read_rows::BaseReadSource;
+        let entity = fresh.rider.admission.entity();
         self.with_topology_mob_mut(fresh.rider.admission, |mob| mob.extra.mount = None)?;
         if let Some(vehicle) = fresh
             .vehicle
@@ -271,7 +279,7 @@ impl Game<'_> {
                 .map(|passenger| passenger.entity().id());
             self.with_topology_mob_mut(vehicle, |mob| mob.extra.rider = remaining)?;
         }
-        let at = self
+        let at = if let Some(placement) = placement { placement } else { self
             .with_entity_read_storage(fresh.rider.admission, None, |rider| {
                 let BaseReadSource::Mob(rider) = rider.body else {
                     return Err(EntityReadError::Lifted);
@@ -300,7 +308,7 @@ impl Game<'_> {
                 })
                 .unwrap_or(Err(EntityReadError::Lifted))
             })
-            .unwrap_or(Err(EntityReadError::Lifted))?;
+            .unwrap_or(Err(EntityReadError::Lifted))? };
         self.with_topology_mob_mut(fresh.rider.admission, |mob| {
             horizon_client::mobs::riders::finish_dismount(
                 mob,
@@ -317,32 +325,49 @@ impl Game<'_> {
     ) -> Result<Option<StopPlan>, EntityReadError> {
         let Some(rider) = self.entity_read_admission(
             EntityReadSubject::Entity(entity),
-            &[
-                EntityReadDependency::Riding,
-                EntityReadDependency::Geometry,
-                EntityReadDependency::PlayerState,
-            ],
+            &[EntityReadDependency::Riding, EntityReadDependency::Geometry],
             None,
         ) else {
             return Ok(None);
         };
+        let mut selection = EntityReadSelection::default();
+        let plan = self.select_topology_stop_parts(rider, None, &mut selection)?;
+        selection.project(|| plan)
+    }
+
+    /// Select parts only. Removal combines every detach before one Pending projection.
+    pub(super) fn select_topology_stop_parts(
+        &mut self,
+        rider: EntityReadAdmission,
+        retained_vehicle: Option<EntityReadAdmission>,
+        selection: &mut EntityReadSelection,
+    ) -> Result<Option<StopPlan>, EntityReadError> {
         let Some(rider) = self.select_topology_relation(rider)? else {
             return Ok(None);
         };
+        selection.include(rider.admission);
         let Some(vehicle_id) = self.topology_vehicle(rider)? else {
             return Ok(None);
         };
-        let vehicle = self
-            .entity_read_admission(
-                EntityReadSubject::Entity(EntityRef::new(entity.epoch(), vehicle_id)),
+        if retained_vehicle.is_some_and(|vehicle| {
+            vehicle.entity().id() != vehicle_id
+                || vehicle.location().owner.dimension != rider.admission.location().owner.dimension
+        }) {
+            return Ok(None);
+        }
+        let vehicle = retained_vehicle.or_else(|| {
+            self.entity_read_admission(
+                EntityReadSubject::Entity(EntityRef::new(
+                    rider.admission.entity().epoch(),
+                    vehicle_id,
+                )),
                 &[EntityReadDependency::Riding, EntityReadDependency::Geometry],
                 None,
             )
             .filter(|vehicle| {
                 vehicle.location().owner.dimension == rider.admission.location().owner.dimension
-            });
-        let mut selection = EntityReadSelection::default();
-        selection.include(rider.admission);
+            })
+        });
         let mut passengers = Vec::new();
         if let Some(vehicle) = vehicle {
             self.with_entity_read_storage(vehicle, None, |_| ())
@@ -352,13 +377,12 @@ impl Game<'_> {
                 self.select_topology_relation(vehicle)?
                     .ok_or(EntityReadError::Lifted)?;
                 passengers = self
-                    .select_passenger_sources(vehicle, None, &mut selection)?
+                    .select_passenger_sources(vehicle, None, selection)?
                     .into_iter()
                     .map(|passenger| passenger.admission)
                     .collect();
             }
         }
-        selection.project(|| ())?;
         Ok(Some(StopPlan {
             rider,
             vehicle,
@@ -414,7 +438,7 @@ impl Game<'_> {
         selection.include(rider.admission);
         let old = self.topology_vehicle(rider)?;
         if old == Some(vehicle.entity().id()) {
-            return Ok(None);
+            return selection.project(|| None);
         }
         // Capacity and ordering require complete actual source nominations.
         let passengers = self
@@ -451,7 +475,7 @@ impl Game<'_> {
         let mut visited = Vec::new();
         while let Some(part) = current {
             if part.entity() == entity || visited.contains(&part.entity()) {
-                return Ok(None);
+                return selection.project(|| None);
             }
             visited.push(part.entity());
             let next = self

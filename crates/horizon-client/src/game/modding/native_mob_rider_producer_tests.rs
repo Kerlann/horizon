@@ -110,3 +110,32 @@ fn no_r_roster_loans_and_canonical_relationship_writes_keep_candidates_complete(
             .restore(held, horizon_client::join_seq::RestoreOrder::SurvivorsFirst);
     });
 }
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn parked_passengers_ignore_stale_r_tick_and_the_callers_level() {
+    with_guests(|game| {
+        crate::game::native_mob_backing_tests::prepare(game);
+        game.enter_level(crate::game::Dim::Nether).unwrap();
+        let epoch = game.native_lifecycle.epoch().unwrap();
+        let level = mod_api::LevelRef::new(epoch, game.dim.key());
+        let kind = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+        for id in [40, 41] {
+            game.mobs.push(Mob::new(id, kind.clone(), Vec3::new(3.0, 64.0, 5.0), 0.0));
+        }
+        assert!(game.ride_mount(Target::Mob(41), Target::Mob(40)).is_ok());
+        game.with_prepared_mob_relations(|_| ());
+        game.enter_level(crate::game::Dim::Overworld).unwrap();
+        // A stale edge in the caller's world is not the receiver's source.
+        let mut wrong_world = Mob::new(42, kind, Vec3::new(3.0, 64.0, 5.0), 0.0);
+        wrong_world.extra.mount = Some(40);
+        game.mobs.push(wrong_world);
+        game.with_prepared_mob_relations(|_| ());
+        game.entity_read_state.borrow_mut().mob_relations.get_mut(&level).unwrap().tick = None;
+        crate::game::native_mob_read_context::record_backing_work(|work| *work = Default::default());
+        assert_eq!(game.entity_passengers(mod_api::EntityRef::new(epoch, 40)),
+            Ok(Some(vec![mod_api::EntityRef::new(epoch, 41)])));
+        assert_eq!(crate::game::native_mob_read_context::backing_work().population_visits, 0);
+        assert_eq!(game.dim, crate::game::Dim::Overworld);
+    });
+}
