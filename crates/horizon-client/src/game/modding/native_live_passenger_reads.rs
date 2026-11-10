@@ -11,7 +11,7 @@ use mod_api::{EntityReadError, EntityRef, LevelRef, MobRef};
 
 pub(super) struct PassengerReadInput {
     pub(super) admission: EntityReadAdmission,
-    order: i64,
+    pub(super) order: i64,
 }
 
 impl Game<'_> {
