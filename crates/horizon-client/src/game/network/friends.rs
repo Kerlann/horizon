@@ -1,3 +1,4 @@
+// game-module-cfg: feature = "friends"
 //! Play with friends, host side: "Start Sharing" on the Play with Friends
 //! screen (`screen`, the pause menu's Friends button) opens the world to LAN if
 //! it isn't (with Open to LAN's defaults) and shares that port behind an

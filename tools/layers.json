@@ -21,6 +21,7 @@
   ],
   "crates": {
     "horizon-assets": "engine",
+    "horizon-game-discovery": "engine",
     "horizon-client": "engine",
     "horizon-client-core": "engine",
     "horizon-client-input": "engine",

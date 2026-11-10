@@ -12,6 +12,7 @@ description = "Build-time typed native mod API generation"
 listener-fixture = []
 
 [dependencies]
+horizon-game-discovery = { path = "../horizon-game-discovery" }
 horizon-mod-point-shape = { path = "../horizon-mod-point-shape" }
 horizon-mod-package = { path = "../horizon-mod-package", default-features = false }
 heck = "0.5"
