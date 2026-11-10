@@ -45,13 +45,6 @@ pub fn prepare() -> Startup {
     }
 }
 
-/// A native function slot, checked against its place's exact type before erasure.
-pub use mod_points::__private::SlotListener as NativeSlot;
-
-/// The places raw listeners register at, named by the generated `main`.
-#[doc(hidden)]
-pub use mod_points::PointId;
-
 /// Code-runtime services supplied by the platform at startup.
 pub struct CodeRuntime {
     pub initialize: fn(&[mod_api::PackageInfo]),
@@ -110,14 +103,6 @@ pub fn start<G>(
     horizon_client::spans::startup::init(std::time::Instant::now());
     horizon_client::spans::trace::start_from_env();
     let (ids, _loaded_code) = load(&native, &launch);
-    for id in ids {
-        for slot in slots.iter().filter(|slot| slot.id() == id) {
-            if let Err(error) = mod_points::register(slot) {
-                eprintln!("Horizon: {id}: {error}");
-                std::process::exit(game::exit_code::ERROR);
-            }
-        }
-    }
     logging::set_game_home(launch.context.home.clone());
     // The dedicated server logs in its own folder, as vanilla's does; the game in its home.
     let (home, side, thread) = if launch

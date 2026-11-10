@@ -71,6 +71,14 @@ pub fn main_with(
                 .collect();
             let ids: Vec<_> = mods.iter().map(|entry| entry.fields().id).collect();
             mod_api::__private::install(mods.into());
+    for id in ids {
+        for slot in slots.iter().filter(|slot| slot.id() == id) {
+            if let Err(error) = mod_points::register(slot) {
+                eprintln!("Horizon: {id}: {error}");
+                std::process::exit(game::exit_code::ERROR);
+            }
+        }
+    }
             (ids, wasm)
         },
         horizon_client::entry::CodeRuntime {

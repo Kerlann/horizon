@@ -8,11 +8,6 @@ use std::sync::atomic::AtomicBool;
 pub use mod_api::__private::points::register;
 pub use mod_api::__private::points::{RegisterError, seal, stop};
 
-/// Each place's slot: set once, at the seal, where a mod listens. A point that nothing listens at
-/// costs one load of it.
-pub static POINTS: [AtomicBool; POINT_COUNT] = [const { AtomicBool::new(false) }; POINT_COUNT];
-/// Call-expression slots, in the same table as the points.
-pub static SITES: [AtomicBool; SITE_COUNT] = [const { AtomicBool::new(false) }; SITE_COUNT];
 /// The game's table: its points, then its call sites.
 pub static TABLE: Table = Table::new(&POINTS, &SITES);
 
