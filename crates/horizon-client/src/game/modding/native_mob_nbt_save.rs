@@ -12,6 +12,109 @@ use horizon_core::nbt::Tag;
 use horizon_world::registry::BlockRegistry;
 use std::collections::HashSet;
 
+pub(super) fn ordered_mob_passengers(
+    mobs: &JoinList<Mob>,
+    persist: &EntityMemory,
+    id: u32,
+) -> Vec<PassengerSlot> {
+    let mut riders: Vec<PassengerSlot> = Vec::new();
+    let mut live_seen = HashSet::new();
+
+    let slots = persist.passenger_slots.get(&id).cloned();
+    if let Some(slots) = slots {
+        for slot in slots {
+            match slot {
+                PassengerSlot::Live(rider_id) => {
+                    if let Some(pos) = mobs.iter().position(|m| {
+                        m.id == rider_id && m.extra.mount == Some(id) && m.alive() && !m.removed
+                    }) {
+                        live_seen.insert(rider_id);
+                        riders.push(PassengerSlot::Live(mobs[pos].id));
+                    }
+                }
+                PassengerSlot::Saved(saved_tag) => {
+                    riders.push(PassengerSlot::Saved(saved_tag.clone()));
+                }
+            }
+        }
+    }
+
+    let mut extra_riders: Vec<usize> = (0..mobs.len())
+        .filter(|&j| {
+            mobs[j].extra.mount == Some(id)
+                && mobs[j].alive()
+                && !mobs[j].removed
+                && !live_seen.contains(&mobs[j].id)
+        })
+        .collect();
+    extra_riders.sort_by_key(|&j| mobs[j].extra.vehicle_order);
+    if let Some(driver) = mobs.iter().find(|m| m.id == id).and_then(|m| m.extra.rider)
+        && let Some(pos) = extra_riders.iter().position(|&j| mobs[j].id == driver)
+        && pos != 0
+    {
+        let d = extra_riders.remove(pos);
+        extra_riders.insert(0, d);
+    }
+    for j in extra_riders {
+        riders.push(PassengerSlot::Live(mobs[j].id));
+    }
+
+    riders
+}
+
+pub(super) fn saved_angry_at(m: &Mob) -> Option<Who> {
+    if m.extra.anger > 0 {
+        // A wolf and an iron golem keep their anger's target themselves,
+        // also once the target is gone (`tame::update_persistent_anger`).
+        if matches!(
+            m.species(),
+            horizon_client::mobs::Species::Wolf | horizon_client::mobs::Species::IronGolem
+        ) {
+            m.extra.angry_at
+        } else {
+            m.ai.target
+        }
+    } else {
+        None
+    }
+}
+
+pub(super) struct MobSaveUuidRequests {
+    pub(super) suspects: Vec<u32>,
+    pub(super) target: Option<u32>,
+    pub(super) attacker: Option<u32>,
+}
+pub(super) fn mob_save_uuid_requests(m: &Mob, mobs: &JoinList<Mob>) -> MobSaveUuidRequests {
+    let suspects: Vec<u32> = m
+        .extra
+        .warden
+        .as_ref()
+        .map(|st| {
+            st.anger
+                .suspects()
+                .iter()
+                .filter_map(|who| match who {
+                    Who::Mob(id) => Some(*id),
+                    Who::Player => None,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let target = match saved_angry_at(m) {
+        Some(Who::Mob(id)) if id != 0 && mobs.iter().any(|m| m.id == id) => Some(id),
+        _ => None,
+    };
+    let attacker = match m.ai.last_hurt_by {
+        Some(Who::Mob(id)) if mobs.iter().any(|m| m.id == id) => Some(id),
+        _ => None,
+    };
+    MobSaveUuidRequests {
+        suspects,
+        target,
+        attacker,
+    }
+}
+
 pub(super) trait MobNbtOwner {
     type Error;
     fn mobs(&self) -> &JoinList<Mob>;
@@ -25,26 +128,8 @@ pub(super) trait MobNbtOwner {
     fn mob_tree_nbt(&mut self, i: usize) -> Result<Tag, Self::Error> {
         let id = self.mobs()[i].id;
         let uuid = self.uuid_for(id)?;
-        // A warden's anger names each suspect by UUID. A mob that has never been
-        // loaded or saved has no UUID yet, so give it one, or the save would
-        // drop the anger at it (`who_uuid` writes nothing for a mob the map does
-        // not know).
-        let suspects: Vec<u32> = self.mobs()[i]
-            .extra
-            .warden
-            .as_ref()
-            .map(|st| {
-                st.anger
-                    .suspects()
-                    .iter()
-                    .filter_map(|who| match who {
-                        Who::Mob(id) => Some(*id),
-                        Who::Player => None,
-                    })
-                    .collect()
-            })
-            .unwrap_or_default();
-        for suspect in suspects {
+        let references = mob_save_uuid_requests(&self.mobs()[i], self.mobs());
+        for suspect in references.suspects {
             self.uuid_for(suspect)?;
         }
         // `NeutralMob.addPersistentAngerSaveData`: the anger ends at an
@@ -61,34 +146,12 @@ pub(super) trait MobNbtOwner {
                 -1
             };
         }
-        self.mobs_mut()[i].extra.angry_at = if anger > 0 {
-            // A wolf and an iron golem keep their anger's target themselves,
-            // also once the target is gone (`tame::update_persistent_anger`).
-            if matches!(
-                self.mobs()[i].species(),
-                horizon_client::mobs::Species::Wolf | horizon_client::mobs::Species::IronGolem
-            ) {
-                self.mobs()[i].extra.angry_at
-            } else {
-                self.mobs()[i].ai.target
-            }
-        } else {
-            None
-        };
-        // A mob gets its UUID when it is first saved (`uuid_for`): the anger
-        // target still in the world gets it now, so `uuid_of` can name it.
-        if let Some(horizon_client::mobs::Who::Mob(target)) = self.mobs()[i].extra.angry_at
-            && target != 0
-            && self.mobs().iter().any(|m| m.id == target)
+        self.mobs_mut()[i].extra.angry_at = saved_angry_at(&self.mobs()[i]);
+        for reference in [references.target, references.attacker]
+            .into_iter()
+            .flatten()
         {
-            self.uuid_for(target)?;
-        }
-        // The mob that last hurt it, still resident, gets its UUID now, as the
-        // anger target does, so `put_last_hurt_by_mob` can name it.
-        if let Some(horizon_client::mobs::Who::Mob(attacker)) = self.mobs()[i].ai.last_hurt_by
-            && self.mobs().iter().any(|m| m.id == attacker)
-        {
-            self.uuid_for(attacker)?;
+            self.uuid_for(reference)?;
         }
         let mut tag = entity_nbt::mob_to_nbt(
             &self.mobs()[i],
@@ -140,54 +203,18 @@ pub(super) trait MobNbtOwner {
     }
 
     fn put_mob_passengers(&mut self, tag: &mut Tag, id: u32) -> Result<(), Self::Error> {
-        let mut riders: Vec<Tag> = Vec::new();
-        let mut live_seen = HashSet::new();
-
-        let slots = self.persist().passenger_slots.get(&id).cloned();
-        if let Some(slots) = slots {
-            for slot in slots {
-                match slot {
-                    PassengerSlot::Live(rider_id) => {
-                        if let Some(pos) = self.mobs().iter().position(|m| {
-                            m.id == rider_id && m.extra.mount == Some(id) && m.alive() && !m.removed
-                        }) {
-                            live_seen.insert(rider_id);
-                            riders.push(self.mob_tree_nbt(pos)?);
-                        }
-                    }
-                    PassengerSlot::Saved(saved_tag) => {
-                        riders.push(saved_tag.clone());
+        let slots = ordered_mob_passengers(self.mobs(), self.persist(), id);
+        let mut riders = Vec::new();
+        for slot in slots {
+            match slot {
+                PassengerSlot::Live(id) => {
+                    if let Some(index) = self.mobs().iter().position(|m| m.id == id) {
+                        riders.push(self.mob_tree_nbt(index)?);
                     }
                 }
+                PassengerSlot::Saved(tag) => riders.push(tag),
             }
         }
-
-        let mut extra_riders: Vec<usize> = (0..self.mobs().len())
-            .filter(|&j| {
-                self.mobs()[j].extra.mount == Some(id)
-                    && self.mobs()[j].alive()
-                    && !self.mobs()[j].removed
-                    && !live_seen.contains(&self.mobs()[j].id)
-            })
-            .collect();
-        extra_riders.sort_by_key(|&j| self.mobs()[j].extra.vehicle_order);
-        if let Some(driver) = self
-            .mobs()
-            .iter()
-            .find(|m| m.id == id)
-            .and_then(|m| m.extra.rider)
-            && let Some(pos) = extra_riders
-                .iter()
-                .position(|&j| self.mobs()[j].id == driver)
-            && pos != 0
-        {
-            let d = extra_riders.remove(pos);
-            extra_riders.insert(0, d);
-        }
-        for j in extra_riders {
-            riders.push(self.mob_tree_nbt(j)?);
-        }
-
         if let Tag::Compound(c) = tag {
             c.remove(&"Passengers".into());
         }
