@@ -417,7 +417,13 @@ impl Game<'_> {
     /// id its handle names) may travel to the level `to`, asked before
     /// anything of it moves. Only a server asks, and only when a mod listens.
     pub(super) fn entity_may_travel(&mut self, id: u32, to: Dim, cause: TravelCause) -> bool {
-        self.entity_tree_may_travel(id, to, cause, &mut Vec::new())
+        match self.entity_tree_may_travel(id, to, cause, &mut Vec::new()) {
+            Ok(allowed) => allowed,
+            Err(error) => {
+                log::debug!("entity travel refused: {error:?}");
+                false
+            }
+        }
     }
 
     fn entity_tree_may_travel(
@@ -426,28 +432,25 @@ impl Game<'_> {
         to: Dim,
         cause: TravelCause,
         visited: &mut Vec<u32>,
-    ) -> bool {
+    ) -> Result<bool, mod_api::EntityReadError> {
         if !self.native_authoritative()
             || !mod_api::__private::listened(mod_api::HookId::EntityTravelToDimension)
         {
-            return true;
+            return Ok(true);
         }
         let Some(epoch) = self.native_lifecycle.epoch() else {
-            return true;
+            return Ok(true);
         };
-        if visited.contains(&id)
-            || (!self.held_out.contains(&id)
-                && self
-                    .native_entity_target(mod_api::EntityRef::new(epoch, id))
-                    .is_none())
-        {
-            return false;
+        if visited.contains(&id) {
+            return Ok(false);
         }
         let entity = mod_api::EntityRef::new(epoch, id);
         // A callback can reparent a participant into a later subtree.
         // Keep the whole transition's visited set, not only its active path.
         visited.push(id);
-        let riders = self.entity_passengers(entity).unwrap_or_default();
+        let Some(riders) = self.entity_passengers(entity)? else {
+            return Ok(false);
+        };
         let mut cancel = false;
         self.native_entity_travel_to_dimension(
             mod_api::EntityRef::new(epoch, id),
@@ -460,36 +463,41 @@ impl Game<'_> {
         // Falling blocks tick held out of the level and cannot be addressed
         // through a handle during this callback.
         if cancel {
-            return false;
+            return Ok(false);
         }
         if self.held_out.contains(&id) {
-            return true;
+            return Ok(true);
         }
         if self
-            .native_entity_target(mod_api::EntityRef::new(epoch, id))
+            .entity_read_dependency(
+                super::native_live_entity_reads::EntityReadSubject::Entity(entity),
+                &[],
+            )
+            .transpose()?
             .is_none()
         {
-            return false;
+            return Ok(false);
         }
         // One snapshot in the shared player/mob boarding order. Ejection can
         // itself call mods; refuse changed edges instead of overriding them.
         for &rider in riders.iter().rev() {
-            if self.entity_vehicle(rider) != Some(entity) {
+            if self.entity_vehicle(rider)? != Some(entity) {
                 continue;
             }
-            if !self.entity_stop_riding(rider) && self.entity_vehicle(rider) == Some(entity) {
-                return false;
+            if !self.entity_stop_riding(rider) && self.entity_vehicle(rider)? == Some(entity) {
+                return Ok(false);
             }
         }
-        let accepted: Vec<_> = riders
-            .into_iter()
-            .filter(|rider| {
-                self.entity_is_passenger(*rider) == Some(false)
-                    && self.entity_tree_may_travel(rider.id(), to, cause, visited)
-            })
-            .collect();
+        let mut accepted = Vec::new();
+        for rider in riders {
+            if self.entity_is_passenger(rider)? == Some(false)
+                && self.entity_tree_may_travel(rider.id(), to, cause, visited)?
+            {
+                accepted.push(rider);
+            }
+        }
         for rider in accepted {
-            if self.entity_is_passenger(rider) == Some(false)
+            if self.entity_is_passenger(rider)? == Some(false)
                 && !self.mobs.iter().any(|m| m.id == rider.id() && !m.alive())
             {
                 // Reject callback topology changes: the shared mount path
@@ -497,8 +505,13 @@ impl Game<'_> {
                 self.entity_start_riding(rider, entity, true);
             }
         }
-        self.native_entity_target(mod_api::EntityRef::new(epoch, id))
-            .is_some()
+        Ok(self
+            .entity_read_dependency(
+                super::native_live_entity_reads::EntityReadSubject::Entity(entity),
+                &[],
+            )
+            .transpose()?
+            .is_some())
     }
 
     /// `Entity.handlePortal` for one player, whose portal state is in place.

@@ -27,6 +27,7 @@ impl Game<'_> {
         let target = match self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Inventory],
+            provider,
         ) {
             Some(target) => target,
             None => return Ok(None),

@@ -24,7 +24,7 @@ impl Game<'_> {
         id: u32,
     ) -> Option<EntityRef> {
         let entity = EntityRef::new(self.native_lifecycle.epoch()?, id);
-        let admitted = self.entity_read_admission(EntityReadSubject::Entity(entity), &[])?;
+        let admitted = self.entity_read_admission(EntityReadSubject::Entity(entity), &[], None)?;
         (admitted.location().owner.dimension == dimension).then_some(entity)
     }
 
@@ -40,6 +40,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Entity(entity),
             &[EntityReadDependency::Riding],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -79,76 +80,93 @@ impl Game<'_> {
     /// index discovers identities only; it never supplies tame/owner payloads.
     pub(super) fn native_source_team<'g>(
         &'g self,
-        source: super::native_live_entity_sources::EntityReadSource<'_>,
+        source: &super::native_live_entity_sources::EntityReadSource<'_>,
         level: mod_api::LevelRef,
         provider: Option<&dyn EntityBodyProvider>,
+        selection: &mut super::native_live_entity_reads::EntityReadSelection,
     ) -> Result<Option<&'g horizon_client_core::scoreboard::Team>, EntityReadError> {
         use super::commands::Target;
+        use horizon_client::join_seq::residency::Source;
         let mob = match source.body {
             BaseReadSource::Player(_) => return Ok(self.player_team()),
             BaseReadSource::Guest(guest) => return Ok(self.score.board.players_team(&guest.name)),
             BaseReadSource::Mob(mob) => mob,
             _ => return Ok(None),
         };
-        let Some(&uuid) = source.level.persist.uuids.get(&mob.id) else {
-            return Ok(None);
-        };
-        let own = horizon_client::save::uuid_text(uuid);
-        if let Some(team) = self.score.board.players_team(&own) {
+        if let Some(&uuid) = source.level.persist.uuids.get(&mob.id)
+            && let Some(team) = self
+                .score
+                .board
+                .players_team(&horizon_client::save::uuid_text(uuid))
+        {
             return Ok(Some(team));
         }
         let Some(mut root) = mob.extra.tame.then_some(mob.extra.owner).flatten() else {
             return Ok(None);
         };
-        // Preserve the engine's existing guard, including its final root name.
         let mut remaining = 64;
         loop {
-            let Some((saved, profile)) = self.relation_identity_candidates_at(level, root) else {
-                return Ok(None);
-            };
+            let (saved, profile) = self.relation_identity_candidates_at(level, root);
             let local = self
                 .local_player_residency
                 .identity()
                 .filter(|identity| identity.details.known_uuid == Some(root))
-                .map(|identity| identity.id.get());
-            let Some(id) = local.or(profile).or(saved) else {
-                return Ok(None);
-            };
-            let entity = EntityRef::new(level.epoch(), id);
-            let Some(admitted) = self.entity_read_admission(
-                EntityReadSubject::Entity(entity),
-                &[
-                    EntityReadDependency::Teams,
-                    EntityReadDependency::Ownership,
-                    EntityReadDependency::Session,
-                ],
-            ) else {
-                return Ok(None);
-            };
-            if matches!(admitted.target(), Target::Player | Target::Guest(_)) {
-                if admitted.known_uuid() != Some(root) {
-                    return Ok(None);
-                }
-                return self.with_admitted_entity_source(admitted, provider, |owner| {
-                    match owner.body {
-                        BaseReadSource::Player(_) => self.player_team(),
-                        BaseReadSource::Guest(guest) => self.score.board.players_team(&guest.name),
-                        _ => None,
-                    }
-                });
-            }
-            if admitted.location().owner.dimension != level.dimension() {
-                return Ok(None);
-            }
-            let known = admitted.known_uuid().or_else(|| {
-                self.entity_read_level(level.dimension())?
-                    .persist
-                    .uuids
-                    .get(&id)
-                    .copied()
+                .map(|identity| (identity.id.get(), Source::LocalPlayer));
+            let profile = local.or_else(|| profile.map(|(id, conn)| (id, Source::Guest(conn))));
+            let dependencies = &[
+                EntityReadDependency::Teams,
+                EntityReadDependency::Ownership,
+                EntityReadDependency::Session,
+            ];
+            let profile = profile.and_then(|(id, expected_source)| {
+                let entity = EntityRef::new(level.epoch(), id);
+                self.entity_read_admission(
+                    EntityReadSubject::Entity(entity),
+                    dependencies,
+                    provider,
+                )
+                .filter(|admitted| {
+                    admitted.known_uuid() == Some(root)
+                        && admitted.location().source == expected_source
+                        && matches!(admitted.target(), Target::Player | Target::Guest(_))
+                })
             });
-            if known != Some(root) {
+            let admitted = if let Some(profile) = profile {
+                Some(profile)
+            } else {
+                let saved = saved.ok_or(EntityReadError::Lifted)?;
+                saved.into_iter().find_map(|id| {
+                    let entity = EntityRef::new(level.epoch(), id);
+                    let admitted = self.entity_read_admission(
+                        EntityReadSubject::Entity(entity),
+                        dependencies,
+                        provider,
+                    )?;
+                    if admitted.location().owner.dimension != level.dimension() {
+                        return None;
+                    }
+                    let known = admitted
+                        .known_uuid()
+                        .or_else(|| source.level.persist.uuids.get(&id).copied());
+                    (known == Some(root)).then_some(admitted)
+                })
+            };
+            let Some(admitted) = admitted else {
                 return Ok(None);
+            };
+            selection.include(admitted);
+            if matches!(admitted.target(), Target::Player | Target::Guest(_)) {
+                return self
+                    .with_entity_read_storage(admitted, provider, |owner| {
+                        Ok(match owner.body {
+                            BaseReadSource::Player(_) => self.player_team(),
+                            BaseReadSource::Guest(guest) => {
+                                self.score.board.players_team(&guest.name)
+                            }
+                            _ => None,
+                        })
+                    })
+                    .unwrap_or(Err(EntityReadError::Lifted));
             }
             if remaining == 0 || !matches!(admitted.target(), Target::Mob(_)) {
                 return Ok(self
@@ -157,11 +175,12 @@ impl Game<'_> {
                     .players_team(&horizon_client::save::uuid_text(root)));
             }
             remaining -= 1;
-            let next =
-                self.with_admitted_entity_source(admitted, provider, |owner| match owner.body {
+            let next = self
+                .with_entity_read_storage(admitted, provider, |owner| match owner.body {
                     BaseReadSource::Mob(mob) => mob.extra.tame.then_some(mob.extra.owner).flatten(),
                     _ => None,
-                })?;
+                })
+                .ok_or(EntityReadError::Lifted)?;
             match next {
                 Some(next) => root = next,
                 None => {

@@ -157,6 +157,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::OrdinaryMob(mob),
             &[EntityReadDependency::Goals],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -202,6 +203,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::OrdinaryMob(mob),
             &[EntityReadDependency::TargetGoals],
+            provider,
         ) else {
             return Ok(None);
         };

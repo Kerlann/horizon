@@ -12,6 +12,7 @@ use horizon_client::{join_seq::JoinList, world::World};
 #[derive(Clone, Copy)]
 pub(super) struct EntityReadLevel<'a> {
     pub(super) world: &'a World,
+    pub(super) border: &'a horizon_client::worldborder::WorldBorder,
     pub(super) persist: &'a EntityMemory,
     pub(super) mobs: &'a JoinList<Mob>,
     pub(super) boats: &'a JoinList<boats::Boat, false>,

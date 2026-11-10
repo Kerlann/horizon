@@ -4,7 +4,7 @@
 //! snapshot is intentionally not accepted: it cannot answer these reads.
 use super::GoalCx;
 use crate::mobs::{self, Mob};
-use mod_api::{LivingRef, MobGoalEntry, MobRef, PathType, RaidRef};
+use mod_api::{LivingRef, MobRef, PathType, RaidRef};
 
 impl GoalCx<'_, '_> {
     fn live_mob(&self, mob: MobRef) -> Option<&Mob> {

@@ -176,6 +176,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Merchant(merchant),
             &[EntityReadDependency::Offers, EntityReadDependency::Session],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -207,6 +208,7 @@ impl Game<'_> {
                             entity, guest.uuid,
                         )),
                         &[EntityReadDependency::Session, EntityReadDependency::Offers],
+                        provider,
                     ) else {
                         continue;
                     };

@@ -265,6 +265,7 @@ impl Game<'_> {
                 EntityReadDependency::Attributes,
                 EntityReadDependency::PlayerState,
             ],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -298,6 +299,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Living(attacker),
             &[EntityReadDependency::AttackState],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -393,10 +395,12 @@ impl Game<'_> {
         let Some(attacker) = self.entity_read_admission(
             EntityReadSubject::Living(attacker),
             &[EntityReadDependency::AttackState],
+            provider,
         ) else {
             return Ok(None);
         };
-        let Some(target) = self.entity_read_admission(EntityReadSubject::Entity(target), &[])
+        let Some(target) =
+            self.entity_read_admission(EntityReadSubject::Entity(target), &[], provider)
         else {
             return Ok(None);
         };

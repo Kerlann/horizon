@@ -80,6 +80,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Entity(entity),
             &[EntityReadDependency::Tags],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -168,6 +169,7 @@ impl Game<'_> {
                 EntityReadDependency::ItemStack,
                 EntityReadDependency::Session,
             ],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -184,7 +186,14 @@ impl Game<'_> {
                 ),
                 target => NameSource::Entity(target),
             };
-            admitted.project_actual(|| {
+            let mut selection = super::native_live_entity_reads::EntityReadSelection::default();
+            selection.include(admitted);
+            let team = if matches!(source.body, BaseReadSource::Mob(_)) {
+                self.native_source_team(&source, level, provider, &mut selection)?
+            } else {
+                None
+            };
+            selection.project(|| {
                 if let Some(remote) = &self.remote {
                     // Admission already proved the network ID fits i32.
                     if let Some((_, Some(name))) = remote.level_player(entity.id() as i32) {
@@ -215,12 +224,10 @@ impl Game<'_> {
                     }
                     NameSource::Peer(guest) => self.player_text(&guest.name, guest.uuid),
                     _ => match source.body {
-                        BaseReadSource::Mob(mob) => {
-                            match self.native_source_team(source, level, provider)? {
-                                Some(team) => team.formatted_name(mob.command_name()),
-                                None => mob.command_name(),
-                            }
-                        }
+                        BaseReadSource::Mob(mob) => match team {
+                            Some(team) => team.formatted_name(mob.command_name()),
+                            None => mob.command_name(),
+                        },
                         BaseReadSource::Item(item) => {
                             self.item_entity_name(Some(&item.stack), custom)
                         }

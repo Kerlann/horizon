@@ -75,6 +75,7 @@ pub(super) struct EntityReadTarget {
 pub(super) struct EntityReadAdmission {
     read: EntityReadTarget,
     lifted: bool,
+    owns: bool,
     pending: Option<CommandId>,
     known_uuid: Option<[i32; 4]>,
 }
@@ -145,6 +146,9 @@ impl Game<'_> {
         mut admission: EntityReadAdmission,
         dependencies: &[EntityReadDependency],
     ) -> EntityReadAdmission {
+        if admission.owns {
+            return admission;
+        }
         let pending = self
             .entity_residency
             .borrow_mut()
@@ -221,7 +225,7 @@ impl Game<'_> {
         subject: EntityReadSubject,
         dependencies: &[EntityReadDependency],
     ) -> Option<Result<EntityReadTarget, EntityReadError<E>>> {
-        self.entity_read_admission(subject, dependencies)
+        self.entity_read_admission(subject, dependencies, None)
             .map(EntityReadAdmission::finish)
     }
 
@@ -231,6 +235,7 @@ impl Game<'_> {
         &self,
         subject: EntityReadSubject,
         dependencies: &[EntityReadDependency],
+        provider: Option<&dyn super::native_entity_body_provider::EntityBodyProvider>,
     ) -> Option<EntityReadAdmission> {
         let entity = subject.entity();
         let server = self.is_logical_server();
@@ -283,6 +288,20 @@ impl Game<'_> {
         {
             return None;
         }
+        let pending = cached.and_then(|row| row.pending_dependency(dependencies));
+        drop(table);
+        let provided = provider.is_some_and(|provider| {
+            let mut actual = false;
+            provider.with_read_source(
+                horizon_client::join_seq::residency::write_queue::Target {
+                    runtime_id: entity.id(),
+                    location,
+                },
+                &mut |_| actual = true,
+            );
+            actual
+        });
+        let owns = provided || self.entity_read_actor_owns(entity.id(), location);
         Some(EntityReadAdmission {
             read: EntityReadTarget {
                 entity,
@@ -290,8 +309,9 @@ impl Game<'_> {
                 location,
             },
             lifted: (matches!(state, EntityLookup::Taken) || self.held_out.contains(&entity.id()))
-                && !self.entity_read_actor_owns(entity.id(), location),
-            pending: cached.and_then(|row| row.pending_dependency(dependencies)),
+                && !provided,
+            owns,
+            pending: if owns { None } else { pending },
             known_uuid: details.known_uuid,
         })
     }

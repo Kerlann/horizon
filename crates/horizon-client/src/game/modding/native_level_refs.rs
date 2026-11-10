@@ -487,6 +487,7 @@ impl Game<'_> {
                 EntityReadDependency::Equipment,
                 EntityReadDependency::PlayerState,
             ],
+            provider,
         ) else {
             return Ok(None);
         };

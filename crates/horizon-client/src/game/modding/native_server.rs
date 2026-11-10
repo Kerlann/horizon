@@ -8,12 +8,7 @@
 //! players (the hub's: a dedicated server's, a LAN host's, single player's
 //! server thread's), never on a client's.
 use super::api_values::{TryIntoApi, TryIntoEngine};
-use super::{
-    Dim, Game,
-    commands::{Target, execute},
-    lan::LanHost,
-    respawn_anchor::RespawnConfig,
-};
+use super::{Dim, Game, commands::execute, lan::LanHost, respawn_anchor::RespawnConfig};
 use crate::game::level_control_hooks::LevelControl;
 use mod_api::__private::game::*;
 // Their old home, for mixin code that names them here.
@@ -1293,6 +1288,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Session],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -1325,6 +1321,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Session],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -1357,6 +1354,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Session],
+            provider,
         ) else {
             return Ok(None);
         };

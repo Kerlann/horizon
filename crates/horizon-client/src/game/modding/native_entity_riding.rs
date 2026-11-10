@@ -12,51 +12,6 @@ use mod_api::{EntityRef, LeashHolder, LivingRef};
 
 impl Game<'_> {
     /// The dismount search with a vehicle or passenger lent out of `self.mobs`.
-    pub(super) fn scoped_mob_dismount_location(
-        &self,
-        vehicle: Option<&Mob>,
-        vehicle_id: u32,
-        rider: Option<&Mob>,
-        passenger: EntityRef,
-    ) -> Option<[f64; 3]> {
-        let at = if let Some(rider) = rider {
-            if let Some(index) = self.boats.iter().position(|boat| boat.id == vehicle_id) {
-                Some(self.boat_dismount_target(index, f64::from(rider.width()), rider.yaw))
-            } else if let Some(mount) = vehicle {
-                Some(
-                    self.horse_dismount_mobs(mount, rider)
-                        .unwrap_or_else(|| super::mounts::on_top(mount)),
-                )
-            } else {
-                self.cart_dismount_mob(vehicle_id, rider)
-            }
-        } else if let Some(mount) = vehicle {
-            match self.native_entity_target(passenger)? {
-                Target::Player => {
-                    Some(self.player_dismount_from_lent_mob(mount, self.yaw, self.player.as_ref()?))
-                }
-                Target::Guest(conn) => {
-                    let guest = self.command_guest(conn)?;
-                    Some(self.player_dismount_from_lent_mob(
-                        mount,
-                        guest.yaw,
-                        guest.motion.as_deref()?,
-                    ))
-                }
-                _ => None,
-            }
-        } else {
-            let vehicle = self.entity(vehicle_id)?;
-            return self.entity_dismount_location(vehicle, LivingRef::new(passenger));
-        };
-        if let Some(at) = at {
-            return Some([at.x, at.y, at.z]);
-        }
-        let vehicle = self.entity(vehicle_id)?;
-        let [x, _, z] = self.entity_position(vehicle)?;
-        let [_, [_, top, _]] = self.entity_bounding_box(vehicle)?;
-        Some([x, top, z])
-    }
 
     /// The id of the entity `t` rides, if it rides one.
     fn native_vehicle_id(&self, t: Target) -> Option<u32> {
@@ -148,6 +103,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Entity(entity),
             &[EntityReadDependency::Riding],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -202,6 +158,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Entity(entity),
             &[EntityReadDependency::Riding],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -292,6 +249,7 @@ impl Game<'_> {
         let Some(vehicle) = self.entity_read_admission(
             EntityReadSubject::Entity(entity),
             &[EntityReadDependency::Riding],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -399,12 +357,12 @@ impl Game<'_> {
         }
         let dependencies = &[EntityReadDependency::Riding];
         let Some(first) =
-            self.entity_read_admission(EntityReadSubject::Entity(entity), dependencies)
+            self.entity_read_admission(EntityReadSubject::Entity(entity), dependencies, provider)
         else {
             return Ok(None);
         };
         let Some(second) =
-            self.entity_read_admission(EntityReadSubject::Entity(other), dependencies)
+            self.entity_read_admission(EntityReadSubject::Entity(other), dependencies, provider)
         else {
             return Ok(None);
         };
@@ -442,36 +400,109 @@ impl Game<'_> {
         &self,
         vehicle: EntityRef,
         passenger: LivingRef,
-    ) -> Option<[f64; 3]> {
+    ) -> Result<Option<[f64; 3]>, mod_api::EntityReadError> {
         self.read_entity_dismount_location(None, vehicle, passenger)
     }
 
     pub(super) fn read_entity_dismount_location(
         &self,
-        _provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
+        provider: Option<&dyn crate::game::native_entity_body_provider::EntityBodyProvider>,
         vehicle: EntityRef,
         passenger: LivingRef,
-    ) -> Option<[f64; 3]> {
-        self.native_entity_target(vehicle)?;
-        let id = vehicle.id();
-        let at = match self.native_entity_target(passenger.entity())? {
-            Target::Mob(rider) => {
-                let rider = self.mobs.iter().position(|m| m.id == rider)?;
-                self.mob_dismount_point(id, rider)
-            }
-            Target::Player => self.player_dismount_point(id, self.yaw, self.player.as_ref()?),
-            Target::Guest(conn) => {
-                let guest = self.command_guest(conn)?;
-                self.player_dismount_point(id, guest.yaw, guest.motion.as_deref()?)
-            }
-            _ => return None,
+    ) -> Result<Option<[f64; 3]>, mod_api::EntityReadError> {
+        use super::{
+            native_base_read_rows::BaseReadSource,
+            native_live_entity_reads::{EntityReadSelection, EntityReadSubject},
+            native_read_dependencies::EntityReadDependency,
         };
-        if let Some(at) = at {
-            return Some([at.x, at.y, at.z]);
+        if !self.is_logical_server() {
+            return Ok(None);
         }
-        let [x, _, z] = self.entity_position(vehicle)?;
-        let [_, [_, top, _]] = self.entity_bounding_box(vehicle)?;
-        Some([x, top, z])
+        let Some(vehicle) = self.entity_read_admission(
+            EntityReadSubject::Entity(vehicle),
+            &[
+                EntityReadDependency::Geometry,
+                EntityReadDependency::MinecartFlipped,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        let Some(passenger) = self.entity_read_admission(
+            EntityReadSubject::MobOrPlayer(passenger),
+            &[
+                EntityReadDependency::Geometry,
+                EntityReadDependency::Equipment,
+                EntityReadDependency::PlayerState,
+            ],
+            provider,
+        ) else {
+            return Ok(None);
+        };
+        enum Rider<'a> {
+            Mob(&'a Mob),
+            Player(&'a horizon_client::motion::PlayerMotion, f32),
+        }
+        self.with_entity_read_storage(passenger, provider, |rider| {
+            let rider = match rider.body {
+                BaseReadSource::Mob(mob) => Rider::Mob(mob),
+                BaseReadSource::Player(motion) => Rider::Player(motion, self.yaw),
+                BaseReadSource::Guest(guest) => {
+                    let Some(motion) = guest.motion.as_deref() else {
+                        return Ok(None);
+                    };
+                    Rider::Player(motion, guest.yaw)
+                }
+                _ => return Err(mod_api::EntityReadError::Lifted),
+            };
+            self.with_entity_read_storage(vehicle, provider, |source| {
+                let mut selection = EntityReadSelection::default();
+                selection.include(vehicle);
+                selection.include(passenger);
+                selection.project(|| {
+                    let world = source.level.world;
+                    let border = source.level.border;
+                    let at = match (source.body, rider) {
+                        (BaseReadSource::Boat(boat), Rider::Mob(rider)) => {
+                            Some(self.boat_dismount_target_at(
+                                world,
+                                boat,
+                                f64::from(rider.width()),
+                                rider.yaw,
+                            ))
+                        }
+                        (BaseReadSource::Cart(cart), Rider::Mob(rider)) => {
+                            self.cart_dismount_mob_at(world, border, cart, rider)
+                        }
+                        (BaseReadSource::Mob(mount), Rider::Mob(rider)) => Some(
+                            self.horse_dismount_mobs_at(world, border, mount, rider)
+                                .unwrap_or_else(|| super::mounts::on_top(mount)),
+                        ),
+                        (BaseReadSource::Boat(boat), Rider::Player(_, yaw)) => {
+                            Some(self.boat_dismount_target_at(world, boat, 0.6, yaw))
+                        }
+                        (BaseReadSource::Cart(cart), Rider::Player(_, _)) => {
+                            Some(self.cart_player_dismount_target_at(world, cart))
+                        }
+                        (BaseReadSource::Mob(mount), Rider::Player(motion, yaw)) => Some(
+                            self.player_dismount_from_mob_at(world, border, mount, yaw, motion),
+                        ),
+                        _ => None,
+                    };
+                    if let Some(at) = at {
+                        return Some([at.x, at.y, at.z]);
+                    }
+                    let geometry = self.live_source_geometry(source.body)?;
+                    Some([
+                        geometry.position[0],
+                        geometry.bounding_box[1][1],
+                        geometry.position[2],
+                    ])
+                })
+            })
+            .unwrap_or(Err(mod_api::EntityReadError::Lifted))
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
     /// A lead's live holder as a handle: `None` when it is out of reach.
     fn native_leash_holder(

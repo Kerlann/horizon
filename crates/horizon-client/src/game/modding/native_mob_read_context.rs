@@ -492,16 +492,23 @@ impl Game<'_> {
         &self,
         level: LevelRef,
         uuid: [i32; 4],
-    ) -> Option<(Option<u32>, Option<u32>)> {
-        self.with_mob_read_relations(level, |index| {
-            let saved = index.saved_ids.get(&uuid).copied();
-            let profile = index
-                .players_by_uuid
-                .get(&horizon_client::lan::playerdata::ints_uuid(uuid))
-                .and_then(|conn| index.guest_identities.get(conn))
-                .map(|&(_, id)| id);
-            (saved, profile)
-        })
+    ) -> (Option<Vec<u32>>, Option<(u32, u32)>) {
+        let profile = self
+            .lan
+            .as_ref()
+            .and_then(|host| {
+                host.hub
+                    .guests
+                    .online_profile(horizon_client::lan::playerdata::ints_uuid(uuid))
+            })
+            .and_then(|guest| Some((u32::try_from(guest.entity_id).ok()?, guest.conn)));
+        let saved = self
+            .entity_read_state
+            .borrow()
+            .mob_relations
+            .get(&level)
+            .and_then(|state| state.index.saved_uuid_candidates(uuid));
+        (saved, profile)
     }
 
     pub(super) fn current_admitted_saved_id(&self, uuid: [i32; 4]) -> Option<u32> {

@@ -59,6 +59,7 @@ impl Game<'_> {
         let read = match self.entity_read_admission(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::MinecartKind],
+            provider,
         ) {
             Some(read) => read,
             None => return Ok(None),
@@ -85,6 +86,7 @@ impl Game<'_> {
         let read = match self.entity_read_admission(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::MinecartSpeed],
+            provider,
         ) {
             Some(read) => read,
             None => return Ok(None),
@@ -108,6 +110,7 @@ impl Game<'_> {
         let read = match self.entity_read_admission(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::MinecartRails],
+            provider,
         ) {
             Some(read) => read,
             None => return Ok(None),
@@ -131,6 +134,7 @@ impl Game<'_> {
         let read = match self.entity_read_admission(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::MinecartFlipped],
+            provider,
         ) {
             Some(read) => read,
             None => return Ok(None),
@@ -159,6 +163,7 @@ impl Game<'_> {
         let read = match self.entity_read_admission(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::VehicleDamage],
+            provider,
         ) {
             Some(read) => read,
             None => return Ok(None),
@@ -188,6 +193,7 @@ impl Game<'_> {
         let read = match self.entity_read_admission(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::VehicleHurtTicks],
+            provider,
         ) {
             Some(read) => read,
             None => return Ok(None),
@@ -217,6 +223,7 @@ impl Game<'_> {
         let read = match self.entity_read_admission(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::MinecartDisplay],
+            provider,
         ) {
             Some(read) => read,
             None => return Ok(None),
@@ -258,6 +265,7 @@ impl Game<'_> {
         let read = match self.entity_read_admission(
             EntityReadSubject::Minecart(cart),
             &[EntityReadDependency::MinecartDisplay],
+            provider,
         ) {
             Some(read) => read,
             None => return Ok(None),
@@ -287,6 +295,7 @@ impl Game<'_> {
         let read = match self.entity_read_admission(
             EntityReadSubject::FurnaceMinecart(cart),
             &[EntityReadDependency::MinecartFuel],
+            provider,
         ) {
             Some(read) => read,
             None => return Ok(None),
@@ -319,6 +328,7 @@ impl Game<'_> {
         let read = match self.entity_read_admission(
             EntityReadSubject::FurnaceMinecart(cart),
             &[EntityReadDependency::MinecartPush],
+            provider,
         ) {
             Some(read) => read,
             None => return Ok(None),
@@ -356,6 +366,7 @@ impl Game<'_> {
         let read = match self.entity_read_admission(
             EntityReadSubject::TntMinecart(cart),
             &[EntityReadDependency::MinecartFuse],
+            provider,
         ) {
             Some(read) => read,
             None => return Ok(None),
@@ -399,6 +410,7 @@ impl Game<'_> {
         let read = match self.entity_read_admission(
             EntityReadSubject::HopperMinecart(cart),
             &[EntityReadDependency::MinecartHopper],
+            provider,
         ) {
             Some(read) => read,
             None => return Ok(None),
@@ -428,6 +440,7 @@ impl Game<'_> {
         let read = match self.entity_read_admission(
             EntityReadSubject::CommandMinecart(cart),
             &[EntityReadDependency::MinecartCommand],
+            provider,
         ) {
             Some(read) => read,
             None => return Ok(None),

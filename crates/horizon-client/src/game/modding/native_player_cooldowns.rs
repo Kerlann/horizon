@@ -76,6 +76,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Cooldowns],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -117,6 +118,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Cooldowns],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -150,6 +152,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Cooldowns],
+            provider,
         ) else {
             return Ok(None);
         };

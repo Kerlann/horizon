@@ -38,6 +38,7 @@ impl Game<'_> {
                 EntityReadDependency::Equipment,
                 EntityReadDependency::Effects,
             ],
+            provider,
         ) else {
             return Ok(None);
         };

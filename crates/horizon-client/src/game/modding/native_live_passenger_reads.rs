@@ -47,6 +47,7 @@ impl Game<'_> {
                         EntityReadDependency::Riding,
                         EntityReadDependency::VitalState,
                     ],
+                    provider,
                 ) {
                     if admitted.location().owner.dimension == level.dimension() {
                         nominees.push(admitted);
@@ -69,6 +70,7 @@ impl Game<'_> {
                 if let Some(admitted) = self.entity_read_admission(
                     EntityReadSubject::Player(player),
                     &[EntityReadDependency::Riding],
+                    provider,
                 ) {
                     if admitted.location().source
                         == horizon_client::join_seq::residency::Source::Guest(conn)
@@ -92,6 +94,7 @@ impl Game<'_> {
                             entity, uuid,
                         )),
                         &[EntityReadDependency::Riding],
+                        provider,
                     )
                 {
                     nominees.push(input);

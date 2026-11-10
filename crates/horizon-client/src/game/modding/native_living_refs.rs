@@ -181,6 +181,7 @@ impl Game<'_> {
                 EntityReadDependency::Attributes,
                 EntityReadDependency::Equipment,
             ],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -215,6 +216,7 @@ impl Game<'_> {
                 EntityReadDependency::Attributes,
                 EntityReadDependency::Equipment,
             ],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -251,6 +253,7 @@ impl Game<'_> {
                 EntityReadDependency::Attributes,
                 EntityReadDependency::Equipment,
             ],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -294,6 +297,7 @@ impl Game<'_> {
                 EntityReadDependency::Attributes,
                 EntityReadDependency::Equipment,
             ],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -606,6 +610,7 @@ impl Game<'_> {
                 EntityReadDependency::Equipment,
                 EntityReadDependency::Riding,
             ],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -618,6 +623,7 @@ impl Game<'_> {
                 EntityReadDependency::Geometry,
                 EntityReadDependency::Attributes,
             ],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -647,6 +653,7 @@ impl Game<'_> {
                     EntityReadDependency::Geometry,
                     EntityReadDependency::Attributes,
                 ],
+                provider,
             ) else {
                 return Ok(None);
             };
@@ -686,6 +693,7 @@ impl Game<'_> {
                 EntityReadDependency::Equipment,
                 EntityReadDependency::PlayerState,
             ],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -753,6 +761,7 @@ impl Game<'_> {
                 EntityReadDependency::Sleeping,
                 EntityReadDependency::Geometry,
             ],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -999,6 +1008,7 @@ impl Game<'_> {
         let Some(admission) = self.entity_read_admission(
             EntityReadSubject::Living(living),
             &[EntityReadDependency::Equipment],
+            provider,
         ) else {
             return Ok(None);
         };

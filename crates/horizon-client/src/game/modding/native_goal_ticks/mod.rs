@@ -359,16 +359,6 @@ impl mobs::part_goals::GoalHost for Game<'_> {
         self.lent_mob_passengers(mob)
     }
 
-    fn mob_dismount_location(
-        &self,
-        vehicle: Option<&Mob>,
-        vehicle_id: u32,
-        rider: Option<&Mob>,
-        passenger: EntityRef,
-    ) -> Option<[f64; 3]> {
-        self.scoped_mob_dismount_location(vehicle, vehicle_id, rider, passenger)
-    }
-
     fn mob_player_controls(&self, mob: &Mob, player: u32) -> bool {
         let Some(epoch) = self.native_lifecycle.epoch() else {
             return false;

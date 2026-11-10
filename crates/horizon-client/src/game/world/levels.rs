@@ -145,6 +145,7 @@ impl Game<'_> {
         if dimension == self.dim.key() {
             return Some(EntityReadLevel {
                 world: &self.world,
+                border: &self.border,
                 persist: &self.persist,
                 mobs: &self.mobs,
                 boats: &self.boats,
@@ -161,6 +162,7 @@ impl Game<'_> {
         let parked = self.levels.parked.get(&dim)?;
         Some(EntityReadLevel {
             world: &parked.world,
+            border: &parked.border,
             persist: &parked.persist,
             mobs: &parked.mobs,
             boats: &parked.boats,

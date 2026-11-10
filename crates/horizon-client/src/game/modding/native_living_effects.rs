@@ -172,6 +172,7 @@ impl Game<'_> {
         let Some(read) = self.entity_read_admission(
             EntityReadSubject::MobOrPlayer(living),
             &[EntityReadDependency::Effects],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -213,6 +214,7 @@ impl Game<'_> {
         let Some(read) = self.entity_read_admission(
             EntityReadSubject::MobOrPlayer(living),
             &[EntityReadDependency::Effects],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -266,6 +268,7 @@ impl Game<'_> {
         let Some(read) = self.entity_read_admission(
             EntityReadSubject::MobOrPlayer(living),
             &[EntityReadDependency::Effects],
+            provider,
         ) else {
             return Ok(false);
         };
@@ -317,6 +320,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::ActingPlayer(living),
             &[EntityReadDependency::Effects],
+            provider,
         ) else {
             return Ok(None);
         };

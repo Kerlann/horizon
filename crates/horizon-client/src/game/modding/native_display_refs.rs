@@ -414,6 +414,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::TextDisplay(display),
             &[EntityReadDependency::DisplayText],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -581,6 +582,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::ItemDisplay(display),
             &[EntityReadDependency::ItemStack],
+            provider,
         ) else {
             return Ok(None);
         };

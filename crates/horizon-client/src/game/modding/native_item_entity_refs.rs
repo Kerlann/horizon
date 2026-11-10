@@ -51,6 +51,7 @@ impl Game<'_> {
         let Some(read) = self.entity_read_admission(
             EntityReadSubject::ItemEntity(item),
             &[EntityReadDependency::ItemStack],
+            provider,
         ) else {
             return Ok(None);
         };

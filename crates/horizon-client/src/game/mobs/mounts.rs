@@ -717,9 +717,11 @@ impl Game<'_> {
         dismount_location(mount, &rider, &GameDismountWorld(self, world, border))
     }
 
-    /// The same player search when the mount is lent out during a mob tick.
-    pub(super) fn player_dismount_from_lent_mob(
+    /// The same player search over an actual mount and owning world.
+    pub(super) fn player_dismount_from_mob_at(
         &self,
+        world: &horizon_client::world::World,
+        border: &horizon_client::worldborder::WorldBorder,
         mount: &Mob,
         yaw: f32,
         player: &PlayerMotion,
@@ -727,7 +729,8 @@ impl Game<'_> {
         if mount.species() == Species::HappyGhast {
             on_top(mount)
         } else {
-            self.mount_player_dismount(&Mount::of(mount), yaw, player).0
+            self.mount_player_dismount_at(world, border, &Mount::of(mount), yaw, player)
+                .0
         }
     }
     /// Where `stop_riding` sets a player in `p` facing `yaw` down off `vehicle`: None when
@@ -745,10 +748,7 @@ impl Game<'_> {
             return Some(self.cart_player_dismount_target(i));
         }
         let mount = self.mobs.iter().find(|m| m.id == vehicle)?;
-        if mount.species() == Species::HappyGhast {
-            return Some(on_top(mount));
-        }
-        Some(self.mount_player_dismount(&Mount::of(mount), yaw, p).0)
+        Some(self.player_dismount_from_mob_at(&self.world, &self.border, mount, yaw, p))
     }
     /// `AbstractHorse.tameWithName`: the acting player owns `mob`, then gets
     /// the `tame_animal` trigger.

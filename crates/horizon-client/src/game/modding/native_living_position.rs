@@ -38,12 +38,12 @@ impl Game<'_> {
             EntityReadDependency::Attributes,
         ];
         let Some(viewer) =
-            self.entity_read_admission(EntityReadSubject::Living(living), dependencies)
+            self.entity_read_admission(EntityReadSubject::Living(living), dependencies, provider)
         else {
             return Ok(None);
         };
         let Some(seen) =
-            self.entity_read_admission(EntityReadSubject::Entity(target), dependencies)
+            self.entity_read_admission(EntityReadSubject::Entity(target), dependencies, provider)
         else {
             return Ok(None);
         };
@@ -101,6 +101,7 @@ impl Game<'_> {
                 EntityReadDependency::Geometry,
                 EntityReadDependency::Attributes,
             ],
+            provider,
         ) else {
             return Ok(None);
         };

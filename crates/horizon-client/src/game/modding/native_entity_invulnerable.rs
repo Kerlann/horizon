@@ -337,6 +337,7 @@ impl Game<'_> {
                 EntityReadDependency::Invulnerability,
                 EntityReadDependency::VitalState,
             ],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -382,24 +383,36 @@ impl Game<'_> {
             EntityReadDependency::Ownership,
             EntityReadDependency::Session,
         ];
-        let Some(own) = self.entity_read_admission(EntityReadSubject::Entity(entity), dependencies)
+        let Some(own) =
+            self.entity_read_admission(EntityReadSubject::Entity(entity), dependencies, provider)
         else {
             return Ok(None);
         };
         let Some(their) =
-            self.entity_read_admission(EntityReadSubject::Entity(source), dependencies)
+            self.entity_read_admission(EntityReadSubject::Entity(source), dependencies, provider)
         else {
             return Ok(None);
         };
         let own_level = mod_api::LevelRef::new(entity.epoch(), own.location().owner.dimension);
         let their_level = mod_api::LevelRef::new(source.epoch(), their.location().owner.dimension);
-        self.with_admitted_entity_sources(own, their, provider, |own, their| {
-            let own = self.native_source_team(own, own_level, provider)?;
-            let their = self.native_source_team(their, their_level, provider)?;
-            Ok(Some(horizon_client::scoreboard::teams_allow_damage(
-                own, their,
-            )))
-        })?
+        self.with_entity_read_storage(own, provider, |own_source| {
+            self.with_entity_read_storage(their, provider, |their_source| {
+                let mut selection = super::native_live_entity_reads::EntityReadSelection::default();
+                selection.include(own);
+                selection.include(their);
+                let own_team =
+                    self.native_source_team(&own_source, own_level, provider, &mut selection)?;
+                let their_team =
+                    self.native_source_team(&their_source, their_level, provider, &mut selection)?;
+                selection.project(|| {
+                    Some(horizon_client::scoreboard::teams_allow_damage(
+                        own_team, their_team,
+                    ))
+                })
+            })
+            .unwrap_or(Err(mod_api::EntityReadError::Lifted))
+        })
+        .unwrap_or(Err(mod_api::EntityReadError::Lifted))
     }
 
     /// The team an entity is on: a mob's own or its tamed owner's, the

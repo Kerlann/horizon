@@ -3,7 +3,7 @@
 //! `ServerRecipeBook`. Reads return None for a stale handle or a player who
 //! isn't online here. Writes return false (or None) for those, for a dead
 //! player, and, inside another player's turn, for anyone but that player.
-use super::{Game, stats::Stats};
+use super::Game;
 use mod_api::{PlayerRef, StatType};
 
 /// An id with its namespace: `stone` is `minecraft:stone`.
@@ -70,6 +70,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Stats],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -147,6 +148,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Recipes],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -178,6 +180,7 @@ impl Game<'_> {
         let Some(admitted) = self.entity_read_admission(
             EntityReadSubject::Player(player),
             &[EntityReadDependency::Recipes],
+            provider,
         ) else {
             return Ok(None);
         };

@@ -138,7 +138,8 @@ impl Game<'_> {
     /// `Entity.getControllingPassenger` when it is a player.
     fn native_controlling_player(&self, t: Target, entity: EntityRef) -> Option<EntityRef> {
         let steered = self.native_steered(t);
-        let first = *self.entity_passengers(entity).ok_or(()).ok()?.first()?;
+        let first = self.seated_passengers(entity.id()).first()?.1;
+        let first = EntityRef::new(entity.epoch(), first);
         let player = matches!(
             self.native_entity_target(first)?,
             Target::Player | Target::Guest(_)
@@ -282,6 +283,7 @@ impl Game<'_> {
         let Some(read) = self.entity_read_admission(
             EntityReadSubject::Entity(entity),
             &[EntityReadDependency::Geometry],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -333,6 +335,7 @@ impl Game<'_> {
         let Some(read) = self.entity_read_admission(
             EntityReadSubject::Entity(entity),
             &[EntityReadDependency::Geometry],
+            provider,
         ) else {
             return Ok(None);
         };

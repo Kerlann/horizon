@@ -100,6 +100,7 @@ impl Game<'_> {
                 EntityReadDependency::PlayerState,
                 EntityReadDependency::Geometry,
             ],
+            provider,
         ) else {
             return Ok(None);
         };
@@ -147,12 +148,12 @@ impl Game<'_> {
             EntityReadDependency::PlayerState,
         ];
         let Some(attacker) =
-            self.entity_read_admission(EntityReadSubject::Player(player), dependencies)
+            self.entity_read_admission(EntityReadSubject::Player(player), dependencies, provider)
         else {
             return Ok(None);
         };
         let Some(victim) =
-            self.entity_read_admission(EntityReadSubject::Player(other), dependencies)
+            self.entity_read_admission(EntityReadSubject::Player(other), dependencies, provider)
         else {
             return Ok(None);
         };

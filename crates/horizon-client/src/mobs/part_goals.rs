@@ -68,14 +68,6 @@ pub trait GoalHost {
     fn mob_passengers_lent(&self, mob: &Mob) -> Option<Vec<mod_api::EntityRef>>;
     /// Whether this player steers the lent mob.
     fn mob_player_controls(&self, mob: &Mob, player: u32) -> bool;
-    /// Dismount location using a mob lent out of the game list.
-    fn mob_dismount_location(
-        &self,
-        vehicle: Option<&Mob>,
-        vehicle_id: u32,
-        rider: Option<&Mob>,
-        passenger: mod_api::EntityRef,
-    ) -> Option<[f64; 3]>;
     /// The game's complete portal eligibility, including player passengers.
     fn mob_can_use_portal(&self, mob: &Mob) -> bool;
     /// Compute climbing from the game's collision and climbing registry.

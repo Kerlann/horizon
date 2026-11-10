@@ -1,10 +1,8 @@
 //! Reads only from the explicit mob actor loaned to the active goal.
-use super::super::api_values::TryIntoApi;
 use super::GoalCx;
 use crate::mobs::Mob;
 use horizon_client::mobs::villager;
-use mod_api::ItemStack;
-use mod_api::{ActiveEffect, EffectKey, EquipmentSlot, Hand, LivingRef, Pose};
+use mod_api::{Hand, LivingRef};
 
 impl GoalCx<'_, '_> {
     fn live_living_mob(&self, living: LivingRef) -> Option<&Mob> {
