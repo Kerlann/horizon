@@ -97,7 +97,7 @@ fn site_rewrite_preserves_method_path_closure_and_question_mark_results() {
         extern crate self as mod_points;
         extern crate self as horizon_mod_api_macros;
         pub enum SiteId {{ {variants} }}
-        pub mod __private {{ pub static SITES: [std::sync::atomic::AtomicBool; {count}] = [const {{ std::sync::atomic::AtomicBool::new(false) }}; {count}]; }}
+        pub mod __private {{ pub static SITES: [std::sync::atomic::AtomicBool; {count}] = [const {{ std::sync::atomic::AtomicBool::new(false) }}; {count}]; pub struct Table; pub static TABLE: Table = Table; impl Table {{ pub fn active_site(&self, index: usize) -> bool {{ SITES[index].load(std::sync::atomic::Ordering::Relaxed) }} }} }}
         #[macro_export] macro_rules! site {{ ($wrap:ident, $place:ident, $listener:ident, $recv_ty:ident, $record:ident, $output:ident, $receiver:expr, $args:expr, $original:expr) => {{ ($original)($receiver, &mut $args) }}; }}
         mod game {{ {rewritten} }}
         {lower}
@@ -383,7 +383,7 @@ fn explicit_receivers_preserve_canonical_identity_and_execute() {
             extern crate self as mod_points;
             extern crate self as horizon_mod_api_macros;
             pub enum SiteId {{ {variant} }}
-            pub mod __private {{ pub static SITES: [std::sync::atomic::AtomicBool; 1] = [std::sync::atomic::AtomicBool::new(true)]; }}
+            pub mod __private {{ pub static SITES: [std::sync::atomic::AtomicBool; 1] = [std::sync::atomic::AtomicBool::new(true)]; pub struct Table; pub static TABLE: Table = Table; impl Table {{ pub fn active_site(&self, index: usize) -> bool {{ SITES[index].load(std::sync::atomic::Ordering::Relaxed) }} }} }}
             #[macro_export] macro_rules! site {{ ($wrap:ident, $place:ident, $listener:ident, $recv_ty:ident, $record:ident, $output:ident, $receiver:expr, $args:expr, $original:expr) => {{ ($original)($receiver, &mut $args) }}; }}
             mod game {{ {rewritten} }}
             fn main() {{ let mut game = game::Game {{ value: 0 }}; assert_eq!(game.run(), 2); assert_eq!(game.value, 2); }}
@@ -500,7 +500,7 @@ fn modify_local_executes_real_binding_at_call_boundary() {
             extern crate self as mod_points;
             extern crate self as horizon_mod_api_macros;
             pub enum SiteId {{ {variant} }}
-            pub mod __private {{ pub static SITES: [std::sync::atomic::AtomicBool; 1] = [std::sync::atomic::AtomicBool::new({enabled})]; }}
+            pub mod __private {{ pub static SITES: [std::sync::atomic::AtomicBool; 1] = [std::sync::atomic::AtomicBool::new({enabled})]; pub struct Table; pub static TABLE: Table = Table; impl Table {{ pub fn active_site(&self, index: usize) -> bool {{ SITES[index].load(std::sync::atomic::Ordering::Relaxed) }} }} }}
             #[macro_export] macro_rules! site {{ ($wrap:ident, $place:ident, $listener:ident, $recv_ty:ident, $record:ident, $output:ident, $receiver:expr, $args:expr, $original:expr) => {{{{ let receiver = $receiver; {listeners} }}}}; }}
             static SINK: std::sync::atomic::AtomicI32 = std::sync::atomic::AtomicI32::new(0);
             fn sink(n: i32) {{ SINK.store(n, std::sync::atomic::Ordering::Relaxed); }}

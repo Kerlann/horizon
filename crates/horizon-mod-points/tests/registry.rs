@@ -2,9 +2,8 @@
 //! test, so the generated points compile once for the tests.
 // Generated fixtures exercise every shape; TODO(#2273): make the generator emit clippy-clean code.
 #![allow(clippy::all, unused_comparisons, unreachable_patterns, dead_code)]
-use mod_points::__private::{POINTS, RawKind, SlotListener, seal};
+use mod_points::__private::{RawKind, SlotListener, TABLE, seal};
 use mod_points::{PointId, RegisterError, register, stop};
-use std::sync::atomic::Ordering;
 
 fn tick(_: mod_api::HostSide<'_>, args: &mut mod_points::TickArgs) {
     assert_eq!(
@@ -101,7 +100,7 @@ fn one_list_registered_sealed_and_stopped() {
     assert_eq!(register(&erased), Ok(()));
     assert_eq!(register(&raw_at("raw_mod", place)), Ok(()));
     assert!(
-        !POINTS[PointId::Tick as usize].load(Ordering::Acquire),
+        !TABLE.active_point(PointId::Tick as usize),
         "nothing listens before the seal"
     );
     seal();
@@ -110,9 +109,9 @@ fn one_list_registered_sealed_and_stopped() {
         register(&mod_points::listeners::tick("late", 0, "head", tick)),
         Err(RegisterError::Sealed)
     );
-    assert!(POINTS[PointId::Tick as usize].load(Ordering::Acquire));
-    assert!(POINTS[PointId::TickReturn as usize].load(Ordering::Acquire));
-    assert!(!POINTS[raw].load(Ordering::Acquire));
+    assert!(TABLE.active_point(PointId::Tick as usize));
+    assert!(TABLE.active_point(PointId::TickReturn as usize));
+    assert!(!TABLE.active_point(raw));
     let (mut heard, mut raw_heard) = (0, 0);
     mod_points::__private::fire_api(PointId::Tick, &mut |_| heard += 1);
     mod_points::__private::fire_raw(PointId::Tick, &mut |_| raw_heard += 1);

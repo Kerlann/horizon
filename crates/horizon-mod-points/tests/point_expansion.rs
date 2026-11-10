@@ -185,6 +185,8 @@ mod mod_points {
         use super::*;
         pub use ::mod_points::__private::RawKind;
 
+        pub static TABLE: mod_api::__private::points::Table =
+            mod_api::__private::points::Table::new(&POINTS, &[]);
         pub static POINTS: [AtomicBool; 14] = [const { AtomicBool::new(false) }; 14];
         /// The places a `replace` listener owns, as the registry's seal leaves them.
         pub static REPLACED: [AtomicBool; 14] = [const { AtomicBool::new(false) }; 14];

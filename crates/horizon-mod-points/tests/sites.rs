@@ -3,10 +3,10 @@
 #![allow(clippy::all, unused_comparisons, unreachable_patterns, dead_code)]
 use mod_points::register;
 use mod_points::{
-    __private::{SITES, SlotListener, seal},
+    __private::{SlotListener, TABLE, seal},
     SiteId,
 };
-use std::sync::{Mutex, atomic::Ordering};
+use std::sync::Mutex;
 const SITE: SiteId = SiteId::S7173cf1fd760a6e4;
 static TRACE: Mutex<Vec<u8>> = Mutex::new(Vec::new());
 struct Args {
@@ -35,7 +35,7 @@ fn listener(id: &'static str, priority: i32, injection: &'static str, f: Listene
 
 #[test]
 fn site_listeners_nest_repeat_original_and_skip_stopped_mods() {
-    assert!(!SITES[SITE as usize].load(Ordering::Relaxed));
+    assert!(!TABLE.active_site(SITE as usize));
     let mut args = Args { rate: 2.0 };
     let mut call = |_: (), a: &mut Args| {
         TRACE.lock().unwrap().push(3);
@@ -63,7 +63,7 @@ fn site_listeners_nest_repeat_original_and_skip_stopped_mods() {
     mod_points::stop("a_high");
     register(&listener("b_high", 10, "outer", outer)).unwrap();
     seal();
-    assert!(SITES[SITE as usize].load(Ordering::Relaxed));
+    assert!(TABLE.active_site(SITE as usize));
     assert_eq!(
         horizon_mod_api_macros::site!(
             __test_site_wrap,

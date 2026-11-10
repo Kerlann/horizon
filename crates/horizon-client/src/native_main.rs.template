@@ -21,7 +21,7 @@ fn main() {
     let mods: Vec<mod_api::ModEntry> = native_mods! {
     /* MOD_ENTRIES */
         };
-    let slots: &[horizon_client::entry::NativeSlot] = &[
+    let slots = &[
 /* MOD_SLOTS */
     ];
     horizon_mod_host::main_with(mods, slots, BUILT_MODS, startup);

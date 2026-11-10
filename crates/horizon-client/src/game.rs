@@ -17700,7 +17700,7 @@ pub(crate) fn run_with(
         let inventory: Vec<_> = context.mods().iter().cloned().collect();
         crate::entry::initialize_code(&inventory);
     }
-    mod_points::__private::seal();
+    horizon_engine_slots::seal();
     mod_phase.advance(mod_api::__private::ModPhase::Registration)?;
     if let Err(refused) = crate::game::api_values::install_parts(mod_api::__private::mods()) {
         panic!("Mod parts refused:\n{}", refused.join("\n"));

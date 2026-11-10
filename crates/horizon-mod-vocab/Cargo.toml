@@ -10,6 +10,7 @@ description = "Engine-owned mod interface vocabulary, host contracts and dispatc
 name = "mod_vocab"
 
 [dependencies]
+horizon-engine-slots = { path = "../horizon-engine-slots" }
 horizon-mod-runtime = { path = "../horizon-mod-runtime" }
 horizon-core = { path = "../horizon-core" }
 horizon-mod-api-macros = { path = "../horizon-mod-api-macros" }

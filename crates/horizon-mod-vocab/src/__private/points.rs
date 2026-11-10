@@ -1,8 +1,9 @@
 //! Slot tables for injection points: the game's (in `mod_points`) and each mod crate's own (#2339),
-//! one registry for all of them. A table is its slots, one `AtomicBool` per place, set once at the
+//! one registry for all of them. A table has one activity flag per place, set once at the
 //! seal where a mod listens. Registering a listener records its table, so the one [`seal`] after
 //! the mods load sets every table that has listeners; a table nobody listens at is never touched,
-//! and each of its points costs one load of a slot that stays `false`.
+//! and its inactive checks return `false`. Mod tables own atomic flags; the game's activity is
+//! published into the dependency-free engine slot crate.
 //!
 //! Sealing orders each place's listeners: API ones before internals ones, a `replace` last among
 //! the API ones, then priority descending, then registration order (the mods register in
@@ -22,18 +23,60 @@ pub fn cold<R>(path: impl FnOnce() -> R) -> R {
 // no wire: point registry machinery runs in its owning process; listeners cross through their records, never this.
 // exhaustive: generated point code builds and matches it in full.
 pub struct Table {
-    points: &'static [AtomicBool],
-    sites: &'static [AtomicBool],
+    points: usize,
+    sites: usize,
+    activity: Activity,
     sealed: OnceLock<Sealed>,
+}
+
+enum Activity {
+    Local {
+        points: &'static [AtomicBool],
+        sites: &'static [AtomicBool],
+    },
+    Engine,
 }
 
 impl Table {
     /// A table over `points` and `sites` (a mod crate's table has no sites).
     pub const fn new(points: &'static [AtomicBool], sites: &'static [AtomicBool]) -> Self {
         Self {
+            points: points.len(),
+            sites: sites.len(),
+            activity: Activity::Local { points, sites },
+            sealed: OnceLock::new(),
+        }
+    }
+
+    /// The game's table: activity is owned by the engine, dispatch by this provider.
+    pub const fn engine(points: usize, sites: usize) -> Self {
+        Self {
             points,
             sites,
+            activity: Activity::Engine,
             sealed: OnceLock::new(),
+        }
+    }
+
+    /// Whether this table has a listener at point `index`.
+    #[inline]
+    pub fn active_point(&self, index: usize) -> bool {
+        match &self.activity {
+            Activity::Local { points, .. } => points
+                .get(index)
+                .is_some_and(|flag| flag.load(Ordering::Acquire)),
+            Activity::Engine => horizon_engine_slots::POINTS.active(index),
+        }
+    }
+
+    /// Whether this table has a listener at call site `index`.
+    #[inline]
+    pub fn active_site(&self, index: usize) -> bool {
+        match &self.activity {
+            Activity::Local { sites, .. } => sites
+                .get(index)
+                .is_some_and(|flag| flag.load(Ordering::Acquire)),
+            Activity::Engine => horizon_engine_slots::SITES.active(index),
         }
     }
 
@@ -104,7 +147,7 @@ impl Table {
         call: impl FnOnce(Option<(*const (), usize)>) -> O,
     ) -> O {
         if let Some(sealed) = self.sealed.get() {
-            for (index, raw) in sealed.slots[self.points.len() + site]
+            for (index, raw) in sealed.slots[self.points + site]
                 .entries
                 .iter()
                 .enumerate()
@@ -132,8 +175,8 @@ impl Table {
                 listener.stopped.store(true, Ordering::Release);
             }
         }
-        let points = self.points.len();
-        let mut lists = vec![Vec::new(); points + self.sites.len()];
+        let points = self.points;
+        let mut lists = vec![Vec::new(); points + self.sites];
         for (place, slot) in slots {
             lists[place].push(slot);
         }
@@ -179,8 +222,24 @@ impl Table {
                 })
                 .collect(),
         });
-        for (slot, list) in self.points.iter().chain(self.sites).zip(&sealed.slots) {
-            slot.store(!list.entries.is_empty(), Ordering::Release);
+        match &self.activity {
+            Activity::Local { points, sites } => {
+                for (slot, list) in points.iter().chain(*sites).zip(&sealed.slots) {
+                    slot.store(!list.entries.is_empty(), Ordering::Release);
+                }
+            }
+            Activity::Engine => {
+                horizon_engine_slots::POINTS.publish(
+                    sealed.slots[..self.points]
+                        .iter()
+                        .map(|slot| !slot.entries.is_empty()),
+                );
+                horizon_engine_slots::SITES.publish(
+                    sealed.slots[self.points..]
+                        .iter()
+                        .map(|slot| !slot.entries.is_empty()),
+                );
+            }
         }
     }
 }

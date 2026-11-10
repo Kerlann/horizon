@@ -21,6 +21,7 @@
   ],
   "crates": {
     "horizon-assets": "engine",
+    "horizon-engine-slots": "engine",
     "horizon-game-discovery": "engine",
     "horizon-client": "engine",
     "horizon-client-core": "engine",
@@ -160,7 +161,6 @@
     "horizon-server -> horizon-world",
     "horizon-client -> horizon-mod-api",
     "horizon-client -> horizon-mod-api-macros",
-    "horizon-client -> horizon-mod-points",
     "horizon-client -> horizon-mod-render",
     "horizon-bench -> horizon-system",
     "horizon-client-lib -> horizon-mod-api",
@@ -191,7 +191,6 @@
     "horizon-modding-examples": "Workspace development fixtures, not a shipped runtime dependency.",
     "horizon-client -> horizon-mod-api": "Existing fork dependency across the upstream layer split; recorded baseline, not a new dependency.",
     "horizon-client -> horizon-mod-api-macros": "Existing fork dependency across the upstream layer split; recorded baseline, not a new dependency.",
-    "horizon-client -> horizon-mod-points": "Existing fork dependency across the upstream layer split; recorded baseline, not a new dependency.",
     "horizon-client -> horizon-mod-render": "Existing fork dependency across the upstream layer split; recorded baseline, not a new dependency.",
     "horizon-bench -> horizon-system": "Existing fork dependency across the upstream layer split; recorded baseline, not a new dependency.",
     "horizon-client-lib -> horizon-mod-api": "Existing fork dependency across the upstream layer split; recorded baseline, not a new dependency.",

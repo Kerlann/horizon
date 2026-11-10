@@ -216,7 +216,7 @@ pub fn expand(attribute: TokenStream, mut function: ImplItemFn) -> TokenStream {
     let cancels =
         matches!(shape.returns, Returns::Unit | Returns::UnitResult) && (api || shape.raw);
     let results = (shape.raw && matches!(outcome, RawOutcome::Result(_))) || api_value.is_some();
-    let listened = |variant: &syn::Ident| quote!(#table::__private::POINTS[#table::PointId::#variant as usize].load(::std::sync::atomic::Ordering::Acquire));
+    let listened = |variant: &syn::Ident| quote!(#table::__private::TABLE.active_point(#table::PointId::#variant as usize));
 
     // The head: copy in, the API listeners, copy out; then the raw listeners on the same places.
     let shared_locals =

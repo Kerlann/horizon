@@ -70,12 +70,8 @@ pub(crate) fn code_refusal(id: &str) -> Option<String> {
 /// Start with named mods and their function slots in installed dependency order.
 pub fn start<G>(
     native: horizon_mod_package::runtime::Runtime,
-    load: impl FnOnce(
-        &horizon_mod_package::runtime::Runtime,
-        &LaunchArguments,
-    ) -> (Vec<&'static str>, G),
+    load: impl FnOnce(&horizon_mod_package::runtime::Runtime, &LaunchArguments) -> G,
     code: CodeRuntime,
-    slots: &[NativeSlot],
     startup: Startup,
 ) {
     let _ = CODE_RUNTIME.set(code);
@@ -102,7 +98,7 @@ pub fn start<G>(
     horizon_hooks::engine::seal();
     horizon_client::spans::startup::init(std::time::Instant::now());
     horizon_client::spans::trace::start_from_env();
-    let (ids, _loaded_code) = load(&native, &launch);
+    let _loaded_code = load(&native, &launch);
     logging::set_game_home(launch.context.home.clone());
     // The dedicated server logs in its own folder, as vanilla's does; the game in its home.
     let (home, side, thread) = if launch

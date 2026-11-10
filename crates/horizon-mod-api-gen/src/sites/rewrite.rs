@@ -235,7 +235,7 @@ pub fn rewrite(
                         pub type #listener = fn(&mut #ty, &mut #record, &mut dyn FnMut(&mut #ty, &mut #record));
                     };
                     let dispatch = quote! {
-                        if ::mod_points::__private::SITES[::mod_points::SiteId::#variant as usize].load(::std::sync::atomic::Ordering::Relaxed) {
+                        if ::mod_points::__private::TABLE.active_site(::mod_points::SiteId::#variant as usize) {
                             let mut #args = #record;
                             ::horizon_mod_api_macros::site!(#wrap, #variant, #listener, #receiver, #record, #output, &mut #binding, #args, |_: &mut #ty, _: &mut #record| ())
                         }
@@ -338,7 +338,7 @@ pub fn rewrite(
                     pub type #listener = for<'g> fn(#receiver_type, &mut #record, &mut dyn FnMut(#receiver_type, &mut #record) -> #output) -> #output;
                 };
                 let replacement = quote! {
-                    if ::mod_points::__private::SITES[::mod_points::SiteId::#variant as usize].load(::std::sync::atomic::Ordering::Relaxed) {
+                    if ::mod_points::__private::TABLE.active_site(::mod_points::SiteId::#variant as usize) {
                         #binding
                         let mut #args = #record { #(#fields: #arguments,)* };
                         ::horizon_mod_api_macros::site!(#wrap, #variant, #listener, #receiver_alias, #record, #output_alias, #recv, #args, |#recv: #receiver_alias<'_, '_>, #args: &mut #record| #original)

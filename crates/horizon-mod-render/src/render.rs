@@ -11,11 +11,10 @@ pub use wgpu;
 
 /// Whether the raw world draw place has an installed listener.
 pub fn world_drawn_hooked() -> bool {
-    mod_points::__private::POINTS[mod_points::PointId::ModRenderRenderWorldDrawn as usize]
-        .load(std::sync::atomic::Ordering::Relaxed)
-        || mod_points::__private::POINTS
-            [mod_points::PointId::ModRenderRenderWorldDrawnReturn as usize]
-            .load(std::sync::atomic::Ordering::Relaxed)
+    mod_points::__private::TABLE
+        .active_point(mod_points::PointId::ModRenderRenderWorldDrawn as usize)
+        || mod_points::__private::TABLE
+            .active_point(mod_points::PointId::ModRenderRenderWorldDrawnReturn as usize)
 }
 
 /// What a mod can draw with once the world is drawn: after the sky, terrain, entities,
