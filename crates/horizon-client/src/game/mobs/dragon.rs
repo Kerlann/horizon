@@ -3385,51 +3385,7 @@ impl Game<'_> {
             if !ticking(c.at[0].floor() as i32, c.at[2].floor() as i32) {
                 return true;
             }
-            c.age += 1;
-            if breath_expired(c.age, c.duration) {
-                return false;
-            }
-            if !c.from_dragon && c.age >= BREATH_WAIT {
-                // DragonFireball's cloud: radius per tick (7 - 3) / duration.
-                c.radius += (7.0 - 3.0) / c.duration as f32;
-            }
-            let r = c.radius;
-            for _ in 0..((std::f32::consts::PI * r * r) as i32).min(40) {
-                let a = self.world.random.next_float() * std::f32::consts::TAU;
-                let d = self.world.random.next_float().sqrt() * r;
-                let at = [
-                    c.at[0] + f64::from(a.cos() * d),
-                    c.at[1],
-                    c.at[2] + f64::from(a.sin() * d),
-                ];
-                self.particles.add_with(
-                    &ParticleOptions::simple(ParticleType::DragonBreath),
-                    at,
-                    [0.0, 0.0, 0.0],
-                    false,
-                    true,
-                );
-            }
-            // AreaEffectCloud: after its wait, each entity every 20 ticks.
-            // Instant damage I from the flame cloud, II from a fireball's,
-            // both at the cloud's 0.5 scale.
-            let amount = harm_amount(u32::from(!c.from_dragon));
-            let inside = players
-                .iter()
-                .filter(|p| cloud_hits(c.at, r, p.bounds, p.position))
-                .map(|p| Victim::Player(p.who))
-                .chain(
-                    mobs.iter()
-                        .filter(|m| cloud_hits(c.at, r, m.1, m.2))
-                        .map(|m| Victim::Mob(m.0)),
-                );
-            for victim in breath_victims(c.age, &mut c.victims, inside) {
-                match victim {
-                    Victim::Player(who) => harmed.push((who, amount)),
-                    Victim::Mob(id) => harmed_mobs.push((id, i32::from(!c.from_dragon), c.at)),
-                }
-            }
-            true
+            self.tick_breath_body(c, &players, &mobs, &mut harmed, &mut harmed_mobs)
         });
         self.breath_clouds
             .restore(clouds, horizon_client::join_seq::RestoreOrder::SpawnsFirst);
@@ -3441,6 +3397,61 @@ impl Game<'_> {
         for (id, amplifier, at) in harmed_mobs {
             self.breath_affect_mob(id, amplifier, at);
         }
+    }
+    /// The existing pure breath Cloud step, before deferred damage.
+    fn tick_breath_body(
+        &mut self,
+        c: &mut Breath,
+        players: &[FightPlayer],
+        mobs: &[(u32, Aabb, Vec3)],
+        harmed: &mut Vec<(FightWho, f32)>,
+        harmed_mobs: &mut Vec<(u32, i32, [f64; 3])>,
+    ) -> bool {
+        c.age += 1;
+        if breath_expired(c.age, c.duration) {
+            return false;
+        }
+        if !c.from_dragon && c.age >= BREATH_WAIT {
+            // DragonFireball's cloud: radius per tick (7 - 3) / duration.
+            c.radius += (7.0 - 3.0) / c.duration as f32;
+        }
+        let r = c.radius;
+        for _ in 0..((std::f32::consts::PI * r * r) as i32).min(40) {
+            let a = self.world.random.next_float() * std::f32::consts::TAU;
+            let d = self.world.random.next_float().sqrt() * r;
+            let at = [
+                c.at[0] + f64::from(a.cos() * d),
+                c.at[1],
+                c.at[2] + f64::from(a.sin() * d),
+            ];
+            self.particles.add_with(
+                &ParticleOptions::simple(ParticleType::DragonBreath),
+                at,
+                [0.0, 0.0, 0.0],
+                false,
+                true,
+            );
+        }
+        // AreaEffectCloud: after its wait, each entity every 20 ticks.
+        // Instant damage I from the flame cloud, II from a fireball's,
+        // both at the cloud's 0.5 scale.
+        let amount = harm_amount(u32::from(!c.from_dragon));
+        let inside = players
+            .iter()
+            .filter(|p| cloud_hits(c.at, r, p.bounds, p.position))
+            .map(|p| Victim::Player(p.who))
+            .chain(
+                mobs.iter()
+                    .filter(|m| cloud_hits(c.at, r, m.1, m.2))
+                    .map(|m| Victim::Mob(m.0)),
+            );
+        for victim in breath_victims(c.age, &mut c.victims, inside) {
+            match victim {
+                Victim::Player(who) => harmed.push((who, amount)),
+                Victim::Mob(id) => harmed_mobs.push((id, i32::from(!c.from_dragon), c.at)),
+            }
+        }
+        true
     }
     /// `EnderDragon.knockBack` on the player in a wing's zone: pushed away
     /// from the body, and hurt for 5 unless the dragon is perched
