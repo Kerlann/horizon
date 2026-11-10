@@ -57,11 +57,9 @@ pub fn register(provider: &'static HostProvider) -> Result<(), ProviderError> {
 
 /// Returns the immutable provider table. Steady-state calls take no mutex.
 pub fn acquire() -> Result<&'static HostProvider, ProviderError> {
-    *SEALED.get_or_init(|| {
-        PENDING
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .take()
-            .ok_or(ProviderError::NotRegistered)
-    })
+    if let Some(provider) = SEALED.get() {
+        return *provider;
+    }
+    let mut pending = PENDING.lock().unwrap_or_else(|e| e.into_inner());
+    *SEALED.get_or_init(|| pending.take().ok_or(ProviderError::NotRegistered))
 }
