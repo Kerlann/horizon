@@ -135,6 +135,37 @@ impl Parked {
 }
 
 impl Game<'_> {
+    pub(super) fn entity_read_level(
+        &self,
+        dimension: DimensionKey,
+    ) -> Option<super::native_live_entity_sources::EntityReadLevel<'_>> {
+        use super::native_live_entity_sources::EntityReadLevel;
+        if dimension == self.dim.key() {
+            return Some(EntityReadLevel {
+                world: &self.world,
+                persist: &self.persist,
+                mobs: &self.mobs,
+                boats: &self.boats,
+                carts: &self.carts,
+                parked: None,
+            });
+        }
+        let dim = match dimension {
+            DimensionKey::OVERWORLD => Dim::Overworld,
+            DimensionKey::NETHER => Dim::Nether,
+            DimensionKey::END => Dim::End,
+            key => Dim::Extra(key),
+        };
+        let parked = self.levels.parked.get(&dim)?;
+        Some(EntityReadLevel {
+            world: &parked.world,
+            persist: &parked.persist,
+            mobs: &parked.mobs,
+            boats: &parked.boats,
+            carts: &parked.carts,
+            parked: Some(parked),
+        })
+    }
     /// Serialize the actual parked Mob owner without placing its level in Game.
     /// Explicit UUID insertions are published after releasing the storage loan,
     /// including when serialization unwinds; no roster reconciliation is needed.
