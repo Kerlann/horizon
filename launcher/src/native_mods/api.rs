@@ -713,6 +713,7 @@ mod tests {
                 local: None,
                 local_type: None,
                 position: None,
+                expr: None,
                 id: format!("listen_{index}"),
                 at: "game::Game<'_>::tick".into(),
                 kind,

@@ -180,6 +180,7 @@ mod tests {
             local: None,
             local_type: None,
             position: None,
+            expr: None,
             id: "own".into(),
             at: at.into(),
             kind,

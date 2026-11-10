@@ -1396,5 +1396,7 @@
   "{count} on the official SMP": "{count} në SMP-në zyrtare",
   "{count} playing now": "{count} duke luajtur tani",
   "{count} waiting to be sent": "{count} në pritje për t'u dërguar",
-  "{n} items": "{n} sende"
+  "{n} items": "{n} sende",
+  "expression requires native internals source rebuilding; use internals, or request a hook": "expression requires native internals source rebuilding; use internals, or request a hook",
+  "E_INJECT_EXPRESSION_TYPE: {injections}: the declared type `{type}` doesn't match the expression `{expr}` in {target}; set `type` in its [[inject]] to the type the game uses there.": "E_INJECT_EXPRESSION_TYPE: {injections}: the declared type `{type}` doesn't match the expression `{expr}` in {target}; set `type` in its [[inject]] to the type the game uses there."
 }

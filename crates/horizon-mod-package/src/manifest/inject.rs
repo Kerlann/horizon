@@ -28,9 +28,14 @@ pub struct Inject {
     pub nth: Option<usize>,
     pub ctx: Option<String>,
     pub local: Option<String>,
+    /// The Rust type of a `modify_local` binding or an `expression`'s value.
     #[serde(rename = "type")]
     pub local_type: Option<String>,
     pub position: Option<Position>,
+    /// An `expression`'s selector: a literal (`64.0`, `"name"`), a constant's path or a field
+    /// read (`self.speed`), as written in the function, found among equal expressions by `nth`
+    /// and `ctx`.
+    pub expr: Option<String>,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
@@ -116,7 +121,6 @@ impl Inject {
             }
             for (field, present) in [
                 ("local", entry.local.is_some()),
-                ("type", entry.local_type.is_some()),
                 ("position", entry.position.is_some()),
             ] {
                 if present != (entry.kind == Kind::ModifyLocal) {
@@ -125,6 +129,25 @@ impl Inject {
                         "local, type and position are required only for modify_local",
                     ));
                 }
+            }
+            if entry.local_type.is_some()
+                != matches!(entry.kind, Kind::ModifyLocal | Kind::Expression)
+            {
+                return Err(invalid(
+                    "type",
+                    "type is required only for modify_local and expression",
+                ));
+            }
+            if entry.expr.is_some() != (entry.kind == Kind::Expression)
+                || entry
+                    .expr
+                    .as_ref()
+                    .is_some_and(|expr| expr.trim().is_empty())
+            {
+                return Err(invalid(
+                    "expr",
+                    "expression needs expr, the expression as written; other kinds take none",
+                ));
             }
             if entry.local.as_ref().is_some_and(|name| {
                 name.is_empty()
@@ -143,12 +166,17 @@ impl Inject {
             }
             let call = entry.call.as_ref().is_some_and(|s| !s.trim().is_empty());
             let ctx = entry.ctx.as_ref().is_some_and(|s| !s.trim().is_empty());
-            if if entry.kind.needs_call() {
+            if if entry.kind == Kind::Expression {
+                entry.call.is_some() || entry.nth.is_none() || !ctx
+            } else if entry.kind.needs_call() {
                 !call || entry.nth.is_none() || !ctx
             } else {
                 entry.call.is_some() || entry.nth.is_some() || entry.ctx.is_some()
             } {
-                return Err(invalid("call/nth/ctx", "calls/locals only: all three"));
+                return Err(invalid(
+                    "call/nth/ctx",
+                    "calls/locals only: all three; expression: nth and ctx",
+                ));
             }
         }
         Ok(())
@@ -204,6 +232,7 @@ pub enum NoSlotReason {
     NativeOnly,
     WasmSitesUnsupported,
     LocalSourceOnly,
+    ExpressionSourceOnly,
     ExtensionSlotsPending,
     ApiSitesUnsupported,
     SourcePending,
@@ -222,6 +251,7 @@ impl fmt::Display for NoSlotReason {
                 "wasm does not support internals or call-site injections; use a hook"
             }
             Self::LocalSourceOnly => "modify_local requires native internals source rebuilding; use internals, or request a hook",
+            Self::ExpressionSourceOnly => "expression requires native internals source rebuilding; use internals, or request a hook",
             Self::ExtensionSlotsPending => "extension slots pending (I6)",
             Self::ApiSitesUnsupported => "API call-site injections require internals",
             Self::SourcePending => "source injects pending (U5)",
@@ -328,6 +358,11 @@ pub fn route(entry: Entry<'_>, slots: &[Place]) -> Result<Route, InjectError> {
         {
             Some(NoSlotReason::LocalSourceOnly)
         }
+        Kind::Expression
+            if entry.target != Target::Native || inject.access != Access::Internals =>
+        {
+            Some(NoSlotReason::ExpressionSourceOnly)
+        }
         Kind::Field => Some(NoSlotReason::ExtensionSlotsPending),
         _ => None,
     } {
@@ -348,6 +383,10 @@ pub fn route(entry: Entry<'_>, slots: &[Place]) -> Result<Route, InjectError> {
     }
     if inject.kind == Kind::ModifyLocal {
         return Ok(Route::Source(NoSlotReason::LocalSourceOnly));
+    }
+    // A constant or field read has no compiled slot: native internals rebuild the game.
+    if inject.kind == Kind::Expression {
+        return Ok(Route::Source(NoSlotReason::ExpressionSourceOnly));
     }
     let available = if inject.kind.needs_call() {
         // An unlisted native internals call is checked against source by U2 before compilation.
@@ -568,22 +607,25 @@ mod tests {
                         p.slots.clear();
                         p.calls[0].slots.clear();
                     }
-                    if kind == Kind::ModifyLocal && access == Access::Internals {
+                    let source_only = match kind {
+                        Kind::ModifyLocal => Some(NoSlotReason::LocalSourceOnly),
+                        Kind::Expression => Some(NoSlotReason::ExpressionSourceOnly),
+                        _ => None,
+                    };
+                    if let Some(only) = source_only.filter(|_| access == Access::Internals) {
                         assert_eq!(
                             run(&i, Target::Native, &[p.clone()]),
-                            Ok(Route::Source(NoSlotReason::LocalSourceOnly))
+                            Ok(Route::Source(only))
                         );
                         assert!(matches!(
                             run(&i, Target::Wasm, &[p]),
-                            Err(InjectError::NoSlot {
-                                reason: NoSlotReason::LocalSourceOnly,
-                                ..
-                            })
+                            Err(InjectError::NoSlot { reason, .. }) if reason == only
                         ));
                         continue;
                     }
                     if let Some(pending) = match kind {
                         Kind::ModifyLocal => Some(NoSlotReason::LocalSourceOnly),
+                        Kind::Expression => Some(NoSlotReason::ExpressionSourceOnly),
                         Kind::Field => Some(NoSlotReason::ExtensionSlotsPending),
                         _ => None,
                     } {
@@ -664,6 +706,9 @@ mod tests {
             Kind::Expression,
         ] {
             for field in ["local", "type", "position"] {
+                if kind == Kind::Expression && field == "type" {
+                    continue;
+                }
                 let mut other = m.inject[0].clone();
                 other.kind = kind;
                 other.local = (field == "local").then(|| "n".into());
@@ -682,6 +727,59 @@ mod tests {
             run(&i, Target::Native, &[place()]).unwrap_err().to_string(),
             "E_INJECT_NO_SLOT: sample:ground: modify_local requires native internals source rebuilding; use internals, or request a hook; slot declaration slots/sample.txt: game::tick; access = \"api\" never rebuilds the game; use access = \"internals\" where supported or request a hook"
         );
+    }
+
+    #[test]
+    fn expression_takes_expr_type_nth_and_ctx_and_only_native_internals() {
+        let native = format!(
+            "[native]\ngame='26.3'\nhorizon='{0}'\nmixins='{0}'",
+            "a".repeat(40)
+        );
+        let decl = DECL.replace(
+            "kind='head'",
+            "kind='expression'\naccess='internals'\nexpr='64.0'\ntype='f64'\nnth=1\nctx='context'",
+        );
+        let m = parse(&decl, &native).unwrap();
+        let i = &m.inject[0];
+        assert_eq!(
+            (
+                i.expr.as_deref(),
+                i.local_type.as_deref(),
+                i.nth,
+                i.call.as_deref()
+            ),
+            (Some("64.0"), Some("f64"), Some(1), None)
+        );
+        for (field, without, with) in [
+            ("expr", "expr='64.0'\n", "expr=''\n"),
+            ("type", "type='f64'\n", "type='f64'\nlocal='n'\n"),
+            ("call/nth/ctx", "nth=1\n", "nth=1\ncall='sink'\n"),
+            ("call/nth/ctx", "ctx='context'\n", "ctx='context'\n"),
+        ] {
+            assert!(
+                parse(&decl.replace(without, ""), &native)
+                    .unwrap_err()
+                    .contains(field),
+                "{field}"
+            );
+            if with != without {
+                assert!(
+                    parse(&decl.replace(without, with), &native).is_err(),
+                    "{with}"
+                );
+            }
+        }
+        // Another kind with `expr` is refused naming it.
+        assert!(
+            parse(&format!("{DECL}expr='64.0'\n"), &native)
+                .unwrap_err()
+                .contains("expr")
+        );
+        let mut api = m.inject[0].clone();
+        (api.at, api.hash, api.access) = ("game::tick".into(), "signature".into(), Access::Api);
+        assert!(run(&api, Target::Native, &[place()]).unwrap_err().to_string().contains(
+            "expression requires native internals source rebuilding; use internals, or request a hook"
+        ));
     }
 
     #[test]

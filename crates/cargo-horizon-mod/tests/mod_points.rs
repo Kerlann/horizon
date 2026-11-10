@@ -63,6 +63,7 @@ fn inject(id: &str, at: &str, kind: Kind, access: Access, with: &str, hash: &str
         local: None,
         local_type: None,
         position: None,
+        expr: None,
     }
 }
 

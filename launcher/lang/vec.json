@@ -1396,5 +1396,7 @@
   "{count} on the official SMP": "{count} sulla SMP ufficiale",
   "{count} playing now": "{count} che zoga deso",
   "{count} waiting to be sent": "{count} in attesa de essere mandato",
-  "{n} items": "{n} ogeti"
+  "{n} items": "{n} ogeti",
+  "expression requires native internals source rebuilding; use internals, or request a hook": "expression requires native internals source rebuilding; use internals, or request a hook",
+  "E_INJECT_EXPRESSION_TYPE: {injections}: the declared type `{type}` doesn't match the expression `{expr}` in {target}; set `type` in its [[inject]] to the type the game uses there.": "E_INJECT_EXPRESSION_TYPE: {injections}: the declared type `{type}` doesn't match the expression `{expr}` in {target}; set `type` in its [[inject]] to the type the game uses there."
 }

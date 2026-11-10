@@ -14,6 +14,8 @@ pub(super) struct Compiler<'a> {
     pub stage: &'a Path,
     pub source: &'a Path,
     pub mods: &'a [(String, String)],
+    /// The private source sites staged into the game; an `expression` one is the injection's.
+    pub sites: &'a [horizon_mod_api_gen::sites::Site],
 }
 
 #[derive(Default)]
@@ -66,6 +68,14 @@ pub(super) fn capture(compiler: &Compiler<'_>, input: impl BufRead, mut log: imp
         if message["level"] != "error" {
             continue;
         }
+        if let Some(site) = message["spans"].as_array().and_then(|spans| {
+            spans
+                .iter()
+                .filter(|s| s["is_primary"] == true)
+                .find_map(|span| expression_site(compiler, span))
+        }) {
+            expression_failure(compiler, site, &mut output);
+        }
         if output.errors.len() < 4 {
             output.errors.push(rendered.to_owned());
         }
@@ -85,6 +95,76 @@ pub(super) fn capture(compiler: &Compiler<'_>, input: impl BufRead, mut log: imp
         }
     }
     output
+}
+
+/// The `expression` site whose lowered block holds the error's primary `span`: the block binds the
+/// read to the declared type first, so a mismatch with where the value is used lands inside it.
+fn expression_site<'a>(
+    compiler: &Compiler<'a>,
+    span: &Value,
+) -> Option<&'a horizon_mod_api_gen::sites::Site> {
+    struct Sites(Vec<(Range<usize>, String)>);
+    impl<'ast> Visit<'ast> for Sites {
+        fn visit_block(&mut self, block: &'ast syn::Block) {
+            if let Some(syn::Stmt::Local(local)) = block.stmts.first() {
+                let pat = match &local.pat {
+                    syn::Pat::Type(typed) => &*typed.pat,
+                    pat => pat,
+                };
+                if let syn::Pat::Ident(ident) = pat {
+                    let name = ident.ident.to_string();
+                    if let Some(site) = name.strip_prefix("__horizon_expression_") {
+                        self.0.push((block.span().byte_range(), site.to_owned()));
+                    }
+                }
+            }
+            syn::visit::visit_block(self, block);
+        }
+    }
+    if compiler.sites.iter().all(|site| site.expression.is_none()) {
+        return None;
+    }
+    let file = compiler.stage.join(span["file_name"].as_str()?);
+    let start = usize::try_from(span["byte_start"].as_u64()?).ok()?;
+    let end = usize::try_from(span["byte_end"].as_u64()?).ok()?;
+    let mut sites = Sites(Vec::new());
+    sites.visit_file(&syn::parse_file(&fs::read_to_string(file).ok()?).ok()?);
+    let (_, name) = sites
+        .0
+        .into_iter()
+        .filter(|(range, _)| range.start <= start && end <= range.end)
+        .min_by_key(|(range, _)| range.len())?;
+    compiler
+        .sites
+        .iter()
+        .find(|site| site.name == name && site.expression.is_some())
+}
+
+/// Names the mods that declared `site` and says what is wrong in their words, not rustc's.
+fn expression_failure(
+    compiler: &Compiler<'_>,
+    site: &horizon_mod_api_gen::sites::Site,
+    output: &mut Output,
+) {
+    let expression = site.expression.as_ref().expect("an expression site");
+    for injection in expression.origin.split(", ") {
+        let id = injection.split(':').next().unwrap_or_default();
+        if let Some((id, version)) = compiler.mods.iter().find(|(m, _)| m == id) {
+            output.owners.insert(format!("{id} {version}"));
+        }
+    }
+    let explained = crate::i18n::trf(
+        "E_INJECT_EXPRESSION_TYPE: {injections}: the declared type `{type}` doesn't match the expression `{expr}` in {target}; set `type` in its [[inject]] to the type the game uses there.",
+        &[
+            ("injections", &expression.origin),
+            ("type", &expression.ty),
+            ("expr", &site.call),
+            ("target", &site.target),
+        ],
+    ) + "\n";
+    if !output.errors.contains(&explained) {
+        output.errors.insert(0, explained);
+    }
 }
 
 /// Both rustc's prebuilt route and Cargo's source route preserve the rendered error.
@@ -310,6 +390,55 @@ mod tests {
     }
 
     #[test]
+    fn a_wrong_expression_type_names_the_injection_not_just_rustc() {
+        let dir = super::super::tests::dir("expression-culprit");
+        fs::create_dir_all(dir.join("src")).unwrap();
+        fs::write(dir.join("Cargo.toml"), "[workspace]\n[package]\nname = 'expression-fixture'\nversion = '0.1.0'\nedition = '2021'\n").unwrap();
+        // The staged shape of an `expression` site: the read bound to the declared type first. The
+        // game uses it as an `f64`; the mod declared `f32`.
+        fs::write(
+            dir.join("src/main.rs"),
+            "fn reach() -> f64 { 3.0 }\nfn main() {\n    let far = reach() > { let __horizon_expression_Sreach: f32 = 4.5; __horizon_expression_Sreach };\n    let _ = far;\n}\n",
+        )
+        .unwrap();
+        let output = Command::new(env!("CARGO"))
+            .args(["check", "--offline", "--message-format=json"])
+            .arg("--manifest-path")
+            .arg(dir.join("Cargo.toml"))
+            .env("CARGO_TARGET_DIR", dir.join("target"))
+            .output()
+            .unwrap();
+        assert!(!output.status.success());
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let site: horizon_mod_api_gen::sites::Site = serde_json::from_value(json!({
+            "expression": {"ty": "f32", "origin": "far_reach:reach, other:reach"},
+            "name": "Sreach", "target": "horizon_client::game::reach", "selector": "4.5",
+            "ordinal": 0, "hash": "h", "call": "4.5", "ctx": "c", "listener": "L", "record": "R",
+            "receiver": "()", "args": [], "output": "f32"
+        }))
+        .unwrap();
+        let mods = vec![("far_reach".to_owned(), "0.2.0".to_owned())];
+        let compiler = Compiler {
+            stage: &dir,
+            source: &dir,
+            mods: &mods,
+            sites: std::slice::from_ref(&site),
+        };
+        let error = capture(&compiler, Cursor::new(&stdout), Vec::new()).explain(String::new());
+        assert!(error.starts_with("far_reach 0.2.0:\nE_INJECT_EXPRESSION_TYPE: far_reach:reach, other:reach: the declared type `f32` doesn't match the expression `4.5` in horizon_client::game::reach; set `type` in its [[inject]] to the type the game uses there.\n"), "{error}");
+        // rustc's own words follow, for the details.
+        assert!(error.contains("E0308"), "{error}");
+        // The same error outside any expression site names no injection.
+        let unrelated = Compiler {
+            sites: &[],
+            ..compiler
+        };
+        let error = capture(&unrelated, Cursor::new(&stdout), Vec::new()).explain(String::new());
+        assert!(!error.contains("E_INJECT_EXPRESSION_TYPE"), "{error}");
+        fs::remove_dir_all(dir).unwrap();
+    }
+
+    #[test]
     fn a_real_compiler_error_in_a_helper_names_its_mod_and_preserves_the_error() {
         let dir = fixture("compiler-culprit");
         let output = Command::new(env!("CARGO"))
@@ -331,6 +460,7 @@ mod tests {
             stage: &dir,
             source: &dir.join("original"),
             mods: &mods,
+            sites: &[],
         };
         let original = String::from_utf8(output.stderr).unwrap();
         let mut log = Vec::new();
@@ -358,6 +488,7 @@ mod tests {
                         stage: &dir,
                         source: &dir.join("original"),
                         mods: &mods,
+                        sites: &[],
                     }),
                 )
                 .map_err(|ran| ran.error)
@@ -396,6 +527,7 @@ mod tests {
                 stage: &dir,
                 source: &dir.join("original"),
                 mods: &both,
+                sites: &[],
             },
             Cursor::new(&stdout),
             Vec::new(),
@@ -516,6 +648,7 @@ mod tests {
             stage: &dir,
             source: &dir.join("original"),
             mods: &mods,
+            sites: &[],
         };
         let line = |package: &str| {
             json!({
@@ -568,6 +701,7 @@ mod tests {
             stage: &dir,
             source: &dir.join("original"),
             mods: &mods,
+            sites: &[],
         };
         let stdout = check(
             &dir,

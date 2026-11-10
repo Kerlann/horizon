@@ -32,6 +32,7 @@ fn api_head_without_prebuilt_slot_is_refused() {
         local: None,
         local_type: None,
         position: None,
+        expr: None,
         id: "missing".into(),
         at: "game::run".into(),
         kind: Kind::Head,
@@ -83,6 +84,7 @@ fn every_native_kind_and_access_registers_or_refuses_by_name() {
                 local: None,
                 local_type: None,
                 position: None,
+                expr: None,
                 id: "test".into(),
                 at: "game::run".into(),
                 kind,
@@ -94,10 +96,15 @@ fn every_native_kind_and_access_registers_or_refuses_by_name() {
                 nth: call.then_some(0),
                 ctx: call.then(|| "context".into()),
             });
-            if kind == Kind::ModifyLocal && access == Access::Internals {
+            let source_only = match kind {
+                Kind::ModifyLocal => Some(NoSlotReason::LocalSourceOnly),
+                Kind::Expression => Some(NoSlotReason::ExpressionSourceOnly),
+                _ => None,
+            };
+            if let Some(only) = source_only.filter(|_| access == Access::Internals) {
                 assert_eq!(
                     routes(&catalog, &manifest).unwrap(),
-                    vec![Route::Source(NoSlotReason::LocalSourceOnly)]
+                    vec![Route::Source(only)]
                 );
                 continue;
             }
@@ -106,8 +113,7 @@ fn every_native_kind_and_access_registers_or_refuses_by_name() {
                 (Kind::ModifyCallArg, _) => Some(NoSlotReason::SourcePending),
                 (Kind::ModifyLocal, Access::Api) => Some(NoSlotReason::LocalSourceOnly),
                 (Kind::Field, _) => Some(NoSlotReason::ExtensionSlotsPending),
-                (Kind::Expression, Access::Api) => Some(NoSlotReason::KindHasNoSlot),
-                (Kind::Expression, _) => Some(NoSlotReason::SourcePending),
+                (Kind::Expression, _) => Some(NoSlotReason::ExpressionSourceOnly),
                 (Kind::Replace, Access::Internals) => Some(NoSlotReason::ReplacePending),
                 (_, Access::Api) if call => Some(NoSlotReason::ApiSitesUnsupported),
                 _ => None,
@@ -169,6 +175,7 @@ fn an_api_listener_at_a_point_without_an_api_record_is_refused_naming_the_type()
         local: None,
         local_type: None,
         position: None,
+        expr: None,
         id: "test".into(),
         at: "game::run".into(),
         kind: Kind::Head,
@@ -209,6 +216,7 @@ fn a_replace_at_a_point_whose_return_has_no_api_form_is_refused_naming_it() {
         local: None,
         local_type: None,
         position: None,
+        expr: None,
         id: "own".into(),
         at: "game::run".into(),
         kind: Kind::Replace,
@@ -262,6 +270,7 @@ fn unified_route_checks_freshness_and_selects_native_function_source() {
         local: None,
         local_type: None,
         position: None,
+        expr: None,
         id: "test".into(),
         at: "game::run".into(),
         kind: Kind::WrapIf,
@@ -315,6 +324,7 @@ fn unstaged_source_value_before_listed_wrap_if_does_not_panic() {
         local: None,
         local_type: None,
         position: None,
+        expr: None,
         id: "value".into(),
         at: "game::run".into(),
         kind: Kind::ModifyValue,

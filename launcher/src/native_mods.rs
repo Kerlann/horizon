@@ -2237,6 +2237,7 @@ fn pipeline(
                 stage: &stage,
                 source: &source,
                 mods: &identities,
+                sites: &horizon_mod_api_gen::sites::source::read(&real)?,
             }),
         )
         .map_err(|ran| {

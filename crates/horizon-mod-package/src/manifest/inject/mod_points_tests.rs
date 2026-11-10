@@ -46,6 +46,7 @@ fn inject(at: &str, kind: Kind, access: Access, hash: &str) -> Inject {
         local: None,
         local_type: None,
         position: None,
+        expr: None,
     }
 }
 

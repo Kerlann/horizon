@@ -265,7 +265,7 @@ fn private_wrap_adapters_repeat_suppress_and_condition_the_original() {
     ] {
         let mut manifest = Manifest::parse(&base).unwrap();
         manifest.inject.push(Inject {
-            local: None, local_type: None, position: None,
+            local: None, local_type: None, position: None, expr: None,
             id: "wrap".into(), at: "game::run".into(), kind, with: "hook".into(),
             access: Access::Internals, priority: 7, hash: "signature".into(),
             call: Some("game::step".into()), nth: Some(0), ctx: Some("statement".into()),

@@ -1396,5 +1396,7 @@
   "{count} on the official SMP": "{count} в официалния SMP",
   "{count} playing now": "{count} играе в момента",
   "{count} waiting to be sent": "{count} чака изпращане",
-  "{n} items": "{n} предмета"
+  "{n} items": "{n} предмета",
+  "expression requires native internals source rebuilding; use internals, or request a hook": "expression requires native internals source rebuilding; use internals, or request a hook",
+  "E_INJECT_EXPRESSION_TYPE: {injections}: the declared type `{type}` doesn't match the expression `{expr}` in {target}; set `type` in its [[inject]] to the type the game uses there.": "E_INJECT_EXPRESSION_TYPE: {injections}: the declared type `{type}` doesn't match the expression `{expr}` in {target}; set `type` in its [[inject]] to the type the game uses there."
 }

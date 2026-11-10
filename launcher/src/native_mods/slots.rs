@@ -39,14 +39,23 @@ pub(super) fn sites<'a>(
     manifest
         .inject
         .iter()
-        .filter(|entry| entry.call.is_some())
+        .filter(|entry| entry.call.is_some() || entry.expr.is_some())
         .map(|entry| (entry, selected(sites, entry).expect("slot route checked")))
 }
 
 fn selected<'a>(sites: &'a [Site], entry: &Inject) -> Option<&'a Site> {
     sites.iter().find(|site| {
         super::internals::plain_path(&site.target) == super::internals::plain_path(&entry.at)
-            && Some(&site.call) == entry.call.as_ref()
+            && Some(&site.call)
+                == entry
+                    .call
+                    .clone()
+                    .or_else(|| {
+                        horizon_mod_api_gen::sites::expression::spelling(entry.expr.as_ref()?).ok()
+                    })
+                    .as_ref()
+            && site.expression.as_ref().map(|e| &e.ty)
+                == entry.local_type.as_ref().filter(|_| entry.expr.is_some())
             && Some(&site.ctx) == entry.ctx.as_ref()
             && Some(site.ordinal) == entry.nth
             && site.local.as_ref().map(|l| (&l.binding, &l.ty, l.after))
@@ -160,6 +169,7 @@ pub(super) fn routes(catalog: &Catalog, manifest: &Manifest) -> Result<Vec<Route
                 | Kind::Return
                 | Kind::BeforeCall
                 | Kind::ModifyLocal
+                | Kind::Expression
                 | Kind::AfterCall
                 | Kind::ModifyValue
                 | Kind::WrapCall

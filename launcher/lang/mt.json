@@ -1396,5 +1396,7 @@
   "{count} on the official SMP": "{count} fuq l-SMP uffiċjali",
   "{count} playing now": "{count} qed jilgħab issa",
   "{count} waiting to be sent": "{count} qed jistenna li jintbagħat",
-  "{n} items": "{n} oġġetti"
+  "{n} items": "{n} oġġetti",
+  "expression requires native internals source rebuilding; use internals, or request a hook": "expression requires native internals source rebuilding; use internals, or request a hook",
+  "E_INJECT_EXPRESSION_TYPE: {injections}: the declared type `{type}` doesn't match the expression `{expr}` in {target}; set `type` in its [[inject]] to the type the game uses there.": "E_INJECT_EXPRESSION_TYPE: {injections}: the declared type `{type}` doesn't match the expression `{expr}` in {target}; set `type` in its [[inject]] to the type the game uses there."
 }

@@ -1396,5 +1396,7 @@
   "{count} on the official SMP": "{count} ma ka SMP kūhelu",
   "{count} playing now": "{count} pāʻani i kēia manawa",
   "{count} waiting to be sent": "{count} e kali ana e hoʻouna ʻia",
-  "{n} items": "{n} mau mea"
+  "{n} items": "{n} mau mea",
+  "expression requires native internals source rebuilding; use internals, or request a hook": "expression requires native internals source rebuilding; use internals, or request a hook",
+  "E_INJECT_EXPRESSION_TYPE: {injections}: the declared type `{type}` doesn't match the expression `{expr}` in {target}; set `type` in its [[inject]] to the type the game uses there.": "E_INJECT_EXPRESSION_TYPE: {injections}: the declared type `{type}` doesn't match the expression `{expr}` in {target}; set `type` in its [[inject]] to the type the game uses there."
 }

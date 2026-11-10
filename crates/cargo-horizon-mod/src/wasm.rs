@@ -629,6 +629,7 @@ mod route_tests {
             local: None,
             local_type: None,
             position: None,
+            expr: None,
             id: id.into(),
             at: "game::tick".into(),
             kind,

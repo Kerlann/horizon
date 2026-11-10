@@ -30,6 +30,7 @@ fn no_slot_suggestions_round_trip_through_the_slot_reader() {
             local: None,
             local_type: None,
             position: None,
+            expr: None,
             id: "test".into(),
             at: if kind == Kind::Field {
                 "test_slots::Thing"
