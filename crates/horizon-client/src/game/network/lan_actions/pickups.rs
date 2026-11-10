@@ -48,17 +48,21 @@ impl Game<'_> {
                     && d.position.y > position[1] - 0.6
                     && d.position.y < position[1] + 2.4
             })
-            .map(|d| d.id)
+            .map(|d| (d.id, d.join))
             .collect();
         let mut taken = Vec::new();
-        for item_id in near.into_iter().rev() {
-            let Some(item) = self.dropped.iter().find(|d| d.id == item_id) else {
+        for (item_id, item_join) in near.into_iter().rev() {
+            let Some(index) = self.dropped.locate(item_join) else {
+                continue;
+            };
+            let item = &self.dropped[index];
+            if item.id != item_id {
                 continue;
             };
             let stack = item.stack.clone();
             let refused = self.as_guest(conn, |g| g.native_pickup_refused(&stack)) == Some(true);
             // The hook can remove or change any item entity.
-            let Some(i) = self.dropped.iter().position(|d| d.id == item_id) else {
+            let Some(i) = self.dropped.locate(item_join) else {
                 continue;
             };
             if refused {
@@ -224,7 +228,7 @@ impl Game<'_> {
                 area.max_position().z,
             ],
         );
-        let touching: Vec<usize> = self
+        let touching: Vec<_> = self
             .orbs
             .iter()
             .enumerate()
@@ -236,7 +240,7 @@ impl Game<'_> {
                     && o.position.z + 0.25 > min[2]
                     && o.position.z - 0.25 < max[2]
             })
-            .map(|(i, _)| i)
+            .map(|(_, orb)| orb.join)
             .collect();
         if touching.is_empty() {
             return;
@@ -248,7 +252,10 @@ impl Game<'_> {
             .next_int_bound(touching.len() as i32)
             .unwrap_or(0) as usize;
         // A merged orb gives its value once per count and goes at zero.
-        let index = touching[pick];
+        let join = touching[pick];
+        let Some(index) = self.orbs.locate(join) else {
+            return;
+        };
         let mut orb = self.orbs[index].clone();
         let mut canceled = false;
         // Swapping the guest in costs: only when a mod hears the pickup.
