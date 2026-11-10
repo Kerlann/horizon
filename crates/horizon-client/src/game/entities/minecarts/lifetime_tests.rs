@@ -395,3 +395,158 @@ fn canonical_priming_keeps_event_sound_and_exact_destruction_rng() {
         });
     }
 }
+
+struct ReplaceCartAtCallback {
+    phase: u8,
+    physical: bool,
+    calls: Arc<std::sync::atomic::AtomicUsize>,
+}
+impl ReplaceCartAtCallback {
+    fn replace(&self, host: &mut dyn mod_api::ServerHost) {
+        let original = host
+            .entity(71)
+            .expect("original is admitted at the real callback");
+        assert_eq!(original.position(host), Some([3.0, 64.0, 5.0]));
+        if self.physical {
+            assert!(
+                host.commands()
+                    .run_command("kill @e[type=minecraft:chest_minecart]")
+            );
+        } else {
+            assert!(original.discard(host));
+        }
+        assert!(
+            host.commands()
+                .run_command("summon minecraft:chest_minecart 3 64 5")
+        );
+        self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+#[mod_api::__subscriptions]
+impl mod_api::Hooks for ReplaceCartAtCallback {
+    fn vehicle_damage(
+        &self,
+        host: &mut dyn mod_api::ServerHost,
+        _: &mut mod_api::VehicleDamageEvent<'_>,
+    ) -> mod_api::Flow {
+        if self.phase == 0 {
+            self.replace(host);
+        }
+        mod_api::Flow::Continue
+    }
+    fn vehicle_destroy(
+        &self,
+        host: &mut dyn mod_api::ServerHost,
+        _: &mut mod_api::VehicleDestroyEvent<'_>,
+    ) {
+        if self.phase == 1 {
+            self.replace(host);
+        }
+    }
+    fn player_advancement_progress(
+        &self,
+        host: &mut dyn mod_api::ServerHost,
+        event: &mut mod_api::PlayerAdvancementProgressEvent<'_>,
+    ) {
+        if self.phase == 2 && event.advancement == "test:cart_loot" {
+            self.replace(host);
+        }
+    }
+}
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn real_cart_notices_cannot_damage_destroy_or_open_a_same_ordinal_newborn() {
+    for case in 0..6 {
+        let physical = case >= 3;
+        let phase = case % 3;
+        let calls = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        mod_api::testing::with_mods(
+            vec![mod_api::ModEntry::new(
+                "replace_cart_at_callback",
+                Box::new(ReplaceCartAtCallback {
+                    phase,
+                    physical,
+                    calls: calls.clone(),
+                }),
+            )]
+            .into(),
+            || {
+                crate::game::native_guest_turn_tests::with_guests(|game| {
+                    game.build_registries();
+                    game.world
+                        .chunks
+                        .insert((0, 0), Arc::new(horizon_client::chunk::Chunk::empty(0, 0)));
+                    game.tickets.update(None);
+                    game.next_entity = game.next_entity.max(71);
+                    game.carts.push(Minecart::new(
+                        71,
+                        CartKind::Chest,
+                        Vec3::new(3.0, 64.0, 5.0),
+                    ));
+                    let original_join = game.carts[0].join;
+                    game.native_joins_skip();
+                    if phase == 2 {
+                        let conn = game.lan.as_ref().unwrap().hub.guests[0].conn;
+                        game.as_guest(conn, |game| {
+                            use horizon_client::advancements::{Advancement, Criterion, Tree};
+                            let mut tree = Tree::default();
+                            tree.list.push(Advancement {
+                                id: "test:cart_loot".into(),
+                                parent: None,
+                                display: None,
+                                criteria: vec![Criterion {
+                                    name: "opened".into(),
+                                    trigger: "minecraft:player_generates_container_loot".into(),
+                                    conditions: horizon_world::lazy_json::LazyJson::new(
+                                        &serde_json::json!({}),
+                                    ),
+                                }],
+                                requirements: vec![vec!["opened".into()]],
+                                rewards: Default::default(),
+                            });
+                            tree.by_id.insert("test:cart_loot".into(), 0);
+                            tree.by_trigger.insert(
+                                "minecraft:player_generates_container_loot".into(),
+                                vec![(0, 0)],
+                            );
+                            game.adv.tree = Arc::new(tree);
+                            game.adv.loaded = true;
+                            game.adv.progress = Default::default();
+                            game.carts.update(0, |cart| {
+                                cart.loot = Some(horizon_client::save::RolledLoot {
+                                    pos: (3, 64, 5),
+                                    table: "test:cart_loot_table".into(),
+                                    seed: None,
+                                    items: horizon_client::save::encode_items(&cart.items),
+                                })
+                            });
+                            game.open_cart_container(0);
+                            assert!(
+                                game.container.is_none(),
+                                "a removed original must not open the newborn"
+                            );
+                            assert!(game.adv.progress.has("test:cart_loot", "opened"));
+                        })
+                        .expect("the real guest turn must execute");
+                    } else {
+                        assert_eq!(game.hurt_cart_result(0, 5.0, false, false), phase == 1);
+                    }
+                    assert_eq!(
+                        calls.load(std::sync::atomic::Ordering::SeqCst),
+                        1,
+                        "phase {phase}, physical {physical}"
+                    );
+                    game.native_removals_flush();
+                    assert_eq!(game.carts.len(), 1);
+                    assert_ne!(game.carts[0].id, 71);
+                    assert_ne!(game.carts[0].join, original_join);
+                    assert_eq!(game.carts[0].damage, 0.0);
+                    assert_eq!(game.carts[0].hurt_time, 0);
+                    assert_eq!(game.carts[0].fuse, -1);
+                    assert!(game.carts[0].items.iter().all(Option::is_none));
+                    assert!(<dyn mod_api::Host>::entity(game, 71).is_none());
+                });
+            },
+        );
+    }
+}

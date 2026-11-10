@@ -2824,7 +2824,17 @@ impl Game<'_> {
     /// own slots, kept under a placeholder key until it closes
     /// (`store_cart_items`/`close_cart_container`).
     pub(super) fn open_cart_container(&mut self, i: usize) {
+        let join = self.carts[i].join;
+        let id = self.carts[i].id;
         self.unpack_cart_loot(i);
+        let Some(i) = self.carts.locate(join).filter(|_| {
+            !self
+                .persist
+                .removals
+                .contains(&super::commands::Target::Cart(id))
+        }) else {
+            return;
+        };
         let id = self.carts[i].id;
         let kind = self.carts[i].kind;
         let position = self.carts[i].position;
@@ -3014,12 +3024,22 @@ impl Game<'_> {
         creative: bool,
         fire: bool,
     ) -> bool {
+        let join = self.carts[i].join;
+        let id = self.carts[i].id;
         let kind = self.carts[i].kind.id();
         let mut cancel = false;
         self.native_vehicle_damage(kind, &mut damage, &mut cancel);
         if cancel {
             return false;
         }
+        let Some(i) = self.carts.locate(join).filter(|_| {
+            !self
+                .persist
+                .removals
+                .contains(&super::commands::Target::Cart(id))
+        }) else {
+            return false;
+        };
         let destroyed = self.carts.update(i, |c| {
             c.hurt_dir = -c.hurt_dir;
             c.hurt_time = 10;
@@ -3048,9 +3068,16 @@ impl Game<'_> {
                 ];
                 self.native_vehicle_destroy(self.carts[i].kind.id(), at);
             }
+            let Some(i) = self.carts.locate(join).filter(|_| {
+                !self
+                    .persist
+                    .removals
+                    .contains(&super::commands::Target::Cart(id))
+            }) else {
+                return true;
+            };
             if tnt_prime {
                 // MinecartTNT.destroy: event and sound precede both fuse RNG draws.
-                let join = self.carts[i].join;
                 if self.carts[i].fuse < 0 {
                     self.prime_cart_join(join);
                     if let Some(at) = self.carts.locate(join) {
