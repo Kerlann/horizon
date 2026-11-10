@@ -2143,14 +2143,22 @@ mod tests {
                 );
                 let mut lr = crate::health::TestLevel::new(0);
                 let mut events = Vec::new();
+                let mut goals = m.ai.goals.take();
+                let entity_inactive_targets = m.ai.targets.take();
                 let mut cx = Cx {
+                    selectors: crate::mobs::goals::GoalSelectorSources {
+                        goals: None,
+                        targets: entity_inactive_targets.read_source(),
+                        active: crate::mobs::goals::SelectorKind::Goals,
+                    },
                     w: &world,
                     level: &mut lr.level(),
                     events: &mut events,
                 };
-                let mut goals = std::mem::take(&mut m.ai.goals);
+
                 goals.tick(&mut m, &mut cx);
                 outcomes.push(goals.is_running("Beg"));
+                m.ai.targets = entity_inactive_targets;
                 m.ai.goals = goals;
             }
         }) {
