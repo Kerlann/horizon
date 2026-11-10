@@ -428,6 +428,23 @@ impl<T: Joined> ResidentList<T> {
     pub fn locate(&self, join: JoinSeq) -> Option<usize> {
         self.0.locate(join)
     }
+    /// Temporarily loan one actual body to the entity actor carrier.
+    /// Membership and lifetime remain attached until put-back or explicit retirement.
+    pub fn extract(&mut self, join: JoinSeq) -> Option<T> {
+        self.0.extract(join)
+    }
+    /// Restore the actor carrier's actual body at its current restoration ordinal.
+    pub fn put_back(&mut self, ordinal: usize, entity: T) {
+        self.0.put_back(ordinal, entity);
+    }
+    /// Finish the actor carrier's permanent removal of an extracted body.
+    pub fn retire_extracted(&mut self, id: u32, join: JoinSeq) {
+        self.0.retire_extracted(id, join);
+    }
+    /// Reorder actual Cloud survivors/newborns without changing membership or lifetime.
+    pub fn swap(&mut self, a: usize, b: usize) {
+        self.0.swap(a, b);
+    }
     /// Install an owner, assigning its stable join number only on first entry.
     pub fn push(&mut self, entity: T) {
         self.0.push(entity);

@@ -1880,8 +1880,7 @@ impl Game<'_> {
         self.breath_clouds.push(cloud);
         Some(id)
     }
-    /// `AreaEffectCloud.tick` for the lingering potions' clouds: the client
-    /// tick's particles, then the server tick.
+    /// Tick original potion Clouds while every callback sees canonical owners.
     fn tick_potion_clouds(&mut self) {
         if self.breath_clouds.iter().all(|c| c.potion.is_none()) {
             return;
@@ -1891,43 +1890,105 @@ impl Game<'_> {
             .into_iter()
             .filter(|p| p.alive)
             .collect();
-        let read_scope = self.begin_resident_read_pass(Kind::Cloud);
-        let mut clouds = self.breath_clouds.lift();
+        let _reads = self.begin_resident_read_pass(Kind::Cloud);
+        let last_original = self.breath_clouds.iter().map(|c| c.join).max().unwrap();
+        let schedule = mod_api::__private::entity_reads_listened().then(|| {
+            self.breath_clouds
+                .iter()
+                .map(|c| c.join)
+                .collect::<Vec<_>>()
+        });
         #[cfg(test)]
         super::entity::taken_pass_tests::after_take(self);
         let ticking = self.entity_ticking_area();
-        clouds.retain_mut(|c| {
-            if c.potion.is_none() || !ticking(c.at[0].floor() as i32, c.at[2].floor() as i32) {
-                return true;
+        let pass = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let mut cursor = 0;
+            let mut scheduled = 0;
+            loop {
+                let join = if let Some(schedule) = &schedule {
+                    let Some(&join) = schedule.get(scheduled) else {
+                        break;
+                    };
+                    scheduled += 1;
+                    join
+                } else {
+                    let Some(c) = self.breath_clouds.get(cursor) else {
+                        break;
+                    };
+                    if c.join > last_original {
+                        break;
+                    }
+                    c.join
+                };
+                let Some(at) = self.breath_clouds.locate(join) else {
+                    continue;
+                };
+                let c = &self.breath_clouds[at];
+                if c.potion.is_none() || !ticking(c.at[0].floor() as i32, c.at[2].floor() as i32) {
+                    if schedule.is_none() {
+                        cursor += 1;
+                    }
+                    continue;
+                }
+                let writer = self.begin_resident_actor_writer(BaseReadSource::Cloud(c));
+                let mut actor =
+                    super::entity_actor_loan::EntityActorLoan::<Breath, false>::extract(self, join)
+                        .unwrap();
+                let body = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    self.tick_potion_cloud(&mut actor, &players)
+                }));
+                if body.is_err() || matches!(body, Ok(Some(true))) {
+                    actor.restore(self);
+                    actor.publish(self, EntityReadCapturePhase::AfterEntityTick);
+                } else {
+                    actor.retire(self);
+                }
+                let body = self.finish_resident_actor_turn(writer.as_ref(), body);
+                let survives = match body {
+                    Ok(value) => value == Some(true),
+                    Err(panic) => std::panic::resume_unwind(panic),
+                };
+                if schedule.is_none() && survives {
+                    cursor += 1;
+                }
             }
-            let alive = self.tick_potion_cloud(c, &players);
-            if read_scope.is_some() {
-                self.publish_resident_actor_reads(
-                    BaseReadSource::Cloud(c),
-                    EntityReadCapturePhase::AfterEntityTick,
-                );
-            }
-            alive
-        });
-        self.breath_clouds
-            .restore(clouds, horizon_client::join_seq::RestoreOrder::SpawnsFirst);
-        if read_scope.is_some() {
-            self.refresh_resident_owner_reads(
-                Kind::Cloud,
-                EntityReadCapturePhase::AfterAppliedWrite,
-            );
+        }));
+        self.finish_cloud_pass(last_original);
+        if let Err(panic) = pass {
+            std::panic::resume_unwind(panic);
         }
     }
-    /// `AreaEffectCloud.serverTick`: configured lifetime/radius changes and
-    /// five-tick doses, with each victim's configured reapplication delay.
-    /// False once the cloud is gone.
-    fn tick_potion_cloud(&mut self, c: &mut Breath, players: &[FightPlayer]) -> bool {
+    /// Promote appended newborns without rebuilding owners or changing survivor order.
+    pub(super) fn finish_cloud_pass(&mut self, last_original: horizon_client::join_seq::JoinSeq) {
+        // Canonical pulses append newborns; exact restoration and subsequent
+        // FIFO removals preserve the original-survivor prefix. Rotate once.
+        let len = self.breath_clouds.len();
+        let prefix = self
+            .breath_clouds
+            .iter()
+            .take_while(|c| c.join <= last_original)
+            .count();
+        if prefix > 0 && prefix < len {
+            for (start, end) in [(0, prefix), (prefix, len), (0, len)] {
+                for offset in 0..(end - start) / 2 {
+                    self.breath_clouds.swap(start + offset, end - 1 - offset);
+                }
+            }
+        }
+    }
+    /// AreaEffectCloud.serverTick with actual ownership and canonical dose pulses.
+    fn tick_potion_cloud(
+        &mut self,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<Breath, false>,
+        players: &[FightPlayer],
+    ) -> Option<bool> {
+        let c = actor.body_mut()?;
         c.age = c.age.wrapping_add(1);
         let Some(potion) = c.potion.as_mut() else {
-            return true;
+            return Some(true);
         };
         if c.duration != -1 && c.age.wrapping_sub(potion.settings.wait_time) >= c.duration {
-            return false;
+            return Some(false);
         }
         let waiting = c.age < potion.settings.wait_time;
         cloud_client_tick(
@@ -1938,22 +1999,22 @@ impl Game<'_> {
             &potion.particle(),
         );
         if waiting {
-            return true;
+            return Some(true);
         }
         if potion.radius_per_tick != 0.0 {
             c.radius += potion.radius_per_tick;
             if c.radius < 0.5 {
-                return false;
+                return Some(false);
             }
             c.radius = c.radius.clamp(0.0, 32.0);
         }
         if c.age % 5 != 0 {
-            return true;
+            return Some(true);
         }
         potion.victims.retain(|(_, until)| c.age < *until);
         if potion.effects.is_empty() {
             potion.victims.clear();
-            return true;
+            return Some(true);
         }
         let r = f64::from(c.radius);
         let area = Aabb::new(
@@ -1965,9 +2026,9 @@ impl Game<'_> {
             inside.push((Victim::Player(p.who), p.position.x, p.position.z));
         }
         let effects = potion.effects.clone();
-        // Only mobs that at least one of the cloud's effects can affect are
-        // taken (`allEffects.stream().anyMatch(entity::canBeAffected)`), so
-        // the others neither become victims nor use up its radius.
+        let mut hidden = Vec::new();
+        let mut ambient = Vec::new();
+        let mut source = potion.source.clone();
         let candidates: Vec<(u32, String, f64, f64)> = self
             .mobs
             .iter()
@@ -1975,14 +2036,24 @@ impl Game<'_> {
             .map(|m| (m.id, m.kind.id.clone(), m.position.x, m.position.z))
             .collect();
         for (mob_id, kind, x, z) in candidates {
-            let affected = effects
-                .iter()
-                .any(|(id, ..)| self.can_be_affected(Some(mob_id as i32), &kind, id));
+            let mut affected = false;
+            for (id, ..) in &effects {
+                affected = actor.with_game(self, |game| {
+                    game.can_be_affected(Some(mob_id as i32), &kind, id)
+                })?;
+                if affected {
+                    break;
+                }
+            }
             if affected {
                 inside.push((Victim::Mob(mob_id), x, z));
             }
         }
         for (victim, x, z) in inside {
+            let c = actor.body_mut()?;
+            let Some(potion) = c.potion.as_mut() else {
+                return Some(true);
+            };
             let (dx, dz) = (x - c.at[0], z - c.at[2]);
             if potion.victims.iter().any(|(v, _)| *v == victim)
                 || dx * dx + dz * dz > f64::from(c.radius * c.radius)
@@ -1993,33 +2064,44 @@ impl Game<'_> {
                 victim,
                 c.age.wrapping_add(potion.settings.reapplication_delay),
             ));
-            self.cloud_affect(
-                victim,
-                &effects,
-                (
-                    &potion.hidden,
-                    &potion.ambient,
-                    potion.settings.duration_scale,
-                ),
-                c.at,
-                &potion.source,
-                (potion.owner, potion.guest),
-            );
+            // Owned operation arguments, not a copied source. Reuse flag buffers
+            // across victims while capturing the current settings at this moment.
+            hidden.clone_from(&potion.hidden);
+            ambient.clone_from(&potion.ambient);
+            source.clone_from(&potion.source);
+            let scale = potion.settings.duration_scale;
+            let at = c.at;
+            let owner = potion.owner;
+            let guest = potion.guest;
+            actor.with_game(self, |game| {
+                game.cloud_affect(
+                    victim,
+                    &effects,
+                    (&hidden, &ambient, scale),
+                    at,
+                    &source,
+                    (owner, guest),
+                )
+            })?;
+            let c = actor.body_mut()?;
+            let Some(potion) = c.potion.as_mut() else {
+                return Some(true);
+            };
             if potion.settings.radius_on_use != 0.0 {
                 c.radius += potion.settings.radius_on_use;
                 if c.radius < 0.5 {
-                    return false;
+                    return Some(false);
                 }
                 c.radius = c.radius.clamp(0.0, 32.0);
             }
             if potion.settings.duration_on_use != 0 && c.duration != -1 {
                 c.duration = c.duration.wrapping_add(potion.settings.duration_on_use);
                 if c.duration <= 0 {
-                    return false;
+                    return Some(false);
                 }
             }
         }
-        true
+        Some(true)
     }
     /// `Creeper.spawnLingeringCloud`: an `AreaEffectCloud` of radius 2.5, wait time 10, duration 300,
     /// shrinking by `-radius / duration` a tick and by 0.5 for each entity it affects, applying
@@ -2771,6 +2853,234 @@ mod tests {
     use super::super::sculk::darkness_blend_added;
     use super::*;
     use horizon_client::{motion::PlayerMotion, screen_effects::nausea_blend_added};
+    struct ActualCloudObserver {
+        mode: u8,
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        second_seen: std::sync::atomic::AtomicBool,
+    }
+    fn actual_cloud_width(host: &dyn mod_api::Host, id: u32) -> f64 {
+        let bounds = host.entity(id).unwrap().bounding_box(host).unwrap();
+        bounds[1][0] - bounds[0][0]
+    }
+    #[mod_api::__subscriptions]
+    impl mod_api::Hooks for ActualCloudObserver {
+        fn mob_effect_applicable(
+            &self,
+            host: &mut dyn mod_api::ServerHost,
+            _: &mut mod_api::MobEffectApplicableEvent,
+        ) -> Option<mod_api::EffectApplicable> {
+            use std::sync::atomic::Ordering::SeqCst;
+            let call = self.calls.fetch_add(1, SeqCst);
+            let mob = host.entity(71).unwrap();
+            if call == 0 {
+                let cloud = host.entity(101).expect("actual loan remains admitted");
+                let bounds = cloud.bounding_box(host).unwrap();
+                assert!((bounds[1][0] - bounds[0][0] - 4.983333110809326).abs() < 1.0e-6);
+                assert!(cloud.teleport_to(host, [4.0, 64.0, 5.0], None));
+                // The next real pulse observes the accepted write; this listener's
+                // read frame was captured before it issued the teleport.
+                assert!(mob.set_velocity(host, [0.9, 0.2, 0.1]));
+                assert!(host.commands().run_command(
+                    "summon minecraft:area_effect_cloud 8 64 5 {Duration:100,WaitTime:0,Radius:3f}"
+                ));
+                if self.mode == 1 {
+                    assert!(cloud.discard(host));
+                }
+                if self.mode == 2 {
+                    panic!("actual Cloud callback panic");
+                }
+            } else if actual_cloud_width(host, 102) == 5.0 {
+                assert_eq!(
+                    host.entity(101).unwrap().position(host),
+                    Some([4.0, 64.0, 5.0])
+                );
+                assert_eq!(
+                    mob.velocity(host),
+                    Some([0.9, 0.2, 0.1]),
+                    "accepted foreign writes are fresh at the next real pulse"
+                );
+            } else if actual_cloud_width(host, 103) == 5.0 && !self.second_seen.swap(true, SeqCst) {
+                assert_eq!(
+                    mob.velocity(host),
+                    Some([0.9, 0.2, 0.1]),
+                    "accepted foreign writes precede the next Cloud"
+                );
+                if self.mode == 0 {
+                    assert!(host.commands().run_command(
+                        "kill @e[type=minecraft:area_effect_cloud,x=4,y=64,z=5,distance=..0.1]"
+                    ));
+                }
+                assert!(host.commands().run_command(
+                    "summon minecraft:area_effect_cloud 9 64 5 {Duration:100,WaitTime:0,Radius:3f}"
+                ));
+            }
+            None
+        }
+    }
+    static CLOUD_VALUE: horizon_mod_runtime::attachments::AttachmentType<i32> =
+        horizon_mod_runtime::attachments::AttachmentType {
+            namespace: "test",
+            name: "actual_cloud_lifetime",
+            default: || 0,
+            codec: None,
+            copy_on_death: false,
+            sync: false,
+        };
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn actual_cloud_callbacks_keep_current_body_lifetime_writes_and_newborn_order_on_removal_and_panic()
+     {
+        use horizon_mod_runtime::attachments::{
+            Attachments, HasAttachmentLifetime, Holder, index::AttachmentIndex,
+        };
+        use std::sync::{
+            Arc, Mutex,
+            atomic::{AtomicUsize, Ordering::SeqCst},
+        };
+        for mode in 0..3 {
+            let calls = Arc::new(AtomicUsize::new(0));
+            mod_api::testing::with_mods(
+                vec![mod_api::ModEntry::new(
+                    "actual_cloud_observer",
+                    Box::new(ActualCloudObserver {
+                        mode,
+                        calls: calls.clone(),
+                        second_seen: Default::default(),
+                    }),
+                )]
+                .into(),
+                || {
+                    crate::game::native_guest_turn_tests::with_guests(|game| {
+                        game.build_registries();
+                        game.lan.as_mut().unwrap().hub.guests.update_all(|guest| {
+                            guest.position = [100.0, 64.0, 100.0];
+                        });
+                        game.lan_acting_fake = false;
+                        game.options.dedicated = Some(Vec::new());
+                        game.player = None;
+                        game.world
+                            .chunks
+                            .insert((0, 0), Arc::new(horizon_client::chunk::Chunk::empty(0, 0)));
+                        game.tickets.update(None);
+                        let kind = game.res.mob_types().get("minecraft:pig").unwrap().clone();
+                        game.mobs.push(horizon_client::mobs::Mob::new(
+                            71,
+                            kind,
+                            Vec3::new(3.0, 64.0, 5.0),
+                            0.0,
+                        ));
+                        game.next_entity = 100;
+                        for _ in 0..3 {
+                            game.spawn_creeper_cloud(
+                                [3.0, 64.0, 5.0],
+                                vec![("poison", 200, 0)],
+                                Vec::new(),
+                                Vec::new(),
+                                0,
+                            );
+                        }
+                        game.breath_clouds.for_each_mut(|cloud| {
+                            cloud.age = 4;
+                            cloud.potion.as_mut().unwrap().settings.wait_time = 0;
+                        });
+                        game.native_joins_skip();
+                        let joins: Vec<_> = game
+                            .breath_clouds
+                            .iter()
+                            .map(|cloud| (cloud.id, cloud.join))
+                            .collect();
+                        let index = Arc::new(Mutex::new(AttachmentIndex::default()));
+                        let mut values = Attachments::default();
+                        let holder = <dyn mod_api::Host>::entity(game, 102).unwrap();
+                        CLOUD_VALUE
+                            .set(&mut values, Holder::Entity(102), 17)
+                            .unwrap();
+                        let registration = game.breath_clouds.update(1, |cloud| {
+                            cloud
+                                .attachment_lifetime()
+                                .bind(&mut values, &index, holder);
+                            cloud.attachment_lifetime().registration().unwrap()
+                        });
+                        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                            game.tick_potion_clouds()
+                        }));
+                        assert_eq!(result.is_err(), mode == 2);
+                        if mode == 2 {
+                            assert_eq!(
+                                result.unwrap_err().downcast_ref::<&str>(),
+                                Some(&"actual Cloud callback panic")
+                            );
+                        }
+                        if mode == 2 {
+                            let cloud = <dyn mod_api::Host>::entity(game, 101).unwrap();
+                            assert_eq!(cloud.position(game), Some([4.0, 64.0, 5.0]));
+                        } else {
+                            assert!(<dyn mod_api::Host>::entity(game, 101).is_none());
+                        }
+                        let originals: Vec<_> = game
+                            .breath_clouds
+                            .iter()
+                            .filter(|cloud| cloud.id <= 103)
+                            .map(|cloud| cloud.id)
+                            .collect();
+                        assert_eq!(
+                            originals,
+                            if mode == 2 {
+                                vec![101, 102, 103]
+                            } else {
+                                vec![102, 103]
+                            }
+                        );
+                        let newborns = if mode == 2 { 1 } else { 2 };
+                        assert!(
+                            game.breath_clouds
+                                .iter()
+                                .take(newborns)
+                                .all(|cloud| cloud.id > 103 && cloud.age == 0)
+                        );
+                        assert_eq!(game.breath_clouds.len(), newborns + originals.len());
+                        for cloud in game.breath_clouds.iter().filter(|cloud| cloud.id <= 103) {
+                            assert_eq!(
+                                cloud.join,
+                                joins.iter().find(|(id, _)| *id == cloud.id).unwrap().1
+                            );
+                            assert_eq!(cloud.age, if mode == 2 && cloud.id != 101 { 4 } else { 5 });
+                        }
+                        let at = game
+                            .breath_clouds
+                            .iter()
+                            .position(|cloud| cloud.id == 102)
+                            .unwrap();
+                        let after = game.breath_clouds.update(at, |cloud| {
+                            cloud.attachment_lifetime().registration().unwrap()
+                        });
+                        assert!(registration.same_registration(&after));
+                        assert_eq!(
+                            index
+                                .lock()
+                                .unwrap()
+                                .snapshot(&("test".into(), "actual_cloud_lifetime".into()))
+                                .len(),
+                            1
+                        );
+                        assert_eq!(CLOUD_VALUE.get(&mut values, Holder::Entity(102)), Ok(17));
+                        assert_eq!(game.mobs[0].velocity, Vec3::new(0.9, 0.2, 0.1));
+                        assert_eq!(
+                            calls.load(SeqCst),
+                            if mode == 2 {
+                                1
+                            } else if mode == 1 {
+                                5
+                            } else {
+                                6
+                            }
+                        );
+                    });
+                },
+            );
+        }
+    }
+
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn lifecycle_cloud_commands_and_parked_owners() {
@@ -2814,12 +3124,18 @@ mod tests {
             if !potion_pass {
                 game.breath_clouds.for_each_mut(|c| c.potion = None);
             }
+            // Prior SpawnsFirst passes need not leave join order sorted.
+            game.breath_clouds.swap(0, 1);
             let first = game.breath_clouds[0].id;
             let second = game.breath_clouds[1].id;
             let next = game.next_entity;
             super::super::entity::taken_pass_tests::with_spawn(
                 |game| {
-                    assert!(game.breath_clouds.is_empty());
+                    assert_eq!(
+                        game.breath_clouds.len(),
+                        2,
+                        "actual original owners remain canonical"
+                    );
                     for _ in 0..2 {
                         game.spawn_creeper_cloud(
                             [0.0, 80.0, 0.0],
