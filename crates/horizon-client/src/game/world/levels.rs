@@ -134,7 +134,29 @@ impl Parked {
     resident_owners!(resident_read_access, self, projectiles);
 }
 
+impl Dim {
+    fn from_key(key: DimensionKey) -> Self {
+        match key {
+            DimensionKey::OVERWORLD => Self::Overworld,
+            DimensionKey::NETHER => Self::Nether,
+            DimensionKey::END => Self::End,
+            key => Self::Extra(key),
+        }
+    }
+}
+
 impl Game<'_> {
+    /// Exclusive canonical relation storage; no H provider can manufacture it.
+    pub(super) fn topology_mobs_mut(
+        &mut self,
+        dimension: DimensionKey,
+    ) -> Option<&mut horizon_client::join_seq::JoinList<horizon_client::mobs::Mob>> {
+        if dimension == self.dim.key() {
+            return Some(&mut self.mobs);
+        }
+        Some(&mut self.levels.parked.get_mut(&Dim::from_key(dimension))?.mobs)
+    }
+
     /// Borrow the exact level selected at entity admission, without swapping
     /// Game or scanning loaded worlds. No handle or UUID is resolved here.
     pub(super) fn entity_read_level(
@@ -153,13 +175,7 @@ impl Game<'_> {
                 parked: None,
             });
         }
-        let dim = match dimension {
-            DimensionKey::OVERWORLD => Dim::Overworld,
-            DimensionKey::NETHER => Dim::Nether,
-            DimensionKey::END => Dim::End,
-            key => Dim::Extra(key),
-        };
-        let parked = self.levels.parked.get(&dim)?;
+        let parked = self.levels.parked.get(&Dim::from_key(dimension))?;
         Some(EntityReadLevel {
             world: &parked.world,
             border: &parked.border,

@@ -751,7 +751,7 @@ pub trait EntitiesBackendMut {
     ///
     /// Players and mobs can ride a mob, boat, minecart or generic seat entity
     /// (an armor stand, display, marker or interaction). Returns false for
-    /// unsupported entity pairs, stale or held-out handles, a full stored
+    /// unsupported entity pairs, stale handles, a full stored
     /// vehicle, a cycle, or a canceled mount or dismount. Mob vehicle capacity
     /// follows its species; minecarts store one passenger and boats store one
     /// mob and up to two passengers in total. Generic seats admit one passenger unless forced.
@@ -759,18 +759,33 @@ pub trait EntitiesBackendMut {
     /// Player boarding cooldown and the strider's
     /// eye-in-lava admission check are not yet represented by the game.
     #[access(WorldOnly)]
-    fn entity_start_riding(&mut self, entity: EntityRef, vehicle: EntityRef, force: bool) -> Result<bool, EntityReadError>;
+    /// Immediate operation, never enqueue acceptance. Returns `Ok(false)` for
+    /// an unsupported pair, stale handle or ordinary mount refusal. A required
+    /// unavailable mutable part is `Lifted`; relevant pending writes are
+    /// `Pending` only after all required actual parts have been selected.
+    fn entity_start_riding(
+        &mut self,
+        entity: EntityRef,
+        vehicle: EntityRef,
+        force: bool,
+    ) -> Result<bool, EntityReadError>;
     /// Side: server.
     /// Gets the entity off its vehicle (`Entity.stopRiding`), where the
     /// vehicle lets it out, as `/ride ... dismount` does. False when it rode
     /// nothing, a mod's `mob_ride` hook kept it on, or for a stale handle.
     #[access(WorldOnly)]
+    /// Immediate operation. `Ok(false)` preserves ordinary absence and veto;
+    /// unavailable required mutable storage is never reported as not riding.
+    /// Physical refusal precedes the latest relevant `Pending` command.
     fn entity_stop_riding(&mut self, entity: EntityRef) -> Result<bool, EntityReadError>;
     /// Side: server.
     /// Gets every passenger off the entity (`Entity.ejectPassengers`), last
     /// first as vanilla walks the list, so `mob_ride` hears them in its
     /// order. False when nothing rode it, or for a stale handle.
     #[access(WorldOnly)]
+    /// Immediate operation. All initial mutable passenger relations are
+    /// selected before pending is checked or the first dismount starts. Each
+    /// callback is followed by fresh join/link checks, not a retained index.
     fn entity_eject_passengers(&mut self, entity: EntityRef) -> Result<bool, EntityReadError>;
     /// Side: server.
     /// Gives the holder the mob's or boat's lead (`Leashable.setLeashedTo`): the entity lets go

@@ -75,6 +75,7 @@ pub(super) struct EntityReadTarget {
 pub(super) struct EntityReadAdmission {
     read: EntityReadTarget,
     lifted: bool,
+    canonical_lifted: bool,
     owns: bool,
     pending: Option<CommandId>,
     known_uuid: Option<[i32; 4]>,
@@ -105,6 +106,17 @@ impl EntityReadSelection {
 }
 
 impl EntityReadAdmission {
+    /// Mutation selectors cannot use a frame or immutable H loan to replace
+    /// unavailable canonical mutable storage. Pending is checked separately,
+    /// only after every required part has been selected.
+    pub(super) fn require_stored_source(self) -> Result<(), EntityReadError> {
+        if self.canonical_lifted {
+            Err(EntityReadError::Lifted)
+        } else {
+            Ok(())
+        }
+    }
+
     /// Choose pending only after the caller selected every actual source part.
     pub(super) fn project_actual<R, E>(
         self,
@@ -302,14 +314,16 @@ impl Game<'_> {
             actual
         });
         let owns = provided || self.entity_read_actor_owns(entity.id(), location);
+        let canonical_lifted =
+            matches!(state, EntityLookup::Taken) || self.held_out.contains(&entity.id());
         Some(EntityReadAdmission {
             read: EntityReadTarget {
                 entity,
                 target,
                 location,
             },
-            lifted: (matches!(state, EntityLookup::Taken) || self.held_out.contains(&entity.id()))
-                && !provided,
+            lifted: canonical_lifted && !provided,
+            canonical_lifted,
             owns,
             pending: if owns { None } else { pending },
             known_uuid: details.known_uuid,

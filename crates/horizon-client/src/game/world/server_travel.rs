@@ -484,7 +484,7 @@ impl Game<'_> {
             if self.entity_vehicle(rider)? != Some(entity) {
                 continue;
             }
-            if !self.entity_stop_riding(rider) && self.entity_vehicle(rider)? == Some(entity) {
+            if !self.entity_stop_riding(rider)? && self.entity_vehicle(rider)? == Some(entity) {
                 return Ok(false);
             }
         }
@@ -502,7 +502,7 @@ impl Game<'_> {
             {
                 // Reject callback topology changes: the shared mount path
                 // checks live handles, dimension, cycles and vehicle capacity.
-                self.entity_start_riding(rider, entity, true);
+                self.entity_start_riding(rider, entity, true)?;
             }
         }
         Ok(self

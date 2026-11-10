@@ -192,15 +192,33 @@ pub fn link(mobs: &mut JoinList<Mob>, rider: u32, vehicle: u32) {
         return;
     }
     if let Some(m) = mobs.iter_mut().find(|m| m.id == rider) {
-        super::shulker::on_start_riding(m);
-        m.extra.mount = Some(vehicle);
-        m.extra.passenger = true;
+        link_rider(m, vehicle);
     }
-    if let Some(m) = mobs.iter_mut().find(|m| m.id == vehicle)
-        && m.extra.rider.is_none()
-    {
-        m.extra.rider = Some(rider);
+    if let Some(m) = mobs.iter_mut().find(|m| m.id == vehicle) {
+        add_first_rider(m, rider);
     }
+}
+
+/// Apply the rider's part of a link to its actual body.
+pub fn link_rider(rider: &mut Mob, vehicle: u32) {
+    super::shulker::on_start_riding(rider);
+    rider.extra.mount = Some(vehicle);
+    rider.extra.passenger = true;
+}
+
+/// The first mob rider remembered by the vehicle; do not replace another.
+pub fn add_first_rider(vehicle: &mut Mob, rider: u32) {
+    if vehicle.extra.rider.is_none() {
+        vehicle.extra.rider = Some(rider);
+    }
+}
+
+/// Finish the placement chosen by the owning world's dismount search.
+pub fn finish_dismount(rider: &mut Mob, at: Vec3, cooldown: i32) {
+    rider.extra.passenger = false;
+    rider.extra.boarding_cooldown = cooldown;
+    rider.position = at;
+    rider.previous = at;
 }
 /// `canAddPassenger` with `aboard` passengers on `v`: a camel takes another
 /// while it carries at most two (`Camel`: `getPassengers().size() <= 2`, a baby

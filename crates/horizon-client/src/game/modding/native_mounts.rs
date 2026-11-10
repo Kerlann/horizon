@@ -6,7 +6,7 @@ use super::{Game, commands::Target, native_hooks::mob_kind};
 impl Game<'_> {
     /// Whether this game is a server whose mounts the mods hear: the server thread or a
     /// dedicated server, never a client.
-    fn native_hears_mounts(&self) -> bool {
+    pub(super) fn native_hears_mounts(&self) -> bool {
         self.serving.is_some() || self.options.dedicated.is_some()
     }
 
