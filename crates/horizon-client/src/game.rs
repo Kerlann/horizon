@@ -104,7 +104,7 @@ pub mod points {
         log::warn!("point {point}: a value has no API form; its listeners were skipped");
     }
 }
-mod host;
+pub mod host;
 mod native_hooks;
 use event_loop::EventLoopCtl;
 use horizon_client::random_source;
@@ -754,7 +754,7 @@ struct InteractTarget {
 }
 
 /// The client world as seen by the vanilla block-behaviour library.
-struct GameLevel<'w> {
+pub struct GameLevel<'w> {
     gateway_servers: &'w mut horizon_client::fast_hash::FxHashMap<
         [i32; 3],
         horizon_client::block_entity_anim::EndGateway,
@@ -2392,7 +2392,7 @@ struct TickScratch {
     later: Vec<BlockPos>,
 }
 
-struct Game<'a> {
+pub struct Game<'a> {
     /// Shared with an integrated server; `collision` and `motion` borrow from it.
     res: Arc<Resources>,
     rest_loader: Option<WorldRestLoader>,
