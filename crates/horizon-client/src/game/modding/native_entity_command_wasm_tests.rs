@@ -9,7 +9,7 @@ struct Observer;
 impl Hooks for Observer {
     fn entity_tick_pre(&self, host: &mut dyn ServerHost, _: &mut EntityTickPreEvent<'_>) -> Flow {
         let epoch = host.entity(71).unwrap().epoch();
-        for sequence in 0..6 {
+        for sequence in 0..10 {
             assert_eq!(
                 CommandId { epoch, sequence }.query(host),
                 Err(CommandQueryError::UnknownOrExpired)
@@ -77,20 +77,26 @@ fn silent_real_wasm_packages_keep_receipts_queries_and_terminal_events_isolated(
                 "second guest reached B Pre after validating every own completion"
             );
             let epoch = game.native_lifecycle.epoch().unwrap();
-            for (issuer, ids) in [("silent_wasm_a", [0, 1, 4]), ("silent_wasm_b", [2, 3, 5])] {
+            for (issuer, ids) in [
+                ("silent_wasm_a", [0, 1, 2, 3, 8]),
+                ("silent_wasm_b", [4, 5, 6, 7, 9]),
+            ] {
                 let _scope = mod_api::__private::enter(issuer, "test query");
-                for sequence in 0..6 {
+                for sequence in 0..10 {
                     let status = CommandId { epoch, sequence }.query(game);
                     if ids.contains(&sequence) {
-                        assert!(matches!(
-                            status,
-                            Ok(EntityCommandStatus::Completed(
-                                EntityWriteCompletion::EntitySetSilent(CommandCompleted {
-                                    outcome: Ok(true),
-                                    ..
-                                })
-                            ))
-                        ));
+                        let expected = if [2, 3, 6, 7].contains(&sequence) {
+                            EntityWriteCompletion::EntitySetNoGravity(CommandCompleted {
+                                id: CommandId { epoch, sequence },
+                                outcome: Ok(true),
+                            })
+                        } else {
+                            EntityWriteCompletion::EntitySetSilent(CommandCompleted {
+                                id: CommandId { epoch, sequence },
+                                outcome: Ok(true),
+                            })
+                        };
+                        assert_eq!(status, Ok(EntityCommandStatus::Completed(expected)));
                     } else {
                         assert_eq!(status, Err(CommandQueryError::UnknownOrExpired));
                     }

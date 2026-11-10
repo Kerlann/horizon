@@ -4,6 +4,8 @@ use crate::*;
 /// Terminal operation-tagged results delivered identically by event and query.
 #[derive(Clone, Debug, PartialEq, Eq, Wire)]
 pub enum EntityWriteCompletion {
+    /// Actual result for the `EntitySetNoGravity` operation.
+    EntitySetNoGravity(CommandCompleted<bool, EntityWriteError>),
     /// Actual result for the `EntitySetSilent` operation.
     EntitySetSilent(CommandCompleted<bool, EntityWriteError>),
 }

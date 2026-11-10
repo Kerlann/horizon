@@ -532,7 +532,10 @@ pub trait EntitiesBackend {
     #[access(WorldOnly)]
     fn entity_glowing(&self, entity: EntityRef) -> Option<bool>;
     /// Side: server.
-    /// Returns the mob's no-gravity flag (`Entity.isNoGravity`).
+    /// Returns the stored no-gravity flag (`Entity.isNoGravity`) for implemented
+    /// storage families. A foreign queued scalar projects its latest ordered
+    /// value; explicit OWN reads use the genuine owner instead. None denotes an
+    /// unavailable source or a family whose backing is not implemented.
     #[access(WorldOnly)]
     fn entity_no_gravity(&self, entity: EntityRef) -> Option<bool>;
     /// Side: server.
@@ -857,9 +860,23 @@ pub trait EntitiesBackendMut {
     #[access(WorldOnly)]
     fn entity_set_glowing(&mut self, entity: EntityRef, glowing: bool) -> bool;
     /// Side: server.
-    /// Sets the mob's no-gravity flag (`Entity.setNoGravity`). Returns false for players and guests.
+    /// Sets the stored no-gravity flag (`Entity.setNoGravity`).
+    /// Direct and explicit OWN calls apply immediately. Foreign calls during a
+    /// writer turn return Pending and execute in FIFO order after that writer.
+    /// Pending light reads project the latest ordered value without claiming
+    /// authoritative application. Completion event and issuer-only query expose
+    /// the actual result after generation/removal checks. An item transaction
+    /// refuses an enqueue with TransactionActive before creating an id/overlay.
+    /// Implemented storage: mobs, items, orbs, armor stands, boats, minecarts,
+    /// projectiles, primed TNT, tridents and falling blocks, active or parked.
+    /// A family without implemented storage refuses Unsupported; this does not
+    /// imply that vanilla forbids no-gravity for that entity kind.
     #[access(WorldOnly)]
-    fn entity_set_no_gravity(&mut self, entity: EntityRef, no_gravity: bool) -> bool;
+    fn entity_set_no_gravity(
+        &mut self,
+        entity: EntityRef,
+        no_gravity: bool,
+    ) -> WriteReceipt<bool, EntityWriteError>;
     /// Side: server.
     /// Sets the entity's frozen ticks (`Entity.setTicksFrozen`).
     #[access(WorldOnly)]

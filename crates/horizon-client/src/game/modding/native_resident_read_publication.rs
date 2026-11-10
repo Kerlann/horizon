@@ -339,7 +339,7 @@ impl Game<'_> {
                 return false;
             };
             NativeReadPublication {
-                silent_overlay: Default::default(),
+                scalar_overlay: Default::default(),
                 capture,
                 base,
                 details,
@@ -350,7 +350,7 @@ impl Game<'_> {
         };
         let published = self.entity_residency.borrow_mut().publish_rows_merging(
             [(raw.id, at, publication)],
-            NativeReadPublication::merge_pending_silent,
+            NativeReadPublication::merge_pending_scalars,
         ) == 1;
         drop(scope);
         published

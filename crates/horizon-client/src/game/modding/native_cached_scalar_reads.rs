@@ -504,6 +504,9 @@ impl Game<'_> {
     }
 
     pub(super) fn entity_no_gravity(&self, entity: EntityRef) -> Option<bool> {
+        if let Some(own) = self.entity_own_no_gravity(entity) {
+            return own;
+        }
         self.with_entity_read_publication(entity, |row| Some(row.base.no_gravity))
             .unwrap_or_else(|| self.uncached_entity_no_gravity(entity))
     }
@@ -1613,7 +1616,7 @@ mod tests {
             base.custom_name_visible = None;
             base.is_sprinting = Some(false);
             let publication = NativeReadPublication {
-                silent_overlay: Default::default(),
+                scalar_overlay: Default::default(),
                 capture: EntityReadCapture {
                     tick: TickId::new(1),
                     pass: 2,

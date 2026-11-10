@@ -208,7 +208,7 @@ impl Game<'_> {
                 &mut state.identities,
             );
             NativeReadPublication {
-                silent_overlay: Default::default(),
+                scalar_overlay: Default::default(),
                 capture,
                 base,
                 details: NativeReadDetails::Mob {
@@ -223,7 +223,7 @@ impl Game<'_> {
         };
         let published = self.entity_residency.borrow_mut().publish_rows_merging(
             [(source.id, location, publication)],
-            NativeReadPublication::merge_pending_silent,
+            NativeReadPublication::merge_pending_scalars,
         ) == 1;
         drop(scope);
         published

@@ -155,7 +155,9 @@ mod tests {
             _: &mut dyn mod_api::ServerHost,
             event: &mut mod_api::EntityCommandCompletedEvent<'_>,
         ) {
-            let mod_api::EntityWriteCompletion::EntitySetSilent(done) = event.completion;
+            let mod_api::EntityWriteCompletion::EntitySetSilent(done) = event.completion else {
+                panic!("unexpected operation completion in SetSilent test")
+            };
             assert_eq!(done.outcome, Ok(true));
             *self.terminals.lock().unwrap() += 1;
             if self.mode == 3 {

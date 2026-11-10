@@ -143,9 +143,9 @@ mod tests {
     }
 
     #[test]
-    fn discovered_silent_completion_keeps_its_wire_tag_and_actual_false() {
+    fn discovered_silent_completion_pins_its_wire_tag_and_actual_false() {
         let bytes = [
-            &[0, 0, 0, 0][..], // EntitySetSilent, independently pinned
+            &[1, 0, 0, 0][..], // EntitySetSilent after adding NoGravity, independently pinned
             &7u64.to_le_bytes(),
             &9u64.to_le_bytes(),
             &[0, 0], // Result::Ok(false), never Pending
@@ -157,6 +157,32 @@ mod tests {
                 sequence: 9,
             },
             outcome: Ok(false),
+        });
+        assert_eq!(
+            Reader::decode::<EntityWriteCompletion>(&bytes).unwrap(),
+            expected
+        );
+        let mut encoded = Writer::new();
+        encoded.put_owned(expected);
+        assert_eq!(encoded.error(), None);
+        assert_eq!(encoded.bytes(), bytes);
+    }
+
+    #[test]
+    fn no_gravity_completion_has_its_own_wire_tag_and_real_result() {
+        let bytes = [
+            &[0, 0, 0, 0][..], // EntitySetNoGravity, independently pinned
+            &7u64.to_le_bytes(),
+            &9u64.to_le_bytes(),
+            &[0, 1], // Result::Ok(true)
+        ]
+        .concat();
+        let expected = EntityWriteCompletion::EntitySetNoGravity(CommandCompleted {
+            id: CommandId {
+                epoch: WorldEpoch::new(7),
+                sequence: 9,
+            },
+            outcome: Ok(true),
         });
         assert_eq!(
             Reader::decode::<EntityWriteCompletion>(&bytes).unwrap(),

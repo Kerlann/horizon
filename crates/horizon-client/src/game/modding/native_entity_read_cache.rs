@@ -58,7 +58,7 @@ impl NativeReadState {
 }
 
 pub(super) struct NativeReadPublication {
-    pub(super) silent_overlay: super::native_silent_overlay::SilentOverlay,
+    pub(super) scalar_overlay: super::native_scalar_overlay::ScalarOverlay,
     pub(super) capture: EntityReadCapture,
     pub(super) base: CompactEntityReadRow,
     pub(super) details: NativeReadDetails,

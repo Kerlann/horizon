@@ -302,7 +302,7 @@ fn foreign_lifted_read_observes_shared_publication_updates_not_seen_or_live_view
             },
         );
         let publication = NativeReadPublication {
-            silent_overlay: Default::default(),
+            scalar_overlay: Default::default(),
             capture: mod_api::EntityReadCapture {
                 tick: mod_api::TickId::new(1),
                 pass: 1,

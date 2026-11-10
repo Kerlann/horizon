@@ -361,12 +361,39 @@ impl Game<'_> {
             _ => None,
         }
     }
-    /// Returns the mob's no-gravity flag (`Entity.isNoGravity`).
+    /// Reads the actual supported owner's stored `Entity.isNoGravity` flag.
     pub(super) fn uncached_entity_no_gravity(&self, entity: EntityRef) -> Option<bool> {
-        match self.native_entity_body(entity)? {
-            Body::Mob(m) => Some(m.no_gravity),
-            _ => None,
+        if self.native_lifecycle.epoch() != Some(entity.epoch()) {
+            return None;
         }
+        let (at, state) = self
+            .entity_residency
+            .borrow_mut()
+            .server_admitted_location(entity.id(), |at| self.locate_server_resident_owner(at))?;
+        if matches!(
+            state,
+            horizon_client::join_seq::residency::table::EntityLookup::Found {
+                value: (_, false),
+                ..
+            }
+        ) || !self.server_read_target_visible(
+            at.owner.dimension,
+            super::entity_residency::residency_target_at(at, entity.id()),
+        ) {
+            return None;
+        }
+        let raw = if at.owner.dimension == self.dim.key() {
+            self.resident_read_source(at)
+        } else {
+            self.levels
+                .parked_of(
+                    mod_api::LevelRef::new(entity.epoch(), at.owner.dimension).dimension_id(),
+                )
+                .and_then(|p| p.resident_read_source(at))
+        }?;
+        (raw.id == entity.id())
+            .then(|| raw.source.no_gravity())
+            .flatten()
     }
     /// Returns the entity's frozen ticks (`Entity.getTicksFrozen`).
     pub(super) fn uncached_entity_ticks_frozen(&self, entity: EntityRef) -> Option<i32> {
@@ -394,17 +421,6 @@ impl Game<'_> {
         };
         self.mobs.iter_mut().find(|m| m.id == id).is_some_and(|m| {
             m.glowing = glowing;
-            m.needs_sync = true;
-            true
-        })
-    }
-    /// Sets the mob's no-gravity flag (`Entity.setNoGravity`). Returns false for players and guests.
-    pub(super) fn entity_set_no_gravity(&mut self, entity: EntityRef, no_gravity: bool) -> bool {
-        let Some(Target::Mob(id)) = self.native_entity_target(entity) else {
-            return false;
-        };
-        self.mobs.iter_mut().find(|m| m.id == id).is_some_and(|m| {
-            m.no_gravity = no_gravity;
             m.needs_sync = true;
             true
         })
@@ -494,7 +510,10 @@ mod tests {
             assert_eq!(entity.is_invisible(game), Some(false));
             assert!(entity.set_glowing(game, true));
             assert!(game.mobs[0].glowing);
-            assert!(entity.set_no_gravity(game, true));
+            assert_eq!(
+                entity.set_no_gravity(game, true),
+                mod_api::WriteReceipt::Applied(true)
+            );
             assert!(game.mobs[0].no_gravity);
             assert!(game.mobs[0].needs_sync);
         });
@@ -820,7 +839,12 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn player_no_gravity_write_is_refused() {
-        with_player(|game, player| assert!(!player.set_no_gravity(game, true)));
+        with_player(|game, player| {
+            assert_eq!(
+                player.set_no_gravity(game, true),
+                mod_api::WriteReceipt::Refused(mod_api::EntityWriteError::Unsupported)
+            )
+        });
     }
 
     #[test]

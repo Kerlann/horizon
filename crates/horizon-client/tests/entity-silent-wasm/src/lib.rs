@@ -32,8 +32,16 @@ impl Hooks for Mod {
                 assert_eq!(other.is_silent(host), Some(value));
                 state.ids.push(id);
             }
+            for value in [true, false] {
+                let WriteReceipt::Pending(id) = other.set_no_gravity(host, value) else {
+                    panic!("foreign no-gravity write was not accepted")
+                };
+                assert_eq!(id.query(host), Ok(EntityCommandStatus::Pending));
+                assert_eq!(other.no_gravity(host), Some(value));
+                state.ids.push(id);
+            }
         } else {
-            assert_eq!(state.completed, 3, "all own completions precede B Pre");
+            assert_eq!(state.completed, 5, "all own completions precede B Pre");
             assert_eq!(other.is_silent(host), Some(true));
             for id in &state.ids {
                 assert!(matches!(
@@ -44,8 +52,11 @@ impl Hooks for Mod {
             // Independent physical markers prove that both guest copies made
             // it past every assertion, including their last completion query.
             match state.ids[0].sequence {
-                0 => assert!(other.set_no_gravity(host, true)),
-                2 => assert!(other.set_glowing(host, true)),
+                0 => assert_eq!(
+                    other.set_no_gravity(host, true),
+                    WriteReceipt::Applied(true)
+                ),
+                4 => assert!(other.set_glowing(host, true)),
                 _ => panic!("unexpected independent package command order"),
             }
         }
@@ -56,7 +67,16 @@ impl Hooks for Mod {
         host: &mut dyn ServerHost,
         event: &mut EntityCommandCompletedEvent<'_>,
     ) {
-        let EntityWriteCompletion::EntitySetSilent(done) = event.completion;
+        let done = match event.completion {
+            EntityWriteCompletion::EntitySetSilent(done) => {
+                assert!(![2, 3, 6, 7].contains(&done.id.sequence));
+                done
+            }
+            EntityWriteCompletion::EntitySetNoGravity(done) => {
+                assert!([2, 3, 6, 7].contains(&done.id.sequence));
+                done
+            }
+        };
         let mut state = self.state.lock().unwrap();
         assert!(
             state.ids.contains(&done.id),

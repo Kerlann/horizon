@@ -1,12 +1,18 @@
-//! The first real light-write projection, retained on the admitted identity row.
+//! Ordered scalar projections retained on the exact admitted identity row.
 use super::native_entity_read_cache::{NativeReadDetails, NativeReadPublication};
 use mod_api::CommandId;
 use std::collections::VecDeque;
 
+#[derive(Clone, Copy)]
+enum ScalarPatch {
+    Silent(bool),
+    NoGravity(bool),
+}
 #[derive(Default)]
-pub(super) struct SilentOverlay {
-    pub(super) authoritative: Option<bool>,
-    pending: VecDeque<(CommandId, bool)>,
+pub(super) struct ScalarOverlay {
+    silent: Option<bool>,
+    no_gravity: Option<bool>,
+    pending: VecDeque<(CommandId, ScalarPatch)>,
 }
 impl NativeReadPublication {
     /// Bounded source dependency selection, never a command-queue scan. Nbt
@@ -23,46 +29,75 @@ impl NativeReadPublication {
                     super::native_read_dependencies::EntityReadDependency::Nbt
                 )
             })
-            .then(|| self.silent_overlay.pending.back().map(|(id, _)| *id))
+            .then(|| self.scalar_overlay.pending.back().map(|(id, _)| *id))
             .flatten()
     }
 
     /// Pure prepared-row replacement; only called after final generation check.
-    pub(super) fn merge_pending_silent(previous: Option<Self>, mut prepared: Self) -> Self {
-        prepared.silent_overlay.authoritative = prepared.base.is_silent;
+    pub(super) fn merge_pending_scalars(previous: Option<Self>, mut prepared: Self) -> Self {
+        prepared.scalar_overlay.silent = prepared.base.is_silent;
+        prepared.scalar_overlay.no_gravity = prepared.base.no_gravity;
         if let Some(previous) = previous {
-            prepared.silent_overlay.pending = previous.silent_overlay.pending;
+            prepared.scalar_overlay.pending = previous.scalar_overlay.pending;
         }
-        prepared.replay_silent_overlay();
+        prepared.replay_scalar_overlay();
         prepared
     }
 
     pub(super) fn queue_silent_overlay(&mut self, id: CommandId, silent: bool) {
-        self.silent_overlay.pending.push_back((id, silent));
-        self.replay_silent_overlay();
+        self.scalar_overlay
+            .pending
+            .push_back((id, ScalarPatch::Silent(silent)));
+        self.replay_scalar_overlay();
+    }
+
+    pub(super) fn queue_no_gravity_overlay(&mut self, id: CommandId, value: bool) {
+        self.scalar_overlay
+            .pending
+            .push_back((id, ScalarPatch::NoGravity(value)));
+        self.replay_scalar_overlay();
     }
 
     pub(super) fn finish_silent_overlay(&mut self, id: CommandId, applied: Option<bool>) {
         if self
-            .silent_overlay
+            .scalar_overlay
             .pending
             .front()
             .is_some_and(|(pending, _)| *pending == id)
         {
-            self.silent_overlay.pending.pop_front();
+            self.scalar_overlay.pending.pop_front();
         }
         if let Some(silent) = applied {
-            self.silent_overlay.authoritative = Some(silent);
+            self.scalar_overlay.silent = Some(silent);
         }
-        self.replay_silent_overlay();
+        self.replay_scalar_overlay();
     }
 
-    fn replay_silent_overlay(&mut self) {
-        let latest = self.silent_overlay.pending.back().copied();
-        self.base.is_silent = latest
-            .map(|(_, value)| value)
-            .or(self.silent_overlay.authoritative);
-        let pending = latest.map(|(id, _)| id);
+    pub(super) fn finish_no_gravity_overlay(&mut self, id: CommandId, applied: Option<bool>) {
+        if self
+            .scalar_overlay
+            .pending
+            .front()
+            .is_some_and(|(pending, _)| *pending == id)
+        {
+            self.scalar_overlay.pending.pop_front();
+        }
+        if let Some(value) = applied {
+            self.scalar_overlay.no_gravity = Some(value);
+        }
+        self.replay_scalar_overlay();
+    }
+
+    fn replay_scalar_overlay(&mut self) {
+        self.base.is_silent = self.scalar_overlay.silent;
+        self.base.no_gravity = self.scalar_overlay.no_gravity;
+        for (_, patch) in &self.scalar_overlay.pending {
+            match *patch {
+                ScalarPatch::Silent(value) => self.base.is_silent = Some(value),
+                ScalarPatch::NoGravity(value) => self.base.no_gravity = Some(value),
+            }
+        }
+        let pending = self.scalar_overlay.pending.back().map(|(id, _)| *id);
         self.capture.pending_overlay = pending;
         // Every materialized family header must describe the same overlay.
         match &mut self.details {

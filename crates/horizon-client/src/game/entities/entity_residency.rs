@@ -198,6 +198,20 @@ macro_rules! define_resident_access {
             $this$(.$projectiles)+.bind_residency(journal, Owner { dimension, kind: Kind::Projectile }, |entity| (entity.id, entity.join_seq()));
             $this.dragon.bind_residency_specialized(journal, Owner { dimension, kind: Kind::Dragon }, |entity| (entity.id, entity.join_seq()), horizon_client::join_seq::residency::Source::Ordinary, Some((Kind::DragonPart, 8, |dragon, offset| dragon.part_uuids.get(usize::from(offset)).copied())), None);
         }
+        /// The caller supplies admitted identity and explicit write authority;
+        /// physical residency here confers neither. Parked storage stays in place.
+        pub(super) fn set_resident_no_gravity(
+            &mut $this,
+            at: Location,
+            id: u32,
+            value: bool,
+        ) -> std::result::Result<bool, mod_api::EntityWriteError> {
+            match at.owner.kind {
+                $(Kind::$kind => $crate::game::native_no_gravity_source::no_gravity_slot!($kind, $this$(.$field)+, at, id, value),)*
+                Kind::Projectile => $crate::game::native_no_gravity_source::no_gravity_slot!(Projectile, $this$(.$projectiles)+, at, id, value),
+                _ => Err(mod_api::EntityWriteError::Unsupported),
+            }
+        }
         pub(super) fn with_resident_owner_slot<R>(
             &mut $this,
             at: Location,
