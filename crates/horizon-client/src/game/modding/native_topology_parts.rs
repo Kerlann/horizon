@@ -68,10 +68,10 @@ impl Game<'_> {
         ) {
             return Ok(None);
         }
-        admission.require_stored_source()?;
         let at = admission.location();
         let id = admission.entity().id();
         let slot = if matches!(admission.target(), Target::Mob(_)) {
+            admission.require_stored_source()?;
             let storage = self
                 .topology_mobs_mut(at.owner.dimension)
                 .ok_or(EntityReadError::Lifted)?;
@@ -88,6 +88,12 @@ impl Game<'_> {
             let source = self
                 .resident_read_source(at)
                 .ok_or(EntityReadError::Lifted)?;
+            if source.id != id {
+                return Err(EntityReadError::Lifted);
+            }
+            // A real guest turn can hold its extracted body in Game.player.
+            // The role resolver checked exact residency and actual entity id;
+            // that owned mutable field is proof, unlike a readonly H provider.
             let slot = match source.source {
                 BaseReadSource::Player(_) => RelationSlot::CurrentPlayer,
                 BaseReadSource::Guest(guest) => RelationSlot::Guest(guest.conn),
@@ -95,6 +101,9 @@ impl Game<'_> {
             };
             match slot {
                 RelationSlot::CurrentPlayer if self.player.is_none() => {
+                    return Err(EntityReadError::Lifted);
+                }
+                RelationSlot::Guest(_) if admission.require_stored_source().is_err() => {
                     return Err(EntityReadError::Lifted);
                 }
                 RelationSlot::Guest(conn)

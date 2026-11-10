@@ -217,8 +217,6 @@ impl Game<'_> {
                     {
                         continue;
                     }
-                    self.with_entity_read_storage(customer, provider, |_| ())
-                        .ok_or(mod_api::EntityReadError::Lifted)?;
                     let menu = self
                         .lan
                         .as_ref()
@@ -228,6 +226,8 @@ impl Game<'_> {
                     if menu.merchant.mob != Some(mob.id) {
                         continue;
                     }
+                    // Identity is admitted above. The required foreign part is
+                    // this actual session, not the customer's motion loan.
                     selection.include(customer);
                     if session.is_none() {
                         session = Some(menu.merchant.session.as_ref());
