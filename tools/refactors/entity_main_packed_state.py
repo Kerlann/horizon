@@ -20,6 +20,17 @@ def replace_once(text, old, new):
     return text.replace(old, new)
 
 
+def port_packed_paths(text):
+    for pattern, replacement in [
+        (r"(?P<existing>\.resident_entities\s*\.knots\b)|(?<!\bp)\.knots\b", ".resident_entities.knots"),
+        (r"(?P<existing>\.residency\s*\.part_uuids\b)|\.part_uuids\b", ".residency.part_uuids"),
+    ]:
+        # Existing packed paths may be wrapped by rustfmt. Parked `p.knots`
+        # deliberately remains a separate owner, not Game residency state.
+        text = re.sub(pattern, lambda m: m.group() if m.group("existing") else replacement, text)
+    return text
+
+
 def main():
     argparse.ArgumentParser(description=__doc__).parse_args()
     state = SRC / "game/entities/resident_state.rs"
@@ -30,11 +41,10 @@ def main():
         for old, new in [
             (r"\.entity_residency\b", ".resident_entities.table"),
             (r"\.local_player_residency\b", ".resident_entities.local_player"),
-            (r"(?<!resident_entities)\.knots\b", ".resident_entities.knots"),
-            (r"(?<!residency)\.part_uuids\b", ".residency.part_uuids"),
+
         ]:
             text = re.sub(old, new, text)
-        path.write_text(text)
+        path.write_text(port_packed_paths(text))
     text = state.read_text()
     text = text.replace(
         "residency::table::EntityTable>>",

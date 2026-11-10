@@ -169,7 +169,6 @@ impl Game<'_> {
         let fences = self.lead_fences();
         self.knot_ids.retain(|p, _| fences.contains(p));
         self.resident_entities
-            .resident_entities
             .knots
             .retain(|knot| fences.contains(&knot.fence));
     }
@@ -193,7 +192,6 @@ impl Game<'_> {
         }
         self.knot_ids.remove(&fence);
         self.resident_entities
-            .resident_entities
             .knots
             .retain(|knot| knot.fence != fence);
     }
