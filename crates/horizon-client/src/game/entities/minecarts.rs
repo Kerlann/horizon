@@ -1763,24 +1763,10 @@ impl Game<'_> {
             c.fuse = 80;
             (c.id, [c.position.x, c.position.y, c.position.z])
         });
-        self.cart_prime_effects(id, at);
-        true
-    }
-    pub(super) fn prime_cart(&mut self, c: &mut Minecart) {
-        if !self
-            .ui
-            .rules
-            .bool_at(horizon_client::gamerules::vanilla::TNT_EXPLODES)
-        {
-            return;
-        }
-        c.fuse = 80;
-        self.cart_prime_effects(c.id, [c.position.x, c.position.y, c.position.z]);
-    }
-    fn cart_prime_effects(&mut self, id: u32, at: [f64; 3]) {
         self.lan_entity_event(id as i32, TNT_PRIME_EVENT, at);
         self.audio
             .play("minecraft:entity.tnt.primed", Some(at), 1.0, 1.0);
+        true
     }
     /// `MinecartTNT.handleEntityEvent`: event 70 calls `primeFuse`, which on a
     /// client only sets the fuse to 80. The window then counts it down

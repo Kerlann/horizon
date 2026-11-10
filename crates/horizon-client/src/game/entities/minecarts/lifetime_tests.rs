@@ -351,7 +351,7 @@ fn a_bound_tnt_cart_keeps_its_join_when_damage_primes_it() {
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn canonical_priming_keeps_event_sound_and_exact_destruction_rng() {
     use horizon_core::random::{LegacyRandom, RandomSource};
-    for mode in 0..3 {
+    for mode in 0..4 {
         bound_cart_case(CartKind::Tnt, |game| {
             let join = game.carts[0].join;
             game.carts
@@ -368,7 +368,12 @@ fn canonical_priming_keeps_event_sound_and_exact_destruction_rng() {
                         location: [0.5, 70.0, 0.5]
                     })));
                 }
-                _ => game.hurt_cart(0, 5.0, false, true),
+                2 => game.hurt_cart(0, 5.0, false, true),
+                _ => {
+                    let entity = <dyn mod_api::Host>::entity(game, 71).unwrap();
+                    let cart = game.minecart(entity).unwrap();
+                    assert!(cart.prime_fuse(game));
+                }
             }
             assert_eq!(game.carts[0].join, join);
             assert_eq!(game.carts[0].fuse, if mode == 2 { 8 } else { 80 });
