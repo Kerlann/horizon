@@ -278,7 +278,9 @@ impl<'a> ParkedMobNbt<'a> {
     }
 
     pub(super) fn into_assignments(self) -> Vec<(u32, [i32; 4])> {
-        self.assignments
+        let mut assignments = self.assignments;
+        assignments.retain(|(id, uuid)| self.persist.uuids.get(id) == Some(uuid));
+        assignments
     }
 }
 
@@ -304,8 +306,8 @@ impl MobNbtOwner for ParkedMobNbt<'_> {
             return Ok(uuid);
         }
         let uuid = horizon_client::save::random_uuid();
-        self.persist.uuids.insert(id, uuid);
         self.assignments.push((id, uuid));
+        self.persist.uuids.insert(id, uuid);
         Ok(uuid)
     }
     fn write_leash(&mut self, tag: &mut Tag, index: usize) -> Result<(), Self::Error> {

@@ -30,6 +30,7 @@ impl SaveAdmission {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(super) enum SaveError {
     IncompleteReference(u32),
+    CyclicPassengers(u32),
     StaleAdmission { id: u32, location: Location },
     UnavailableBody(Location),
 }
@@ -51,7 +52,27 @@ pub(super) struct AdmittedSaveOwner<'a> {
 }
 impl AdmittedSaveOwner<'_> {
     pub(super) fn into_assignments(self) -> Vec<(u32, [i32; 4])> {
-        self.assignments
+        let mut assignments = self.assignments;
+        // Candidates are staged before insertion so unwind cannot lose a real
+        // write. Publish only candidates actually present in the owning map.
+        assignments.retain(|(id, uuid)| self.persist.uuids.get(id) == Some(uuid));
+        assignments
+    }
+    pub(super) fn validate_references(
+        &mut self,
+        requirements: &super::native_nbt_save_requirements::SaveRequirements,
+    ) -> Result<(), SaveError> {
+        use super::native_nbt_save_requirements::SaveRequirement;
+        for request in &requirements.requests {
+            if let SaveRequirement::UuidReference(id) = *request {
+                let token = self.admissions.iter().copied().find(|token| token.id() == id)
+                    .ok_or(SaveError::IncompleteReference(id))?;
+                if let SaveAdmission::Present { id, location } = token {
+                    (self.primary_uuid)(id, location)?;
+                }
+            }
+        }
+        Ok(())
     }
 }
 impl MobNbtOwner for AdmittedSaveOwner<'_> {
@@ -97,8 +118,8 @@ impl MobNbtOwner for AdmittedSaveOwner<'_> {
             return Ok(uuid);
         }
         let uuid = horizon_client::save::random_uuid();
-        self.persist.uuids.insert(id, uuid);
         self.assignments.push((id, uuid));
+        self.persist.uuids.insert(id, uuid);
         Ok(uuid)
     }
     fn write_leash(&mut self, tag: &mut Tag, index: usize) -> Result<(), SaveError> {
