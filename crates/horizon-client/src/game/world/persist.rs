@@ -349,6 +349,81 @@ fn transformation_tag(
     Tag::Compound(t)
 }
 
+pub(super) fn other_to_nbt(
+    o: &super::commands::OtherEntity,
+    uuid: [i32; 4],
+    raw: Option<&Tag>,
+    registry: &horizon_world::registry::BlockRegistry,
+    items: &horizon_items::items::Items,
+) -> Tag {
+    let mut tag = raw
+        .cloned()
+        .unwrap_or_else(|| Tag::Compound(Default::default()));
+    if let Tag::Compound(c) = &mut tag {
+        // Display.addAdditionalSaveData omits the transient start delay.
+        if matches!(
+            o.kind.as_str(),
+            "minecraft:block_display" | "minecraft:item_display" | "minecraft:text_display"
+        ) {
+            c.remove(&"start_interpolation".into());
+        }
+        c.insert("id".into(), Tag::String(o.kind.as_str().into()));
+        c.insert(
+            "Pos".into(),
+            Tag::List(
+                [o.position.x, o.position.y, o.position.z]
+                    .map(|v| Tag::Double(v.to_bits()))
+                    .to_vec(),
+            ),
+        );
+        c.insert(
+            "Rotation".into(),
+            Tag::List(vec![
+                Tag::Float(o.yaw.to_bits()),
+                Tag::Float(o.pitch.to_bits()),
+            ]),
+        );
+        c.insert("UUID".into(), Tag::IntArray(uuid.to_vec()));
+    }
+    let display = matches!(
+        o.kind.as_str(),
+        "minecraft:text_display" | "minecraft:block_display" | "minecraft:item_display"
+    );
+    if display || super::interactions::is_interaction(&o.kind) {
+        write_static_entity_fields(&mut tag);
+    }
+    if display {
+        display::write_display_nbt(o, &mut tag, registry, items);
+    }
+    if let Some(state) = &o.interaction
+        && let Tag::Compound(fields) = &mut tag
+    {
+        state.write(fields);
+    }
+    if let Some(eye) = o.eye
+        && let Tag::Compound(c) = &mut tag
+    {
+        // Entity.saveWithoutId: the live motion and the fire ticks.
+        let m = eye.motion;
+        c.insert(
+            "Motion".into(),
+            Tag::List([m.x, m.y, m.z].map(|v| Tag::Double(v.to_bits())).to_vec()),
+        );
+        c.entry("Fire".into()).or_insert(Tag::Short(0));
+    }
+    // Marker, LeashFenceKnotEntity and EyeOfEnder still use
+    // Entity.saveWithoutId's common fields, which their own saves leave out.
+    if o.eye.is_some()
+        || matches!(
+            o.kind.as_str(),
+            "minecraft:marker" | "marker" | "minecraft:leash_knot"
+        )
+    {
+        entity_nbt::fill_common_defaults(&mut tag);
+    }
+    tag
+}
+
 impl Game<'_> {
     /// Saved ticks and the save time for a chunk about to be written.
     pub(super) fn attach_save_data(&self, chunk: &mut Chunk) {
@@ -1268,6 +1343,7 @@ impl Game<'_> {
     /// passengers cannot save even before their list entry is swept.
     pub(super) fn put_mob_passengers(&mut self, tag: &mut Tag, id: u32) {
         super::native_mob_nbt_save::MobNbtOwner::put_mob_passengers(self, tag, id)
+            .unwrap_or_else(|never| match never {})
     }
     /// Read an unsimulated entity without assigning it a new identity.
     pub(super) fn other_from_nbt(
@@ -1319,75 +1395,13 @@ impl Game<'_> {
     /// The compound of an entity Horizon does not simulate, with its current
     /// position, rotation and UUID.
     pub(super) fn other_to_nbt(&self, o: &super::commands::OtherEntity, uuid: [i32; 4]) -> Tag {
-        let mut tag = self
-            .persist
-            .raw
-            .get(&o.id)
-            .cloned()
-            .unwrap_or_else(|| Tag::Compound(Default::default()));
-        if let Tag::Compound(c) = &mut tag {
-            // Display.addAdditionalSaveData omits the transient start delay.
-            if matches!(
-                o.kind.as_str(),
-                "minecraft:block_display" | "minecraft:item_display" | "minecraft:text_display"
-            ) {
-                c.remove(&"start_interpolation".into());
-            }
-            c.insert("id".into(), Tag::String(o.kind.as_str().into()));
-            c.insert(
-                "Pos".into(),
-                Tag::List(
-                    [o.position.x, o.position.y, o.position.z]
-                        .map(|v| Tag::Double(v.to_bits()))
-                        .to_vec(),
-                ),
-            );
-            c.insert(
-                "Rotation".into(),
-                Tag::List(vec![
-                    Tag::Float(o.yaw.to_bits()),
-                    Tag::Float(o.pitch.to_bits()),
-                ]),
-            );
-            c.insert("UUID".into(), Tag::IntArray(uuid.to_vec()));
-        }
-        let display = matches!(
-            o.kind.as_str(),
-            "minecraft:text_display" | "minecraft:block_display" | "minecraft:item_display"
-        );
-        if display || super::interactions::is_interaction(&o.kind) {
-            write_static_entity_fields(&mut tag);
-        }
-        if display {
-            self.write_display_nbt(o, &mut tag);
-        }
-        if let Some(state) = &o.interaction
-            && let Tag::Compound(fields) = &mut tag
-        {
-            state.write(fields);
-        }
-        if let Some(eye) = o.eye
-            && let Tag::Compound(c) = &mut tag
-        {
-            // Entity.saveWithoutId: the live motion and the fire ticks.
-            let m = eye.motion;
-            c.insert(
-                "Motion".into(),
-                Tag::List([m.x, m.y, m.z].map(|v| Tag::Double(v.to_bits())).to_vec()),
-            );
-            c.entry("Fire".into()).or_insert(Tag::Short(0));
-        }
-        // Marker, LeashFenceKnotEntity and EyeOfEnder still use
-        // Entity.saveWithoutId's common fields, which their own saves leave out.
-        if o.eye.is_some()
-            || matches!(
-                o.kind.as_str(),
-                "minecraft:marker" | "marker" | "minecraft:leash_knot"
-            )
-        {
-            entity_nbt::fill_common_defaults(&mut tag);
-        }
-        tag
+        other_to_nbt(
+            o,
+            uuid,
+            self.persist.raw.get(&o.id),
+            self.pack.assets.registry,
+            self.items(),
+        )
     }
     /// The root of a stack of riders (`Entity.getRootVehicle`).
     fn mob_root(&self, mut i: usize) -> usize {
@@ -1549,6 +1563,7 @@ impl Game<'_> {
     /// A mob's entity tag with the mobs riding it under `Passengers`.
     pub(super) fn mob_tree_nbt(&mut self, i: usize) -> Tag {
         super::native_mob_nbt_save::MobNbtOwner::mob_tree_nbt(self, i)
+            .unwrap_or_else(|never| match never {})
     }
     /// `LivingEntity.addAdditionalSaveData`'s `last_hurt_by_mob` and
     /// `ticks_since_last_hurt_by_mob`, a PARTIAL projection at save time: both
@@ -2405,7 +2420,7 @@ impl horizon_client::mobs::WhoLookup for Game<'_> {
 pub(super) type ChunkKey = (i32, i32);
 
 /// The raw compound kept for an entity loaded at `at`, found by kind and position.
-fn anon_raw(persist: &EntityMemory, kind: &str, at: Vec3) -> Option<Tag> {
+pub(super) fn anon_raw(persist: &EntityMemory, kind: &str, at: Vec3) -> Option<Tag> {
     persist
         .anon
         .get(&anon_key(kind, at))

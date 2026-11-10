@@ -56,6 +56,35 @@ fn distance(a: Vec3, b: Vec3) -> f64 {
     ((a.x - b.x).powi(2) + (a.y - b.y).powi(2) + (a.z - b.z).powi(2)).sqrt()
 }
 
+pub(super) fn write_boat_leash_tag<E>(
+    tag: &mut Tag,
+    holder: Option<Holder>,
+    pending: Option<Pending>,
+    player: Option<[i32; 4]>,
+    mut uuid_for: impl FnMut(u32) -> Result<[i32; 4], E>,
+) -> Result<(), E> {
+    let Tag::Compound(map) = tag else { return Ok(()) };
+    map.remove(&"leash".into());
+    let value = match (holder, pending) {
+        (Some(Holder::Mob(id)), _) => {
+            let uuid = uuid_for(id)?;
+            leash::to_nbt(Holder::Mob(id), Some(uuid))
+        }
+        (Some(Holder::Boat(id)), _) => {
+            let uuid = uuid_for(id)?;
+            leash::to_nbt(Holder::Boat(id), Some(uuid))
+        }
+        (Some(h), _) => leash::to_nbt(h, player),
+        (None, Some(Pending::Knot(p))) => leash::to_nbt(Holder::Knot(p), None),
+        (None, Some(Pending::Uuid(u))) => leash::to_nbt(Holder::Player, Some(u)),
+        _ => None,
+    };
+    if let Some(v) = value {
+        map.insert("leash".into(), v);
+    }
+    Ok(())
+}
+
 impl Game<'_> {
     /// The player whose lead this is: the lead's `leash_player`, else the
     /// local player.
@@ -346,27 +375,10 @@ impl Game<'_> {
 
     /// The `leash` tag of a boat about to be saved.
     pub(super) fn write_boat_leash(&mut self, tag: &mut Tag, index: usize) {
-        let Tag::Compound(map) = tag else { return };
-        map.remove(&"leash".into());
         let b = &self.boats[index];
         let (holder, pending, player) = (b.leash, b.leash_pending, self.boat_leash_player(b));
-        let value = match (holder, pending) {
-            (Some(Holder::Mob(id)), _) => {
-                let uuid = self.mob_uuid(id);
-                leash::to_nbt(Holder::Mob(id), Some(uuid))
-            }
-            (Some(Holder::Boat(id)), _) => {
-                let uuid = self.uuid_for(id);
-                leash::to_nbt(Holder::Boat(id), Some(uuid))
-            }
-            (Some(h), _) => leash::to_nbt(h, player),
-            (None, Some(Pending::Knot(p))) => leash::to_nbt(Holder::Knot(p), None),
-            (None, Some(Pending::Uuid(u))) => leash::to_nbt(Holder::Player, Some(u)),
-            _ => None,
-        };
-        if let Some(v) = value {
-            map.insert("leash".into(), v);
-        }
+        write_boat_leash_tag(tag, holder, pending, player, |id| Ok::<_, std::convert::Infallible>(self.uuid_for(id)))
+            .unwrap_or_else(|never| match never {});
     }
 
     /// Whether the player acting holds this boat's lead.

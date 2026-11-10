@@ -2,6 +2,57 @@ use super::*;
 use crate::join_seq::residency::EntitySubtype;
 
 #[test]
+fn admitted_details_read_drains_retirement_and_refuses_a_replaced_exact_token() {
+    let journal = Journal::default();
+    let mut table = EntityTable::<()>::new(journal.clone());
+    let owner = Owner {
+        dimension: DimensionKey::NETHER,
+        kind: super::super::Kind::Cart,
+    };
+    let old = Identity::new(73, JoinSeq::next())
+        .unwrap()
+        .with_known_uuid(Some([1, 2, 3, 4]));
+    journal.push(Event {
+        owner,
+        change: Change::Install(old),
+    });
+    let (at, _, _) = table
+        .server_admitted_identity(73, |_| Some(SourceEntity { id: 73, value: () }))
+        .unwrap();
+    assert_eq!(
+        table
+            .admitted_identity_details_at(73, at)
+            .unwrap()
+            .known_uuid,
+        Some([1, 2, 3, 4])
+    );
+    journal.push(Event {
+        owner,
+        change: Change::Remove(old),
+    });
+    assert!(table.admitted_identity_details_at(73, at).is_none());
+    let replacement = Identity::new(73, JoinSeq::next()).unwrap();
+    journal.push(Event {
+        owner,
+        change: Change::Install(replacement),
+    });
+    assert!(table.admitted_identity_details_at(73, at).is_none());
+    let (new_at, _, _) = table
+        .server_admitted_identity(73, |_| Some(SourceEntity { id: 73, value: () }))
+        .unwrap();
+    // A valid row with no primary UUID is not an unavailable/replaced token.
+    assert_eq!(
+        table
+            .admitted_identity_details_at(73, new_at)
+            .unwrap()
+            .known_uuid,
+        None
+    );
+    table.reset();
+    assert!(table.admitted_identity_details_at(73, new_at).is_none());
+}
+
+#[test]
 fn cold_identity_details_survive_real_loan_and_stale_removal_but_not_absence() {
     let journal = Journal::default();
     let mut table = EntityTable::<()>::new(journal.clone());

@@ -383,6 +383,20 @@ impl<R> EntityTable<R> {
         Some((row.location, state, row.details))
     }
 
+    /// Read the same primary row after matching-epoch physical admission.
+    /// The caller transports that admitted ID and exact location; this does not
+    /// nominate a candidate or perform another physical lookup. Journal changes
+    /// invalidate a retired or replaced token before its metadata can be read.
+    pub fn admitted_identity_details_at(
+        &mut self,
+        id: u32,
+        location: Location,
+    ) -> Option<IdentityDetails> {
+        self.drain();
+        let row = self.rows.get(&NonZeroU32::new(id)?)?;
+        (row.location == location).then_some(row.details)
+    }
+
     /// Candidate-only metadata, including Taken. Collect into a reusable buffer
     /// and release this borrow before invoking any source or UUID resolver.
     pub fn admitted_metadata(
