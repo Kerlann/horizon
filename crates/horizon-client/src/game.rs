@@ -18327,12 +18327,6 @@ impl Game<'_> {
 }
 
 impl Game<'_> {
-    fn held(&self) -> Option<&ItemStack> {
-        self.stack_in(self.held_slot())
-    }
-}
-
-impl Game<'_> {
     fn precipitation(&self, x: i32, y: i32, z: i32) -> Option<bool> {
         let chunk = self.world.chunks.get(&(x >> 4, z >> 4))?;
         self.res
