@@ -25,6 +25,19 @@ impl EntityActor<false> for super::boats::Boat {
     }
 }
 
+impl EntityActor<false> for super::minecarts::Minecart {
+    const KIND: Kind = Kind::Cart;
+    fn id(&self) -> u32 {
+        self.id
+    }
+    fn target(&self) -> super::commands::Target {
+        super::commands::Target::Cart(self.id)
+    }
+    fn owner<'a, 'g>(game: &'a mut Game<'g>) -> &'a mut JoinList<Self, false> {
+        &mut game.carts
+    }
+}
+
 impl EntityActor for super::fireworks::Rocket {
     const KIND: Kind = Kind::Rocket;
     fn id(&self) -> u32 {

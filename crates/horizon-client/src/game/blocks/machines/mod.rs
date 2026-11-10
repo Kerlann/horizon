@@ -1658,12 +1658,23 @@ impl Game<'_> {
     /// entities over it or touching it, each tick without a cooldown.
     /// `consumedItemThisFrame` in 26.3 caps a tick at one item: the tick tries
     /// once, and `makeStepAlongTrack` may try again, but only one succeeds.
-    pub(super) fn hopper_cart_suck(&mut self, cart: &mut super::minecarts::Minecart) {
-        // The cart's slots are edited as a container under the placeholder key
-        // its menu uses; when that menu is open the placeholder is the live copy.
-        let key = (i32::MAX - 15, super::minecarts::CART_KEY_Y, cart.id as i32);
-        let (view, open) = self.lend_items(key, &mut cart.items);
-        let p = cart.position;
+    pub(super) fn hopper_cart_suck(&mut self, join: horizon_client::join_seq::JoinSeq) {
+        let Some(index) = self.carts.locate(join) else {
+            return;
+        };
+        // The actual Cart stays canonical. Its existing inventory lender owns
+        // the slots under the same key the mod inventory API already resolves.
+        let key = (
+            i32::MAX - 15,
+            super::minecarts::CART_KEY_Y,
+            self.carts[index].id as i32,
+        );
+        let p = self.carts[index].position;
+        let mut items = self
+            .carts
+            .update(index, |cart| std::mem::take(&mut cart.items));
+        let (view, open) = self.lend_items(key, &mut items);
+        self.carts.update(index, |cart| cart.items = items);
         // getLevelY is the cart's y + 0.5, so the container is the block at
         // y + 1.5, and Hopper.SUCK_AABB (moved by getLevel - 0.5) starts 11/16
         // above the cart.
@@ -1681,9 +1692,9 @@ impl Game<'_> {
                 [p.x + 0.5, p.y + 2.0, p.z + 0.5],
             ),
         };
-        if !took {
-            // The cart's own box, inflated by 0.25 sideways.
-            let b = cart.bounds();
+        if !took && let Some(index) = self.carts.locate(join) {
+            // Reacquire the actual box after any inventory callbacks.
+            let b = self.carts[index].bounds();
             let (lo, hi) = (b.min_position(), b.max_position());
             self.cart_suck_items(
                 &view,
@@ -1691,7 +1702,11 @@ impl Game<'_> {
                 [hi.x + 0.25, hi.y, hi.z + 0.25],
             );
         }
-        self.reclaim_items(key, open, &mut cart.items);
+        let mut items = Vec::new();
+        self.reclaim_items(key, open, &mut items);
+        if let Some(index) = self.carts.locate(join) {
+            self.carts.update(index, |cart| cart.items = items);
+        }
     }
 
     // ---- dispensers and droppers ----

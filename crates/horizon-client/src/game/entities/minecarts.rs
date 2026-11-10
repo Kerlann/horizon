@@ -246,6 +246,35 @@ pub(super) fn forget_unreadable_display(
         c.custom_display = None;
     }
 }
+/// Rider placement from an actual physics step, including a retired source.
+/// This is an operation result, never a body provider.
+struct CartTickEnd {
+    alive: bool,
+    position: Vec3,
+}
+
+/// Consumed explosion arguments, never a resident body or a body source.
+struct CartBlast {
+    id: u32,
+    at: [f64; 3],
+    power: f32,
+    silent: bool,
+    primed: bool,
+    bounds: Aabb,
+}
+impl CartBlast {
+    fn new(c: &Minecart, power: f32, silent: bool) -> Self {
+        Self {
+            id: c.id,
+            at: [c.position.x, c.position.y, c.position.z],
+            power,
+            silent,
+            primed: c.fuse >= 0,
+            bounds: c.bounds(),
+        }
+    }
+}
+
 /// The carts' and mobs' boxes for one tick's cart pushes (`push_from_cart`,
 /// `pickup_from_cart`), so a cart reads its neighbours instead of every cart and
 /// every mob of the level. Both answer in slot order, as the scans did.
@@ -1001,8 +1030,13 @@ impl Game<'_> {
     /// `Entity.checkInsideBlocks` for a recorded move of the cart from `from`
     /// to `to`: the entity-sensing blocks (plates, buttons, tripwires, detector
     /// rails) on the path run `entityInside` now, with the cart where the tick
-    /// left it. `slot` is where the cart is stored.
-    fn cart_inside_blocks(&mut self, c: &mut Minecart, slot: usize, from: Vec3, to: Vec3) {
+    /// left it, using the complete canonical source during block callbacks.
+    fn cart_inside_blocks(
+        &mut self,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<Minecart, false>,
+        from: Vec3,
+        to: Vec3,
+    ) -> Option<()> {
         let shrink = f64::from(1.0e-5f32);
         let half = WIDTH / 2.0;
         let bounds = Aabb::new(
@@ -1026,21 +1060,17 @@ impl Game<'_> {
             },
         );
         if hits.is_empty() {
-            return;
+            return Some(());
         }
-        let Some(i) = cart_at(&self.carts, c.id, slot) else {
-            return;
-        };
-        // The stored cart is the one a plate counts: it takes the moved cart
-        // for the walk and hands back what the walk left.
-        self.carts.update(i, |stored| std::mem::swap(stored, c));
-        self.with_level(|b, level, ticks| {
-            for p in hits {
-                b.entity_inside(level, ticks, p);
-            }
-        });
-        self.carts.update(i, |stored| std::mem::swap(stored, c));
-        let _ = self.process_level_events();
+        actor.with_game(self, |game| {
+            game.with_level(|b, level, ticks| {
+                for p in hits {
+                    b.entity_inside(level, ticks, p);
+                }
+            });
+            let _ = game.process_level_events();
+        })?;
+        Some(())
     }
     /// `AbstractMinecart`: `minecart_improvements` picks the smoother
     /// physics.
@@ -1190,7 +1220,12 @@ impl Game<'_> {
     /// `NewMinecartBehavior.moveAlongTrack`: the iteration keeps moving
     /// while distance is left, over as many rails as it takes, the speed
     /// recomputed per rail (slope, halt, boost).
-    fn move_along_track_new(&mut self, c: &mut Minecart, intent: [f64; 2]) {
+    fn move_along_track_new(
+        &mut self,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<Minecart, false>,
+        intent: [f64; 2],
+    ) -> Option<()> {
+        let mut c = actor.body_mut()?;
         // `TrackIteration`: the slope, halt and boost speeds each apply once
         // per tick, and the iteration keeps moving while distance is left.
         let mut first = true;
@@ -1210,7 +1245,7 @@ impl Game<'_> {
                     self.cart_block_effects(c);
                     self.cart_block_effects(c);
                 }
-                return;
+                return Some(());
             };
             if !c.on_rails {
                 c.on_rails = true;
@@ -1220,7 +1255,8 @@ impl Game<'_> {
             step_start = c.position;
             self.note_cart_pass(c, pos);
             if &*rail.name == "minecraft:activator_rail" {
-                self.activate_cart(c, rail.powered);
+                self.activate_cart(actor, rail.powered)?;
+                c = actor.body_mut()?;
             }
             let ridden = self.cart_is_vehicle(c.id);
             let initial_h = c.velocity.horizontal_distance();
@@ -1311,6 +1347,7 @@ impl Game<'_> {
             }
             first = false;
         }
+        Some(())
     }
     /// `NewMinecartBehavior.stepAlongTrack`: toward the rail's exit, the
     /// hill's Y projected, a V of opposing slopes resting a slow cart.
@@ -1464,39 +1501,32 @@ impl Game<'_> {
             }
         }
     }
-    /// Runs `push_from_cart` for the cart being ticked (`c` is a copy of the
-    /// stored one, kept at `slot`): the stored cart is replaced by `c` for the
-    /// push and `c` takes back what the push changed. The rolled loot stays
-    /// with `c`: the stored cart is without it for the whole tick
-    /// (`tick_carts_now`), and a mineshaft's chest cart carries its whole roll
-    /// as NBT.
-    fn push_from_ticked_cart(&mut self, c: &mut Minecart, slot: usize, index: &mut CartIndex) {
-        let Some(i) = cart_at(&self.carts, c.id, slot) else {
-            return;
-        };
-        let loot = c.loot.take();
-        if !self.store_cart_back(i, c.clone()) {
-            return;
-        }
-        self.push_from_cart(i, index);
-        if let Some(i) = self.carts.iter().position(|x| x.id == c.id) {
-            *c = self.carts[i].clone();
-        }
-        c.loot = loot;
+    /// Push using the complete actual canonical Cart, never a copied backing.
+    fn push_from_ticked_cart(
+        &mut self,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<Minecart, false>,
+        index: &mut CartIndex,
+    ) -> Option<()> {
+        let join = actor.join();
+        actor.with_game(self, |game| {
+            if let Some(at) = game.carts.locate(join) {
+                game.push_from_cart(at, index);
+            }
+        })?;
+        Some(())
     }
-    /// `AbstractMinecart.tick` for one cart; returns false once it is gone.
-    /// `slot` is where the cart is stored (where to look first). Spawner joins
+    /// `AbstractMinecart.tick` for one actual Cart loan. Spawner joins
     /// and events return through `spawner_completion`: the caller applies them
     /// immediately after returning this progressed body to canonical storage,
     /// before continuing the turn. No later copy may overwrite listener writes.
     fn tick_cart(
         &mut self,
-        c: &mut Minecart,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<Minecart, false>,
         intent: [f64; 2],
-        slot: usize,
         index: &mut CartIndex,
         spawner_completion: &mut Option<super::spawner::SpawnerTickCompletion>,
-    ) -> bool {
+    ) -> Option<CartTickEnd> {
+        let mut c = actor.body_mut()?;
         c.tick_count += 1;
         c.previous = c.position;
         c.previous_yaw = c.yaw;
@@ -1523,12 +1553,14 @@ impl Game<'_> {
         let pos = self.rail_block(c.position);
         let mut step = None;
         if self.minecart_improvements() {
-            self.move_along_track_new(c, intent);
+            self.move_along_track_new(actor, intent)?;
+            c = actor.body_mut()?;
         } else if let Some(rail) = self.rail(pos[0], pos[1], pos[2]) {
             step = Some(self.move_along_track(c, pos, &rail, intent));
             self.note_cart_pass(c, pos);
             if &*rail.name == "minecraft:activator_rail" {
-                self.activate_cart(c, rail.powered);
+                self.activate_cart(actor, rail.powered)?;
+                c = actor.body_mut()?;
             }
         } else {
             self.come_off_track(c);
@@ -1555,13 +1587,14 @@ impl Game<'_> {
             self.cart_block_effects(c);
             // applyEffectsFromBlocks over the step moveAlongTrack recorded.
             if let Some((from, to)) = step {
-                self.cart_inside_blocks(c, slot, from, to);
+                self.cart_inside_blocks(actor, from, to)?;
             }
         }
         // OldMinecartBehavior.tick ends with pushAndPickupEntities, before
         // AbstractMinecart.tick's updateFluidInteraction. The experiment still
         // uses this fallback until its per-move pickup/push retry is ported.
-        self.push_from_ticked_cart(c, slot, index);
+        self.push_from_ticked_cart(actor, index)?;
+        c = actor.body_mut()?;
         // AbstractMinecart.tick: updateFluidInteraction, a stream pushes the cart.
         c.in_water = c
             .push_by_fluid(&self.world, &self.res.motion().fluids, &self.loop_context)
@@ -1596,8 +1629,14 @@ impl Game<'_> {
             CartKind::Tnt => {
                 // MinecartTNT.causeFallDamage ran inside the move.
                 if let Some(speed_sqr) = c.fall_blast.take() {
-                    self.explode_cart(c, speed_sqr);
-                    return false;
+                    let position = c.position;
+                    let join = actor.join();
+                    let _ =
+                        actor.with_game(self, |game| game.explode_ticking_cart(join, speed_sqr));
+                    return Some(CartTickEnd {
+                        alive: false,
+                        position,
+                    });
                 }
                 // MinecartTNT.tick: the fuse and the collision check are separate.
                 if c.fuse > 0 {
@@ -1609,8 +1648,13 @@ impl Game<'_> {
                     // explode(horizontalDistanceSqr()): a rising cart's
                     // vertical speed adds nothing.
                     let speed = c.velocity.x * c.velocity.x + c.velocity.z * c.velocity.z;
-                    self.explode_cart(c, speed);
-                    return false;
+                    let position = c.position;
+                    let join = actor.join();
+                    let _ = actor.with_game(self, |game| game.explode_ticking_cart(join, speed));
+                    return Some(CartTickEnd {
+                        alive: false,
+                        position,
+                    });
                 }
                 // MinecartTNT.tick reads the delta left after AbstractMinecart.tick
                 // (pushes and fluids included). The move zeroed the blocked axes
@@ -1619,8 +1663,13 @@ impl Game<'_> {
                 // the free axis (#11380).
                 let speed = c.velocity.horizontal_distance_squared();
                 if tnt_ignites_by_collision(c.horizontal_collision, speed) {
-                    self.explode_cart(c, speed);
-                    return false;
+                    let position = c.position;
+                    let join = actor.join();
+                    let _ = actor.with_game(self, |game| game.explode_ticking_cart(join, speed));
+                    return Some(CartTickEnd {
+                        alive: false,
+                        position,
+                    });
                 }
             }
             // MinecartSpawner.tick: `BaseSpawner.serverTick` at the cart's block.
@@ -1643,7 +1692,10 @@ impl Game<'_> {
             }
             _ => {}
         }
-        true
+        Some(CartTickEnd {
+            alive: true,
+            position: c.position,
+        })
     }
     /// The cart passes over the rail at `pos`: `minecart_pass`, delivered after its batch.
     fn note_cart_pass(&self, c: &Minecart, pos: [i32; 3]) {
@@ -1654,7 +1706,12 @@ impl Game<'_> {
         );
     }
     /// `activateMinecart` on an activator rail.
-    fn activate_cart(&mut self, c: &mut Minecart, powered: bool) {
+    fn activate_cart(
+        &mut self,
+        actor: &mut super::entity_actor_loan::EntityActorLoan<Minecart, false>,
+        powered: bool,
+    ) -> Option<()> {
+        let c = actor.body_mut()?;
         match c.kind {
             CartKind::Rideable if powered => {
                 // Minecart.activateMinecart: ejectPassengers.
@@ -1673,7 +1730,10 @@ impl Game<'_> {
                     c.damage = 50.0;
                 }
             }
-            CartKind::Tnt if powered && c.fuse < 0 => self.prime_cart(c),
+            CartKind::Tnt if powered && c.fuse < 0 => {
+                let join = actor.join();
+                actor.with_game(self, |game| game.prime_cart_join(join))?;
+            }
             CartKind::Hopper => c.enabled = !powered,
             // MinecartCommandBlock.activateMinecart: the command runs at most
             // every ACTIVATION_DELAY ticks.
@@ -1683,23 +1743,30 @@ impl Game<'_> {
             }
             _ => {}
         }
+        Some(())
     }
     /// `MinecartTNT.primeFuse`: fuse 80, then `Level.broadcastEntityEvent`
     /// (`EntityEvent.TNT_PRIME`, 70) and `SoundEvents.TNT_PRIMED`. A client
     /// that receives 70 only sets the fuse (`handleEntityEvent`).
-    pub(super) fn prime_cart(&mut self, c: &mut Minecart) {
+    pub(super) fn prime_cart_join(&mut self, join: horizon_client::join_seq::JoinSeq) -> bool {
+        let Some(index) = self.carts.locate(join) else {
+            return false;
+        };
         if !self
             .ui
             .rules
             .bool_at(horizon_client::gamerules::vanilla::TNT_EXPLODES)
         {
-            return;
+            return false;
         }
-        c.fuse = 80;
-        let at = [c.position.x, c.position.y, c.position.z];
-        self.lan_entity_event(c.id as i32, TNT_PRIME_EVENT, at);
+        let (id, at) = self.carts.update(index, |c| {
+            c.fuse = 80;
+            (c.id, [c.position.x, c.position.y, c.position.z])
+        });
+        self.lan_entity_event(id as i32, TNT_PRIME_EVENT, at);
         self.audio
             .play("minecraft:entity.tnt.primed", Some(at), 1.0, 1.0);
+        true
     }
     /// `MinecartTNT.handleEntityEvent`: event 70 calls `primeFuse`, which on a
     /// client only sets the fuse to 80. The window then counts it down
@@ -1716,6 +1783,38 @@ impl Game<'_> {
             self.carts.update(i, |c| c.fuse = 80);
         }
     }
+    fn cart_blast_power(c: &mut Minecart, speed_sqr: f64) -> f32 {
+        let speed = speed_sqr.sqrt().min(5.0);
+        let r = c.random.next_double();
+        (4.0 + r * 1.5 * speed) as f32
+    }
+    fn explode_ticking_cart(&mut self, join: horizon_client::join_seq::JoinSeq, speed_sqr: f64) {
+        if !self
+            .ui
+            .rules
+            .bool_at(horizon_client::gamerules::vanilla::TNT_EXPLODES)
+        {
+            return;
+        }
+        let Some(index) = self.carts.locate(join) else {
+            return;
+        };
+        let power = self
+            .carts
+            .update(index, |c| Self::cart_blast_power(c, speed_sqr));
+        let id = self.carts[index].id;
+        let mut blast = CartBlast::new(&self.carts[index], power, self.entity_silent(id));
+        self.eject_cart_mobs(index);
+        self.release_vehicle_container(id);
+        // Keep the already chosen explosion even if closing its container
+        // removed the source. Never reconstruct or reinstall a dead body.
+        if let Some(index) = self.carts.locate(join) {
+            let c = self.carts.remove(index);
+            blast.primed = c.fuse >= 0;
+            blast.bounds = c.bounds();
+        }
+        self.explode_removed_cart(blast);
+    }
     fn explode_cart(&mut self, c: &mut Minecart, speed_sqr: f64) {
         if !self
             .ui
@@ -1724,26 +1823,36 @@ impl Game<'_> {
         {
             return;
         }
-        let speed = speed_sqr.sqrt().min(5.0);
-        let r = c.random.next_double();
-        let power = (4.0 + r * 1.5 * speed) as f32;
-        let at = [c.position.x, c.position.y, c.position.z];
+        let power = Self::cart_blast_power(c, speed_sqr);
         // The cart is the explosion's source: it is gone before the blast
         // looks for entities, so it can't hit itself.
-        let silent = self.entity_silent(c.id);
+        let mut blast = CartBlast::new(c, power, self.entity_silent(c.id));
         if let Some(i) = self.carts.iter().position(|x| x.id == c.id) {
             self.eject_cart_mobs(i);
         }
         self.release_vehicle_container(c.id);
         self.carts.retain(|x| x.id != c.id);
+        blast.primed = c.fuse >= 0;
+        blast.bounds = c.bounds();
+        self.explode_removed_cart(blast);
+    }
+    fn explode_removed_cart(&mut self, blast: CartBlast) {
+        let CartBlast {
+            id,
+            at,
+            power,
+            silent,
+            primed,
+            bounds,
+        } = blast;
         // ExplosionInteraction.TNT: the tnt_explosion_drop_decay rule.
         let interaction =
             self.destroy_type(horizon_client::gamerules::vanilla::TNT_EXPLOSION_DROP_DECAY);
         // MinecartTNT.isPrimed (fuse > -1): a cart that ran into a wall or
         // fell unprimed blows rails up like any blast.
-        self.combat.rail_proof_blast = c.fuse >= 0;
-        self.combat.explosion_in_water = self.bounds_in_water(c.bounds());
-        self.combat.explosion_direct = Some(c.id);
+        self.combat.rail_proof_blast = primed;
+        self.combat.explosion_in_water = self.bounds_in_water(bounds);
+        self.combat.explosion_direct = Some(id);
         let _ = self.with_hive_emptying_blast(|g| {
             g.server_explode_from(
                 at,
@@ -1752,7 +1861,7 @@ impl Game<'_> {
                 false,
                 super::explosion::ExplosionSource::default()
                     .with_silence(silent)
-                    .with_entity(c.id, "minecraft:tnt_minecart"),
+                    .with_entity(id, "minecraft:tnt_minecart"),
             )
         });
         self.combat.explosion_direct = None;
@@ -2059,35 +2168,31 @@ impl Game<'_> {
             self.mobs[j].previous = at;
         }
     }
-    /// Keep the progressed body and its unique loot roll through an unwind.
-    /// The existing collision backing remains resident until store-back.
+    /// Own the complete actual Cart, including its unique loot and Spawner.
     pub(super) fn with_cart_body<R>(
         &mut self,
         index: usize,
-        action: impl FnOnce(&mut Self, &mut Minecart) -> R,
+        action: impl FnOnce(
+            &mut Self,
+            &mut super::entity_actor_loan::EntityActorLoan<Minecart, false>,
+        ) -> R,
     ) -> R {
-        let loot = self.carts.update(index, |cart| cart.loot.take());
-        let mut body = self.carts[index].clone();
-        body.loot = loot;
-        let join = body.join;
-        let held_out_len = self.held_out.len();
-        if !mod_api::__private::mods().is_empty() {
-            self.held_out.push(body.id);
-        }
+        let join = self.carts[index].join;
+        let mut actor =
+            super::entity_actor_loan::EntityActorLoan::<Minecart, false>::extract(self, join)
+                .expect("selected actual Cart");
         let result =
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| action(self, &mut body)));
-        if let Some(at) = self.carts.locate(join) {
-            self.store_cart_back(at, body);
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| action(self, &mut actor)));
+        if actor.body_mut().is_some_and(|body| {
+            self.persist
+                .removals
+                .contains(&super::commands::Target::Cart(body.id))
+        }) {
+            actor.retire(self);
+        } else {
+            actor.restore(self);
         }
-        self.held_out.truncate(held_out_len);
-        if mod_api::__private::entity_reads_listened()
-            && let Some(at) = self.carts.locate(join)
-        {
-            self.publish_resident_actor_reads(
-                BaseReadSource::Cart(&self.carts[at]),
-                EntityReadCapturePhase::AfterAppliedWrite,
-            );
-        }
+        actor.publish(self, EntityReadCapturePhase::AfterAppliedWrite);
         match result {
             Ok(value) => value,
             Err(payload) => std::panic::resume_unwind(payload),
@@ -2154,32 +2259,42 @@ impl Game<'_> {
                     let Some(i) = cart_at(&self.carts, id, i) else {
                         break 'cart_turn;
                     };
-                    // The ticked copy takes the loot roll instead of copying it: only
-                    // opening the cart, a command or a save reads it, never a tick, and
-                    // a mineshaft's chest cart carries its whole roll as NBT. The
-                    // stored cart keeps its slots for whatever reads them meanwhile.
                     let mut completion = None;
-                    let mut due = self.with_cart_body(i, |game, c| {
-                        let alive = game.tick_cart(c, [0.0; 2], i, &mut index, &mut completion);
+                    let mut due = self.with_cart_body(i, |game, actor| {
+                        let Some(end) =
+                            game.tick_cart(actor, [0.0; 2], &mut index, &mut completion)
+                        else {
+                            return false;
+                        };
                         if completion.is_some() {
                             return false;
                         }
-                        if c.kind == CartKind::Hopper && c.enabled {
-                            game.hopper_cart_suck(c);
-                        }
-                        let Some(i) = cart_at(&game.carts, id, i) else {
-                            return false;
-                        };
-                        if alive {
-                            let due = std::mem::take(&mut c.command_due);
-                            index.moved(i, c.bounds());
-                            due
-                        } else {
-                            game.eject_cart_mobs(i);
-                            game.release_vehicle_container(id);
-                            game.carts.remove(i);
-                            false
-                        }
+                        actor
+                            .with_game(game, |game| {
+                                let Some(at) = game.carts.locate(join) else {
+                                    return false;
+                                };
+                                if game.carts[at].kind == CartKind::Hopper && game.carts[at].enabled
+                                {
+                                    game.hopper_cart_suck(join);
+                                }
+                                let Some(at) = game.carts.locate(join) else {
+                                    return false;
+                                };
+                                if end.alive {
+                                    index.moved(at, game.carts[at].bounds());
+                                    game.carts
+                                        .update(at, |cart| std::mem::take(&mut cart.command_due))
+                                } else {
+                                    game.eject_cart_mobs(at);
+                                    game.release_vehicle_container(id);
+                                    if let Some(at) = game.carts.locate(join) {
+                                        game.carts.remove(at);
+                                    }
+                                    false
+                                }
+                            })
+                            .unwrap_or(false)
                     });
                     if let Some(work) = completion {
                         let _ = self.complete_spawner_tick(work);
@@ -2378,28 +2493,43 @@ impl Game<'_> {
         let join = self.carts[i].join;
         let id = self.carts[i].id;
         let mut completion = None;
-        let result = self.with_cart_body(i, |game, c| {
-            let alive = game.tick_cart(c, intent, i, &mut CartIndex::default(), &mut completion);
-            if completion.is_some() {
-                return Some((i, alive));
-            }
-            if let Some(p) = game.player.as_mut() {
-                game.previous_position = p.position;
-                p.position = Vec3::new(c.position.x, c.position.y + SEAT, c.position.z);
-                p.velocity = Vec3::ZERO;
-                p.fall_distance = 0.0;
-            }
-            let Some(i) = game.carts.iter().position(|x| x.id == c.id) else {
+        let result = self.with_cart_body(i, |game, actor| {
+            let Some(end) =
+                game.tick_cart(actor, intent, &mut CartIndex::default(), &mut completion)
+            else {
                 game.riding = None;
                 return None;
             };
-            if !alive {
-                game.eject_cart_mobs(i);
-                game.release_vehicle_container(c.id);
-                game.carts.remove(i);
+            if completion.is_some() {
+                return Some((i, end.alive));
+            }
+            if let Some(p) = game.player.as_mut() {
+                game.previous_position = p.position;
+                p.position = Vec3::new(end.position.x, end.position.y + SEAT, end.position.z);
+                p.velocity = Vec3::ZERO;
+                p.fall_distance = 0.0;
+            }
+            let result = actor
+                .with_game(game, |game| {
+                    let Some(at) = game.carts.locate(join) else {
+                        game.riding = None;
+                        return None;
+                    };
+                    if !end.alive {
+                        game.eject_cart_mobs(at);
+                        game.release_vehicle_container(id);
+                        if let Some(at) = game.carts.locate(join) {
+                            game.carts.remove(at);
+                        }
+                        game.riding = None;
+                    }
+                    Some((at, end.alive))
+                })
+                .flatten();
+            if result.is_none() {
                 game.riding = None;
             }
-            Some((i, alive))
+            result
         });
         let result = if let Some(work) = completion {
             let _ = self.complete_spawner_tick(work);
@@ -2670,9 +2800,7 @@ impl Game<'_> {
                 if !lighter || self.carts[i].fuse >= 0 {
                     return false;
                 }
-                let mut c = self.carts[i].clone();
-                self.prime_cart(&mut c);
-                self.store_cart_back(i, c);
+                self.prime_cart_join(self.carts[i].join);
             }
             // MinecartCommandBlock.interact: a game master gets SUCCESS (the
             // client opens the editor, `open_cart_command_block`), anyone else
@@ -2689,26 +2817,28 @@ impl Game<'_> {
     /// (`store_cart_items`/`close_cart_container`).
     pub(super) fn open_cart_container(&mut self, i: usize) {
         self.unpack_cart_loot(i);
-        let c = self.carts[i].clone();
-        let key = (i32::MAX - 15, CART_KEY_Y, c.id as i32);
+        let id = self.carts[i].id;
+        let kind = self.carts[i].kind;
+        let position = self.carts[i].position;
+        let key = (i32::MAX - 15, CART_KEY_Y, id as i32);
         // `startOpen` shares one container, it does not reset it: a stand-in
         // another player's menu is still editing over stays as it is.
         if !self.world.block_entities.contains_key(&key) {
             self.world
                 .block_entities
-                .insert(key, BlockEntity::Chest(c.items.clone()));
+                .insert(key, BlockEntity::Chest(self.carts[i].items.clone()));
         }
         self.container = Some(key);
         self.set_screen(super::Screen::Inventory);
         self.capture(false);
         self.right = false;
-        if c.kind == CartKind::Chest {
+        if kind == CartKind::Chest {
             // `MinecartChest.interact` (which overrides
             // `AbstractMinecartContainer.interact`): a successful open fires
             // CONTAINER_OPEN with the player and angers the piglins that see
             // it. `MinecartHopper` does not override it, so a hopper minecart
             // fires neither. Vanilla plays no open sound for a chest minecart.
-            let at = [c.position.x, c.position.y, c.position.z];
+            let at = [position.x, position.y, position.z];
             let ctx = self.player_context(None);
             self.post_game_event("minecraft:container_open", at, ctx);
             self.anger_piglins(true);
@@ -2910,20 +3040,20 @@ impl Game<'_> {
                 ];
                 self.native_vehicle_destroy(self.carts[i].kind.id(), at);
             }
-            let mut c = if tnt_prime {
-                self.carts.extract(self.carts[i].join).unwrap()
-            } else {
-                self.carts.remove(i)
-            };
             if tnt_prime {
-                // MinecartTNT.destroy: prime instead of breaking.
-                if c.fuse < 0 {
-                    self.prime_cart(&mut c);
-                    c.fuse = c.random.next_int_bound(20).unwrap_or(0)
-                        + c.random.next_int_bound(20).unwrap_or(0);
+                // MinecartTNT.destroy: event and sound precede both fuse RNG draws.
+                let join = self.carts[i].join;
+                if self.carts[i].fuse < 0 {
+                    self.prime_cart_join(join);
+                    if let Some(at) = self.carts.locate(join) {
+                        self.carts.update(at, |c| {
+                            c.fuse = c.random.next_int_bound(20).unwrap_or(0)
+                                + c.random.next_int_bound(20).unwrap_or(0)
+                        });
+                    }
                 }
-                self.carts.put_back(i, c);
             } else {
+                let c = self.carts.remove(i);
                 let at = [c.position.x, c.position.y, c.position.z];
                 // AbstractMinecartContainer.remove: `Containers.dropContents`
                 // for every destroying removal (the kill below, and a creative
@@ -3642,8 +3772,13 @@ mod tests {
                 let mut cart = Minecart::new(1, kind, at);
                 cart.velocity = Vec3::new(0.0, 0.0, 1.0);
                 cart.first_tick = false;
-                game.tick_cart(&mut cart, [0.0; 2], 0, &mut CartIndex::default(), &mut None);
-                cart.velocity.horizontal_distance()
+                game.carts.clear();
+                game.carts.push(cart);
+                game.with_cart_body(0, |game, actor| {
+                    game.tick_cart(actor, [0.0; 2], &mut CartIndex::default(), &mut None)
+                        .unwrap();
+                });
+                game.carts[0].velocity.horizontal_distance()
             };
             // On a rail, the first iteration's cap.
             let furnace = speed_after(game, CartKind::Furnace, true);
@@ -4244,14 +4379,13 @@ mod tnt_impact_tests {
             }
             let mut cart = Minecart::new(1, CartKind::Tnt, at);
             cart.velocity = velocity;
+            game.carts.push(cart);
             for _ in 0..40 {
-                if !game.tick_cart(
-                    &mut cart,
-                    [0.0; 2],
-                    0,
-                    &mut super::CartIndex::default(),
-                    &mut None,
-                ) {
+                let end = game.with_cart_body(0, |game, actor| {
+                    game.tick_cart(actor, [0.0; 2], &mut super::CartIndex::default(), &mut None)
+                        .unwrap()
+                });
+                if !end.alive {
                     result = true;
                     break;
                 }
@@ -4314,14 +4448,12 @@ mod tnt_impact_tests {
         game.world.set(6, 65, 8, plate).unwrap();
         let mut cart = Minecart::new(1, CartKind::Rideable, Vec3::new(5.5, 64.5, 8.5));
         cart.velocity = Vec3::new(0.4, 0.0, 0.0);
-        game.carts.push(cart.clone());
-        assert!(game.tick_cart(
-            &mut cart,
-            [0.0; 2],
-            0,
-            &mut super::CartIndex::default(),
-            &mut None
-        ));
+        game.carts.push(cart);
+        let end = game.with_cart_body(0, |game, actor| {
+            game.tick_cart(actor, [0.0; 2], &mut super::CartIndex::default(), &mut None)
+                .unwrap()
+        });
+        assert!(end.alive);
         let powered = registry
             .state(game.world.block(6, 65, 8))
             .unwrap()

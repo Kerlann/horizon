@@ -195,17 +195,11 @@ impl Game<'_> {
         let Some(index) = self.native_minecart_index(cart) else {
             return false;
         };
-        if self.carts[index].kind != CartKind::Tnt
-            || !self
-                .ui
-                .rules
-                .bool_at(horizon_client::gamerules::vanilla::TNT_EXPLODES)
-        {
+        if self.carts[index].kind != CartKind::Tnt {
             return false;
         }
-        let mut primed = self.carts[index].clone();
-        self.prime_cart(&mut primed);
-        self.native_minecart_edit(cart, Some(CartKind::Tnt), |c| c.fuse = primed.fuse)
+        let join = self.carts[index].join;
+        self.prime_cart_join(join)
     }
 
     /// `MinecartHopper.isEnabled`; None for another kind of cart.
