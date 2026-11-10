@@ -19,7 +19,9 @@ impl Hooks for Runtime {
         );
         let package = mod_api::content::crash::current_converted_call()
             .map_or_else(|| "native".to_owned(), |call| call.package.into_owned());
-        let EntityWriteCompletion::EntitySetSilent(done) = event.completion;
+        let EntityWriteCompletion::EntitySetSilent(done) = event.completion else {
+            panic!("unexpected operation completion in SetSilent test")
+        };
         assert_eq!(
             done.id.query(host),
             Ok(EntityCommandStatus::Completed(event.completion.clone()))

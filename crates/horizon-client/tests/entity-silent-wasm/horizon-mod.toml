@@ -5,3 +5,7 @@ description = "Real Game writer and issuer-only completion boundary fixture."
 api = "0.2"
 side = "both"
 capabilities = ["registries"]
+
+[wasm]
+sha512 = "796f15ecd18d9a25ebca4d63b47cdb6a833eded6957f838fe6a0f7fd813e8be3333292f1851e07d9ecefb7e30b77541b737712c46a690ac22e04dcb95eefb2b8"
+toolchain = "1.99.1 58cf8f9c35b355199727627d07ae34a4e2846d67"

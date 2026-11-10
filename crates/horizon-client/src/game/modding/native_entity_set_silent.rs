@@ -238,24 +238,34 @@ impl Game<'_> {
             let Some(command) = command else {
                 break;
             };
-            let (completion, applied) = match command.operation {
+            let completion = match command.operation {
                 EntityOperation::SetSilent(silent) => {
                     let outcome = self.apply_silent(command.target, silent);
                     let applied = outcome.as_ref().ok().map(|_| silent);
-                    (
-                        EntityWriteCompletion::EntitySetSilent(CommandCompleted {
-                            id: command.id,
-                            outcome,
-                        }),
-                        applied,
-                    )
+                    self.entity_residency.borrow_mut().edit_cached_row(
+                        command.target.runtime_id,
+                        command.target.location,
+                        |row| row.finish_silent_overlay(command.id, applied),
+                    );
+                    EntityWriteCompletion::EntitySetSilent(CommandCompleted {
+                        id: command.id,
+                        outcome,
+                    })
+                }
+                EntityOperation::SetNoGravity(value) => {
+                    let outcome = self.apply_no_gravity(command.target, value);
+                    let applied = outcome.as_ref().ok().map(|_| value);
+                    self.entity_residency.borrow_mut().edit_cached_row(
+                        command.target.runtime_id,
+                        command.target.location,
+                        |row| row.finish_no_gravity_overlay(command.id, applied),
+                    );
+                    EntityWriteCompletion::EntitySetNoGravity(CommandCompleted {
+                        id: command.id,
+                        outcome,
+                    })
                 }
             };
-            self.entity_residency.borrow_mut().edit_cached_row(
-                command.target.runtime_id,
-                command.target.location,
-                |row| row.finish_silent_overlay(command.id, applied),
-            );
             let (issuer, terminal) = {
                 let mut state = self.entity_read_state.borrow_mut();
                 let commands = state.commands.as_mut().expect("applying queue exists");

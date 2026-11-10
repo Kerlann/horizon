@@ -1,0 +1,7 @@
+{
+  "operation": "SetNoGravity",
+  "completion": "EntitySetNoGravity",
+  "payload": "bool",
+  "result": "bool",
+  "error": "EntityWriteError"
+}
