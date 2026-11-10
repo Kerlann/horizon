@@ -759,19 +759,19 @@ pub trait EntitiesBackendMut {
     /// Player boarding cooldown and the strider's
     /// eye-in-lava admission check are not yet represented by the game.
     #[access(WorldOnly)]
-    fn entity_start_riding(&mut self, entity: EntityRef, vehicle: EntityRef, force: bool) -> bool;
+    fn entity_start_riding(&mut self, entity: EntityRef, vehicle: EntityRef, force: bool) -> Result<bool, EntityReadError>;
     /// Side: server.
     /// Gets the entity off its vehicle (`Entity.stopRiding`), where the
     /// vehicle lets it out, as `/ride ... dismount` does. False when it rode
     /// nothing, a mod's `mob_ride` hook kept it on, or for a stale handle.
     #[access(WorldOnly)]
-    fn entity_stop_riding(&mut self, entity: EntityRef) -> bool;
+    fn entity_stop_riding(&mut self, entity: EntityRef) -> Result<bool, EntityReadError>;
     /// Side: server.
     /// Gets every passenger off the entity (`Entity.ejectPassengers`), last
     /// first as vanilla walks the list, so `mob_ride` hears them in its
     /// order. False when nothing rode it, or for a stale handle.
     #[access(WorldOnly)]
-    fn entity_eject_passengers(&mut self, entity: EntityRef) -> bool;
+    fn entity_eject_passengers(&mut self, entity: EntityRef) -> Result<bool, EntityReadError>;
     /// Side: server.
     /// Gives the holder the mob's or boat's lead (`Leashable.setLeashedTo`): the entity lets go
     /// of any other holder and gets off its vehicle, where a mod's `mob_ride` lets it. As

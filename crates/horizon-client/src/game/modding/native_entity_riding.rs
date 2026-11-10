@@ -802,7 +802,7 @@ impl Game<'_> {
         entity: EntityRef,
         vehicle: EntityRef,
         force: bool,
-    ) -> bool {
+    ) -> Result<bool, mod_api::EntityReadError> {
         let Some(rider) = self.native_entity_target(entity) else {
             return false;
         };
@@ -815,7 +815,7 @@ impl Game<'_> {
     /// Gets the entity off its vehicle (`Entity.stopRiding`), where the
     /// vehicle lets it out, as `/ride ... dismount` does. False when it rode
     /// nothing, a mod's `mob_ride` hook kept it on, or for a stale handle.
-    pub(super) fn entity_stop_riding(&mut self, entity: EntityRef) -> bool {
+    pub(super) fn entity_stop_riding(&mut self, entity: EntityRef) -> Result<bool, mod_api::EntityReadError> {
         let Some(t) = self.native_entity_target(entity) else {
             return false;
         };
@@ -834,7 +834,7 @@ impl Game<'_> {
     /// Gets every passenger off the entity (`Entity.ejectPassengers`), last
     /// first as vanilla walks the list, so `mob_ride` hears them in its
     /// order. False when nothing rode it, or for a stale handle.
-    pub(super) fn entity_eject_passengers(&mut self, entity: EntityRef) -> bool {
+    pub(super) fn entity_eject_passengers(&mut self, entity: EntityRef) -> Result<bool, mod_api::EntityReadError> {
         let Some(passengers) = self.entity_passengers(entity) else {
             return false;
         };
