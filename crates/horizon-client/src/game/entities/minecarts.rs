@@ -38,7 +38,6 @@ use horizon_core::{
 use horizon_world::registry::BlockStateId;
 use mod_api::EntityReadCapturePhase;
 use std::{collections::HashMap, sync::Arc};
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(super) enum CartKind {
     Rideable,

@@ -349,7 +349,7 @@ fn packed_wanted() -> bool {
     std::env::var("HORIZON_PACKED_QUADS").as_deref() != Ok("0")
 }
 
-mod animate;
+pub(crate) mod animate;
 mod arena;
 pub mod capture;
 pub mod compositor;
@@ -371,6 +371,7 @@ pub use hdr::{Calibration as HdrCalibration, Output as HdrOutput};
 mod hold;
 pub use hold::WorldHold;
 pub use output::{DisplayReading, EffectiveOutput, FrameConfiguration, FrameRequest};
+
 pub mod block_light;
 mod custom_sky;
 mod displace;
@@ -411,6 +412,8 @@ pub use screenshot::PendingScreenshot;
 mod stars;
 mod surface_setup;
 use surface_setup::{AdapterChoice, AdapterFailure, open_adapter, pick_adapter, set_up_surface};
+mod off_page;
+use off_page::move_off_page;
 pub mod submit;
 mod sunrise_fan;
 mod timing;
@@ -897,62 +900,6 @@ impl Part {
         }
     }
 }
-/// `Renderer::compact_arena`'s and `shrink_translucent`'s moves: what the meshes
-/// hold on `page` of `arena` (`part`) goes to its other pages in video memory,
-/// until the next range would pass `budget` bytes (it keeps what is left; the
-/// first range moves whatever its size, so none keeps the page closed), the
-/// copies into `encoder`, the ranges' flat draw ids (`flat`) and, in the
-/// section arena, GPU culling's records (`records`) along. False when the other
-/// pages have no room left.
-fn move_off_page<'a>(
-    arena: &mut arena::Arena,
-    encoder: &mut wgpu::CommandEncoder,
-    mut flat: Option<(&mut flat::Flat, &wgpu::Device, &mut upload::Uploads)>,
-    mut records: Option<&mut gpu_culling::Records>,
-    meshes: impl Iterator<Item = &'a mut SectionGpu>,
-    page: u32,
-    part: Part,
-    budget: &mut u64,
-) -> bool {
-    debug_assert!(
-        records.is_none() || matches!(part, Part::Section { .. }),
-        "records follow the section arena's ranges"
-    );
-    let mut moved = false;
-    for s in meshes {
-        // Nothing of a mesh here: split, one without solid quads (its (0, 0) is no
-        // range of page 0); in the other arenas, one without translucent quads.
-        let Some((_, start, vertices)) = part.of(s).filter(|r| r.0 == page) else {
-            continue;
-        };
-        let bytes = vertices * arena.stride();
-        if moved && bytes > *budget {
-            break;
-        }
-        let Some(to) = arena.alloc_moved(vertices) else {
-            return false;
-        };
-        arena.copy(encoder, (page, start), to, vertices);
-        arena.release(page, start, vertices);
-        if let (Some((flat, device, uploads)), Some(id)) = (&mut flat, s.flat_id) {
-            let key = match part {
-                Part::Translucent => to.0 + flat::TRANSLUCENT_KEYS,
-                _ => to.0,
-            };
-            flat.place(device, encoder, uploads, id, key, to.1, vertices);
-        }
-        part.set(s, to);
-        // Its solid quads start the range in either layout.
-        if let (Part::Section { .. }, Some(records), Some(id)) =
-            (part, records.as_deref_mut(), s.gpu_id)
-        {
-            records.relocate(id, to.0, u64::from(s.solid_base()));
-        }
-        *budget = budget.saturating_sub(bytes);
-        moved = true;
-    }
-    true
-}
 /// Starts moving a page of a large arena far larger than its ranges in use
 /// (`Arena::oversized`) into a new page of the size they get (`Arena::open_page`),
 /// for `Renderer::shrink_translucent`: the page closes and `move_off_page` empties
@@ -1309,6 +1256,9 @@ pub struct ScreenshotRequest {
     /// F2's: drawn at the game's resolution (Resolution Scale above 100%) times
     /// `Renderer::screenshot_quality`, not the window's.
     pub scaled: bool,
+    /// Written on a thread of its own (F2's, the world icon's): its outcome comes back a
+    /// frame or a few later in `Renderer::saved_screenshots`, not `screenshot_result`.
+    pub background: bool,
 }
 /// A solid terrain pipeline without HDR output's lighting (terrain.wgsl's `HDR_LIGHTING`),
 /// for the frames HDR is off, and with it where the display offers HDR output: the
@@ -1498,7 +1448,7 @@ pub struct Renderer {
     celestial_buffer: wgpu::Buffer,
     end_sky: end_sky::EndSky,
     stars: stars::Stars,
-    /// OptiFine custom sky layers (`crate::custom_sky`), and the frame's from the game.
+    /// Custom sky layers (`crate::custom_sky`), and the frame's from the game.
     custom_sky: custom_sky::CustomSky,
     custom_sky_draws: Vec<crate::custom_sky::Draw>,
     /// The glowing entities' outline (`LevelRenderer.entityOutlineTarget`).
@@ -5645,11 +5595,11 @@ impl Renderer {
             ))
         });
     }
-    /// The pack's OptiFine custom sky layer textures (`crate::custom_sky::CustomSky::load`).
-    pub fn set_custom_sky(&mut self, pack: &crate::custom_sky::CustomSky) {
+    /// The pack's custom sky layer textures (`crate::custom_sky::load`).
+    pub fn set_custom_sky(&mut self, pack: &dyn crate::custom_sky::SkyLayers) {
         self.custom_sky.set_pack(&self.device, &self.queue, pack);
     }
-    /// The custom sky layers the next frame draws (`CustomSky::draws`): the game refills it each
+    /// The custom sky layers the next frame draws (`SkyLayers::draws`): the game refills it each
     /// frame, empty when the world's sky has none.
     pub fn custom_sky_draws(&mut self) -> &mut Vec<crate::custom_sky::Draw> {
         &mut self.custom_sky_draws
@@ -7223,8 +7173,10 @@ impl Renderer {
         }
     }
     /// This renderer's output as applied, with what its destination offers and reports.
-    pub fn output(&self) -> &output::EffectiveOutput {
-        &self.output
+    pub fn output(&self) -> output::EffectiveOutput {
+        let native = self.native.as_ref().map(|n| n.frame.api);
+        self.output
+            .with_pack(self.shader_pack_kind() == Some("iris"), native)
     }
     /// What this renderer's display last reported: a renderer made again for the window
     /// starts from it (`Renderer::new`'s `display`).
@@ -8478,8 +8430,12 @@ impl Renderer {
             t.begin(&self.device, &self.queue);
         }
         if self.animated_textures {
-            self.hud
-                .animate_sprites(&mut self.uploads, &mut encoder, frame.ticks);
+            self.hud.animate(
+                &mut self.uploads,
+                &mut encoder,
+                frame.ticks,
+                &self.animations,
+            );
         }
         self.update_lightmap(
             &mut encoder,
@@ -8498,9 +8454,7 @@ impl Renderer {
         let taa = !frame.title
             && self.pack_post.as_ref().is_none_or(|p| p.1.is_none())
             && self.native.as_ref().is_none_or(|n| n.post.is_none());
-        let hdr_lighting = self.native.is_none()
-            && self.pack_post.as_ref().is_none_or(|p| p.1.is_none())
-            && std::env::var_os("HORIZON_HDR_LIGHTING").is_none_or(|v| v != "0");
+        let hdr_lighting = self.shader_pack_kind().is_none();
         if let Some(hdr) = &mut self.hdr {
             hdr.lighting = hdr_lighting && hdr.look;
         }
@@ -9394,13 +9348,11 @@ impl Renderer {
         }
         // Near water and distant water share one back-to-front draw order.
         if self.translucent_draws.len() > section_translucent {
-            // Distant water goes after the near chunks', and replaced tiles'
-            // after all: each is a hair behind the one before, so depth leaves
-            // it only where that one has none. Back to front together, a far
-            // tile's water under a near chunk's (one fading in, or brought
-            // into view by a longer render distance) blended twice and looked
-            // opaque. The cost: far water just behind near water shows no
-            // surface of its own there.
+            // Distant water goes after the near chunks', and replaced tiles' after all: each is a
+            // hair behind the one before, so depth leaves it only where that one has none. Back to
+            // front together, a far tile's water under a near chunk's (one fading in, or brought
+            // into view by a longer render distance) blended twice and looked opaque. The cost: far
+            // water just behind near water shows no surface of its own there.
             let tier = |instance: usize| match instance.checked_sub(visible.len()) {
                 None => 0,
                 Some(tile) if visible_lods[tile].old => 2,
@@ -10273,7 +10225,11 @@ impl Renderer {
         let pack_reads_world = pack_post || native_post;
         laps.lap("r_uploads");
         // Phase 2 of occlusion culling draws over the depth, and a shader pack or TAA reads it.
+        // Post effects (a resource pack's chains, `use_depth_buffer`) read the world's depth
+        // after the world pass, as `GameRenderer.render` hands them the main target's.
+        let post_reads_depth = !frame.title && !frame.post_effects.effects.is_empty();
         let keep_depth = pack_reads_world
+            || post_reads_depth
             || (taa && self.world_post.taa)
             || oit_on
             || native_render::needs().world_depth
@@ -12886,10 +12842,11 @@ impl Renderer {
             let texture = copy.as_ref().unwrap_or(texture);
             Some((request, copy_frame(&self.device, encoder, texture, size)))
         } else {
-            self.screenshot_result = Some(Err(format!(
+            let error = format!(
                 "screenshots need a 32-bit surface format, not {:?}",
                 self.config.format
-            )));
+            );
+            self.screenshot_result = Some(Err(error));
             None
         }
     }
@@ -13878,6 +13835,7 @@ mod tests {
             Some(Reported {
                 paper_white: 240,
                 peak: 998,
+                peak_guessed: true,
             })
         );
         assert_eq!(
@@ -13885,6 +13843,7 @@ mod tests {
             Some(Reported {
                 paper_white: 480,
                 peak: 480,
+                peak_guessed: true,
             })
         );
         // White above the calibrated peak (a Samsung QD-OLED's 380, the slider at 456).
@@ -13893,6 +13852,7 @@ mod tests {
             Some(Reported {
                 paper_white: 456,
                 peak: 456,
+                peak_guessed: true,
             })
         );
         assert_eq!(os_reported(&info(Some(1000.0), None)), None);
@@ -15578,11 +15538,9 @@ fn log_os_reported(reported: Option<crate::graphics::Reported>) {
         None => "Horizon renderer: the system doesn't report the display's luminance".into(),
     });
 }
-/// What the OS reports in absolute nits (Windows: DXGI's `MaxLuminance` and the SDR
-/// white level the brightness slider sets), which is HDR output's scale there: SDR
-/// white is Paper White, the display's peak is Peak Brightness. Both are kept within
-/// the settings' ranges. The OS's figures often come from the display's EDID and may
-/// run optimistic; the player's own value always wins.
+/// What the OS reports in absolute nits, HDR output's scale (Windows: DXGI's SDR white level,
+/// the brightness slider's, as Paper White, and its `MaxLuminance`, mostly the display's EDID
+/// guess, as Peak Brightness), kept within the settings' ranges. The player's values win.
 fn os_reported(info: &wgpu::DisplayHdrInfo) -> Option<crate::graphics::Reported> {
     let luminance = info.luminance?;
     let usable = |n: f32| n.is_finite() && n > 0.0;
@@ -15594,6 +15552,7 @@ fn os_reported(info: &wgpu::DisplayHdrInfo) -> Option<crate::graphics::Reported>
         // Windows' SDR brightness slider can set white above the reported peak (480 against
         // a calibrated 380): the highlights then stay at white instead of dropping below it.
         peak: (peak.round() as u32).clamp(200, 10_000).max(paper_white),
+        peak_guessed: true,
     })
 }
 
@@ -15629,6 +15588,7 @@ fn reported(l: horizon_hdr::wayland::Luminances) -> crate::graphics::Reported {
     crate::graphics::Reported {
         paper_white: 203,
         peak: peak.clamp(200, 10_000),
+        peak_guessed: false,
     }
 }
 
@@ -15877,11 +15837,11 @@ mod shadow_caster_tests {
     #[test]
     fn the_shadow_pass_draws_terrain_outside_the_pack_s_planes() {
         let kept = |near: Option<f32>, far: Option<f32>, y: f64, min: [f32; 3], depth: bool| {
-            let shadow = horizon_render_pipeline::Shadow {
+            let shadow = horizon_shaders::Shadow {
                 distance: 128.0,
                 near,
                 far,
-                ..horizon_render_pipeline::Shadow::default()
+                ..horizon_shaders::Shadow::default()
             };
             let camera = DVec3::new(13.5, y + 1.62, -13.5);
             let view = pack_post::ShadowView {

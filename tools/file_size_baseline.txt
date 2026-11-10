@@ -1,13 +1,14 @@
 # Sync-only restoration ratchet; shrink entries with their files.
 # The full SHA must be a new merge parent outside the base; see tools/sync/README.md.
-# sync-baseline: 1d6e973ab867d599fcbc253242ccb2a218d99696
-crates/horizon-client-render/src/gfx.rs 13618
-crates/horizon-client-render/src/options_ui.rs 5632
-crates/horizon-client/src/game/entities/minecarts.rs 3364
-crates/horizon-client/src/game/network/remote/mod.rs 12688
-crates/horizon-client/src/mobs.rs 5704
+# sync-baseline: 537539fe581e9f5c780070133070d79c70ab6022
+crates/horizon-client-render/src/gfx.rs 13575
+crates/horizon-client-render/src/options_ui.rs 5595
+crates/horizon-client/src/game/entities/minecarts.rs 3363
+crates/horizon-client/src/game/network/remote/mod.rs 12654
+crates/horizon-client/src/mobs.rs 5703
 crates/horizon-client/src/title.rs 4690
-launcher/src/backend.rs 4579
-launcher/src/main.rs 5827
-launcher/src/servers_page.rs 3458
-launcher/src/cli.rs 3830
+launcher/src/backend.rs 4572
+launcher/src/main.rs 5771
+launcher/src/servers_page.rs 3448
+launcher/src/cli.rs 3701
+crates/horizon-client/src/mobs/ai.rs 3604

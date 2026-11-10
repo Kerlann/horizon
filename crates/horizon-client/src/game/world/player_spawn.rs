@@ -116,7 +116,7 @@ impl Game<'_> {
         self.resident_entities.local_player.renew();
         self.player = Some(player);
         self.bind_local_player_residency();
-        self.pad.player_replaced();
+        self.input_player_replaced();
         self.sway = Default::default();
         self.apply_equipment();
         self.eye = 1.62;

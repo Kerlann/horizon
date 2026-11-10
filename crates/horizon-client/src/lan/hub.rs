@@ -45,6 +45,7 @@ use {
 pub mod advancements;
 pub mod chat;
 pub mod chat_filter;
+mod spawn_info;
 use advancements::AdvancementOwners;
 
 pub mod game_event {
@@ -119,6 +120,8 @@ pub struct BodyFlags {
 
 /// Everything the hub needs from the game for one tick.
 pub struct TickCtx<'a> {
+    /// The active level's generator sea level (`CommonPlayerSpawnInfo`).
+    pub sea_level: i32,
     pub world: &'a mut World,
     pub entities: &'a [EntityState],
     pub next_entity: &'a mut u32,
@@ -1419,32 +1422,6 @@ impl Hub {
 
     // ---- joining -------------------------------------------------------
 
-    /// `CommonPlayerSpawnInfo`, with the player's `portalCooldown`.
-    fn spawn_info(&self, i: usize, portal_cooldown: i32) -> play::SpawnInfo {
-        let g = &self.guests[i];
-        play::SpawnInfo {
-            dimension_type: self.dimension_type,
-            dimension: self.config.dimension.clone(),
-            seed: horizon_core::biome::obfuscate_seed(self.config.seed),
-            game_type: g.game_mode,
-            previous_game_type: None,
-            debug: self.debug_world,
-            flat: self.flat_world,
-            // Player.getLastDeathLocation.
-            last_death: g
-                .last_death
-                .as_ref()
-                .map(|(dimension, pos)| play::GlobalPos {
-                    dimension: dimension.clone(),
-                    pos: *pos,
-                }),
-            portal_cooldown,
-            // `Level.getSeaLevel` of the guest's level, as the server sends it.
-            sea_level: horizon_core::LevelKey::parse(&self.config.dimension)
-                .map_or(63, horizon_world::level::sea_level_of),
-        }
-    }
-
     fn admit(&mut self, j: super::Joined, ctx: &mut TickCtx) -> u32 {
         // The game's ids are taken by incrementing first: the current value
         // is the last id in use (the host's own, right after opening to LAN).
@@ -1526,7 +1503,7 @@ impl Hub {
             reduced_debug_info: self.reduced_debug_info,
             show_death_screen: !self.immediate_respawn,
             limited_crafting: self.limited_crafting,
-            spawn: self.spawn_info(i, 0),
+            spawn: self.spawn_info(i, 0, ctx.sea_level),
             // MinecraftServer.usesAuthentication, enforceSecureProfile.
             online_mode: self.lan.shared.config.online.is_some(),
             enforces_secure_chat: self.enforces_secure_chat(),
@@ -4347,7 +4324,8 @@ impl Hub {
                 | S::RecipeBookSeenRecipe(_)
                 | S::ClientTickEnd(_)
                 | S::KeepAlive(_)
-                | S::Pong(_) => false,
+                | S::Pong(_)
+                | S::PingRequest(_) => false,
                 S::MovePlayerPos(p) => self.moved_far(i, [p.x, p.y, p.z]),
                 S::MovePlayerPosRot(p) => self.moved_far(i, [p.x, p.y, p.z]),
                 S::PlayerInput(_) => self.guests[i].client_loaded(),
@@ -4453,6 +4431,8 @@ impl Hub {
                     });
                 }
                 S::Pong(p) => self.anticheat_pong(i, p.id),
+                // ServerGamePacketListenerImpl.handlePingRequest: echo on this connection.
+                S::PingRequest(p) => self.send_to(conn, &C::PongResponse(p)),
                 // handleAttack is the game's too: a move queued behind an attack would move
                 // the player (or land them on the ground, losing a falling attack's critical
                 // hit) before the game checks their reach and state.
@@ -5234,7 +5214,7 @@ impl Hub {
     /// `rotation` is the facing a mod's `player_respawn_position` chose; none
     /// is the level's respawn direction.
     pub fn respawn(&mut self, i: usize, at: [f64; 3], rotation: Option<[f32; 2]>, ctx: &TickCtx) {
-        let info = self.spawn_info(i, 0);
+        let info = self.spawn_info(i, 0, ctx.sea_level);
         self.close_container_for(i);
         let id = self.guests.update(i, |g| {
             // The old player leaves its level with its chunks (ChunkMap.removeEntity).
@@ -5387,7 +5367,7 @@ impl Hub {
         portal_cooldown: i32,
         ctx: &TickCtx,
     ) {
-        let info = self.spawn_info(i, portal_cooldown);
+        let info = self.spawn_info(i, portal_cooldown, ctx.sea_level);
         self.close_container_for(i);
         self.guests.update(i, |g| {
             // Out of the old level with its chunks (ChunkMap.removeEntity).
@@ -5750,6 +5730,147 @@ mod tests {
         };
         assert_eq!(machine.revision(), revision);
         assert_eq!(machine.nbt, Compound::from([progress]));
+    }
+
+    #[test]
+    fn self_pose_wire_lifecycle_preserves_existing_publishers() {
+        use crate::pose::Pose;
+        fn drain(
+            rx: &std::sync::mpsc::Receiver<crate::lan::Out>,
+        ) -> (Vec<Vec<(u8, i32, Value)>>, Vec<i32>) {
+            let mut frames = Vec::new();
+            let mut keeps = Vec::new();
+            while let Ok(out) = rx.try_recv() {
+                let crate::lan::Out::Packet(body) = out else {
+                    continue;
+                };
+                let mut r = horizon_protocol::buf::Reader::new(&body);
+                let id = r.varint().unwrap();
+                match C::decode(id, r.rest()).unwrap() {
+                    C::SetEntityData(p) if p.values.iter().any(|(i, _, _)| *i == 0 || *i == 6) => {
+                        assert_eq!(p.id, 1, "actual self recipient");
+                        frames.push(p.values);
+                    }
+                    C::Respawn(p) => keeps.push(p.keep as i32),
+                    _ => {}
+                }
+            }
+            (frames, keeps)
+        }
+        let pose = |p: Pose| vec![(6, serializer::POSE, Value::Id(p.id()))];
+        let flags = |f| vec![(0, serializer::BYTE, Value::Byte(f))];
+        let (mut hub, rx) = hub_with_a_guest();
+        hub.sync_player_state(0);
+        assert!(drain(&rx).0.is_empty(), "default Standing is not dirty");
+        hub.guests.update(0, |g| g.sneaking = true);
+        hub.sync_player_state(0);
+        assert_eq!(drain(&rx).0, [flags(2), pose(Pose::Crouching)]);
+        hub.sync_player_state(0);
+        assert!(drain(&rx).0.is_empty());
+        // The existing refused-glide force-flags marker never forces Pose.
+        hub.guests.update(0, |g| g.sent_shared ^= -128);
+        hub.sync_player_state(0);
+        assert_eq!(drain(&rx).0, [flags(2)]);
+        hub.guests.update(0, |g| g.sneaking = false);
+        hub.sync_player_state(0);
+        assert_eq!(drain(&rx).0, [flags(0), pose(Pose::Standing)]);
+        hub.sync_player_state(0);
+        assert!(drain(&rx).0.is_empty());
+        hub.guests.update(0, |g| g.bed = Some([1, 64, 2]));
+        hub.guests.update(0, |g| g.sleeping = true);
+        hub.sync_player_state(0);
+        assert_eq!(
+            drain(&rx).0,
+            [vec![
+                (6, serializer::POSE, Value::Id(2)),
+                (
+                    14,
+                    serializer::OPTIONAL_BLOCK_POS,
+                    Value::OptPos(Some([1, 64, 2]))
+                ),
+            ]]
+        );
+        assert_eq!(hub.guests[0].sent_pose, Pose::Sleeping);
+        hub.wake(0);
+        assert_eq!(
+            drain(&rx).0,
+            [vec![
+                (6, serializer::POSE, Value::Id(0)),
+                (14, serializer::OPTIONAL_BLOCK_POS, Value::OptPos(None)),
+            ]]
+        );
+        hub.sync_player_state(0);
+        assert!(drain(&rx).0.is_empty(), "wake already sent Standing");
+        // The non-wake bed-delta publisher also owns its exact existing frame.
+        hub.guests.update(0, |g| g.bed = Some([1, 64, 2]));
+        hub.guests.update(0, |g| g.sleeping = true);
+        hub.sync_player_state(0);
+        drain(&rx);
+        hub.guests.update(0, |g| g.bed = None);
+        hub.guests.update(0, |g| g.sleeping = false);
+        hub.sync_player_state(0);
+        assert_eq!(
+            drain(&rx).0,
+            [vec![
+                (6, serializer::POSE, Value::Id(0)),
+                (14, serializer::OPTIONAL_BLOCK_POS, Value::OptPos(None)),
+            ]]
+        );
+        hub.guests.update(0, |g| g.fall_flying = true);
+        hub.sync_player_state(0);
+        assert!(
+            drain(&rx)
+                .0
+                .iter()
+                .all(|v| !v.iter().any(|(i, _, _)| *i == 6)),
+            "other normal poses stay outside this sender"
+        );
+        hub.guests.update(0, |g| g.fall_flying = false);
+        hub.guests.update(0, |g| g.sneaking = true);
+        hub.sync_player_state(0);
+        drain(&rx);
+        let mut world = World::new(horizon_world::registry::BlockStateId(0), 0);
+        let mut next_entity = 2;
+        let border = crate::worldborder::WorldBorder::default();
+        let ctx = TickCtx {
+            sea_level: 63,
+            world: &mut world,
+            entities: &[],
+            next_entity: &mut next_entity,
+            spawn: [0.5, 64.0, 0.5],
+            spawn_angle: [0.0; 2],
+            difficulty: 2,
+            difficulty_locked: false,
+            clock_rate: 1.0,
+            tick_rate: 20.0,
+            tick_frozen: false,
+            tick_steps: Default::default(),
+            collision: None,
+            border: &border,
+            streaming: None,
+        };
+        hub.change_level(0, [100.5, 49.0, 0.5], 0.0, None, false, 0, &ctx);
+        assert_eq!(drain(&rx).1, [3]);
+        assert_eq!(hub.guests[0].sent_pose, Pose::Crouching);
+        hub.sync_player_state(0);
+        assert!(drain(&rx).0.is_empty(), "KEEP_ALL_DATA retains crouch");
+        hub.guests.update(0, |g| g.sneaking = false);
+        hub.sync_player_state(0);
+        assert_eq!(drain(&rx).0, [flags(0), pose(Pose::Standing)]);
+        hub.guests.update(0, |g| g.sneaking = true);
+        hub.sync_player_state(0);
+        drain(&rx);
+        hub.respawn(0, [0.5, 64.0, 0.5], Some([0.0; 2]), &ctx);
+        assert_eq!(drain(&rx).1, [0]);
+        assert_eq!(hub.guests[0].sent_pose, Pose::Standing);
+        hub.sync_player_state(0);
+        assert_eq!(
+            drain(&rx).0,
+            [pose(Pose::Crouching)],
+            "KEEP_NONE reset makes the actual crouch dirty again"
+        );
+        hub.sync_player_state(0);
+        assert!(drain(&rx).0.is_empty());
     }
 
     /// A hub with one placed guest, the speed effect registered, and what the
@@ -6183,6 +6304,7 @@ mod tests {
         let mut next_entity = 39;
         let entities = [near, untracked];
         let mut ctx = TickCtx {
+            sea_level: 63,
             world: &mut world,
             entities: &entities,
             next_entity: &mut next_entity,
@@ -6262,6 +6384,7 @@ mod tests {
         let mut next_entity = 2;
         let border = crate::worldborder::WorldBorder::default();
         let mut ctx = TickCtx {
+            sea_level: 63,
             world,
             entities: &[],
             next_entity: &mut next_entity,
@@ -6331,6 +6454,7 @@ mod tests {
         let mut next_entity = 2;
         let border = crate::worldborder::WorldBorder::default();
         let ctx = TickCtx {
+            sea_level: 63,
             world: &mut world,
             entities: &[],
             next_entity: &mut next_entity,
@@ -6509,6 +6633,7 @@ mod tests {
         let mut next_entity = 100;
         let border = crate::worldborder::WorldBorder::default();
         let mut ctx = TickCtx {
+            sea_level: 63,
             world: &mut world,
             entities: &[],
             next_entity: &mut next_entity,
@@ -6598,6 +6723,7 @@ mod tests {
         let mut next_entity = 100;
         let border = crate::worldborder::WorldBorder::default();
         let mut ctx = TickCtx {
+            sea_level: 63,
             world: &mut world,
             entities: &[],
             next_entity: &mut next_entity,
@@ -6711,6 +6837,7 @@ mod tests {
         let mut track = |hub: &mut Hub, state: EntityState| {
             let entities = [state];
             hub.track_entities(&mut TickCtx {
+                sea_level: 63,
                 world: &mut world,
                 entities: &entities,
                 next_entity: &mut next_entity,
@@ -6958,6 +7085,7 @@ mod tests {
         let mut next_entity = 100;
         let border = crate::worldborder::WorldBorder::default();
         let mut ctx = TickCtx {
+            sea_level: 63,
             world: &mut world,
             entities: &[],
             next_entity: &mut next_entity,
@@ -7182,6 +7310,7 @@ mod tests {
         let mut next_entity = 2;
         let border = crate::worldborder::WorldBorder::default();
         let mut ctx = TickCtx {
+            sea_level: 63,
             world: &mut world,
             entities: &[],
             next_entity: &mut next_entity,
@@ -7250,6 +7379,7 @@ mod tests {
         let mut next_entity = 2;
         let border = crate::worldborder::WorldBorder::default();
         let mut ctx = TickCtx {
+            sea_level: 63,
             world: &mut world,
             entities: &[],
             next_entity: &mut next_entity,
@@ -7583,6 +7713,7 @@ mod tests {
         let mut next_entity = 100;
         let border = crate::worldborder::WorldBorder::default();
         let ctx = TickCtx {
+            sea_level: 63,
             world,
             entities: &[],
             next_entity: &mut next_entity,
@@ -7686,6 +7817,7 @@ mod tests {
             let mut next_entity = 100;
             let border = crate::worldborder::WorldBorder::default();
             let ctx = TickCtx {
+                sea_level: 63,
                 world: &mut world,
                 entities: &[],
                 next_entity: &mut next_entity,

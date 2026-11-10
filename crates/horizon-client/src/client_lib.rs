@@ -19,13 +19,13 @@ pub use horizon_client_render::{
     containers, controller_ui, crash, custom_sky, datapack, dynamic_light, effects, environment,
     extras, fast_hash, fluid_models, fluid_render, fog, font, gfx, graphics, graphics_style,
     graphics_ui, hdr_calibration, hud, hud_kit, hud_layout, hud_overlays, inventory_effects,
-    java_text, jigsaw_block, json_folder, level_loading, light, lod, logging, menu_blur, mesher,
-    minimap, mipmap, mod_browser, mod_chunk_tickets, mod_list, model_library, models, mods_screen,
-    monitor, multiline_edit, native_emissive, options_file, options_fixes, options_ui, overlay,
-    pack_browser, pack_palette, pack_screen, packs, pad_cursor, pad_glyph, par, particles,
-    poi_sections, polytone_colors, polytone_creative_tabs, polytone_post, post_chain,
-    potent_sulfur, preedit, providers, pvp, pvp_hud, random_source, resource_source, screen_draw,
-    screen_effects, sculk, section_mask, server_terrain, settings, shader_options,
+    java_text, jigsaw_block, json_folder, level_loading, light, lod, logging, menu_blur,
+    menu_style, mesher, minimap, mipmap, mod_browser, mod_chunk_tickets, mod_list, model_library,
+    models, mods_screen, monitor, multiline_edit, native_emissive, options_file, options_fixes,
+    options_ui, overlay, pack_browser, pack_formats, pack_hooks, pack_palette, pack_screen, packs,
+    pad_cursor, pad_glyph, par, particles, poi_sections, polytone_creative_tabs, polytone_post,
+    post_chain, potent_sulfur, preedit, providers, pvp, pvp_hud, random_source, resource_source,
+    screen_draw, screen_effects, sculk, section_mask, server_terrain, settings, shader_options,
     shader_pack_list, signs, skins, social, sound_engine, sound_events, sound_preview, spans,
     split_layout, split_map, split_profiles, sprites, streaming, structure_block, tab_list,
     terrain_model, test_block, test_instance_block, testgen, title_edition, trims, ui, vault,
@@ -61,8 +61,6 @@ pub mod debug_overlay;
 pub mod debugworld;
 pub mod dialog;
 pub mod dialog_screen;
-#[cfg(feature = "discord")]
-pub mod discord_presence;
 pub mod enchantment_levels;
 pub mod end_crystal;
 pub mod end_gateway;
@@ -75,7 +73,6 @@ pub mod fire_render;
 pub mod first_person;
 pub mod flatgen;
 pub mod fluid_tooltip;
-pub mod friends_screen;
 pub mod furnace;
 pub mod game_mode_switcher;
 pub mod game_rules_screen;
@@ -183,6 +180,7 @@ pub use horizon_client_input::gamepad;
 pub use horizon_client_input::gameplay_guide;
 pub use horizon_client_input::held;
 pub use horizon_client_input::input;
+pub use horizon_client_input::input_source;
 pub use horizon_client_input::interaction_input;
 pub use horizon_client_input::key_names;
 pub use horizon_client_input::keybinds;

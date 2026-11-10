@@ -401,7 +401,7 @@ impl Game<'_> {
                 PlayerRead::Guest(g) => g
                     .respawn_elsewhere
                     .as_ref()
-                    .map(|(d, p, y, f)| (d.as_str(), *p, *y, *f)),
+                    .map(|(d, p, y, _pitch, f)| (d.as_str(), *p, *y, *f)),
             };
             let Some((dim, pos, yaw, forced)) = saved else {
                 return Some(None);

@@ -31,7 +31,7 @@ pub fn from_part(part: &Part) -> ModelPart {
 
 static REGISTERED: OnceLock<HashMap<String, LayerDefinition>> = OnceLock::new();
 
-/// Keeps the layers native mods registered (`native_layer_definitions`),
+/// Keeps the layers native mods registered (`native_register_layer_definitions`),
 /// once at start. An id is `<namespace>:<path>#<layer>` (NeoForge's
 /// `ModelLayerLocation`) in a namespace other than vanilla's; one that isn't,
 /// or that another layer has already, is logged and left out.

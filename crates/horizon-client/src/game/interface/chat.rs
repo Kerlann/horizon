@@ -300,8 +300,8 @@ pub struct UiState {
     /// What this frame's HUD shows that Horizon's overlays keep clear of (`Game::hud_room`),
     /// set by `hud_layers` before anything draws.
     pub room: horizon_client::hud_kit::room::Room,
-    /// Path of an F2 screenshot waiting for its frame.
-    pub screenshot_message: Option<std::path::PathBuf>,
+    /// F2 screenshots not written yet: each reports in chat once its PNG is.
+    pub screenshot_messages: Vec<std::path::PathBuf>,
     /// The options screens.
     pub options: horizon_client::options_ui::OptionsUi,
     /// The prepared resources before resource packs are layered on.
@@ -2169,25 +2169,30 @@ impl Game<'_> {
         self.ui.toggle_hide_gui();
     }
     /// F2: ScreenShot.grab into `screenshots/` with vanilla's file name.
-    pub(super) fn take_screenshot(&mut self) {
+    pub(super) fn take_screenshot(&mut self) -> Option<std::path::PathBuf> {
         if self.screenshot_sequence.is_some() {
-            return;
+            return None;
         }
         let dir = horizon_client::logging::player_dir().join("screenshots");
         if std::fs::create_dir_all(&dir).is_err() {
-            return;
+            return None;
         }
-        let name = screenshot_name(&dir);
-        let Some(renderer) = self.renderer.as_mut() else {
-            return;
-        };
+        let name = screenshot_name(&dir, &self.ui.screenshot_messages);
+        let renderer = self.renderer.as_mut()?;
         let path = dir.join(name);
+        // A second shortcut before rendering replaces the queued frame. Release
+        // that request's name: no readback will arrive to finish it.
+        if let Some(replaced) = renderer.screenshot.as_ref() {
+            self.ui.screenshot_messages.retain(|p| *p != replaced.path);
+        }
         renderer.screenshot = Some(horizon_client::gfx::ScreenshotRequest {
             path: path.clone(),
             size: None,
             scaled: true,
+            background: true,
         });
-        self.ui.screenshot_message = Some(path);
+        self.ui.screenshot_messages.push(path.clone());
+        Some(path)
     }
     /// `Minecraft.handleGlobalKeyPress`'s screenshot branch: the
     /// `key.screenshot` mapping (F2 by default) takes the picture before a
@@ -2207,7 +2212,7 @@ impl Game<'_> {
         if self.debug_keys.modifier_down {
             return false;
         }
-        self.take_screenshot();
+        let _ = self.take_screenshot();
         true
     }
     /// Readback is complete: fire the client hook, then save the image it left.
@@ -2215,11 +2220,16 @@ impl Game<'_> {
         &mut self,
         mut pending: horizon_client::gfx::PendingScreenshot,
     ) -> Option<std::result::Result<[u32; 2], String>> {
-        if self.ui.screenshot_message.as_ref() != Some(&pending.path) {
+        if !self.ui.screenshot_messages.contains(&pending.path) {
             // Another request replaced F2 before its frame was drawn.
-            self.ui.screenshot_message = None;
             return Some(pending.save().map_err(|e| e.to_string()));
         }
+        let at = self
+            .ui
+            .screenshot_messages
+            .iter()
+            .position(|p| *p == pending.path)
+            .unwrap();
         let mut file_name = pending
             .path
             .file_name()
@@ -2235,15 +2245,16 @@ impl Game<'_> {
             &mut cancel,
         );
         if cancel {
+            self.ui.screenshot_messages.remove(at);
             self.post_screenshot_chat(screenshot_cancel_line(message));
-            self.ui.screenshot_message = None;
             return None;
         }
         let root = horizon_client::logging::player_dir().join("screenshots");
         let result = pending
             .save_in(&root, &file_name)
             .map_err(|e| e.to_string());
-        self.ui.screenshot_message = Some(pending.path);
+        self.ui.screenshot_messages.remove(at);
+        self.ui.screenshot_messages.insert(0, pending.path);
         self.finish_screenshot(&result, message);
         Some(result)
     }
@@ -2253,9 +2264,10 @@ impl Game<'_> {
         result: &std::result::Result<[u32; 2], String>,
         message: Option<Text>,
     ) {
-        let Some(path) = self.ui.screenshot_message.take() else {
+        if self.ui.screenshot_messages.is_empty() {
             return;
-        };
+        }
+        let path = self.ui.screenshot_messages.remove(0);
         let message = match result {
             Ok(_) => {
                 log::info!("Saved screenshot to {}", path.display());
@@ -2298,7 +2310,7 @@ pub(super) fn screenshot_cancel_line(message: Option<Text>) -> Text {
     })
 }
 /// `yyyy-MM-dd_HH.mm.ss[_n].png` (Util.getFilenameFormattedDateTime, in local time).
-pub fn screenshot_name(dir: &std::path::Path) -> String {
+pub fn screenshot_name(dir: &std::path::Path, pending: &[std::path::PathBuf]) -> String {
     // Util.getFilenameFormattedDateTime: the local date and time.
     let base = chrono::Local::now().format("%Y-%m-%d_%H.%M.%S").to_string();
     let mut n = 1;
@@ -2308,7 +2320,8 @@ pub fn screenshot_name(dir: &std::path::Path) -> String {
         } else {
             format!("{base}_{n}.png")
         };
-        if !dir.join(&name).exists() {
+        let path = dir.join(&name);
+        if !path.exists() && !pending.contains(&path) {
             return name;
         }
         n += 1;
@@ -2401,6 +2414,25 @@ mod tests {
         assert!(should_discard_draft(ChatExit::Intentional, false));
         assert!(!should_discard_draft(ChatExit::Intentional, true));
         assert!(should_discard_draft(ChatExit::Done, true));
+    }
+
+    /// `Screenshot.getFile` picks the first free name of the second; an F2
+    /// screenshot still being written on its thread has no file yet, so a
+    /// second press in the same second takes the next name, not the same one.
+    #[test]
+    fn a_screenshot_being_written_keeps_its_name() {
+        let dir = std::env::temp_dir().join(format!("horizon-shots-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let first = screenshot_name(&dir, &[]);
+        let second = screenshot_name(&dir, &[dir.join(&first)]);
+        assert_ne!(first, second);
+        // Unless the clock turned to the next second in between.
+        let same_second = second.starts_with(first.trim_end_matches(".png"));
+        assert!(
+            !same_second || second == first.replace(".png", "_2.png"),
+            "{second}"
+        );
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]

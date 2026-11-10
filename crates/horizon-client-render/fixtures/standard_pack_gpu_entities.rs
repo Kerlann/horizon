@@ -398,6 +398,7 @@ fn fixture(window: Arc<Window>) -> Result<(), Box<dyn std::error::Error>> {
         path: out.join("cpu.png"),
         size: None,
         scaled: false,
+        background: false,
     });
     renderer.render(&frame)?;
     renderer
@@ -447,6 +448,7 @@ fn fixture(window: Arc<Window>) -> Result<(), Box<dyn std::error::Error>> {
         path: out.join("gpu.png"),
         size: None,
         scaled: false,
+        background: false,
     });
     renderer.render(&frame)?;
     renderer

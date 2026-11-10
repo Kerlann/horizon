@@ -2218,6 +2218,35 @@ mod tests {
             vec!["minecraft:diamond_sword", "minecraft:diamond_axe"]
         );
     }
+    #[test]
+    fn stonecutter_result_keeps_its_components() {
+        let root = std::env::temp_dir().join(format!(
+            "horizon-stonecutter-components-{}",
+            std::process::id()
+        ));
+        let dir = root.join("data/minecraft/recipe");
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(root.join("items.json"), r#"{"minecraft:stone":{}}"#).unwrap();
+        fs::write(
+            dir.join("cut.json"),
+            r#"{"type":"minecraft:stonecutting","ingredient":"minecraft:stone","result":{"id":"minecraft:stone","components":{"minecraft:custom_name":"Cut Stone"}}}"#,
+        )
+        .unwrap();
+        let recipes = StationRecipes::load(
+            &root,
+            &sample_items(),
+            &PackOverlay::NONE,
+            &crate::test_resources::server_load(),
+        );
+        let _ = fs::remove_dir_all(&root);
+        let listed = recipes.stonecutter(
+            crate::test_resources::server_loop_context(),
+            &ItemStack::new("minecraft:stone", 1),
+        );
+        assert_eq!(listed.len(), 1);
+        assert_eq!(listed[0].result.custom_name().as_deref(), Some("Cut Stone"));
+    }
+
     /// A world pack's stonecutting recipe takes its place in registration
     /// order (path, then namespace), not a place after the game's own.
     #[test]

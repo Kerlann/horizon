@@ -106,6 +106,16 @@ pub struct EntityState {
 }
 
 impl EntityState {
+    /// Entity.DATA_NO_GRAVITY: omitted false values must reset a client that
+    /// previously saw true, both on initial pairing and on tracking updates.
+    pub fn no_gravity(&mut self, value: bool) {
+        self.defaults
+            .push((5, serializer::BOOLEAN, Value::Bool(false)));
+        if value {
+            self.meta.push((5, serializer::BOOLEAN, Value::Bool(true)));
+        }
+    }
+
     /// The entity `id` of type `kind` as a fresh state has it: at the origin,
     /// at rest, with no data, equipment or attributes. Keeps the allocations
     /// of the strings and vectors it held.

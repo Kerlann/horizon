@@ -576,7 +576,7 @@ impl Game<'_> {
             },
             _ => return false,
         };
-        self.native_set_leash(entity, target, holder, player)
+        self.native_set_leash(target, holder, player)
     }
     /// Ties the mob's or boat's lead to the fence at `pos`, as `entity_leash_to` does to
     /// an entity; the knot is there while a lead hangs on it. False for a stale handle, an
@@ -592,22 +592,37 @@ impl Game<'_> {
         if !self.named_block_in_tag("minecraft:fences", &block.name) {
             return false;
         }
-        self.native_set_leash(entity, target, Holder::Knot(pos), None)
+        self.native_set_leash(target, Holder::Knot(pos), None)
     }
     /// `Leashable.setLeashedTo` from a handle: the lead first, then off the vehicle.
     fn native_set_leash(
         &mut self,
-        entity: EntityRef,
         target: Target,
         holder: Holder,
         player: Option<[i32; 4]>,
     ) -> bool {
         let leashed = self.set_leash(target, holder, player);
         if leashed {
-            self.entity_stop_riding(entity);
+            self.stop_riding_target(target);
         }
         leashed
     }
+    /// Authoritative current-world engine path. Callers already possess their
+    /// actual participant; it does not call a mod permission wrapper.
+    fn stop_riding_target(&mut self, target: Target) -> bool {
+        if self.native_vehicle_id(target).is_none() {
+            return false;
+        }
+        match target {
+            Target::Mob(id) => self.dismount_mob(id),
+            Target::Player | Target::Guest(_) => {
+                self.for_player(target, |game| game.stop_riding());
+            }
+            _ => return false,
+        }
+        self.native_vehicle_id(target).is_none()
+    }
+
     /// Takes the lead off a mob or boat: the lead falls as an item with `drop_lead`
     /// (`Leashable.dropLeash`), and is gone without it (`removeLeash`). A mob's removal is heard
     /// by `entity_unleash`. False when no holder has the lead, for a stale handle, or for an
@@ -790,7 +805,7 @@ impl Game<'_> {
     /// Attempts to board a vehicle through the shared server mount path.
     ///
     /// Players and mobs can ride a mob, boat, minecart or generic seat entity. Returns false for
-    /// unsupported entity pairs, stale or held-out handles, a full stored
+    /// unsupported entity pairs, stale handles, a full stored
     /// vehicle, a cycle, or a canceled mount or dismount. Normal mob capacity
     /// follows its species and is bypassed by force; minecarts store one passenger and boats store one
     /// mob and up to two passengers in total. Generic seats admit one passenger unless forced.
@@ -802,47 +817,83 @@ impl Game<'_> {
         entity: EntityRef,
         vehicle: EntityRef,
         force: bool,
-    ) -> bool {
-        let Some(rider) = self.native_entity_target(entity) else {
-            return false;
+    ) -> Result<bool, mod_api::EntityReadError> {
+        let Some(plan) = self.prepare_topology_mount(entity, vehicle)? else {
+            return Ok(false);
         };
-        let Some(vehicle) = self.native_entity_target(vehicle) else {
-            return false;
+        if plan.rider.slot == super::native_topology_parts::RelationSlot::Mob {
+            return self.execute_topology_mob_mount(plan, force);
+        }
+        if plan.rider.admission.location().owner.dimension != self.dim.key() {
+            // The parked mutation/effect kernel must not run against Game's
+            // unrelated current world, nor swap dimensions to manufacture it.
+            return Err(mod_api::EntityReadError::Lifted);
+        }
+        let rider = match plan.rider.slot {
+            super::native_topology_parts::RelationSlot::CurrentPlayer => Target::Player,
+            _ => plan.rider.admission.target(),
         };
-        self.start_riding_target(rider, vehicle, force)
+        Ok(self.start_riding_target(rider, plan.vehicle.target(), force))
     }
 
     /// Gets the entity off its vehicle (`Entity.stopRiding`), where the
     /// vehicle lets it out, as `/ride ... dismount` does. False when it rode
     /// nothing, a mod's `mob_ride` hook kept it on, or for a stale handle.
-    pub(super) fn entity_stop_riding(&mut self, entity: EntityRef) -> bool {
-        let Some(t) = self.native_entity_target(entity) else {
-            return false;
+    pub(super) fn entity_stop_riding(
+        &mut self,
+        entity: EntityRef,
+    ) -> Result<bool, mod_api::EntityReadError> {
+        let Some(plan) = self.prepare_topology_stop(entity)? else {
+            return Ok(false);
         };
-        if self.native_vehicle_id(t).is_none() {
-            return false;
+        if plan.rider.slot == super::native_topology_parts::RelationSlot::Mob {
+            return self.execute_topology_mob_stop(plan);
         }
-        match t {
-            Target::Mob(id) => self.dismount_mob(id),
-            Target::Player | Target::Guest(_) => {
-                self.for_player(t, |g| g.stop_riding());
-            }
-            _ => return false,
+        if plan.rider.admission.location().owner.dimension != self.dim.key() {
+            return Err(mod_api::EntityReadError::Lifted);
         }
-        self.native_vehicle_id(t).is_none()
+        let target = match plan.rider.slot {
+            super::native_topology_parts::RelationSlot::CurrentPlayer => Target::Player,
+            _ => plan.rider.admission.target(),
+        };
+        self.stop_riding_target(target);
+        Ok(self.topology_vehicle(plan.rider)?.is_none())
     }
     /// Gets every passenger off the entity (`Entity.ejectPassengers`), last
     /// first as vanilla walks the list, so `mob_ride` hears them in its
     /// order. False when nothing rode it, or for a stale handle.
-    pub(super) fn entity_eject_passengers(&mut self, entity: EntityRef) -> bool {
-        let Some(passengers) = self.entity_passengers(entity) else {
-            return false;
+    pub(super) fn entity_eject_passengers(
+        &mut self,
+        entity: EntityRef,
+    ) -> Result<bool, mod_api::EntityReadError> {
+        use super::{
+            native_live_entity_reads::EntityReadSubject,
+            native_read_dependencies::EntityReadDependency,
+        };
+        let Some(passengers) = self.preflight_topology_passengers(entity)? else {
+            return Ok(false);
         };
         let mut any = false;
-        for p in passengers.into_iter().rev() {
-            any |= self.entity_stop_riding(p);
+        for passenger in passengers.into_iter().rev() {
+            let Some(now) = self.entity_read_admission(
+                EntityReadSubject::Entity(passenger.admission.entity()),
+                &[EntityReadDependency::Riding],
+                None,
+            ) else {
+                continue;
+            };
+            if now.location() != passenger.admission.location() {
+                continue;
+            }
+            let relation = self
+                .select_topology_relation(now)?
+                .ok_or(mod_api::EntityReadError::Lifted)?;
+            if self.topology_vehicle(relation)? != Some(entity.id()) {
+                continue;
+            }
+            any |= self.entity_stop_riding(now.entity())?;
         }
-        any
+        Ok(any)
     }
 }
 

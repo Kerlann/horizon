@@ -1,3 +1,4 @@
+use super::screen_build::ObservedScreen;
 use crate::game::api_values::{TryIntoApi, TryIntoEngine};
 use horizon_client::containers::ModBlockEntity as EngineBlockEntity;
 
@@ -8,34 +9,6 @@ struct ContentsChangedGuard<'a, 'game> {
 impl Drop for ContentsChangedGuard<'_, '_> {
     fn drop(&mut self) {
         self.game.contents_changing.pop();
-    }
-}
-
-pub(super) struct ObservedScreen {
-    id: &'static str,
-    /// Not a `Screen` value: the title's own screen or an overlay drawn over
-    /// gameplay (sign editor, book, dialog, prompt). `set_screen` never sees
-    /// it open or close.
-    overlay: bool,
-    menu: Option<String>,
-    title: Option<std::sync::Arc<mod_api::Text>>,
-    rect: [f32; 4],
-    slots: usize,
-    mouse: [f32; 2],
-    partial_tick: f32,
-}
-
-impl ObservedScreen {
-    fn view(&self) -> ScreenView<'_> {
-        ScreenView::from(mod_api::__private::built::ScreenView {
-            id: self.id,
-            menu: self.menu.as_deref(),
-            title: self.title.as_deref(),
-            rect: self.rect,
-            slots: self.slots,
-            mouse: self.mouse,
-            partial_tick: self.partial_tick,
-        })
     }
 }
 
@@ -177,6 +150,7 @@ impl Game<'_> {
             self.mining = None;
             self.capture(false);
         }
+        self.build_screen();
     }
     /// The events of one change of screen, in order, for
     /// `set_screen` and for the overlays `observe_screen` announces: `opens`
@@ -265,14 +239,20 @@ impl Game<'_> {
     ) -> bool {
         if !self.screen_hooks_heard() {
             open(self);
+            self.screen_state.build.reopened();
+            self.build_screen();
             return true;
         }
-        // What changed earlier this frame is told first, so `observed_screen`
+        // What changed earlier this frame is told first, so `screen_state`
         // is what shows now.
         self.observe_screen();
         let decision = {
             let none = self.screen_change_view(Screen::Playing);
-            let from = self.observed_screen.as_ref().filter(|old| old.overlay);
+            let from = self
+                .screen_state
+                .observed
+                .as_ref()
+                .filter(|old| old.overlay);
             let from = from.map(ObservedScreen::view);
             let to = screen_view_with_id(&none, id);
             self.decide_screen(from.as_ref().unwrap_or(&none), &to, from.is_some())
@@ -281,14 +261,16 @@ impl Game<'_> {
             ScreenDecision::Keep => return false,
             ScreenDecision::ModScreen(mod_id) => {
                 self.apply_screen(Screen::Mod, Some(mod_id));
-                self.observed_screen = self.observed_now();
+                self.screen_state.observed = self.observed_now();
                 return false;
             }
             ScreenDecision::Open => {}
         }
         open(self);
+        self.screen_state.build.reopened();
+        self.build_screen();
         // Told here, so the frame's `observe_screen` sees no change to announce.
-        self.observed_screen = self.observed_now();
+        self.screen_state.observed = self.observed_now();
         let none = self.screen_change_view(Screen::Playing);
         self.native_screen_init_post(&screen_view_with_id(&none, id));
         true
@@ -351,7 +333,8 @@ impl Game<'_> {
         if let Some(title) = self.title.as_mut() {
             title.mode = mode;
         }
-        self.observed_screen = self.observed_now();
+        self.build_screen();
+        self.screen_state.observed = self.observed_now();
         let none = self.screen_change_view(Screen::Playing);
         self.native_screen_init_post(&screen_view_with_id(&none, id));
     }
@@ -380,7 +363,8 @@ impl Game<'_> {
             self.title_change(None);
         }
         self.title = None;
-        self.observed_screen = self.observed_now();
+        self.build_screen();
+        self.screen_state.observed = self.observed_now();
     }
     /// The hooks of the title appearing (`to` is its screen) or going
     /// (`None`), from what shows now. What changed before is told first.
@@ -389,7 +373,11 @@ impl Game<'_> {
         self.observe_change(now);
         let none = self.screen_change_view(Screen::Playing);
         // The title's screen or an overlay; a `Screen` told its own change.
-        let from = self.observed_screen.as_ref().filter(|old| old.overlay);
+        let from = self
+            .screen_state
+            .observed
+            .as_ref()
+            .filter(|old| old.overlay);
         let from = match (from, self.title.as_ref()) {
             (Some(old), _) => Some(old.view()),
             // No renderer yet (startup, a test): the title is still known.
@@ -407,6 +395,9 @@ impl Game<'_> {
 
     pub(super) fn observe_screen(&mut self) {
         self.settle_title_mode();
+        // Keeps the build on the frame's window size and drops it once nothing
+        // shows; an unchanged frame compares and builds nothing.
+        self.build_screen();
         // Free with no native mod: the snapshot clones the title and menu.
         if mod_api::__private::mods().is_empty() {
             return;
@@ -422,13 +413,17 @@ impl Game<'_> {
     /// and in the same order, but after the change. `screen_init_post`
     /// follows for every kind, on opening and on a resize.
     fn observe_change(&mut self, current: Option<ObservedScreen>) {
-        let changed = match (&self.observed_screen, &current) {
+        let changed = match (&self.screen_state.observed, &current) {
             (Some(old), Some(new)) => old.id != new.id || old.menu != new.menu,
             (None, None) => false,
             _ => true,
         };
         if changed {
-            let old = self.observed_screen.as_ref().filter(|old| old.overlay);
+            let old = self
+                .screen_state
+                .observed
+                .as_ref()
+                .filter(|old| old.overlay);
             let opens = current.as_ref().is_some_and(|new| new.overlay)
                 || (current.is_none() && old.is_some());
             if old.is_some() || opens {
@@ -445,12 +440,12 @@ impl Game<'_> {
             if let Some(new) = &current {
                 self.native_screen_init_post(&new.view());
             }
-        } else if let (Some(old), Some(new)) = (&self.observed_screen, &current)
+        } else if let (Some(old), Some(new)) = (&self.screen_state.observed, &current)
             && old.rect != new.rect
         {
             self.native_screen_init_post(&new.view());
         }
-        self.observed_screen = current;
+        self.screen_state.observed = current;
     }
 }
 
@@ -5521,6 +5516,7 @@ pub(super) mod particle_count_tests {
             rotation: [0.0, 0.0],
             join: Default::default(),
             no_gravity: false,
+            needs_sync: false,
             id: 1,
             position: at,
             previous: at,

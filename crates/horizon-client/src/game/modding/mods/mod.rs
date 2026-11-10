@@ -378,14 +378,14 @@ pub(super) fn collect_key_mappings<'declared>(
     if role.is_client() { declared } else { &[] }
 }
 
-/// The native mods' entity model layers (`native_layer_definitions`), kept
+/// The native mods' entity model layers (`native_register_layer_definitions`), kept
 /// once at start for `bake_layer`.
 pub(super) fn register_layer_definitions(role: ExecutionRole) {
     if !role.is_client() {
         return;
     }
     let mut layers = Vec::new();
-    Game::native_layer_definitions(&RegistrationContext::new(), &mut layers);
+    Game::native_register_layer_definitions(&RegistrationContext::new(), &mut layers);
     horizon_client::mobs::model_layers::register(layers);
 }
 /// The native mods' F3 debug entries (`native_register_debug_entries`), kept once at start.

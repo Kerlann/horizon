@@ -28,6 +28,31 @@ struct EntityFluidWorld<'a> {
     fluids: &'a FluidResources,
     context: &'a LoopContext,
 }
+/// `Entity.move`'s fall-reset ray along a move from `from`, up to 8 blocks:
+/// `ClipContext.Fluid.WATER` (the water's shape) and
+/// `ClipContext.Block.FALLDAMAGE_RESETTING` (a block `tagged` says is a reset
+/// block clips as a full block). Both shapes are queried for every visited
+/// block, the water's first (its first query fixes the shared cached shape);
+/// either one hitting ends the ray.
+pub fn fall_reset_hit(
+    context: &LoopContext,
+    world: &World,
+    fluids: &FluidResources,
+    tagged: impl Fn(BlockPos) -> bool,
+    from: Vec3,
+    moved: Vec3,
+) -> bool {
+    let to = from.add_vector(moved.normalize().scale(moved.length().min(8.0)));
+    let hit = horizon_core::geometry::traverse_blocks(from, to, 1_000_000, |p| {
+        let water = water_clip(context, world, fluids, from, to, p);
+        let reset = tagged(p)
+            && horizon_core::geometry::VoxelShape::block()
+                .clip(from, to, p)
+                .is_some();
+        (water || reset).then_some(())
+    });
+    matches!(hit, Ok(Some(())))
+}
 /// `ClipContext.Fluid.WATER` in a fall-reset ray through `p`: the water's
 /// shape from the shared `FlowingFluid.shapes` cache (the first query of a
 /// fluid state fixes its height), as the player's own ray reads it.
@@ -498,6 +523,7 @@ mod tests {
             rotation: [0.0, 0.0],
             join: Default::default(),
             no_gravity: false,
+            needs_sync: false,
             id: 1,
             position: at,
             previous: at,
@@ -596,6 +622,7 @@ mod tests {
             rotation: [0.0, 0.0],
             join: Default::default(),
             no_gravity: false,
+            needs_sync: false,
             id: 1,
             position: at,
             previous: at,

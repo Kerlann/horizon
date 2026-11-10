@@ -75,6 +75,21 @@ malus is a finite `Vec<(PathType, f32)>` table; can-eat stores `[bool; 2]` index
 adds no LevelReadRow. Minecart payloads, player/session strings, passengers, block transforms,
 melee range, heavy payload reads and queued-write surfaces remain deferred.
 
+#### Immediate topology operations
+
+`EntityRef::start_riding`, `stop_riding` and `eject_passengers` are immediate
+operations returning `Result<bool, EntityReadError>`, not queued writes or write
+receipts. `Ok(false)` retains an ordinary unsupported pair, stale handle,
+absence or veto. It does not mean that required mutable storage was unavailable.
+A required inaccessible part returns `Lifted`; the latest relevant `Pending`
+command is considered only after all required actual parts are available.
+
+A readonly live loan can answer a heavy read without authorizing mutation.
+Likewise, an actor frame is not proof that a mutable body or supplementary
+relation part exists. Topology operations select their actual owning storage,
+and recheck joins and decided links after callbacks rather than retaining an
+iterator index or acting on a different relationship.
+
 #### Write receipts and completion
 
 `WriteReceipt<R, E>` distinguishes `Applied(actual_result)`, `Pending(CommandId)`

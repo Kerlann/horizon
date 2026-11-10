@@ -128,7 +128,6 @@ impl Game<'_> {
         self.keys.clear();
         self.set_screen(Screen::Options);
         self.options_from_title = from_title;
-        self.options_to_game = false;
         let minecart_improvements = self.minecart_improvements();
         let ui = &mut self.ui.options;
         ui.open_at(!from_title && self.title.is_none(), page);
@@ -187,7 +186,7 @@ impl Game<'_> {
         let output = self
             .renderer
             .as_ref()
-            .map_or(Default::default(), |r| *r.output());
+            .map_or(Default::default(), |r| r.output());
         ui.draw(&self.settings, output, batch, &self.gui.atlas, self.cursor);
         self.ui.options = ui;
         self.show_calibration((batch.width, batch.height));
@@ -392,12 +391,12 @@ impl Game<'_> {
                 Event::Close if self.ui.options.resource_error.is_some() => {}
                 Event::Close => {
                     self.settings.save(&Self::options_path());
-                    let to_game = std::mem::take(&mut self.options_to_game);
+                    let to_game = self.options_from_title;
                     let back = if let Some(screen) = self.panel.recipes_settings_return.take() {
                         screen
                     } else if std::mem::take(&mut self.options_to_world_options) {
                         Screen::WorldOptions
-                    } else if self.options_from_title || to_game {
+                    } else if self.options_from_title {
                         Screen::Playing
                     } else {
                         Screen::Paused
@@ -642,6 +641,9 @@ impl Game<'_> {
             self.ui.chat.rescale(&self.gui.atlas);
         }
         self.notify_window_resize();
+        // The GUI scale is part of the screen's size (`Screen.resize`): a
+        // change remakes its build before this frame draws it.
+        self.build_screen();
         // 3D skin layers: a skin's slabs are built when it is resolved, so a
         // change here rebuilds the players already on screen (the Options
         // screen keeps resolving them every frame; this covers the console
@@ -678,6 +680,7 @@ impl Game<'_> {
                 now.gui_size[0],
                 now.gui_size[1],
             );
+            self.build_screen();
         }
     }
     /// `Window.updateFullscreenState`: a fullscreen change made by the window

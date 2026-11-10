@@ -247,7 +247,7 @@ impl VanillaTerrain {
         terrain.flat = true;
         Ok(terrain)
     }
-    /// `ChunkGenerator.getSeaLevel`: the sea level the terrain is generated with.
+    /// `ChunkGenerator.getSeaLevel`: the active generator's loaded setting.
     pub fn sea_level(&self) -> i32 {
         self.generator.sea_level()
     }

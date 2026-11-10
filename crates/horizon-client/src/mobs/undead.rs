@@ -515,6 +515,7 @@ fn zombified_piglin_step(m: &mut Mob, cx: &mut Cx) {
         if m.extra.anger == 0 {
             m.set_ai_target(cx.w, None);
             m.extra.angry_at = None;
+            m.extra.anger_end = -1;
             m.extra.flag2 = false;
         }
     } else {

@@ -2349,6 +2349,7 @@ mod pickup_xp_tests {
                 ticks: 0,
                 health: 5,
                 no_gravity: true,
+                needs_sync: false,
                 following: None,
             });
             game.guest_orbs(0);

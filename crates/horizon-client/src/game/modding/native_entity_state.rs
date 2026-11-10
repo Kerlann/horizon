@@ -646,6 +646,7 @@ mod tests {
                 ticks: 21,
                 health: 5,
                 no_gravity: true,
+                needs_sync: false,
                 following: None,
             });
             let orb = game.entity(43).unwrap();
@@ -728,6 +729,7 @@ mod tests {
                 rotation: [0.0, 0.0],
                 join: Default::default(),
                 no_gravity: false,
+                needs_sync: false,
                 id: 41,
                 position: Vec3::ZERO,
                 previous: Vec3::ZERO,
@@ -763,11 +765,23 @@ mod tests {
                 .push(Rocket::remote(44, Vec3::ZERO, Vec3::ZERO));
             game.tridents
                 .push(ThrownTrident::remote(45, Vec3::ZERO, 0.0, 0.0));
-            for id in [item, 41, 42, 43, tnt, arrow, snowball, 44, 45] {
+            // Entity defaults to 300; VehicleEntity overrides it to 10 and
+            // Projectile to 2 (`getDimensionChangingDelay` in vanilla 26.3).
+            for (id, delay) in [
+                (item, 300),
+                (41, 300),
+                (42, 10),
+                (43, 10),
+                (tnt, 300),
+                (arrow, 2),
+                (snowball, 2),
+                (44, 2),
+                (45, 2),
+            ] {
                 let entity = game.entity(id).unwrap();
                 assert_eq!(entity.portal_cooldown(game), Some(0), "entity {id}");
                 game.set_portal_cooldown(id);
-                assert_eq!(entity.portal_cooldown(game), Some(300), "entity {id}");
+                assert_eq!(entity.portal_cooldown(game), Some(delay), "entity {id}");
             }
 
             // A falling block keeps its own, as its save does.

@@ -289,6 +289,7 @@ fn drawn_frame(game: &mut Game<'_>) -> (Vec<u8>, usize) {
         path: "unused.png".into(),
         size: None,
         scaled: false,
+        background: false,
     });
     game.render_with(|renderer, frame| renderer.render(frame))
         .unwrap();

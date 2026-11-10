@@ -259,6 +259,7 @@ fn game_events_ask_client_level_before_playback() {
                 facts: game.res.facts(),
                 collision: game.collision,
                 player: None,
+                cached_chunk: std::cell::Cell::new(None),
             };
             game.particles.tick(&level);
             assert_eq!(

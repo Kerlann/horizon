@@ -699,10 +699,22 @@ fn level_queries_take_their_hosts(
 #[allow(dead_code)]
 fn entity_queries_take_a_shared_host(read: &dyn Host, entity: EntityRef) {
     let _: Option<[f64; 3]> = entity.up_vector(read);
-    let _: Option<[i32; 3]> = entity.on_block(read);
-    let _: Option<ClipHit> = entity.pick(read, 4.5);
+    let _: Result<Option<[i32; 3]>, EntityReadError> = entity.on_block(read);
+    let _: Result<Option<ClipHit>, EntityReadError> = entity.pick(read, 4.5);
     let _: Option<bool> = entity.is_multipart(read);
     let _: Option<Vec<EntityRef>> = entity.parts(read);
+}
+
+/// Compile-only: topology methods are immediate typed results, not receipts.
+#[allow(dead_code)]
+fn entity_topology_takes_a_server_host(
+    server: &mut dyn ServerHost,
+    entity: EntityRef,
+    vehicle: EntityRef,
+) {
+    let _: Result<bool, EntityReadError> = entity.start_riding(server, vehicle, true);
+    let _: Result<bool, EntityReadError> = entity.stop_riding(server);
+    let _: Result<bool, EntityReadError> = entity.eject_passengers(server);
 }
 
 /// Compile-only: an entity is sent to another dimension from a server host.
@@ -743,8 +755,9 @@ fn player_rules_take_their_hosts(
     stack: &ItemStack,
     config: PlayerRespawnConfig,
 ) {
-    let _: Option<bool> = player.may_use_item_at(read, [0, 64, 0], BlockFace::Up, stack);
-    let _: Option<bool> = player.can_harm(read, other);
+    let _: Result<Option<bool>, EntityReadError> =
+        player.may_use_item_at(read, [0, 64, 0], BlockFace::Up, stack);
+    let _: Result<Option<bool>, EntityReadError> = player.can_harm(read, other);
     let _: Option<Option<PlayerRespawnConfig>> = player.respawn_config(read);
     let _: Option<bool> = player.text_filtering(read);
     let _: Option<bool> = player.sleep_ignored(read);

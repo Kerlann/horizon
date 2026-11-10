@@ -693,6 +693,19 @@ pub fn check_kind(id: &str, old: &Kind, new: &Kind) -> Result<(), String> {
 /// `revoked.toml`), a project's kind never changes, and changes by someone who
 /// isn't an owner, or to owners and keys, are pointed out.
 pub fn review(base: &[Entry], head: &[Entry], author: &str) -> Review {
+    review_with_revoked(base, head, &[], author)
+}
+
+/// [`review`], where a version may leave its entry once `revoked` (the pull
+/// request's `revoked.toml`) takes its file down by hash: a project whose
+/// signing key was lost lists its next version under a new key and drops the
+/// versions the new key can't verify.
+pub fn review_with_revoked(
+    base: &[Entry],
+    head: &[Entry],
+    revoked: &[Revoked],
+    author: &str,
+) -> Review {
     let mut r = Review::default();
     for old in base {
         let Some(new) = head.iter().find(|e| e.id == old.id) else {
@@ -716,7 +729,16 @@ pub fn review(base: &[Entry], head: &[Entry], author: &str) -> Review {
             r.errors.push(error);
         }
         for v in &old.versions {
+            let taken_down = || {
+                revoked
+                    .iter()
+                    .any(|t| t.id == old.id && t.sha256.as_deref() == Some(v.sha256.as_str()))
+            };
             match new.versions.iter().find(|w| w.version == v.version) {
+                None if taken_down() => r.notes.push(format!(
+                    "{} {}: leaves the entry, taken down in {REVOKED}",
+                    old.id, v.version
+                )),
                 None => r.errors.push(format!(
                     "{} {}: removed; take it down in {REVOKED} instead",
                     old.id, v.version

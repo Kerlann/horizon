@@ -60,7 +60,9 @@ impl Game<'_> {
         // Wolf.readAdditionalSaveData initializes persistent anger at
         // the live level clock, just as load_mob does on admission.
         if slot.species() == horizon_client::mobs::Species::Wolf {
-            slot.extra.anger = horizon_client::mobs::anger_left(slot.extra.anger_end, game_time);
+            horizon_client::mobs::adopt_anger_end(slot, game_time);
+        } else {
+            slot.extra.anger_stamp = Some((slot.extra.anger, slot.age));
         }
     }
 }

@@ -1820,9 +1820,19 @@ impl Game<'_> {
         let Some(v) = self.mobs[i].extra.mount else {
             return;
         };
+        let join = horizon_client::join_seq::Joined::join_seq(&self.mobs[i]);
+        let removed = self.mobs[i].removed;
         if !self.native_mob_may_ride(rider, v, false) {
             return;
         }
+        let Some(i) = self.mobs.iter().position(|mob| {
+            mob.id == rider
+                && horizon_client::join_seq::Joined::join_seq(mob) == join
+                && mob.removed == removed
+                && mob.extra.mount == Some(v)
+        }) else {
+            return;
+        };
         self.mobs[i].extra.mount = None;
         self.record_ai_mob_owner_id(rider);
         let remaining = self
@@ -1837,11 +1847,11 @@ impl Game<'_> {
         let at = self
             .mob_dismount_point(v, i)
             .unwrap_or(self.mobs[i].position);
-        let m = &mut self.mobs[i];
-        m.extra.passenger = false;
-        m.extra.boarding_cooldown = super::super::boat_passengers::BOARDING_COOLDOWN;
-        m.position = at;
-        m.previous = at;
+        horizon_client::mobs::riders::finish_dismount(
+            &mut self.mobs[i],
+            at,
+            super::super::boat_passengers::BOARDING_COOLDOWN,
+        );
     }
     /// Where `dismount_mob` sets the mob at index `rider` down off the vehicle `v`: None when
     /// `v` is no boat, cart or mob.

@@ -3,6 +3,8 @@
 //! tick and turns what the guests do into gameplay. A world that is not open
 //! costs one `Option` check per tick.
 mod event_timings;
+#[cfg(test)]
+mod level_event_targets;
 mod residency;
 
 use super::{
@@ -2219,7 +2221,7 @@ impl Game<'_> {
     /// Only the entities whose id is above `after` (0: all of them). With
     /// `kept`, idle mobs and items no client can pair with are described bare
     /// (game/network/lan_idle.rs).
-    fn lan_entities(
+    pub(super) fn lan_entities(
         &mut self,
         out: &mut States,
         drain_minecart_steps: bool,
@@ -2296,6 +2298,7 @@ impl Game<'_> {
             // HappyGhast.aiStep: requiresPrecisePosition while on a still timeout.
             e.precise = m.species() == horizon_client::mobs::Species::HappyGhast
                 && horizon_client::mobs::happy_ghast::on_still_timeout(m);
+            e.no_gravity(m.no_gravity);
             mob_freeze_meta(m, &mut e.meta, &mut e.defaults);
             self.mob_attributes(m, &mut speeds, &mut e.attributes);
             let Some(host) = self.lan.as_mut() else {
@@ -2341,14 +2344,17 @@ impl Game<'_> {
             if self.tracked_entity_glowing(d.id) {
                 e.meta.push((0, serializer::BYTE, Value::Byte(0x40)));
             }
+            e.no_gravity(d.no_gravity);
             e.meta.push((8, serializer::ITEM_STACK, Value::Item(stack)));
         }
         for o in self.orbs.iter().filter(|o| o.id > after) {
             let e = out.add(o.id as i32, entity_uuid(o.id), "minecraft:experience_orb");
             e.position = [o.position.x, o.position.y, o.position.z];
             e.idle = idle_at(o.position);
+            e.needs_sync = o.needs_sync;
             e.on_ground = o.on_ground;
             e.velocity = [o.velocity.x, o.velocity.y, o.velocity.z];
+            e.no_gravity(o.no_gravity);
             // ExperienceOrb.DATA_VALUE.
             e.meta.push((8, serializer::INT, Value::Int(o.value)));
         }
@@ -2911,6 +2917,7 @@ impl Game<'_> {
         let events = {
             let clock_rate = self.network_clock_rate();
             let mut ctx = TickCtx {
+                sea_level: self.end.locator().map_or(63, |terrain| terrain.sea_level()),
                 world: &mut self.world,
                 entities: entities.as_slice(),
                 next_entity: &mut self.next_entity,
@@ -3222,7 +3229,9 @@ impl Game<'_> {
                 d.needs_sync = false;
             }
             self.tridents.iter_mut().for_each(|t| t.needs_sync = false);
-
+            for o in &mut self.orbs {
+                o.needs_sync = false;
+            }
             // The step command reaches clients before the events its tick
             // generated, as ServerTickRateManager.updateStepTicks does.
             let Some(host) = self.lan.as_mut() else {
@@ -3264,6 +3273,7 @@ impl Game<'_> {
                     return;
                 };
                 let mut ctx = TickCtx {
+                    sea_level: self.end.locator().map_or(63, |terrain| terrain.sea_level()),
                     world: &mut self.world,
                     entities,
                     next_entity: &mut self.next_entity,
@@ -3543,6 +3553,7 @@ impl Game<'_> {
         };
         let clock_rate = self.network_clock_rate();
         let mut ctx = TickCtx {
+            sea_level: self.end.locator().map_or(63, |terrain| terrain.sea_level()),
             world: &mut self.world,
             entities,
             next_entity: &mut self.next_entity,
@@ -4074,39 +4085,8 @@ fn event_kind(event: &HostEvent) -> EventKind {
     }
 }
 
-/// Who `ServerLevel.levelEvent` leaves out of the broadcast.
-///
-/// `LevelAccessor.levelEvent(int, BlockPos, int)` passes a null source, so the
-/// acting player is included. `ComposterBlock.useItemOn` (and the hopper input
-/// container) fill that way: event 1500, which the client turns into
-/// `handleFill` (the fill particles and `playLocalSound`). A call that names
-/// the player still excludes them. `collateral_break` is a later 2001 from
-/// `destroyBlock` with no player, after the breaker's own `playerWillDestroy`.
 #[cfg(test)]
-fn level_event_except(id: i32, acting: Option<u32>, collateral_break: bool) -> Option<u32> {
-    if matches!(
-        id,
-        2015 | 1500
-            | 1501
-            | 1503
-            | 1505
-            | 1026
-            | 1027
-            | 1029
-            | 1030
-            | 1045
-            | 1052
-            | 2019
-            | 2020
-            | 3000
-            | 3008
-    ) || collateral_break
-    {
-        None
-    } else {
-        acting
-    }
-}
+use level_event_targets::level_event_except;
 
 /// Notes how long the event that started at `started` took (`spans::note`), with what it
 /// was about when [`Game::event_detail`] said.

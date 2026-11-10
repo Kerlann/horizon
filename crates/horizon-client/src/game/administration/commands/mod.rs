@@ -2801,6 +2801,7 @@ impl Game<'_> {
                         rotation: [0.0, 0.0],
                         join: Default::default(),
                         no_gravity: false,
+                        needs_sync: false,
                         id: self.next_entity,
                         position: Vec3::new(at[0], at[1], at[2]),
                         previous: Vec3::new(at[0], at[1], at[2]),
@@ -3941,12 +3942,9 @@ impl Game<'_> {
         let level = self.dim;
         for &t in &targets {
             self.for_player(t, |g| {
-                g.set_respawn_point(Some(super::respawn_anchor::RespawnConfig {
-                    dim: level,
-                    pos,
-                    yaw,
-                    forced: true,
-                }));
+                g.set_respawn_point(Some(super::respawn_anchor::RespawnConfig::forced(
+                    level, pos, yaw, pitch,
+                )));
             });
         }
         let dim = Text::literal(self.dim.id());
@@ -5806,9 +5804,10 @@ mod forced_respawn_tests {
                 assert_eq!(actual.is_some(), allowed, "{block} at height {height}");
                 assert_eq!(game.respawn_config.is_some(), allowed);
                 assert_eq!(game.level.world_spawn, Some([0, 80, 0]));
-                if let Some((at, yaw)) = actual {
+                if let Some((at, yaw, pitch)) = actual {
                     assert_eq!(at, Vec3::new(5.5, 64.1, 5.5));
                     assert_eq!(yaw, 0.0);
+                    assert_eq!(pitch, 0.0);
                 }
             }
         }

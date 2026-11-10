@@ -107,6 +107,7 @@ pub mod points {
 mod host;
 mod native_hooks;
 use event_loop::EventLoopCtl;
+use hand::interact_location;
 use horizon_client::random_source;
 use loading_window::{
     build_renderer, loading_frame, loading_renderer, prepare_renderer_textures, start_game,
@@ -1672,7 +1673,7 @@ impl LevelAccess for GameLevel<'_> {
             };
         }
         if let Some(signal) = books::lectern_signal(self.world, pos) {
-            return signal;
+            return signal * i32::from(books::has_book_state(self.registry, state));
         }
         if let Some(signal) =
             machines::shelf_signal(self.world, self.registry, state, pos, direction)
@@ -2273,8 +2274,8 @@ pub struct PackResources {
     clouds: Arc<(u32, u32, Vec<bool>)>,
     /// misc/forcefield.png: (width, height, RGBA) for the world border wall.
     forcefield: Arc<(u32, u32, Vec<u8>)>,
-    /// OptiFine custom sky layers (`optifine/sky`) with their textures; empty without them.
-    custom_sky: Arc<horizon_client::custom_sky::CustomSky>,
+    /// Custom sky layers (OptiFine's `optifine/sky`) with their textures; none without them.
+    custom_sky: Arc<dyn horizon_client::custom_sky::SkyLayers>,
     /// The overworld's, Nether's and End's attribute stacks with the packs' Polytone biome and
     /// dimension modifiers (#11486), when a pack has some: what the frame draws.
     environments: Option<Arc<[Environment; 3]>>,
@@ -2283,7 +2284,7 @@ pub struct PackResources {
     /// The packs' Polytone post chains (#11486), when a pack has some.
     polytone_post: Option<Arc<horizon_client::polytone_post::PolytonePost>>,
     /// The packs' Polytone custom colours (`polytone/colors.json`).
-    polytone_colors: Arc<horizon_client::polytone_colors::PackColors>,
+    polytone_colors: Arc<horizon_client::pack_palette::PackColors>,
 }
 
 /// A quick craft drag as the screen draws it: each dragged slot's count and
@@ -2601,7 +2602,7 @@ struct Game<'a> {
     /// `horizon-ctl gpu-passes`: time Horizon's own passes on the GPU with F3 shut.
     gpu_passes: bool,
     screen: Screen,
-    observed_screen: Option<native_hooks::ObservedScreen>,
+    screen_state: screen_build::ScreenState,
     /// The layout the last frame drew the inventory's effect panels with.
     effects_layout: std::cell::Cell<Option<horizon_client::inventory_effects::EffectsLayout>>,
     window: Option<Arc<Window>>,
@@ -3213,20 +3214,10 @@ struct Game<'a> {
     remote: Option<remote::Remote>,
     /// The current connection came from Realms (retained for reconnect).
     realm_session: bool,
-    /// Active packet replay session (game/studio.rs).
-    pub(super) studio_replay: Option<horizon_client::studio::ReplayDriver>,
-    pub(super) studio_freecam: horizon_client::studio::StudioFreecam,
-    pub(super) studio_timeline: horizon_client::studio::TimelineUi,
-    pub(super) studio_topbar: horizon_client::studio::TopBarUi,
-    pub(super) studio_rmb_down: bool,
-    studio_camera_track_dirty: bool,
-    /// Camera perspective to restore after leaving replay playback.
-    studio_replay_previous_camera_type: Option<horizon_client::camera::CameraType>,
-    /// Replay opened from the title screen owns the synthetic remote session.
-    studio_replay_standalone: bool,
-    last_replay_tick: Option<Instant>,
-    pub(super) studio_virtual_tick_ms: f32,
-    /// This world is open to the network (game/network/lan/mod.rs).
+    /// Replay playback (game/replay.rs), and Horizon Studio's editor on it (game/studio.rs).
+    pub(super) replay: replay::Replay,
+    pub(super) studio: studio::Studio,
+    /// This world is open to the network (game/lan.rs).
     lan: Option<lan::LanHost>,
     /// Single player's server thread, which `remote` is connected to.
     integrated: Option<integrated::Integrated>,
@@ -3242,8 +3233,6 @@ struct Game<'a> {
     world_options: Option<lan_screen::WorldOptions>,
     /// Chat Settings opened from RestrictionsScreen: Done returns to World Options.
     options_to_world_options: bool,
-    /// HDR's settings opened with their key from the game: Done returns to the game.
-    options_to_game: bool,
     command_block_screen: Option<command_blocks::CommandBlockScreen>,
     block_editor: Option<block_editor::BlockEditScreen>,
     /// `StructureTemplateManager.structureRepository`: the templates in memory
@@ -3680,12 +3669,6 @@ fn facing_offset(facing: &str) -> [i32; 3] {
         "up" => [0, 1, 0],
         _ => [0, -1, 0],
     }
-}
-/// The point a `ServerboundInteractPacket` carries: `EntityHitResult.getLocation()
-/// - entity.position()`, measured from the entity's feet, as
-/// `MultiPlayerGameMode.interact` computes it.
-fn interact_location(point: Vec3, feet: Vec3) -> [f64; 3] {
-    [point.x - feet.x, point.y - feet.y, point.z - feet.z]
 }
 /// How far along `dir` (within `reach`) a ray from `eye` enters `b`.
 fn ray_box(eye: [f64; 3], dir: [f64; 3], reach: f64, b: Aabb) -> Option<f64> {
@@ -4186,23 +4169,6 @@ impl Game<'_> {
         let stars =
             (sky.star_brightness > 0.0).then(|| (frame(sky.star_angle), sky.star_brightness));
         (out, stars)
-    }
-
-    pub(super) fn visual_ticks(&self) -> u64 {
-        if self.clock.still() {
-            self.world.game_time.max(0) as u64
-        } else {
-            self.ticks
-        }
-    }
-
-    /// Frame time in milliseconds, fixed to world time in still mode.
-    pub(super) fn visual_millis(&self) -> i64 {
-        if self.clock.still() {
-            self.visual_ticks() as i64 * 50
-        } else {
-            self.started.elapsed().as_millis() as i64
-        }
     }
 
     /// `Level.canHaveWeather`, from the level's dimension type (sky light, no
@@ -6896,7 +6862,7 @@ impl Game<'_> {
         if canceled {
             return Ok(false);
         }
-        self.pad_rumble(horizon_client::gamepad::Rumble::BlockBroken);
+        self.input_feedback(horizon_client::input_source::Feedback::BlockBroken);
         let broken = state;
         let facts = self.res.facts().get(state).clone();
         let state = self.crack_mined_pot(pos, state);
@@ -8273,15 +8239,6 @@ impl Game<'_> {
         });
         cancel
     }
-    /// The clock of the animated textures: `Minecraft.runTick` ticks the `TextureManager`
-    /// only while the level runs normally. Under `HORIZON_STILL` it is the world's ticks.
-    pub(super) fn texture_clock(&self) -> u64 {
-        if self.clock.still() {
-            self.visual_ticks()
-        } else {
-            self.texture_ticks
-        }
-    }
     fn tick(&mut self) -> Result<()> {
         if self.agent.hold_server {
             return Ok(());
@@ -8621,7 +8578,7 @@ impl Game<'_> {
         batch
     }
     fn hud_layers(&mut self, size: [u32; 2]) -> HudBatch {
-        self.pad.guide_shown.clear();
+        self.input_hud_begin();
         let mut batch = HudBatch::new(size, self.settings.gui_scale_inputs());
         batch.glint_colour = self.settings.extras.pvp.tweaks.glint_texel();
         // GlobalSettingsUniform's GameTime, for a resource pack's text shader.
@@ -8733,7 +8690,10 @@ impl Game<'_> {
             self.native_render_gui_pre(&mut gui_canceled);
         }
         // RenderGuiEvent.Pre: a mod's cancel hides the HUD as F1 does.
-        let show_hud = !self.ui.hide_gui && !gui_canceled && self.studio_replay.is_none();
+        let show_hud = !self.ui.hide_gui && !gui_canceled && !self.replay.playing();
+        // Hud.extractRenderState asks `Screen.isInGameUi` twice: such a screen
+        // defers the subtitles over itself, and keeps them while F1 hides the
+        // rest of the HUD.
         let subtitles = subtitles(
             show_hud,
             in_game_ui(self.screen, self.book.is_some() || self.sign_edit.is_some()),
@@ -8923,7 +8883,7 @@ impl Game<'_> {
                     let atlas = &g.gui.atlas;
                     let width = |s: &str| HudBatch::text_width(atlas, s) as i32;
                     let draws = hud_layout::experience_colored(
-                        g.pack.polytone_colors.xp_bar(),
+                        g.pack.polytone_colors.xp_bar,
                         wi,
                         hi,
                         g.experience.progress,
@@ -9070,23 +9030,7 @@ impl Game<'_> {
             self.draw_sign_editor(&mut batch);
             self.draw_book(&mut batch);
         }
-        if !self.ui.hide_gui
-            && self.screen == Screen::Playing
-            && (self.studio_replay.is_some() || self.studio_freecam.active)
-        {
-            self.studio_topbar.render(
-                &mut batch,
-                &self.gui.atlas,
-                self.cursor,
-                self.studio_freecam.locked_to_path,
-            );
-            self.studio_timeline.render(
-                &mut batch,
-                &self.gui.atlas,
-                self.cursor,
-                &self.studio_freecam,
-            );
-        }
+        self.draw_studio_bars(&mut batch);
         if show_hud {
             self.draw_pad_guide(&mut batch, guide_from);
         }
@@ -9398,18 +9342,6 @@ impl Game<'_> {
         if let Some(lines) = effect_tip {
             self.draw_tooltip_lines(batch, &lines, self.cursor.0, self.cursor.1);
         }
-    }
-    /// `AbstractContainerScreen` keeps `isQuickCrafting` and the drag it
-    /// belongs to on the screen. Horizon keeps both on `Game` (`inv_clicks`,
-    /// `inv_drag`, `last_inv_click`), so they are dropped when the pointer
-    /// changes hands: a screen that opens or closes starts with its own
-    /// state, and a press whose release never reached the screen -- the
-    /// pointer left the window, or the screen closed first -- would
-    /// otherwise leave every later press on every later screen swallowed.
-    pub(super) fn reset_inventory_clicks(&mut self) {
-        self.inv_clicks.cancel_drag();
-        self.inv_drag = None;
-        self.last_inv_click = None;
     }
     pub(super) fn close_container(&mut self) {
         // `Gui.setScreen` clears the old screen's focus before it goes: the
@@ -10388,12 +10320,12 @@ impl Game<'_> {
     /// `Camera.setRotation`: the camera's orientation, turned round in
     /// third-person front view.
     pub(super) fn camera_orientation(&self) -> glam::Quat {
-        if self.studio_freecam.active {
+        if self.studio.flying() {
             return camera_rotation(
                 horizon_client::camera::CameraType::FirstPerson,
-                self.studio_freecam.yaw,
-                self.studio_freecam.pitch,
-            ) * glam::Quat::from_rotation_z(self.studio_freecam.roll.to_radians());
+                self.studio.freecam.yaw,
+                self.studio.freecam.pitch,
+            ) * glam::Quat::from_rotation_z(self.studio.freecam.roll.to_radians());
         }
         match self.posed_rotation {
             // The frame's camera, already turned round in front view.
@@ -10601,11 +10533,7 @@ impl Game<'_> {
         self.mark_player(out.len(), !self.own_body_in_view());
         let player_start = out.len();
         self.mark_motion(player_start, Self::MOTION_OWN_PLAYER);
-        let player_alpha = if self.studio_replay.is_some() {
-            (self.studio_virtual_tick_ms as f64 / 50.0).clamp(0.0, 1.0)
-        } else {
-            self.clock.camera_fraction()
-        };
+        let player_alpha = self.own_player_alpha();
         self.player_model_geometry(camera, player_alpha, &mut out);
         // A native pack's shadow pass alone gets the first-person model (no per-entity draws).
         if self.pack_ids.is_none() && !self.own_body_in_view() {
@@ -10614,7 +10542,8 @@ impl Game<'_> {
                 .extend(out.drain(player_start..));
         }
         self.mark_motion(out.len(), 0);
-        self.cosmetics_fx_geometry(camera, alpha, &mut out);
+        // What crates draw around players: first person, see-through (game/player_hooks.rs).
+        self.players_after_geometry(camera, alpha, &mut out);
         self.mark_entity(out.len(), "minecraft:evoker_fangs");
         self.fangs_geometry(camera, alpha, &mut out);
         self.block_item_display_geometry(camera, alpha, &mut out);
@@ -11744,7 +11673,6 @@ impl Game<'_> {
         self.spawn_phantoms();
         self.tick_advancements();
         self.tick_player_model();
-        self.tick_emotes();
         Ok(())
     }
 
@@ -13335,6 +13263,7 @@ impl Game<'_> {
             rotation: [0.0, 0.0],
             join: Default::default(),
             no_gravity: false,
+            needs_sync: false,
             id: self.next_entity,
             position: p,
             previous: p,
@@ -13740,7 +13669,7 @@ impl Game<'_> {
         // replay player's hands remain visible in first person; freecam has
         // no player-view hand.
         if !fov::studio_draws_hand(
-            self.studio_freecam.active,
+            self.studio.flying(),
             self.ui.hands_drawn(
                 self.spectator(),
                 self.sleeping.is_some(),
@@ -14970,7 +14899,7 @@ impl Game<'_> {
         self.apply_requested_camera_type();
         let vanilla = self.camera_view(camera_alpha as f32);
         let view = vanilla.map(|view| {
-            if self.shows_panorama() || self.studio_freecam.active {
+            if self.shows_panorama() || self.studio.flying() {
                 view
             } else {
                 self.native_camera_pose_now(camera_alpha as f32, view)
@@ -15143,14 +15072,7 @@ impl Game<'_> {
         // hitboxes (F3+G, F3+B).
         let mut lines = self.fishing_line(alpha, size);
         let mut g = self.debug_gizmos(alpha as f32, camera.to_array());
-        if self.studio_freecam.active || self.studio_replay.is_some() {
-            horizon_client::studio::render_camera_path(
-                &self.studio_freecam.track,
-                &mut g,
-                None,
-                100,
-            );
-        }
+        self.studio_camera_path(&mut g);
         lines.extend(g.lines);
         let on_top = g.on_top;
         pr.lap("pr_debug");
@@ -15172,7 +15094,7 @@ impl Game<'_> {
             Vec::new()
         };
         pr.lap("pr_native_visuals");
-        let view = if self.studio_freecam.active {
+        let view = if self.studio.flying() {
             glam::Mat4::from_quat(self.camera_orientation().conjugate())
         } else {
             horizon_client::camera::view_matrix(view_yaw, view_pitch)
@@ -15292,7 +15214,7 @@ impl Game<'_> {
         } else {
             self.fov_degrees(camera_alpha as f32, camera.to_array())
         };
-        let camera_effects = fov::camera_effects_enabled(title, self.studio_freecam.active);
+        let camera_effects = fov::camera_effects_enabled(title, self.studio.flying());
         let bob = if !camera_effects {
             glam::Mat4::IDENTITY
         } else {
@@ -16415,7 +16337,7 @@ impl<'a> Game<'a> {
             debug: false,
             gpu_passes: false,
             screen: Screen::Playing,
-            observed_screen: None,
+            screen_state: screen_build::ScreenState::default(),
             effects_layout: std::cell::Cell::new(None),
             window: None,
             resize_state: None,
@@ -16756,23 +16678,14 @@ impl<'a> Game<'a> {
             attachment_indexes: Default::default(),
             remote: None,
             realm_session: false,
-            studio_replay: None,
-            studio_freecam: Default::default(),
-            studio_timeline: Default::default(),
-            studio_topbar: Default::default(),
-            studio_rmb_down: false,
-            studio_camera_track_dirty: false,
-            studio_replay_previous_camera_type: None,
-            studio_replay_standalone: false,
-            last_replay_tick: None,
-            studio_virtual_tick_ms: 0.0,
+            replay: Default::default(),
+            studio: Default::default(),
             lan: None,
             integrated: None,
             level_shapes: Default::default(),
             serving: None,
             world_options: None,
             options_to_world_options: false,
-            options_to_game: false,
             command_block_screen: None,
             block_editor: None,
             structure_templates: HashMap::new(),
@@ -17734,27 +17647,11 @@ pub(crate) fn run_with(
     // horizon-ctl drives: those start in a source checkout and wrote the list there.
     if !options.offscreen && !synchronous_startup(&options) {
         let version = horizon_client::telemetry::version();
-        horizon_hooks::engine::started(&horizon_hooks::Started::new(&version));
-        let player_dir = horizon_client::logging::player_dir();
-        // horizon-extras: the official server is Horizon's (docs/forking.md).
-        if cfg!(feature = "horizon-extras")
-            && let Err(e) = horizon_client::multiplayer::add_official_server(&player_dir)
-        {
-            log::warn!("could not add the official server to servers.dat: {e}");
-        }
-        if let Err(e) = horizon_client::multiplayer::withdraw_partner_servers(&player_dir) {
-            log::warn!("could not take the withdrawn partner server out of servers.dat: {e}");
-        }
+        let game_dir = horizon_client::logging::player_dir();
+        horizon_hooks::engine::started(&horizon_hooks::Started::new(&version, &game_dir));
     }
-    // "Playing Horizon" on Discord: never for a server; an automated run only talks to a test's fake Discord.
-    #[cfg(feature = "discord")]
-    if options.dedicated.is_none() {
-        let automated = options.benchmark.is_some()
-            || options.offscreen
-            || options.frames.is_some()
-            || options.world_frames.is_some();
-        horizon_client::discord_presence::start(early_settings.extras.discord_presence, automated);
-    }
+    // A game window's hooks (Discord's presence): never for a server.
+    activity::client_started(&options);
     // Snapshots of derived tables live in the game folder, never beside the
     // shared resources.
     Behaviours::set_cache_dir(std::env::current_dir()?.join(".horizon-cache"));
