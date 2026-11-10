@@ -49,12 +49,93 @@ pub enum BiomeColor {
     Colormap(String),
 }
 
+/// A fluid modifier's fog (`fluid_modifiers`): `fog_colormap` as a flat colour (RGB), and the
+/// `fog_radius` and `fog_fade` multipliers (1 is vanilla).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct FluidFog {
+    pub color: Option<u32>,
+    pub radius: f32,
+    pub fade: f32,
+}
+
+/// The fog the packs' fluid modifiers give water and lava, read with the colours.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct FluidFogs {
+    pub water: Option<FluidFog>,
+    pub lava: Option<FluidFog>,
+}
+
+impl FluidFogs {
+    /// Every `assets/<namespace>/polytone/fluid_modifiers/**.json` under a pack overlay root that
+    /// sets a fog field and targets `minecraft:water` or `minecraft:lava` (still or flowing). A
+    /// colormap id or an expression isn't read (a warning names it).
+    pub fn from_files(files: impl IntoIterator<Item = (String, String)>) -> Self {
+        let mut fogs = Self::default();
+        for (relative, text) in files {
+            fogs.add(&relative, &text);
+        }
+        fogs
+    }
+
+    fn add(&mut self, relative: &str, text: &str) {
+        let Ok(json) = serde_json::from_str::<Json>(text) else {
+            return;
+        };
+        let number = |key: &str| match json.get(key) {
+            None => Some(1.0),
+            Some(Json::Number(n)) => n.as_f64().map(|v| v as f32),
+            Some(Json::String(s)) => s.trim().parse().ok().or_else(|| {
+                log::warn!("{relative}: {key} expressions aren't read yet");
+                None
+            }),
+            _ => None,
+        };
+        let color = match json.get("fog_colormap") {
+            None => None,
+            Some(value) => match parse_color(value) {
+                Some(c) => Some(c & 0xFF_FFFF),
+                None => {
+                    log::warn!("{relative}: only flat fog colours are read");
+                    None
+                }
+            },
+        };
+        let fog = FluidFog {
+            color,
+            radius: number("fog_radius").unwrap_or(1.0),
+            fade: number("fog_fade").unwrap_or(1.0),
+        };
+        if fog
+            == (FluidFog {
+                color: None,
+                radius: 1.0,
+                fade: 1.0,
+            })
+        {
+            return;
+        }
+        let implicit = crate::implicit_id(relative, "fluid_modifiers");
+        let Ok(targets) = crate::Targets::parse(json.get("targets"), implicit.as_deref()) else {
+            return;
+        };
+        let aims = |id: &str| targets.matches(id, |_| false);
+        if aims("minecraft:water") || aims("minecraft:flowing_water") {
+            self.water = Some(fog);
+        }
+        if aims("minecraft:lava") || aims("minecraft:flowing_lava") {
+            self.lava = Some(fog);
+        }
+    }
+}
+
 /// Every pack's custom colours, by dotted key.
 #[derive(Clone, Debug, Default)]
 pub struct PackColors {
     entries: BTreeMap<String, Json>,
     /// [`Self::environment`], read once with the packs: the fog reads it every frame.
     pub env: Environment,
+    /// The packs' fluid modifiers' fog.
+    pub fluid_fog: FluidFogs,
 }
 
 impl PackColors {
@@ -365,6 +446,24 @@ mod tests {
             Some(BiomeColor::Colormap("minecraft:lake".into()))
         );
         assert_eq!(c.biome_color("dry_foliage"), None);
+    }
+
+    #[test]
+    fn fluid_modifiers_give_water_and_lava_their_fog() {
+        let fogs = FluidFogs::from_files([
+            ("assets/minecraft/polytone/fluid_modifiers/water.json".into(), r#"{"targets": ["minecraft:water", "minecraft:flowing_water"], "fog_colormap": "ff0000", "fog_radius": 0.3}"#.into()),
+            ("assets/minecraft/polytone/fluid_modifiers/lava.json".into(), r#"{"fog_fade": "0"}"#.into()),
+            ("assets/minecraft/polytone/fluid_modifiers/honey.json".into(), r#"{"colormap": "foliage_color"}"#.into()),
+        ]);
+        let fog = |color, radius, fade| {
+            Some(FluidFog {
+                color,
+                radius,
+                fade,
+            })
+        };
+        assert_eq!(fogs.water, fog(Some(0xff0000), 0.3, 1.0));
+        assert_eq!(fogs.lava, fog(None, 1.0, 0.0));
     }
 
     #[test]

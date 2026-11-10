@@ -140,23 +140,23 @@ impl View {
         }
         None
     }
-    /// `WorldlyContainer.getSlotsForFace` or every slot.
-    fn slots_for_face(&self, face: Option<Direction>) -> Vec<usize> {
+    /// `WorldlyContainer.getSlotsForFace` or every slot, zero-allocation iterator.
+    pub(super) fn slots_for_face_iter(&self, face: Option<Direction>) -> Slots<'_> {
         match (self.kind, face) {
-            (Kind::Furnace, Some(Direction::Down)) => vec![2, 1],
-            (Kind::Furnace, Some(Direction::Up)) => vec![0],
-            (Kind::Furnace, Some(_)) => vec![1],
-            (Kind::Brewing, Some(Direction::Up)) => vec![3],
-            (Kind::Brewing, Some(Direction::Down)) => vec![0, 1, 2, 3],
-            (Kind::Brewing, Some(_)) => vec![0, 1, 2, 4],
-            (Kind::Composter(8), Some(Direction::Down)) => vec![0],
-            (Kind::Composter(level), Some(Direction::Up)) if level < 7 => vec![0],
-            (Kind::Composter(_), _) => vec![],
+            (Kind::Furnace, Some(Direction::Down)) => Slots::Slice(&[2, 1]),
+            (Kind::Furnace, Some(Direction::Up)) => Slots::Slice(&[0]),
+            (Kind::Furnace, Some(_)) => Slots::Slice(&[1]),
+            (Kind::Brewing, Some(Direction::Up)) => Slots::Slice(&[3]),
+            (Kind::Brewing, Some(Direction::Down)) => Slots::Slice(&[0, 1, 2, 3]),
+            (Kind::Brewing, Some(_)) => Slots::Slice(&[0, 1, 2, 4]),
+            (Kind::Composter(8), Some(Direction::Down)) => Slots::Slice(&[0]),
+            (Kind::Composter(level), Some(Direction::Up)) if level < 7 => Slots::Slice(&[0]),
+            (Kind::Composter(_), _) => Slots::Slice(&[]),
             (Kind::Mod, Some(face)) => self
                 .container
                 .as_ref()
-                .map_or_else(Vec::new, |c| c.faces[face as usize].clone()),
-            _ => (0..self.len()).collect(),
+                .map_or(Slots::Slice(&[]), |c| Slots::Mod(&c.faces[face as usize])),
+            _ => Slots::Range(0..self.len()),
         }
     }
     /// `Container.getMaxStackSize`: what one slot holds of any item, 1 for a chiseled
@@ -167,15 +167,57 @@ impl View {
             _ => 99,
         }
     }
-    /// The slots `HopperBlockEntity.addItem` tries through `face`.
-    fn slots_to_add(&self, face: Option<Direction>) -> Vec<usize> {
+    pub(super) fn slots_to_add_iter(&self, face: Option<Direction>) -> Slots<'_> {
         if matches!(self.kind, Kind::Furnace | Kind::Brewing | Kind::Mod) && face.is_some() {
-            self.slots_for_face(face)
+            self.slots_for_face_iter(face)
         } else {
-            (0..self.len()).collect()
+            Slots::Range(0..self.len())
         }
     }
+    fn slots_for_face(&self, face: Option<Direction>) -> Vec<usize> {
+        self.slots_for_face_iter(face).collect()
+    }
+    #[cfg(test)]
+    fn slots_to_add(&self, face: Option<Direction>) -> Vec<usize> {
+        self.slots_to_add_iter(face).collect()
+    }
 }
+
+pub(super) enum Slots<'a> {
+    Range(std::ops::Range<usize>),
+    Slice(&'static [usize]),
+    Mod(&'a [usize]),
+}
+
+impl Iterator for Slots<'_> {
+    type Item = usize;
+    #[inline]
+    fn next(&mut self) -> Option<usize> {
+        match self {
+            Slots::Range(r) => r.next(),
+            Slots::Slice(s) => {
+                let (&first, rest) = s.split_first()?;
+                *s = rest;
+                Some(first)
+            }
+            Slots::Mod(s) => {
+                let (&first, rest) = s.split_first()?;
+                *s = rest;
+                Some(first)
+            }
+        }
+    }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let len = match self {
+            Slots::Range(r) => r.len(),
+            Slots::Slice(s) => s.len(),
+            Slots::Mod(s) => s.len(),
+        };
+        (len, Some(len))
+    }
+}
+impl ExactSizeIterator for Slots<'_> {}
 
 pub(super) fn dir_from_name(name: &str) -> Option<Direction> {
     Some(match name {
@@ -210,8 +252,6 @@ pub(super) struct Containers<'a> {
     registry: &'static horizon_world::registry::BlockRegistry,
     /// Brewing recipes, for what a brewing stand accepts (not needed for signals).
     brewing: Option<&'a horizon_client::brewing::Brewing>,
-    /// The stack of a full composter's `OutputContainer`.
-    bone_meal: ItemStack,
 }
 impl Containers<'_> {
     fn prop(&self, state: BlockStateId, key: &str) -> Option<&str> {
@@ -376,7 +416,7 @@ impl Containers<'_> {
     fn get(&self, view: &View, slot: usize) -> Option<&ItemStack> {
         if let Kind::Composter(level) = view.kind {
             // OutputContainer holds one bone meal; InputContainer composts at once.
-            return (level == 8 && slot == 0).then_some(&self.bone_meal);
+            return (level == 8 && slot == 0).then_some(bone_meal_stack());
         }
         let (pos, i) = view.locate(slot)?;
         self.world
@@ -511,7 +551,7 @@ impl Containers<'_> {
     }
     /// `HopperBlockEntity.isFullContainer`.
     fn is_full(&self, view: &View, face: Direction) -> bool {
-        view.slots_for_face(Some(face)).into_iter().all(|i| {
+        view.slots_for_face_iter(Some(face)).all(|i| {
             self.insertion_item(view, i)
                 .is_some_and(|s| s.count >= self.max_stack(&s))
         })
@@ -569,6 +609,9 @@ impl ItemColumns {
         x: i32,
         z: i32,
     ) -> bool {
+        if items.is_empty() {
+            return false;
+        }
         let (len, last) = (items.len(), items.last().map(|i| i.id));
         let stale = self
             .seen
@@ -627,13 +670,14 @@ impl StampedItemColumns {
     }
 }
 
-fn bone_meal() -> ItemStack {
-    ItemStack {
+fn bone_meal_stack() -> &'static ItemStack {
+    static STACK: std::sync::LazyLock<ItemStack> = std::sync::LazyLock::new(|| ItemStack {
         item: "minecraft:bone_meal".into(),
         count: 1,
         damage: 0,
         extra: None,
-    }
+    });
+    &STACK
 }
 
 /// Comparator input from a container block entity (0 when there is none).
@@ -650,7 +694,6 @@ pub(super) fn container_signal(
         items,
         registry,
         brewing: None,
-        bone_meal: bone_meal(),
     };
     c.view((pos.x, pos.y, pos.z), true)
         .filter(|v| !matches!(v.kind, Kind::Composter(_)))
@@ -706,7 +749,6 @@ impl Game<'_> {
             items: self.items(),
             registry: self.pack.assets.registry,
             brewing: Some(&self.stations().brewing),
-            bone_meal: bone_meal(),
         }
     }
     pub(super) fn block_can_place(&self, pos: [i32; 3], slot: usize, stack: &ItemStack) -> bool {
@@ -907,7 +949,7 @@ impl Game<'_> {
             return self.composter_container_insert([x, y, z], stack, face == Some(Direction::Up));
         }
         let mut rest = Some(stack);
-        for slot in view.slots_to_add(face) {
+        for slot in view.slots_to_add_iter(face) {
             let Some(stack) = rest.take() else { break };
             rest = self.try_move_in_item(from_hopper, view, stack, slot);
         }
@@ -940,15 +982,16 @@ impl Game<'_> {
     /// is still a hopper (`BlockEntityType.isValid`).
     pub(super) fn tick_hopper(&mut self, pos: Pos) {
         let time = self.world.game_time;
-        let waiting = {
-            let state = self.hoppers.entry(pos).or_default();
-            state.cooldown = state.cooldown.wrapping_sub(1);
-            state.ticked = time;
-            state.cooldown > 0
-        };
-        if waiting {
+        // Every hopper keeps its cooldown and the tick it last ticked
+        // (`HopperBlockEntity.tickedGameTime`), idle ones too: a hopper that
+        // receives an item reads it for its cooldown (8, or 7 once it ticked).
+        let state = self.hoppers.entry(pos).or_default();
+        state.cooldown = state.cooldown.wrapping_sub(1);
+        state.ticked = time;
+        if state.cooldown > 0 {
             return;
         }
+        state.cooldown = 0;
         // Most ticks only advance the cooldown: the block is checked when the
         // hopper is about to move, not on every tick it waits.
         let hopper = horizon_client::block_entity_types::factory_block(
@@ -962,10 +1005,8 @@ impl Game<'_> {
             self.hoppers.remove(&pos);
             return;
         }
-        if let Some(state) = self.hoppers.get_mut(&pos) {
-            state.cooldown = 0;
-        }
-        self.hopper_try_move_items(pos);
+        let state = self.world.block(pos.0, pos.1, pos.2);
+        self.hopper_try_move_items_with_state(pos, state);
     }
     /// Drops the cooldowns of hoppers whose block entity is gone.
     pub(super) fn forget_gone_hoppers(&mut self) {
@@ -977,6 +1018,9 @@ impl Game<'_> {
     /// `HopperBlockEntity.tryMoveItems` with `suckInItems`.
     pub(super) fn hopper_try_move_items(&mut self, pos: Pos) {
         let state = self.world.block(pos.0, pos.1, pos.2);
+        self.hopper_try_move_items_with_state(pos, state);
+    }
+    fn hopper_try_move_items_with_state(&mut self, pos: Pos, state: BlockStateId) {
         let c = self.containers();
         let enabled = c.prop(state, "enabled") != Some("false");
         let Some(view) = c.view(pos, false) else {
@@ -1059,16 +1103,17 @@ impl Game<'_> {
     /// `tryMoveItems(…, () -> addItem(hopper, itemEntity))`; true when the
     /// item entity was taken whole.
     fn hopper_take_item(&mut self, pos: Pos, i: usize) -> bool {
+        if self.hoppers.get(&pos).is_some_and(|h| h.cooldown > 0) {
+            return false;
+        }
         let state = self.world.block(pos.0, pos.1, pos.2);
         let c = self.containers();
+        if c.prop(state, "enabled") == Some("false") {
+            return false;
+        }
         let Some(view) = c.view(pos, false) else {
             return false;
         };
-        if c.prop(state, "enabled") == Some("false")
-            || self.hoppers.get(&pos).is_some_and(|h| h.cooldown > 0)
-        {
-            return false;
-        }
         let mut changed = false;
         if !c.is_empty(&view) {
             changed = self.hopper_eject(pos, &view);
@@ -1365,6 +1410,9 @@ impl Game<'_> {
         if blocked {
             return false;
         }
+        if self.dropped.is_empty() {
+            return false;
+        }
         // Hopper.SUCK_AABB: the hopper bowl and the block above.
         let (min, max) = (
             [
@@ -1423,7 +1471,6 @@ impl Game<'_> {
             Some([above.0, above.1, above.2]),
             None,
         );
-        let c = self.containers();
         if let Kind::Composter(level) = source.kind {
             if level != 8 {
                 return Some(false);
@@ -1433,7 +1480,7 @@ impl Game<'_> {
             // second setChanged after the move or, when the hopper has no
             // room, the setItem putting the bone meal back into the detached
             // container (whose bone meal is lost with it).
-            let bone_meal = c.bone_meal.clone();
+            let bone_meal = bone_meal_stack().clone();
             if mod_api::__private::listened(mod_api::HookId::InventoryMoveItem) {
                 let mut cancel = false;
                 self.native_inventory_move_item(
@@ -1463,13 +1510,15 @@ impl Game<'_> {
         source: &View,
         hopper: &View,
     ) -> bool {
-        for slot in source.slots_for_face(Some(Direction::Down)) {
-            let c = self.containers();
-            let Some(stack) = c.get(source, slot) else {
-                continue;
-            };
-            if !c.can_take(source, slot, stack, Direction::Down) {
-                continue;
+        for slot in source.slots_for_face_iter(Some(Direction::Down)) {
+            {
+                let c = self.containers();
+                let Some(stack) = c.get(source, slot) else {
+                    continue;
+                };
+                if !c.can_take(source, slot, stack, Direction::Down) {
+                    continue;
+                }
             }
             if self.hopper_move_canceled(source, slot, source, hopper) {
                 continue;
@@ -1488,7 +1537,9 @@ impl Game<'_> {
                     }
                     return true;
                 }
-                Some(rest) => self.put_back(source, slot, rest),
+                Some(rest) => {
+                    self.put_back(source, slot, rest);
+                }
             }
         }
         false
@@ -2027,6 +2078,109 @@ mod brewing_fuel_transfer_tests {
     use super::*;
     use crate::game::native_entity_refs::tests::with_game;
     use horizon_client::brewing::BrewingStand;
+    use mod_api::HostTransaction;
+
+    struct PrepareProbe {
+        calls: std::sync::Arc<std::sync::atomic::AtomicUsize>,
+        fill: bool,
+    }
+
+    #[mod_api::__subscriptions]
+    impl mod_api::Hooks for PrepareProbe {
+        fn prepare_hopper_transfer(
+            &self,
+            host: &mut dyn mod_api::ServerHost,
+            _: &mut mod_api::PrepareHopperTransferEvent,
+        ) {
+            self.calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            if self.fill {
+                let level = host.level("minecraft:overworld").unwrap();
+                let items = level
+                    .capability(host, &mod_api::ITEMS, [8, 64, 8], None)
+                    .unwrap();
+                let stack = mod_api::ItemStack::new(
+                    mod_api::__private::item_key("minecraft:stone").unwrap(),
+                    1,
+                )
+                .unwrap();
+                let resource = mod_api::ItemResource::of(&stack);
+                host.transaction(|host, tx| {
+                    assert_eq!(items.insert(host, tx, 0, &resource, 1), 1);
+                    Ok::<_, ()>(())
+                })
+                .unwrap();
+            }
+        }
+    }
+
+    fn check_prepare_transfer(fill: bool) {
+        let calls = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let mods: mod_api::Mods = vec![mod_api::ModEntry::new(
+            "prepare_probe",
+            Box::new(PrepareProbe {
+                calls: calls.clone(),
+                fill,
+            }),
+        )]
+        .into();
+        mod_api::testing::with_mods(mods, || {
+            with_game(|game| {
+                game.options.dedicated = Some(Vec::new());
+                game.world.chunks.insert(
+                    (0, 0),
+                    std::sync::Arc::new(horizon_client::chunk::Chunk::empty(0, 0)),
+                );
+                let pos = (8, 64, 8);
+                let state = game
+                    .pack
+                    .assets
+                    .registry
+                    .default_state("minecraft:hopper")
+                    .unwrap();
+                game.world.set(pos.0, pos.1, pos.2, state).unwrap();
+                game.world
+                    .block_entities
+                    .insert(pos, BlockEntity::Chest(vec![None; HOPPER_SLOTS]));
+                if fill {
+                    let chest = game
+                        .pack
+                        .assets
+                        .registry
+                        .default_state("minecraft:chest")
+                        .unwrap();
+                    game.world.set(8, 63, 8, chest).unwrap();
+                    game.world
+                        .block_entities
+                        .insert((8, 63, 8), BlockEntity::Chest(vec![None; 27]));
+                }
+                game.hopper_try_move_items(pos);
+                assert_eq!(calls.load(std::sync::atomic::Ordering::SeqCst), 1);
+                if fill {
+                    let containers = game.containers();
+                    let target = containers.view((8, 63, 8), false).unwrap();
+                    assert_eq!(
+                        containers.get(&target, 0).unwrap().item.as_ref(),
+                        "minecraft:stone"
+                    );
+                    assert_eq!(containers.get(&target, 0).unwrap().count, 1);
+                    assert!(containers.is_empty(&containers.view(pos, false).unwrap()));
+                    assert_eq!(game.hoppers[&pos].cooldown, 8);
+                }
+            })
+        });
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn empty_hopper_dispatches_prepare_transfer() {
+        check_prepare_transfer(false);
+    }
+
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn prepare_transfer_inventory_write_is_ejected() {
+        check_prepare_transfer(true);
+    }
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
@@ -2290,11 +2444,30 @@ mod mod_container_tests {
                 menu: None,
             })),
         };
-        assert_eq!(view.slots_for_face(Some(Direction::Up)), [0]);
-        assert_eq!(view.slots_for_face(Some(Direction::Down)), [2]);
-        assert_eq!(view.slots_for_face(Some(Direction::North)), [1]);
-        assert!(view.slots_for_face(Some(Direction::East)).is_empty());
-        assert_eq!(view.slots_for_face(None), [0, 1, 2]);
+        assert_eq!(
+            view.slots_for_face_iter(Some(Direction::Up))
+                .collect::<Vec<_>>(),
+            [0]
+        );
+        assert_eq!(
+            view.slots_for_face_iter(Some(Direction::Down))
+                .collect::<Vec<_>>(),
+            [2]
+        );
+        assert_eq!(
+            view.slots_for_face_iter(Some(Direction::North))
+                .collect::<Vec<_>>(),
+            [1]
+        );
+        assert!(
+            view.slots_for_face_iter(Some(Direction::East))
+                .next()
+                .is_none()
+        );
+        assert_eq!(
+            view.slots_for_face_iter(None).collect::<Vec<_>>(),
+            [0, 1, 2]
+        );
     }
 
     /// A slot takes no more than its container's limit and the item's: one book into a chiseled
@@ -2324,7 +2497,7 @@ mod mod_container_tests {
 
 #[cfg(test)]
 mod capacity_tests {
-    use super::{Containers, Kind, View, bone_meal};
+    use super::{Containers, Kind, View};
     use horizon_client::{brewing::Brewing, containers::BlockEntity, items::ItemStack};
     use std::collections::HashSet;
 
@@ -2388,7 +2561,6 @@ mod capacity_tests {
             items: &items,
             registry,
             brewing: Some(&brewing),
-            bone_meal: bone_meal(),
         };
         for (x, &(block, kind, len, _, offered)) in (0..).zip(&cases) {
             let view = View {

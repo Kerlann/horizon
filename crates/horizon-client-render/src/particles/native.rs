@@ -212,6 +212,7 @@ mod tests {
                 facts: &self.facts,
                 collision: &self.collision,
                 player: None,
+                cached_chunk: std::cell::Cell::new(None),
             }
         }
     }

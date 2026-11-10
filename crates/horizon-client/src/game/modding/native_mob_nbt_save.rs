@@ -50,11 +50,10 @@ pub(super) trait MobNbtOwner {
         // absolute game time, so it goes on while the chunk is unloaded, and
         // the target is the entity the mob is angry at.
         let anger = self.mobs()[i].extra.anger;
-        // A loaded NoAI Enderman owns an absolute NeutralMob timestamp;
-        // its skipped AI does not decrement the derived gameplay counter.
-        if !(self.mobs()[i].species() == horizon_client::mobs::Species::Enderman
-            && self.mobs()[i].no_ai)
-        {
+        if horizon_client::mobs::persistent_anger(self.mobs()[i].species()) {
+            let game_time = self.game_time();
+            horizon_client::mobs::settle_anger_end(&mut self.mobs_mut()[i], game_time);
+        } else {
             self.mobs_mut()[i].extra.anger_end = if anger > 0 {
                 self.game_time() + i64::from(anger)
             } else {

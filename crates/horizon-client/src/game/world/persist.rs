@@ -6,6 +6,10 @@ mod display;
 #[path = "persist/loaded_pass.rs"]
 mod loaded_pass;
 
+#[cfg(test)]
+#[path = "persist/anger_tests.rs"]
+mod anger_tests;
+
 use super::{FallingBlock, Game};
 use horizon_client::{
     Result,
@@ -5406,7 +5410,7 @@ mod h262_enderman_absolute_anger_tests {
     use crate::game::{Audio, Options, Progress, Settings, load_resources};
     use horizon_client::{chunk::Chunk, motion::PlayerMotion};
     use horizon_core::{geometry::Vec3, position::ChunkPos, random::LegacyRandom};
-    fn with_game(test: impl FnOnce(&mut Game<'_>)) {
+    pub(super) fn with_game(test: impl FnOnce(&mut Game<'_>)) {
         let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
         let settings = Settings::default();
         let loaded = load_resources(
@@ -5645,7 +5649,7 @@ mod h262_enderman_absolute_anger_tests {
             game.world.game_time += 1;
             assert_eq!(
                 game.mob_tree_nbt(i).get("anger_end_time"),
-                Some(&Tag::Long(151))
+                Some(&Tag::Long(150)) // an absolute end (#13076)
             );
         });
     }

@@ -15,6 +15,9 @@ concurrency:
   # in the shared one, adding needs-proof cancelled the parity run queued seconds before (run 40766180150).
   group: run-parity-${{ github.event.pull_request.number }}${{ github.event.action == 'labeled' && github.event.label.name != 'run-parity' && format('-{0}', github.run_id) || '' }}
   cancel-in-progress: true
+env:
+  # Test runs never reach the telemetry server: no live-count ping, no uploads (docs/telemetry.md).
+  HORIZON_TELEMETRY_URL: "off"
 jobs:
   parity:
     if: github.event.label.name == 'run-parity'

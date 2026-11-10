@@ -493,14 +493,14 @@ enum Subject<'a> {
 }
 
 /// What one expression runs against: its subject, the frame and the level.
-struct Ctx<'a> {
+struct Ctx<'a, 'l> {
     subject: Subject<'a>,
     random: &'a mut LegacyRandom,
     custom: &'a mut f64,
     customs: &'a mut BTreeMap<String, f64>,
     frame: &'a Frame,
     registry: &'a Registry,
-    level: Option<&'a ParticleLevel<'a>>,
+    level: Option<&'a ParticleLevel<'l>>,
     blocks: Vec<[i32; 3]>,
 }
 
@@ -518,7 +518,7 @@ fn axis(name: &str) -> usize {
     usize::from(name.as_bytes()[0] - b'x')
 }
 
-impl Ctx<'_> {
+impl Ctx<'_, '_> {
     fn position(&self) -> [f64; 3] {
         match &self.subject {
             Subject::Particle(p) => p.position,
@@ -686,7 +686,7 @@ impl Ctx<'_> {
     }
 }
 
-impl Host for Ctx<'_> {
+impl Host for Ctx<'_, '_> {
     fn root(&mut self, root: Root) -> V {
         match root {
             Root::Object => V::Object(SELF),
@@ -803,6 +803,26 @@ impl Host for Ctx<'_> {
                 .ok_or_else(|| format!("no config {id}")),
             _ => Err(format!("{name} is not available here")),
         }
+    }
+
+    /// A particle's own fields, as `particle_method` answers them.
+    fn field(&mut self, root: Root, field: horizon_polytone::expr::Field) -> Option<V> {
+        use horizon_polytone::expr::Field as F;
+        let Subject::Particle(p) = &self.subject else {
+            return None;
+        };
+        if root != Root::Object {
+            return None;
+        }
+        Some(V::Num(match field {
+            F::Age => f64::from(p.age),
+            F::Life => f64::from(p.lifetime),
+            F::Custom => *self.custom,
+            F::X => p.position[0],
+            F::Y => p.position[1],
+            F::Z => p.position[2],
+            F::Temperature | F::Downfall => return None,
+        }))
     }
 }
 
@@ -1697,6 +1717,7 @@ mod tests {
             facts: &scene.facts,
             collision: &scene.collision,
             player: None,
+            cached_chunk: std::cell::Cell::new(None),
         };
         let mut engine = engine(Registry::read(
             &horizon_assets::resource_source::ResourceSource::directory(root.clone()),
@@ -1740,6 +1761,7 @@ mod tests {
             facts: &scene.facts,
             collision: &scene.collision,
             player: None,
+            cached_chunk: std::cell::Cell::new(None),
         };
         let mut engine = engine(Registry::read(
             &horizon_assets::resource_source::ResourceSource::directory(root.clone()),
@@ -1767,6 +1789,7 @@ mod tests {
             facts: &scene.facts,
             collision: &scene.collision,
             player: None,
+            cached_chunk: std::cell::Cell::new(None),
         };
         let mut engine = engine(Registry::read(
             &horizon_assets::resource_source::ResourceSource::directory(root.clone()),
@@ -1818,6 +1841,7 @@ mod tests {
             facts: &scene.facts,
             collision: &scene.collision,
             player: None,
+            cached_chunk: std::cell::Cell::new(None),
         };
         let registry = Registry::read(
             &horizon_assets::resource_source::ResourceSource::directory(root.clone()),
@@ -1878,6 +1902,7 @@ mod tests {
             facts: &scene.facts,
             collision: &scene.collision,
             player: None,
+            cached_chunk: std::cell::Cell::new(None),
         };
         let registry = Registry::read(
             &horizon_assets::resource_source::ResourceSource::directory(root.clone()),
@@ -1920,6 +1945,7 @@ mod tests {
             facts: &scene.facts,
             collision: &scene.collision,
             player: None,
+            cached_chunk: std::cell::Cell::new(None),
         };
         let mut engine = engine(Registry::read(
             &horizon_assets::resource_source::ResourceSource::directory(root.clone()),
@@ -1976,6 +2002,7 @@ mod tests {
             facts: &scene.facts,
             collision: &scene.collision,
             player: None,
+            cached_chunk: std::cell::Cell::new(None),
         };
         let mut engine = engine(Registry::read(
             &horizon_assets::resource_source::ResourceSource::directory(root.clone()),
@@ -2041,6 +2068,7 @@ mod tests {
             facts: &scene.facts,
             collision: &scene.collision,
             player: None,
+            cached_chunk: std::cell::Cell::new(None),
         };
         let mut engine = engine(Registry::read(
             &horizon_assets::resource_source::ResourceSource::directory(root.clone()),
@@ -2093,6 +2121,7 @@ mod tests {
             facts: &scene.facts,
             collision: &scene.collision,
             player: None,
+            cached_chunk: std::cell::Cell::new(None),
         };
         let mut engine = engine(Registry::read(
             &horizon_assets::resource_source::ResourceSource::directory(root.clone()),
@@ -2163,6 +2192,7 @@ mod tests {
             facts: &scene.facts,
             collision: &scene.collision,
             player: None,
+            cached_chunk: std::cell::Cell::new(None),
         };
         let registry = Arc::new(Registry::read(
             &horizon_assets::resource_source::ResourceSource::directory(root.clone()),
@@ -2308,6 +2338,7 @@ mod tests {
             facts: &scene.facts,
             collision: &scene.collision,
             player: None,
+            cached_chunk: std::cell::Cell::new(None),
         };
         let mut engine = engine(Registry::read(
             &horizon_assets::resource_source::ResourceSource::directory(root.clone()),
@@ -2396,6 +2427,7 @@ mod tests {
             facts: &scene.facts,
             collision: &scene.collision,
             player: None,
+            cached_chunk: std::cell::Cell::new(None),
         };
         let mut engine = engine(Registry::read(
             &horizon_assets::resource_source::ResourceSource::directory(root.clone()),

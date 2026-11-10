@@ -1251,6 +1251,32 @@ mod tests {
         value: u32,
     }
     crate::impl_joined!(Entity);
+    #[derive(Debug)]
+    struct E {
+        join: JoinSeq,
+    }
+    crate::impl_joined!(E);
+
+    /// A numbered entity put back lands by its join number; a new one goes last.
+    #[test]
+    fn put_back_keeps_the_join_order() {
+        let mut list: JoinList<E> = JoinList::default();
+        for _ in 0..3 {
+            list.push(E {
+                join: JoinSeq::UNJOINED,
+            });
+        }
+        let first = list.remove(0);
+        let first_seq = first.join;
+        list.put_back(0, first);
+        assert_eq!(list[0].join, first_seq, "back before the later joins");
+        list.push(E {
+            join: JoinSeq::UNJOINED,
+        });
+        let seqs: Vec<_> = list.iter().map(|e| e.join).collect();
+        assert!(seqs.windows(2).all(|w| w[0] < w[1]), "{seqs:?}");
+        assert_eq!(seqs.len(), 4);
+    }
 
     fn entity(value: u32) -> Entity {
         Entity {

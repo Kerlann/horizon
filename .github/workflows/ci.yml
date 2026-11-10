@@ -21,6 +21,9 @@ concurrency:
   # queued ~100 main runs on 2026-11-09; the release follows the newest finished main run (docs/release-flow.md).
   group: checks-${{ github.event.pull_request.number || (github.event_name == 'push' && 'main') || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+env:
+  # Test runs never reach the telemetry server: no live-count ping, no uploads (docs/telemetry.md).
+  HORIZON_TELEMETRY_URL: "off"
 jobs:
   # One job, not one per check: each job takes a runner from the organisation's shared pool, and with every pull request
   # and every merge to main starting this workflow, three jobs a run left the pool's queue tens of minutes deep.

@@ -212,7 +212,7 @@ fn stop_being_angry_with_world(m: &mut Mob, world: Option<&MobWorld>) {
     } else {
         m.ai.target = None;
     }
-    m.extra.anger = 0;
+    super::neutral_anger::stop(m);
     m.extra.flag2 = false;
 }
 

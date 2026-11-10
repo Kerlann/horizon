@@ -55,9 +55,12 @@ class WorldInputCaptureTests(unittest.TestCase):
         ready = remote[remote.index("    fn tick_client_load("):]
         self.assertLess(ready.index("r.loaded_sent = true"),
                         ready.index("self.capture_loaded_world()"))
-        level = remote[remote.index("    fn tick_remote_level("):]
+        self.assertIn("self.tick_remote_player(running, hold)", method(remote, "tick_remote_level"))
+        level = method(remote, "tick_remote_player")
         self.assertLess(level.index("self.tick_client_load()"),
-                        level.index("let stick = self.pad_move()"))
+                        level.index("self.tick_local_player("))
+        # The extracted local-player pass owns the movement input now.
+        self.assertIn("let stick = self.pad_move()", method(remote, "tick_local_player"))
 
     @unittest.skipUnless(shutil.which("rustc"), "requires Rust")
     def test_capture_lifecycle(self):
@@ -122,6 +125,12 @@ struct Remote;
 #[derive(Default)]
 struct StudioFreecam { active: bool }
 #[derive(Default)]
+struct Studio { freecam: StudioFreecam, rmb_down: bool }
+impl Studio { fn flying(&self) -> bool { self.freecam.active } }
+#[derive(Default)]
+struct Replay { driver: Option<()> }
+impl Replay { fn playing(&self) -> bool { self.driver.is_some() } }
+#[derive(Default)]
 struct Options { offscreen: bool }
 #[derive(Default)]
 struct ServerPacks { prompt: Option<()> }
@@ -130,7 +139,7 @@ struct Game {
     keyboard_mouse: bool, split_window: bool, view_at: [u32; 2],
     captured: bool, capture_mode: Option<CursorGrabMode>, regrab_on_refocus: bool, title: Option<()>, screen: Screen,
     remote: Option<Remote>,
-    studio_replay: Option<()>, studio_freecam: StudioFreecam, studio_rmb_down: bool,
+    studio: Studio, replay: Replay,
     mining: bool, lan_acting: Option<u32>, renderer: Option<Renderer>, cursor: (f32, f32),
     server_packs: ServerPacks, command_prompt: Option<()>, options: Options, settings: Settings,
     unclaimed_window: bool, scripted: bool, focus_after_run: Option<bool>, applied_focus: Vec<bool>,
@@ -140,8 +149,7 @@ impl Default for Game {
         Self { focused: true, agent_pointer: false, window: Some(Window::default()),
             keyboard_mouse: true, split_window: false, view_at: [0, 0],
             mouse: Mouse::default(), captured: false, capture_mode: None, regrab_on_refocus: false, title: None,
-            screen: Screen::Playing, remote: None, studio_replay: None,
-            studio_freecam: StudioFreecam::default(), studio_rmb_down: false,
+            screen: Screen::Playing, remote: None, studio: Studio::default(), replay: Replay::default(),
             mining: false, lan_acting: None,
             renderer: None, cursor: (0.0, 0.0), server_packs: ServerPacks::default(),
             command_prompt: None, options: Options::default(), settings: Settings,
@@ -151,6 +159,7 @@ impl Default for Game {
 HELPER
 impl Game {
     fn stop_mining(&mut self) { self.mining = false; }
+    fn studio_up(&self) -> bool { self.replay.playing() || self.studio.flying() }
     fn reset_inventory_clicks(&mut self) {}
     fn restore_held_keys(&mut self) {}
     fn dialog_open(&self) -> bool { false }
@@ -276,8 +285,8 @@ fn main() {
     // only captures it while the right mouse button is held.
     {
         let mut game = Game::default();
-        game.studio_replay = Some(());
-        game.studio_rmb_down = true;
+        game.replay.driver = Some(());
+        game.studio.rmb_down = true;
         game.capture(true);
         assert!(game.captured);
         game.regrab_on_refocus = true;
@@ -286,7 +295,7 @@ fn main() {
         game.focused = true;
         game.regrab_on_refocus();
         assert!(!game.captured);
-        assert!(!game.studio_rmb_down);
+        assert!(!game.studio.rmb_down);
     }
     // A controller-only player's screens leave the shared native pointer alone.
     {

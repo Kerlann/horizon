@@ -636,6 +636,10 @@ impl Mob {
     pub fn is_in_liquid(&self) -> bool {
         self.fluids.in_water || self.fluids.in_lava
     }
+    /// `FloatGoal.canUse` and the brains' `Swim`: water deeper than the jump threshold, or lava.
+    pub fn floats(&self) -> bool {
+        self.fluids.water > self.fluid_jump_threshold() || self.fluids.in_lava
+    }
     /// `Entity.isPushedByFluid`: water animals, turtles, axolotls, frogs and
     /// nautiluses keep their own course.
     fn pushed_by_fluid(&self) -> bool {
@@ -773,6 +777,10 @@ impl Mob {
         let length = moved.x * moved.x + moved.y * moved.y + moved.z * moved.z;
         let wanted_length = wanted.x * wanted.x + wanted.y * wanted.y + wanted.z * wanted.z;
         if length > 1.0e-7 || wanted_length - length < 1.0e-7 {
+            if self.fall_distance != 0.0 && length >= 1.0 && fall_reset_hit(w, self.position, moved)
+            {
+                self.fall_distance = 0.0;
+            }
             self.position = Vec3::new(
                 self.position.x + moved.x,
                 self.position.y + moved.y,
@@ -786,7 +794,6 @@ impl Mob {
         self.horizontal_collision = x_hit || z_hit;
         // A server's mobs are authoritative (`isLocalInstanceAuthoritative`):
         // the vertical flags update even without vertical movement.
-        let moved_vertically = wanted.y.abs() > 0.0;
         let vertical = wanted.y != moved.y;
         self.vertical_collision_below = vertical && wanted.y < 0.0;
         self.on_ground = self.vertical_collision_below;
@@ -800,11 +807,30 @@ impl Mob {
         } else if !matches!(self.kind.species, super::Species::Bat | super::Species::Bee) {
             self.check_fall_damage(w, level, moved, events);
         }
+        self.restitute_movement(w, level, wanted, moved);
+        self.movement_emission(w, moved, events);
+        // Entity.move's last step: soul sand, honey and the like slow the
+        // horizontal speed of whatever the mob stands in or on.
+        let factor = self.block_speed_factor(w);
+        self.velocity = horizon_world::entity_move::scale_by_block_speed(self.velocity, factor);
+    }
+    /// `Entity.restituteMovementAfterCollisions`, shared by travel and piston pushes.
+    pub fn restitute_movement(
+        &mut self,
+        w: &MobWorld,
+        level: &mut DamageLevel<'_>,
+        wanted: Vec3,
+        moved: Vec3,
+    ) {
+        let differs = |a: f64, b: f64| (b - a).abs() >= f64::from(1.0e-5_f32);
+        let x_hit = differs(wanted.x, moved.x);
+        let z_hit = differs(wanted.z, moved.z);
+        let vertical = wanted.y != moved.y;
         // Entity.restituteMovementAfterCollisions: the colliding components
         // bounce back by the entity's bounciness or the block's (a slime
         // block, a bed), whichever is larger. A mob never sneaks, so nothing
         // suppresses its bounce there.
-        if moved_vertically && vertical || self.horizontal_collision {
+        if wanted.y.abs() > 0.0 && vertical || x_hit || z_hit {
             // Entity.getOnPos(0.2F): the block whose bounce this move sees.
             let on = (
                 self.position.x.floor() as i32,
@@ -816,7 +842,7 @@ impl Mob {
                 collided_x: x_hit,
                 collided_z: z_hit,
                 vertical_collision: vertical,
-                collision_below: self.vertical_collision_below,
+                collision_below: vertical && wanted.y < 0.0,
                 living: true,
                 resolved_movement: moved,
                 fall_distance: self.fall_distance,
@@ -832,11 +858,6 @@ impl Mob {
                 input,
             );
         }
-        self.movement_emission(w, moved, events);
-        // Entity.move's last step: soul sand, honey and the like slow the
-        // horizontal speed of whatever the mob stands in or on.
-        let factor = self.block_speed_factor(w);
-        self.velocity = horizon_world::entity_move::scale_by_block_speed(self.velocity, factor);
     }
     /// `Entity.getBlockSpeedFactor` at the mob's feet.
     fn block_speed_factor(&self, w: &MobWorld) -> f32 {
@@ -3654,4 +3675,19 @@ mod farmland_event_tests {
         // cannot be built: the test has nothing to check.
         let _ = ran;
     }
+}
+
+fn fall_reset_hit(w: &MobWorld, from: Vec3, moved: Vec3) -> bool {
+    let reset = w.block_tags.get("minecraft:fall_damage_resetting");
+    crate::entities::fall_reset_hit(
+        w.loop_context,
+        w.world,
+        w.fluid_tables,
+        |p| {
+            let name = &w.facts.get(w.world.block(p.x, p.y, p.z)).name;
+            reset.is_some_and(|t| t.contains(&**name))
+        },
+        from,
+        moved,
+    )
 }

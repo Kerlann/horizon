@@ -32,7 +32,6 @@
     "horizon-narrator": "engine",
     "horizon-prepare": "engine",
     "horizon-protocol": "engine",
-    "horizon-render-pipeline": "engine",
     "horizon-server-files": "engine",
     "horizon-system": "engine",
     "horizon-threads": "engine",
@@ -82,7 +81,9 @@
     "horizon-cosmetics": "horizon",
     "horizon-official": "horizon",
     "horizon-telemetry": "horizon",
-    "horizon-telemetry-server": "horizon"
+    "horizon-telemetry-server": "horizon",
+    "horizon-discord": "horizon",
+    "horizon-official-servers": "horizon"
   },
   "portable": {
     "_doc": "docs/layers.md#engine: vanilla's rules and data with no desktop in them, which a port builds on. They depend only on each other, and never on a forbidden library.",

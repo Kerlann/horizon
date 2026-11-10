@@ -6,8 +6,9 @@ use super::{Game, commands::Target};
 use horizon_client::{
     advancements as adv,
     gossip::GossipType,
+    items::ItemStack,
     lan::playerdata,
-    mobs::{Mob, Species, villager, zombie_villager},
+    mobs::{Mob, Species, drops, finalize, villager, zombie_villager},
 };
 use horizon_core::random::RandomSource;
 use horizon_world::food::Difficulty;
@@ -161,7 +162,15 @@ impl Game<'_> {
         let Some(v) = self.mobs.iter_mut().find(|m| m.id == vid) else {
             return;
         };
-        convert_to_villager(&old, v, nausea);
+        let drops = convert_to_villager(&old, v, nausea);
+        for stack in drops {
+            self.spawn_item(
+                stack,
+                [old.position.x, old.position.y, old.position.z],
+                [0.0; 3],
+                10,
+            );
+        }
         // `level.getPlayerByUUID(conversionStarter)`: the player who fed the
         // apple, if still in this level (the host or a server's guest).
         let starter = zombie_villager::cure(&old).and_then(|c| c.starter);
@@ -182,6 +191,10 @@ impl Game<'_> {
             self.for_player(who, |g| {
                 g.trigger_cured_zombie_villager(&zombie_view, &villager_view)
             });
+        }
+        // The nausea comes after the advancement criterion (finishConversion).
+        if let Some(v) = self.mobs.iter_mut().find(|m| m.id == vid) {
+            v.add_effect("minecraft:nausea", 200, 0);
         }
         if !old.silent {
             self.level_event_at(
@@ -289,12 +302,33 @@ pub(super) fn convert_to_zombie_villager(from: &Mob, to: &mut Mob) {
 }
 /// A cured zombie villager becomes a villager again, queasy for 10 seconds
 /// when `nausea` (the `canBeAffected` ask on the fresh villager) allows it.
-pub(super) fn convert_to_villager(from: &Mob, to: &mut Mob, nausea: bool) {
+pub(super) fn convert_to_villager(from: &Mob, to: &mut Mob, nausea: bool) -> Vec<ItemStack> {
     carry_over(from, to);
+    let mut drops_out = Vec::new();
+    // `EquipmentSlot.VALUES` order: main hand, off hand, feet, legs, chest, head.
+    for (slot, name) in drops::SLOTS.iter().take(6).enumerate() {
+        let Some(stack) = finalize::item_stack(from, slot) else {
+            continue;
+        };
+        drops::clear_slot(to, name);
+        if stack.enchantment_level("minecraft:binding_curse") > 0 {
+            // `getIndex() + 300`: hands 0..1, then feet, legs, chest, head 0..3.
+            let index = if slot < 2 { slot } else { slot - 2 };
+            let inventory = &mut villager::ext_mut(to).inventory;
+            if index < inventory.len() {
+                inventory[index] = stack;
+            } else {
+                inventory.push(stack);
+            }
+        } else if drops::drop_chance(from, name) > 1.0 {
+            drops_out.push(stack);
+        }
+    }
     to.extra.age = if from.is_baby() { -24000 } else { 0 };
     if nausea {
         to.add_effect("minecraft:nausea", 200, 0);
     }
+    drops_out
 }
 
 #[cfg(test)]
@@ -435,5 +469,27 @@ mod tests {
         assert!(cured.no_gravity);
         assert!(cured.invulnerable_flag);
         assert!(cured.extra.left_handed);
+        // The cure keeps no equipment: picked-up gear drops, cursed gear goes
+        // to the inventory, the rest vanishes.
+        use horizon_client::mobs::finalize::{
+            FEET, HEAD, MAINHAND, item_stack, set_drop_chance, set_item, set_item_stack,
+        };
+        let mut gear = mob(4, Species::ZombieVillager, "minecraft:zombie_villager");
+        set_item(&mut gear, MAINHAND, "minecraft:iron_sword");
+        set_drop_chance(&mut gear, MAINHAND, 2.0);
+        set_item(&mut gear, HEAD, "minecraft:iron_helmet");
+        let mut boots = ItemStack::new("minecraft:iron_boots", 1);
+        boots.set_crafting_enchantments(vec![("minecraft:binding_curse".into(), 1)]);
+        set_item_stack(&mut gear, FEET, boots);
+        let mut bare = mob(5, Species::Villager, "minecraft:villager");
+        let drops = convert_to_villager(&gear, &mut bare, true);
+        assert_eq!(drops.len(), 1);
+        assert_eq!(drops[0].item.as_ref(), "minecraft:iron_sword");
+        for slot in 0..=5 {
+            assert!(item_stack(&bare, slot).is_none(), "slot {slot}");
+        }
+        let kept = &villager::ext(&bare).unwrap().inventory;
+        assert_eq!(kept.len(), 1);
+        assert_eq!(kept[0].item.as_ref(), "minecraft:iron_boots");
     }
 }

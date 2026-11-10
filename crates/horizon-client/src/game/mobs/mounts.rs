@@ -1623,3 +1623,7 @@ mod tests {
         assert!((v.x + edge).abs() < 1.0e-3 && (v.z - edge).abs() < 1.0e-3);
     }
 }
+
+#[cfg(test)]
+#[path = "mounts/camel_jump_tests.rs"]
+mod camel_jump_tests;

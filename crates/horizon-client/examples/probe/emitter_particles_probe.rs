@@ -97,6 +97,7 @@ pub fn main() -> Result<()> {
         facts: &facts,
         collision: &collision,
         player: None,
+        cached_chunk: std::cell::Cell::new(None),
     };
     let source = horizon_client::resource_source::ResourceSource::directory(root);
     let mut engine = ParticleEngine::new(&source, &Default::default(), &Default::default());

@@ -1784,6 +1784,7 @@ dependencies = [
 name = "horizon-chat-filter"
 version = "0.1.0"
 dependencies = [
+ "horizon-server-files",
  "serde",
  "serde_json",
  "toml",
@@ -1906,7 +1907,6 @@ dependencies = [
  "horizon-command",
  "horizon-core",
  "horizon-dualsense",
- "horizon-friends",
  "horizon-hdr",
  "horizon-hooks",
  "horizon-items",
@@ -1920,7 +1920,6 @@ dependencies = [
  "horizon-server-files",
  "horizon-shader-api",
  "horizon-shaders",
- "horizon-system",
  "horizon-telemetry",
  "horizon-theme",
  "horizon-threads",
@@ -1967,6 +1966,7 @@ dependencies = [
  "horizon-core",
  "horizon-cosmetics",
  "horizon-hdr",
+ "horizon-hooks",
  "horizon-items",
  "horizon-mod-api",
  "horizon-mod-api-macros",
@@ -1977,7 +1977,6 @@ dependencies = [
  "horizon-optifine",
  "horizon-polytone",
  "horizon-protocol",
- "horizon-render-pipeline",
  "horizon-shader-api",
  "horizon-shaders",
  "horizon-system",
@@ -2040,6 +2039,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "horizon-discord"
+version = "0.1.0"
+dependencies = [
+ "horizon-platform",
+ "log",
+ "serde_json",
+]
+
+[[package]]
 name = "horizon-dualsense"
 version = "0.1.0"
 dependencies = [
@@ -2056,6 +2064,7 @@ dependencies = [
  "getrandom 0.3.4",
  "hkdf",
  "horizon-addresses",
+ "horizon-platform",
  "if-addrs",
  "serde",
  "serde_json",
@@ -2327,11 +2336,23 @@ dependencies = [
 name = "horizon-official"
 version = "0.1.0"
 dependencies = [
+ "horizon-discord",
+ "horizon-friends",
  "horizon-game",
  "horizon-heartbeat",
+ "horizon-official-servers",
  "horizon-platform",
  "log",
  "winresource",
+]
+
+[[package]]
+name = "horizon-official-servers"
+version = "0.1.0"
+dependencies = [
+ "horizon-addresses",
+ "horizon-platform",
+ "log",
 ]
 
 [[package]]
@@ -2432,10 +2453,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "horizon-render-pipeline"
-version = "0.1.0"
-
-[[package]]
 name = "horizon-server"
 version = "0.1.0"
 dependencies = [
@@ -2511,7 +2528,6 @@ version = "0.1.0"
 dependencies = [
  "half",
  "horizon-core",
- "horizon-render-pipeline",
  "naga",
  "png",
  "zip",

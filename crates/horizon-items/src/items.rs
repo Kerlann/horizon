@@ -3249,6 +3249,46 @@ mod tests {
     }
 
     #[test]
+    fn attribute_modifiers_come_from_the_stack() {
+        let items = Items::for_tests(HashMap::new());
+        let mut sword = ItemStack::new("minecraft:diamond_sword", 1);
+        let attack = horizon_core::nbt::Tag::compound([
+            (
+                "type",
+                horizon_core::nbt::Tag::String("minecraft:attack_damage".into()),
+            ),
+            (
+                "id",
+                horizon_core::nbt::Tag::String("minecraft:test".into()),
+            ),
+            ("amount", horizon_core::nbt::Tag::Double(0.1f64.to_bits())),
+            (
+                "operation",
+                horizon_core::nbt::Tag::String("add_value".into()),
+            ),
+            ("slot", horizon_core::nbt::Tag::String("mainhand".into())),
+        ]);
+        sword.data_mut().set_other(
+            "minecraft:attribute_modifiers",
+            Some(horizon_core::nbt::Tag::List(vec![attack])),
+        );
+        let modifiers = sword.default_attribute_modifiers(&items);
+        assert_eq!(modifiers.len(), 1);
+        assert_eq!(modifiers[0].attribute, "minecraft:attack_damage");
+        // A double, as `AttributeModifier.amount`: not rounded through a float.
+        assert_eq!(modifiers[0].amount, 0.1);
+        drop(modifiers);
+        sword.data_mut().set_other(
+            "!minecraft:attribute_modifiers",
+            Some(horizon_core::nbt::Tag::compound(Vec::<(
+                &str,
+                horizon_core::nbt::Tag,
+            )>::new())),
+        );
+        assert!(sword.default_attribute_modifiers(&items).is_empty());
+    }
+
+    #[test]
     fn admitted_tool_rules_override_defaults_and_removals_survive_saving() {
         let root =
             std::env::temp_dir().join(format!("horizon-tool-components-{}", std::process::id()));

@@ -100,18 +100,18 @@ fn client_packet_hands_a_mod_the_type_and_custom_payload() {
 
 mod model_layers {
     use mod_api::{
-        CubeListBuilder, Hooks, LayerDefinition, LayerDefinitionsEvent, MeshDefinition, ModEntry,
-        PartPose, RegistrationContext,
+        CubeListBuilder, Hooks, LayerDefinition, MeshDefinition, ModEntry, PartPose,
+        RegisterLayerDefinitionsEvent, RegistrationContext,
     };
 
     struct Golem(&'static str);
     #[mod_api::__subscriptions]
     impl Hooks for Golem {
-        // ANCHOR: layer_definitions
-        fn layer_definitions(
+        // ANCHOR: register_layer_definitions
+        fn register_layer_definitions(
             &self,
             _context: &RegistrationContext,
-            event: &mut LayerDefinitionsEvent<'_>,
+            event: &mut RegisterLayerDefinitionsEvent<'_>,
         ) {
             let mut mesh = MeshDefinition::new();
             let root = mesh.root();
@@ -123,11 +123,11 @@ mod model_layers {
                 .layers
                 .push((self.0.into(), LayerDefinition::create(mesh, 64, 32)));
         }
-        // ANCHOR_END: layer_definitions
+        // ANCHOR_END: register_layer_definitions
     }
 
     #[test]
-    fn layer_definitions_collect_each_mods_layers_in_order() {
+    fn register_layer_definitions_collect_each_mods_layers_in_order() {
         // The harness supplies the engine-owned context; the listener above uses only public API.
         use mod_api::__private::game::RegistrationContextNew;
         mod_api::testing::with_mods(
@@ -138,7 +138,10 @@ mod model_layers {
             .into(),
             || {
                 let mut layers = Vec::new();
-                mod_api::dispatch_layer_definitions(&RegistrationContext::new(), &mut layers);
+                mod_api::dispatch_register_layer_definitions(
+                    &RegistrationContext::new(),
+                    &mut layers,
+                );
                 let ids: Vec<_> = layers.iter().map(|(id, _)| id.as_str()).collect();
                 assert_eq!(ids, ["first:golem#main", "second:golem#main"]);
                 let model = layers[0].1.bake_root();

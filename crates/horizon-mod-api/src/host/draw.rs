@@ -12,7 +12,7 @@ pub trait DrawClientHost {
     /// Side: client.
     /// Entity model layer `layer` baked into its `ModelPart` tree, each part
     /// at its pose, as `EntityModelSet.bakeLayer` bakes it: one a native mod
-    /// registered (`native_layer_definitions`), or vanilla's, by the name
+    /// registered (`native_register_layer_definitions`), or vanilla's, by the name
     /// `entity-models.json` gives it (`minecraft:zombie#main`,
     /// `minecraft:player#main`). The tree is the caller's own copy: bake it
     /// once, as a renderer does, and set its parts' poses each frame. None

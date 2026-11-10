@@ -1042,7 +1042,6 @@ one of these moments has to move that logic into a client native mod.
 | `item_tooltip.rs` | `item_tooltip` |
 | `key_mapping_pre.rs` | `key_mapping_pre` |
 | `left_click_empty.rs` | `left_click_empty` |
-| `model_layers.rs` | `layer_definitions` |
 | `movement_input.rs` | `movement_input` |
 | `player_heart_type.rs` | `player_heart_type` |
 | `register_block_tint_sources.rs` | `register_block_tint_sources` |
@@ -1051,6 +1050,7 @@ one of these moments has to move that logic into a client native mod.
 | `register_debug_renderers.rs` | `register_debug_renderers` |
 | `register_gui_layers.rs` | `register_gui_layers` |
 | `register_item_tint_sources.rs` | `register_item_tint_sources` |
+| `register_layer_definitions.rs` | `register_layer_definitions` |
 | `register_range_select_item_model_property.rs` | `register_range_select_item_model_property` |
 | `register_runtime_sprites.rs` | `register_runtime_sprites` |
 | `register_texture_atlases.rs` | `register_texture_atlases` |
