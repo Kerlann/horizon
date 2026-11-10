@@ -116,19 +116,21 @@ fn resolve_pending_leash(
 }
 
 /// Write a mob's `leash` NBT entry into `tag`.
-pub(super) fn write_mob_leash_tag(
+pub(super) fn write_mob_leash_tag<E>(
     tag: &mut Tag,
     holder: Option<Holder>,
     pending: Option<Pending>,
     leash_player: Option<[i32; 4]>,
     level_player_uuid: Option<[i32; 4]>,
-    mob_uuid: impl FnOnce(u32) -> [i32; 4],
-) {
-    let Tag::Compound(map) = tag else { return };
+    mob_uuid: impl FnOnce(u32) -> Result<[i32; 4], E>,
+) -> Result<(), E> {
+    let Tag::Compound(map) = tag else {
+        return Ok(());
+    };
     map.remove(&"leash".into());
     let uuid = match (holder, pending) {
         (Some(Holder::Player), _) => leash_player.or(level_player_uuid).or(Some([0, 0, 0, 1])),
-        (Some(Holder::Mob(id) | Holder::Boat(id)), _) => Some(mob_uuid(id)),
+        (Some(Holder::Mob(id) | Holder::Boat(id)), _) => Some(mob_uuid(id)?),
         (_, Some(Pending::Uuid(u))) => Some(u),
         _ => None,
     };
@@ -141,6 +143,7 @@ pub(super) fn write_mob_leash_tag(
     if let Some(v) = value {
         map.insert("leash".into(), v);
     }
+    Ok(())
 }
 
 impl Game<'_> {
@@ -594,8 +597,9 @@ impl Game<'_> {
             pending,
             leash_player,
             level_player_uuid,
-            |id| self.mob_uuid(id),
-        );
+            |id| Ok::<_, std::convert::Infallible>(self.mob_uuid(id)),
+        )
+        .unwrap_or_else(|never| match never {});
     }
     #[cfg(test)]
     pub(super) fn interact_leash(&mut self, index: usize, item: &str) -> bool {
@@ -1140,8 +1144,9 @@ mod rope_hold_tests {
                 None,
                 Some(acting),
                 Some(level_player_uuid),
-                |_| [0; 4],
-            );
+                |_| Ok::<_, std::convert::Infallible>([0; 4]),
+            )
+            .unwrap_or_else(|never| match never {});
             let pending = leash::pending_from_nbt(tag.get("leash")).expect("saved leash tag");
             assert_eq!(pending, Pending::Uuid(acting));
 

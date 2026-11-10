@@ -13,17 +13,18 @@ use horizon_world::registry::BlockRegistry;
 use std::collections::HashSet;
 
 pub(super) trait MobNbtOwner {
+    type Error;
     fn mobs(&self) -> &JoinList<Mob>;
     fn mobs_mut(&mut self) -> &mut JoinList<Mob>;
     fn persist(&self) -> &EntityMemory;
     fn game_time(&self) -> i64;
     fn registry(&self) -> &BlockRegistry;
-    fn uuid_for(&mut self, id: u32) -> [i32; 4];
-    fn write_leash(&mut self, tag: &mut Tag, index: usize);
+    fn uuid_for(&mut self, id: u32) -> Result<[i32; 4], Self::Error>;
+    fn write_leash(&mut self, tag: &mut Tag, index: usize) -> Result<(), Self::Error>;
 
-    fn mob_tree_nbt(&mut self, i: usize) -> Tag {
+    fn mob_tree_nbt(&mut self, i: usize) -> Result<Tag, Self::Error> {
         let id = self.mobs()[i].id;
-        let uuid = self.uuid_for(id);
+        let uuid = self.uuid_for(id)?;
         // A warden's anger names each suspect by UUID. A mob that has never been
         // loaded or saved has no UUID yet, so give it one, or the save would
         // drop the anger at it (`who_uuid` writes nothing for a mob the map does
@@ -44,7 +45,7 @@ pub(super) trait MobNbtOwner {
             })
             .unwrap_or_default();
         for suspect in suspects {
-            self.uuid_for(suspect);
+            self.uuid_for(suspect)?;
         }
         // `NeutralMob.addPersistentAngerSaveData`: the anger ends at an
         // absolute game time, so it goes on while the chunk is unloaded, and
@@ -81,14 +82,14 @@ pub(super) trait MobNbtOwner {
             && target != 0
             && self.mobs().iter().any(|m| m.id == target)
         {
-            self.uuid_for(target);
+            self.uuid_for(target)?;
         }
         // The mob that last hurt it, still resident, gets its UUID now, as the
         // anger target does, so `put_last_hurt_by_mob` can name it.
         if let Some(horizon_client::mobs::Who::Mob(attacker)) = self.mobs()[i].ai.last_hurt_by
             && self.mobs().iter().any(|m| m.id == attacker)
         {
-            self.uuid_for(attacker);
+            self.uuid_for(attacker)?;
         }
         let mut tag = entity_nbt::mob_to_nbt(
             &self.mobs()[i],
@@ -105,9 +106,9 @@ pub(super) trait MobNbtOwner {
                 horizon_client::mobs::camel::synced_pose_tick(&self.mobs()[i], self.game_time());
             c.insert("LastPoseTick".into(), Tag::Long(tick));
         }
-        self.write_leash(&mut tag, i);
-        self.put_mob_passengers(&mut tag, id);
-        tag
+        self.write_leash(&mut tag, i)?;
+        self.put_mob_passengers(&mut tag, id)?;
+        Ok(tag)
     }
 
     fn put_last_hurt_by_mob(&self, m: &horizon_client::mobs::Mob, tag: &mut Tag) {
@@ -139,7 +140,7 @@ pub(super) trait MobNbtOwner {
         }
     }
 
-    fn put_mob_passengers(&mut self, tag: &mut Tag, id: u32) {
+    fn put_mob_passengers(&mut self, tag: &mut Tag, id: u32) -> Result<(), Self::Error> {
         let mut riders: Vec<Tag> = Vec::new();
         let mut live_seen = HashSet::new();
 
@@ -152,7 +153,7 @@ pub(super) trait MobNbtOwner {
                             m.id == rider_id && m.extra.mount == Some(id) && m.alive() && !m.removed
                         }) {
                             live_seen.insert(rider_id);
-                            riders.push(self.mob_tree_nbt(pos));
+                            riders.push(self.mob_tree_nbt(pos)?);
                         }
                     }
                     PassengerSlot::Saved(saved_tag) => {
@@ -185,17 +186,19 @@ pub(super) trait MobNbtOwner {
             extra_riders.insert(0, d);
         }
         for j in extra_riders {
-            riders.push(self.mob_tree_nbt(j));
+            riders.push(self.mob_tree_nbt(j)?);
         }
 
         if let Tag::Compound(c) = tag {
             c.remove(&"Passengers".into());
         }
         add_passengers(tag, riders);
+        Ok(())
     }
 }
 
 impl MobNbtOwner for Game<'_> {
+    type Error = std::convert::Infallible;
     fn mobs(&self) -> &JoinList<Mob> {
         &self.mobs
     }
@@ -211,11 +214,12 @@ impl MobNbtOwner for Game<'_> {
     fn registry(&self) -> &BlockRegistry {
         self.pack.assets.registry
     }
-    fn uuid_for(&mut self, id: u32) -> [i32; 4] {
-        Game::uuid_for(self, id)
+    fn uuid_for(&mut self, id: u32) -> Result<[i32; 4], Self::Error> {
+        Ok(Game::uuid_for(self, id))
     }
-    fn write_leash(&mut self, tag: &mut Tag, index: usize) {
+    fn write_leash(&mut self, tag: &mut Tag, index: usize) -> Result<(), Self::Error> {
         Game::write_leash(self, tag, index);
+        Ok(())
     }
 }
 
@@ -253,6 +257,7 @@ impl<'a> ParkedMobNbt<'a> {
 }
 
 impl MobNbtOwner for ParkedMobNbt<'_> {
+    type Error = std::convert::Infallible;
     fn mobs(&self) -> &JoinList<Mob> {
         self.mobs
     }
@@ -268,22 +273,22 @@ impl MobNbtOwner for ParkedMobNbt<'_> {
     fn registry(&self) -> &BlockRegistry {
         self.registry
     }
-    fn uuid_for(&mut self, id: u32) -> [i32; 4] {
+    fn uuid_for(&mut self, id: u32) -> Result<[i32; 4], Self::Error> {
         if let Some(&uuid) = self.persist.uuids.get(&id) {
-            return uuid;
+            return Ok(uuid);
         }
         let uuid = horizon_client::save::random_uuid();
         self.persist.uuids.insert(id, uuid);
         self.assignments.push((id, uuid));
-        uuid
+        Ok(uuid)
     }
-    fn write_leash(&mut self, tag: &mut Tag, index: usize) {
+    fn write_leash(&mut self, tag: &mut Tag, index: usize) -> Result<(), Self::Error> {
         let m = &self.mobs[index];
         let (holder, pending, player) =
             (m.extra.leash, m.extra.leash_pending, m.extra.leash_player);
         super::leads::write_mob_leash_tag(tag, holder, pending, player, self.player_uuid, |id| {
             self.uuid_for(id)
-        });
+        })
     }
 }
 

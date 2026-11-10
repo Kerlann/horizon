@@ -196,7 +196,9 @@ impl Game<'_> {
                 self.level.player_uuid,
             );
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                owner.mob_tree_nbt(index)
+                owner
+                    .mob_tree_nbt(index)
+                    .unwrap_or_else(|never| match never {})
             }));
             (result, owner.into_assignments())
         };

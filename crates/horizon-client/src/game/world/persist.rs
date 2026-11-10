@@ -1339,6 +1339,7 @@ impl Game<'_> {
     /// passengers cannot save even before their list entry is swept.
     pub(super) fn put_mob_passengers(&mut self, tag: &mut Tag, id: u32) {
         super::native_mob_nbt_save::MobNbtOwner::put_mob_passengers(self, tag, id)
+            .unwrap_or_else(|never| match never {})
     }
     /// Read an unsimulated entity without assigning it a new identity.
     pub(super) fn other_from_nbt(
@@ -1558,6 +1559,7 @@ impl Game<'_> {
     /// A mob's entity tag with the mobs riding it under `Passengers`.
     pub(super) fn mob_tree_nbt(&mut self, i: usize) -> Tag {
         super::native_mob_nbt_save::MobNbtOwner::mob_tree_nbt(self, i)
+            .unwrap_or_else(|never| match never {})
     }
     /// `LivingEntity.addAdditionalSaveData`'s `last_hurt_by_mob` and
     /// `ticks_since_last_hurt_by_mob`, a PARTIAL projection at save time: both
