@@ -239,11 +239,11 @@ MCP: `account_skin`.
 
 ## `horizon-launcher settings`
 
-Show the launcher's settings, or set one (the Settings page): selected-version TAG, game-architecture auto|x64|arm64, minecraft-dir PATH, server-dir PATH ("default" resets a folder), install-new-versions on|off, prune-old-versions on|off (delete old versions after an install, keeping the selected one, the ones instances use and the newest few), keep-versions N (how many of the newest to keep; "default" is 2), opening-animation on|off, proxy http://host:port|socks5://host:port ("default" removes it), while-playing stay|minimize|hide (what the window does while the game runs), language system|en|fr|ru|de|zh|es|uk|pl (the window's language; system follows the computer's), accent violet|blue|teal|green|amber|red|pink|#rrggbb|DEGREES (a named accent, any colour, or any hue), background PATH (a picture behind Home; "default" shows Horizon's landscape), native-cache-gib N (combined native compilation cache limit in GiB, default 30; 0 disables automatic cleanup).
+Show the launcher's settings, or set one (the Settings page): selected-version TAG, game-architecture auto|x64|arm64, minecraft-dir PATH, server-dir PATH ("default" resets a folder), install-new-versions on|off, prune-old-versions on|off (delete old versions after an install, keeping the selected one, the ones instances use and the newest few), keep-versions N (how many of the newest to keep; "default" is 2), opening-animation on|off, proxy http://host:port|socks5://host:port ("default" removes it), while-playing stay|minimize|hide (what the window does while the game runs), language system|en|fr|ru|de|zh|es|uk|pl (the window's language; system follows the computer's), accent violet|blue|teal|green|amber|red|pink|#rrggbb|DEGREES (a named accent, any colour, or any hue), background PATH (a picture behind Home; "default" shows Horizon's landscape), cache-limit-gib N (managed cache limit in GiB: 10, 25 (default), 50, 100; 0 disables automatic cleanup).
 
     horizon-launcher settings [KEY] [VALUE]
 
-- `KEY` (selected-version, minecraft-dir, server-dir, install-new-versions, prune-old-versions, keep-versions, opening-animation, game-architecture, proxy, while-playing, language, accent, background, native-cache-gib)
+- `KEY` (selected-version, minecraft-dir, server-dir, install-new-versions, prune-old-versions, keep-versions, opening-animation, game-architecture, proxy, while-playing, language, accent, background, cache-limit-gib)
 - `VALUE`: The new value (with KEY)
 
 MCP: `settings`.
@@ -319,6 +319,81 @@ Write a bug report to a file you attach to the issue by hand; nothing is sent (d
 - `--log`: Add the end of the game's log (names and worlds hidden, without chat)
 
 MCP: `bug_report`.
+
+## `horizon-launcher data status`
+
+What is allowed, the install ID and how many items wait (the default).
+
+    horizon-launcher data status
+
+MCP: `data_status`.
+
+## `horizon-launcher data allow`
+
+Turn kinds on: performance, crashes, bugs, benchmarks, or all.
+
+    horizon-launcher data allow <KINDS>...
+
+- `KINDS`
+
+MCP: `data_allow`, only when the player asks.
+
+## `horizon-launcher data deny`
+
+Turn kinds off: performance, crashes, bugs, benchmarks, or all.
+
+    horizon-launcher data deny <KINDS>...
+
+- `KINDS`
+
+MCP: `data_deny`.
+
+## `horizon-launcher data show`
+
+Print exactly what would be sent.
+
+    horizon-launcher data show
+
+MCP: `data_show`.
+
+## `horizon-launcher data delete`
+
+Delete everything sent from here, and what waits, and take a new install ID.
+
+    horizon-launcher data delete
+
+MCP: `data_delete`, needs `confirm: true`.
+
+## `horizon-launcher data send`
+
+Send what is waiting now.
+
+    horizon-launcher data send
+
+MCP: `data_send`, only when the player asks.
+
+## `horizon-launcher data bug`
+
+Send a bug report you write; it is printed first, as it would leave.
+
+    horizon-launcher data bug <TEXT>
+
+- `TEXT`
+- `--log`: Add the end of the game's log (scrubbed, without chat)
+- `--yes`: Send without asking
+
+MCP: `data_bug`, only when the player asks.
+
+## `horizon-launcher data benchmark`
+
+Upload a benchmark report (docs/benchmark-report.md); it is printed first.
+
+    horizon-launcher data benchmark <FILE>
+
+- `FILE`
+- `--yes`
+
+MCP: `data_benchmark`, only when the player asks.
 
 ## `horizon-launcher instance list`
 

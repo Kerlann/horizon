@@ -1,7 +1,7 @@
 //! The benchmark report format, version 1 (docs/benchmark-report.md).
 //!
 //! One JSON file per run, the same for the game, the launcher and `tools/perf_bench.py`: the local log
-//! a player can attach by hand. Nothing is sent anywhere.
+//! a player can attach, and, with consent, what the telemetry upload sends ([`Report::for_upload`]).
 //! It holds summaries and fixed-edge histogram counts, never raw frame streams.
 
 use std::collections::BTreeMap;
@@ -291,6 +291,17 @@ impl Report {
         Ok(report)
     }
 
+    /// The report without its local-only fields, dated to the day: what an upload sends.
+    pub fn for_upload(&self) -> Report {
+        let day = self.created.get(..10).unwrap_or_default();
+        Report {
+            label: None,
+            local: Vec::new(),
+            created: format!("{day}T00:00:00Z"),
+            ..self.clone()
+        }
+    }
+
     pub fn to_json(&self) -> String {
         serde_json::to_string_pretty(self).expect("a report always serializes")
     }
@@ -396,7 +407,7 @@ mod tests {
     }
 
     #[test]
-    fn a_report_round_trips() {
+    fn round_trip_and_upload_strips_local_fields() {
         let mut r = Report::new(
             Kind::Game,
             App {
@@ -413,6 +424,14 @@ mod tests {
         r.local.push("/home/someone/logs/latest.log".into());
         let back = Report::parse(&r.to_json()).unwrap();
         assert_eq!(back, r);
+        r.created = "2026-10-15T14:03:27Z".into();
+        let upload = r.for_upload();
+        assert_eq!(upload.created, "2026-10-15T00:00:00Z", "the day only");
+        let upload = upload.to_json();
+        assert!(
+            !upload.contains("my run") && !upload.contains("someone"),
+            "{upload}"
+        );
     }
 
     #[test]

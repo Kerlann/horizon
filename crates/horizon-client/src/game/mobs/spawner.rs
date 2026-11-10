@@ -242,6 +242,7 @@ impl Game<'_> {
         mut created: Vec<Mob>,
         rides: Vec<(u32, u32)>,
     ) -> HashMap<u32, u32> {
+        let _save_lease = horizon_client::join_seq::visibility::PassLease::enter();
         let mut finalized: Vec<Mob> = Vec::new();
         let mut gears: Vec<Option<Tag>> = Vec::new();
         let mut loads: Vec<(Tag, Option<Tag>, u32)> = Vec::new();

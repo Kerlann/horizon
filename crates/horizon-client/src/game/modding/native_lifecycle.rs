@@ -242,7 +242,7 @@ impl Game<'_> {
         }
         self.attachment_indexes.clear();
         self.entity_read_state.get_mut().reset();
-        self.entity_residency.get_mut().reset();
+        self.resident_entities.table.get_mut().reset();
     }
 
     /// Report a server-loop or shutdown failure once and retire its epoch.
@@ -255,7 +255,7 @@ impl Game<'_> {
         }
         self.attachment_indexes.clear();
         self.entity_read_state.get_mut().reset();
-        self.entity_residency.get_mut().reset();
+        self.resident_entities.table.get_mut().reset();
     }
 
     /// After the final save, before the lock release. Client epochs retire
@@ -271,7 +271,7 @@ impl Game<'_> {
         }
         self.attachment_indexes.clear();
         self.entity_read_state.get_mut().reset();
-        self.entity_residency.get_mut().reset();
+        self.resident_entities.table.get_mut().reset();
         mod_api::__private::clear_game_parts();
     }
 

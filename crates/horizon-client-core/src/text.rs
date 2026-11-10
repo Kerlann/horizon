@@ -547,7 +547,15 @@ impl Text {
             self.origins = origins.into();
         }
         self.replace_component(c);
-        self.refresh();
+        // The cached spans take the style underneath their own, as a fresh render of the
+        // component above would give them. Rendering it again instead would translate existing
+        // content anew, in whatever language is current now (#2493).
+        for span in &mut self.rendered.spans {
+            span.inherit_style(style);
+            if style.inline_object.is_some() {
+                span.style.inline_object.clone_from(&style.inline_object);
+            }
+        }
         self
     }
     /// The `Component` as vanilla's JSON (ComponentSerialization): the one
@@ -1533,7 +1541,9 @@ mod tests {
             .as_ref()
             .clone()
             .bold();
+        // Styling keeps object metadata; plain text exposes its fallback.
         assert_eq!(hover.plain(), "stoneremote");
+        assert!(hover.spans[0].style.inline_object.is_some());
         assert_eq!(origins(&hover), [Origin::Local, Origin::Remote]);
         assert!(hover.spans[0].click_event().is_some());
         assert!(hover.spans[1].click_event().is_none());
@@ -1611,6 +1621,85 @@ mod tests {
         let crossed = Text::from(form);
         assert_eq!(crossed, built);
         assert_eq!(crossed.plain(), "<Steve> hello");
+    }
+
+    /// Styling translated text where its language isn't loaded keeps the translation it was
+    /// built with and gains the style; its spans keep their origins (#2493).
+    #[test]
+    fn styling_keeps_the_translation_it_was_built_with() {
+        let language = lang::Language::of(
+            lang::DEFAULT,
+            [("chat.type.text".to_owned(), "<%s> %s".to_owned())],
+        );
+        let (built, _) = lang::scoped(language, || {
+            Text::translate(
+                "chat.type.text",
+                &[Text::literal("Steve"), Text::literal("hello")],
+            )
+        });
+        let origins: Vec<_> = built.rendered.spans.iter().map(|s| s.origin).collect();
+        let red = Style {
+            color: Some(0xFF5555),
+            ..Style::default()
+        };
+        // A language without the key: rendering the source again would read `chat.type.text`.
+        let (styled, _) = lang::scoped(lang::Language::of(lang::DEFAULT, []), || {
+            built.with_style(&red)
+        });
+        assert_eq!(styled.plain(), "<Steve> hello");
+        assert!(
+            styled
+                .rendered
+                .spans
+                .iter()
+                .all(|span| span.style.color == Some(0xFF5555))
+        );
+        assert_eq!(
+            styled
+                .rendered
+                .spans
+                .iter()
+                .map(|s| s.origin)
+                .collect::<Vec<_>>(),
+            origins
+        );
+        assert!(styled.component().get("color").is_some());
+    }
+
+    /// A parent's style goes underneath its children: a child that sets only its colour keeps
+    /// it and gains the parent's bold, in the cached spans and in a fresh render alike.
+    #[test]
+    fn a_parent_style_goes_underneath_a_childs_own() {
+        let text = Text::literal("a").append(Text::colored("b", 0x55FF55));
+        let origins: Vec<_> = text.rendered.spans.iter().map(|s| s.origin).collect();
+        let styled = text.with_style(&Style {
+            color: Some(0x5555FF),
+            bold: Some(true),
+            ..Style::default()
+        });
+        let fresh = Text::from(styled.component());
+        for spans in [&styled.rendered.spans, &fresh.rendered.spans] {
+            let read: Vec<_> = spans
+                .iter()
+                .map(|s| (s.text.as_str(), s.style.color, s.style.bold))
+                .collect();
+            assert_eq!(
+                read,
+                [
+                    ("a", Some(0x5555FF), Some(true)),
+                    ("b", Some(0x55FF55), Some(true))
+                ]
+            );
+        }
+        assert_eq!(
+            styled
+                .rendered
+                .spans
+                .iter()
+                .map(|s| s.origin)
+                .collect::<Vec<_>>(),
+            origins
+        );
     }
 
     #[test]
@@ -1723,5 +1812,37 @@ mod tests {
             Some(false)
         );
         assert_eq!(text.rendered.spans.last().unwrap().style.color, Some(RED));
+    }
+    #[test]
+    fn styling_installs_atlas_and_player_metadata() {
+        for object in [
+            InlineObject::Atlas {
+                atlas: "a".into(),
+                sprite: "b".into(),
+                fallback: "".into(),
+            },
+            InlineObject::Player {
+                profile: std::sync::Arc::new(json!({})),
+                hat: true,
+                fallback: "".into(),
+            },
+        ] {
+            let text = Text::styled(
+                "\u{fffc}",
+                Style {
+                    inline_object: Some(object),
+                    ..Style::default()
+                },
+            );
+            assert!(text.spans[0].style.inline_object.is_some());
+        }
+    }
+    #[test]
+    fn styling_remote_span_drops_local_file_action() {
+        let text = Text::from(json!({"text":"remote"})).with_style(&Style {
+            click: Some(ClickEvent::OpenFile("secret".into())),
+            ..Style::default()
+        });
+        assert!(text.spans[0].style.click.is_none());
     }
 }

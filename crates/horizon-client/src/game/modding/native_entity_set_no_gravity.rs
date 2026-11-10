@@ -60,7 +60,8 @@ impl Game<'_> {
             return Err(EntityWriteError::OutsideScope);
         }
         let (location, state) = self
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_admitted_location(entity.id(), |at| self.locate_server_resident_owner(at))
             .ok_or(EntityWriteError::Missing)?;
@@ -139,9 +140,11 @@ impl Game<'_> {
             return WriteReceipt::Refused(EntityWriteError::OutsideScope);
         };
         let mut cached = false;
-        self.entity_residency
-            .borrow_mut()
-            .edit_cached_row(entity.id(), target.location, |_| cached = true);
+        self.resident_entities.table.borrow_mut().edit_cached_row(
+            entity.id(),
+            target.location,
+            |_| cached = true,
+        );
         if !cached
             && !self.publish_no_gravity_target(target, EntityReadCapturePhase::BeforeCallback)
         {
@@ -167,7 +170,7 @@ impl Game<'_> {
             Ok(id) => id,
             Err(_) => return WriteReceipt::Refused(EntityWriteError::WorkLimit),
         };
-        let patched = self.entity_residency.borrow_mut().edit_cached_row(
+        let patched = self.resident_entities.table.borrow_mut().edit_cached_row(
             entity.id(),
             target.location,
             |row| row.queue_no_gravity_overlay(id, no_gravity),
@@ -189,7 +192,8 @@ impl Game<'_> {
             .epoch()
             .ok_or(EntityWriteError::StaleEpoch)?;
         let (location, state) = self
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_admitted_location(target.runtime_id, |at| {
                 self.locate_server_resident_owner(at)

@@ -62,7 +62,8 @@ pub(super) fn with_fixture(f: impl FnOnce(&mut Game<'_>, &Events)) {
 }
 pub(super) fn writer(game: &Game<'_>) -> EntityWriterScope {
     let (location, _) = game
-        .entity_residency
+        .resident_entities
+        .table
         .borrow_mut()
         .server_admitted_location(71, |at| game.locate_server_resident_owner(at))
         .unwrap();
@@ -180,7 +181,8 @@ fn silent_apply_rejects_removed_or_reused_generation_and_preserves_overlay_on_ca
                 panic!("foreign write did not queue");
             };
             let (location, _) = game
-                .entity_residency
+                .resident_entities
+                .table
                 .borrow_mut()
                 .server_admitted_location(72, |at| game.locate_server_resident_owner(at))
                 .unwrap();

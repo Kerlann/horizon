@@ -3,6 +3,13 @@
 use super::*;
 
 impl Game<'_> {
+    pub(super) fn admit_entity_save() -> Result<()> {
+        if !horizon_client::join_seq::visibility::passes_settled() {
+            return Err("entity pass is lifted".into());
+        }
+        Ok(())
+    }
+
     pub(super) fn save_game(&mut self) -> Result<()> {
         self.save_game_with(true)
     }
@@ -70,8 +77,7 @@ impl Game<'_> {
         // their own file (`PlayerDataStorage.save`); the owner is also in the
         // file level.dat names, which is the one it loads from
         // (`playerdata::load_owner`).
-        if self.options.dedicated.is_some()
-            && !self.options.execution_role.is_client()
+        if self.options.execution_role == execution_role::ExecutionRole::DedicatedServer
             && let Some(host) = self.lan.as_mut()
         {
             // The vehicle tree goes into a player's file when they leave
@@ -93,8 +99,7 @@ impl Game<'_> {
                 }
             });
         }
-        if self.options.dedicated.is_some()
-            && !self.options.execution_role.is_client()
+        if self.options.execution_role == execution_role::ExecutionRole::DedicatedServer
             && let Some(host) = self.lan.as_ref()
         {
             self.save_connected_guest_statistics(host);
@@ -122,6 +127,7 @@ impl Game<'_> {
         if self.remote.is_some() {
             return Ok(());
         }
+        Self::admit_entity_save()?;
         // `DedicatedServer.saveAllChunks` tells the management protocol's clients when a save starts and when
         // it ends without failing, for every save: the command, the autosave, the pause.
         let dedicated = self.options.dedicated.is_some();

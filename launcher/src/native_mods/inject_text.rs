@@ -30,7 +30,7 @@ pub(super) fn inject_error(error: &InjectError) -> String {
             reason,
             declaration,
         } => trf(
-            "E_INJECT_NO_SLOT: {id}: {reason}; slot declaration {declaration}; use a native mod or a game build supporting this slot",
+            "E_INJECT_NO_SLOT: {id}: {reason}; slot declaration {declaration}; access = \"api\" never rebuilds the game; use access = \"internals\" where supported or request a hook",
             &[
                 ("id", id),
                 ("reason", no_slot_reason(*reason)),
@@ -48,7 +48,7 @@ fn no_slot_reason(reason: NoSlotReason) -> &'static str {
         NoSlotReason::WasmSitesPending => tr("wasm sites pending"),
         NoSlotReason::LocalSlotsPending => tr("local slots pending (I5)"),
         NoSlotReason::ExtensionSlotsPending => tr("extension slots pending (I6)"),
-        NoSlotReason::ApiSitesPending => tr("API site listeners pending (U4c)"),
+        NoSlotReason::ApiSitesUnsupported => tr("API call-site injections require internals"),
         NoSlotReason::SourcePending => tr("source injects pending (U5)"),
         NoSlotReason::ReplacePending => tr("internals replace listeners pending (U9)"),
         NoSlotReason::NoApiRecord => tr("no API record: a parameter has no API type yet"),
@@ -69,7 +69,7 @@ mod tests {
             NoSlotReason::WasmSitesPending,
             NoSlotReason::LocalSlotsPending,
             NoSlotReason::ExtensionSlotsPending,
-            NoSlotReason::ApiSitesPending,
+            NoSlotReason::ApiSitesUnsupported,
             NoSlotReason::SourcePending,
             NoSlotReason::ReplacePending,
             NoSlotReason::NoApiRecord,

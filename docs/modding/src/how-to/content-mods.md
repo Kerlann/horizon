@@ -690,3 +690,11 @@ radius. `kernel_size` 0 is none.
 { "horizon:enhanced_terrain_adaptation": { "kernel_size": 24, "kernel_distance": 24,
     "top": "carve", "bottom": "none", "rigid_junctions": true, "inflate": true } }
 ```
+
+### Passenger attachment points
+
+An entity type can set `passenger_attachments` to seat offsets relative to its feet.
+A list of exactly three plain numbers is **one** `[x, y, z]` point, not three heights.
+For multiple seats use nested points, for example `[[1, 2, 3], [-1, 4, 5]]`.
+Seats follow passenger order; extra passengers use the last point. Offsets scale with
+the entity and rotate with its yaw.

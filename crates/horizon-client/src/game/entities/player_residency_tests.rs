@@ -118,6 +118,80 @@ fn actual_guest_membership_and_lifetime_survive_nested_body_loans_and_reset() {
 
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn refused_body_construction_does_not_begin_guest_or_hook_loans() {
+    with_guests(|game| {
+        game.as_guest(12, |g| {
+            g.install_fishing_hook(crate::game::fishing::Hook::remote(
+                900,
+                Vec3::ZERO,
+                [1, 2, 3, 4],
+            ))
+        })
+        .unwrap();
+        assert!(matches!(
+            game.server_resident_entity(12),
+            EntityLookup::Found {
+                value: Target::Guest(12),
+                ..
+            }
+        ));
+        assert!(matches!(
+            game.server_resident_entity(900),
+            EntityLookup::Found {
+                value: Target::Hook(900),
+                ..
+            }
+        ));
+        let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let mut bad =
+            horizon_client::motion::MotionResources::load(&root, &game.pack.assets).unwrap();
+        bad.attributes = std::sync::Arc::new(horizon_world::attributes::entity::Catalog::from_json(&serde_json::json!({
+            "data_version": horizon_core::version::DATA_VERSION, "attributes": [], "entities": {}
+        })).unwrap());
+        assert!(horizon_client::motion::PlayerMotion::new(&bad, Vec3::ZERO).is_err());
+        let original = game.motion;
+        game.motion = Box::leak(Box::new(bad));
+        game.lan
+            .as_mut()
+            .unwrap()
+            .hub
+            .guests
+            .update_connection(12, |g| g.motion = None);
+        let permission = game.ui.registries.permission;
+        assert!(game.as_guest(12, |_| panic!("refused turn ran")).is_none());
+        game.motion = original;
+        assert_eq!(game.ui.registries.permission, permission);
+        assert!(game.lan_guest_swaps.is_empty());
+        assert!(matches!(
+            game.server_resident_entity(12),
+            EntityLookup::Found {
+                value: Target::Guest(12),
+                ..
+            }
+        ));
+        assert!(matches!(
+            game.server_resident_entity(900),
+            EntityLookup::Found {
+                value: Target::Hook(900),
+                ..
+            }
+        ));
+        game.as_guest(12, |outer| {
+            outer
+                .as_guest(13, |inner| assert!(inner.as_guest(12, |_| ()).is_none()))
+                .unwrap();
+        })
+        .expect("same connection can enter after refusal");
+        assert!(game.lan_guest_swaps.is_empty());
+        assert!(matches!(
+            game.server_resident_entity(900),
+            EntityLookup::Found { .. }
+        ));
+    });
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn owned_hooks_keep_their_own_uuid_and_source_across_nested_actor_loans() {
     with_guests(|game| {
         let first = [101, 102, 103, 104];
@@ -294,9 +368,10 @@ fn actual_dragon_admits_exactly_eight_checked_parts_with_independent_uuids() {
         let parent = game
             .spawn_dragon_spawned([0.0; 3], crate::game::creatures::SpawnSite::Plain)
             .unwrap();
-        let uuids = game.dragon.as_ref().unwrap().part_uuids;
+        let uuids = game.dragon.as_ref().unwrap().residency.part_uuids;
         let parts: Vec<_> = game
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .admitted_metadata()
             .filter(|(_, at, _)| at.owner.kind == Kind::DragonPart)

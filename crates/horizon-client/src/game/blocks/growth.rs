@@ -408,6 +408,14 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources and an isolated process for native mods"]
     fn the_live_features_follow_the_world_being_opened() {
+        // Other feature fixtures can evict the process-wide last-built cache.
+        if super::super::native_entity_refs::tests::run_fresh_cases(
+            "game::growth::tests::the_live_features_follow_the_world_being_opened",
+            "HORIZON_LIVE_FEATURE_CACHE_CHILD",
+            &["reopen"],
+        ) {
+            return;
+        }
         use horizon_world::worldgen::overrides::WorldgenOverrides;
         super::super::native_entity_refs::tests::with_game(|game| {
             let mut with_tree = WorldgenOverrides::default();

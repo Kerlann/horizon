@@ -203,7 +203,10 @@ fn child_cargo_locks_prevent_clear_and_survive_idle_cleanup() {
             ));
             assert!(output.exists());
             held.unlock().unwrap();
-            if matches!(cache.access(), Access::UninstrumentedGame) {
+            if matches!(
+                cache.access(&home.0.join(cache.relative())).unwrap(),
+                Access::UninstrumentedGame
+            ) {
                 assert!(matches!(
                     storage.clear(cache),
                     Err(Error::UnprovenExclusion)
@@ -264,4 +267,35 @@ fn freed_bytes_exclude_the_retained_lock_skeleton() {
     assert!(after > 0);
     assert_eq!(freed, before.saturating_sub(after));
     assert!(freed < before);
+}
+
+/// Use checkout storage rather than /tmp (which may report zero directory blocks).
+#[cfg(unix)]
+#[test]
+fn allocated_total_includes_directory_metadata() {
+    use std::os::unix::fs::MetadataExt;
+    let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("target/storage-allocation-tests");
+    fs::create_dir_all(&root).unwrap();
+    let path = root.join(format!("directory-{}", std::process::id()));
+    fs::create_dir(&path).unwrap();
+    // Home removes the fixture on drop, including when an assertion unwinds.
+    let home = Home(path);
+    for index in 0..300 {
+        fs::write(home.0.join(format!("{index:04}-{}", "x".repeat(180))), []).unwrap();
+    }
+    let directory_bytes = fs::metadata(&home.0).unwrap().blocks() * 512;
+    let entries_bytes: u64 = fs::read_dir(&home.0)
+        .unwrap()
+        .map(|entry| {
+            fs::symlink_metadata(entry.unwrap().path())
+                .unwrap()
+                .blocks()
+                * 512
+        })
+        .sum();
+    assert_eq!(
+        allocated_bytes(&home.0).unwrap(),
+        directory_bytes + entries_bytes
+    );
+    eprintln!("independent directory allocation: {directory_bytes} bytes");
 }

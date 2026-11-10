@@ -1,4 +1,5 @@
 //! A key press while a world is open (`KeyboardHandler.keyPress` and the gameplay mappings).
+use super::inventory_input::drop_whole_stack;
 use super::*;
 
 impl Game<'_> {
@@ -76,6 +77,7 @@ impl Game<'_> {
         }
         match key {
             KeyCode::Escape => match self.screen {
+                Screen::EmoteWheel => self.close_emote_wheel(None),
                 Screen::Options => self.options_key(KeyCode::Escape, None)?,
                 Screen::Playing => {
                     if self.studio_replay.is_some() && self.captured {
@@ -184,6 +186,24 @@ impl Game<'_> {
                 self.release_use_for_keybind_screen();
             }
             KeyCode::KeyL if self.screen == Screen::Advancements => self.close_advancements(),
+            // key.emote (Horizon's): the emote wheel, a tap again closes it.
+            KeyCode::KeyB if self.screen == Screen::Playing && super::cosmetics::enabled() => {
+                self.open_emote_wheel();
+            }
+            KeyCode::KeyB if self.screen == Screen::EmoteWheel => self.close_emote_wheel(None),
+            KeyCode::Digit1
+            | KeyCode::Digit2
+            | KeyCode::Digit3
+            | KeyCode::Digit4
+            | KeyCode::Digit5
+            | KeyCode::Digit6
+            | KeyCode::Digit7
+            | KeyCode::Digit8
+                if self.screen == Screen::EmoteWheel =>
+            {
+                let slot = (key as u32).wrapping_sub(KeyCode::Digit1 as u32) as usize;
+                self.close_emote_wheel(Some(slot));
+            }
             // key.quickActions: only open if a datapack provides dialog actions.
             KeyCode::KeyG if self.screen == Screen::Playing => {
                 if self.has_quick_actions() {

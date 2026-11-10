@@ -180,7 +180,9 @@ impl Game<'_> {
             count: amount,
             ..resource.clone()
         };
-        let _ = tx;
+        if !self.transaction_holds(tx) {
+            return 0;
+        }
         if !self.places_simulated() || stack.count == 0 {
             return 0;
         }
@@ -310,7 +312,9 @@ impl Game<'_> {
             count: amount,
             ..resource.clone()
         };
-        let _ = tx;
+        if !self.transaction_holds(tx) {
+            return 0;
+        }
         if !self.places_simulated() {
             return 0;
         }

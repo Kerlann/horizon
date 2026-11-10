@@ -16,7 +16,7 @@ use std::{
 };
 pub const ENV: &str = "HORIZON_RUNTIME_HOLDER";
 pub const ENTRY: &str = "HORIZON_RUNTIME_ENTRY";
-pub const CAPABILITY: [u8; 26] = *b"horizon-private-holder-v1;";
+pub const CAPABILITY: [u8; 26] = *b"horizon-private-holder-v2;";
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Tree {
@@ -70,6 +70,34 @@ impl Snapshot {
         })
     }
 }
+fn acquire_snapshots(
+    registry: &std::sync::Arc<Registry>,
+    snapshots: &[Snapshot],
+) -> io::Result<Vec<Claim>> {
+    let claims = snapshots
+        .iter()
+        .map(|snapshot| {
+            registry
+                .lock(&snapshot.directory, LockMode::Shared)
+                .map_err(|error| match error {
+                    crate::runtime_leases::Error::Io(error)
+                        if error.kind() == io::ErrorKind::NotFound =>
+                    {
+                        io::Error::new(
+                            io::ErrorKind::NotFound,
+                            "start the launcher once to register this installation",
+                        )
+                    }
+                    error => lease_error(error),
+                })
+        })
+        .collect::<io::Result<Vec<_>>>()?;
+    for snapshot in snapshots {
+        snapshot.tree.recheck()?;
+    }
+    Ok(claims)
+}
+
 impl Tree {
     fn snapshot(&self) -> io::Result<Snapshot> {
         let snapshot = Snapshot::capture(&self.path, self.complete.is_some())?;
@@ -149,14 +177,7 @@ impl Entry {
             .iter()
             .map(Tree::snapshot)
             .collect::<io::Result<Vec<_>>>()?;
-        let claims = snapshots
-            .iter()
-            .map(|snapshot| {
-                registry
-                    .lock(&snapshot.directory, LockMode::Shared)
-                    .map_err(lease_error)
-            })
-            .collect::<io::Result<_>>()?;
+        let claims = acquire_snapshots(&registry, &snapshots)?;
         self.check_image(&std::env::current_exe()?)?;
         Ok(Acquired {
             _record: None,
@@ -240,6 +261,6 @@ mod entry_tests;
 mod record;
 pub use controller::{Prepared, Started, capable, launch};
 mod game_entry;
-pub use game_entry::{acquire_entry, bootstrap};
+pub use game_entry::{acquire, acquire_entry, lease_paths};
 #[cfg(test)]
 mod tests;

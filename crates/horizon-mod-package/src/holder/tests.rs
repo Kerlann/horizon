@@ -648,3 +648,76 @@ fn independently_retained_objects_and_claims_survive_native_exit_callbacks() {
     assert!(held.contains(&(Unix::dev(&directory), Unix::ino(&directory))));
     assert!(held.contains(&(Unix::dev(&complete), Unix::ino(&complete))));
 }
+
+#[test]
+fn direct_game_owns_install_resources_and_home_until_process_exit() {
+    let root = tempfile::tempdir().unwrap();
+    let data = root.path().canonicalize().unwrap();
+    let install = data.join("install");
+    let resources = data.join("resources");
+    let home = data.join("home");
+    for path in [&install, &resources, &home] {
+        fs::create_dir(path).unwrap();
+    }
+    fs::write(install.join(".installed"), b"").unwrap();
+    let registry = Registry::with_release(&data, Release::Close).unwrap();
+    let directories: Vec<_> = [&install, &resources, &home]
+        .into_iter()
+        .map(|p| open_directory(p).unwrap())
+        .collect();
+    for directory in &directories {
+        drop(registry.lock(directory, LockMode::Shared).unwrap());
+    }
+    let image = install.join(actor().file_name().unwrap());
+    assert!(
+        Command::new(actor())
+            .env("HOLDER_TEST_MODE", "copy-image")
+            .env("HOLDER_TEST_IMAGE", &image)
+            .status()
+            .unwrap()
+            .success()
+    );
+    let ready = data.join("ready");
+    let stop = data.join("stop");
+    let command = || {
+        let mut command = Command::new(&image);
+        command
+            .env("HOLDER_TEST_MODE", "direct")
+            .env("READY", &ready)
+            .env("STOP", &stop)
+            .env("HORIZON_HOME", &home)
+            .env_remove(ENTRY)
+            .env_remove(ENV)
+            .args(["--resources"])
+            .arg(&resources)
+            .arg("--game-dir")
+            .arg(&home)
+            .current_dir(&home);
+        command
+    };
+    let exclusive = registry.lock(&directories[0], LockMode::Exclusive).unwrap();
+    assert_eq!(command().status().unwrap().code(), Some(78));
+    assert!(!ready.exists());
+    drop(exclusive);
+    let mut child = command().spawn().unwrap();
+    let end = deadline();
+    while !ready.is_file() {
+        assert!(Instant::now() < end);
+        std::thread::yield_now();
+    }
+    for directory in &directories {
+        assert!(matches!(
+            registry.lock(directory, LockMode::Exclusive),
+            Err(crate::runtime_leases::Error::Busy)
+        ));
+    }
+    fs::write(&stop, b"").unwrap();
+    assert!(child.wait().unwrap().success());
+    for directory in &directories {
+        drop(registry.lock(directory, LockMode::Exclusive).unwrap());
+    }
+    fs::remove_file(&ready).unwrap();
+    fs::remove_file(install.join(".installed")).unwrap();
+    assert_eq!(command().status().unwrap().code(), Some(78));
+    assert!(!ready.exists());
+}

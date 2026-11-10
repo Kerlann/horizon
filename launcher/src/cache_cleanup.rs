@@ -16,14 +16,149 @@ const LOCKS: [&str; 3] = [".cargo-lock", ".package-cache", ".package-cache-mutat
 pub(crate) enum Access {
     BuildTools,
     UninstrumentedGame,
+    LeasedGame,
+    IncompleteGame,
 }
 impl Access {
+    /// Installed units trust only their own executable; shared units require all potentially
+    /// referencing installed builds. Unknown ownership remains fail-closed.
+    pub(crate) fn for_unit(path: &Path) -> Result<Self, Error> {
+        if !path.try_exists()? {
+            return Ok(Self::UninstrumentedGame);
+        }
+        let path = path.canonicalize()?;
+        let path = path.as_path();
+        let data = match crate::backend::data_dir().canonicalize() {
+            Ok(data) => data,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                return Ok(Self::UninstrumentedGame)
+            }
+            Err(error) => return Err(error.into()),
+        };
+        if !path.starts_with(&data) {
+            return Ok(Self::UninstrumentedGame);
+        }
+        let build = match crate::backend::build_dir().canonicalize() {
+            Ok(build) => build,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                crate::backend::build_dir()
+            }
+            Err(error) => return Err(error.into()),
+        }
+        .join("native");
+        if path
+            .strip_prefix(&build)
+            .is_ok_and(|relative| relative.starts_with("target"))
+        {
+            return Ok(Self::IncompleteGame);
+        }
+        let versions = data.join("versions");
+        let servers = build.join("server-builds");
+        for (root, binary) in [
+            (&versions, crate::backend::CLIENT.to_owned()),
+            (
+                &servers,
+                format!("horizon-engine{}", std::env::consts::EXE_SUFFIX),
+            ),
+        ] {
+            if let Ok(relative) = path.strip_prefix(root) {
+                if let Some(unit) = relative.components().next() {
+                    let image = root.join(unit).join(binary);
+                    return Ok(if capable_image(&image, &data)? {
+                        Self::LeasedGame
+                    } else {
+                        Self::UninstrumentedGame
+                    });
+                }
+            }
+        }
+        let mut images = Vec::new();
+        // Include incomplete/unused cached builds too: an old executable does not honor
+        // completion markers. These shared units conservatively consider all local builds.
+        for root in [
+            &versions,
+            &servers,
+            &build.join("prebuilt"),
+            &build.join("target"),
+        ] {
+            match std::fs::read_dir(root) {
+                Ok(entries) => {
+                    for entry in entries {
+                        let entry = entry?;
+                        let kind = entry.file_type()?;
+                        if kind.is_symlink() {
+                            return Ok(Self::UninstrumentedGame);
+                        }
+                        if !kind.is_dir() {
+                            continue;
+                        }
+                        let unit = entry.path();
+                        for binary in [
+                            crate::backend::CLIENT.to_owned(),
+                            format!("horizon-engine{}", std::env::consts::EXE_SUFFIX),
+                        ] {
+                            if unit.join(&binary).is_file() {
+                                images.push(unit.join(&binary));
+                            }
+                            // Cargo cross-target units contain target-triple/profile directories.
+                            if root.ends_with("target") {
+                                for profile in crate::native_cache::PROFILES {
+                                    if unit.join(profile).join(&binary).is_file() {
+                                        images.push(unit.join(profile).join(&binary));
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+                Err(error) => return Err(error.into()),
+            }
+        }
+        if path.is_dir() {
+            for binary in [
+                crate::backend::CLIENT.to_owned(),
+                format!("horizon-engine{}", std::env::consts::EXE_SUFFIX),
+            ] {
+                if path.join(&binary).is_file() {
+                    images.push(path.join(binary));
+                }
+            }
+        }
+        if images.is_empty() {
+            return Ok(Self::UninstrumentedGame);
+        }
+        for image in images {
+            if !capable_image(&image, &data)? {
+                return Ok(Self::UninstrumentedGame);
+            }
+        }
+        Ok(Self::LeasedGame)
+    }
+
     pub(crate) fn check(self) -> Result<(), Error> {
         match self {
-            Self::BuildTools => Ok(()),
+            Self::BuildTools | Self::LeasedGame => Ok(()),
+            Self::IncompleteGame => Err(Error::IncompleteUnit),
             Self::UninstrumentedGame => Err(Error::UnprovenExclusion),
         }
     }
+}
+
+fn capable_image(image: &Path, data: &Path) -> Result<bool, Error> {
+    let meta = match std::fs::symlink_metadata(image) {
+        Ok(meta) => meta,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(error) => return Err(error.into()),
+    };
+    if !meta.is_file() || crate::native_cache::linked(&meta) {
+        return Ok(false);
+    }
+    let image = image.canonicalize()?;
+    if !image.starts_with(data) {
+        return Ok(false);
+    }
+    horizon_mod_package::holder::capable(&image).map_err(Into::into)
 }
 
 /// Operational locks are neither disposable outputs nor user reports/jar-cache entries.
@@ -205,3 +340,41 @@ impl Plan {
 #[cfg(test)]
 #[path = "cache_cleanup/tests.rs"]
 mod tests;
+
+/// Game-visible units are detached whole while exclusively leased, never partially cleared.
+pub(crate) fn delete_game_unit(path: &Path) -> Result<(), Error> {
+    delete_game_unit_observed(path, || {})
+}
+
+pub(crate) fn delete_game_unit_observed(
+    path: &Path,
+    after_classification: impl FnOnce(),
+) -> Result<(), Error> {
+    use horizon_mod_package::{locks::Release, runtime_leases::Registry};
+    let registry = Registry::with_release(&crate::backend::data_dir(), Release::Close)?;
+    registry.remove_unit(path, |directory, is_directory| {
+        Access::for_unit(path)?.check()?;
+        after_classification();
+        if is_directory && contains_operational_locks(directory)? {
+            return Err(Error::IncompleteUnit);
+        }
+        Ok(())
+    })
+}
+
+fn contains_operational_locks(directory: &Dir) -> Result<bool, Error> {
+    for entry in directory.entries()? {
+        let name = PathBuf::from(entry?.file_name());
+        if reserved(&name) {
+            return Ok(true);
+        }
+        let meta = directory.symlink_metadata(&name)?;
+        if meta.file_type().is_symlink() {
+            return Err(Error::Unsafe(name));
+        }
+        if meta.is_dir() && contains_operational_locks(&directory.open_dir_nofollow(&name)?)? {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}

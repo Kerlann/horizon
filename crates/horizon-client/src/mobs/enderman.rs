@@ -342,6 +342,7 @@ impl Goal for LookForPlayer {
         };
         self.pending = p.alive
             && !p.creative
+            && !p.spectator
             && m.distance_sqr(p.position) <= m.attrs.follow_range.powi(2)
             && stared_at(m, cx.w);
         self.pending
@@ -369,6 +370,7 @@ impl Goal for LookForPlayer {
         }
         p.alive
             && !p.creative
+            && !p.spectator
             && m.ai.target == Some(Who::Player)
             && m.distance_sqr(p.position) <= m.attrs.follow_range.powi(2)
     }
@@ -752,6 +754,56 @@ mod tests {
             !out.iter()
                 .any(|d| matches!(d, drops::Drop::CarriedBlock(_))),
             "{out:?}"
+        );
+    }
+
+    /// `EndermanLookForPlayerGoal` finds its player with
+    /// `TargetingConditions.forCombat()`, which never picks a spectator: a
+    /// spectator staring at an enderman does not start the anger goal.
+    #[test]
+    fn a_spectator_staring_does_not_anger_an_enderman() {
+        use crate::mobs::world::{test_player, with_test_world};
+        let mut outcomes = Vec::new();
+        if !with_test_world(&[], |w, _| {
+            for spectator in [false, true] {
+                let mut world = w.clone();
+                let mut m = enderman();
+                m.position = Vec3::new(0.5, 64.0, 0.5);
+                let mut p = test_player(Vec3::new(2.5, 64.0, 0.5));
+                p.spectator = spectator;
+                let dx = m.position.x - p.position.x;
+                let dy = m.eye_y() - p.eye[1];
+                let dz = m.position.z - p.position.z;
+                let len = (dx * dx + dy * dy + dz * dz).sqrt();
+                p.look = [dx / len, dy / len, dz / len];
+                world.player = Some(p);
+                m.ai.goals.add(
+                    1,
+                    LookForPlayer {
+                        pending: false,
+                        aggro: 0,
+                        teleport: 0,
+                    },
+                );
+                let mut lr = crate::health::TestLevel::new(0);
+                let mut events = Vec::new();
+                let mut cx = Cx {
+                    w: &world,
+                    level: &mut lr.level(),
+                    events: &mut events,
+                };
+                let mut goals = std::mem::take(&mut m.ai.goals);
+                goals.tick(&mut m, &mut cx);
+                outcomes.push(goals.is_running("LookForPlayer"));
+                m.ai.goals = goals;
+            }
+        }) {
+            return;
+        }
+        assert_eq!(
+            outcomes,
+            vec![true, false],
+            "a survival player's stare angers it; a spectator's does not"
         );
     }
 }

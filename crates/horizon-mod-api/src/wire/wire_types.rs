@@ -85,12 +85,15 @@ mod resource_wire_tests {
     #[test]
     fn wire_tokens_and_package_inventory() {
         let mut out = Writer::new();
-        out.put(&crate::Transaction(()));
-        out.put(&crate::TransactionSeal(()));
-        assert!(out.bytes().is_empty());
+        out.put(&crate::Transaction(7));
+        assert_eq!(
+            out.bytes().len(),
+            8,
+            "a transaction crosses as its frame token"
+        );
         let mut input = Reader::new(out.bytes());
-        let _: crate::Transaction = input.take().unwrap();
-        let _: crate::TransactionSeal = input.take().unwrap();
+        let tx: crate::Transaction = input.take().unwrap();
+        assert_eq!(tx, crate::Transaction(7));
         crate::world::phase::with_test_packages(&["test_mod"], || {
             let mods: crate::LoadedMods = input.take().unwrap();
             let context: crate::RegistrationContext = input.take().unwrap();
@@ -105,6 +108,7 @@ mod resource_wire_tests {
             vec!["test".into()],
             vec!["other".into()],
         );
+        let mut out = Writer::new();
         out.put(&package);
         let decoded: crate::PackageInfo = Reader::new(out.bytes()).take().unwrap();
         assert_eq!(decoded.id(), "test");

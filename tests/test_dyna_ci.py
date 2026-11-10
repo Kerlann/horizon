@@ -72,6 +72,11 @@ class DynaRoutingTests(unittest.TestCase):
         self.assertIn("runs-on: ubuntu-latest", blocks["pool-watch"])
         self.assertIn("permissions:\n  contents: read", workflow)
 
+    def test_telemetry_ingest_checks_require_manual_dispatch(self):
+        from test_ci_runners import triggers
+        workflow = (ROOT / ".github/workflows/telemetry-server.yml").read_text()
+        self.assertEqual(triggers(workflow), {"workflow_dispatch"})
+
     def test_schedule_only_dispatches_and_parity_only_runs_on_dispatch(self):
         from test_ci_runners import jobs, triggers
         workflow = (ROOT / ".github/workflows/dyna-ci.yml").read_text()

@@ -882,8 +882,8 @@ mod tests {
             );
             assert_eq!(saved.get("view_range"), Some(&Tag::Float(2.5f32.to_bits())));
             assert_eq!(
-                saved.get("text").and_then(|t| t.get("text")),
-                Some(&Tag::String("saved".into()))
+                comp_text(&tag_to_json(saved.get("text").unwrap())).plain(),
+                "saved"
             );
         });
     }

@@ -181,18 +181,62 @@ def template_violations(source):
     return result
 
 
+def runtime_reexport_names(source):
+    """Follow public use trees, including groups and aliases, into the runtime."""
+    ts = [value for value, _ in code_tokens(source)]
+    names = set()
+
+    def walk(parts, prefix=()):
+        i = 0
+        while i < len(parts):
+            path = list(prefix)
+            grouped = False
+            while i < len(parts) and parts[i] != ',':
+                value = parts[i]
+                i += 1
+                if value == '{':
+                    start, depth = i, 1
+                    while i < len(parts) and depth:
+                        depth += (parts[i] == '{') - (parts[i] == '}')
+                        i += 1
+                    walk(parts[start:i - 1], tuple(path))
+                    grouped = True
+                elif value == 'as':
+                    i += 1  # The exported alias does not rename its definition.
+                elif value != ':':
+                    path.append(value)
+            if not grouped and path and path[0] == 'horizon_mod_runtime':
+                names.add(path[-1])
+            i += 1
+
+    for i in range(len(ts) - 1):
+        if ts[i:i + 2] == ['pub', 'use']:
+            end = i + 2
+            while end < len(ts) and ts[end] != ';':
+                end += 1
+            walk(ts[i + 2:end])
+    return names
+
+
 def repository_violations(root=ROOT):
     api = root / 'crates/horizon-mod-api/src'
     sources = {}
     for path in sorted(api.rglob('*.rs')):
         if path.name == '__private.rs' or path.name.endswith('_tests.rs'):
             continue
-        # Export fragments contain only use/mod declarations; their private
-        # scopes have no public type definitions to check.
         sources[str(path.relative_to(root))] = path.read_text()
     result = []
     for path, source in sources.items():
         result.extend(f'{path}:{line}: {name}' for line, name in violations(source))
+    # Runtime-owned types are public API too; policy lives on their definition,
+    # not on a use alias or on an unrelated hand-written impl with the same name.
+    runtime_names = set().union(*(runtime_reexport_names(s) for s in sources.values()))
+    if '*' in runtime_names:
+        result.append('runtime re-export: wildcard requires explicit named exports for Wire policy')
+    runtime = root / 'crates/horizon-mod-runtime/src'
+    for path in sorted(runtime.rglob('*.rs')):
+        result.extend(f'{path.relative_to(root)}:{line}: {name}'
+                      for line, name in violations(path.read_text()) if name in runtime_names)
     gen = root / 'crates/horizon-mod-api-gen/src'
     for relative in API_TEMPLATE_FILES:
         path = gen / relative

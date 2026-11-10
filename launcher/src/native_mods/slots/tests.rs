@@ -23,6 +23,29 @@ fn fixture() -> (Manifest, Catalog) {
 }
 
 #[test]
+fn api_head_without_prebuilt_slot_is_refused() {
+    let (mut manifest, mut catalog) = fixture();
+    catalog.points.clear();
+    manifest.inject.push(Inject {
+        id: "missing".into(),
+        at: "game::run".into(),
+        kind: Kind::Head,
+        with: "listen".into(),
+        access: Access::Api,
+        priority: 0,
+        hash: "signature".into(),
+        call: None,
+        nth: None,
+        ctx: None,
+    });
+    let error = check(&catalog, &manifest).unwrap_err().to_string();
+    assert!(error.contains("example:missing"));
+    assert!(error.contains("game::run"));
+    assert!(error.contains("access = \"api\" never rebuilds the game"));
+    assert!(error.contains("request a hook"));
+}
+
+#[test]
 fn every_native_kind_and_access_registers_or_refuses_by_name() {
     for kind in [
         Kind::Head,
@@ -64,12 +87,14 @@ fn every_native_kind_and_access_registers_or_refuses_by_name() {
                 ctx: call.then(|| "context".into()),
             });
             let pending = match (kind, access) {
+                (Kind::ModifyCallArg, Access::Api) => Some(NoSlotReason::ApiSitesUnsupported),
                 (Kind::ModifyCallArg, _) => Some(NoSlotReason::SourcePending),
                 (Kind::ModifyLocal, _) => Some(NoSlotReason::LocalSlotsPending),
                 (Kind::Field, _) => Some(NoSlotReason::ExtensionSlotsPending),
+                (Kind::Expression, Access::Api) => Some(NoSlotReason::KindHasNoSlot),
                 (Kind::Expression, _) => Some(NoSlotReason::SourcePending),
                 (Kind::Replace, Access::Internals) => Some(NoSlotReason::ReplacePending),
-                (_, Access::Api) if call => Some(NoSlotReason::ApiSitesPending),
+                (_, Access::Api) if call => Some(NoSlotReason::ApiSitesUnsupported),
                 _ => None,
             };
             if let Some(expected) = pending {

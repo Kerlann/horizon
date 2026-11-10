@@ -108,7 +108,8 @@ impl Game<'_> {
         loop {
             let (saved, profile) = self.relation_identity_candidates_at(level, root);
             let local = self
-                .local_player_residency
+                .resident_entities
+                .local_player
                 .identity()
                 .filter(|identity| identity.details.known_uuid == Some(root))
                 .map(|identity| (identity.id.get(), Source::LocalPlayer));

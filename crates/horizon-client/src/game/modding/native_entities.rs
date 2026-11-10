@@ -200,8 +200,9 @@ impl Game<'_> {
                 .get(&id)
                 .and_then(|uuid| self.entity_attachments.get(uuid))
                 .is_some_and(|map| map.has_index_entries())
+                && let Err(error) = self.bind_resident_entity_attachments(id)
             {
-                let _ = self.bind_resident_entity_attachments(id);
+                log::warn!("constructor attachment binding failed for entity {id}: {error:?}");
             }
             self.native_entity_join_level(
                 dimension,

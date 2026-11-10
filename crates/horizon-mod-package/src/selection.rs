@@ -37,6 +37,42 @@ pub fn content_packages<'a>(
     })
 }
 
+/// Retains invalid package diagnostics and manifest identities for loader refusals.
+#[cfg(not(target_arch = "wasm32"))]
+pub fn package_errors(paths: impl IntoIterator<Item = PathBuf>) -> Vec<(String, String)> {
+    paths
+        .into_iter()
+        .filter_map(|path| {
+            let error = Package::read(&path).err()?;
+            use std::io::Read;
+            let limit = crate::manifest::MAX_MANIFEST + 1;
+            let text = if path.is_dir() {
+                let mut text = String::new();
+                std::fs::File::open(path.join(crate::manifest::MANIFEST))
+                    .ok()?
+                    .take(limit)
+                    .read_to_string(&mut text)
+                    .ok()?;
+                text
+            } else {
+                let mut zip = zip::ZipArchive::new(std::fs::File::open(&path).ok()?).ok()?;
+                let mut text = String::new();
+                zip.by_name(crate::manifest::MANIFEST)
+                    .ok()?
+                    .take(limit)
+                    .read_to_string(&mut text)
+                    .ok()?;
+                text
+            };
+            if text.len() as u64 > crate::manifest::MAX_MANIFEST {
+                return None;
+            }
+            let manifest = crate::Manifest::parse(&text).ok()?;
+            Some((manifest.id, error))
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

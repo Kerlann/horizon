@@ -271,12 +271,26 @@ fn children(
 
 /// The files of `horizon_client::game`; see [`module_files`] for `every_build`.
 pub(crate) fn game_files(src: &Path, every_build: bool) -> Result<Vec<GameFile>, String> {
-    module_files(
+    let files = module_files(
         "horizon_client::game".to_owned(),
         src.join("game.rs"),
         src.join("game"),
         every_build,
-    )
+    )?;
+    #[cfg(feature = "listener-fixture")]
+    let files = {
+        let mut files = files;
+        let path = src.join("../../horizon-mod-wasm/tests/fixture/src/points.rs");
+        if path.is_file() {
+            files.push(GameFile {
+                module: "listener_fixture".into(),
+                path,
+                cfg: Vec::new(),
+            });
+        }
+        files
+    };
+    Ok(files)
 }
 
 /// The crate `krate`'s package folder and library root, from its manifest.

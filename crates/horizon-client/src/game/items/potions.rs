@@ -2,6 +2,8 @@
 //! `Consumable`), throwing splash/lingering potions (`ThrownSplashPotion`),
 //! filling glass bottles (`BottleItem`), the per-tick effect application,
 //! effect attribute modifiers and the HUD effect icons (`Hud.extractEffects`).
+#[path = "potions/cloud_particle.rs"]
+mod cloud_particle;
 use super::{
     Game, Screen,
     dragon::{Breath, FightPlayer, FightWho},
@@ -185,6 +187,7 @@ pub(super) fn potion_cloud_from_nbt(tag: &Tag) -> Option<(Vec3, Breath)> {
                 ambient,
                 radius_per_tick: real("RadiusPerTick", 0.0),
                 color,
+                custom_particle: tag.get("custom_particle").cloned(),
                 victims: Vec::new(),
                 source: Text::translate("entity.minecraft.area_effect_cloud", &[]),
                 owner: None,
@@ -243,6 +246,9 @@ pub(super) fn potion_cloud_to_nbt(c: &Breath, uuid: [i32; 4], raw: Option<&Tag>)
         "RadiusPerTick".into(),
         Tag::Float(potion.radius_per_tick.to_bits()),
     );
+    if let Some(particle) = &potion.custom_particle {
+        map.insert("custom_particle".into(), particle.clone());
+    }
     map.insert("WaitTime".into(), Tag::Int(potion.settings.wait_time));
     map.insert(
         "ReapplicationDelay".into(),
@@ -289,6 +295,8 @@ pub(super) struct PotionCloud {
     pub(super) radius_per_tick: f32,
     /// The potion's colour (`PotionContents.getColor`).
     color: u32,
+    /// `AreaEffectCloud.customParticle`: the `custom_particle` compound as saved.
+    custom_particle: Option<Tag>,
     /// Each victim and the tick it can be affected again.
     victims: Vec<(Victim, i32)>,
     /// Who its instant damage names (`indirectMagic(cloud, owner)`): the
@@ -301,10 +309,16 @@ pub(super) struct PotionCloud {
     guest: Option<u32>,
 }
 impl PotionCloud {
-    /// `AreaEffectCloud.updateParticle`: an entity effect in the potion's colour.
+    /// `AreaEffectCloud.updateParticle`: the custom particle when one is set,
+    /// else an entity effect in the potion's colour.
     pub(super) fn particle(&self) -> ParticleOptions {
-        let c = |shift: u32| (self.color >> shift & 255) as f32 / 255.0;
-        ParticleOptions::colored(ParticleType::EntityEffect, [c(16), c(8), c(0), 1.0])
+        self.custom_particle
+            .as_ref()
+            .and_then(cloud_particle::custom_particle_options)
+            .unwrap_or_else(|| {
+                let c = |shift: u32| (self.color >> shift & 255) as f32 / 255.0;
+                ParticleOptions::colored(ParticleType::EntityEffect, [c(16), c(8), c(0), 1.0])
+            })
     }
 }
 /// `Projectile.getOwner` of a thrown potion: what its `indirectMagic` damage
@@ -2050,6 +2064,7 @@ impl Game<'_> {
                 ambient,
                 radius_per_tick: -2.5 / 300.0,
                 color,
+                custom_particle: None,
                 victims: Vec::new(),
                 source: Text::translate("entity.minecraft.area_effect_cloud", &[]),
                 owner: None,
@@ -2463,6 +2478,7 @@ impl Game<'_> {
                         ambient: Vec::new(),
                         radius_per_tick: -3.0 / 600.0,
                         color,
+                        custom_particle: None,
                         victims: Vec::new(),
                         source: owner.name.clone().unwrap_or_else(|| {
                             Text::translate("entity.minecraft.area_effect_cloud", &[])
@@ -2935,15 +2951,24 @@ mod tests {
             "test-potions",
             Box::new(TestMod),
         )]));
-        static ONCE: std::sync::Once = std::sync::Once::new();
-        ONCE.call_once(|| {
-            brewing::register_mod_effects([("test:effect".into(), 0, brewing::Category::Neutral)]);
-        });
+        assert!(brewing::register_mod_effects([(
+            "test:effect".into(),
+            0,
+            brewing::Category::Neutral,
+        )]));
     }
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn mod_tick_heals_and_feeds_player() {
+        // Mod effects are frozen process-wide: another fixture may have registered first.
+        if super::super::native_entity_refs::tests::run_fresh_cases(
+            "game::potions::tests::mod_tick_heals_and_feeds_player",
+            "HORIZON_POTION_EFFECT_CHILD",
+            &["effect"],
+        ) {
+            return;
+        }
         effect_test_mod();
         super::super::native_entity_refs::tests::with_game(|game| {
             game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
@@ -2965,6 +2990,14 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn mod_tick_magic_respects_player_hit_frames() {
+        // Mod effects are frozen process-wide: another fixture may have registered first.
+        if super::super::native_entity_refs::tests::run_fresh_cases(
+            "game::potions::tests::mod_tick_magic_respects_player_hit_frames",
+            "HORIZON_POTION_EFFECT_CHILD",
+            &["effect"],
+        ) {
+            return;
+        }
         effect_test_mod();
         super::super::native_entity_refs::tests::with_game(|game| {
             game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
@@ -2980,6 +3013,14 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn mod_tick_kills_mob_through_death_and_drops() {
+        // Mod effects are frozen process-wide: another fixture may have registered first.
+        if super::super::native_entity_refs::tests::run_fresh_cases(
+            "game::potions::tests::mod_tick_kills_mob_through_death_and_drops",
+            "HORIZON_POTION_EFFECT_CHILD",
+            &["effect"],
+        ) {
+            return;
+        }
         effect_test_mod();
         super::super::native_entity_refs::tests::with_game(|game| {
             // Death drops read the server's loot, which a world open loads.
@@ -3018,6 +3059,14 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn mod_tick_sees_prior_regeneration() {
+        // Mod effects are frozen process-wide: another fixture may have registered first.
+        if super::super::native_entity_refs::tests::run_fresh_cases(
+            "game::potions::tests::mod_tick_sees_prior_regeneration",
+            "HORIZON_POTION_EFFECT_CHILD",
+            &["effect"],
+        ) {
+            return;
+        }
         effect_test_mod();
         super::super::native_entity_refs::tests::with_game(|game| {
             game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
@@ -3104,6 +3153,7 @@ mod tests {
                 ambient: vec!["poison"],
                 radius_per_tick: -0.008_750,
                 color: 0x0033_FF44,
+                custom_particle: None,
                 victims: Vec::new(),
                 source: Text::translate("entity.minecraft.area_effect_cloud", &[]),
                 owner: None,
@@ -3342,6 +3392,7 @@ mod tests {
                 ambient: Vec::new(),
                 radius_per_tick: -3.0 / 600.0,
                 color: 0,
+                custom_particle: None,
                 victims: Vec::new(),
                 source: Text::empty(),
                 owner: None,

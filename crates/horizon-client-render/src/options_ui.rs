@@ -8,6 +8,7 @@ pub use crate::settings::Opt;
 
 use crate::{
     gamepad::{self, GlyphStyle},
+    hdr_calibration::Picture,
     hud::{HudAtlas, HudBatch, rgba},
     keybinds::{self, CATEGORIES, KeyBinds, MAPPINGS},
     lang::{self, LanguageInfo},
@@ -19,6 +20,14 @@ use crate::{
 
 fn tr(key: &str) -> Text {
     Text::translate(key, &[])
+}
+
+/// False only in a game built without the `horizon-extras` feature (docs/forking.md), which says
+/// so once at startup: the Options screen then has vanilla's Telemetry Data slot instead of
+/// Horizon Settings and Mods, and Credits & Attribution names the official build.
+pub static HORIZON_EXTRAS: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+fn horizon_extras() -> bool {
+    HORIZON_EXTRAS.load(std::sync::atomic::Ordering::Relaxed)
 }
 fn generic(caption: &str, value: Text) -> Text {
     Text::translate("options.generic_value", &[tr(caption), value])
@@ -1840,8 +1849,8 @@ pub struct OptionsUi {
     pub split_profiles: crate::split_profiles::SplitProfiles,
     /// HDR calibration while its page is open.
     pub calibration: Option<crate::hdr_calibration::Calibration>,
-    /// Whether the window was fullscreen before calibration made it so (the game keeps it).
-    pub calibration_fullscreen: Option<bool>,
+    /// The window as calibration found it before making it fullscreen (the game keeps it).
+    pub calibration_window: Option<crate::hdr_calibration::WindowState>,
     pub split_setup: crate::split_ui::SplitUi,
     pub studio: crate::studio_ui::StudioUi,
     /// The AI Agent page's status lines (set by the game while it shows).
@@ -1923,7 +1932,7 @@ impl Default for OptionsUi {
             pack_configs: Default::default(),
             split_profiles: Default::default(),
             calibration: None,
-            calibration_fullscreen: None,
+            calibration_window: None,
             split_setup: Default::default(),
             studio: Default::default(),
             agent_status: Vec::new(),
@@ -3241,6 +3250,22 @@ impl OptionsUi {
                     ("horizon.pages.open.mods", Some(Page::Mods)),
                     ("options.credits_and_attribution", Some(Page::Credits)),
                 ];
+                // horizon-extras: without it, vanilla's last row instead of Horizon Settings and
+                // Mods: Telemetry Data (greyed: nothing is sent) and Credits & Attribution.
+                let plain;
+                let entries: &[_] = if horizon_extras() {
+                    &entries
+                } else {
+                    plain = [
+                        &entries[..entries.len() - 3],
+                        &[
+                            ("options.telemetry", None),
+                            ("options.credits_and_attribution", Some(Page::Credits)),
+                        ],
+                    ]
+                    .concat();
+                    &plain
+                };
                 let rows = entries.len().div_ceil(2) as f32;
                 let gy = (61.0 + 30.0f32).min(h - 33.0 - rows * 24.0);
                 for (i, (key, page)) in entries.iter().enumerate() {
@@ -3289,6 +3314,22 @@ impl OptionsUi {
                 {
                     let y = y + 28.0 * (i + 1) as f32;
                     out.push(inactive(button(x, y, 210.0, tr(key), Act::None)));
+                }
+                // horizon-extras: a build without them says where the official one is.
+                if !horizon_extras() {
+                    out.push(Widget {
+                        x: 0.0,
+                        y: (y + 92.0).min(h - 42.0),
+                        w,
+                        h: 9.0,
+                        kind: WKind::Text {
+                            text: tr("horizon.plain.official"),
+                            color: 0xFFA0A0A0,
+                            centered: true,
+                        },
+                        list: false,
+                        row: 0,
+                    });
                 }
                 out.push(done(h - 27.0));
                 top = 0.0;
@@ -4242,7 +4283,7 @@ impl OptionsUi {
             if right {
                 return Vec::new();
             }
-            let outcome = c.click((x, y), size, drag);
+            let outcome = c.click(&atlas.font, (x, y), size, drag);
             return self.calibration_outcome(s, outcome);
         }
         if self.shell().is_some() {
@@ -4915,13 +4956,12 @@ impl OptionsUi {
             }
         }
     }
-    /// HDR calibration's test picture, while its page is open: the step, its nits and
-    /// where the controls start (a share of the height `h`).
-    pub fn calibration_picture(&self, h: f32) -> Option<(crate::hdr_calibration::Step, f32, f32)> {
+    /// HDR calibration's test picture, while its page is open, in a GUI of `size`.
+    pub fn calibration_picture(&self, atlas: &HudAtlas, size: (f32, f32)) -> Option<Picture> {
         self.calibration
             .as_ref()
             .filter(|_| self.page() == Page::HdrCalibration)
-            .map(|c| c.picture(h))
+            .map(|c| c.picture(&atlas.font, size))
     }
     pub fn back(&mut self, s: &mut Settings) -> Vec<Event> {
         let mut events = Vec::new();

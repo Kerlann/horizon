@@ -367,7 +367,8 @@ impl Game<'_> {
             return None;
         }
         let (at, state) = self
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_admitted_location(entity.id(), |at| self.locate_server_resident_owner(at))?;
         if matches!(

@@ -138,7 +138,8 @@ pass. The refused store writes no value and creates no registration.
 
 `AttachmentError::UnsupportedHolder(family)` means the physical family cannot
 own attachments; retrying cannot help. The name is bounded static text, not an
-engine type. Family names are stable lowercase identifiers: `mob`, `item`,
+engine type. Wire decoding accepts at most 256 UTF-8 bytes for that text and
+rejects longer names on both native and wasm guest paths. Family names are stable lowercase identifiers: `mob`, `item`,
 `orb`, `projectile`, `armorstand`, `itemframe`, `painting`, `boat`,
 `minecart`, `other`, `fangs`, `crystal`, `dragon`, `tnt`, `falling`,
 `rocket`, `trident`, `spawner`, `cloud`, `cushion`, `knot`, `player`, `hook`,

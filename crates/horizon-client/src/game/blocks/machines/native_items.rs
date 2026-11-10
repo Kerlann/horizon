@@ -64,7 +64,9 @@ impl Game<'_> {
         limit: u32,
         tx: &Transaction,
     ) -> bool {
-        let _ = tx;
+        if !self.transaction_holds(tx) {
+            return false;
+        }
         if !(1..=99).contains(&limit) {
             return false;
         }
@@ -114,7 +116,9 @@ impl Game<'_> {
             count: amount,
             ..resource.clone()
         };
-        let _ = tx;
+        if !self.transaction_holds(tx) {
+            return Some(stack);
+        }
         let Some(view) = self.capability_view(at) else {
             return Some(stack);
         };
@@ -165,7 +169,9 @@ impl Game<'_> {
         max: u32,
         tx: &Transaction,
     ) -> Option<ItemStack> {
-        let _ = tx;
+        if !self.transaction_holds(tx) {
+            return None;
+        }
         let view = self.capability_view(at)?;
         let slot = *view.slots_for_face(at.side).get(slot)?;
         let c = self.containers();

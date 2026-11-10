@@ -416,6 +416,53 @@ fn screenshots_are_the_gallery_from_the_registry_only() {
 }
 
 #[test]
+fn installs_combined_native_content_as_one_hmod() {
+    use std::io::Write;
+    let home = scratch("native-content-install");
+    let archive = home.join("source.hmod");
+    let a = "a".repeat(40);
+    let b = "b".repeat(40);
+    let mut zip = zip::ZipWriter::new(fs::File::create(&archive).unwrap());
+    for (name, text) in [
+        ("Cargo.toml", "[package]\nname='coords_hud'\nversion='0.1.0'\n".into()),
+        ("src/lib.rs", "fn hook() {}".into()),
+        ("horizon-mod.toml", format!("id='coords_hud'\nname='Sound proof'\nversion='0.1.0'\napi='0.2'\ncapabilities=['registries']\n[native]\ngame='{GAME}'\nhorizon='{a}'\nmixins='{b}'\n")),
+        ("assets/coords_hud/sounds.json", "{}".into()),
+    ] {
+        zip.start_file(name, zip::write::SimpleFileOptions::default()).unwrap();
+        zip.write_all(text.as_bytes()).unwrap();
+    }
+    zip.finish().unwrap();
+    let bytes = fs::read(&archive).unwrap();
+    let mut index = sample();
+    let p = &mut index.projects[0];
+    p.kind = index::Kind::NativeMod;
+    p.key = None;
+    let v = &mut p.versions[0];
+    v.api = format!("native-1/{a}/{b}");
+    v.version = "0.1.0".into();
+    v.game = GAME.into();
+    v.side = None;
+    v.requires.clear();
+    v.capabilities.clear();
+    v.file.name = "coords_hud.hmod".into();
+    v.file.url = format!("file://{}", archive.display());
+    v.file.size = bytes.len() as u64;
+    v.file.sha256 = index::sha256(&bytes);
+    v.file.signature = None;
+    let p = &index.projects[0];
+    let entry = install_version(&index, true, p, &p.versions[0], &home, &|_, _| {}).unwrap();
+    assert_eq!(entry.file, "horizon-native-mods/coords_hud.hmod");
+    assert_eq!(mod_id(&entry), Some("coords_hud"));
+    let bundle = index::native::Bundle::read(&home.join(&entry.file)).unwrap();
+    assert_eq!(bundle.files["assets/coords_hud/sounds.json"], b"{}");
+    assert_eq!(crate::native_status::enabled(&home).len(), 1);
+    installed::remove(&home, "coords_hud").unwrap();
+    assert!(!home.join(entry.file).exists());
+    fs::remove_dir_all(home).unwrap();
+}
+
+#[test]
 fn installs_checked_turns_on_and_removes() {
     let index = sample();
     let home = scratch("install");

@@ -237,6 +237,7 @@ fn load_player_type(models: &horizon_client::mobs::EntityModelDocument) -> Optio
             step_sound: None,
             food: Arc::from([]),
             tempt: Arc::from([]),
+            passenger_attachments: Vec::new(),
         })
     })
 }
@@ -337,7 +338,9 @@ impl Game<'_> {
             }
         };
         let mut view = self.view;
+        let pull = self.emote_camera_pull(partial);
         let kind = self.camera_type;
+
         let context = CollisionContext::for_entity(
             CollisionEntity {
                 identity: EntityIdentity(0),
@@ -365,7 +368,7 @@ impl Game<'_> {
             partial,
             kind,
             |distance| {
-                let mut distance = distance;
+                let mut distance = distance * pull;
                 self.native_camera_distance(partial, kind.is_mirrored(), &entity, &mut distance);
                 distance
             },
@@ -841,6 +844,19 @@ impl Game<'_> {
                 packed,
                 out,
             );
+            if super::cosmetics::enabled() {
+                let base = horizon_client::mobs::render::base_transform(m, alpha as f32, camera);
+                self.cosmetics_geometry(
+                    m,
+                    true,
+                    base,
+                    Some(camera),
+                    alpha as f32,
+                    packed,
+                    false,
+                    out,
+                );
+            }
             self.player_elytra_geometry(m, chest, camera, alpha as f32, packed, out);
             self.spin_attack_geometry(m, camera, alpha as f32, packed, out);
             self.shoulder_parrots_geometry(m, camera, alpha as f32, packed, out);
@@ -954,6 +970,10 @@ impl Game<'_> {
             240 | 240 << 8,
             &mut verts,
         );
+        if super::cosmetics::enabled() {
+            let base = horizon_client::mobs::render::base_transform(&m, 1.0, camera);
+            self.cosmetics_geometry(&m, true, base, None, 1.0, 240 | 240 << 8, false, &mut verts);
+        }
         // `WingsLayer` draws through `RenderTypes.armorCutoutNoCull`: the
         // wings' faces show from both sides (the elytra texture is empty on
         // the face that looks at the body).

@@ -88,7 +88,8 @@ fn redirect_to_another_guest_switches_view_and_tags_subsequent_events() {
             let other = game.mobs.extract(other_join).unwrap();
             for id in [actor.id, other.id] {
                 assert!(matches!(
-                    game.entity_residency
+                    game.resident_entities
+                        .table
                         .borrow_mut()
                         .server_entity_lookup(id, |at| game.locate_server_resident_owner(at)),
                     horizon_client::join_seq::residency::table::EntityLookup::Taken

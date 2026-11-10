@@ -13,8 +13,8 @@ The opening, then Play ([clip](docs/opening.webm)):
 
 ## What it does
 
-- **Versions**: lists game builds published by arismoko/horizon, when available,
-  installs the build for this platform into its own
+- **Versions**: lists the published builds of horizon-rust/horizon (the current Nightly, the last
+  week's, then the releases from before), installs the build for this platform into its own
   folder, and removes it again. **Import a game build…** takes a `horizon-client` you have (one
   built on your fork's Actions, or the zip holding it) and installs it as `imported-<date>-<sha>`:
   a copy of the selected release or Nightly's folder, game files included, with that program as the
@@ -235,7 +235,7 @@ The opening, then Play ([clip](docs/opening.webm)):
   keeping every field the launcher doesn't show and the servers joined with Direct Connection. The
   same from the command line: `horizon-launcher multiplayer [list|add|remove] [--instance <name>]`
   and `horizon-launcher play --server <address or name>`.
-- **Patch notes**: each release's notes, newest first, with no ads. Quiet "Roadmap", "Documentation" and "Website" links sit in the sidebar footer.
+- **Patch notes**: each release's notes, newest first, with a link to GitHub Sponsors. Quiet "Sponsor", "Discord" and "Website" links sit in the sidebar footer.
 
 Data lives in the platform's data directory (`~/.local/share/horizon-launcher` on Linux,
 `~/Library/Application Support/horizon-launcher` on macOS, `%APPDATA%\horizon-launcher` on
@@ -280,8 +280,8 @@ page `servers.json` (the list), `servers/<name>/` (the servers created there) an
   Without one, `HTTPS_PROXY` and `HTTP_PROXY` are used when the launcher is started with them, and
   `NO_PROXY` names the hosts to reach directly, a modpack import's jars included. A server on this
   computer never goes through it.
-- **Links**: the website, the roadmap and the documentation come from `launcher/links.json` on this fork's main
-  (`{"website": "...", "roadmap": "...", "docs": "..."}`), so they change without a launcher release. Offline,
+- **Links**: the Discord invite, the Sponsors page and the website come from `launcher/links.json` on main
+  (`{"discord": "...", "sponsor": "...", "website": "..."}`), so they change without a launcher release. Offline,
   the launcher uses the same values built in; an empty address hides its button.
 
 Long pages, dialogs, the server console and data previews have a visible scrollbar when
@@ -391,7 +391,7 @@ and don't set `%ERRORLEVEL%` / `$LASTEXITCODE`. Scripts that need the exit code 
     horizon-launcher play [--version <tag>] [--instance <name>] [--arg <ARG>]...   start the client; --arg passes an extra argument through (repeatable)
     horizon-launcher server [--dir <dir>] [--version <tag>] [--accept-eula]
     horizon-launcher notes [<tag>]                  patch notes as plain text
-    horizon-launcher links                          the website, roadmap and documentation links
+    horizon-launcher links                          the Discord, sponsor and website links
     horizon-launcher game-args [<line>]             show or set the extra arguments the game starts with
     horizon-launcher update [--check]               Horizon and the launcher
     horizon-launcher logs [--lines N] [--crash]     the end of the game's log, or its newest crash report
@@ -435,7 +435,12 @@ and don't set `%ERRORLEVEL%` / `$LASTEXITCODE`. Scripts that need the exit code 
     horizon-launcher servers run <server> -- <horizon-server command>   for example: servers run "My server" -- start
     horizon-launcher servers forget <server>        take it off the list (its folder stays)
     horizon-launcher benchmark [--repeats N]        measure the launcher (see Performance log)
-    horizon-launcher bug-report "<text>" [--log]    write a bug report file to attach by hand (nothing is sent)
+    horizon-launcher data [status]                  what data collection is allowed, the install ID, what waits
+    horizon-launcher data allow|deny <kinds|all>    performance, crashes, bugs, benchmarks
+    horizon-launcher data show                      exactly what would be sent
+    horizon-launcher data delete                    delete what was sent and what waits; new install ID
+    horizon-launcher data bug "<text>" [--log]      a bug report, printed for you to confirm first
+    horizon-launcher data benchmark <report.json>   upload a benchmark report, printed first
 
 `--json` prints JSON where there is something to report (`versions`, `install`, `notes`,
 `next`, `links`, `game-args`, `update --check`, `logs`, `account`, `benchmark`, `data`, `modpack`). Errors go to stderr with exit code 1. `server` runs in the terminal,
@@ -456,9 +461,9 @@ command that adds it; for Claude Code:
 (with the full path to the binary if it is not on your `PATH`). Every CLI command is a tool of the
 same name and arguments, generated from the CLI's definition (`src/cli_tools.rs`): `versions`,
 `install`, `remove`, `prepare`, `settings`, `mods_search`, `mods_install`, `modpack_import`,
-`servers_create`, `bug_report`... A call runs that command with `--json` and returns its
+`servers_create`, `data_status`... A call runs that command with `--json` and returns its
 output. Tools that delete something (`remove`, `mods_remove`, `modpack_remove`,
-`servers_forget`, `account_sign_out`) need `confirm: true`. The session runs a few
+`servers_forget`, `account_sign_out`, `data_delete`) need `confirm: true`. The session runs a few
 itself, under the CLI's names: `play`, `server` with `server_command`, `server_log` and
 `server_stop`, `account_list` and `account_sign_in` (returns the link and code for the player;
 the sign-in finishes in the background). A server started through MCP stops (cleanly, with
@@ -509,14 +514,19 @@ The game writes its log to `logs/latest.log` in the game folder (`HORIZON_HOME`,
 archives the previous one at start as `logs/<date>-<n>.log.gz`, as Minecraft does. When it
 crashes it writes `crash-reports/crash-<date>_<time>-client.txt` beside them. When a game the
 launcher started crashes, the Play page says so, with buttons to open or copy the report, open the
-logs folder and report it on GitHub; Settings has the logs folder too. A crash report leaves the
+logs folder and report it on Discord; Settings has the logs folder too. A crash report leaves the
 machine only if you turn on crash reports (below).
 
 ## Data collection
 
-None. The launcher and the game send nothing about you or your machine (see
-[docs/telemetry.md](../docs/telemetry.md)). `horizon-launcher bug-report "text" [--log]` writes a bug report
-to a file you attach to your issue by hand.
+The first time it opens, the launcher asks whether you want to send performance statistics,
+crash reports, bug reports and benchmark uploads, each on its own switch and all off until you
+turn one on ("Send nothing" is one click). Settings → Data collection changes them any time, shows
+exactly what would be sent (the JSON), and deletes everything sent from your install. It asks
+again only when what is collected changes. The game obeys the same answer, kept in
+`telemetry/consent.json` in the game folder. What waits is sent when the launcher starts and
+closes. Every field, the caps and the format: [docs/telemetry.md](../docs/telemetry.md).
+
 
 ## Performance log
 
@@ -528,8 +538,9 @@ and OS (read on a thread after the first frame: on Windows those queries take se
 to an issue about the launcher being slow. `horizon-launcher benchmark` measures on purpose: it starts the launcher `--repeats` times (5; the first start is the cold one, as far
 as the OS's file cache allows), switches pages for a few seconds in each, rests 3 seconds to
 measure idle CPU, fetches the release list 3 times, and writes one report there with means and
-95% confidence intervals. Its window has to be on a screen that is awake. Session logs and benchmark reports stay on
-your machine ([data collection](../docs/telemetry.md)).
+95% confidence intervals. Its window has to be on a screen that is awake. Session logs stay on
+your machine; a `benchmark` report is uploaded, dated to the day, only if you allowed benchmark
+uploads ([data collection](../docs/telemetry.md)).
 
 Long lists on Mods (results, installed entries, coverage reports and project versions), Versions
 and Patch notes build only nearby rows, including on their first frame. Variable row heights

@@ -13,7 +13,7 @@ use std::sync::{Arc, atomic::AtomicI32, mpsc};
 
 type Boxes = Vec<([f64; 3], [f64; 3])>;
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -35,7 +35,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -124,7 +124,8 @@ fn seen_by_builder(game: &mut Game<'_>) -> Boxes {
 /// `turns`, the guests' turns that follow it in the tick), and the same
 /// without the shared boxes.
 fn the_mover_changed_mid_tick(command: &str, turns: bool) -> (Boxes, Boxes, Boxes) {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     crate::game::lan_actions::building_cache(game.lan.as_ref());
     let before = seen_by_builder(&mut game);
     assert!(game.run_command(command), "{command}");

@@ -31,7 +31,7 @@ impl Game<'_> {
         let mut locations = Vec::new();
         match kind {
             Kind::Player => {
-                locations.extend(self.local_player_residency.location());
+                locations.extend(self.resident_entities.local_player.location());
                 if let Some(lan) = &self.lan {
                     locations.extend(
                         lan.hub
@@ -78,7 +78,7 @@ impl Game<'_> {
     pub(super) fn current_player_resident_location(&self) -> Option<Location> {
         match self.lan_acting {
             Some(conn) => self.command_guest(conn)?.residency.location(),
-            None => self.local_player_residency.location(),
+            None => self.resident_entities.local_player.location(),
         }
     }
 
@@ -89,7 +89,7 @@ impl Game<'_> {
         dimension: mod_api::DimensionKey,
         id: u32,
     ) -> Option<[i32; 4]> {
-        let mut table = self.entity_residency.borrow_mut();
+        let mut table = self.resident_entities.table.borrow_mut();
         let (at, _, details) =
             table.server_admitted_identity(id, |at| self.locate_server_resident_owner(at))?;
         let uuid = details.known_uuid;
@@ -105,7 +105,8 @@ impl Game<'_> {
                     .identity()
                     .map(|identity| identity.id.get()),
                 None => self
-                    .local_player_residency
+                    .resident_entities
+                    .local_player
                     .identity()
                     .map(|identity| identity.id.get()),
             },
@@ -122,7 +123,7 @@ impl Game<'_> {
         self.lan_acting
             .and_then(|conn| self.command_guest(conn))
             .map_or_else(
-                || self.local_player_residency.join(),
+                || self.resident_entities.local_player.join(),
                 |guest| guest.residency.join(),
             )
     }
@@ -137,7 +138,7 @@ impl Game<'_> {
 
     pub(super) fn remove_local_player_body(&mut self) {
         self.hook.discard();
-        self.local_player_residency.retire();
+        self.resident_entities.local_player.retire();
         self.player_attachments.retire();
         self.player = None;
     }
@@ -146,12 +147,12 @@ impl Game<'_> {
         if self.lan_acting.is_some() {
             return;
         }
-        let journal = self.entity_residency.borrow().producer();
+        let journal = self.resident_entities.table.borrow().producer();
         let Some(player) = &self.player else {
-            self.local_player_residency.retire();
+            self.resident_entities.local_player.retire();
             return;
         };
-        self.local_player_residency.bind(
+        self.resident_entities.local_player.bind(
             &journal,
             Owner {
                 dimension: self.dim.key(),
@@ -168,7 +169,7 @@ impl Game<'_> {
     }
 
     pub(super) fn bind_current_hook_residency(&mut self) {
-        let journal = self.entity_residency.borrow().producer();
+        let journal = self.resident_entities.table.borrow().producer();
         let (owner, source) = self
             .hook
             .resident_location()
@@ -198,15 +199,16 @@ impl Game<'_> {
     }
 
     pub(super) fn bind_specialized_resident_owners(&mut self, journal: &Journal) {
-        self.local_player_residency.rebind(journal);
+        self.resident_entities.local_player.rebind(journal);
         let body_id = self.player.as_ref().map(|player| player.entity_id as u32);
         if self.lan_acting.is_some()
             || self
-                .local_player_residency
+                .resident_entities
+                .local_player
                 .identity()
                 .is_some_and(|identity| Some(identity.id.get()) != body_id)
         {
-            self.local_player_residency.extract();
+            self.resident_entities.local_player.extract();
         }
         self.bind_current_hook_residency();
         if self.hook.resident_location().is_some_and(|at| {
@@ -263,11 +265,15 @@ impl Game<'_> {
     ) -> Option<SourceEntity<(SpecializedSource<'_>, Target)>> {
         let (source, id, target) = match (at.owner.kind, at.source) {
             (Kind::Player, Source::LocalPlayer) => {
-                if self.lan_acting.is_some() || self.local_player_residency.location() != Some(at) {
+                if self.lan_acting.is_some()
+                    || self.resident_entities.local_player.location() != Some(at)
+                {
                     return None;
                 }
                 let player = self.player.as_ref()?;
-                if self.local_player_residency.identity()?.id.get() != player.entity_id as u32 {
+                if self.resident_entities.local_player.identity()?.id.get()
+                    != player.entity_id as u32
+                {
                     return None;
                 }
                 (
@@ -310,7 +316,7 @@ impl Game<'_> {
                             return None;
                         }
                         let hook = self.hook.as_ref()?;
-                        if hook.caster_generation != self.local_player_residency.join() {
+                        if hook.caster_generation != self.resident_entities.local_player.join() {
                             return None;
                         }
                         hook

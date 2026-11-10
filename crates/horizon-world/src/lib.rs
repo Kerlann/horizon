@@ -21,6 +21,7 @@ pub mod block_survival;
 pub mod blocking_item_damage;
 pub mod blocking_rules;
 pub mod bundle_weight;
+pub mod carrier;
 pub mod chunk;
 pub mod chunk_status;
 pub mod climbing;

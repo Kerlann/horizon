@@ -15,7 +15,7 @@ use crate::{
     engine,
     supervisor::note,
 };
-use horizon_server_files::properties::{ServerProperties, SystemEntropy};
+use horizon_platform::server_files::properties::{ServerProperties, SystemEntropy};
 use horizon_server_launch::config;
 use std::{
     collections::HashMap,
@@ -309,7 +309,7 @@ fn read_info(shared: &Shared) -> Option<Info> {
     Some(Info {
         motd: p.motd,
         world: p.level_name,
-        version: horizon_core::version::VERSION_ID.to_owned(),
+        version: horizon_platform::version::VERSION_ID.to_owned(),
         players,
         max_players: status["max_players"]
             .as_i64()

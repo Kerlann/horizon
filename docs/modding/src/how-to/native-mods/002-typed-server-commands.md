@@ -36,8 +36,10 @@ Register a value kind once from `Hooks::register`, then use its namespaced id as
 argument's kind:
 
 ```rust,ignore
-use mod_api::{CommandArgumentError, CommandArgumentKind, CommandArgumentType,
-              CommandSuggestion, Registrar, RegistrationContext, Text};
+use mod_api::{
+    Command, CommandArgumentError, CommandArgumentKind, CommandArgumentType, CommandSuggestion,
+    Hooks, RegisterCommandsEvent, Registrar, RegistrationContext, ServerHost, Text,
+};
 
 struct Machine;
 
@@ -50,7 +52,8 @@ impl CommandArgumentType for Machine {
         match input {
             "press" | "furnace" => Ok(input.to_owned()),
             _ => Err(CommandArgumentError::new(Text::translate(
-                "example.commands.machine.unknown", vec![Text::literal(input)]
+                "example.commands.machine.unknown",
+                vec![Text::literal(input)],
             ))),
         }
     }
@@ -64,12 +67,17 @@ impl CommandArgumentType for Machine {
     }
 }
 
-fn register(&self, r: &mut dyn Registrar, _: &RegistrationContext) {
-    r.register_command_argument("machine", Machine);
-}
+#[mod_api::horizon_mod]
+impl Hooks for MyMod {
+    fn register(&self, r: &mut dyn Registrar, _: &RegistrationContext) {
+        r.register_command_argument("machine", Machine);
+    }
 
-fn register_commands(&self, _: &mut dyn ServerHost, event: &mut RegisterCommandsEvent<'_>) {
-    event.commands.push(Command::new("machine use <machine:mymod:machine>"));
+    fn register_commands(&self, _: &mut dyn ServerHost, event: &mut RegisterCommandsEvent<'_>) {
+        event
+            .commands
+            .push(Command::new("machine use <machine:mymod:machine>"));
+    }
 }
 ```
 
@@ -79,8 +87,10 @@ as `CommandArgumentValue::Custom { kind, value }`, where `kind` is `mymod:machin
 and `value` is the canonical text `parse` returned. `suggest` is asked for the
 completions while the player types.
 
-`CommandArgumentKind::Word` takes one word; `Greedy` takes the rest of the line and
-must be the usage's last argument. Players whose client does not know the type still
+`CommandArgumentKind::Word` takes one word of ASCII letters, digits and `_ - . +`; the
+word ends at the first other character, a space included, so a value with `:` or `/`
+needs `Greedy`, which takes the rest of the line and must be the usage's last argument.
+Players whose client does not know the type still
 parse and complete the command: the server sends the argument as a Brigadier string
 of that shape with `minecraft:ask_server`, and their chat asks the server for the
 suggestions. (Fabric sends the registered argument type's id, which an unmodded

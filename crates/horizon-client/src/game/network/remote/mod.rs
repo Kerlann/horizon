@@ -85,7 +85,7 @@ pub(super) fn builtin_registries(root: &std::path::Path) -> Option<Arc<Builtin>>
 /// `ChatType`'s two decorations: how a message shows in the chat, and what
 /// the narrator says of it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Decoration {
+pub(super) enum Decoration {
     Chat,
     Narration,
 }
@@ -926,7 +926,7 @@ impl Game<'_> {
         name: &str,
         cookies: Option<horizon_client::net::Cookies>,
     ) -> Result<()> {
-        self.connect_server_with_options(address, name, cookies, false)
+        self.connect_server_with_options(address, name, cookies, false, false)
     }
     /// `ConnectScreen.startConnecting`: keep LAN discovery's server kind through loading.
     pub(super) fn connect_server_with_options(
@@ -935,6 +935,7 @@ impl Game<'_> {
         name: &str,
         cookies: Option<horizon_client::net::Cookies>,
         lan: bool,
+        realm: bool,
     ) -> Result<()> {
         super::world_loading::preload_server_loot(
             &self.options.resources,
@@ -945,12 +946,13 @@ impl Game<'_> {
             name: name.to_owned(),
             cookies: cookies.clone(),
             lan,
+            realm,
         })? {
             return Ok(());
         }
         self.join_world_rest()?;
         self.client_logging_out();
-        if let Err(error) = self.join_server(address, name, None, cookies, lan) {
+        if let Err(error) = self.join_server(address, name, None, cookies, lan, realm) {
             log::warn!("Horizon: could not join server: {error}");
             let skip = self.settings.file.bool("skipMultiplayerWarning");
             match &mut self.title {
@@ -979,7 +981,7 @@ impl Game<'_> {
         pipe: horizon_protocol::connection::Pipe,
         name: &str,
     ) -> Result<()> {
-        self.join_server("local", name, Some(pipe), None, false)
+        self.join_server("local", name, Some(pipe), None, false, false)
     }
     fn join_server(
         &mut self,
@@ -988,8 +990,11 @@ impl Game<'_> {
         local: Option<horizon_protocol::connection::Pipe>,
         cookies: Option<horizon_client::net::Cookies>,
         lan: bool,
+        realm: bool,
     ) -> Result<()> {
+        self.realm_session = realm;
         self.reset_tutorial();
+        self.perf.world_opening();
         // A server's own biomes come over the connection; the last local
         // world's packed table must not name its ids. The window's own
         // server thread keeps the one it just set.
@@ -1319,7 +1324,9 @@ impl Game<'_> {
 
     /// Prepare a client session and remote state to receive packets from a studio replay.
     pub(super) fn init_remote_for_replay(&mut self) -> Result<()> {
+        self.realm_session = false;
         self.reset_tutorial();
+        self.perf.world_opening();
         self.world_biomes = None;
         self.world_biomes_base = None;
         let root = self.options.resources.clone();
@@ -1556,6 +1563,7 @@ impl Game<'_> {
             return self.begin_closing_save(false);
         }
         self.client_logging_out();
+        self.finish_perf();
         if reason.is_none() {
             // Leaving on purpose: nothing for auto-reconnect to retry.
             self.extras_left();
@@ -5579,15 +5587,13 @@ impl Game<'_> {
                     p.unsigned_content.as_ref(),
                     &line,
                 );
-                // ChatListener.showMessageToPlayer: `Minecraft.isBlocked` hides the
-                // message of a player hidden in the Social Interactions screen; it
-                // counts as processed, not shown.
-                if self.social_hides(p.sender) {
+                // A hidden or fully filtered message counts as processed, not shown.
+                let Some((line, narration)) = self.shown_player_chat(&p, line, narration) else {
                     if let Some(signature) = &signature {
                         self.mark_message_processed(signature, false);
                     }
                     return Ok(());
-                }
+                };
                 self.handle_player_chat(QueuedChat {
                     line,
                     signature,
@@ -6457,7 +6463,7 @@ impl Game<'_> {
     /// ChatType.Bound.decorate (`Decoration::Chat`) and `decorateNarration`
     /// (`Decoration::Narration`): the chat type's decoration from the
     /// server's registry, applied to `content`.
-    fn decorate_chat(
+    pub(super) fn decorate_chat(
         &self,
         bound: &play::ChatTypeBound,
         content: &serde_json::Value,
@@ -6693,7 +6699,7 @@ impl Game<'_> {
                 player.velocity = delta;
                 self.hook.discard();
                 self.player_attachments.retire();
-                self.local_player_residency.renew();
+                self.resident_entities.local_player.renew();
                 self.player = Some(player);
                 self.bind_local_player_residency();
                 self.pad.player_replaced();
@@ -7290,6 +7296,7 @@ impl Game<'_> {
         if self.studio_replay.is_none() {
             self.tick_player_model();
         }
+        self.tick_emotes();
         if !dead {
             self.remote_tick_using();
         }

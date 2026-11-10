@@ -420,17 +420,24 @@ fn mob_constructor_first_store_binds_only_the_resident_lifetime() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn marker_constructor_store_reaches_its_real_owned_map() {
-    struct Refusal;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    struct Store(Arc<AtomicBool>);
     #[mod_api::__subscriptions]
-    impl Hooks for Refusal {
+    impl Hooks for Store {
         fn entity_constructing(&self, host: HostSide<'_>, event: &mut EntityConstructingEvent) {
             if let HostSide::Server(host) = host {
                 assert_eq!(VALUE.set(host, event.holder, 41), Ok(()));
+                self.0.store(true, Ordering::SeqCst);
             }
         }
     }
+    let ran = Arc::new(AtomicBool::new(false));
     mod_api::testing::with_mods(
-        vec![mod_api::ModEntry::new("refusal", Box::new(Refusal))].into(),
+        vec![mod_api::ModEntry::new(
+            "store",
+            Box::new(Store(ran.clone())),
+        )]
+        .into(),
         || {
             with_game(|game| {
                 game.options.dedicated = Some(Vec::new());
@@ -439,6 +446,7 @@ fn marker_constructor_store_reaches_its_real_owned_map() {
             });
         },
     );
+    assert!(ran.load(Ordering::SeqCst));
 }
 
 #[test]

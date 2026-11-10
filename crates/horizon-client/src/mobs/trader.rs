@@ -495,3 +495,8 @@ mod use_overflow_tests {
         );
     }
 }
+
+/// Whether the wandering trader currently has invisibility.
+pub fn is_invisible(m: &Mob) -> bool {
+    invisible(m)
+}

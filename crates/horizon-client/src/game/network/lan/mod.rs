@@ -3,6 +3,7 @@
 //! tick and turns what the guests do into gameplay. A world that is not open
 //! costs one `Option` check per tick.
 mod event_timings;
+mod residency;
 
 use super::{
     Game,
@@ -1035,25 +1036,23 @@ pub(super) fn mob_meta(
             }
             defaults.push((16, serializer::INT, Value::Int(0)));
         }
-        // AbstractCubeMob.ID_SIZE; SulfurCube also syncs FROM_BUCKET and
-        // MAX_FUSE (clients tick the fuse for the swell / white flash).
+        // AbstractCubeMob.ID_SIZE; SulfurCube then syncs MAX_FUSE (-1 until primed;
+        // clients tick it for the swell / white flash) and FROM_BUCKET (#13721).
         "minecraft:slime" | "minecraft:magma_cube" | "minecraft:sulfur_cube" => {
             if e.size > 1 {
                 meta.push((18, serializer::INT, Value::Int(e.size)));
             }
             defaults.push((18, serializer::INT, Value::Int(1)));
             if kind == "minecraft:sulfur_cube" {
-                let from_bucket = e.scratch[3] != 0;
-                if from_bucket {
-                    meta.push((19, serializer::BOOLEAN, Value::Bool(true)));
-                }
-                defaults.push((19, serializer::BOOLEAN, Value::Bool(false)));
-                // SulfurCube.MAX_FUSE: set when primed; 0 means unprimed.
                 let fuse = horizon_client::mobs::sulfur_cube::fuse(m);
                 if fuse >= 0 {
-                    meta.push((20, serializer::INT, Value::Int(fuse)));
+                    meta.push((19, serializer::INT, Value::Int(fuse)));
                 }
-                defaults.push((20, serializer::INT, Value::Int(0)));
+                defaults.push((19, serializer::INT, Value::Int(-1)));
+                if e.scratch[3] != 0 {
+                    meta.push((20, serializer::BOOLEAN, Value::Bool(true)));
+                }
+                defaults.push((20, serializer::BOOLEAN, Value::Bool(false)));
             }
         }
         // Creeper.DATA_SWELL_DIR, DATA_IS_POWERED and DATA_IS_IGNITED: the
@@ -1688,10 +1687,7 @@ impl Game<'_> {
             .then(|| horizon_client::lod_net::Service::new(net.lod_distance, biome_names.clone()));
         let lan = Lan::start_with(sync.clone(), net)?;
         let mut hub = Hub::new(lan, sync, encoder, config, self.loop_context.clone());
-        hub.guests
-            .bind_residency(&self.entity_residency.borrow().producer(), |id| {
-                crate::game::Dim::from_id(id).key()
-            });
+        self.bind_guest_residency(&mut hub);
         hub.rule_registry = self.level.rule_registry.clone();
         hub.sync_attachments = !mod_api::__private::mods().is_empty();
         hub.flat_world = self.world_flat;
@@ -3021,13 +3017,6 @@ impl Game<'_> {
         }
     }
 
-    /// The start of a phase vanilla runs before ChunkMap.tick and Horizon
-    /// among the entities' ticks (ServerChunkCache.tickChunks' spawning and
-    /// thunder, the raids): the counter to give `lan_synced_since`.
-    pub(super) fn lan_synced_from(&mut self) -> Option<i32> {
-        self.lan_ids_so_far()
-    }
-
     /// The end of such a phase: what joined during it is first updated in
     /// this tick's pass too.
     pub(super) fn lan_synced_since(&mut self, from: Option<i32>) {
@@ -3232,6 +3221,8 @@ impl Game<'_> {
             for d in &mut self.dropped {
                 d.needs_sync = false;
             }
+            self.tridents.iter_mut().for_each(|t| t.needs_sync = false);
+
             // The step command reaches clients before the events its tick
             // generated, as ServerTickRateManager.updateStepTicks does.
             let Some(host) = self.lan.as_mut() else {
@@ -5049,7 +5040,7 @@ mod tests {
     }
 
     /// A hub with no players and empty registries, for `mob_meta`.
-    fn meta_hub(name: &str) -> horizon_client::lan::hub::Hub {
+    pub(super) fn meta_hub(name: &str) -> horizon_client::lan::hub::Hub {
         use horizon_client::lan::{Lan, NetConfig, chunks::ChunkEncoder, data, hub};
         let mut sync = data::SyncData::empty();
         for (registry, id) in [
@@ -5670,6 +5661,7 @@ mod sources_tests {
         assert_ne!(key(&files), key(&changed));
         assert_ne!(key(&files), key(&[]));
     }
+    include!("sulfur_cube_meta_tests.rs");
 }
 
 #[cfg(test)]

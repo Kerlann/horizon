@@ -317,7 +317,8 @@ fn foreign_lifted_read_observes_shared_publication_updates_not_seen_or_live_view
             mob_target_facts: None,
         };
         assert_eq!(
-            game.entity_residency
+            game.resident_entities
+                .table
                 .borrow_mut()
                 .publish_rows([(9002, location, publication)]),
             1
@@ -335,7 +336,8 @@ fn foreign_lifted_read_observes_shared_publication_updates_not_seen_or_live_view
                 selectors: Default::default(),
             };
             assert_eq!(entity.position(&context), Some([5.0, 2.0, 3.0]));
-            game.entity_residency
+            game.resident_entities
+                .table
                 .borrow_mut()
                 .edit_cached_row(9002, location, |row| {
                     row.base.position = [7.0, 2.0, 3.0];

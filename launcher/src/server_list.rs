@@ -5,14 +5,22 @@
 //! The launcher only adds and removes entries: every other field of every entry is written back
 //! as it was read.
 use base64::Engine;
-use horizon_core::{
-    nbt,
-    nbt::{Compound, JavaString, Limits, NamedTag, Tag},
-};
+use horizon_platform::world::nbt::{self, Compound, JavaString, Limits, NamedTag, Tag};
 use std::fs;
 use std::path::Path;
 
 const FILE: &str = "servers.dat";
+/// Horizon's official survival server, named as the game lists it. Its address comes from
+/// `launcher/links.json` on main (`backend::Links`), so a move to a new host needs no release.
+pub const OFFICIAL_NAME: &str = "Horizon Official";
+/// The official server's address until links.json is read, and when it can't be.
+pub const OFFICIAL_ADDRESS: &str = horizon_telemetry::server_status::OFFICIAL_ADDRESS;
+/// Addresses the official server had before: lists that still hold one are moved to the current one.
+pub const OFFICIAL_PREVIOUS: &[&str] = horizon_telemetry::server_status::OFFICIAL_PREVIOUS;
+/// Beside servers.dat once the official server was offered, so a player who removes it never
+/// gets it back: the address offered, so a new one moves the list once. The game writes the same file.
+const OFFICIAL_MARKER: &str = "horizon_official_server.txt";
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Server {
     pub name: String,
@@ -50,6 +58,15 @@ fn entry(name: &str, ip: &str) -> Compound {
     ]
     .into_iter()
     .collect()
+}
+
+/// An address as the game connects to it: any case, 25565 when no port is given.
+fn same_address(a: &str, b: &str) -> bool {
+    let norm = |ip: &str| {
+        let ip = ip.trim().to_ascii_lowercase();
+        ip.strip_suffix(":25565").map(str::to_owned).unwrap_or(ip)
+    };
+    norm(a) == norm(b)
 }
 
 impl List {
@@ -158,6 +175,67 @@ impl List {
             .and_then(|()| fs::rename(&new, &current));
         written.map_err(|e| format!("Could not save the server list: {e}"))
     }
+
+    /// Points the entries for a previous official address at `address`, each keeping the player's
+    /// name, picture and every other field. The shown list keeps one entry for the server: an old
+    /// one goes when the list already has `address`. Whether anything changed.
+    fn move_official(&mut self, address: &str, previous: &[String]) -> bool {
+        let old = |ip: &str| {
+            !same_address(ip, address)
+                && previous
+                    .iter()
+                    .any(|p| !p.trim().is_empty() && same_address(ip, p))
+        };
+        let mut shown = self.servers().iter().any(|s| same_address(&s.ip, address));
+        let mut changed = false;
+        self.entries.retain_mut(|e| {
+            if !old(&text(e, "ip")) {
+                return true;
+            }
+            changed = true;
+            if !hidden(e) {
+                if shown {
+                    return false;
+                }
+                shown = true;
+            }
+            e.insert(key("ip"), Tag::String(address.into()));
+            true
+        });
+        changed
+    }
+}
+
+/// Puts the official server at `address` first in the list in `home`, once: not again after the
+/// player removes it, and not when the list already has its address. When the server moved (the
+/// address differs from the one offered last), the entries for its `previous` addresses move to
+/// the new one, once, and it is not offered again to a player who removed it. A list that can't be
+/// read is left alone; an empty `address` changes nothing.
+pub fn add_official(home: &Path, address: &str, previous: &[String]) -> Result<(), String> {
+    let address = address.trim();
+    if address.is_empty() {
+        return Ok(());
+    }
+    let marker = home.join(OFFICIAL_MARKER);
+    // A marker that is there but can't be read: offered already, at an address not known.
+    let offered = match fs::read_to_string(&marker) {
+        Ok(text) => Some(text),
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+        Err(_) => Some(String::new()),
+    };
+    if offered.as_deref().is_some_and(|a| same_address(a, address)) {
+        return Ok(());
+    }
+    let mut list = List::read(home).ok_or("The server list can't be read.")?;
+    let mut changed = list.move_official(address, previous);
+    if offered.is_none() && !list.servers().iter().any(|s| same_address(&s.ip, address)) {
+        list.entries.insert(0, entry(OFFICIAL_NAME, address));
+        changed = true;
+    }
+    if changed {
+        list.save(home)?;
+    }
+    fs::write(marker, format!("{address}\n")).map_err(|e| e.to_string())
 }
 
 /// The shown server a command names: its position from 1, its name (any case) or its address.

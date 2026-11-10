@@ -44,7 +44,7 @@ def main():
     path = SRC / "join_seq.rs"
     text = path.read_text()
     for old, new in [
-        ("    Option<physics_mutations::Binding<T>>,\n);", "    Option<physics_mutations::Binding<T>>,\n    Option<visibility::PassLease>,\n);"),
+        ("    Option<visibility::Binding>,\n    Option<physics_mutations::Binding<T>>,\n);", "    Option<visibility::Binding>,\n    Option<physics_mutations::Binding<T>>,\n    Option<visibility::PassLease>,\n);"),
         ("Self(self.0.clone(), None, ListStamp::new(), None, None)", "Self(self.0.clone(), None, ListStamp::new(), None, None, None)"),
         ("Self(Vec::new(), None, ListStamp::new(), None, None)", "Self(Vec::new(), None, ListStamp::new(), None, None, None)"),
         ("assert!(taken.4.is_none(), \"lifting an already owned pass\");", "assert!(taken.5.is_none(), \"lifting an already owned pass\");"),

@@ -1,5 +1,5 @@
 //! The glass look's frame (the mockup's `launcher-app.tsx`): the sidebar plate with the
-//! instances, the launcher's update, the open-source card and the links; the top bar with the
+//! instances, the launcher's update, Sculk's card, Discord and the links; the top bar with the
 //! pages in a glass tab strip, the player, Microsoft sign-in and Settings; and the menus they open.
 //! Dark appearance only for now (`docs/design-system.md`, "Glass").
 use super::*;
@@ -136,14 +136,7 @@ impl Launcher {
                             ),
                         )
                     }
-                    (None, Some(tag), Some(_)) => (
-                        Tone::Live,
-                        format!(
-                            "{} · {}",
-                            tr("Ready"),
-                            horizon_launcher::nightly::short_commit(tag)
-                        ),
-                    ),
+                    (None, Some(tag), Some(_)) => (Tone::Live, format!("{} · {tag}", tr("Ready"))),
                     (None, Some(_), None) => (Tone::Live, tr("Ready").into()),
                 }
             }
@@ -281,7 +274,7 @@ impl Launcher {
     }
 
     /// The glass sidebar: a plate 248 wide, 14 from the window's edges.
-    pub(super) fn glass_sidebar(&mut self, cx: &mut Context<Self>) -> Div {
+    pub(super) fn glass_sidebar(&mut self, window: &Window, cx: &mut Context<Self>) -> Div {
         let t = self.theme;
         let soft = self.look.accent_soft;
         self.load_packs();
@@ -483,16 +476,66 @@ impl Launcher {
             _ => {}
         }
 
-        foot = foot.child(div().mt(px(12.)).child(open_card::card(
-            "open-card",
-            horizon_theme::glass::FONT,
-            open_card::Palette {
-                ink: white(ink::FULL),
-                soft: white(ink::SOFT),
-                accent: gpui::rgb(0xb9a9ff).into(),
-            },
-            &self.theme,
-        )));
+        // Sculk's card (not in the mockup, kept: a sponsor), where the old sidebar had it: at
+        // the sidebar's foot above the links, on every page (Servers shows the wide banner too).
+        // Tall where the sidebar has the height for it besides its rows, compact otherwise.
+        if !self.settings.partner_hidden {
+            let rows = self.instances.list.len() + servers.len();
+            let free = f32::from(window.viewport_size().height)
+                - 2. * MARGIN
+                - 52.
+                - 56. * rows as f32
+                - 190.;
+            let mut side = div().relative().mt(px(12.)).child(partner::card(
+                "partner-side",
+                SIDEBAR - 20.,
+                free < partner::TALL_HEIGHT,
+                &t,
+            ));
+            if self.settings.partner_seen_secs >= partner::SEEN_BEFORE_HIDE {
+                side = side.child(
+                    partner::hide_button("partner-hide", &t).on_click(cx.listener(
+                        |this, _: &ClickEvent, _, cx| {
+                            this.settings.partner_hidden = true;
+                            this.save_settings();
+                            cx.notify();
+                        },
+                    )),
+                );
+            }
+            foot = foot.child(side);
+        }
+
+        if !self.links.discord.is_empty() {
+            let url = self.links.discord.clone();
+            foot = foot.child(keyboard(
+                div()
+                    .id("discord")
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .gap(px(10.))
+                    .mt(px(12.))
+                    // At least 40 high: a long translation wraps onto a second line, which grows the
+                    // button instead of spilling out of it.
+                    .min_h(px(40.))
+                    .px(px(12.))
+                    .py(px(8.))
+                    .rounded(px(radius::ROW))
+                    .bg(ui::color(horizon_theme::glass::DISCORD))
+                    .hover(|s| s.bg(ui::color(horizon_theme::glass::DISCORD_HOVER)))
+                    .cursor_pointer()
+                    .child(ui::icon("discord", 18., gpui::white()))
+                    .child(
+                        ui::text(14., FontWeight::SEMIBOLD, ink::FULL)
+                            .min_w_0()
+                            .text_center()
+                            .child(tr("Join the Discord")),
+                    )
+                    .on_click(move |_, _, cx| cx.open_url(&url)),
+                &t,
+            ));
+        }
         let link = |id: &'static str, label: &'static str, icon: &'static str, url: String| {
             let id = SharedString::from(id);
             keyboard(
@@ -524,21 +567,39 @@ impl Launcher {
                 &t,
             )
         };
-        let links = [
-            ("roadmap", tr("Roadmap"), "map", &self.links.roadmap),
-            (
-                "documentation",
+        let mut links = div().flex().flex_col().mt(px(8.));
+        if !self.links.sponsor.is_empty() {
+            links = links.child(link(
+                "sponsor",
+                tr("Sponsor"),
+                "favourite",
+                self.links.sponsor.clone(),
+            ));
+        }
+        if !self.links.roadmap.is_empty() {
+            links = links.child(link(
+                "roadmap",
+                tr("Roadmap"),
+                "map",
+                self.links.roadmap.clone(),
+            ));
+        }
+        if !self.links.docs.is_empty() {
+            links = links.child(link(
+                "docs",
                 tr("Documentation"),
                 "book",
-                &self.links.docs,
-            ),
-        ]
-        .into_iter()
-        .filter(|(_, _, _, url)| !url.is_empty())
-        .fold(
-            div().flex().flex_col().mt(px(8.)),
-            |col, (id, label, icon, url)| col.child(link(id, label, icon, url.clone())),
-        );
+                self.links.docs.clone(),
+            ));
+        }
+        if !self.links.website.is_empty() {
+            links = links.child(link(
+                "website",
+                tr("Website"),
+                "globe-02",
+                self.links.website.clone(),
+            ));
+        }
         foot = foot.child(links).child(
             ui::text(12., FontWeight::NORMAL, ink::DIM)
                 .id("launcher-version")
@@ -575,7 +636,7 @@ impl Launcher {
             .items_center()
             .gap(px(if compact { 2. } else { 4. }))
             .min_w_0();
-        for (page, label, _) in Page::in_top_bar() {
+        for (page, label, _) in Page::in_top_bar(self.wardrobe_shown()) {
             let mut item = ui::tab(format!("nav-{label}"), tr(label), self.page == page, &t);
             if compact {
                 item = item.px(px(8.));

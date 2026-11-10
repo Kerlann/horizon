@@ -367,19 +367,7 @@ impl Game<'_> {
         title.set_rule_registry(Arc::new(crate::game::api_values::game_rule_registry()));
         self.show_title_with_registry(title);
     }
-    pub(super) fn show_title_with_registry(&mut self, mut title: horizon_client::title::Title) {
-        title.set_additional_data_packs(self.pack.additional_data.clone());
-        if !self.screen_hooks_heard() {
-            self.title = Some(title);
-            return;
-        }
-        let id = title.mode.id();
-        self.title_change(Some(id));
-        self.title = Some(title);
-        self.observed_screen = self.observed_now();
-        let none = self.screen_change_view(Screen::Playing);
-        self.native_screen_init_post(&screen_view_with_id(&none, id));
-    }
+
     /// Takes the title down as a world opens over it (`setScreen` to the
     /// loading screen, then null): `screen_opening` to no screen, then
     /// `screen_closing` for the title's screen, before it goes. The world

@@ -57,26 +57,3 @@ pub(super) fn key(
 pub(super) fn snapshot(root: &Path, key: &str) -> PathBuf {
     root.join("patched").join(key)
 }
-
-/// Record a hit and retain the three most recently used snapshots.
-pub(super) fn touch_and_prune(root: &Path, key: &str) -> Result<(), String> {
-    let dir = root.join("patched");
-    fs::write(dir.join(key).join(".last-used"), b"").map_err(|e| e.to_string())?;
-    let mut entries = fs::read_dir(&dir)
-        .map_err(|e| e.to_string())?
-        .flatten()
-        .filter(|e| e.path().is_dir() && !e.file_name().to_string_lossy().starts_with('.'))
-        .collect::<Vec<_>>();
-    entries.sort_by_key(|e| {
-        std::cmp::Reverse((
-            e.file_name() == key,
-            fs::metadata(e.path().join(".last-used"))
-                .and_then(|m| m.modified())
-                .ok(),
-        ))
-    });
-    for entry in entries.into_iter().skip(3) {
-        fs::remove_dir_all(entry.path()).map_err(|e| e.to_string())?;
-    }
-    Ok(())
-}

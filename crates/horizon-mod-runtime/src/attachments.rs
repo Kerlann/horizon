@@ -28,6 +28,8 @@ use std::{
 
 use horizon_core::nbt::{Compound, JavaString, Tag};
 
+// no wire: owned by the lower runtime crate, which cannot depend on mod_api's derive;
+// mod_api supplies the explicit tagged Wire implementation, including bounded static text.
 /// An attachment operation could not be completed.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
@@ -72,6 +74,7 @@ pub fn attachment_compound(tag: Option<&Tag>) -> Result<Option<&Compound>, Attac
 /// A server holder in the host's current dimension.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 #[non_exhaustive]
+// no wire: runtime-owned selector; mod_api supplies its explicit tagged Wire codec.
 pub enum Holder {
     Entity(u32),
     Player(u128),
@@ -84,6 +87,7 @@ pub enum Holder {
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+// no wire: host-local storage access intent, never a cross-target payload.
 pub enum AttachmentAccess {
     /// Inspection, removal or sync: never create a registration.
     Existing,
@@ -102,10 +106,12 @@ pub trait AttachmentHost {
 
 /// A value of a mod's own type, as the holder keeps it: shared, so a copy of the holder's map
 /// copies no value.
+// no wire: host-local erased Arc value; attachment values cross through their registered codec.
 pub type AttachmentValue = Arc<dyn Any + Send + Sync>;
 
 /// How a policy-checked type declared its value: what saving, respawning and syncing do with it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+// no wire: runtime-owned policy; mod_api supplies its explicit field-wise Wire codec.
 pub struct AttachmentPolicy {
     pub copy_on_death: bool,
     pub sync: bool,
@@ -114,6 +120,7 @@ pub struct AttachmentPolicy {
 /// What comes with a stored value: its saved form (`None` for a type with no codec), its type's
 /// policy, and why it is stored.
 #[derive(Clone, Debug, PartialEq)]
+// no wire: runtime-owned saved form; mod_api supplies its explicit NBT-aware Wire codec.
 pub struct AttachmentForm {
     pub encoded: Option<Compound>,
     pub policy: AttachmentPolicy,
@@ -123,6 +130,7 @@ pub struct AttachmentForm {
 /// Why a value is stored, which decides what else changes.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
+// no wire: runtime-owned write intent; mod_api supplies its explicit tagged Wire codec.
 pub enum AttachmentWrite {
     /// A saved value just decoded: nothing else changes.
     Decoded,
@@ -277,12 +285,14 @@ impl<H: AttachmentHost + ?Sized> AttachmentStore for H {
 }
 
 /// The optional on-disk representation of an attachment.
+// no wire: host-local encoder/decoder function pointers, not cross-target values.
 pub struct AttachmentCodec<T> {
     pub encode: fn(&T) -> Result<Compound, AttachmentError>,
     pub decode: fn(&Compound) -> Result<T, AttachmentError>,
 }
 
 /// A mod-defined attachment key and its value's behavior.
+// no wire: host-local key with callback pointers; attachment calls cross by namespace/name and codec.
 pub struct AttachmentType<T: 'static> {
     pub namespace: &'static str,
     pub name: &'static str,
@@ -467,6 +477,7 @@ enum Entry {
 /// Query reads may cache decoded values, but never change the canonical raw/decoded state.
 #[doc(hidden)]
 #[non_exhaustive]
+// no wire: host-local retained binding with erased decoded state, not a wire payload.
 pub struct AttachmentEntry {
     state: Entry,
 }
@@ -627,6 +638,7 @@ impl AttachmentRegistration {
 
 /// The data held by one entity, block entity, chunk or level.
 #[derive(Default)]
+// no wire: host-local canonical map and publication authority; only saved values cross the boundary.
 pub struct Attachments {
     entries: BTreeMap<index::AttachmentKey, Arc<AttachmentEntry>>,
     // Keep malformed or otherwise unrecognized NBT exactly as it was read.

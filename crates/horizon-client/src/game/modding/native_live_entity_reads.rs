@@ -150,7 +150,8 @@ impl Game<'_> {
             return admission;
         }
         let pending = self
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .cached_row_at(admission.entity().id(), admission.location())
             .and_then(|row| row.pending_dependency(dependencies));
@@ -261,7 +262,7 @@ impl Game<'_> {
         if self.native_lifecycle.epoch() != Some(entity.epoch()) {
             return None;
         }
-        let mut table = self.entity_residency.borrow_mut();
+        let mut table = self.resident_entities.table.borrow_mut();
         let (location, state, cached, details) = table
             .server_admitted_read_lookup(entity.id(), |at| self.locate_server_resident_owner(at))?;
         let target = match state {

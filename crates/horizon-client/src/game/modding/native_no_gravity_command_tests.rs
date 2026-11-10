@@ -205,7 +205,8 @@ fn gravity_direct_own_transaction_and_ordered_foreign_patches_share_the_real_fif
         assert_eq!(other.no_gravity(game), Some(false));
         assert_eq!(other.is_silent(game), Some(true));
         let (at, _) = game
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_admitted_location(72, |at| game.locate_server_resident_owner(at))
             .unwrap();
@@ -352,7 +353,8 @@ fn gravity_all_ten_real_source_families_apply_active_and_parked_without_swaps() 
         assert_eq!(events.lock().unwrap().len(), 10);
         for entity in targets {
             let (at, _) = game
-                .entity_residency
+                .resident_entities
+                .table
                 .borrow_mut()
                 .server_admitted_location(entity.id(), |at| game.locate_server_resident_owner(at))
                 .unwrap();
@@ -381,7 +383,8 @@ fn gravity_direct_taken_source_refuses_instead_of_claiming_application() {
     fixture(|game, events| {
         let other = EntityRef::new(game.native_lifecycle.epoch().unwrap(), 72);
         let (at, _) = game
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_admitted_location(72, |at| game.locate_server_resident_owner(at))
             .unwrap();
@@ -471,7 +474,8 @@ fn gravity_transfer_does_not_retarget_the_accepted_source_address() {
             "canonical transfer reloaded a fresh runtime identity"
         );
         let (at, _) = game
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_admitted_location(destination, |at| game.locate_server_resident_owner(at))
             .unwrap();
@@ -556,7 +560,8 @@ fn gravity_taken_target_accepts_only_projection_then_revalidates_removal_or_reus
             let scope = super::native_entity_command_lifecycle_tests::writer(game);
             let other = EntityRef::new(game.native_lifecycle.epoch().unwrap(), 72);
             let (at, _) = game
-                .entity_residency
+                .resident_entities
+                .table
                 .borrow_mut()
                 .server_admitted_location(72, |at| game.locate_server_resident_owner(at))
                 .unwrap();

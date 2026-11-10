@@ -84,21 +84,8 @@ impl Fixture {
         self.title.finish_preparing();
         assert!(matches!(self.title.creation_packs(), Some((_, _))));
     }
-    fn finish_backup(&mut self) {
-        self.title.backup_shown.set(true);
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
-        while matches!(self.title.mode, Mode::Backup { .. }) {
-            assert!(std::time::Instant::now() < deadline);
-            std::thread::sleep(std::time::Duration::from_millis(10));
-            self.title.poll_backup();
-        }
-    }
 }
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.root);
-    }
-}
+include!("preset_tests.rs");
 
 mod multiplayer_parent_navigation {
     use super::*;
@@ -224,6 +211,7 @@ fn direct_connection_remembers_the_address_on_cancel_escape_and_join() {
         Action::Connect {
             address: "localhost:25569".into(),
             lan: false,
+            realm: false,
         }
     );
     assert_eq!(f.title.last_server, "localhost:25569");
@@ -771,7 +759,13 @@ fn only_the_vertical_wheel_cycles_a_create_world_button() {
         else {
             panic!("not on Create World");
         };
-        create_world::buttons(size.0, size.1, *creative, options)
+        create_world::buttons(
+            size.0,
+            size.1,
+            *creative,
+            options,
+            f.title.preset_data.is_some(),
+        )
     };
     let button = labels(&f)
         .into_iter()
@@ -2496,6 +2490,7 @@ fn the_single_biome_preset_is_customized_into_the_generator() {
         options.world_gen(),
         None,
         options.single_biome(),
+        None,
     )
     .unwrap();
     let settings = crate::save::world_gen_settings(&dir).unwrap();

@@ -197,6 +197,7 @@ impl Game<'_> {
             jockey_rider: None,
         };
         finalize::finalize(&mut cx, mob, reason, group);
+        let _save_lease = horizon_client::join_seq::visibility::PassLease::enter();
         let created = std::mem::take(&mut cx.created);
         let game = level.game;
         game.world.random = random;

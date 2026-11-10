@@ -11,7 +11,7 @@
 use super::{Game, commands::Target};
 use horizon_client::items::ItemStack;
 use horizon_core::{geometry::Vec3, position::BlockPos};
-use mod_api::{EntityRef, RemovalReason};
+use mod_api::{EntityReadError, EntityRef, RemovalReason};
 
 impl Game<'_> {
     /// Removes the entity with no death and no loot (`Entity.discard`): a
@@ -26,7 +26,11 @@ impl Game<'_> {
     /// removal (Oozing's slimes, Weaving's cobwebs, Wind Charged's burst),
     /// still with no death and no loot. False for a player, a dragon part, or a stale
     /// handle.
-    pub(super) fn entity_remove(&mut self, entity: EntityRef, reason: RemovalReason) -> Result<bool, EntityReadError> {
+    pub(super) fn entity_remove(
+        &mut self,
+        entity: EntityRef,
+        reason: RemovalReason,
+    ) -> Result<bool, EntityReadError> {
         let killed = reason == RemovalReason::Killed;
         match self.native_entity_target(entity) {
             // A part leaves the level with its dragon, never alone.

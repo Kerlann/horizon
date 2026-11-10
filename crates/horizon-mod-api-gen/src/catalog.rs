@@ -591,7 +591,38 @@ impl Catalog {
                     .map(str::to_string)
             })
             .collect::<Vec<_>>();
-        modules.sort_by(|a, b| (a != "base", a).cmp(&(b != "base", b)));
+        // Split declarations retain their original HookId positions in per-item metadata.
+        // Unnumbered additions are discovered alphabetically, without a shared registry.
+        let mut order = std::collections::HashMap::new();
+        for module in &modules {
+            let path = dir.join(format!("{module}.rs"));
+            let source = fs::read_to_string(&path).map_err(|e| read_error(&path, e))?;
+            if let Some(value) = source
+                .lines()
+                .find_map(|line| line.strip_prefix("// catalog-order: "))
+            {
+                let ordinal = value
+                    .parse::<usize>()
+                    .map_err(|e| CatalogError::Declaration {
+                        path: path.display().to_string(),
+                        error: format!("invalid catalog-order: {e}"),
+                    })?;
+                if order.values().any(|previous| *previous == ordinal) {
+                    return Err(CatalogError::Declaration {
+                        path: path.display().to_string(),
+                        error: format!("duplicate catalog-order: {ordinal}"),
+                    });
+                }
+                order.insert(module.clone(), ordinal);
+            }
+        }
+        modules.sort_by(|a, b| {
+            (a != "base", order.get(a).copied().unwrap_or(usize::MAX), a).cmp(&(
+                b != "base",
+                order.get(b).copied().unwrap_or(usize::MAX),
+                b,
+            ))
+        });
         for module in &modules {
             if syn::parse_str::<syn::Ident>(module).is_err() {
                 return Err(CatalogError::InvalidModule(module.clone()));
@@ -1018,5 +1049,29 @@ mod tests {
                 CatalogError::AnsweredNeedsGlobalReplace("a".into())
             );
         }
+    }
+    #[test]
+    fn split_file_order_is_stable_and_validated() {
+        let dir = std::env::temp_dir().join(format!("hook-order-{}", std::process::id()));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("z.rs"), "// catalog-order: 1\n").unwrap();
+        fs::write(dir.join("a.rs"), "// catalog-order: 2\n").unwrap();
+        fs::write(dir.join("b.rs"), "").unwrap();
+        assert_eq!(Catalog::modules(&dir).unwrap(), ["z", "a", "b"]);
+        fs::write(dir.join("b.rs"), "// catalog-order: 2\n").unwrap();
+        assert!(
+            Catalog::modules(&dir)
+                .unwrap_err()
+                .to_string()
+                .contains("duplicate catalog-order")
+        );
+        fs::write(dir.join("b.rs"), "// catalog-order: bad\n").unwrap();
+        assert!(
+            Catalog::modules(&dir)
+                .unwrap_err()
+                .to_string()
+                .contains("invalid catalog-order")
+        );
+        fs::remove_dir_all(dir).unwrap();
     }
 }

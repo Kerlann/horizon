@@ -1,14 +1,18 @@
 //! Atlas sprite sources (`SpriteSourceList`): the `atlases/*.json`
 //! definitions listing which sprites an atlas holds. `directory`, `single`,
-//! `filter`, `unstitch` and `paletted_permutations` sources run in order
-//! against the resource tree; a later source replaces an earlier sprite of
-//! the same id and a filter removes the matching ones.
+//! `filter`, `unstitch` and `paletted_permutations` sources, and the types mods
+//! register ([`crate::mod_sprite_sources`]), run in order against the resource
+//! tree; a later source replaces an earlier sprite of the same id and a filter
+//! removes the matching ones.
 use horizon_assets::palette::apply_palette;
 use horizon_client_core::pattern::Pattern;
+use horizon_core::nbt::Tag;
+use mod_api::{Identifier, SpriteSourceOutput};
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
+    sync::Arc,
 };
 
 /// One region of an `unstitch` source, in units of the divisors.
@@ -46,6 +50,13 @@ pub enum SpriteSource {
         permutations: BTreeMap<String, String>,
         separator: String,
     },
+    /// An entry of a type a mod registered: its source answers it when the atlas is listed.
+    Registered {
+        /// The type id (`mymod:checker`).
+        kind: String,
+        /// The entry's object, converted once at load.
+        config: Arc<Tag>,
+    },
 }
 /// Where a listed sprite's pixels come from.
 #[derive(Clone, Debug, PartialEq)]
@@ -65,6 +76,8 @@ pub enum SpriteOrigin {
         palette_key: String,
         palette: String,
     },
+    /// Pixels a mod's sprite source made.
+    Pixels(Image),
 }
 
 /// `Identifier.parse` default namespace.
@@ -85,15 +98,63 @@ fn number(v: &Value, key: &str, default: f64) -> Option<f64> {
     }
 }
 
+/// Why an atlas definition can't be decoded ([`decode`]).
+#[derive(Debug)]
+pub enum DefinitionError {
+    /// The file isn't JSON.
+    Json(serde_json::Error),
+    /// It has no `sources` list.
+    NoSources,
+    /// The entry at `index` doesn't decode as its type.
+    Malformed { index: usize },
+    /// The entry at `index` is of a type neither built in nor registered by a mod.
+    UnknownType { index: usize, kind: String },
+}
+impl std::fmt::Display for DefinitionError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Json(error) => error.fmt(f),
+            Self::NoSources => f.write_str("no `sources` list"),
+            Self::Malformed { index } => write!(f, "sources[{index}]: malformed source"),
+            Self::UnknownType { index, kind } => {
+                write!(f, "sources[{index}]: unknown sprite source type {kind}")
+            }
+        }
+    }
+}
+impl std::error::Error for DefinitionError {}
+
 /// `SpriteSources.FILE_CODEC`: the `sources` list of an atlas definition.
-/// A malformed source fails the whole file, as the codec does.
-pub fn decode(text: &str) -> Option<Vec<SpriteSource>> {
-    let json: Value = serde_json::from_str(text).ok()?;
-    json.get("sources")?
-        .as_array()?
+/// A malformed source fails the whole file, as the codec does; the error names
+/// the first one, and its type when no source has it.
+pub fn decode(text: &str) -> Result<Vec<SpriteSource>, DefinitionError> {
+    let json: Value = serde_json::from_str(text).map_err(DefinitionError::Json)?;
+    let sources = json
+        .get("sources")
+        .and_then(Value::as_array)
+        .ok_or(DefinitionError::NoSources)?;
+    sources
         .iter()
-        .map(decode_source)
+        .enumerate()
+        .map(|(index, source)| {
+            let kind = source.get("type").and_then(Value::as_str).map(qualified);
+            decode_source(source).ok_or_else(|| match kind {
+                Some(kind) if !known(&kind) => DefinitionError::UnknownType { index, kind },
+                _ => DefinitionError::Malformed { index },
+            })
+        })
         .collect()
+}
+/// Whether a source of type `kind` can be decoded: a built-in one or one a mod registered.
+fn known(kind: &str) -> bool {
+    matches!(
+        kind,
+        "minecraft:directory"
+            | "minecraft:single"
+            | "minecraft:filter"
+            | "minecraft:unstitch"
+            | "minecraft:paletted_permutations"
+    ) || crate::mod_sprite_sources::is_registered(kind)
 }
 fn decode_source(s: &Value) -> Option<SpriteSource> {
     Some(match qualified(s.get("type")?.as_str()?).as_str() {
@@ -165,6 +226,10 @@ fn decode_source(s: &Value) -> Option<SpriteSource> {
                 Some(v) => v.as_str()?.to_owned(),
             },
         },
+        kind if crate::mod_sprite_sources::is_registered(kind) => SpriteSource::Registered {
+            kind: kind.to_owned(),
+            config: Arc::new(horizon_core::json_nbt::json_to_tag(s).ok()?),
+        },
         _ => return None,
     })
 }
@@ -203,9 +268,24 @@ pub fn texture_resource(texture: &str, directory: &str) -> String {
     }
 }
 
+/// What a mod's source answers for an entry of its type: the type, the entry's
+/// object and the sprites listed before it ([`crate::mod_sprite_sources::ask`]).
+pub type Ask<'a> = dyn FnMut(&str, &Tag, &[Identifier]) -> Vec<SpriteSourceOutput> + 'a;
+
+/// The `ask` of an atlas Horizon doesn't stitch from its definition (its block, item and GUI
+/// atlases): a mod's source there adds nothing, so what is listed matches what is stitched.
+pub fn unasked(_: &str, _: &Tag, _: &[Identifier]) -> Vec<SpriteSourceOutput> {
+    Vec::new()
+}
+
 /// `SpriteSourceList.list`: every sprite id of the atlas and its origin.
-/// `textures` are the available texture identifiers ([`list_textures`]).
-pub fn list(sources: &[SpriteSource], textures: &[String]) -> BTreeMap<String, SpriteOrigin> {
+/// `textures` are the available texture identifiers ([`list_textures`]);
+/// `ask` answers the entries of a type a mod registered.
+pub fn list(
+    sources: &[SpriteSource],
+    textures: &[String],
+    ask: &mut Ask<'_>,
+) -> BTreeMap<String, SpriteOrigin> {
     let mut out = BTreeMap::new();
     let exists = |t: &str| textures.binary_search_by(|x| x.as_str().cmp(t)).is_ok();
     for source in sources {
@@ -280,21 +360,84 @@ pub fn list(sources: &[SpriteSource], textures: &[String]) -> BTreeMap<String, S
                     }
                 }
             }
+            SpriteSource::Registered { kind, config } => {
+                let listed: Vec<Identifier> = out
+                    .keys()
+                    .filter_map(|id| Identifier::parse(id).ok())
+                    .collect();
+                for output in ask(kind, config, &listed) {
+                    apply(kind, output, &exists, &mut out);
+                }
+            }
         }
     }
     out
 }
 
+/// One step of a mod's source on the listed sprites, as `SpriteSource.Output` takes it. What
+/// can't be a sprite is logged and skipped by itself.
+fn apply(
+    kind: &str,
+    output: SpriteSourceOutput,
+    exists: &dyn Fn(&str) -> bool,
+    out: &mut BTreeMap<String, SpriteOrigin>,
+) {
+    match output {
+        SpriteSourceOutput::Texture { sprite, texture } => {
+            let texture = texture.to_string();
+            if exists(&texture) {
+                out.insert(sprite.to_string(), SpriteOrigin::File(texture));
+            } else {
+                log::warn!("sprite source {kind}: sprite {sprite}: no texture {texture}; skipped");
+            }
+        }
+        SpriteSourceOutput::Pixels {
+            sprite,
+            width,
+            height,
+            rgba,
+        } => {
+            // A size from mod code: checked arithmetic, so no input can overflow or panic.
+            let length = (width as usize)
+                .checked_mul(height as usize)
+                .and_then(|pixels| pixels.checked_mul(4));
+            if width == 0 || height == 0 {
+                log::warn!("sprite source {kind}: sprite {sprite} has no pixels; skipped");
+            } else if length != Some(rgba.len()) {
+                log::warn!(
+                    "sprite source {kind}: sprite {sprite}: {} bytes for {width}x{height} pixels \
+                     (4 a pixel); skipped",
+                    rgba.len()
+                );
+            } else if i64::from(width.max(height)) > MAX_SPRITE_SIDE {
+                log::warn!(
+                    "sprite source {kind}: sprite {sprite}: {width}x{height} exceeds the \
+                     {MAX_SPRITE_SIDE}-pixel sprite side; skipped"
+                );
+            } else {
+                out.insert(
+                    sprite.to_string(),
+                    SpriteOrigin::Pixels((width, height, rgba)),
+                );
+            }
+        }
+        SpriteSourceOutput::Remove { sprite } => {
+            out.remove(&sprite.to_string());
+        }
+    }
+}
+
 /// An RGBA image.
 pub type Image = (u32, u32, Vec<u8>);
 
-/// The largest side of a sprite an `unstitch` region may cut, in pixels. Vanilla's
-/// `Unstitcher` has no limit of its own, but its stitcher can't place a sprite larger than the
-/// device's maximum texture size, and the renderer asks for the adapter's own limits. 32768 is the
-/// largest `max_texture_dimension_2d` current drivers report (NVIDIA's Vulkan; Direct3D 12 and
-/// Metal stop at 16384), so no region vanilla would stitch is refused. A larger declared region is
-/// skipped with a logged reason, never allocated.
-pub const MAX_REGION_SIDE: i64 = 32768;
+/// The largest side of a sprite an `unstitch` region may cut or a mod's source may make, in
+/// pixels. Vanilla's `Unstitcher` and `SpriteSource.Output` have no limit of their own, but its
+/// stitcher can't place a sprite larger than the device's maximum texture size, and the renderer
+/// asks for the adapter's own limits. 32768 is the largest `max_texture_dimension_2d` current
+/// drivers report (NVIDIA's Vulkan; Direct3D 12 and Metal stop at 16384), so no sprite vanilla
+/// would stitch is refused. A larger declared sprite is skipped with a logged reason, never
+/// allocated.
+pub const MAX_SPRITE_SIDE: i64 = 32768;
 
 fn argb(rgba: &[u8]) -> Vec<u32> {
     rgba.as_chunks::<4>()
@@ -303,14 +446,15 @@ fn argb(rgba: &[u8]) -> Vec<u32> {
         .map(|p| u32::from_be_bytes([p[3], p[0], p[1], p[2]]))
         .collect()
 }
-/// The pixels of a generated sprite (`Region` or `Paletted`); `None` for a
-/// plain file, which loads as itself.
+/// The pixels of a generated sprite (`Region`, `Paletted` or a mod's `Pixels`);
+/// `None` for a plain file, which loads as itself.
 pub fn generate(
     origin: &SpriteOrigin,
     load: &dyn Fn(&str, &str) -> Option<Image>,
 ) -> Option<Image> {
     match origin {
         SpriteOrigin::File(_) => None,
+        SpriteOrigin::Pixels(image) => Some(image.clone()),
         SpriteOrigin::Region {
             texture,
             region,
@@ -330,9 +474,9 @@ pub fn generate(
             }
             // The region and divisors come from an atlas definition a mod or pack writes: refuse a
             // sprite over the stated side before sizing anything.
-            if width > MAX_REGION_SIDE || height > MAX_REGION_SIDE {
+            if width > MAX_SPRITE_SIDE || height > MAX_SPRITE_SIDE {
                 log::warn!(
-                    "atlas region {} of {texture}: {width}x{height} exceeds the {MAX_REGION_SIDE}-pixel \
+                    "atlas region {} of {texture}: {width}x{height} exceeds the {MAX_SPRITE_SIDE}-pixel \
                      sprite side; skipped",
                     region.sprite
                 );
@@ -400,7 +544,13 @@ pub fn atlases(
         .filter_map(|file| {
             let (namespace, path) = file.strip_prefix("assets/")?.split_once("/atlases/")?;
             let name = path.strip_suffix(".json")?;
-            let sources = decode(&source.read_to_string(&file).ok()?)?;
+            let sources = match decode(&source.read_to_string(&file).ok()?) {
+                Ok(sources) => sources,
+                Err(error) => {
+                    log::warn!("Horizon: atlas {namespace}:{name} skipped: {error}");
+                    return None;
+                }
+            };
             Some((format!("{namespace}:{name}"), sources))
         })
         .collect()
@@ -430,7 +580,7 @@ mod tests {
         let atlases = atlases(&source);
         assert_eq!(atlases.keys().collect::<Vec<_>>(), [&"demo:custom/nested"]);
         assert!(
-            matches!(list(&atlases["demo:custom/nested"], &textures).get("demo:renamed"), Some(SpriteOrigin::File(texture)) if texture == "demo:item/x")
+            matches!(list(&atlases["demo:custom/nested"], &textures, &mut unasked).get("demo:renamed"), Some(SpriteOrigin::File(texture)) if texture == "demo:item/x")
         );
     }
 
@@ -460,7 +610,7 @@ mod tests {
             ]}"#,
         )
         .unwrap();
-        let listed = list(&sources, &textures());
+        let listed = list(&sources, &textures(), &mut unasked);
         let ids: Vec<&str> = listed.keys().map(String::as_str).collect();
         assert_eq!(
             ids,
@@ -478,11 +628,24 @@ mod tests {
     }
     #[test]
     fn malformed_sources_fail_the_file() {
-        assert!(decode(r#"{"sources":[{"type":"directory","source":"item"}]}"#).is_none());
-        assert!(
-            decode(r#"{"sources":[{"type":"unstitch","resource":"x","regions":[]}]}"#).is_none()
+        assert_eq!(
+            decode(r#"{"sources":[{"type":"directory","source":"item"}]}"#)
+                .unwrap_err()
+                .to_string(),
+            "sources[0]: malformed source"
         );
-        assert!(decode(r#"{"sources":[{"type":"horizon"}]}"#).is_none());
+        assert_eq!(
+            decode(r#"{"sources":[{"type":"directory","source":"a","prefix":""},{"type":"unstitch","resource":"x","regions":[]}]}"#)
+                .unwrap_err()
+                .to_string(),
+            "sources[1]: malformed source"
+        );
+        assert_eq!(
+            decode(r#"{"sources":[{"type":"horizon"}]}"#)
+                .unwrap_err()
+                .to_string(),
+            "sources[0]: unknown sprite source type minecraft:horizon"
+        );
     }
     #[test]
     fn unstitch_cuts_by_divisor() {
@@ -535,14 +698,14 @@ mod tests {
             (i64::MAX as f64, 2.0),
             (2.0, i64::MAX as f64),
             (3_000_000_000.0, 3_000_000_000.0),
-            ((MAX_REGION_SIDE + 1) as f64, 1.0),
+            ((MAX_SPRITE_SIDE + 1) as f64, 1.0),
             (f64::INFINITY, 1.0),
         ] {
             assert_eq!(region_of(0.0, 0.0, width, height), None, "{width}x{height}");
         }
         // The largest side is still a sprite (one row, so the test allocates little).
-        let (w, h, out) = region_of(0.0, 0.0, MAX_REGION_SIDE as f64, 1.0).unwrap();
-        assert_eq!((w, h), (MAX_REGION_SIDE as u32, 1));
+        let (w, h, out) = region_of(0.0, 0.0, MAX_SPRITE_SIDE as f64, 1.0).unwrap();
+        assert_eq!((w, h), (MAX_SPRITE_SIDE as u32, 1));
         assert_eq!(&out[..4], [0, 0, 0, 255]);
         // An offset near the integer limit: the pixels outside the texture stay transparent.
         let (w, h, out) = region_of(i64::MAX as f64, -(i64::MAX as f64), 2.0, 2.0).unwrap();

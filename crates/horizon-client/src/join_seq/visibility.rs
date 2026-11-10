@@ -5,6 +5,29 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
+/// Process-wide outstanding entity passes, including unbound owners and parked levels.
+/// Admission is serialized with lending on the game thread.
+static PASSES: AtomicUsize = AtomicUsize::new(0);
+
+pub fn passes_settled() -> bool {
+    PASSES.load(Ordering::Relaxed) == 0
+}
+
+/// Lexical obligation for rows held outside their authoritative storage.
+#[derive(Debug)]
+pub struct PassLease(());
+impl PassLease {
+    pub fn enter() -> Self {
+        PASSES.fetch_add(1, Ordering::Relaxed);
+        Self(())
+    }
+}
+impl Drop for PassLease {
+    fn drop(&mut self) {
+        PASSES.fetch_sub(1, Ordering::Relaxed);
+    }
+}
+
 #[derive(Debug, Default)]
 struct Epoch(AtomicUsize);
 
@@ -21,7 +44,10 @@ impl Visibility {
     pub fn enter(&self) -> Lease {
         let epoch = self.0.lock().unwrap();
         epoch.0.fetch_add(1, Ordering::Relaxed);
-        Lease(epoch.clone())
+        Lease {
+            epoch: epoch.clone(),
+            _pass: PassLease::enter(),
+        }
     }
     /// Whether this epoch has no tracked outstanding leases. This describes
     /// visibility only if callers have not expired a still-borrowed owner.
@@ -46,10 +72,13 @@ impl Visibility {
 
 /// Owned visibility obligation. Transfer this value instead of entering twice.
 #[derive(Debug)]
-pub struct Lease(Arc<Epoch>);
+pub struct Lease {
+    epoch: Arc<Epoch>,
+    _pass: PassLease,
+}
 impl Drop for Lease {
     fn drop(&mut self) {
-        self.0.0.fetch_sub(1, Ordering::Relaxed);
+        self.epoch.0.fetch_sub(1, Ordering::Relaxed);
     }
 }
 
@@ -80,6 +109,45 @@ mod tests {
         Row {
             join: JoinSeq::UNJOINED,
         }
+    }
+
+    #[test]
+    fn unbound_passes_block_until_restore_consumption_and_unwind() {
+        // The admission signal is process-wide. Isolate this test from other
+        // tests legitimately lifting owners concurrently in the same runner.
+        const CHILD: &str = "HORIZON_SAVE_LEASE_TEST_CHILD";
+        if std::env::var_os(CHILD).is_none() {
+            let status = std::process::Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "join_seq::visibility::tests::unbound_passes_block_until_restore_consumption_and_unwind"])
+                .env(CHILD, "1")
+                .status()
+                .unwrap();
+            assert!(status.success());
+            return;
+        }
+        assert!(passes_settled());
+        let mut list = JoinList::<Row>::default();
+        list.push(row());
+        let mut pass = list.lift();
+        assert!(!passes_settled());
+        let owned = pass.take_owned_pass();
+        drop(pass);
+        assert!(!passes_settled());
+        list.restore(owned, RestoreOrder::SurvivorsFirst);
+        assert!(passes_settled());
+        let mut iter = list.lift().into_iter();
+        let _row = iter.next().unwrap();
+        assert!(!passes_settled());
+        drop(iter);
+        assert!(passes_settled());
+        let panic = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            let _pass = list.lift();
+            let _bare = PassLease::enter();
+            assert!(!passes_settled());
+            panic!("listener");
+        }));
+        assert!(panic.is_err());
+        assert!(passes_settled());
     }
 
     #[test]

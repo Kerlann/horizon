@@ -15,7 +15,7 @@ const PIG: &str = "0000609a-0000-0000-0000-000000000001";
 const EXPLICIT: &str = "0000609a-0000-0000-0000-000000000002";
 const NATURAL: &str = "@e[type=minecraft:leash_knot,x=8.5,y=201.375,z=0.5,distance=..0.001]";
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -37,7 +37,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -86,7 +86,8 @@ fn pig(game: &mut Game<'_>) -> usize {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn commands_see_the_knot_a_restored_fence_leash_ties() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     assert!(game.lan.is_none(), "no server tracks the level");
     // Before restoration: only the pending tag, no knot at the fence; the
     // explicit knot is found.

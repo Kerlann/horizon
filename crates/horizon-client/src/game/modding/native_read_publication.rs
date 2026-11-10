@@ -221,10 +221,15 @@ impl Game<'_> {
                 mob_target_facts: Some(NativeMobTargetFacts::capture(source)),
             }
         };
-        let published = self.entity_residency.borrow_mut().publish_rows_merging(
-            [(source.id, location, publication)],
-            NativeReadPublication::merge_pending_scalars,
-        ) == 1;
+        let published = self
+            .resident_entities
+            .table
+            .borrow_mut()
+            .publish_rows_merging(
+                [(source.id, location, publication)],
+                NativeReadPublication::merge_pending_scalars,
+            )
+            == 1;
         drop(scope);
         published
     }

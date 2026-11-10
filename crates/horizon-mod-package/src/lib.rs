@@ -15,6 +15,7 @@ pub mod icon;
 pub mod index;
 pub mod install_lock;
 pub mod internals;
+pub mod layouts;
 #[cfg(all(
     feature = "runtime-process",
     any(target_os = "linux", target_os = "macos", windows)

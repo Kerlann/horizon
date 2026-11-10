@@ -8,7 +8,7 @@ use horizon_client::chunk::Chunk;
 use horizon_core::position::ChunkPos;
 use std::sync::Arc;
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -30,7 +30,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -138,7 +138,8 @@ const STICK: &str = "execute if entity @e[type=item,x=2.5,y=100,z=8.5,distance=.
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_burnt_out_stand_drops_its_loot_table() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     with_stick_table(&mut game, "normal");
     burn(&mut game, false);
     assert!(game.run_command(STICK), "the table's stick drops");
@@ -148,7 +149,8 @@ fn a_burnt_out_stand_drops_its_loot_table() {
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_small_burnt_out_stand_drops_no_loot() {
     // ArmorStand.isBaby is isSmall: LivingEntity.shouldDropLoot is false.
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     with_stick_table(&mut game, "small");
     burn(&mut game, true);
     assert!(!game.run_command(STICK));
@@ -167,7 +169,8 @@ fn sticks(game: &mut Game<'_>) -> String {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn control_mob_drops_off_rolls_nothing() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     with_stick_table(&mut game, "nodrops");
     assert!(game.run_command("gamerule mob_drops false"));
     burn(&mut game, false);
@@ -177,7 +180,8 @@ fn control_mob_drops_off_rolls_nothing() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn control_one_break_rolls_the_table_once() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     with_stick_table(&mut game, "once");
     burn(&mut game, false);
     assert_eq!(sticks(&mut game), "Test passed. Count: 1");

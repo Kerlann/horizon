@@ -130,8 +130,8 @@ impl Parked {
         self.persist.uuids.iter().map(|(&id, &uuid)| (id, uuid))
     }
 
-    resident_owners!(define_resident_access, self, projectiles);
-    resident_owners!(resident_read_access, self, projectiles);
+    resident_owners!(define_resident_access, self, projectiles, knots);
+    resident_owners!(resident_read_access, self, projectiles, knots);
 }
 
 impl Game<'_> {
@@ -288,7 +288,8 @@ impl Game<'_> {
     ) -> super::entity_residency::SlotAccess<R> {
         use super::entity_residency::SlotAccess;
         let resolved = {
-            self.entity_residency
+            self.resident_entities
+                .table
                 .borrow_mut()
                 .entity_lookup(dimension, id.get(), |at| {
                     self.locate_server_resident_owner(at)
@@ -299,7 +300,7 @@ impl Game<'_> {
             EntityLookup::Taken => return SlotAccess::Taken,
             EntityLookup::Missing => return SlotAccess::Missing,
         };
-        debug_assert!(self.entity_residency.try_borrow_mut().is_ok());
+        debug_assert!(self.resident_entities.table.try_borrow_mut().is_ok());
         if matches!(
             location.owner.kind,
             horizon_client::join_seq::residency::Kind::Player
@@ -338,7 +339,8 @@ impl Game<'_> {
 
     pub(super) fn server_resident_entity(&self, id: u32) -> EntityLookup<Target> {
         let found = self
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_entity_lookup(id, |at| self.locate_server_resident_owner(at));
         match found {
@@ -379,7 +381,7 @@ impl Game<'_> {
     /// A new epoch invalidates every old producer before rebinding retained levels.
     pub(super) fn reset_entity_residency(&mut self) {
         self.entity_read_state.get_mut().reset();
-        let table = self.entity_residency.get_mut();
+        let table = self.resident_entities.table.get_mut();
         table.reset();
         let journal = table.producer();
         self.bind_resident_owners(&journal, self.dim.key());
@@ -795,7 +797,10 @@ impl Game<'_> {
         swap(&mut self.hoppers, &mut p.hoppers);
         swap(&mut self.mobs, &mut p.mobs);
         swap(&mut self.knot_ids, &mut p.knot_ids);
-        swap(&mut self.knots, &mut p.knots);
+        swap(
+            &mut self.resident_entities.knots,
+            &mut p.resident_entities.knots,
+        );
         swap(&mut self.creatures.projectiles, &mut p.projectiles);
         swap(&mut self.dropped, &mut p.dropped);
         swap(&mut self.orbs, &mut p.orbs);
@@ -941,25 +946,7 @@ impl Game<'_> {
     /// run. The native server tick hook brackets it (`ServerTickStart` before
     /// the first level, `ServerTickEnd` after the last).
     pub(super) fn tick_server(&mut self, paused: bool) -> Result<()> {
-        use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
-        let result = catch_unwind(AssertUnwindSafe(|| self.tick_server_body(paused)));
-        // Expire markers even after an interrupted pass. Preserve the original
-        // native payload if the debug completion assertion also fires.
-        let finished = catch_unwind(AssertUnwindSafe(|| {
-            self.entity_residency.get_mut().end_tick()
-        }));
-        match result {
-            Err(payload) => resume_unwind(payload),
-            Ok(result) => {
-                let finished = match finished {
-                    Ok(finished) => finished,
-                    Err(payload) => resume_unwind(payload),
-                };
-                result?;
-                finished
-                    .map_err(|error| format!("unfinished entity residency pass: {error:?}").into())
-            }
-        }
+        self.with_residency_tick(|game| game.tick_server_body(paused))
     }
 
     fn tick_server_body(&mut self, paused: bool) -> Result<()> {
@@ -1301,7 +1288,7 @@ impl Game<'_> {
         {
             return;
         }
-        let journal = self.entity_residency.borrow().producer();
+        let journal = self.resident_entities.table.borrow().producer();
         if dim == self.dim {
             self.bind_resident_owners(&journal, dim.key());
         } else if let Some(parked) = self.levels.parked.get_mut(&dim) {
@@ -1338,6 +1325,9 @@ impl Game<'_> {
     /// could not be is logged. A level not open any more is opened to be saved, like a parked one.
     /// The level in place is put back.
     pub(super) fn run_requested_saves(&mut self) {
+        if Self::admit_entity_save().is_err() {
+            return;
+        }
         let requested = std::mem::take(&mut self.levels.requested_saves);
         if requested.is_empty() || self.remote.is_some() {
             return;
@@ -1875,6 +1865,20 @@ mod tests {
 #[cfg(test)]
 mod request_save_tests {
     use super::{Dim, Levels};
+
+    #[test]
+    #[ignore = "needs prepared resources and isolated homes"]
+    fn requested_save_waits_without_consuming_the_queue_while_lifted() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            game.levels.request_save(Dim::Overworld);
+            let pass = game.dropped.lift();
+            game.run_requested_saves();
+            assert_eq!(game.levels.requested_saves, [Dim::Overworld]);
+            drop(pass);
+            game.run_requested_saves();
+            assert!(game.levels.requested_saves.is_empty());
+        });
+    }
 
     /// A level asked for twice is queued once, and clearing the levels drops the queue.
     #[test]

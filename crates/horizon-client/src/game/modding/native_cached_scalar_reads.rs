@@ -1631,9 +1631,11 @@ mod tests {
                 mob_target_facts: None,
             };
             assert_eq!(
-                game.entity_residency
-                    .borrow_mut()
-                    .publish_rows([(410, location, publication)]),
+                game.resident_entities.table.borrow_mut().publish_rows([(
+                    410,
+                    location,
+                    publication
+                )]),
                 1
             );
             assert_eq!(game.entity_custom_name_visible(entity), None);

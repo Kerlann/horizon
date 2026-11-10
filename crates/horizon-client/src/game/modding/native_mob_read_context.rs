@@ -307,7 +307,7 @@ impl Game<'_> {
         #[cfg(test)]
         record_backing_work(|work| work.source_lookups += 1);
         let (at, state, details) = {
-            let mut table = self.entity_residency.borrow_mut();
+            let mut table = self.resident_entities.table.borrow_mut();
             let (at, state, _, details) = table
                 .server_admitted_read_lookup(id, |at| self.locate_server_resident_owner(at))?;
             (at, state, details)
@@ -467,7 +467,7 @@ impl Game<'_> {
     pub(super) fn admitted_profile_uuid(&self, id: u32, source: Source, uuid: [i32; 4]) -> bool {
         #[cfg(test)]
         record_backing_work(|work| work.source_lookups += 1);
-        let mut table = self.entity_residency.borrow_mut();
+        let mut table = self.resident_entities.table.borrow_mut();
         table
             .server_admitted_read_lookup(id, |at| self.locate_server_resident_owner(at))
             .is_some_and(|(at, state, _, details)| {
@@ -526,7 +526,12 @@ impl Game<'_> {
         mut visit: impl FnMut(u32, [i32; 4]),
     ) {
         candidates.clear();
-        candidates.extend(self.entity_residency.borrow_mut().admitted_metadata());
+        candidates.extend(
+            self.resident_entities
+                .table
+                .borrow_mut()
+                .admitted_metadata(),
+        );
         #[cfg(test)]
         record_backing_work(|work| work.population_visits += candidates.len());
         for &(id, expected, expected_details) in candidates.iter() {
@@ -557,7 +562,8 @@ impl Game<'_> {
             kind: horizon_client::join_seq::residency::Kind::Mob,
         };
         if self
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .owner_physically_available(owner, None)
         {
@@ -659,7 +665,7 @@ impl Game<'_> {
         .then_some(guest)
     }
     fn read_mob_facts(&self, id: u32, level: LevelRef) -> Option<NativeMobTargetFacts> {
-        let mut table = self.entity_residency.borrow_mut();
+        let mut table = self.resident_entities.table.borrow_mut();
         let (state, cached) =
             table.server_entity_read_lookup(id, |at| self.locate_server_resident_owner(at));
         match state {
@@ -963,7 +969,7 @@ impl Game<'_> {
         level: LevelRef,
         _index: &NativeMobRelations,
     ) -> Option<EntityRef> {
-        let mut table = self.entity_residency.borrow_mut();
+        let mut table = self.resident_entities.table.borrow_mut();
         let (at, state, _, _) =
             table.server_admitted_read_lookup(id, |at| self.locate_server_resident_owner(at))?;
         let visible = match state {
@@ -1105,7 +1111,7 @@ impl Game<'_> {
                     (uuid, valid)
                 } else {
                     let conn = {
-                        let mut table = self.entity_residency.borrow_mut();
+                        let mut table = self.resident_entities.table.borrow_mut();
                         let (at, _, _, _) = table.server_admitted_read_lookup(id, |at| {
                             self.locate_server_resident_owner(at)
                         })?;
@@ -1153,7 +1159,7 @@ impl Game<'_> {
         }
         let epoch = self.native_lifecycle.epoch()?;
         let level = {
-            let mut table = self.entity_residency.borrow_mut();
+            let mut table = self.resident_entities.table.borrow_mut();
             let (state, cached) = table
                 .server_entity_read_lookup(actor.id, |at| self.locate_server_resident_owner(at));
             match state {

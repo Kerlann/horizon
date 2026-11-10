@@ -8,6 +8,7 @@ description = "Downloads, prepares and starts Horizon builds"
 [workspace]
 
 [dependencies]
+horizon-addresses = { path = "../crates/horizon-addresses" }
 # The catalog and mod-owned trait injections share their generation rules.
 horizon-mod-api-gen = { path = "../crates/horizon-mod-api-gen" }
 horizon-mod-point-shape = { path = "../crates/horizon-mod-point-shape" }
@@ -41,13 +42,19 @@ dirs = "5"
 sys-locale = "0.3"
 clap = { version = "4", features = ["derive"] }
 clap_complete = "4"
-horizon-theme = { path = "../crates/horizon-theme" }
 horizon-core = { path = "../crates/horizon-core" }
-# Share the managed supervisor command; never query a game for it.
 horizon-server-launch = { path = "../crates/horizon-server-launch" }
+horizon-prepare = { path = "../crates/horizon-prepare" }
+horizon-system = { path = "../crates/horizon-system" }
+horizon-protocol = { path = "../crates/horizon-protocol" }
+horizon-theme = { path = "../crates/horizon-theme" }
+# The engine, through the platform's public API (docs/layers.md): the pinned version, No AI, the preparer,
+# level.dat and servers.dat (the worlds and server lists of instances), and the official server's SRV record.
+horizon-platform = { path = "../crates/horizon-platform", features = ["prepare", "protocol", "world"] }
+horizon-cosmetics = { path = "../crates/horizon-cosmetics" }
+glam = "0.30"
 # `horizon-launcher mcp`: the Model Context Protocol, shared with horizon-ctl and horizon-server.
 horizon-mcp = { path = "../crates/horizon-mcp" }
-horizon-prepare = { path = "../crates/horizon-prepare" }
 # Join a friend: invite codes (the game does the joining).
 horizon-friends = { path = "../crates/horizon-friends" }
 horizon-bench = { path = "../crates/horizon-bench" }
@@ -59,12 +66,8 @@ horizon-mod-package = { path = "../crates/horizon-mod-package", features = ["ind
 horizon-shader-api = { path = "../crates/horizon-shader-api" }
 # Signed updates: archives are checked against the release's signed checksums (docs/security.md).
 horizon-release-sign = { path = "../crates/horizon-release-sign" }
-# Hardware probes and the scrubber for local bug reports (nothing is sent, docs/telemetry.md).
-horizon-system = { path = "../crates/horizon-system" }
-# The official server's count follows its SRV record, as the game does (server_redirect).
-horizon-protocol = { path = "../crates/horizon-protocol" }
-# level.dat and servers.dat (the worlds and server lists of instances)
-horizon-world = { path = "../crates/horizon-world" }
+# Opt-in data collection: the consent, the outbox and its upload (docs/telemetry.md).
+horizon-telemetry = { path = "../crates/horizon-telemetry" }
 # Deleting a world moves it to the system's trash
 trash = "5"
 # Backup names carry the local time, as vanilla's do

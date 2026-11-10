@@ -9,3 +9,6 @@ pub fn own_average(args: &mut mod_points::GameBeaconAverageArgs) -> u32 {
 
 /// Each call's inputs and the value the caller gets.
 pub const CASES: [(u32, u32, u32); 2] = [(3, 7, 70), (9, 1, 90)];
+
+/// Counts ordinary body execution in the native fixture.
+pub static BODY_CALLS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);

@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 const WOLF: u32 = 50;
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -31,7 +31,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = crate::game::execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -81,7 +81,8 @@ fn use_on_wolf(game: &mut Game<'_>, item: &str) -> (bool, u8, u32) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn the_collars_own_dye_leaves_a_wolf_as_it_was() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     let red = game.mobs[0].extra.color;
     assert_eq!(
         horizon_client::mobs::render::DYE_NAMES[usize::from(red)],

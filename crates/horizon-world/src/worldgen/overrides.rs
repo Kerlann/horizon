@@ -377,14 +377,19 @@ impl WorldgenOverrides {
         }
     }
     /// The dimension type a mod or a pack gave `level`, resolved as `level_height` does: a built-in
-    /// type's facts with the fields the pack's JSON names over them. None when the level takes a vanilla
-    /// type unchanged, and an error when a field the game reads is refused.
+    /// type's facts with the fields the pack's JSON names over them. An explicit stem may also
+    /// choose an unchanged built-in type. None without a stem or type override, and an error
+    /// when a field the game reads is refused.
     pub fn level_facts(
         &self,
         level: &str,
     ) -> Option<Result<crate::dimension_type::DimensionFacts, String>> {
         use crate::dimension_type::DimensionFacts;
-        let (id, json) = self.level_type_json(level)?;
+        let Some((id, json)) = self.level_type_json(level) else {
+            let stem = self.entries.get(DIMENSIONS)?.get(level)?;
+            let stem: Value = serde_json::from_str(stem).ok()?;
+            return Some(Ok(DimensionFacts::vanilla(stem["type"].as_str()?)?.clone()));
+        };
         // A pack's type for a vanilla id changes that type; any other starts from the Overworld's.
         let base = DimensionFacts::base_for_type(&id);
         Some(DimensionFacts::patched(base, &id, &json))
@@ -710,6 +715,32 @@ mod tests {
 #[cfg(test)]
 mod level_facts_tests {
     use super::*;
+
+    #[test]
+    fn a_stem_can_choose_a_different_builtin_dimension_type() {
+        let mut overrides = WorldgenOverrides::default();
+        overrides.set(
+            DIMENSIONS,
+            "minecraft:overworld",
+            r#"{"type":"minecraft:the_nether"}"#.into(),
+        );
+        let facts = overrides
+            .level_facts("minecraft:overworld")
+            .unwrap()
+            .unwrap();
+        assert_eq!(facts.id, "minecraft:the_nether");
+        assert!(facts.fast_lava && facts.respawn_anchor_works);
+        assert_eq!(facts.height.height, 256);
+        overrides.set(DIMENSION_TYPES, "minecraft:the_nether", r#"{"min_y":0,"height":256,"logical_height":128,"has_ceiling":true,"has_skylight":false,"ambient_light":0.5}"#.into());
+        assert_eq!(
+            overrides
+                .level_facts("minecraft:overworld")
+                .unwrap()
+                .unwrap()
+                .ambient_light,
+            0.5
+        );
+    }
 
     #[test]
     fn a_mods_level_takes_the_fields_it_set_over_the_overworlds() {

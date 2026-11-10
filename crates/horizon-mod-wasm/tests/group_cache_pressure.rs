@@ -2,6 +2,8 @@
 //! Separate process: exhausting the shared native budget must not race other fixtures.
 // Generated fixtures exercise every shape; TODO(#2273): make the generator emit clippy-clean code.
 #![allow(clippy::all, unused_comparisons, unreachable_patterns, dead_code)]
+#[path = "support/no_hooks.rs"]
+mod no_hooks;
 use mod_api::wire::{Writer, guest};
 
 #[test]

@@ -2,6 +2,8 @@
 //! progress (`PlayerAdvancements`) and the predicates criteria test
 //! (`EntityPredicate`, `ItemPredicate`, `LocationPredicate`, the loot
 //! conditions advancements use).
+mod state_ranges;
+
 use horizon_world::lazy_json::LazyJson;
 use serde_json::Value;
 use std::{
@@ -624,6 +626,10 @@ pub trait World {
     fn structures(&self, pos: [i32; 3]) -> Vec<String>;
     /// Block name and properties.
     fn block(&self, pos: [i32; 3]) -> (String, BTreeMap<String, String>);
+    /// Legal values of the actual registered property, unavailable without registry access.
+    fn block_property_values(&self, _block: &str, _property: &str) -> Option<Vec<String>> {
+        None
+    }
     fn fluid(&self, pos: [i32; 3]) -> Option<String>;
     fn can_see_sky(&self, pos: [i32; 3]) -> bool;
     fn light(&self, pos: [i32; 3]) -> i32;
@@ -919,7 +925,9 @@ pub fn block(v: &Value, pos: [i32; 3], w: &dyn World) -> bool {
                 Value::String(s) => have == *s,
                 Value::Bool(b) => have == b.to_string(),
                 Value::Number(n) => have == n.to_string(),
-                Value::Object(_) => have.parse::<f64>().is_ok_and(|h| range_f(want, h)),
+                Value::Object(bounds) => w
+                    .block_property_values(&name, k)
+                    .is_some_and(|domain| state_ranges::matches(bounds, &have, &domain)),
                 _ => false,
             };
             if !ok {
@@ -1960,7 +1968,6 @@ impl Tree {
 mod tests {
     use super::*;
     use serde_json::json;
-
     #[test]
     fn conditional_advancements_select_before_filtering_and_cache_by_inventory() {
         let data = std::env::temp_dir().join(format!(
@@ -2033,7 +2040,6 @@ mod tests {
         .unwrap();
         assert!(without.rewards.function.is_none());
     }
-
     /// The criteria an inventory change and a recipe unlock test, on vanilla's tree:
     /// `cargo test -p horizon-client --lib -- --ignored --nocapture index_on_vanilla_tree`
     /// with HORIZON_RESOURCES set to the prepared resources.
@@ -2241,7 +2247,6 @@ mod tests {
             &Flat
         ));
     }
-
     /// A `recipe_crafted` criterion names `minecraft:x`; the craft hands
     /// the recipe book and the trigger the same whole id (`award_crafted`
     /// qualifies). The bare name the crafting copy uses never matched —
@@ -2264,7 +2269,6 @@ mod tests {
             "the whole id award_crafted passes matches"
         );
     }
-
     /// `LockCode.canUnlock` for a chest with
     /// `lock:{items:"minecraft:gold_ingot"}`: a gold ingot opens it, an empty
     /// hand or another item does not, and a spectator always does.
@@ -3413,7 +3417,6 @@ mod tests {
         );
         assert_eq!(date_millis("not a date"), None);
     }
-
     #[test]
     fn simulate_progression_advancements() {
         let mut tree = Tree::default();
@@ -3500,7 +3503,6 @@ mod tests {
             tree.by_id.insert(id, tree.list.len());
             tree.list.push(a);
         }
-
         fn get_list(tree: &Tree, target: Option<&str>, mode: &str) -> Vec<usize> {
             match target {
                 None => (0..tree.list.len()).collect(),
@@ -3529,7 +3531,6 @@ mod tests {
                 }
             }
         }
-
         fn grant(tree: &Tree, prog: &mut Progress, list: &[usize]) -> i32 {
             let mut count = 0;
             for &i in list {
@@ -3544,7 +3545,6 @@ mod tests {
             }
             count
         }
-
         fn revoke(tree: &Tree, prog: &mut Progress, list: &[usize]) -> i32 {
             let mut count = 0;
             for &i in list {

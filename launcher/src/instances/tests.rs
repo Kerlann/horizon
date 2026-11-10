@@ -44,6 +44,7 @@ fn player_home(home: &Path) {
     put(&home.join("resourcepacks/faithful.zip"), "pack");
     put(&home.join("logs/latest.log"), "log");
     put(&home.join("sessions/a.json"), "token");
+    put(&home.join("telemetry/consent.json"), "{}");
     let pack = horizon_port_pack::import::Pack {
         name: "Small Pack".into(),
         ..Default::default()
@@ -261,7 +262,8 @@ fn an_instance_follows_the_players_answers() {
     let (main, own) = (root.join("main"), root.join("own"));
     put(&main.join("options.txt"), "fov:90\n");
     put(&main.join("horizon-player.txt"), "name:Player123\n");
-    horizon_core::no_ai::set(&main, true).unwrap();
+    put(&main.join("telemetry/consent.json"), r#"{"version":1}"#);
+    horizon_platform::no_ai::set(&main, true).unwrap();
     put(&own.join("options.txt"), "fov:70\n");
     follow_player(&main, &own);
     assert_eq!(
@@ -272,10 +274,14 @@ fn an_instance_follows_the_players_answers() {
         fs::read_to_string(own.join("horizon-player.txt")).unwrap(),
         "name:Player123\n"
     );
-    assert!(horizon_core::no_ai::is_on(&own));
-    horizon_core::no_ai::set(&main, false).unwrap();
+    assert_eq!(
+        fs::read_to_string(own.join("telemetry/consent.json")).unwrap(),
+        r#"{"version":1}"#
+    );
+    assert!(horizon_platform::no_ai::is_on(&own));
+    horizon_platform::no_ai::set(&main, false).unwrap();
     follow_player(&main, &own);
-    assert!(!horizon_core::no_ai::is_on(&own));
+    assert!(!horizon_platform::no_ai::is_on(&own));
     fs::remove_dir_all(&root).unwrap();
 }
 
@@ -509,6 +515,13 @@ fn switching_what_an_instance_plays_keeps_its_worlds_mods_and_settings() {
             .join(crate::native_mods::INSTALLED)
             .join("treefall.hmod"),
         "native hmod",
+    );
+    put(
+        &made
+            .home
+            .join(crate::native_mods::INSTALLED)
+            .join("obsolete.hnmod"),
+        "not a supported package",
     );
     put(&made.home.join("options.txt"), "fov:90");
     edit_in(&home, &data, &made.id, |m| {

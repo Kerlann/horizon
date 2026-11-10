@@ -75,13 +75,13 @@ fn resident_new_family_lifetimes_bind_move_and_retire() {
         check_list!(game, tnts);
 
         game.next_entity += 1;
-        game.knots.push(crate::game::leads::Knot {
+        game.resident_entities.knots.push(crate::game::leads::Knot {
             attachment_lifetime: Default::default(),
             id: game.next_entity,
             join: Default::default(),
             fence: [0, 70, 0],
         });
-        check_list!(game, knots);
+        check_list!(game, resident_entities.knots);
 
         game.summon_with_nbt(
             "minecraft:firework_rocket",

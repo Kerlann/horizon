@@ -289,7 +289,9 @@ impl Game<'_> {
         slot: u32,
         stack: Option<ItemStack>,
     ) -> Result<bool, BlockEntityItemError> {
-        let _ = tx;
+        if !self.transaction_holds(tx) {
+            return Ok(false);
+        }
         let key = self
             .native_block_entity_write_key(entity)
             .ok_or(BlockEntityItemError::Stale)?;

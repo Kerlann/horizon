@@ -10,6 +10,8 @@ description = "The game's injection points for mods that listen at them: typed f
 name = "mod_points"
 
 [features]
+# Shared listener integration fixture only; never enabled by gameplay crates.
+listener-fixture = ["horizon-mod-api-gen/listener-fixture"]
 wasm-guest = ["horizon-mod-api/wasm-guest"]
 
 [dependencies]

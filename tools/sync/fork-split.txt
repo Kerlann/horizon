@@ -6,8 +6,6 @@ crates/horizon-client/src/game/cauldrons.rs
 crates/horizon-client/src/game/chat/suggestion_completion_tests.rs
 crates/horizon-client/src/game/client_fireworks_tests.rs
 crates/horizon-client/src/game/core_tests.rs
-crates/horizon-client/src/game/emote_wheel.rs
-crates/horizon-client/src/game/emotes.rs
 crates/horizon-client/src/game/enderman_placement_tests.rs
 crates/horizon-client/src/game/entity_inside_tests.rs
 crates/horizon-client/src/game/execution_role.rs

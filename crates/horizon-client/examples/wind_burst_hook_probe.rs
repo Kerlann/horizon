@@ -19,6 +19,7 @@ impl Hooks for Protect {
     }
 }
 fn main() {
+    let startup = horizon_client::entry::prepare();
     let mods: Vec<ModEntry> = if std::env::var_os("HORIZON_WIND_NO_MOD").is_some() {
         Vec::new()
     } else {
@@ -29,7 +30,7 @@ fn main() {
     std::thread::Builder::new()
         .name("wind-burst-fixture".into())
         .stack_size(64 * 1024 * 1024)
-        .spawn(move || horizon_client::entry::main_with(mods, &[], &[], None))
+        .spawn(move || horizon_client::entry::main_with(mods, &[], &[], startup))
         .expect("start wind fixture")
         .join()
         .expect("wind fixture panicked");

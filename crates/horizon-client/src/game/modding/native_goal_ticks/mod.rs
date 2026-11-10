@@ -284,7 +284,8 @@ impl mobs::part_goals::GoalHost for Game<'_> {
             residency::{Kind, table::EntityLookup, write_queue::Target},
         };
         let admitted = self
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_admitted_read_lookup(actor.id, |at| self.locate_server_resident_owner(at))
             .map(|(location, state, _, _)| (location, matches!(state, EntityLookup::Taken)));

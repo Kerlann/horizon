@@ -143,7 +143,34 @@ impl Launcher {
                 .on_click(cx.listener(|this, _: &ClickEvent, _, cx| this.import_build(cx)))
                 .into_any_element()
         };
-        let mut page = div().flex().flex_col().child(head).child(
+        let sponsor = (!self.links.sponsor.is_empty()).then(|| {
+            let url = self.links.sponsor.clone();
+            crate::glass::plate(radius::PANEL)
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(16.))
+                .p(px(24.))
+                .mb(px(24.))
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.))
+                        .child(
+                            ui::text(16., FontWeight::SEMIBOLD, ink::FULL)
+                                .child(tr("Support the work below")),
+                        )
+                        .child(ui::text(14., FontWeight::NORMAL, ink::BODY).child(tr(
+                            "Horizon is built in the open. Sponsors fund the next release.",
+                        ))),
+                )
+                .child(
+                    ui::quiet_icon("sponsor", Some("github"), tr("Sponsor on GitHub"), 36., &t)
+                        .on_click(move |_: &ClickEvent, _, cx| cx.open_url(&url)),
+                )
+        });
+        let mut page = div().flex().flex_col().child(head).children(sponsor).child(
             div()
                 .flex()
                 .items_center()
@@ -191,7 +218,7 @@ impl Launcher {
                             },
                         )),
                     ),
-                );
+                )
             }
             Load::Ready(r) if r.is_empty() => {
                 return page.child(centered(tr("No releases yet."), &t));

@@ -1,4 +1,4 @@
-//! Catalog-owned native hook placement, also used by the one-shot source splitter.
+//! Native hook placement discovered from engine modules, used by source tooling.
 use crate::catalog::{Catalog, DECLARATIONS};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, fs, path::Path};
@@ -6,6 +6,27 @@ use syn::{Item, spanned::Spanned};
 
 /// Return catalog areas and lossless item line ranges for the source splitter.
 pub fn native_hook_layout(root: &Path, source: &str) -> Result<Value, String> {
+    let mut engine_areas = BTreeMap::new();
+    for path in crate::native_hook_files(root)? {
+        let area = path.file_stem().unwrap().to_string_lossy().into_owned();
+        let file = syn::parse_file(&fs::read_to_string(&path).map_err(|e| e.to_string())?)
+            .map_err(|e| e.to_string())?;
+        for item in file.items {
+            if let Item::Impl(item) = item {
+                for method in item.items {
+                    if let syn::ImplItem::Fn(method) = method {
+                        let name = method.sig.ident.to_string();
+                        if name.starts_with("native_")
+                            && let Some(previous) = engine_areas.insert(name.clone(), area.clone())
+                            && previous != area
+                        {
+                            return Err(format!("{name}: found in both {previous} and {area}"));
+                        }
+                    }
+                }
+            }
+        }
+    }
     let mut areas = BTreeMap::new();
     for area in Catalog::modules(&root.join(DECLARATIONS))? {
         let path = root.join(DECLARATIONS).join(format!("{area}.rs"));
@@ -16,11 +37,10 @@ pub fn native_hook_layout(root: &Path, source: &str) -> Result<Value, String> {
         for target in catalog.hooks.iter().map(|h| &h.target) {
             if target.starts_with("horizon_client::game::native_hooks::") {
                 let name = target.rsplit("::").next().unwrap().to_owned();
-                if let Some(previous) = areas.insert(name.clone(), area.clone())
-                    && previous != area
-                {
-                    return Err(format!("{name}: belongs to both {previous} and {area}"));
-                }
+                let engine_area = engine_areas.get(&name).ok_or_else(|| {
+                    format!("{name}: catalog target is missing from engine modules")
+                })?;
+                areas.insert(name, engine_area.clone());
             }
         }
     }

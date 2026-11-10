@@ -14,6 +14,13 @@ pub enum Error {
 }
 impl From<std::io::Error> for Error {
     fn from(error: std::io::Error) -> Self {
+        #[cfg(windows)]
+        if matches!(error.raw_os_error(), Some(32 | 33)) {
+            return Self::Busy;
+        }
+        if error.kind() == io::ErrorKind::WouldBlock {
+            return Self::Busy;
+        }
         Self::Io(error)
     }
 }
@@ -68,9 +75,52 @@ pub struct Registry {
 pub struct Claim {
     tree: Locked,
     registry: Arc<Registry>,
+    #[cfg(not(windows))]
+    key: String,
+    exclusive: bool,
+}
+
+/// Serializes executable publication against shared-cache capability snapshots.
+pub struct Publication {
+    _lock: Locked,
+    _registry: Arc<Registry>,
 }
 
 impl Claim {
+    /// Remove this deleted unit's key while its exclusive tree and namespace claims remain held.
+    pub fn retire(self) -> Result<(), Error> {
+        if !self.exclusive {
+            return Err(io::Error::from(io::ErrorKind::InvalidInput).into());
+        }
+        #[cfg(not(windows))]
+        self.registry.directory.remove_file(&self.key)?;
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::AsRawHandle;
+            use windows_sys::Win32::Storage::FileSystem::{
+                FILE_DISPOSITION_INFO, FileDispositionInfo, SetFileInformationByHandle,
+            };
+            // Opening another DELETE handle conflicts with our own exclusive sharing mode.
+            // Mark this owned handle delete-pending without dropping the exclusive claim;
+            // its close completes unlinking before retire returns.
+            let disposition = FILE_DISPOSITION_INFO { DeleteFile: true };
+            // SAFETY: the claim owns this live DELETE-capable handle; the disposition
+            // buffer and exact size remain valid for the duration of the synchronous call.
+            let result = unsafe {
+                SetFileInformationByHandle(
+                    self.tree.file().as_raw_handle().cast(),
+                    FileDispositionInfo,
+                    (&disposition as *const FILE_DISPOSITION_INFO).cast(),
+                    std::mem::size_of::<FILE_DISPOSITION_INFO>() as u32,
+                )
+            };
+            if result == 0 {
+                return Err(io::Error::last_os_error().into());
+            }
+        }
+        Ok(())
+    }
+
     pub fn files(&self) -> [&fs::File; 2] {
         [self.tree.file(), self.registry.gate.file()]
     }
@@ -110,18 +160,113 @@ impl Registry {
         }))
     }
 
+    pub fn publication(self: &Arc<Self>, mode: LockMode) -> Result<Publication, Error> {
+        let lock = open_lock(
+            &self.directory,
+            "publication",
+            mode,
+            self.release,
+            self.create,
+        )?;
+        Ok(Publication {
+            _lock: lock,
+            _registry: self.clone(),
+        })
+    }
+
+    /// Delete an authorized unit while excluding both runtime users and new executable
+    /// publication. Authorization runs after identity recheck and before invalidation.
+    /// A markerless tree is detached atomically; partial failures never restore completion.
+    pub fn remove_unit<E: From<Error> + From<io::Error>>(
+        self: &Arc<Self>,
+        path: &Path,
+        authorize: impl FnOnce(&Dir, bool) -> Result<(), E>,
+    ) -> Result<(), E> {
+        let parent_path = path
+            .parent()
+            .ok_or_else(|| Error::Unsafe(path.to_owned()))?;
+        let parent = open_directory(parent_path)?;
+        let meta = fs::symlink_metadata(path)?;
+        checked(path, meta.is_dir())?;
+        let path = path.canonicalize()?;
+        let path = path.as_path();
+        let is_directory = meta.is_dir();
+        let tree_path = if is_directory {
+            path
+        } else {
+            path.parent()
+                .ok_or_else(|| Error::Unsafe(path.to_owned()))?
+        };
+        let _publication = self.publication(LockMode::Exclusive)?;
+        let directory = open_directory(tree_path)?;
+        let claim = self.lock(&directory, LockMode::Exclusive)?;
+        let current = open_directory(tree_path)?;
+        let before = directory.dir_metadata()?;
+        let after = current.dir_metadata()?;
+        if (before.dev(), before.ino()) != (after.dev(), after.ino()) {
+            return Err(Error::Unsafe(path.to_owned()).into());
+        }
+        drop(current);
+        authorize(&directory, is_directory)?;
+        let name = path
+            .file_name()
+            .ok_or_else(|| Error::Unsafe(path.to_owned()))?;
+        if is_directory {
+            match directory.remove_file(".installed") {
+                Ok(()) => {}
+                Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+                Err(error) => return Err(removal_error(error).into()),
+            }
+        }
+        // Windows retained directory handles prohibit rename; kernel claims remain held.
+        drop(directory);
+        static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+        let trash = format!(
+            ".trash-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed)
+        );
+        parent
+            .rename(name, &parent, &trash)
+            .map_err(removal_error)?;
+        let result = if is_directory {
+            parent.remove_dir_all(&trash)
+        } else {
+            parent.remove_file(&trash)
+        };
+        if result.is_ok() && is_directory {
+            claim.retire()?;
+        }
+        result.map_err(|error| removal_error(error).into())
+    }
+
     /// Gate first; identity comes from a held directory, never a mutable path.
     pub fn lock(self: &Arc<Self>, tree: &Dir, mode: LockMode) -> Result<Claim, Error> {
         filesystem::local(tree)?;
         let metadata = tree.dir_metadata()?;
         let identity = format!("{}:{}", metadata.dev(), metadata.ino());
         let key = format!("{:x}", Sha256::digest(identity.as_bytes()));
+        let exclusive = matches!(mode, LockMode::Exclusive);
         let tree = open_lock(&self.directory, &key, mode, self.release, self.create)?;
         Ok(Claim {
             tree,
             registry: self.clone(),
+            #[cfg(not(windows))]
+            key,
+            exclusive,
         })
     }
+}
+
+// Windows directory rename/delete reports open sharing/mapping refusals as access
+// denied too. Treat them as non-destructive Busy at this removal boundary, not a
+// reason to continue deleting in place or restore a completion marker.
+fn removal_error(error: io::Error) -> Error {
+    #[cfg(windows)]
+    if matches!(error.raw_os_error(), Some(5 | 32 | 33 | 1224)) {
+        return Error::Busy;
+    }
+    error.into()
 }
 
 // A creator must be compatible with shared readers even before its handle closes.
@@ -163,6 +308,12 @@ fn open_lock(
     #[cfg(windows)]
     {
         use cap_std::fs::OpenOptionsExt;
+        if matches!(mode, LockMode::Exclusive) {
+            use windows_sys::Win32::Storage::FileSystem::{
+                DELETE, FILE_GENERIC_READ, FILE_GENERIC_WRITE,
+            };
+            options.access_mode(FILE_GENERIC_READ | FILE_GENERIC_WRITE | DELETE);
+        }
         options
             .write(matches!(mode, LockMode::Exclusive))
             .share_mode(if matches!(mode, LockMode::Shared) {
@@ -173,13 +324,7 @@ fn open_lock(
     }
     let file = directory
         .open_with(key, &options)
-        .map_err(|error| {
-            #[cfg(windows)]
-            if matches!(error.raw_os_error(), Some(32 | 33)) {
-                return Error::Busy;
-            }
-            Error::Io(error)
-        })?
+        .map_err(Error::from)?
         .into_std();
     if !file.metadata()?.is_file() {
         return Err(Error::Unsafe(key.into()));
@@ -237,3 +382,23 @@ pub mod cleanup;
 mod filesystem;
 #[cfg(test)]
 mod tests;
+
+// Unrelated libtest threads can fork while a close-owned claim is live. Its inherited
+// descriptor can outlive a test's local Drop, although production retains claims to exit.
+// Lifetime/drop assertions therefore need a process with no unrelated fork owners.
+#[cfg(test)]
+pub(crate) fn isolated_test() -> bool {
+    if std::env::var_os("RUNTIME_LEASE_TEST_ISOLATED").is_some() {
+        return false;
+    }
+    let test = std::thread::current().name().unwrap().to_owned();
+    assert!(
+        std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", &test, "--nocapture"])
+            .env("RUNTIME_LEASE_TEST_ISOLATED", "1")
+            .status()
+            .unwrap()
+            .success()
+    );
+    true
+}

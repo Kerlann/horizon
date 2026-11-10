@@ -3,6 +3,8 @@
 //! scheduled block/fluid ticks (chunk `block_ticks`/`fluid_ticks`).
 #[path = "persist/display.rs"]
 mod display;
+#[path = "persist/loaded_pass.rs"]
+mod loaded_pass;
 
 use super::{FallingBlock, Game};
 use horizon_client::{
@@ -619,89 +621,6 @@ impl Game<'_> {
                 id: 0,
             },
         ))
-    }
-    /// Spawn the entities of chunks that finished loading.
-    pub(super) fn spawn_loaded_entities(&mut self) {
-        let loaded = std::mem::take(&mut self.world.loaded_entities);
-        let player_uuid = self.level.player_uuid;
-        for (key, tags) in loaded {
-            let count = tags.len();
-            for mut tag in tags {
-                // A world older builds named by the offline profile names the player that
-                // way in its entities too: migrate them as they load, so the next save of
-                // the chunk keeps the account's UUID (`playerdata::migrate_owner`).
-                if let Some((old, new)) = self.owner_migration {
-                    entity_nbt::migrate_player_uuid(
-                        &mut tag,
-                        horizon_client::lan::playerdata::uuid_ints(old),
-                        horizon_client::lan::playerdata::uuid_ints(new),
-                    );
-                }
-                // PersistentEntitySectionManager.addEntity's `loaded`.
-                let from_disk = !take_fresh(&mut tag);
-                // An End gateway's traveller never left the level: nothing joins.
-                let moved = take_moved(&mut tag);
-                // Whatever was added since the last tick joins before this one.
-                self.native_joins_flush(false, 0);
-                let kind = entity_nbt::kind(&tag).unwrap_or_default();
-                let is_mob = self.res.mob_types().contains_key(kind.as_str());
-                drop_unleashable_leash(&mut tag, &kind, is_mob);
-                let uuid = entity_nbt::uuid(&tag);
-                if uuid.is_some_and(|u| self.restored_vehicle(u).is_some()) {
-                    continue;
-                }
-                if (matches!(
-                    kind.as_str(),
-                    "minecraft:experience_orb"
-                        | "minecraft:arrow"
-                        | "minecraft:spectral_arrow"
-                        | "minecraft:llama_spit"
-                        | "minecraft:shulker_bullet"
-                        | "minecraft:experience_bottle"
-                        | "minecraft:fireball"
-                        | "minecraft:small_fireball"
-                        | "minecraft:dragon_fireball"
-                        | "minecraft:wind_charge"
-                        | "minecraft:breeze_wind_charge"
-                        | "minecraft:wither_skull"
-                        | "minecraft:snowball"
-                        | "minecraft:egg"
-                        | "minecraft:ender_pearl"
-                        | "minecraft:splash_potion"
-                        | "minecraft:lingering_potion"
-                        | "minecraft:falling_block"
-                        | "minecraft:firework_rocket"
-                        | "minecraft:trident"
-                        | "minecraft:end_crystal"
-                        | "minecraft:ender_dragon"
-                ) || horizon_client::projectiles::thrown_type(&kind).is_some())
-                    && let Some(at) = entity_nbt::position(&tag)
-                {
-                    self.persist
-                        .anon
-                        .insert(anon_key(&kind, at), (at, tag.clone()));
-                }
-                // Kinds outside `entity_lists!` first, then the listed kinds
-                // (`Entity::load_nbt`), then whatever else is a compound.
-                if let Err(tag) = self.load_unlisted(key, &kind, uuid, tag)
-                    && let Err(tag) = self.load_listed(&kind, uuid, player_uuid, tag)
-                {
-                    if !kind.is_empty() && entity_nbt::position(&tag).is_some() {
-                        self.load_other(tag, &kind);
-                    } else {
-                        self.persist.unknown.entry(key).or_default().push(tag);
-                    }
-                }
-                // PersistentEntitySectionManager.addEntity: every kind that
-                // just joined tells the mods; a moved one does not join.
-                if moved {
-                    self.native_joins_skip();
-                } else {
-                    self.native_joins_flush(from_disk, 0);
-                }
-            }
-            self.native_entities_load(self.dim.id(), [key.0, key.1], count);
-        }
     }
     /// The kinds `entity_lists!` does not hold: `Err` hands the compound back
     /// when `kind` is not one of them.
@@ -1792,6 +1711,9 @@ impl Game<'_> {
         self.uuid_for(id)
     }
     pub(super) fn uuid_for(&mut self, id: u32) -> [i32; 4] {
+        if let Some(uuid) = self.known_resident_entity_uuid_at(self.dim.key(), id) {
+            return uuid;
+        }
         if let Some(&uuid) = self.persist.uuids.get(&id) {
             return uuid;
         }
@@ -2588,42 +2510,7 @@ fn join_saved_team(board: &mut Scoreboard, name: &str, tag: &Tag) -> bool {
 mod tests {
     use super::*;
 
-    #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
-    fn neutral_mob_load_notifies_target_even_without_saved_anger() {
-        use std::sync::{Arc, Mutex};
-
-        struct Observe(Arc<Mutex<Vec<(u32, bool)>>>);
-        #[mod_api::__subscriptions]
-        impl mod_api::Hooks for Observe {
-            fn living_change_target(
-                &self,
-                host: &dyn mod_api::Host,
-                event: &mut mod_api::LivingChangeTargetEvent<'_>,
-            ) -> mod_api::Flow {
-                assert!(event.mob.living().health(host).is_some());
-                self.0
-                    .lock()
-                    .unwrap()
-                    .push((event.mob.entity().id(), event.original_target.is_none()));
-                mod_api::Flow::Continue
-            }
-        }
-        let observed = Arc::new(Mutex::new(Vec::new()));
-        let mods = vec![mod_api::ModEntry::new(
-            "observe",
-            Box::new(Observe(observed.clone())),
-        )]
-        .into();
-        mod_api::testing::with_mods(mods, || {
-            super::super::native_entity_refs::tests::with_game(|game| {
-                let wolf = game.load_mob(entity("minecraft:wolf"), None).unwrap();
-                let golem = game.load_mob(entity("minecraft:iron_golem"), None).unwrap();
-                game.load_mob(entity("minecraft:pig"), None).unwrap();
-                assert_eq!(*observed.lock().unwrap(), [(wolf, true), (golem, true)]);
-            });
-        });
-    }
+    include!("persist/position_load_tests.rs");
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]

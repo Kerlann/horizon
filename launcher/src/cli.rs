@@ -12,13 +12,11 @@ use horizon_launcher::native_mods;
 use horizon_launcher::other_launchers;
 use horizon_launcher::server_list;
 use horizon_launcher::storage::{Category, Storage};
-
 #[derive(Clone, Debug)]
 enum ClearStorage {
     All,
     Row(Category),
 }
-
 fn parse_storage_row(value: &str) -> Result<ClearStorage, String> {
     use clap::ValueEnum;
     if value == "all" {
@@ -34,7 +32,6 @@ fn parse_storage_row(value: &str) -> Result<ClearStorage, String> {
 use std::io::{IsTerminal, Write};
 use std::path::{Path, PathBuf};
 use std::process::Command;
-
 #[derive(Parser)]
 #[command(
     name = "horizon-launcher",
@@ -48,7 +45,6 @@ struct Cli {
     #[command(subcommand)]
     command: Option<Cmd>,
 }
-
 #[derive(Subcommand)]
 enum JavaCmd {
     /// The Java runtimes Horizon downloaded from Mojang and the ones installed on this computer
@@ -57,7 +53,6 @@ enum JavaCmd {
     /// version's JSON (java-runtime-delta)
     Install { java: String },
 }
-
 #[derive(Subcommand)]
 enum RustCmd {
     /// Whether it is installed, its version and whether this computer can link with it
@@ -67,7 +62,6 @@ enum RustCmd {
     /// Delete the toolchain and the native builds' Cargo home
     Remove,
 }
-
 #[derive(Subcommand)]
 enum ServersCmd {
     /// The servers, their folder and whether they run
@@ -122,7 +116,6 @@ enum ServersCmd {
     /// Take a server off the list (its folder stays)
     Forget { server: String },
 }
-
 #[derive(Subcommand)]
 enum AccountCmd {
     /// The signed-in accounts and which one plays
@@ -171,6 +164,44 @@ enum AccountCmd {
         /// Take the cape off
         #[arg(long)]
         no_cape: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum DataCmd {
+    /// What is allowed, the install ID and how many items wait (the default)
+    Status,
+    /// Turn kinds on: performance, crashes, bugs, benchmarks, or all
+    Allow {
+        #[arg(required = true)]
+        kinds: Vec<String>,
+    },
+    /// Turn kinds off: performance, crashes, bugs, benchmarks, or all
+    Deny {
+        #[arg(required = true)]
+        kinds: Vec<String>,
+    },
+    /// Print exactly what would be sent
+    Show,
+    /// Delete everything sent from here, and what waits, and take a new install ID
+    Delete,
+    /// Send what is waiting now
+    Send,
+    /// Send a bug report you write; it is printed first, as it would leave
+    Bug {
+        text: String,
+        /// Add the end of the game's log (scrubbed, without chat)
+        #[arg(long)]
+        log: bool,
+        /// Send without asking
+        #[arg(long)]
+        yes: bool,
+    },
+    /// Upload a benchmark report (docs/benchmark-report.md); it is printed first
+    Benchmark {
+        file: PathBuf,
+        #[arg(long)]
+        yes: bool,
     },
 }
 
@@ -782,8 +813,8 @@ enum Cmd {
     /// removal and automatic runtime eviction retain files while any launch path lacks enforceable
     /// lifetime exclusion; an empty process scan is not authorization. Read-only reports stay available.
     /// Private launch records and raw captures are collected together only after all participating owners
-    /// exit, under the exclusive permanent namespace gate. Registry housekeeping starts at 4,096 recognized
-    /// empty lock entries; the gate and unknown entries remain.
+    /// exit, under the exclusive permanent namespace gate. Published unit keys persist until exclusive
+    /// unit removal. Registry entry counts are logged; lock entries are not age-collected.
     Storage {
         /// Request cleanup of build-files, prebuilt-games, spare-game-builds, rust-compiler, other-caches or all rows; game-accessible caches refuse cleanup without enforceable lifetime exclusion
         #[arg(long, value_parser = parse_storage_row)]
@@ -856,8 +887,8 @@ enum Cmd {
     /// system|en|fr|ru|de|zh|es|uk|pl (the window's language; system follows the computer's), accent
     /// violet|blue|teal|green|amber|red|pink|#rrggbb|DEGREES (a named accent, any colour, or any
     /// hue), background PATH (a picture behind Home; "default"
-    /// shows Horizon's landscape), native-cache-gib N (combined native compilation cache limit
-    /// in GiB, default 30; 0 disables automatic cleanup)
+    /// shows Horizon's landscape), cache-limit-gib N (managed cache limit
+    /// in GiB: 10, 25 (default), 50, 100; 0 disables automatic cleanup)
     Settings {
         #[arg(value_parser = SETTING_KEYS)]
         key: Option<String>,
@@ -912,6 +943,12 @@ enum Cmd {
         /// Add the end of the game's log (names and worlds hidden, without chat)
         #[arg(long)]
         log: bool,
+    },
+    /// Opt-in data collection (docs/telemetry.md): what is allowed, what would be sent, and
+    /// deleting it; all off until you allow a kind
+    Data {
+        #[command(subcommand)]
+        action: Option<DataCmd>,
     },
     /// Instances: separate game folders, each with its own worlds, options and packs
     Instance {
@@ -1021,7 +1058,7 @@ const SETTING_KEYS: [&str; 14] = [
     "language",
     "accent",
     "background",
-    "native-cache-gib",
+    "cache-limit-gib",
 ];
 
 fn on_off(value: &str) -> Result<bool, String> {
@@ -1096,13 +1133,13 @@ fn set_setting(s: &mut backend::Settings, key: &str, value: &str) -> Result<(), 
                 })?),
             }
         }
-        "native-cache-gib" => {
-            s.native_cache_gib = match value {
+        "cache-limit-gib" => {
+            s.cache_limit_gib = match value {
                 "default" => None,
                 n => Some(
                     n.parse::<u64>()
                         .ok()
-                        .filter(|n| n.checked_mul(1 << 30).is_some())
+                        .filter(|n| matches!(n, 0 | 10 | 25 | 50 | 100))
                         .ok_or_else(|| {
                             tr("Enter a cache limit in GiB; 0 disables automatic cleanup.")
                                 .to_string()
@@ -1142,7 +1179,7 @@ fn settings_json(s: &backend::Settings) -> serde_json::Value {
         "language": s.language.map_or("system", |l| l.code()),
         "accent": s.accent.name(),
         "background": horizon_launcher::themes::background(&backend::data_dir(), s.background.as_deref()),
-        "native_cache_gib": s.native_cache_gib.unwrap_or(native_mods::DEFAULT_CACHE_GIB),
+        "cache_limit_gib": s.cache_limit_gib.unwrap_or(horizon_launcher::storage::policy::DEFAULT_LIMIT_GIB),
         "no_ai": backend::no_ai(),
     })
 }
@@ -1161,7 +1198,7 @@ pub fn run() -> Option<i32> {
     let cli = Cli::from_arg_matches(&definition.get_matches()).unwrap_or_else(|e| e.exit());
     let command = cli.command?;
     let result = match command {
-        Cmd::Mcp | Cmd::AgentConfig { .. } if no_ai => Err(horizon_core::no_ai::REFUSAL.into()),
+        Cmd::Mcp | Cmd::AgentConfig { .. } if no_ai => Err(horizon_platform::no_ai::REFUSAL.into()),
         Cmd::Mcp => crate::mcp::serve().map(|()| 0),
         command => {
             let result = execute(command, cli.json);
@@ -1204,8 +1241,8 @@ fn json(value: serde_json::Value) {
 /// Runs a game process in this terminal and reports how it ended.
 fn attached(cmd: Command) -> Result<i32, String> {
     let (mut cmd, _runtime) = backend::prepare_command(cmd)?;
-    let status = cmd
-        .status()
+    let status = backend::spawn_attached(&mut cmd)
+        .and_then(|mut child| child.wait())
         .map_err(|e| format!("Could not start {:?}: {e}", cmd.get_program()))?;
     #[cfg(unix)]
     {
@@ -1307,6 +1344,11 @@ fn execute(command: Cmd, as_json: bool) -> Result<i32, String> {
             };
             let report = storage.report(row, all).map_err(native_mods::cache_error)?;
             println!("{}", serde_json::to_string_pretty(&report).unwrap());
+            if row.is_some() || all {
+                if let Some(kept) = report.rows.iter().flat_map(|row| &row.kept).next() {
+                    return Err(kept.reason.clone());
+                }
+            }
         }
         Cmd::NativeBuild {
             sync_internals,
@@ -1595,6 +1637,7 @@ fn execute(command: Cmd, as_json: bool) -> Result<i32, String> {
             }
         }
         Cmd::Account { action } => account_command(action.unwrap_or(AccountCmd::List), as_json)?,
+        Cmd::Data { action } => data(action.unwrap_or(DataCmd::Status), as_json)?,
         Cmd::Benchmark { repeats } => {
             let path = crate::perf::benchmark(repeats.max(1))?;
             if as_json {
@@ -1611,7 +1654,9 @@ fn execute(command: Cmd, as_json: bool) -> Result<i32, String> {
                 for (name, url) in [
                     ("Website", &links.website),
                     ("Roadmap", &links.roadmap),
-                    ("Docs", &links.docs),
+                    ("Documentation", &links.docs),
+                    ("Discord", &links.discord),
+                    ("Sponsor", &links.sponsor),
                 ] {
                     println!("{name:<8} {}", if url.is_empty() { "(none)" } else { url });
                 }
@@ -2152,6 +2197,81 @@ fn account_command(action: AccountCmd, as_json: bool) -> Result<(), String> {
             accounts.remove_offline(&name, &horizon_launcher::skins::dir())?;
             accounts.save()?;
             println!("Forgot the offline name {name}.");
+        }
+    }
+    Ok(())
+}
+
+/// `data`: the same consent as Settings → Data collection.
+fn data(action: DataCmd, as_json: bool) -> Result<(), String> {
+    use horizon_launcher::telemetry;
+    let review = |item: &horizon_telemetry::Item, yes: bool| -> Result<bool, String> {
+        println!(
+            "{}",
+            serde_json::to_string_pretty(item).map_err(|e| e.to_string())?
+        );
+        if yes {
+            return Ok(true);
+        }
+        if !std::io::stdin().is_terminal() {
+            return Err("Add --yes to send it without asking.".into());
+        }
+        eprint!("Send this? [y/N] ");
+        let mut line = String::new();
+        std::io::stdin()
+            .read_line(&mut line)
+            .map_err(|e| e.to_string())?;
+        Ok(line.trim().eq_ignore_ascii_case("y"))
+    };
+    match action {
+        DataCmd::Status => {
+            let status = telemetry::status_json();
+            if as_json {
+                json(status);
+                return Ok(());
+            }
+            let consent = telemetry::consent();
+            if consent.needs_asking() {
+                println!("Not answered yet: nothing is collected.");
+            }
+            for (kind, name, _) in telemetry::SWITCHES {
+                let on = consent.allows(kind);
+                println!("{name}: {}", if on { "on" } else { "off" });
+            }
+            println!("Waiting to be sent: {}", status["waiting"]);
+            match horizon_telemetry::endpoint() {
+                Some(url) => println!("Server: {url}"),
+                None => println!("Server: turned off (HORIZON_TELEMETRY_URL=off), nothing is sent"),
+            }
+        }
+        DataCmd::Allow { kinds } => {
+            telemetry::set(&telemetry::parse_kinds(&kinds)?, true)?;
+            return data(DataCmd::Status, as_json);
+        }
+        DataCmd::Deny { kinds } => {
+            telemetry::set(&telemetry::parse_kinds(&kinds)?, false)?;
+            return data(DataCmd::Status, as_json);
+        }
+        DataCmd::Show => {
+            let (what, text) = telemetry::preview();
+            eprintln!("{what}");
+            println!("{text}");
+        }
+        DataCmd::Delete => println!("{}", telemetry::delete_my_data()?),
+        DataCmd::Send => println!("{:?}", telemetry::send()),
+        DataCmd::Bug { text, log, yes } => {
+            telemetry::ensure_allowed(horizon_telemetry::Kind::Bug)?;
+            let item = telemetry::bug_report(&text, log)?;
+            if review(&item, yes)? {
+                println!("{}", telemetry::submit(&item)?);
+            }
+        }
+        DataCmd::Benchmark { file, yes } => {
+            telemetry::ensure_allowed(horizon_telemetry::Kind::Benchmark)?;
+            let item = telemetry::benchmark_report(&file)?;
+            if review(&item, yes)? {
+                println!("{}", telemetry::submit(&item)?);
+            }
         }
     }
     Ok(())
@@ -3707,6 +3827,8 @@ fn modpack(action: ModpackCmd, as_json: bool) -> Result<i32, String> {
 }
 
 #[cfg(test)]
+mod storage_tests;
+#[cfg(test)]
 mod tests {
     use super::*;
     use clap::Parser;
@@ -4108,39 +4230,5 @@ mod tests {
             );
         }
         assert_eq!(native_mods::base_for(None, &[], false), None);
-    }
-
-    #[test]
-    fn native_cache_command_and_persisted_limit() {
-        assert!(matches!(
-            Cli::try_parse_from(["horizon-launcher", "storage"])
-                .unwrap()
-                .command,
-            Some(Cmd::Storage { clear: None })
-        ));
-        assert!(matches!(
-            Cli::try_parse_from(["horizon-launcher", "storage", "--clear", "all"])
-                .unwrap()
-                .command,
-            Some(Cmd::Storage {
-                clear: Some(ClearStorage::All)
-            })
-        ));
-        assert!(Cli::try_parse_from(["horizon-launcher", "storage", "--clear", "worlds"]).is_err());
-        assert!(Cli::try_parse_from(["horizon-launcher", "native-cache"]).is_err());
-        assert!(
-            Cli::try_parse_from(["horizon-launcher", "storage", "--clear", "other-caches"]).is_ok()
-        );
-        let mut settings = backend::Settings::default();
-        set_setting(&mut settings, "native-cache-gib", "12").unwrap();
-        let saved = serde_json::to_string(&settings).unwrap();
-        let loaded: backend::Settings = serde_json::from_str(&saved).unwrap();
-        assert_eq!(loaded.native_cache_gib, Some(12));
-        assert!(set_setting(&mut settings, "native-cache-gib", "18446744073709551615").is_err());
-        assert!(set_setting(&mut settings, "native-cache-gib", "-1").is_err());
-        set_setting(&mut settings, "native-cache-gib", "0").unwrap();
-        assert_eq!(settings.native_cache_gib, Some(0));
-        set_setting(&mut settings, "native-cache-gib", "default").unwrap();
-        assert_eq!(settings.native_cache_gib, None);
     }
 }

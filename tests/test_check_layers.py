@@ -1,6 +1,12 @@
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
 import unittest
+from unittest import mock
 
-from tools import check_layers
+from tools import check_layers, check_file_size
 
 CONFIG = {
     "may_depend": {"engine": ["engine"], "platform": ["engine", "platform"], "horizon": ["platform", "horizon"]},
@@ -111,10 +117,8 @@ class CheckLayersTests(unittest.TestCase):
         self.assertIn("core -> wgpu: a portable crate takes no window, GPU", problems[1])
 
     def test_portable_baseline_only_exempts_the_recorded_optional_edge(self):
-        config = dict(CONFIG, portable={
-            "crates": ["core"], "forbidden": [],
-            "allowed": [{"edge": "core -> mod-api", "reason": "Nonportable optional feature"}],
-        })
+        config = dict(CONFIG, portable={"crates": ["core"], "forbidden": []},
+                      optional=[{"edge": "core -> mod-api", "reason": "Nonportable optional feature"}])
         dep = {"name": "mod-api", "kind": None, "path": "/x/mod-api", "optional": True}
         pkg = {"name": "core", "dependencies": [dep]}
         self.assertEqual(check_layers.portable(config, [pkg]), [])
@@ -130,9 +134,132 @@ class CheckLayersTests(unittest.TestCase):
             f"mod-api: listed as portable in {check_layers.CONFIG_PATH}, but not an engine crate there",
         ])
 
+    def test_an_optional_exception_holds_only_while_the_dependency_is_optional(self):
+        config = dict(CONFIG, optional=[{"edge": "core -> mod-api", "reason": "behind a feature"}])
+        optional_dep = {"name": "mod-api", "kind": None, "path": "/x/mod-api", "optional": True}
+        packages = [{"name": "core", "dependencies": [optional_dep]}]
+        graph = check_layers.edges(packages)
+        self.assertEqual(check_layers.check(config, graph, None, check_layers.optional_edges(packages)), ([], []))
+        # The same dependency made mandatory (here by a build-dependency next to the optional one) fails.
+        packages[0]["dependencies"].append({"name": "mod-api", "kind": "build", "path": "/x/mod-api"})
+        problems, _ = check_layers.check(config, graph, None, check_layers.optional_edges(packages))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("core -> mod-api: listed in 'optional'", problems[0])
+        self.assertIn("no longer optional", problems[0])
+
+    def test_an_optional_exception_excuses_no_other_edge(self):
+        config = dict(CONFIG, optional=[{"edge": "core -> mod-api", "reason": "behind a feature"}])
+        packages = [{"name": "game", "dependencies": [
+            {"name": "mod-api", "kind": None, "path": "/x/mod-api", "optional": True}]}]
+        problems, _ = check_layers.check(config, check_layers.edges(packages), None,
+                                         check_layers.optional_edges(packages))
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("game -> mod-api: engine may not depend on platform", problems[0])
+
+    def test_optional_edges_ignore_dev_and_registry_dependencies(self):
+        packages = [{"name": "core", "dependencies": [
+            {"name": "mod-api", "kind": None, "path": "/x/mod-api", "optional": True},
+            {"name": "mod-api", "kind": "dev", "path": "/x/mod-api"},
+            {"name": "serde", "kind": None, "path": None, "optional": True},
+        ]}]
+        self.assertEqual(check_layers.optional_edges(packages), {"core -> mod-api"})
+
+    def test_an_optional_exception_with_no_dependency_left_is_only_a_note(self):
+        config = dict(CONFIG, optional=[{"edge": "core -> mod-api", "reason": "behind a feature"}])
+        problems, notes = check_layers.check(config, check_layers.edges([package("core")]))
+        self.assertEqual(problems, [])
+        self.assertEqual(len(notes), 1)
+        self.assertIn("core -> mod-api: no longer a dependency; you can remove it from 'optional'", notes[0])
+
+    def test_a_branch_may_move_an_exception_to_optional_but_not_add_one(self):
+        packages = [{"name": "core", "dependencies": [
+            {"name": "mod-api", "kind": None, "path": "/x/mod-api", "optional": True}]}]
+        graph, optional = check_layers.edges(packages), check_layers.optional_edges(packages)
+        config = dict(CONFIG, optional=[{"edge": "core -> mod-api", "reason": "behind a feature"}])
+        moved = dict(CONFIG, allowed=["core -> mod-api"])
+        self.assertEqual(check_layers.check(config, graph, moved, optional), ([], []))
+        self.assertEqual(check_layers.check(config, graph, config, optional), ([], []))
+        problems, _ = check_layers.check(config, graph, CONFIG, optional)
+        self.assertEqual(len(problems), 1, problems)
+        self.assertIn("core -> mod-api: added to 'optional'", problems[0])
+
+    def test_the_repository_config_keeps_its_rows_apart(self):
+        config = check_layers.load_config()
+        allowed, optional = config["allowed"], check_layers.optional_rows(config)
+        self.assertEqual(len(allowed), len(set(allowed)), "an 'allowed' row is listed twice")
+        self.assertEqual(optional & set(allowed), set(), "an edge is in both 'allowed' and 'optional'")
+        for row in config.get("optional", []):
+            self.assertTrue(row.get("reason"), f"{row['edge']}: an 'optional' row needs a reason")
+        for workspace in config["workspaces"]:
+            self.assertTrue((check_layers.ROOT / workspace).is_file(), workspace)
+
     def test_registry_dependencies_are_not_edges(self):
         pkg = {"name": "game", "dependencies": [{"name": "cosmetics", "kind": None, "path": None}]}
         self.assertEqual(check_layers.edges([pkg]), {"game": set()})
+
+
+class UpstreamLayerRestorationTests(unittest.TestCase):
+    def setUp(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        self.root = Path(directory.name)
+        self.git("init", "-q", "-b", "main")
+        self.git("config", "user.name", "Fixture")
+        self.git("config", "user.email", "fixture@example.invalid")
+        self.config = dict(CONFIG, crates=dict(CONFIG["crates"], cosmetic="horizon"))
+        self.base_config = dict(self.config, crates={k: v for k, v in self.config["crates"].items() if k != "cosmetics"})
+        (self.root / "tools").mkdir()
+        (self.root / "tools/layers.json").write_text(json.dumps(self.base_config))
+        (self.root / "tools/file_size_baseline.txt").write_text("")
+        self.git("add", "tools")
+        self.git("commit", "-q", "-m", "base")
+        self.base = self.git("rev-parse", "HEAD").strip()
+        self.git("checkout", "-q", "-b", "upstream")
+        upstream = dict(self.config, allowed=["game -> cosmetics"])
+        (self.root / "tools/layers.json").write_text(json.dumps(upstream))
+        self.git("commit", "-q", "-am", "upstream layers")
+        marker = self.git("rev-parse", "HEAD").strip()
+        remote = self.root / "remote.git"
+        self.git("init", "-q", "--bare", str(remote))
+        self.git("push", "-q", str(remote), "HEAD:refs/heads/main")
+        self.git("checkout", "-q", "-b", "work", self.base)
+        (self.root / "fork").write_text("fork")
+        self.git("add", "fork")
+        self.git("commit", "-q", "-m", "fork")
+        self.git("merge", "-q", "--no-edit", "upstream")
+        (self.root / "tools/file_size_baseline.txt").write_text(f"# sync-baseline: {marker}\n")
+        for patch in (mock.patch.object(check_file_size, "ROOT", self.root),
+                      mock.patch.dict(os.environ, {"HORIZON_UPSTREAM_URL": str(remote)})):
+            patch.start()
+            self.addCleanup(patch.stop)
+
+    def git(self, *args):
+        return subprocess.run(["git", *args], cwd=self.root, check=True,
+                              capture_output=True, text=True).stdout
+
+    def problems(self, edge, layer="horizon"):
+        upstream, errors = check_file_size.verified_sync_config(self.base, "tools/layers.json")
+        self.assertEqual(errors, [])
+        config = dict(self.config, allowed=[edge], crates=dict(self.config["crates"], cosmetics=layer))
+        crate, dependency = edge.split(" -> ")
+        return check_layers.check(config, {crate: {dependency}, dependency: set()},
+                                  self.base_config, upstream=upstream)[0]
+
+    def test_verbatim_upstream_edge_and_assignment_pass(self):
+        self.assertEqual(self.problems("game -> cosmetics"), [])
+
+    def test_fork_only_edge_fails(self):
+        self.assertTrue(self.problems("game -> mod-api"))
+
+    def test_one_character_different_edge_fails(self):
+        self.assertTrue(self.problems("game -> cosmetic"))
+
+    def test_upstream_edge_without_sync_declaration_fails(self):
+        (self.root / "tools/file_size_baseline.txt").write_text("")
+        self.assertTrue(self.problems("game -> cosmetics"))
+
+    def test_altered_new_crate_assignment_fails(self):
+        self.assertTrue(self.problems("game -> cosmetics", "platform"))
 
 
 if __name__ == "__main__":

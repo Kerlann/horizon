@@ -37,10 +37,10 @@ macro_rules! assign_resident_ids {
 }
 pub(crate) use assign_resident_ids;
 
-// Projectiles are nested in Game and direct in Parked. All other owners have
-// the same field path; keep binding and resolution on this one family list.
+// Projectiles and knots have distinct Game/Parked field paths; keep binding
+// and resolution on this one family list.
 macro_rules! resident_owners {
-    ($then:ident, $this:ident, $($projectiles:ident).+) => {
+    ($then:ident, $this:ident, $($projectiles:ident).+, $($knots:ident).+) => {
         $then! {
             ($this, $($projectiles).+)
             Mob => Mob: mobs,
@@ -56,7 +56,7 @@ macro_rules! resident_owners {
             Crystal => Crystal: crystals,
             Tnt => Tnt: tnts,
             Cushion => Cushion: cushions,
-            Knot => Knot: knots,
+            Knot => Knot: $($knots).+,
             Falling => Falling: falling,
             Rocket => Rocket: rockets,
             Trident => Trident: tridents,
@@ -81,7 +81,7 @@ macro_rules! define_resident_targets {
         }
     };
 }
-resident_owners!(define_resident_targets, unused, unused);
+resident_owners!(define_resident_targets, unused, unused, unused);
 
 /// Canonical address mapping when an admitted payload is physically taken.
 /// Session role and dragon-part identity come from the same immutable location.
@@ -196,7 +196,7 @@ macro_rules! define_resident_access {
         pub(super) fn bind_resident_owners(&mut $this, journal: &Journal, dimension: DimensionKey) {
             $($crate::game::entity_residency::bind_resident_list!($kind, $this$(.$field)+, journal, Owner { dimension, kind: Kind::$kind });)*
             $this$(.$projectiles)+.bind_residency(journal, Owner { dimension, kind: Kind::Projectile }, |entity| (entity.id, entity.join_seq()));
-            $this.dragon.bind_residency_specialized(journal, Owner { dimension, kind: Kind::Dragon }, |entity| (entity.id, entity.join_seq()), horizon_client::join_seq::residency::Source::Ordinary, Some((Kind::DragonPart, 8, |dragon, offset| dragon.part_uuids.get(usize::from(offset)).copied())), None);
+            $this.dragon.bind_residency_specialized(journal, Owner { dimension, kind: Kind::Dragon }, |entity| (entity.id, entity.join_seq()), horizon_client::join_seq::residency::Source::Ordinary, Some((Kind::DragonPart, 8, |dragon, offset| dragon.residency.part_uuids.get(usize::from(offset)).copied())), None);
         }
         /// The caller supplies admitted identity and explicit write authority;
         /// physical residency here confers neither. Parked storage stays in place.
@@ -273,7 +273,12 @@ macro_rules! define_resident_access {
 pub(crate) use define_resident_access;
 
 impl Game<'_> {
-    resident_owners!(define_resident_access, self, creatures.projectiles);
+    resident_owners!(
+        define_resident_access,
+        self,
+        creatures.projectiles,
+        resident_entities.knots
+    );
 }
 
 #[cfg(test)]
@@ -391,7 +396,7 @@ mod tests {
             let holder = game.entity(id.get()).unwrap();
             let index = Arc::new(Mutex::new(AttachmentIndex::default()));
             let mut values = Attachments::default();
-            let journal = game.entity_residency.borrow().producer();
+            let journal = game.resident_entities.table.borrow().producer();
             let result = game.with_resident_slot(&DimensionKey::OVERWORLD, id, |slot| {
                 // Reenter the same structural journal: a retained drain borrow panics.
                 journal.drain_into(&mut Vec::new());
@@ -420,7 +425,7 @@ mod tests {
                         .same_registration(&mob.attachment_lifetime().registration().unwrap())
                 )
             });
-            assert!(game.entity_residency.try_borrow_mut().is_ok());
+            assert!(game.resident_entities.table.try_borrow_mut().is_ok());
             game.enter_level(crate::game::Dim::Nether).unwrap();
             assert!(matches!(
                 game.with_resident_slot(&DimensionKey::OVERWORLD, id, |slot| slot.is_bound()),
@@ -462,7 +467,7 @@ mod tests {
                 game.server_resident_entity(411),
                 EntityLookup::Found { .. }
             ));
-            assert_eq!(game.entity_residency.get_mut().end_tick(), Ok(()));
+            assert_eq!(game.resident_entities.table.get_mut().end_tick(), Ok(()));
         });
     }
 
@@ -521,7 +526,7 @@ mod tests {
                 game.server_resident_entity(411),
                 EntityLookup::Found { .. }
             ));
-            assert_eq!(game.entity_residency.get_mut().end_tick(), Ok(()));
+            assert_eq!(game.resident_entities.table.get_mut().end_tick(), Ok(()));
         });
     }
 
@@ -551,7 +556,7 @@ mod tests {
                 EntityLookup::Found { .. }
             ));
             game.mobs.restore(taken, RestoreOrder::SurvivorsFirst);
-            assert_eq!(game.entity_residency.get_mut().end_tick(), Ok(()));
+            assert_eq!(game.resident_entities.table.get_mut().end_tick(), Ok(()));
         });
     }
 
@@ -575,7 +580,7 @@ mod tests {
             );
             game.lan_assign_ids();
             assert_eq!(game.tnts[0].id, id);
-            assert_eq!(game.entity_residency.get_mut().end_tick(), Ok(()));
+            assert_eq!(game.resident_entities.table.get_mut().end_tick(), Ok(()));
         });
     }
 }

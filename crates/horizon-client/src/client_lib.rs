@@ -23,12 +23,13 @@ pub use horizon_client_render::{
     minimap, mipmap, mod_browser, mod_chunk_tickets, mod_list, model_library, models, mods_screen,
     monitor, multiline_edit, native_emissive, options_file, options_fixes, options_ui, overlay,
     pack_browser, pack_palette, pack_screen, packs, pad_cursor, pad_glyph, par, particles,
-    poi_sections, polytone_colors, polytone_post, post_chain, potent_sulfur, preedit, providers,
-    pvp, pvp_hud, random_source, resource_source, screen_draw, screen_effects, sculk, section_mask,
-    server_terrain, settings, shader_options, shader_pack_list, signs, skins, sound_engine,
-    sound_events, sound_preview, spans, split_layout, split_map, split_profiles, sprites,
-    streaming, structure_block, tab_list, terrain_model, test_block, test_instance_block, testgen,
-    title_edition, trims, ui, vault, weather, widgets, world, worldborder, zip,
+    poi_sections, polytone_colors, polytone_creative_tabs, polytone_post, post_chain,
+    potent_sulfur, preedit, providers, pvp, pvp_hud, random_source, resource_source, screen_draw,
+    screen_effects, sculk, section_mask, server_terrain, settings, shader_options,
+    shader_pack_list, signs, skins, social, sound_engine, sound_events, sound_preview, spans,
+    split_layout, split_map, split_profiles, sprites, streaming, structure_block, tab_list,
+    terrain_model, test_block, test_instance_block, testgen, title_edition, trims, ui, vault,
+    weather, widgets, world, worldborder, zip,
 };
 pub mod attack_strength;
 pub mod attribute_updates;
@@ -60,6 +61,8 @@ pub mod debug_overlay;
 pub mod debugworld;
 pub mod dialog;
 pub mod dialog_screen;
+#[cfg(feature = "discord")]
+pub mod discord_presence;
 pub mod enchantment_levels;
 pub mod end_crystal;
 pub mod end_gateway;
@@ -147,6 +150,7 @@ pub mod stations;
 pub mod stopwatches;
 pub mod structure_blocks;
 pub mod studio;
+pub mod telemetry;
 pub mod text_display;
 pub mod tick_chunk_membership;
 pub mod ticket_levels;
@@ -194,3 +198,6 @@ pub use horizon_items::flowers;
 pub use horizon_items::item_data;
 pub use horizon_items::items;
 pub use horizon_items::random_sequences;
+
+#[cfg(test)]
+mod brewing_speed_load_tests;

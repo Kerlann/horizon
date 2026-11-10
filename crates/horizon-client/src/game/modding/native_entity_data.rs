@@ -10,7 +10,7 @@ use super::{
 };
 use horizon_client::{entity_nbt::flag, scoreboard::json_to_tag, text::Text};
 use horizon_core::nbt::{Compound, Tag};
-use mod_api::{EntityRef, MobCategory};
+use mod_api::{EntityReadError, EntityRef, MobCategory};
 
 /// The most tags an entity holds (`Entity.addTag`).
 const MAX_TAGS: usize = 1024;
@@ -19,7 +19,10 @@ impl Game<'_> {
     /// The entity's data as `/data get entity` shows it
     /// (`Entity.saveWithoutId`): its compound without `id`. An entity with no
     /// UUID yet gets the one it will be saved with. API 386.
-    pub(super) fn entity_nbt(&mut self, entity: EntityRef) -> Result<Option<Compound>, EntityReadError> {
+    pub(super) fn entity_nbt(
+        &mut self,
+        entity: EntityRef,
+    ) -> Result<Option<Compound>, EntityReadError> {
         if self.remote.is_some() {
             return None;
         }
@@ -42,7 +45,11 @@ impl Game<'_> {
     /// can't reload yet (only mobs, dropped items, armor stands and item
     /// frames), data nested too deep, or data that changes nothing. API
     /// 386.
-    pub(super) fn entity_merge_nbt(&mut self, entity: EntityRef, nbt: Compound) -> Result<bool, EntityReadError> {
+    pub(super) fn entity_merge_nbt(
+        &mut self,
+        entity: EntityRef,
+        nbt: Compound,
+    ) -> Result<bool, EntityReadError> {
         if self.remote.is_some() {
             return false;
         }
@@ -541,7 +548,8 @@ mod tests {
             game.enter_level(super::super::Dim::Overworld).unwrap();
             let dimension = game.dim.key();
             let (at, _) = game
-                .entity_residency
+                .resident_entities
+                .table
                 .borrow_mut()
                 .server_admitted_location(entity.id(), |at| game.locate_server_resident_owner(at))
                 .unwrap();

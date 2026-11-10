@@ -1514,11 +1514,6 @@ fn base_tick(
     if m.invulnerable > 0 {
         m.invulnerable -= 1;
     }
-    // Entity.baseTick: the entity-level invulnerability window counts down
-    // too, its own timer (#916), never the damage cooldown above.
-    if m.invulnerable_time > 0 {
-        m.invulnerable_time -= 1;
-    }
     // LivingEntity.baseTick runs tickEffects after the timers count down.
     tick_effects(m, w.loop_context, level, w.mod_effects);
     // Entity.applyEffectsFromBlocks runs in LivingEntity.aiStep, after

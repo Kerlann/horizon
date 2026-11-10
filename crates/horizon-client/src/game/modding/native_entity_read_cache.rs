@@ -169,7 +169,7 @@ impl Game<'_> {
         id: u32,
     ) -> Option<(EntityRef, horizon_client::join_seq::residency::Kind)> {
         let epoch = self.native_lifecycle.epoch()?;
-        let mut table = self.entity_residency.borrow_mut();
+        let mut table = self.resident_entities.table.borrow_mut();
         let (location, state, _, _) =
             table.server_admitted_read_lookup(id, |at| self.locate_server_resident_owner(at))?;
         let visible = match state {
@@ -194,7 +194,7 @@ impl Game<'_> {
         if self.native_lifecycle.epoch() != Some(entity.epoch()) {
             return None;
         }
-        let mut table = self.entity_residency.borrow_mut();
+        let mut table = self.resident_entities.table.borrow_mut();
         let (state, cached) = table
             .server_entity_read_lookup(entity.id(), |at| self.locate_server_resident_owner(at));
         match state {

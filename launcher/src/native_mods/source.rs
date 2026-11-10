@@ -38,7 +38,11 @@ fn lower(
         fix,
     };
     if inject.access != Access::Internals {
-        return Err(invalid("access", "API source adapters await U5f"));
+        return Err(InjectError::NoSlot {
+            id: format!("{owner}:{}", inject.id),
+            reason: NoSlotReason::NotListed,
+            declaration: inject.at.clone(),
+        });
     }
     let kind = match inject.kind {
         Kind::Head => "HEAD",
@@ -235,17 +239,34 @@ fn checked_routes_and_identities_do_not_alias() {
         Err(InjectError::Changed { .. })
     ));
     manifest.inject[0].hash = "fingerprint".into();
-    for (access, kind, field) in [
-        (Access::Api, Kind::Head, "access"),
-        (Access::Internals, Kind::ModifyArg, "kind"),
-    ] {
-        manifest.inject[0].access = access;
-        manifest.inject[0].kind = kind;
-        let error = adapt(&manifest, vec![], "fn target()").err();
-        assert!(
-            matches!(error, Some(InjectError::Invalid { field: actual, .. }) if actual == field)
-        );
-    }
+    manifest.inject[0].access = Access::Api;
+    let error = adapt(&manifest, vec![], "fn target()").err().unwrap();
+    let message = error.to_string();
+    assert!(message.contains("one:ab"));
+    assert!(message.contains("game::c"));
+    assert!(message.contains("access = \"api\" never rebuilds the game"));
+    assert!(message.contains("request a hook"));
+    manifest.inject[0].access = Access::Internals;
+    manifest.inject[0].kind = Kind::ModifyArg;
+    assert!(matches!(
+        adapt(&manifest, vec![], "fn target()"),
+        Err(InjectError::Invalid { field: "kind", .. })
+    ));
+}
+
+#[test]
+fn api_head_without_slot_is_permanently_refused() {
+    let mut manifest = declaration("example", "check", "game::target", "head");
+    manifest.inject[0].access = Access::Api;
+    let error = adapt(&manifest, vec![], "fn target()")
+        .err()
+        .unwrap()
+        .to_string();
+    assert!(error.contains("example:check"));
+    assert!(error.contains("game::target"));
+    assert!(error.contains("access = \"api\" never rebuilds the game"));
+    assert!(error.contains("access = \"internals\""));
+    assert!(error.contains("request a hook"));
 }
 
 #[cfg(test)]

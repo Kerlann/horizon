@@ -32,6 +32,7 @@ fn launcher(root: &Path, args: &[&str]) -> Command {
         .env("XDG_CONFIG_HOME", root.join("config"))
         .env("HORIZON_LAUNCHER_NO_SELF_UPDATE", "1")
         .env("HORIZON_NO_AUDIO", "1")
+        .env("HORIZON_TELEMETRY_URL", "off")
         // Memory only: the test never reads the player's keychain.
         .env("HORIZON_NO_KEYCHAIN", "1")
         .env("HORIZON_MSA_CLIENT_ID", "test-client");

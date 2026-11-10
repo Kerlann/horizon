@@ -42,7 +42,8 @@ fn silent_nested_callback_own_actor_keeps_turn_and_restores_on_panic() {
     for panic in [false, true] {
         with_fixture(|game, _| {
             let (a, _) = game
-                .entity_residency
+                .resident_entities
+                .table
                 .borrow_mut()
                 .server_admitted_location(71, |at| game.locate_server_resident_owner(at))
                 .unwrap();

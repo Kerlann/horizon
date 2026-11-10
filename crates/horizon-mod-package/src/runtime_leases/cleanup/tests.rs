@@ -1,22 +1,6 @@
 use super::*;
 
-// Other libtest threads can fork while Cleanup holds its exclusive gate. Keep
-// these lifetime assertions in a process with no unrelated descriptor owners.
-fn isolated() -> bool {
-    if std::env::var_os("RUNTIME_CLEANUP_ISOLATED").is_some() {
-        return false;
-    }
-    let test = std::thread::current().name().unwrap().to_owned();
-    assert!(
-        std::process::Command::new(std::env::current_exe().unwrap())
-            .args(["--exact", &test, "--nocapture"])
-            .env("RUNTIME_CLEANUP_ISOLATED", "1")
-            .status()
-            .unwrap()
-            .success()
-    );
-    true
-}
+use crate::runtime_leases::isolated_test as isolated;
 
 fn setup() -> (tempfile::TempDir, Arc<Registry>) {
     let root = tempfile::tempdir().unwrap();
@@ -24,43 +8,20 @@ fn setup() -> (tempfile::TempDir, Arc<Registry>) {
     (root, registry)
 }
 
-fn populate(registry: &Registry, count: usize) {
-    for index in 0..count {
-        drop(initialize_lock(&registry.directory, &format!("{index:064x}")).unwrap());
-    }
-}
-
 #[test]
-fn boundaries_and_permanent_gate() {
+fn permanent_gate_excludes_new_owners_until_cleanup_drops() {
     if isolated() {
         return;
     }
-    for count in [4095, 4096, 4097] {
-        let (root, registry) = setup();
-        populate(&registry, count);
-        let before = registry.directory.metadata("gate").unwrap();
-        drop(registry);
-        let cleanup = Cleanup::existing(root.path()).unwrap();
-        #[cfg(unix)]
-        {
-            use std::os::fd::AsRawFd;
-            assert!(cleanup.directory.as_raw_fd() > 2);
-            assert!(cleanup._gate.file().as_raw_fd() > 2);
-        }
-        assert_eq!(
-            cleanup.collect().unwrap(),
-            if count < 4096 { 0 } else { count }
-        );
-        let after = cleanup.directory.metadata("gate").unwrap();
-        assert_eq!((before.dev(), before.ino()), (after.dev(), after.ino()));
-        assert_eq!(
-            cleanup.directory.entries().unwrap().count(),
-            if count < 4096 { count + 1 } else { 1 }
-        );
-        assert!(matches!(Registry::existing(root.path()), Err(Error::Busy)));
-        drop(cleanup);
-        assert!(Registry::existing(root.path()).is_ok());
-    }
+    let (root, registry) = setup();
+    let before = registry.directory.metadata("gate").unwrap();
+    drop(registry);
+    let cleanup = Cleanup::existing(root.path()).unwrap();
+    assert!(matches!(Registry::existing(root.path()), Err(Error::Busy)));
+    drop(cleanup);
+    let registry = Registry::existing(root.path()).unwrap();
+    let after = registry.directory.metadata("gate").unwrap();
+    assert_eq!((before.dev(), before.ino()), (after.dev(), after.ino()));
 }
 
 #[test]
@@ -85,37 +46,8 @@ fn every_claim_owner_holds_the_gate_until_its_last_reference() {
             Registry::with_release(root.path(), Release::Unlock),
             Err(Error::Busy)
         ));
-        assert_eq!(cleanup.collect().unwrap(), 0);
+        drop(cleanup);
     }
-}
-
-#[test]
-fn unknown_entries_never_count_or_disappear() {
-    if isolated() {
-        return;
-    }
-    let (root, registry) = setup();
-    populate(&registry, 4095);
-    let odd = [
-        "unknown",
-        &"A".repeat(64),
-        &"g".repeat(64),
-        &"f".repeat(63),
-        &"c".repeat(64),
-    ];
-    for name in odd {
-        registry.directory.write(name, b"retained").unwrap();
-    }
-    registry.directory.create_dir("e".repeat(64)).unwrap();
-    drop(registry);
-    let cleanup = Cleanup::existing(root.path()).unwrap();
-    assert_eq!(cleanup.collect().unwrap(), 0);
-    drop(initialize_lock(&cleanup.directory, &format!("{:064x}", 4095)).unwrap());
-    assert_eq!(cleanup.collect().unwrap(), 4096);
-    for name in odd {
-        assert_eq!(cleanup.directory.read(name).unwrap(), b"retained");
-    }
-    assert!(cleanup.directory.metadata("e".repeat(64)).unwrap().is_dir());
 }
 
 #[test]
@@ -138,26 +70,16 @@ fn existing_never_creates_missing_namespace_or_gate() {
 
 #[cfg(unix)]
 #[test]
-fn redirects_and_hardlinks_are_retained() {
+fn redirected_gate_and_namespace_are_refused() {
     if isolated() {
         return;
     }
     use std::os::unix::fs::symlink;
     let (root, registry) = setup();
-    populate(&registry, 4096);
+    drop(registry);
     let outside = root.path().join("outside");
     fs::write(&outside, b"untouched").unwrap();
     let leases = root.path().join("run-leases");
-    let link = leases.join("f".repeat(64));
-    symlink(&outside, &link).unwrap();
-    let hard = leases.join("d".repeat(64));
-    fs::hard_link(&outside, &hard).unwrap();
-    drop(registry);
-    let cleanup = Cleanup::existing(root.path()).unwrap();
-    assert_eq!(cleanup.collect().unwrap(), 4096);
-    assert!(fs::symlink_metadata(link).unwrap().file_type().is_symlink());
-    assert_eq!(fs::read(hard).unwrap(), b"untouched");
-    drop(cleanup);
     fs::remove_file(leases.join("gate")).unwrap();
     symlink(&outside, leases.join("gate")).unwrap();
     assert!(Cleanup::existing(root.path()).is_err());
@@ -182,6 +104,20 @@ fn windows_open_reader_blocks_exclusive_gate_and_collection_shares_no_gate() {
     drop(registry);
     assert!(matches!(Cleanup::existing(root.path()), Err(Error::Busy)));
     drop(reader);
-    let cleanup = Cleanup::existing(root.path()).unwrap();
-    assert!(cleanup.directory.open("gate").is_err());
+    let _cleanup = Cleanup::existing(root.path()).unwrap();
+    let directory = open_directory(&root.path().join("run-leases")).unwrap();
+    assert!(directory.open("gate").is_err());
+}
+
+#[test]
+fn published_unit_keys_survive_registry_reopen_without_creating_entries() {
+    if isolated() {
+        return;
+    }
+    let (root, registry) = setup();
+    let tree = open_directory(root.path()).unwrap();
+    drop(registry.lock(&tree, LockMode::Shared).unwrap());
+    drop(registry);
+    let registry = Registry::existing(root.path()).unwrap();
+    drop(registry.lock(&tree, LockMode::Shared).unwrap());
 }

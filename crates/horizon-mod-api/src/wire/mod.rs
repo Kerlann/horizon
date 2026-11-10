@@ -1,5 +1,5 @@
 //! The wire form of the API's plain data, for the wasm boundary: values written into and read
-//! from one buffer in the guest's linear memory. Native mods never use it.
+//! from one buffer. Native and wasm mods share the same encoding and layout identity.
 //!
 //! Everything is little-endian and self-delimiting: a length is a `u32` before its items, an
 //! `Option` is a tag byte, an enum is a `u32` case then its fields, a record is its fields in
@@ -8,41 +8,66 @@
 //! as UTF-8, and nesting against [`MAX_DEPTH`]. A bad input is a [`WireError`], never a panic and
 //! never an allocation larger than the input can back.
 //!
-//! The impls for the API's own types are generated from their definitions, so a type crosses
-//! exactly as it is written and a field added to it crosses with no other change.
+//! Derive [`Wire`](crate::Wire) on types that cross a target boundary. The derive encodes
+//! fields in declaration order; checked constructors can use `#[wire(via = T)]`.
+//! Hand-written implementations must keep their layout identity consistent with their encoding.
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::hash::Hash;
 use std::sync::Arc;
 
+// hidden: transport plumbing used by generated boundary code.
+#[doc(hidden)]
 pub use crate::wire::wire_slots::{Id, Slots, Stale};
+// hidden: resource transport implementation, not a mod-facing codec API.
+#[doc(hidden)]
 #[path = "wire_resources.rs"]
 mod resources;
+// hidden: transport plumbing used by generated boundary code.
+#[doc(hidden)]
 pub use resources::{
     ResourceCodec, ResourceScope, ScopeError, ScopeLease, ScopeToken, Unsupported, borrow_token,
 };
 
 /// The guest's start-up call: its input is the package list.
+// hidden: transport plumbing used by generated boundary code.
+#[doc(hidden)]
 pub const INIT: u32 = 0xFFFF_FF00;
 /// The guest's call to drop the handlers the game let go of: its input is their ids.
+// hidden: transport plumbing used by generated boundary code.
+#[doc(hidden)]
 pub const RELEASE: u32 = 0xFFFF_FF01;
 /// The game's import freeing an object the mod held: its input is the id.
+// hidden: transport plumbing used by generated boundary code.
+#[doc(hidden)]
 pub const HOST_RELEASE: u32 = 0xFFFF_FF02;
 /// The game's import taking a message from the mod (a panic's text): its input is a string.
+// hidden: transport plumbing used by generated boundary code.
+#[doc(hidden)]
 pub const HOST_LOG: u32 = 0xFFFF_FF03;
 
 /// The layout of every value and call that crosses, a hash the generator writes: a mod built
 /// for another one is refused when it loads.
+// hidden: transport plumbing used by generated boundary code.
+#[doc(hidden)]
 pub use crate::WIRE_LAYOUT as LAYOUT;
 
 #[cfg(any(target_arch = "wasm32", feature = "wasm-guest"))]
+// hidden: transport plumbing used by generated boundary code.
+#[doc(hidden)]
 pub use crate::wire::wire_guest as guest;
 
 /// Maximum static strings retained by either transport string table.
+// hidden: transport plumbing used by generated boundary code.
+#[doc(hidden)]
 pub const MAX_STATIC_STRINGS: usize = 4096;
 /// Maximum bytes in one static API string (the existing interning bound).
+// hidden: transport plumbing used by generated boundary code.
+#[doc(hidden)]
 pub const MAX_STATIC_STRING_BYTES: usize = 256;
 
 /// Intern a static API string with bounded process-lifetime storage.
+// hidden: transport plumbing used by generated boundary code.
+#[doc(hidden)]
 pub fn intern(value: &str) -> Result<&'static str, WireError> {
     use std::sync::{Mutex, OnceLock};
     static STRINGS: OnceLock<Mutex<HashSet<&'static str>>> = OnceLock::new();
@@ -120,6 +145,7 @@ pub struct Writer {
 }
 
 impl Writer {
+    /// Creates an empty writer with no byte limit.
     pub fn new() -> Self {
         Self::default()
     }
@@ -140,6 +166,7 @@ impl Writer {
     pub fn into_bytes(self) -> Vec<u8> {
         self.bytes
     }
+    /// Borrows the bytes written so far; check `error` before sending them.
     pub fn bytes(&self) -> &[u8] {
         &self.bytes
     }
@@ -161,6 +188,7 @@ impl Writer {
         }
         fits
     }
+    /// Appends raw bytes without a length prefix.
     pub fn put_bytes(&mut self, bytes: &[u8]) {
         if self.can_fit(bytes.len()) {
             self.bytes.extend_from_slice(bytes);
@@ -199,6 +227,7 @@ impl Writer {
             None => self.put(&0u8),
         }
     }
+    /// Encodes a borrowed value unless an earlier write failed.
     pub fn put<T: Put + ?Sized>(&mut self, value: &T) {
         if self.error.is_none() {
             value.put_to(self);
@@ -214,11 +243,14 @@ impl Writer {
     pub fn error(&self) -> Option<WireError> {
         self.error
     }
+    /// Records the first failure, preventing subsequent writes.
     pub fn fail(&mut self, error: WireError) {
         self.error.get_or_insert(error);
     }
     /// Resolves one resource, reserving its wire width before registry mutation.
     /// Any failure is recorded before returning, so partial messages are never sent.
+    // hidden: transport plumbing used by generated boundary code.
+    #[doc(hidden)]
     pub fn resource(&mut self, value: Box<dyn std::any::Any>) -> Result<Id, WireError> {
         self.can_fit(<Id as Wire>::MIN);
         if let Some(error) = self.error {
@@ -231,9 +263,13 @@ impl Writer {
         result
     }
     /// Reports a deliberate erased-view refusal without changing the native Option contract.
+    // hidden: transport plumbing used by generated boundary code.
+    #[doc(hidden)]
     pub fn refused(&self, handler: &str) {
         resources::refused(handler);
     }
+    // hidden: transport plumbing used by generated boundary code.
+    #[doc(hidden)]
     pub fn put_resource(&mut self, value: Box<dyn std::any::Any>) {
         if let Ok(id) = self.resource(value) {
             self.put(&id)
@@ -414,6 +450,7 @@ pub struct Reader<'a> {
 }
 
 impl<'a> Reader<'a> {
+    /// Reads values from a borrowed buffer without copying it.
     pub fn new(data: &'a [u8]) -> Self {
         Self { data, depth: 0 }
     }
@@ -421,6 +458,7 @@ impl<'a> Reader<'a> {
     pub fn rest(&self) -> &'a [u8] {
         self.data
     }
+    /// Takes exactly `len` bytes, refusing a length beyond the remaining buffer.
     pub fn take_bytes(&mut self, len: usize) -> Result<&'a [u8], WireError> {
         let (head, tail) = self.data.split_at_checked(len).ok_or(WireError::Eof)?;
         self.data = tail;
@@ -437,6 +475,7 @@ impl<'a> Reader<'a> {
             _ => Err(WireError::Length),
         }
     }
+    /// Decodes one value from the current position.
     pub fn take<T: Wire>(&mut self) -> Result<T, WireError> {
         T::take(self)
     }
@@ -486,6 +525,8 @@ impl<'a> Reader<'a> {
         }
         Ok(items)
     }
+    // hidden: transport plumbing used by generated boundary code.
+    #[doc(hidden)]
     pub fn take_resource<T: 'static>(&mut self) -> Result<T, WireError> {
         resources::load(self.take()?)
     }
@@ -591,12 +632,15 @@ pub trait Wire: Sized {
     fn __tuple_layouts() -> Option<Vec<u64>> {
         None
     }
+    /// Minimum encoded size, used to reject impossible collection lengths.
     const MIN: usize;
+    /// Encodes this value, recording failures on the writer.
     fn put(&self, out: &mut Writer);
     /// Consumes owned data when a resource's ownership must cross the boundary.
     fn put_owned(self, out: &mut Writer) {
         self.put(out);
     }
+    /// Decodes one value, leaving any following bytes for the caller.
     fn take(input: &mut Reader<'_>) -> Result<Self, WireError>;
     // hidden: internal Vec encoding specialization, not a mod-facing API
     /// Internal list codec; primitive numbers override this with a contiguous codec.
@@ -1484,7 +1528,12 @@ mod tests {
     #[test]
     fn attachment_refusals_use_bounded_interned_static_text() {
         round(crate::AttachmentError::HolderBusy);
-        round(crate::AttachmentError::UnsupportedHolder("dragon"));
+        round(crate::AttachmentError::UnsupportedHolder("dragonpart"));
+        round(crate::AttachmentRowError::HolderBusy);
+        round(crate::AttachmentRowError::UnsupportedHolder("dragonpart"));
+        let bound: &'static str = Box::leak("é".repeat(128).into_boxed_str());
+        round(crate::AttachmentError::UnsupportedHolder(bound));
+        round(crate::AttachmentRowError::UnsupportedHolder(bound));
         let mut out = super::Writer::new();
         out.put(&crate::AttachmentError::UnsupportedHolder("dragon"));
         let first = super::Reader::decode::<crate::AttachmentError>(out.bytes()).unwrap();
@@ -1504,6 +1553,13 @@ mod tests {
         out.put(&"x".repeat(257));
         assert_eq!(
             super::Reader::decode::<crate::AttachmentError>(out.bytes()),
+            Err(super::WireError::Invalid("static string too long"))
+        );
+        out.clear();
+        out.put(&3u32);
+        out.put(&"é".repeat(129));
+        assert_eq!(
+            super::Reader::decode::<crate::AttachmentRowError>(out.bytes()),
             Err(super::WireError::Invalid("static string too long"))
         );
     }

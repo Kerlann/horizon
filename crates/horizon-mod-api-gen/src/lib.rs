@@ -8,7 +8,9 @@ pub use dispatch_fixtures::layout as dispatch_fixture_layout;
 pub use game_modules::materialize_game_modules;
 mod host;
 mod layout;
+mod named_hooks;
 mod parts;
+pub mod wire_types;
 pub use catalog::DECLARATIONS;
 use catalog::{Catalog, Contract, DrawContext, Hook, HostAccess, PartKind, PhaseContext, Side};
 use heck::ToSnakeCase;
@@ -471,7 +473,9 @@ pub enum Target {
     Client,
 }
 
-/// Fill new hooks' placeholders in hand-written source. Never writes generated files.
+/// Fill new hooks' placeholders in `game/native_hooks/`. Never writes generated files.
+/// Named hooks in other logical game modules must already call their own dispatch;
+/// this command validates them but never fills or rewrites their bodies.
 pub fn fill_hooks(root: &Path) -> Result<(), String> {
     sources(root, FillMode::Fill).map(|_| ())
 }

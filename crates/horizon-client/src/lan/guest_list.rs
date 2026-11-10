@@ -417,6 +417,14 @@ impl Drop for Edit<'_> {
         if (after.0, after.1) != (self.before.0, self.before.1)
             || (self.before.2 != 0 && after.2 != self.before.2)
         {
+            if self.registration.as_ref().is_some_and(|old| {
+                self.list.rows[self.index]
+                    .attachments
+                    .registration()
+                    .is_some_and(|current| old.same_registration(&current))
+            }) {
+                self.list.rows[self.index].attachments.retire();
+            }
             self.list.rows[self.index].residency.renew();
         }
         let dimension = self
@@ -560,6 +568,58 @@ mod tests {
             assert!(index.lock().unwrap().snapshot(&key).is_empty(), "{action}");
             assert_eq!(before[0].entry.read(&VALUE), Ok(&7));
             assert_eq!(VALUE.get_existing(&mut saved, Holder::Level), Ok(Some(7)));
+        }
+    }
+
+    #[test]
+    fn identity_edits_retire_only_the_retained_old_attachment_registration() {
+        use horizon_mod_runtime::attachments::{Holder, index::AttachmentIndex};
+        use std::sync::{Arc, Mutex};
+        for field in ["connection", "uuid", "entity"] {
+            for replace_registration in [false, true] {
+                let index = Arc::new(Mutex::new(AttachmentIndex::default()));
+                let key = ("guest_test".into(), "value".into());
+                let mut player = guest(1);
+                VALUE
+                    .set(&mut player.attachments, Holder::Level, 7)
+                    .unwrap();
+                let old = player.attachments.bind_index(&index, player.uuid);
+                let mut table =
+                    crate::join_seq::residency::table::EntityTable::new(Default::default());
+                let mut list = GuestList::default();
+                list.bind_residency(&table.producer(), |_| mod_api::DimensionKey::OVERWORLD);
+                list.push(player);
+                list.update(0, |g| {
+                    match field {
+                        "connection" => g.conn = 9,
+                        "uuid" => g.uuid = 909,
+                        _ => g.entity_id = 19,
+                    }
+                    if replace_registration {
+                        g.attachments = Default::default();
+                        VALUE.set(&mut g.attachments, Holder::Level, 9).unwrap();
+                        g.attachments.bind_index(&index, g.uuid);
+                    }
+                });
+                let entries = index.lock().unwrap().snapshot(&key);
+                assert!(
+                    !old.unregister(),
+                    "old binding already retired: {field}, replacement={replace_registration}"
+                );
+                if replace_registration {
+                    assert_eq!(entries.len(), 1);
+                    assert_eq!(entries[0].entry.read(&VALUE), Ok(&9));
+                } else {
+                    assert!(entries.is_empty(), "{field}");
+                }
+                assert!(
+                    table
+                        .server_admitted_identity(list[0].entity_id as u32, |at| resident(
+                            &list, at
+                        ))
+                        .is_some()
+                );
+            }
         }
     }
 

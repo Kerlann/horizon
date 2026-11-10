@@ -14,7 +14,7 @@ const NEAR_PIG: &str = "00006093-0000-0000-0000-00000000000d";
 const HOGLIN: &str = "00006093-0000-0000-0000-000000000001";
 const PIG: &str = "00006093-0000-0000-0000-00000000000b";
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -36,7 +36,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -104,7 +104,8 @@ fn step(game: &mut Game<'_>, ticks: u32) {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_hoglin_keeps_attacking_its_attacker_beside_another_hit_hoglin() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     step(&mut game, 40);
     // The neighbour's hoglin first, then this one, in the same tick.
     assert!(game.run_command(&format!(
@@ -152,7 +153,8 @@ fn mob_id(game: &mut Game<'_>, uuid: &str) -> u32 {
 fn a_broadcast_target_replaces_only_a_farther_one() {
     use horizon_client::mobs::{Who, piglin::receive_attack_target};
     use horizon_core::geometry::Vec3;
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     let receiver = mob_id(&mut game, HOGLIN);
     let (near, far) = (mob_id(&mut game, PIG), mob_id(&mut game, NEAR_PIG));
     let place = |game: &Game<'_>, id: u32| game.mobs.iter().find(|m| m.id == id).unwrap().position;
@@ -192,7 +194,8 @@ fn a_broadcast_target_replaces_only_a_farther_one() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn the_sensed_receivers_are_visible_adult_hoglins() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     // Inside this hoglin's pen: an adult and a baby. Beyond a stone wall: an adult.
     assert!(game.run_command(
         "summon hoglin 24.5 100 10.5 {PersistenceRequired:1b,IsImmuneToZombification:1b,NoAI:1b,UUID:[I;24723,0,0,6]}"

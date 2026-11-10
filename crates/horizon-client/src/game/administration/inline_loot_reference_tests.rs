@@ -13,7 +13,7 @@ const MISSING_MESSAGE: &str = "Failed to parse structure: Failed to parse either
      Second: Failed to parse either. First: Not a list: \"parity:il_none\"; \
      Second: Failed to get element parity:il_none from registry minecraft:loot_table";
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -35,7 +35,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -146,7 +146,8 @@ fn give(game: &mut Game<'_>, table: &str) -> (bool, Option<String>, i32, i32, i3
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn an_inline_reference_to_a_missing_table_fails_the_parse() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     // The valid references run: one diamond each time, and nothing for the empty table.
     let (ok, said, r, s, d) = give(&mut game, &reference("\"parity:il_one\""));
     assert_eq!(
@@ -189,7 +190,8 @@ fn an_inline_reference_to_a_missing_table_fails_the_parse() {
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn inline_references_follow_the_codec_and_the_reloaded_registry() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     let child_one = "{pools:[{rolls:1,entries:[{type:\"minecraft:alternatives\",children:[{type:\"minecraft:loot_table\",value:\"parity:il_one\"}]}]}]}";
     let (ok, said, r, s, d) = give(&mut game, child_one);
     assert_eq!(

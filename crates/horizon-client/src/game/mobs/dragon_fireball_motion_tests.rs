@@ -7,7 +7,7 @@ use horizon_client::chunk::Chunk;
 use horizon_core::position::ChunkPos;
 use std::sync::Arc;
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -29,7 +29,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -67,7 +67,8 @@ const FIREBALL: &str = "0000d127-0000-0000-0000-000000000002";
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn a_summoned_dragon_fireball_moves_like_a_fireball() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     for command in [
         "forceload add 0 0",
         "tick freeze",

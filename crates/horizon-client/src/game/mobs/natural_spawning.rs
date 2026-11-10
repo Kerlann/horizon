@@ -1122,6 +1122,7 @@ impl<'a> Game<'a> {
         rides: Vec<(u32, u32)>,
         persistent: bool,
     ) {
+        let _save_lease = horizon_client::join_seq::visibility::PassLease::enter();
         let mut pending = pending;
         let mut created = created;
         for m in pending.iter_mut() {

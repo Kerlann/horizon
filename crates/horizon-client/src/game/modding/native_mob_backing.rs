@@ -42,7 +42,8 @@ impl Game<'_> {
         use horizon_client::join_seq::residency::Kind;
         use horizon_core::geometry::{Aabb, Vec3};
         let (at, state, _) = self
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_admitted_identity(id, |at| self.locate_server_resident_owner(at))?;
         if at.owner.dimension != self.dim.key()

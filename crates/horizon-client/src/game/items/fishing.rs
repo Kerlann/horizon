@@ -2,7 +2,7 @@
 //! bobbing, lure and bite timers, open water, hooking mobs, retrieving the
 //! `gameplay/fishing` loot) and `FishingHookRenderer` (bobber and line).
 use super::api_values::TryIntoApi;
-use super::{Game, lan_mobs::guest_bounds, view_vector};
+use super::{Game, creatures::ProjectileHitter, lan_mobs::guest_bounds, view_vector};
 use horizon_client::advancements::EntityView;
 use horizon_client::lan::entity::States;
 use horizon_client::{
@@ -16,7 +16,7 @@ use horizon_client::{
     random_source,
 };
 use horizon_core::{
-    geometry::{Aabb, Vec3, traverse_blocks, trig},
+    geometry::{Aabb, BlockHit, Vec3, traverse_blocks, trig},
     position::BlockPos,
     random::{LegacyRandom, RandomSource},
 };
@@ -1028,7 +1028,7 @@ impl Game<'_> {
                 // segment so a fast hook cannot tunnel or catch through a wall.
                 let to = h.position.add_vector(h.velocity);
                 let block_hit = self.hook_block_hit(h.position, to);
-                let entity_end = block_hit.unwrap_or(to);
+                let entity_end = block_hit.map_or(to, |hit| hit.location);
                 let owner = self.lan_acting;
                 let own_vehicle = self.own_vehicle();
                 let hit = first_entity_hit(
@@ -1097,13 +1097,28 @@ impl Game<'_> {
                         }
                     }
                 } else if let Some(hit) = block_hit {
+                    let projectile = ProjectileHitter {
+                        owner: Some(horizon_client::mobs::Who::Player),
+                        guest: self.lan_acting,
+                        arrow: false,
+                        kind: "minecraft:fishing_bobber",
+                        position: h.position,
+                    };
+                    let pos = [hit.block.x, hit.block.y, hit.block.z];
+                    let face = hit.direction.normal();
+                    if let Err(error) =
+                        self.projectile_block_impact(&projectile, pos, hit.location, face)
+                    {
+                        log::error!("fishing block impact: {error}");
+                    }
+                    self.target_block_hit(&projectile, pos, hit.location, face);
                     // Projectile.onHit on a block: PROJECTILE_LAND.
                     self.projectile_landed_event(
                         h.id,
                         Some(horizon_client::mobs::Who::Player),
-                        [hit.x, hit.y, hit.z],
+                        [hit.location.x, hit.location.y, hit.location.z],
                     );
-                    h.velocity = rebound(h.velocity, hit, h.position);
+                    h.velocity = rebound(h.velocity, hit.location, h.position);
                 }
             }
             State::Hooked(id) => {
@@ -1478,7 +1493,8 @@ impl Game<'_> {
             table::{EntityLookup, SourceEntity},
         };
         let found = self
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_entity_lookup(id, |at| {
                 if at.owner.kind != Kind::Hook {
@@ -1511,7 +1527,8 @@ impl Game<'_> {
     pub(in crate::game) fn remove_fishing_hook(&mut self, id: u32) {
         use horizon_client::join_seq::residency::{Kind, Source, table::EntityLookup};
         let found = self
-            .entity_residency
+            .resident_entities
+            .table
             .borrow_mut()
             .server_entity_lookup(id, |at| self.locate_server_resident_owner(at));
         let EntityLookup::Found { location, .. } = found else {
@@ -1870,7 +1887,7 @@ impl Game<'_> {
         inside_medium(position, medium)
     }
     /// `FishingHook.checkCollision` clips blocks on both sides of the connection.
-    fn hook_block_hit(&self, from: Vec3, to: Vec3) -> Option<Vec3> {
+    fn hook_block_hit(&self, from: Vec3, to: Vec3) -> Option<BlockHit> {
         let mut scene = SceneCollisions {
             world: &self.world,
             binding: self.collision,
@@ -1888,7 +1905,6 @@ impl Game<'_> {
         })
         .ok()
         .flatten()
-        .map(|hit| hit.location)
     }
 
     /// `FishingHook.tick`: one tick of movement without the fishing (the
@@ -1925,7 +1941,7 @@ impl Game<'_> {
             }
             State::Flying => {
                 if let Some(hit) = self.hook_block_hit(position, position.add_vector(velocity)) {
-                    velocity = rebound(velocity, hit, position);
+                    velocity = rebound(velocity, hit.location, position);
                 }
             }
             State::Hooked(id) => {

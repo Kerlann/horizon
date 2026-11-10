@@ -3296,3 +3296,6 @@ mod required_tag_tests {
         });
     }
 }
+
+#[cfg(test)]
+include!("functions/typed_state_range_tests.rs");

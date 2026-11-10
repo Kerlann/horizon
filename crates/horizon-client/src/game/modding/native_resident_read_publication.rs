@@ -42,7 +42,12 @@ macro_rules! resident_read_identity {
         }
     };
 }
-super::entity_residency::resident_owners!(resident_read_identity, unused, creatures.projectiles);
+super::entity_residency::resident_owners!(
+    resident_read_identity,
+    unused,
+    creatures.projectiles,
+    resident_entities.knots
+);
 macro_rules! resident_read_owner_locations {
     (($this:ident, $($projectiles:ident).+) $($kind:ident => $target:ident: $($field:ident).+,)*) => {
         fn resident_owner_read_locations(&$this, kind: Kind) -> Vec<Location> {
@@ -116,11 +121,17 @@ impl Drop for ResidentReadScopes {
 }
 
 impl Game<'_> {
-    super::entity_residency::resident_owners!(resident_read_access, self, creatures.projectiles);
+    super::entity_residency::resident_owners!(
+        resident_read_access,
+        self,
+        creatures.projectiles,
+        resident_entities.knots
+    );
     super::entity_residency::resident_owners!(
         resident_read_owner_locations,
         self,
-        creatures.projectiles
+        creatures.projectiles,
+        resident_entities.knots
     );
 
     /// Open before lifting an owner. The guard owns only the shared clock;
@@ -348,10 +359,15 @@ impl Game<'_> {
                 mob_target_facts: None,
             }
         };
-        let published = self.entity_residency.borrow_mut().publish_rows_merging(
-            [(raw.id, at, publication)],
-            NativeReadPublication::merge_pending_scalars,
-        ) == 1;
+        let published = self
+            .resident_entities
+            .table
+            .borrow_mut()
+            .publish_rows_merging(
+                [(raw.id, at, publication)],
+                NativeReadPublication::merge_pending_scalars,
+            )
+            == 1;
         drop(scope);
         published
     }

@@ -16,6 +16,8 @@ horizon-mod-api-gen = { path = "../horizon-mod-api-gen" }
 winresource = "0.1"
 
 [dependencies]
+horizon-cosmetics = { path = "../horizon-cosmetics" }
+horizon-hooks = { path = "../horizon-hooks" }
 horizon-mod-runtime = { path = "../horizon-mod-runtime" }
 horizon-mod-render = { path = "../horizon-mod-render" }
 horizon-mod-api = { path = "../horizon-mod-api" }
@@ -78,6 +80,9 @@ flate2 = { version = "1.1.10", default-features = false, features = ["zlib-rs", 
 horizon-theme = { path = "../horizon-theme" }
 # Hardware probes for the benchmark report (nothing leaves the machine, docs/telemetry.md).
 horizon-system = { path = "../horizon-system" }
+# Opt-in data collection: the game keeps, the launcher sends (docs/telemetry.md). The
+# anonymous "I'm playing" ping is the Horizon layer's (`horizon-heartbeat`, in the official executable).
+horizon-telemetry = { path = "../horizon-telemetry", default-features = false }
 horizon-bench = { path = "../horizon-bench" }
 crc32fast = "1"
 zip = { version = "9.1.3", default-features = false, features = ["deflate"] }
@@ -118,7 +123,7 @@ objc2-foundation = { version = "0.3", default-features = false, features = ["std
 wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
 
 [features]
-default = ["audio", "controllers", "friends"]
+default = ["audio", "controllers", "horizon-extras"]
 # Scoped trait-mod installation for a mod's own tests.
 testing = []
 # Sound output. Without it (and `controllers`) the program links neither libasound nor libudev on
@@ -126,6 +131,15 @@ testing = []
 audio = ["horizon-client-render/audio", "horizon-client-lib/audio"]
 # Controllers: gilrs, and the DualSense's own output. Without it only `horizon-ctl pad`'s virtual pad.
 controllers = ["horizon-client-lib/controllers", "dep:gilrs", "dep:horizon-dualsense", "horizon-client-input/controllers"]
+# Horizon's own extras over the vanilla game, for a fork that wants them out (docs/forking.md):
+# cosmetics and emotes, the "Horizon player" presence, the official server added to
+# the server list, the Horizon Settings and Mods pages, Discord and Play with Friends. Players always get them; there is no switch. `grep -rn horizon-extras crates/` lists
+# every place it gates. Without it (`--no-default-features --features audio,controllers`) the
+# client is best effort: CI builds only the default.
+horizon-extras = ["discord", "friends"]
+# Online extras a server or a port can leave out; the server build has none of them. "Playing Horizon"
+# on Discord (game/discord.rs).
+discord = ["horizon-client-lib/discord"]
 # Play with Friends: sharing a world behind an invite code (game/friends.rs) and joining one.
 friends = ["horizon-client-lib/friends", "dep:horizon-friends"]
 # Records the call sites of mob random draws (`mob_ai_probe` traces).
@@ -159,6 +173,10 @@ name = "datapack_biome_sync"
 path = "tests/datapack_biome_sync.rs"
 
 [[test]]
+name = "busy_launch"
+path = "tests/busy_launch.rs"
+
+[[test]]
 name = "launch_api"
 path = "tests/launch_api.rs"
 
@@ -177,6 +195,7 @@ workspace = true
 # Allocation assertions run with the existing system-allocator feature, so this
 # test-only counter never competes with the game's normal mimalloc allocator.
 allocation-counter = "0.8.1"
+tempfile = "3"
 horizon-mod-runtime = { path = "../horizon-mod-runtime", features = ["test-work-count"] }
 horizon-mod-api = { path = "../horizon-mod-api", features = ["testing"] }
 horizon-client-render = { path = "../horizon-client-render", features = ["test-support"] }

@@ -344,7 +344,15 @@ pub struct TabInputs<'a> {
     /// The player is in the level with an upside-down name
     /// (`AvatarRenderer.isPlayerUpsideDown`).
     pub upside_down: &'a dyn Fn(u128) -> bool,
+    /// A mark after the player's head, or none: an extension point for what lives above the
+    /// engine (Horizon's mark, `horizon_cosmetics::mark`). Vanilla draws none.
+    pub mark: &'a dyn Fn(u128) -> Option<NameMark>,
 }
+
+/// A mark drawn after a player's head in the tab list: filled rectangles `(x, y, width, height,
+/// ARGB)` in an 8x8 box. Once any listed player has one, every row gets the column, so the names
+/// stay aligned.
+pub type NameMark = &'static [(u8, u8, u8, u8, u32)];
 
 /// `PlayerTabOverlay`: the header, footer, visibility and heart states.
 #[derive(Clone, Debug, Default)]
@@ -808,6 +816,7 @@ mod tests {
                 gui_ticks: frame,
                 background: 0x20ffffff,
                 upside_down: &|_| false,
+                mark: &|_| None,
             };
             fresh.cache = None;
             assert_eq!(

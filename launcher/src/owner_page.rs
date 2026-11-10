@@ -6,10 +6,11 @@ use super::*;
 
 impl Launcher {
     /// Whether the screen covers the window: no owner, and either Play was refused or the player
-    /// hasn't read it yet.
+    /// hasn't read it yet. The data question comes first.
     pub(crate) fn asking_owner(&self) -> bool {
         (self.owner_shown() == Some(false) || sign_in_preview())
             && (self.owner_screen_open || !self.settings.owner_notice_seen || sign_in_preview())
+            && !self.asking_consent()
             && self.opening.is_none()
     }
 

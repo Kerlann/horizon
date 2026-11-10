@@ -9,7 +9,7 @@ use std::sync::Arc;
 const ORB: &str = "00000000-0000-0000-0000-0000000000a7";
 const STAND: &str = "00000000-0000-0000-0000-0000000000a8";
 
-fn game() -> Game<'static> {
+fn game<'a>(resources: &'a mut Option<std::sync::Arc<crate::game::Resources>>) -> Game<'a> {
     let root = std::path::PathBuf::from(
         std::env::var_os("HORIZON_TEST_RESOURCES")
             .expect("set HORIZON_TEST_RESOURCES to prepared resources"),
@@ -31,7 +31,7 @@ fn game() -> Game<'static> {
     let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
     options.resources = root.clone();
     options.execution_role = execution_role::ExecutionRole::IntegratedServer;
-    let res: &'static _ = Box::leak(Box::new(loaded.resources));
+    let res = resources.insert(loaded.resources);
     let mut game = Game::new(
         res,
         loaded.pack,
@@ -83,7 +83,8 @@ fn store(game: &mut Game<'_>, subject: &str, kind: &str, getter: &str) -> (bool,
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn an_orb_stores_into_its_own_score() {
-    let mut game = game();
+    let mut resources = None;
+    let mut game = game(&mut resources);
     // The supported holder: the armor stand's own score.
     assert_eq!(store(&mut game, STAND, "result", "Air"), (true, Some(300)));
     assert_eq!(store(&mut game, STAND, "success", "Air"), (true, Some(1)));

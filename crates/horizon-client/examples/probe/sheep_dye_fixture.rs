@@ -55,6 +55,7 @@ fn kind() -> Arc<MobType> {
         step_sound: None,
         food: Arc::default(),
         tempt: Arc::default(),
+        passenger_attachments: Vec::new(),
     })
 }
 

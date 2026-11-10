@@ -216,9 +216,7 @@ fn host_for(os: &str, arch: &str) -> Option<&'static Host> {
     HOSTS.iter().find(|h| h.target == target)
 }
 
-/// Every host the launcher ships a toolchain for, so tests check each host's commands on
-/// whichever machine runs them (a macOS x64 or Windows ARM64 runner included).
-#[cfg(test)]
+/// Every supported host, shared by cache-name parsing and cross-platform command tests.
 pub(crate) fn hosts() -> &'static [Host] {
     HOSTS
 }

@@ -1332,6 +1332,7 @@ impl Game<'_> {
         if self.remote.is_some() || self.portals.arrivals.is_empty() {
             return;
         }
+        let _save_lease = horizon_client::join_seq::visibility::PassLease::enter();
         let waiting = std::mem::take(&mut self.world.loaded_entities);
         self.resolve_arrivals();
         self.spawn_loaded_entities();
