@@ -5,6 +5,8 @@
 // The generated impls convert error types that are already equal; TODO(#2273): make the generator skip it.
 #![allow(clippy::useless_conversion, clippy::unit_arg)]
 use super::Game;
+
+pub mod provider;
 use mod_api::__private::game::*;
 use mod_api::*;
 
