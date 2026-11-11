@@ -16,7 +16,7 @@ pub const PATH_TYPES: usize = PathType::COUNT;
 
 impl MobWorld<'_> {
     pub fn path_type_from_state(&self, x: i32, y: i32, z: i32) -> PathType {
-        self.data.state(self.world.block(x, y, z)).path
+        self.data.path_type(self.world.block(x, y, z))
     }
     /// WalkNodeEvaluator.getPathTypeStatic.
     pub fn path_type_static(&self, x: i32, y: i32, z: i32) -> PathType {
@@ -38,19 +38,18 @@ impl MobWorld<'_> {
             t
         }
     }
-    /// WalkNodeEvaluator.checkNeighbourBlocks.
+    /// WalkNodeEvaluator.checkNeighbourBlocks: the first neighbour that gives a node a type
+    /// (`getAdjacentBlockPathType`) decides it.
     pub fn check_neighbours(&self, x: i32, y: i32, z: i32, t: PathType) -> PathType {
         for dx in -1..=1 {
             for dy in -1..=1 {
                 for dz in -1..=1 {
-                    if dx != 0 || dz != 0 {
-                        match self.path_type_from_state(x + dx, y + dy, z + dz) {
-                            PathType::Damaging => return PathType::DamagingInNeighbor,
-                            PathType::Fire | PathType::Lava => return PathType::FireInNeighbor,
-                            PathType::Water => return PathType::WaterBorder,
-                            PathType::DamageCautious => return PathType::DamageCautious,
-                            _ => {}
-                        }
+                    if (dx != 0 || dz != 0)
+                        && let Some(adjacent) =
+                            self.data
+                                .adjacent_path_type(self.world.block(x + dx, y + dy, z + dz))
+                    {
+                        return adjacent;
                     }
                 }
             }

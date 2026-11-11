@@ -63,7 +63,7 @@ same facts is `StateFacts` in `crates/horizon-items/src/blocks.rs`.
 | `getLightEmission(state, level, pos)` | Partial | `BlockProperties.light` → `StateFacts.emission` | Static; no level or position. |
 | `ignitedByLava(state, level, pos, direction)` | Partial | template state flag (`StateFacts`, `state_flags::IGNITED_BY_LAVA`) | Inherited from the template's prepared data; no content field or Part changes it. |
 | `isLadder(state, level, pos, entity)` | Covered | `BlockPart::is_ladder` (`hooks/is_ladder.rs`) | Asked of the block a living entity stands in, with the entity id, after the `#climbable` tag: the part's answer replaces the tag's, either way. Players and mobs; armor stands never ask. |
-| `makesOpenTrapdoorAboveClimbable(state, level, pos, stateAbove)` | Missing | — | Engine rule in the climbing code; not exposed. |
+| `makesOpenTrapdoorAboveClimbable(state, level, pos, stateAbove)` | Covered | `BlockPart::makes_open_trapdoor_above_climbable` (`hooks/makes_open_trapdoor_above_climbable.rs`) | Asked of the block under an open trapdoor a living entity stands in, with its position and the trapdoor's state, once the trapdoor itself is not a ladder; starts with vanilla's answer, a ladder facing the trapdoor's way. Players and mobs; armor stands never ask. |
 | `isBurning(state, level, pos)` | Missing | — | No per-block burning query; `block_burn` is fire removing a block. |
 | `canHarvestBlock(state, level, pos, player)` | Covered | `BlockPart::can_harvest_block` (`hooks/can_harvest_block.rs`) | Asked where `player_harvest_check` fires, before it: the global hook still hears and may change the part's answer. |
 | `onDestroyedByPlayer(state, level, pos, player, stack, willHarvest, fluid)` | Partial | `break_block` (`hooks/base.rs`), `block_drops` (`hooks/block_drops.rs`) | `break_block` cancels the break or replaces the XP sample; `block_drops` edits drops. Neither returns "the block was destroyed" for the caller. [#1038](https://github.com/arismoko/horizon/issues/1038). |
@@ -87,8 +87,8 @@ same facts is `StateFacts` in `crates/horizon-items/src/blocks.rs`.
 | `getSoundType(state, level, pos, entity)` | Partial | `BlockProperties.sounds`, `host.block_states().sound(state)` | Static set of break/step/place/hit/fall sounds; no per-position or per-entity choice. |
 | `getBeaconColorMultiplier(state, level, pos, beaconPos)` | Missing | — | Beacon beam colour is engine-owned. |
 | `getStateAtViewpoint(state, level, pos, viewpoint)` | Missing | — | No viewpoint-state query. |
-| `getBlockPathType(state, level, pos, mob)` | Partial | `BlockPart::is_pathfindable` (`hooks/is_pathfindable.rs`) | Answers whether a `PathComputationType` may pass, once per state and type; not a `PathType` per mob or position. [#1038](https://github.com/arismoko/horizon/issues/1038). |
-| `getAdjacentBlockPathType(state, level, pos, mob, pathType)` | Missing | — | No adjacent-path-type query. |
+| `getBlockPathType(state, level, pos, mob)` | Partial | `BlockPart::block_path_type` (`hooks/block_path_type.rs`) | Any `PathType`, starting with vanilla's after `is_pathfindable`; asked once per state when parts resolve, so not per position or mob (vanilla caches the type per position for every mob). |
+| `getAdjacentBlockPathType(state, level, pos, mob, pathType)` | Partial | `BlockPart::adjacent_block_path_type` (`hooks/adjacent_block_path_type.rs`) | The type a walk node beside the block takes, from the block's own resolved type; asked once per state when parts resolve, so not per position, mob or node type. |
 | `isSlimeBlock(state)` | Missing | — | No per-state slime query; the piston/fall logic is engine-owned. [#1038](https://github.com/arismoko/horizon/issues/1038). |
 | `isStickyBlock(state)` | Missing | — | Same. [#1038](https://github.com/arismoko/horizon/issues/1038). |
 | `canStickTo(state, otherState)` | Missing | — | Same. [#1038](https://github.com/arismoko/horizon/issues/1038). |
@@ -129,7 +129,7 @@ the parameters shifted by one. Three block methods have no state-receiver form:
 | --- | --- |
 | `getPistonPushReaction(state)` | Covered (content `push_reaction`) |
 | `getMapColor(state, level, pos, defaultColor)` | Partial (content `map_color`) |
-| `makesOpenTrapdoorAboveClimbable(state, level, pos, stateAbove)` | Missing |
+| `makesOpenTrapdoorAboveClimbable(state, level, pos, stateAbove)` | Covered |
 
 Counts: 5 covered, 20 partial, 32 missing among the 57. The handful of signature differences (`canStickTo` takes
 the neighbour state; `getCloneItemStack` reorders its arguments; `getEnchantPowerBonus` takes a `LevelReader`)

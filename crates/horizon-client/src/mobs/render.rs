@@ -2937,7 +2937,7 @@ mod tests {
             blinks: Default::default(),
             pois: Default::default(),
             species_placements: Default::default(),
-            pathfindable_overrides: Default::default(),
+            resolved: Default::default(),
             mod_spawns: Default::default(),
         };
         (mob, data)
@@ -3516,7 +3516,7 @@ mod tests {
             pois: Default::default(),
             species_placements: Default::default(),
             mod_spawns: Default::default(),
-            pathfindable_overrides: Default::default(),
+            resolved: Default::default(),
         };
         let atlas = |name: &str| {
             Some(if name.contains("_inner") {
@@ -3611,7 +3611,7 @@ mod tests {
             pois: Default::default(),
             species_placements: Default::default(),
             mod_spawns: Default::default(),
-            pathfindable_overrides: Default::default(),
+            resolved: Default::default(),
         };
         let atlas = |name: &str| {
             Some(if name.contains("copper_golem_eyes") {
@@ -3670,7 +3670,7 @@ mod tests {
             pois: Default::default(),
             species_placements: Default::default(),
             mod_spawns: Default::default(),
-            pathfindable_overrides: Default::default(),
+            resolved: Default::default(),
         };
         for left in [false, true] {
             let t = held_item_transform(&mob, 0.5, glam::DVec3::ZERO, &data, left).unwrap();
@@ -3788,7 +3788,7 @@ mod tests {
             pois: Default::default(),
             species_placements: Default::default(),
             mod_spawns: Default::default(),
-            pathfindable_overrides: Default::default(),
+            resolved: Default::default(),
         };
         let atlas = |_: &str| Some([0.0, 0.0, 0.25, 0.25]);
         let part = &kind.model;
@@ -4096,7 +4096,7 @@ mod scroll_tests {
             pois: Default::default(),
             species_placements: Default::default(),
             mod_spawns: Default::default(),
-            pathfindable_overrides: Default::default(),
+            resolved: Default::default(),
         };
         let atlas = |name: &str| {
             let h = name.len() as f32 / 64.0;
@@ -4264,7 +4264,7 @@ mod emissive_tests {
             pois: Default::default(),
             species_placements: Default::default(),
             mod_spawns: Default::default(),
-            pathfindable_overrides: Default::default(),
+            resolved: Default::default(),
         }
     }
 
@@ -4546,7 +4546,7 @@ mod random_texture_tests {
             pois: Default::default(),
             species_placements: Default::default(),
             mod_spawns: Default::default(),
-            pathfindable_overrides: Default::default(),
+            resolved: Default::default(),
         }
     }
 

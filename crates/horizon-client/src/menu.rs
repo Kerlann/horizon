@@ -4988,6 +4988,9 @@ pub(crate) mod tests {
                 is_ladder: |context, _, _, _, ladder| {
                     *ladder |= context.setting("rules_mod", "stack").is_some();
                 },
+                makes_open_trapdoor_above_climbable: |context, _, _, _, climbable| {
+                    *climbable |= context.setting("rules_mod", "stack").is_some();
+                },
                 player_stays_on_ground_surface: |context, _, staying| {
                     *staying |= context.setting("rules_mod", "stack").is_some();
                 },
@@ -5150,6 +5153,20 @@ pub(crate) mod tests {
         };
         assert!(!ladder(&before));
         assert!(ladder(&after));
+        // So does the block under an open trapdoor.
+        let trapdoor_ladder = |context: &LoopContext| {
+            let mut climbable = false;
+            crate::motion::ladder::native_makes_open_trapdoor_above_climbable(
+                context,
+                horizon_world::registry::BlockStateId(0),
+                horizon_core::position::BlockPos::new(0, 0, 0),
+                horizon_world::registry::BlockStateId(0),
+                &mut climbable,
+            );
+            climbable
+        };
+        assert!(!trapdoor_ladder(&before));
+        assert!(trapdoor_ladder(&after));
         // The edge backoff and the fluid current read it too.
         let movement = |context: &LoopContext| {
             let (mut staying, mut flow) = (false, [0.25, 0.0, 0.0]);

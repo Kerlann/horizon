@@ -22,6 +22,8 @@ use horizon_world::{
     movement_restitution::{RestitutionInput, RestitutionWorld, restitute_movement},
     registry::BlockStateId,
 };
+#[path = "climbing.rs"]
+mod climbing;
 
 /// How many block particles a landing throws up
 /// (`(int)(min(0.2F + power / 15, 2.5) * 150)`), none when the fall is within
@@ -416,43 +418,6 @@ impl Mob {
     }
     pub fn eye_y(&self) -> f64 {
         self.position.y + self.eye_height()
-    }
-    /// `LivingEntity.onClimbable` (`Spider.onClimbable`: the climbing flag):
-    /// the block it stands in is `#minecraft:climbable` (vines, ladders,
-    /// scaffolding...) or its mod parts' `is_ladder` says it is, or an open trapdoor over a ladder facing the same way
-    /// (`trapdoorUsableAsLadder`). A mob gliding (`isFallFlying`) through a
-    /// `#minecraft:can_glide_through` block (vines) is not on it: that test
-    /// comes first.
-    pub fn on_climbable(&self, w: &MobWorld) -> bool {
-        if self.kind.flags.climber {
-            return self.climbing;
-        }
-        let (x, y, z) = (
-            self.position.x.floor() as i32,
-            self.position.y.floor() as i32,
-            self.position.z.floor() as i32,
-        );
-        let state = w.world.block(x, y, z);
-        let facts = w.facts.get(state);
-        if self.extra.fall_flying && w.has_tag("minecraft:can_glide_through", &facts.name) {
-            return false;
-        }
-        // `IBlockExtension.isLadder`: the block's parts answer after the tag.
-        let mut ladder = w.has_tag("minecraft:climbable", &facts.name);
-        crate::motion::native_is_ladder(
-            w.loop_context,
-            self.id,
-            BlockPos::new(x, y, z),
-            state,
-            &mut ladder,
-        );
-        if ladder {
-            return true;
-        }
-        facts.has_class("TrapDoorBlock")
-            && w.prop(x, y, z, "open") == Some("true")
-            && w.block_name(x, y - 1, z) == "minecraft:ladder"
-            && w.prop(x, y - 1, z, "facing") == w.prop(x, y, z, "facing")
     }
     /// `LivingEntity.getScale`: the `minecraft:scale` the server sent on this
     /// living entity (`extra.model_scale`, 0 when none came), through the

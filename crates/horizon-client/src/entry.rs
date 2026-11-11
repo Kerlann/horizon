@@ -346,6 +346,8 @@ pub(crate) fn install_client_hooks() {
         is_ladder: |context, entity, pos, state, ladder| {
             crate::game::is_ladder(context, entity, pos, state, ladder);
         },
+        makes_open_trapdoor_above_climbable:
+            crate::game::native_trapdoor_ladder::makes_open_trapdoor_above_climbable,
         player_stays_on_ground_surface: |context, entity, staying| {
             if !mod_api::__private::listened(mod_api::HookId::PlayerStaysOnGroundSurface) {
                 return;
