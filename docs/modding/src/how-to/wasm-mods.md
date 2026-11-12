@@ -111,7 +111,7 @@ together.
 
 The state is 32 words, zeroed, exported by the std member as `horizon_group_state`: the handler table, the cache budget, and
 29 slots for eviction callbacks. A member's allocator is `mod_api`'s `#[global_allocator]` on wasm32. When an allocation
-fails because the group's memory (256 MiB) is full, it calls every callback registered with
+fails because the group's memory is full (see [Memory](#memory)), it calls every callback registered with
 `mod_api::wire::guest::register_eviction(fn())` once and retries once; if that frees nothing the allocation fails as
 usual (`try_reserve` returns an error, an infallible allocation ends the call with a trap). Register a callback to
 give back what a cache can rebuild. It must free memory and must not allocate. Registering the same function twice is
@@ -228,6 +228,19 @@ and named on the Mods page.
 
 The game limits execution time, memory and table usage. A trap or limit hit disables the affected
 group. APIs marked `Not on wasm` in their Rust documentation cannot be used by wasm mods.
+
+### Memory
+
+A group's members share one linear memory: their heaps, stacks and static data together. Its limit is
+1 GiB, or the largest `wasm_memory_mib` a member's `horizon-mod.toml` declares (1 to 4096 MiB, wasm32's 4 GiB),
+so a library declares what it and its addons need. The limit is a ceiling, not memory taken: the group
+uses what it grows to. Past the limit, or past what the system gives, `memory.grow` answers -1 inside the
+guest and the call goes on; Rust's allocator then reports the failure as usual (`try_reserve` returns an
+error; an infallible allocation ends the call with a trap and the log names the group and its limit).
+
+Each instance caps every group with `wasm.memory_cap_mib:<MiB>` in `horizon-mods.txt`, beside `options.txt`:
+4096 unless the player lowers it. A group whose members declare more than the cap is refused at load, and
+the Mods page names the group, what it declares and the cap.
 
 ## Compiled module cache
 

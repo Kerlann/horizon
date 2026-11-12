@@ -31,6 +31,10 @@ pub const API: &str = "0.2";
 const RESERVED_NAMESPACES: [&str; 3] = ["minecraft", "c", "horizon"];
 /// A mod's saved settings, shared by native mods and modpack overrides.
 pub const STORAGE_DIR: &str = ".horizon-mod-data";
+/// wasm32's whole address space in MiB (4 GiB): the most a mod may declare in `wasm_memory_mib`,
+/// and an instance's group memory cap unless the player lowers it (`horizon-mods.txt`).
+pub const MAX_WASM_MEMORY_MIB: u32 = 4096;
+
 /// The largest manifest this build reads.
 /// Maximum manifest bytes accepted by package readers and developer tools.
 pub const MAX_MANIFEST: u64 = 32 << 20;
@@ -82,6 +86,12 @@ pub struct Manifest {
     pub native: Option<Native>,
     /// A wasm mod's `mod.wasm`, its toolchain and what it was linked against.
     pub wasm: Option<Wasm>,
+    /// The linear memory, in MiB (1 to [`MAX_WASM_MEMORY_MIB`]), this wasm mod or library expects
+    /// its dependency group to have. The group gets the largest any member declares, up to the
+    /// instance's cap; with none declared it gets 1 GiB. Native mods are not wasm groups: they
+    /// share the game's memory, and the key means nothing to them.
+    #[serde(default)]
+    pub wasm_memory_mib: Option<u32>,
     /// Game internals used by this mod, fingerprinted against its pinned build.
     #[serde(default)]
     pub internals: Vec<Internal>,
@@ -333,6 +343,13 @@ impl Manifest {
             if !valid_mod_id(id) {
                 return Err(format!("{MANIFEST}: invalid dependency id {id:?}"));
             }
+        }
+        if let Some(mib) = m.wasm_memory_mib
+            && !(1..=MAX_WASM_MEMORY_MIB).contains(&mib)
+        {
+            return Err(format!(
+                "{MANIFEST}: wasm_memory_mib {mib} is not 1 to {MAX_WASM_MEMORY_MIB} (wasm32's 4 GiB)"
+            ));
         }
         if m.native.is_some() && m.wasm.is_some() {
             if let Some(refusal) = wasm_loop() {
@@ -1115,6 +1132,27 @@ mod tests {
             error.contains("chemlib::transfer") && error.contains("own hooks and functions"),
             "{error}"
         );
+    }
+
+    #[test]
+    fn declared_wasm_memory_is_one_mib_to_wasm32s_four_gib() {
+        let declare = |value: &str| {
+            Manifest::parse(&EXAMPLE.replace(
+                "capabilities = [\"registries\"]\n",
+                &format!("capabilities = [\"registries\"]\nwasm_memory_mib = {value}\n"),
+            ))
+        };
+        assert_eq!(Manifest::parse(EXAMPLE).unwrap().wasm_memory_mib, None);
+        assert_eq!(declare("1").unwrap().wasm_memory_mib, Some(1));
+        assert_eq!(declare("4096").unwrap().wasm_memory_mib, Some(4096));
+        for value in ["0", "4097"] {
+            assert!(
+                declare(value)
+                    .unwrap_err()
+                    .contains(&format!("wasm_memory_mib {value} is not 1 to 4096")),
+                "{value}"
+            );
+        }
     }
 
     #[test]

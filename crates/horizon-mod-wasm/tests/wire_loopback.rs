@@ -24,6 +24,10 @@ mod piglin_answers;
 mod piston_push_reaction;
 #[path = "wire_loopback/use_item_hand.rs"]
 mod use_item_hand;
+/// The generated proxies' refusal reason; the loopback refuses only on its own encode errors.
+fn wasm_call_refusal() -> String {
+    "loopback refused".into()
+}
 thread_local! {
     static EXPECTED_LOOT_HAND: std::cell::RefCell<Option<mod_api::ItemStack>> = const { std::cell::RefCell::new(None) };
 }

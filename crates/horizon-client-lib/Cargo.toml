@@ -118,6 +118,10 @@ wgpu = { version = "30.0.1", default-features = false, features = ["gles"] }
 [features]
 # Scoped observations for compiled-guest executor tests only.
 test-payload-probe = []
+# Isolated server-publication slots for resource-backed game fixtures only.
+test-publication-scope = []
+# Non-consuming residency journal observation for game fixtures only.
+test-residency-observer = []
 default = ["audio", "controllers"]
 # Sound output. Without it (and `controllers`) the program links neither libasound nor libudev on
 # Linux: the server build (`--no-default-features`, released as horizon-engine; docs/server.md).

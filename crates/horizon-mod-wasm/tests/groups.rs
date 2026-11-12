@@ -162,7 +162,7 @@ fn capability_is_answered_only_within_its_group() {
                 registers.iter().all(|r| *r == registers[0]),
                 "every member registers as often as every other, in its group or not: {registers:?}"
             );
-            // The allocator's retry, in the real group memory (256 MiB). `hog` keeps 150 MiB it frees
+            // The allocator's retry, in the real group memory: 256 MiB, which hog's manifest declares. `hog` keeps 150 MiB it frees
             // when the group's allocator asks. With nothing held, a 1 GiB request fails and says so (no
             // trap) after the evictor ran once; holding, a 150 MiB request that cannot fit beside the
             // held buffer succeeds because the evictor freed it first, and ran once more.

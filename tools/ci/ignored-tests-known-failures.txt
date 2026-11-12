@@ -40,6 +40,12 @@ horizon-client game::payload_transport::wasm_tests::compiled_guest_runs_in_actua
 horizon-client game::remote::interaction_event_tests::interaction_event_wasm_tests::wasm_interaction_shared_matrix HORIZON_WASM_FIXTURE needs
 horizon-client-lib raw_payloads::wasm_tests::compiled_guest_observes_physical_provider_pressure HORIZON_WASM_FIXTURE needs
 
+# Disabled by the owner's decision until H077_OLD_WORLD is wired into CI.
+# needs the private old-world fixture: see followups
+horizon-client game::levels::tests::features_write_a_full_neighbour_only_through_its_sections H077_OLD_WORLD needs
+horizon-client game::levels::tests::an_old_chunk_saves_the_heights_its_new_neighbour_calculated H077_OLD_WORLD needs
+horizon-client game::levels::tests::the_overworld_cache_holds_the_edge_chunks_calculated_heights H077_OLD_WORLD needs
+
 # Tests that need a graphics adapter (REFERENCE is the ignore reason's word).
 horizon-client-render gfx::crumbling_tests::crack_samples_stay_aligned_between_stages adapter gpu
 horizon-client-render gfx::pack_uniforms::initial_history_tests::core_matrix_inputs_render_provider_values adapter gpu
@@ -58,12 +64,3 @@ horizon-client-render gfx::pack_post::destination_tests::clear_budget_tests::siz
 horizon-client game::explosion::tests::explosion_items_parity_fixture #2177 harness
 horizon-client game::native_live_holder_tests::thousand_live_block_entity_ticks #2177 harness
 horizon-client game::remote_vehicles::tests::steering_mount_control_matches_vanilla #2177 harness
-
-# Additional failures in the current-main honest run (42497697222).
-
-# #2474 dependency: external constructed 1.20.4 save with its partial ring removed; no committed recipe or CI provisioning.
-horizon-client game::levels::tests::features_write_a_full_neighbour_only_through_its_sections #2474
-# #2474 dependency: external constructed 1.20.4 save with its partial ring removed; no committed recipe or CI provisioning.
-horizon-client game::levels::tests::an_old_chunk_saves_the_heights_its_new_neighbour_calculated #2474
-# #2474 dependency: external constructed 1.20.4 save with its partial ring removed; no committed recipe or CI provisioning.
-horizon-client game::levels::tests::the_overworld_cache_holds_the_edge_chunks_calculated_heights #2474

@@ -2396,13 +2396,12 @@ impl Hub {
         events
     }
 
-    /// Keeps, in a frozen player's inbox, the packets that answer the server
-    /// (teleport, chunk batch, loaded, keep-alive, ping, tick end, client
-    /// information) and drops the rest. A chat message or signed command is
-    /// dropped too, but the messages it says the client has seen are taken
-    /// first (`unpackAndApplyLastSeen`), and a chat acknowledgement is handled
-    /// here, in the order they came: the client counts them as acknowledged,
-    /// and its next message after the freeze would not validate otherwise.
+    /// Keeps server-answer packets in a frozen player's inbox (teleport, chunk batch,
+    /// loaded, keep-alive, ping, tick end, client information) and drops the rest.
+    /// Chat messages and signed commands are dropped, but their last-seen messages
+    /// are taken first (`unpackAndApplyLastSeen`). Chat acknowledgements are handled
+    /// here in arrival order: the client counts them as acknowledged, and its next
+    /// message after the freeze would not validate otherwise.
     pub(crate) fn keep_acknowledgements(&mut self, i: usize, events: &mut Vec<HostEvent>) {
         let inbox = self.guests.update(i, |g| std::mem::take(&mut g.inbox));
         let mut credits = Vec::new();
@@ -2430,6 +2429,7 @@ impl Hub {
                 | S::ClientInformation(_)
                 | S::ClientTickEnd(_)
                 | S::KeepAlive(_)
+                | S::PingRequest(_)
                 | S::Pong(_) => {
                     self.guests
                         .update(i, |g| g.inbox.push_back(InboxItem::Packet(packet, credit)));

@@ -4776,6 +4776,7 @@ impl Game<'_> {
         for (block, position, movement) in snow_contacts {
             self.powder_snow_particle(block, position, movement);
         }
+        let last_ticked_join = projectiles.iter().map(|p| p.join).max();
         let listed = keep_flags.clone();
         let mut idx = 0;
         if impacts.is_empty() {
@@ -4822,12 +4823,11 @@ impl Game<'_> {
         for (at, event) in arrow_events {
             self.arrow_event(at, event);
         }
-        // `Entity.applyEffectsFromBlocks`' checkInsideBlocks for every
-        // projectile that ticked, at the batch: the borrow block above held the
-        // world read-only, and a part's contact needs the lent level, so the
-        // sweeps run here, each still inside this batch and its own tick.
+        // `Entity.applyEffectsFromBlocks` sweeps the original cohort by join identity:
+        // settlement can remove rows or append hook spawns. Contacts need the lent
+        // level here, after the read-only borrow, each still in this batch's tick.
         for i in 0..projectiles.len() {
-            if !keep_flags[i] {
+            if last_ticked_join.is_none_or(|last| projectiles[i].join > last) {
                 continue;
             }
             let mut swept = None;
@@ -9066,9 +9066,8 @@ mod enchanted_entity_loot_tests {
                 // kill, and the flesh is still asked, from a level of 0.
                 seen.lock().unwrap().clear();
                 let skeleton = zombie(game, Damage::mob(0, [0.0; 3]));
-                let mut alive = skeleton.clone();
-                alive.health = 20.0;
-                *game.mobs.last_mut().unwrap() = alive;
+                // Keep the admitted row's residency and attachment lifetime.
+                game.mobs.last_mut().unwrap().health = 20.0;
                 let victim = zombie(game, Damage::mob(skeleton.id, [0.0; 3]));
                 game.mob_died(&victim);
                 assert_eq!(
@@ -9100,6 +9099,7 @@ mod enchanted_entity_loot_tests {
                 game.player = Some(PlayerMotion::new(game.motion, Vec3::ZERO).unwrap());
                 game.player.as_mut().unwrap().entity_id = 9000;
                 // The host's own turn: the uuid is acting, no guest connection.
+                crate::game::native_entity_refs::tests::bind_local_player(game, 9000, 99);
                 game.lan_acting_uuid = Some(99);
                 game.lan_acting_entity = Some(9000);
                 let by_player = Damage {
@@ -12029,9 +12029,11 @@ mod mob_pearl_hook_tests {
                 game.player = Some(PlayerMotion::new(game.motion, from).unwrap());
                 game.lan_acting = Some(12);
                 game.lan_acting_uuid = Some(7);
+                crate::game::native_entity_refs::tests::bind_local_player(game, 2, 7);
                 game.lan_acting_name = Some("PearlTest".into());
                 game.lan_acting_permission = Some(4);
                 game.lan_acting_entity = Some(2);
+                crate::game::native_entity_refs::tests::bind_acting_guest(game);
                 game.ui.difficulty = 0;
                 let pearl = Projectile::new(
                     ProjectileKind::EnderPearl,

@@ -52,9 +52,13 @@ jobs:
               ln -s "$artifacts/$artifact" "$root/$artifact"
             done
           done
+      - name: The pinned Rust (tools/ci/rust-version)
+        id: rust
+        shell: bash
+        run: echo "version=$(cat "$GITHUB_WORKSPACE/tools/ci/rust-version")" >> "$GITHUB_OUTPUT"
       - uses: dtolnay/rust-toolchain@master
         with:
-          toolchain: 1.99.1
+          toolchain: ${{ steps.rust.outputs.version }}
           components: rust-src, rustfmt
           targets: wasm32-unknown-unknown
       - name: Check fieldless Wire layout coverage and hashes
@@ -179,7 +183,13 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
+      - name: The pinned Rust (tools/ci/rust-version)
+        id: rust
+        shell: bash
+        run: echo "version=$(cat "$GITHUB_WORKSPACE/tools/ci/rust-version")" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.rust.outputs.version }}
       - run: cargo test --locked -p horizon-guest-stack --lib
       - run: cargo test --locked -p horizon-mod-wasm --lib deep_guest_stack_and_overflow_attribution
       - run: cargo test --locked -p horizon-mod-wasm --lib sixty_thousand_frames_exceed_wasmtime_default

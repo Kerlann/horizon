@@ -29,16 +29,9 @@ It does not answer `IEntityExtension` methods; those are covered only where a gl
 
 ## Counts
 
-| Interface | Public methods | Covered | Partial | Missing | n/a |
-| --- | ---: | ---: | ---: | ---: | ---: |
-| `IBlockExtension` | 60 | 20 | 13 | 27 | 0 |
-| `IBlockStateExtension` | 57 | 19 | 12 | 26 | 0 |
-| `IItemExtension` | 46 | 19 | 10 | 17 | 0 |
-| `IEntityExtension` | 33 | 1 | 16 | 16 | 0 |
-| `ILivingEntityExtension` | 6 | 0 | 3 | 3 | 0 |
-| `IBlockEntityExtension` | 9 | 2 | 3 | 3 | 1 |
-| `IFluidExtension` | 9 | 0 | 6 | 3 | 0 |
-| `IMenuTypeExtension` | 2 | 0 | 2 | 0 | 0 |
+<!-- extension-counts -->
+
+The book build computes this table from the method verdicts below; there is no snapshot to update.
 
 Of the 60 block methods, 57 exist a second time with the state as receiver, so the state-extension counts are
 the block counts minus three; see [`IBlockStateExtension`](#iblockstateextension). The block follow-up is
@@ -131,7 +124,7 @@ the parameters shifted by one. Three block methods have no state-receiver form:
 | `getMapColor(state, level, pos, defaultColor)` | Partial (content `map_color`) |
 | `makesOpenTrapdoorAboveClimbable(state, level, pos, stateAbove)` | Covered |
 
-Counts: 19 covered, 12 partial, 26 missing among the 57. The handful of signature differences (`canStickTo` takes
+The handful of signature differences (`canStickTo` takes
 the neighbour state; `getCloneItemStack` reorders its arguments; `getEnchantPowerBonus` takes a `LevelReader`)
 do not change any verdict.
 

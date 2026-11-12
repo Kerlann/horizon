@@ -45,6 +45,15 @@ SUMMARY = re.compile(r"^test result: \S+\. (\d+) passed; (\d+) failed; (\d+) ign
 TARGET = re.compile(r"^\s+Running (?:unittests|tests/)")
 COUNT = re.compile(r"^running (\d+) tests?$")
 PANIC = re.compile(r"^thread '([^']+)'.* panicked at (\S+):$")
+# The Rust runtime's own words when it aborts a process: fixed text, no payload, safe to show.
+ABORTS = (
+    (re.compile(r"^thread '[^']*'.* has overflowed its stack$"), "stack overflow"),
+    (re.compile(r"^thread '[^']*'.* panicked while processing panic"), "a panic while panicking"),
+    (re.compile(r"^panicked while panicking"), "a panic while panicking"),
+    (re.compile(r"^thread caused non-unwinding panic\. aborting\.$"), "a panic that cannot unwind"),
+    (re.compile(r"^panic in a (?:function|destructor) (?:that cannot unwind|during cleanup)"), "a panic that cannot unwind"),
+    (re.compile(r"^memory allocation of \d+ bytes failed$"), "a failed memory allocation"),
+)
 # Packages whose integration tests (`tests/*.rs`) run too, beside their library tests.
 INTEGRATION_TESTS = {"horizon-client"}
 LEG = re.compile(r"^(?P<package>[^#]+)#(?P<number>\d+)of(?P<count>\d+)$")
@@ -245,6 +254,7 @@ def failure_diagnostics(output):
     failures = []
     contexts = {}
     context = []
+    aborts = []
     panic_reason_pending = False
     skipped_lines = 0
     skipped_contexts = 0
@@ -258,6 +268,9 @@ def failure_diagnostics(output):
             panic_reason_pending = False
             continue
         line = line.rstrip("\r\n")
+        abort = next((label for pattern, label in ABORTS if pattern.match(line.strip())), None)
+        if abort and abort not in aborts:
+            aborts.append(abort)
         if RESULT.match(line) or SUMMARY.match(line) or TARGET.match(line):
             panic_reason_pending = False
         if panic_reason_pending and line.strip():
@@ -329,7 +342,15 @@ def failure_diagnostics(output):
     identities_withheld = locations_withheld = payloads_withheld = reasons_shown = 0
     for name in failures:
         identity = safe_identity(name)
-        details = contexts.get(name, ["  panic context missing from captured output"])
+        details = contexts.get(name)
+        if details is None:
+            # A crash ends the test without its own panic: say what the runtime aborted on, and
+            # what panicked on threads that are not tests (a server or worker thread).
+            details = [f"  process aborted: {abort}" for abort in aborts]
+            for thread, other in contexts.items():
+                if "::" not in thread and thread not in failures:
+                    details += ["  on a non-test thread:"] + other
+            details = details or ["  panic context missing from captured output"]
         missing += any("missing from captured output" in item for item in details)
         withheld += identity != name or any("withheld" in item for item in details)
         identities_withheld += identity != name

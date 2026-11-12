@@ -6,7 +6,7 @@ pub fn module(bytes: &[u8]) -> Result<WasmMod, String> {
     let engine = runtime::engine().map_err(|error| error.to_string())?;
     WasmMod::instantiate(
         &engine,
-        &[],
+        runtime::DEFAULT_GROUP_MEMORY_MIB,
         &[Member {
             name: "fixture",
             module: bytes,

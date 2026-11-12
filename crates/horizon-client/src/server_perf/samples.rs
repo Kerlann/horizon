@@ -7,6 +7,7 @@ use horizon_perf_format::v1::{Overhead, SampleProfile, Side, Symbols, Unit};
 pub const MAX_WINDOW_S: f64 = 600.0;
 
 /// Seconds per time block: 5 s, longer when the window would need more than 32 of them.
+#[cfg(target_os = "linux")]
 fn block_s(window_s: f64) -> f32 {
     (window_s / 32.0).ceil().max(5.0) as f32
 }
