@@ -20,6 +20,7 @@ server-files = ["dep:horizon-server-files"]
 mod-build = ["dep:horizon-mod-api-gen", "dep:horizon-mod-point-shape"]
 
 [dependencies]
+horizon-guest-stack = { path = "../horizon-guest-stack" }
 horizon-mod-api-gen = { path = "../horizon-mod-api-gen", optional = true }
 horizon-mod-point-shape = { path = "../horizon-mod-point-shape", optional = true }
 horizon-core = { path = "../horizon-core" }

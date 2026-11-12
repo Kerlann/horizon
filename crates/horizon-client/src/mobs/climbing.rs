@@ -16,6 +16,21 @@ impl Mob {
         if self.kind.flags.climber {
             return self.climbing;
         }
+        // `AbstractHorse.onClimbable`, `Ghast.onClimbable`, `Phantom.onClimbable`
+        // and `HappyGhast.onClimbable` are a plain false: no horse, donkey,
+        // mule, undead horse, llama, trader llama, camel or camel husk (nor
+        // those flying monsters) is ever on a climbable block, whatever it
+        // stands in.
+        if crate::mobs::equine::is_equine(self.species())
+            || matches!(
+                self.species(),
+                crate::mobs::Species::Ghast
+                    | crate::mobs::Species::Phantom
+                    | crate::mobs::Species::HappyGhast
+            )
+        {
+            return false;
+        }
         let (x, y, z) = (
             self.position.x.floor() as i32,
             self.position.y.floor() as i32,

@@ -56,7 +56,7 @@ impl Hooks for BesideMod {
 fn with_parts(id: &'static str, hooks: impl Hooks + 'static, test: impl FnOnce(&mut Game<'_>)) {
     let mods: mod_api::Mods = vec![mod_api::ModEntry::new(id, Box::new(hooks))].into();
     crate::game::api_values::install_parts(&mods).unwrap();
-    mod_api::testing::with_mods(mods, || {
+    mod_platform::testing::with_mods(mods, || {
         with_game(|game| {
             game.world
                 .chunks

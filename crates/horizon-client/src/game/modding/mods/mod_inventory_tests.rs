@@ -1,6 +1,7 @@
 use super::*;
 use horizon_mod_package::{enabled::EnabledMods, selection::SelectedPackage};
-use mod_api::{Hooks, ModEntry, testing::with_mods};
+use mod_api::{Hooks, ModEntry};
+use mod_platform::testing::with_mods;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 struct EmptyCode;
@@ -77,7 +78,7 @@ fn admission_uses_active_native_and_wasm_entries_and_accepted_content_not_startu
         ]
         .into(),
         || {
-            mod_api::__private::with_test_packages(&["refused_code", "shared_space"], || {
+            mod_platform::__private::with_test_packages(&["refused_code", "shared_space"], || {
                 assert!(
                     mod_api::__private::loaded_mods()
                         .get("refused_code")

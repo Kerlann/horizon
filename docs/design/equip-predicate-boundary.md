@@ -70,6 +70,8 @@ handles, slot and scalar answer per candidate. No engine pointers cross; release
 handles at decision end. This requires a reusable prepared Wire call path, not the
 ordinary owned-stack encode/decode on every slot. Unsupported capabilities refuse at
 registration/load with a named reason on both targets; no silent wasm skip.
+The prepared wasm path is deferred and tracked by #3549: until it lands the predicate is native-only
+for the budget below, and a wasm mod is given a copy of the stack on each call.
 
 The required engine/bridge budget **per candidate** is 0 heap allocations, 0 stack or
 component payload clones/copies, and only bounded scalar/handle copies, including

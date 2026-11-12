@@ -232,7 +232,7 @@ fn advancement_tree(game: &mut Game<'_>) {
 
 fn matrix(mods: mod_api::Mods) {
     crate::game::api_values::install_parts(&mods).unwrap();
-    mod_api::testing::with_mods(mods, || {
+    mod_platform::testing::with_mods(mods, || {
         for client in [false, true] {
             with_interaction_game(client, |game| {
                 let registry = game.pack.assets.registry;

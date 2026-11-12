@@ -1,8 +1,9 @@
 use super::*;
 use mod_api::{
     ClientHost, Flow, Hooks, InteractionKeyMappingTriggeredEvent, KeyMappingPreEvent, ModEntry,
-    ScreenClosingEvent, ScreenOpeningEvent, testing::with_mods,
+    ScreenClosingEvent, ScreenOpeningEvent,
 };
+use mod_platform::testing::with_mods;
 use std::sync::{Arc, Mutex};
 
 /// A mod that hears `screen_opening` and passes.

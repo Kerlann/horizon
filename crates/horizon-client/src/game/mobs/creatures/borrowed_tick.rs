@@ -110,6 +110,12 @@ impl Game<'_> {
         let uuid = state.uuid;
         let level_id = state.level_id;
         let round = state.round;
+        // Each mob's position updates in its tick, in order, filed once the game is free: its
+        // teleports (`snapTo`, kept while this record is open), then where its tick left it.
+        let mut section_moves = std::mem::take(&mut self.native_lifecycle.entity_sections.ticked);
+        let teleports = round
+            .sections()
+            .then(horizon_client::mobs::living::teleports::Record::open);
         let mut dispatch_panic = None;
         let mut pushes = std::mem::take(state.pushes);
         let original_len = snapshot.len();
@@ -496,6 +502,12 @@ impl Game<'_> {
                         super::super::tick_profile::add(level_id, &kind, started);
                     }
                     let m = &mut mobs[i];
+                    // Each teleport in its tick, then where the tick left it: one position update
+                    // each (`EntityInLevelCallback.onMove` for each).
+                    if let Some(teleports) = &teleports {
+                        teleports.take_into(&mut section_moves);
+                        section_moves.push((m.id, m.position));
+                    }
                     if let Some(selection) = &selection
                         && selection.has_switched()
                         && let Some(player) = selection.selected()
@@ -577,6 +589,7 @@ impl Game<'_> {
             // The callback sees the real owning rows and level RNG/attachments,
             // and its writes are the state the continuation will resume from.
             lent.give_back(&mut self.world);
+            self.entity_sections_ticked(&mut section_moves);
             // Earlier mobs' pushes become visible before the listener can read
             // or replace another actor's velocity. Departed rows must no longer
             // resolve as live handles while the batch is temporarily installed.
@@ -710,6 +723,8 @@ impl Game<'_> {
                 horizon_client::mobs::apply_mob_pushes(m, &mut pushes);
             }
         }
+        self.entity_sections_ticked(&mut section_moves);
+        self.native_lifecycle.entity_sections.ticked = section_moves;
         *state.pushes = pushes;
         *state.mobs = mobs;
         *state.snapshot = snapshot;

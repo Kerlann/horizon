@@ -377,6 +377,11 @@ impl VanillaTerrain {
     pub fn set_spawn_conditions(&self, difficulty: u8, day_time: i64) {
         self.structure_mobs.set_conditions(difficulty, day_time);
     }
+    /// Reads what generated mobs are finalized with on a thread of its own
+    /// (`StructureMobFinalizer::load_behind`).
+    pub fn load_structure_mobs_behind(&self) {
+        self.structure_mobs.load_behind();
+    }
     /// The random a chunk's generation steps draw from (`WorldGenRegion`).
     pub fn region_random(&self, cx: i32, cz: i32) -> Box<dyn PieceRandom> {
         self.generator.region_random(ChunkPos::new(cx, cz))
@@ -719,7 +724,7 @@ impl VanillaTerrain {
         const QUIET: u64 = 2_000;
         const LATEST: u64 = 60_000;
         let terrain = Arc::downgrade(self);
-        let spawned = std::thread::Builder::new()
+        let spawned = horizon_guest_stack::builder()
             .name("Ring search".into())
             .spawn(move || {
                 horizon_threads::idle_current();
@@ -832,6 +837,7 @@ pub fn shared_data(
 }
 /// `shared_data` with a world's data packs over the bundle: loaded once for
 /// each registry lifetime and set of packs' entries, the most recent few kept.
+#[horizon_mod_api_macros::replaceable]
 pub fn shared_data_with(
     dir: &Path,
     overrides: &WorldgenOverrides,

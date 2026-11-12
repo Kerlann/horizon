@@ -101,7 +101,7 @@ mod tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn preset_editor_test_mod_draws_and_edits_through_real_client_hooks() {
-        mod_api::testing::with_mods(
+        mod_platform::testing::with_mods(
             vec![ModEntry::new("example", Box::new(EditorMod))].into(),
             || {
                 crate::game::native_entity_refs::tests::with_client_game(|game| {

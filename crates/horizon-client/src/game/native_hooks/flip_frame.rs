@@ -42,7 +42,7 @@ mod tests {
         }
         let heard = Arc::new(Mutex::new(Vec::new()));
         let mods = vec![ModEntry::new("moments", Box::new(Moments(heard.clone())))];
-        mod_api::testing::with_mods(mods.into(), || {
+        mod_platform::testing::with_mods(mods.into(), || {
             with_client_game(|game| {
                 let _event_loop = frame_scene(game);
                 let elapsed = Duration::from_millis(16);

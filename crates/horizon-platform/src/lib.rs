@@ -56,8 +56,8 @@ pub mod hooks {
         PlayerModel, PlayerModels, Quad, SpriteStore, Sprites, View,
     };
     pub use horizon_hooks::{
-        Activity, Client, Dimension, GameMode, Hooks, Play, Started, TooLate, register, seat,
-        tunnel,
+        Activity, Client, Dimension, GameMode, GetTheGame, Hooks, Play, Started, TooLate, register,
+        seat, tunnel,
     };
 }
 
@@ -69,7 +69,13 @@ pub mod settings {
 
 /// Settings pages a crate adds to the options screens (docs/layers.md, "Platform registries").
 pub mod pages {
-    pub use horizon_hooks::pages::{Act, Label, Page, Place, Row, register};
+    pub use horizon_hooks::pages::{Act, Label, Page, Place, Row, connect, register};
+}
+
+/// The lang files with a crate's text, loaded with the game's own (docs/layers.md, "Platform
+/// registries").
+pub mod lang {
+    pub use horizon_hooks::lang::{Files, register};
 }
 
 /// Drawing on the HUD (docs/layers.md, "Platform registries").
@@ -94,3 +100,6 @@ pub mod mod_build {
     /// Parsing and validation of injection point signatures.
     pub use point_shape;
 }
+
+/// Establish the executable stack policy before starting the game or supervisor.
+pub use horizon_guest_stack::prepare_main as prepare_main_stack;

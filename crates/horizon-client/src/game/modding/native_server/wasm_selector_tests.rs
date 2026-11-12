@@ -27,7 +27,7 @@ fn wasm_selectors_resolve_in_game_and_refuse_before_guest_dispatch() {
     );
     assert!(loaded.refused.is_empty(), "{:?}", loaded.refused);
     loaded.initialize(&[info]).unwrap();
-    mod_api::testing::with_mods(loaded.mods.into(), || {
+    mod_platform::testing::with_mods(loaded.mods.into(), || {
         super::super::native_guest_turn_tests::with_guests(|game| {
             game.build_registries();
             game.register_native_commands();
@@ -152,7 +152,7 @@ fn wasm_server_tick_messages_reach_dedicated_game() {
         "message_observer",
         Box::new(Heard(heard.clone())),
     ));
-    mod_api::testing::with_mods(mods.into(), || {
+    mod_platform::testing::with_mods(mods.into(), || {
         super::super::native_guest_turn_tests::with_guests(|game| {
             game.options.execution_role =
                 crate::game::execution_role::ExecutionRole::DedicatedServer;

@@ -574,7 +574,7 @@ pub(in crate::game) mod tests {
                 Flow::Continue
             }
         }
-        mod_api::testing::with_mods(
+        mod_platform::testing::with_mods(
             vec![ModEntry::new("join_persist", Box::new(Joiner))].into(),
             || {
                 with_game(|game| {
@@ -1296,7 +1296,7 @@ pub(in crate::game) mod tests {
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn a_block_part_decides_what_a_living_entity_climbs() {
         // The fixture's parts: glass is a ladder to even entity ids, a vine to none.
-        mod_api::__private::part_tests::ladder_game_thread();
+        mod_platform::__private::part_tests::ladder_game_thread();
         // The client library asks the mods through the executable's callbacks.
         crate::entry::install_client_hooks();
         with_game(|game| {
@@ -1442,7 +1442,7 @@ pub(in crate::game) mod tests {
         crate::game::api_values::install_parts(&mods).unwrap();
         // The client library asks the mods through the executable's callbacks.
         crate::entry::install_client_hooks();
-        mod_api::testing::with_mods(mods, || {
+        mod_platform::testing::with_mods(mods, || {
             with_game(|game| {
                 game.world.chunks.insert(
                     (0, 0),

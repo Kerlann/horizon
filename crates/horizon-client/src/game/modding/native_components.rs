@@ -381,17 +381,7 @@ impl Game<'_> {
         if pool.is_empty() {
             return Ok(None);
         }
-        let data = stack.data();
-        let value = if let Some(own) = data.and_then(|d| d.other("minecraft:enchantable")) {
-            own.get("value")
-                .and_then(horizon_items::properties::component_int)
-                .and_then(|value| u32::try_from(value).ok())
-                .unwrap_or_default()
-        } else if data.is_some_and(|d| d.other("!minecraft:enchantable").is_some()) {
-            0
-        } else {
-            enchantments.enchantable(&stack.item)
-        };
+        let value = enchantments.enchantable_of(stack);
         let picked = enchantments.select_with_value(
             items,
             &mut self.world.random,
@@ -548,7 +538,7 @@ mod enchantment_conflict_tests {
             let expected = definitions.select(
                 game.items(),
                 &mut expected_random,
-                &stack.item,
+                &stack,
                 power,
                 definitions.tag("minecraft:in_enchanting_table"),
             );
@@ -865,7 +855,7 @@ mod hot_key_tests {
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
     fn resolved_keys_select_fuel_and_compost_metadata() {
-        mod_api::testing::with_mods(Vec::new().into(), || {
+        mod_platform::testing::with_mods(Vec::new().into(), || {
             crate::game::native_entity_refs::tests::with_game(|game| {
                 let key = |name| mod_api::__private::item_key(name).unwrap();
                 assert_eq!(game.item_burn_time(key("minecraft:coal")), Some(1600));
