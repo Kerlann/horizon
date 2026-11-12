@@ -18,7 +18,7 @@ struct Thorny;
 #[mod_api::horizon_part]
 impl BlockPart for Thorny {
     fn block_path_type(&self, _: &dyn Host, event: &mut BlockPathTypeEvent) {
-        event.path_type = PathType::Damaging;
+        *event.path_type = PathType::Damaging;
     }
 }
 
@@ -36,7 +36,7 @@ struct Beside(Option<PathType>);
 #[mod_api::horizon_part]
 impl BlockPart for Beside {
     fn adjacent_block_path_type(&self, _: &dyn Host, event: &mut AdjacentBlockPathTypeEvent) {
-        event.adjacent = self.0;
+        *event.adjacent = self.0;
     }
 }
 
