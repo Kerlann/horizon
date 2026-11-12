@@ -151,6 +151,7 @@ pub struct Mod<'a> {
     pub dependencies: &'a [Dependency],
 }
 
+#[derive(Debug)]
 pub struct Resolution {
     /// Original bundle indices, in dispatch order.
     pub order: Vec<usize>,
