@@ -188,7 +188,8 @@ fn groups(packages: &[WasmPackage]) -> (Vec<Vec<usize>>, Vec<(String, Refusal)>)
                     | dependencies::Error::Missing { owner, .. }
                     | dependencies::Error::NoApi { owner, .. }
                     | dependencies::Error::CargoConflict { owner, .. }
-                    | dependencies::Error::Version { owner, .. } => vec![owner],
+                    | dependencies::Error::Version { owner, .. }
+                    | dependencies::Error::Incompatible { owner, .. } => vec![owner],
                 };
                 for &i in &active {
                     if owners.contains(&packages[i].manifest.id.as_str()) {

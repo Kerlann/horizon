@@ -1,7 +1,10 @@
 //! Resolve bundle dependencies without touching the staged workspace.
+use crate::manifest::RuleSide;
 use semver::{Version, VersionReq};
+use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::fmt;
+use std::path::Path;
 
 /// Parse an installed mod version, padding omitted minor and patch components.
 /// This is also the comparison used for saved-world mod versions.
@@ -43,6 +46,13 @@ pub enum Error {
     Cycle {
         mods: Vec<String>,
     },
+    Incompatible {
+        owner: String,
+        target: String,
+        version: String,
+        /// The owner's reason and link, ` (reason, url)`, or empty.
+        note: String,
+    },
 }
 
 impl fmt::Display for Error {
@@ -74,6 +84,12 @@ impl fmt::Display for Error {
                 "{owner} requires {target} {requirement}, but installed version is {version}"
             ),
             Self::Cycle { mods } => write!(f, "Mod dependency cycle: {}", mods.join(" -> ")),
+            Self::Incompatible {
+                owner,
+                target,
+                version,
+                note,
+            } => write!(f, "{owner} is incompatible with {target} {version}{note}"),
         }
     }
 }
@@ -138,18 +154,130 @@ pub struct Mod<'a> {
 pub struct Resolution {
     /// Original bundle indices, in dispatch order.
     pub order: Vec<usize>,
+    /// What the load rules let through: a discouraged pair, an override applied.
+    pub warnings: Vec<String>,
 }
 
 pub fn resolve(mods: &[Mod<'_>]) -> Result<Resolution, Error> {
-    resolve_with_api(mods, true)
+    resolve_with_api(mods, true, &[], &Overrides::default())
 }
 
 /// Resolve content layers without requiring native API packages.
 pub fn resolve_content(mods: &[Mod<'_>]) -> Result<Resolution, Error> {
-    resolve_with_api(mods, false)
+    resolve_with_api(mods, false, &[], &Overrides::default())
 }
 
-fn resolve_with_api(mods: &[Mod<'_>], require_api: bool) -> Result<Resolution, Error> {
+/// [`resolve`], with `rules[i]` the load rules of `mods[i]` and an instance's overrides, as the
+/// game starts its code mods.
+pub fn resolve_with_rules(
+    mods: &[Mod<'_>],
+    rules: &[Vec<Rule>],
+    overrides: &Overrides,
+) -> Result<Resolution, Error> {
+    resolve_with_api(mods, true, rules, overrides)
+}
+
+/// What a load rule asks of another mod.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum RuleKind {
+    /// `[incompatible]`: refuse to start beside it.
+    Incompatible,
+    /// `[discouraged]`: start beside it with a warning.
+    Discouraged,
+    /// `load_before`: run before it when it is loaded.
+    LoadBefore,
+}
+
+/// One of a mod's load rules about another mod, on the running side.
+#[derive(Clone, Debug)]
+pub struct Rule {
+    pub kind: RuleKind,
+    pub id: String,
+    /// The other mod's versions the rule matches.
+    pub requirement: VersionReq,
+    /// The mod's reason and link, ` (reason, url)`, or empty.
+    pub note: String,
+}
+
+/// `manifest`'s load rules that hold on `running`, the client or the dedicated server.
+pub fn rules(manifest: &crate::Manifest, running: RuleSide) -> Vec<Rule> {
+    fn declared<'a>(
+        kind: RuleKind,
+        table: &'a BTreeMap<String, crate::manifest::Rule>,
+        running: RuleSide,
+    ) -> impl Iterator<Item = Rule> + 'a {
+        table.iter().filter_map(move |(id, rule)| {
+            let rule = rule.details();
+            let note = match (rule.reason, rule.url) {
+                (Some(reason), Some(url)) => format!(" ({reason}, {url})"),
+                (Some(text), None) | (None, Some(text)) => format!(" ({text})"),
+                (None, None) => String::new(),
+            };
+            (rule.side == RuleSide::Both || rule.side == running).then(|| Rule {
+                kind,
+                id: id.clone(),
+                requirement: rule.version,
+                note,
+            })
+        })
+    }
+    declared(RuleKind::Incompatible, &manifest.incompatible, running)
+        .chain(declared(
+            RuleKind::Discouraged,
+            &manifest.discouraged,
+            running,
+        ))
+        .chain(manifest.load_before.iter().map(|id| Rule {
+            kind: RuleKind::LoadBefore,
+            id: id.clone(),
+            requirement: VersionReq::STAR,
+            note: String::new(),
+        }))
+        .collect()
+}
+
+/// What an instance's overrides file does to one mod's rule about another (NeoForge's
+/// `FMLConfig.DependencyOverride`).
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Override {
+    /// Ignore the rule.
+    Drop,
+    /// Load beside an incompatible mod, with a warning.
+    Discourage,
+}
+
+/// The overrides file's name, in the instance's `horizon-mods` folder.
+pub const OVERRIDES: &str = "dependency-overrides.toml";
+
+/// An instance's overrides of the mods' load rules: `[owner]` tables of `target = "drop"` or
+/// `"discourage"`.
+#[derive(Debug, Default, Deserialize)]
+#[serde(transparent)]
+pub struct Overrides(BTreeMap<String, BTreeMap<String, Override>>);
+
+impl Overrides {
+    /// The overrides file in `mods_dir`; none when there is no file.
+    pub fn read(mods_dir: &Path) -> Result<Self, String> {
+        let path = mods_dir.join(OVERRIDES);
+        match std::fs::read_to_string(&path) {
+            Ok(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display())),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
+            Err(e) => Err(format!("{}: {e}", path.display())),
+        }
+    }
+
+    fn get(&self, owner: &str, target: &str) -> Option<Override> {
+        self.0.get(owner)?.get(target).copied()
+    }
+}
+
+fn resolve_with_api(
+    mods: &[Mod<'_>],
+    require_api: bool,
+    rules: &[Vec<Rule>],
+    overrides: &Overrides,
+) -> Result<Resolution, Error> {
     let mut ids = HashMap::new();
     for (index, item) in mods.iter().enumerate() {
         if ids.insert(item.id, index).is_some() {
@@ -193,6 +321,58 @@ fn resolve_with_api(mods: &[Mod<'_>], require_api: bool) -> Result<Resolution, E
             edges[index].push(target);
         }
     }
+    let mut warnings = Vec::new();
+    for (index, item) in mods.iter().enumerate() {
+        for rule in rules.get(index).into_iter().flatten() {
+            // A rule about a mod that isn't loaded holds nothing.
+            let Some(&target) = ids.get(rule.id.as_str()) else {
+                continue;
+            };
+            let mut kind = rule.kind;
+            match overrides.get(item.id, &rule.id) {
+                Some(Override::Drop) => {
+                    warnings.push(format!(
+                        "dependency override: {} -> {} dropped",
+                        item.id, rule.id
+                    ));
+                    continue;
+                }
+                Some(Override::Discourage) if kind == RuleKind::Incompatible => {
+                    warnings.push(format!(
+                        "dependency override: {} -> {} only discouraged",
+                        item.id, rule.id
+                    ));
+                    kind = RuleKind::Discouraged;
+                }
+                _ => {}
+            }
+            if kind == RuleKind::LoadBefore {
+                edges[target].push(index);
+                continue;
+            }
+            let other = &mods[target];
+            let version = parse_version(other.version).map_err(|e| Error::Manifest {
+                owner: item.id.into(),
+                target: rule.id.clone(),
+                reason: format!("invalid installed version {:?}: {e}", other.version),
+            })?;
+            if !rule.requirement.matches(&version) {
+                continue;
+            }
+            if kind == RuleKind::Incompatible {
+                return Err(Error::Incompatible {
+                    owner: item.id.into(),
+                    target: rule.id.clone(),
+                    version: other.version.into(),
+                    note: rule.note.clone(),
+                });
+            }
+            warnings.push(format!(
+                "{} works badly with {} {}{}",
+                item.id, rule.id, other.version, rule.note
+            ));
+        }
+    }
     let mut done = vec![false; mods.len()];
     let mut order = Vec::with_capacity(mods.len());
     while order.len() < mods.len() {
@@ -222,7 +402,7 @@ fn resolve_with_api(mods: &[Mod<'_>], require_api: bool) -> Result<Resolution, E
         done[next] = true;
         order.push(next);
     }
-    Ok(Resolution { order })
+    Ok(Resolution { order, warnings })
 }
 
 /// A target's staged Cargo package, or none for an absent optional mod.
@@ -378,6 +558,66 @@ mod tests {
             ]),
             Err(Error::Cycle { .. })
         ));
+    }
+
+    #[test]
+    fn load_rules_refuse_warn_order_and_yield_to_overrides() {
+        let header =
+            "id='user'\nname='User'\nversion='1'\napi='0.2'\ncapabilities=['registries']\n";
+        let user = crate::Manifest::parse(&format!(
+            "{header}load_before=['late', 'absent']\n[incompatible]\n\
+             broken={{version='<2', reason='Corrupts saves', url='https://example.com/why'}}\n\
+             client_only={{side='client'}}\n[discouraged]\nslow='*'\n"
+        ))
+        .unwrap();
+        let server = rules(&user, RuleSide::Server);
+        let client = rules(&user, RuleSide::Client);
+        let none = Overrides::default();
+        let with = |others: &[(&'static str, &'static str)], rules: &[Rule], overrides| {
+            let mut mods = vec![item("user", "1", &[])];
+            mods.extend(others.iter().map(|&(id, version)| item(id, version, &[])));
+            let rules = [rules.to_vec()];
+            resolve_with_rules(&mods, &rules, overrides)
+        };
+        let refused = with(&[("broken", "1.5")], &server, &none).unwrap_err();
+        assert_eq!(
+            refused.to_string(),
+            "user is incompatible with broken 1.5 (Corrupts saves, https://example.com/why)"
+        );
+        assert!(with(&[("broken", "2.0")], &server, &none).is_ok());
+        // A client-only rule holds nothing on a dedicated server.
+        assert!(with(&[("client_only", "1")], &server, &none).is_ok());
+        assert!(with(&[("client_only", "1")], &client, &none).is_err());
+        let slow = with(&[("slow", "3")], &server, &none).unwrap();
+        assert_eq!(slow.warnings, ["user works badly with slow 3"]);
+        // Before a present mod it doesn't depend on; an absent one is ignored.
+        let mods = [item("late", "1", &[]), item("user", "1", &[])];
+        let rules = [Vec::new(), server.clone()];
+        assert_eq!(
+            resolve_with_rules(&mods, &rules, &none).unwrap().order,
+            [1, 0]
+        );
+        let discourage: Overrides = toml::from_str("[user]\nbroken = 'discourage'\n").unwrap();
+        let warned = with(&[("broken", "1.5")], &server, &discourage).unwrap();
+        assert_eq!(
+            warned.warnings,
+            [
+                "dependency override: user -> broken only discouraged",
+                "user works badly with broken 1.5 (Corrupts saves, https://example.com/why)"
+            ]
+        );
+        let drop: Overrides = toml::from_str("[user]\nbroken = 'drop'\n").unwrap();
+        let dropped = with(&[("broken", "1.5")], &server, &drop).unwrap();
+        assert_eq!(
+            dropped.warnings,
+            ["dependency override: user -> broken dropped"]
+        );
+        for refused in [
+            "[incompatible]\nx={url='http://example.com'}",
+            "load_before=['Bad']",
+        ] {
+            assert!(crate::Manifest::parse(&format!("{header}{refused}")).is_err());
+        }
     }
 
     #[test]

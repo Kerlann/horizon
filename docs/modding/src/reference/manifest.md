@@ -88,6 +88,34 @@ Top-level `[dependencies]` declares other mods by id: a semver requirement strin
 Content layers load in dependency order. A missing required dependency, incompatible installed version or dependency cycle refuses startup; an absent optional dependency is ignored. Native code dependencies additionally require API packages
 ([Dependencies between trait mods](../concepts/trait-mods.md#dependencies-between-trait-mods)).
 
+Load rules name other mods without linking against them (NeoForge's `INCOMPATIBLE`, `DISCOURAGED` and
+`ordering = "BEFORE"`). The game checks them when it starts code mods:
+
+```toml
+load_before = ["minimap"]            # their hooks run after ours when they are loaded
+
+[incompatible]
+old_lib = "<2"                       # refuse to start beside old_lib below 2.0
+
+[discouraged]
+shaders = { version = "*", reason = "Flickers with the water shader", url = "https://example.org/w", side = "client" }
+```
+
+An `[incompatible]` or `[discouraged]` entry is a semver requirement on the other mod's version, or a
+table with `version` (every version when left out), `reason` (at most 512 bytes), `url` (`https://`
+only) and `side` (`"both"`, the default, `"client"` or `"server"`, the dedicated server). A rule
+about a mod that isn't loaded holds nothing. A matching incompatible mod refuses startup with the
+owner's reason and link; a matching discouraged mod loads with a warning in the log.
+
+A player can override a rule in `horizon-mods/dependency-overrides.toml`: a table per mod that owns
+the rule, mapping the other mod's id to `"drop"` (ignore the rule) or `"discourage"` (load beside an
+incompatible mod, with a warning). Every applied override is logged.
+
+```toml
+[my_mod]
+old_lib = "discourage"
+```
+
 ## Original Java jar layers
 
 Content and code mods can list ordered `[[jar]]` references. Use

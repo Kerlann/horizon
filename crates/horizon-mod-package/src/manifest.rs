@@ -75,6 +75,17 @@ pub struct Manifest {
     /// Other native mods whose hooks must be available before this one.
     #[serde(default)]
     pub dependencies: std::collections::BTreeMap<String, Dependency>,
+    /// Mods this one breaks with: the game refuses to start while one of them is loaded at a
+    /// version the rule matches (NeoForge's `DependencyType.INCOMPATIBLE`).
+    #[serde(default)]
+    pub incompatible: std::collections::BTreeMap<String, Rule>,
+    /// Mods this one works badly with: they load, with a warning (`DependencyType.DISCOURAGED`).
+    #[serde(default)]
+    pub discouraged: std::collections::BTreeMap<String, Rule>,
+    /// Mods whose hooks run after this one's when they are loaded, without depending on them
+    /// (`Ordering.BEFORE`).
+    #[serde(default)]
+    pub load_before: Vec<String>,
     /// Original Java jars, layered in list order below this mod's own files.
     #[serde(default)]
     pub jar: Vec<JarRef>,
@@ -102,6 +113,61 @@ pub struct DependencyDetails {
     pub version: semver::VersionReq,
     #[serde(default)]
     pub optional: bool,
+}
+
+/// An `[incompatible]` or `[discouraged]` entry: the versions of the other mod it matches
+/// (`"<2"`), or a table that also gives the player a reason and a link.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum Rule {
+    Version(semver::VersionReq),
+    Detailed(RuleDetails),
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(deny_unknown_fields)]
+pub struct RuleDetails {
+    /// Every version when left out.
+    #[serde(default = "any_version")]
+    pub version: semver::VersionReq,
+    /// Why, shown when the rule fails: at most 512 bytes.
+    #[serde(default)]
+    pub reason: Option<String>,
+    /// Where to read more, shown with the reason: an `https://` link.
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Where the rule holds: both sides, or only the client or the dedicated server.
+    #[serde(default)]
+    pub side: RuleSide,
+}
+
+fn any_version() -> semver::VersionReq {
+    semver::VersionReq::STAR
+}
+
+/// The side a rule holds on (NeoForge's `DependencySide`).
+#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RuleSide {
+    #[default]
+    Both,
+    Client,
+    Server,
+}
+
+impl Rule {
+    /// The versions, reason, link and side, the bare form's as defaults.
+    pub fn details(&self) -> RuleDetails {
+        match self {
+            Self::Version(version) => RuleDetails {
+                version: version.clone(),
+                reason: None,
+                url: None,
+                side: RuleSide::Both,
+            },
+            Self::Detailed(details) => details.clone(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq)]
@@ -329,9 +395,24 @@ impl Manifest {
                 m.id
             ));
         }
-        for id in m.dependencies.keys() {
+        let rules = m.incompatible.iter().chain(&m.discouraged);
+        for id in m
+            .dependencies
+            .keys()
+            .chain(rules.clone().map(|(id, _)| id))
+            .chain(&m.load_before)
+        {
             if !valid_mod_id(id) {
                 return Err(format!("{MANIFEST}: invalid dependency id {id:?}"));
+            }
+        }
+        for (id, rule) in rules {
+            let rule = rule.details();
+            if rule.reason.as_ref().is_some_and(|reason| reason.len() > 512) {
+                return Err(format!("{MANIFEST}: rule for {id}: reason over 512 bytes"));
+            }
+            if rule.url.as_ref().is_some_and(|url| !url.starts_with("https://")) {
+                return Err(format!("{MANIFEST}: rule for {id}: url is not https://"));
             }
         }
         if m.native.is_some() && m.wasm.is_some() {

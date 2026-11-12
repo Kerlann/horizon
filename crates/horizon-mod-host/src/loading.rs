@@ -79,8 +79,34 @@ pub fn main_with(
                     dependencies,
                 })
                 .collect();
-            let order = horizon_mod_package::dependencies::resolve(&inputs)
-                .unwrap_or_else(|error| panic!("mod load refused: {error}"));
+            // Load rules hold on the side this process runs as.
+            let dedicated = launch
+                .rest
+                .iter()
+                .any(|arg| matches!(arg, horizon_mod_package::selection::Argument::Dedicated(_)));
+            let side = if dedicated {
+                horizon_mod_package::manifest::RuleSide::Server
+            } else {
+                horizon_mod_package::manifest::RuleSide::Client
+            };
+            let rules: Vec<_> = manifests
+                .iter()
+                .map(|m| horizon_mod_package::dependencies::rules(m, side))
+                .collect();
+            let order = horizon_mod_package::dependencies::Overrides::read(
+                &launch
+                    .context
+                    .game_dir
+                    .join(horizon_mod_package::mod_list::DIR),
+            )
+            .and_then(|overrides| {
+                horizon_mod_package::dependencies::resolve_with_rules(&inputs, &rules, &overrides)
+                    .map_err(|error| error.to_string())
+            })
+            .unwrap_or_else(|error| panic!("mod load refused: {error}"));
+            for warning in &order.warnings {
+                log::warn!("Horizon: {warning}");
+            }
             // What every level.dat this game saves records (`fml.LoadingModList`).
             horizon_client::save::level_mods::set_loaded(Some(
                 order
