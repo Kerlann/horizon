@@ -748,24 +748,14 @@ fn sense_hurt(m: &mut Mob, w: &MobWorld) {
     }
 }
 /// `VillagerHostilesSensor.ACCEPTABLE_DISTANCE_FROM_HOSTILES`.
-fn hostile_distance(s: Species) -> Option<f32> {
-    Some(match s {
-        Species::Drowned
-        | Species::Husk
-        | Species::Vex
-        | Species::Zombie
-        | Species::ZombieVillager => 8.0,
-        Species::Evoker | Species::Illusioner | Species::Ravager => 12.0,
-        Species::Pillager => 15.0,
-        Species::Vindicator | Species::Zoglin => 10.0,
-        _ => return None,
-    })
-}
+/// `VillagerHostilesSensor`, its distances from `neoforge:acceptable_villager_distances`.
 fn sense_hostiles(m: &mut Mob, w: &MobWorld) {
+    let maps = crate::neoforge_mob_maps::current();
     let hostile = find_closest(m, w, |m, who| {
         let Who::Mob(id) = who else { return false };
         let Some(s) = w.seen(id) else { return false };
-        hostile_distance(s.species).is_some_and(|d| m.distance_sqr(s.position) <= f64::from(d * d))
+        let close = |d: f32| m.distance_sqr(s.position) <= f64::from(d * d);
+        maps.villager_distance(s.species).is_some_and(close)
     });
     mem(m).nearest_hostile.set_opt(hostile);
 }

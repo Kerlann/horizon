@@ -142,8 +142,8 @@ impl Game<'_> {
             peaceful,
             &nearby,
         ) {
-            self.audio
-                .play(&format!("minecraft:{sound}"), Some(at), volume, pitch);
+            let sound = horizon_client::mobs::entity_sounds::full_id(sound);
+            self.audio.play(&sound, Some(at), volume, pitch);
         }
     }
 

@@ -66,7 +66,9 @@ const IMITATIONS: [(Species, &str); 41] = [
     ),
 ];
 
-fn imitation(species: Species) -> Option<&'static str> {
+/// `Parrot.MOB_SOUND_MAP`'s sound of a species (vanilla's table: packs go
+/// through `neoforge:parrot_imitations`, [`crate::neoforge_mob_maps`]).
+pub(crate) fn imitation(species: Species) -> Option<&'static str> {
     IMITATIONS.iter().find(|i| i.0 == species).map(|i| i.1)
 }
 
@@ -109,10 +111,12 @@ fn imitate_nearby_mobs(
         return;
     }
     let area = m.bounds().inflate(Vec3::new(20.0, 20.0, 20.0));
+    let maps = crate::neoforge_mob_maps::current();
+    let imitable = |s: Species| maps.parrot_imitation(s).is_some();
     let mobs: Vec<_> = w
         .others
         .iter()
-        .filter(|s| s.alive && imitation(s.species).is_some() && s.bounds.intersects(area))
+        .filter(|s| s.alive && imitable(s.species) && s.bounds.intersects(area))
         .collect();
     if mobs.is_empty() {
         return;
@@ -121,7 +125,7 @@ fn imitate_nearby_mobs(
     if mob.silent {
         return;
     }
-    if let Some(sound) = imitation(mob.species).filter(|s| !s.is_empty()) {
+    if let Some(sound) = maps.parrot_imitation(mob.species).filter(|s| !s.is_empty()) {
         let at = [m.position.x, m.position.y, m.position.z];
         events.push(MobEvent::Sound(sound, at, 0.7, pitch(random)));
     }
@@ -141,22 +145,23 @@ pub fn shoulder_sound(
     peaceful: bool,
     nearby: &[(Species, bool)],
 ) -> Option<(&'static str, f32, f32)> {
+    let maps = crate::neoforge_mob_maps::current();
     if player_alive && !player_silent && random.next_int_bound(2).unwrap_or(1) == 0 {
         let candidates: Vec<_> = nearby
             .iter()
-            .filter(|(s, _)| imitation(*s).is_some())
+            .filter(|(s, _)| maps.parrot_imitation(*s).is_some())
             .collect();
         if !candidates.is_empty() {
             let (species, silent) =
                 *candidates[random.next_int_bound(candidates.len() as i32).unwrap_or(0) as usize];
             if !silent {
-                let sound = imitation(species).filter(|s| !s.is_empty())?;
+                let sound = maps.parrot_imitation(species).filter(|s| !s.is_empty())?;
                 return Some((sound, 0.7, pitch(random)));
             }
         }
     }
     let sound = if !peaceful && random.next_int_bound(1000).unwrap_or(1) == 0 {
-        IMITATIONS[random.next_int_bound(IMITATIONS.len() as i32).unwrap_or(0) as usize].1
+        random_imitation(&maps, random)
     } else {
         "entity.parrot.ambient"
     };
@@ -167,13 +172,27 @@ pub fn shoulder_sound(
 /// imitable mob instead of the parrot's own.
 pub fn ambient(m: &mut Mob, w: &MobWorld) -> &'static str {
     if w.difficulty.effective > 0.0 && m.random.next_int_bound(1000).unwrap_or(1) == 0 {
-        let i = m
-            .random
-            .next_int_bound(IMITATIONS.len() as i32)
-            .unwrap_or(0);
-        return IMITATIONS[i as usize].1;
+        return random_imitation(&crate::neoforge_mob_maps::current(), &mut m.random);
     }
     "entity.parrot.ambient"
+}
+
+/// `getAmbient`'s rare draw: a random imitable mob's sound, from vanilla's
+/// table or the pack's map (the parrot's own sound when the map is empty).
+fn random_imitation(
+    maps: &crate::neoforge_mob_maps::NeoForgeMobMaps,
+    random: &mut LegacyRandom,
+) -> &'static str {
+    let sounds = maps.parrot_sounds();
+    let len = sounds.map_or(IMITATIONS.len(), <[_]>::len);
+    if len == 0 {
+        return "entity.parrot.ambient";
+    }
+    let i = random.next_int_bound(len as i32).unwrap_or(0) as usize;
+    match sounds {
+        Some(sounds) => sounds[i],
+        None => IMITATIONS[i].1,
+    }
 }
 
 /// `Parrot(EntityType, Level)` with `createNavigation` and `registerGoals`:

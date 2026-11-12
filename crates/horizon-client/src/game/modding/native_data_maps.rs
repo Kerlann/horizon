@@ -110,6 +110,55 @@ fn apply_file(
     true
 }
 
+/// The pack files of `wanted` (map `id`'s key) applied over `map`, in pack
+/// order: a file whose conditions fail is left out, one that isn't a data map
+/// is skipped with a warning.
+fn apply_files(
+    map: &mut BTreeMap<String, Value>,
+    wanted: &str,
+    id: &str,
+    overlay: &horizon_world::loot::PackOverlay<'_>,
+    tags: &HashMap<String, HashSet<String>>,
+) {
+    let Some((_, versions)) = overlay.files.iter().find(|(k, _)| *k == wanted) else {
+        return;
+    };
+    for bytes in versions {
+        let file = serde_json::from_slice::<Value>(bytes).ok();
+        if file
+            .as_ref()
+            .is_some_and(|file| !overlay.conditions.allows_file(file, wanted))
+        {
+            continue;
+        }
+        let applied = file.is_some_and(|file| apply_file(map, &file, tags));
+        if !applied {
+            log::warn!("Horizon: a data map file of {id} is not a data map, skipped");
+        }
+    }
+}
+
+/// One of NeoForge's built-in data maps (`NeoForgeDataMaps`), map `id` on the
+/// registry folder `dir`: the pack files merged over `base` (vanilla's table,
+/// which NeoForge ships as the map's data, so a pack can `remove` from it).
+/// None where no pack has a file for the map.
+pub(crate) fn merge_builtin(
+    id: &str,
+    dir: &str,
+    base: impl FnOnce() -> BTreeMap<String, Value>,
+    overlay: &horizon_world::loot::PackOverlay<'_>,
+    tags: &HashMap<String, HashSet<String>>,
+) -> Option<BTreeMap<String, Value>> {
+    let (ns, path) = id.split_once(':')?;
+    let wanted = format!("data_maps/{ns}:{dir}/{path}");
+    if !overlay.files.iter().any(|(k, _)| *k == wanted) {
+        return None;
+    }
+    let mut map = base();
+    apply_files(&mut map, &wanted, id, overlay, tags);
+    Some(map)
+}
+
 impl DataMaps {
     /// The types' values from `files` (the server's tables' pack files, in
     /// pack order, mods' below the packs'), tags resolved against the
@@ -165,24 +214,7 @@ impl DataMaps {
             let (ns, path) = ty.id.split_once(':').unwrap_or_default();
             let wanted = format!("data_maps/{ns}:{dir}/{path}");
             let mut map = BTreeMap::new();
-            if let Some((_, versions)) = overlay.files.iter().find(|(k, _)| *k == wanted) {
-                for bytes in versions {
-                    let file = serde_json::from_slice::<Value>(bytes).ok();
-                    if file
-                        .as_ref()
-                        .is_some_and(|file| !overlay.conditions.allows_file(file, &wanted))
-                    {
-                        continue;
-                    }
-                    let applied = file.is_some_and(|file| apply_file(&mut map, &file, tags));
-                    if !applied {
-                        log::warn!(
-                            "Horizon: a data map file of {} is not a data map, skipped",
-                            ty.id
-                        );
-                    }
-                }
-            }
+            apply_files(&mut map, &wanted, &ty.id, overlay, tags);
             registered.insert(ty.id.clone(), map);
         }
         Self { maps }

@@ -412,6 +412,7 @@ impl Game<'_> {
         (self.world_tables, self.health_resources) =
             self.build_world_tables(stack, false, root, self.mods.data_switched)?;
         self.install_profession_save_snapshots();
+        self.install_mob_maps();
         self.mods.datapack_registries = self.mods.datapack_candidate.take().map(|candidate| {
             Arc::new(mod_api::DatapackRegistrySet::first(
                 candidate,
@@ -467,6 +468,7 @@ impl Game<'_> {
         }
         self.world_tables = tables;
         self.install_profession_save_snapshots();
+        self.install_mob_maps();
         self.world.pois.clear();
         for world in self.levels.parked_worlds() {
             world.pois.clear();

@@ -117,16 +117,14 @@ impl Game<'_> {
         }
         let mut remaining = 20;
         let mut amounts: Vec<(std::sync::Arc<str>, i32)> = Vec::new();
+        let maps = horizon_client::neoforge_mob_maps::current();
         let slots = villager::ext(&self.mobs[mob]).map_or(0, |e| e.inventory.len());
         'slots: for slot in (0..slots).rev() {
             if remaining <= 0 {
                 break;
             }
             let stack = villager::ext_mut(&mut self.mobs[mob]).inventory[slot].clone();
-            if !matches!(
-                &*stack.item,
-                "minecraft:wheat_seeds" | "minecraft:beetroot_seeds"
-            ) {
+            if !maps.villager_compostable(&stack.item) {
                 continue;
             }
             let known = amounts.iter().position(|(item, _)| *item == stack.item);
