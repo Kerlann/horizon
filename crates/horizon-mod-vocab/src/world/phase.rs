@@ -508,13 +508,16 @@ impl std::error::Error for RegistrationReadError {}
 /// }
 /// ```
 // exhaustive: its fields are private, so mods cannot build or destructure it
-// no wire: phase context has a custom Wire layout for its derived directory value; other host tables rebind locally.
+// no wire: phase context has a custom Wire layout for its derived directory value and the game's startup screen (a held resource); other host tables rebind locally.
 pub struct RegistrationContext {
     pub(crate) mods: LoadedMods,
     pub(crate) data: Option<RegistrationData>,
     pub(crate) declaration_refusals: std::sync::Mutex<Vec<String>>,
     pub(crate) self_refusal: std::sync::Mutex<Option<String>>,
     pub(crate) instance_dir: Option<crate::InstanceDirectory>,
+    /// The game's startup screen, for [`progress`](Self::progress) and
+    /// [`message`](Self::message); none without a game.
+    pub(crate) startup: Option<Arc<dyn crate::StartupScreen>>,
 }
 
 impl RegistrationContext {
@@ -527,6 +530,7 @@ impl RegistrationContext {
             declaration_refusals: Default::default(),
             self_refusal: Default::default(),
             instance_dir,
+            startup: crate::world::startup_progress::installed(),
         }
     }
 

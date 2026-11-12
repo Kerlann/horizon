@@ -264,14 +264,19 @@ impl Wire for crate::LoadedMods {
     }
 }
 impl Wire for crate::RegistrationContext {
-    const LAYOUT_SEED: u64 = crate::wire::layout_seed("RegistrationContext.instance_dir.v1");
-    const MIN: usize = <Option<crate::InstanceDirectory> as Wire>::MIN;
+    const LAYOUT_SEED: u64 =
+        crate::wire::layout_seed("RegistrationContext.instance_dir.startup.v1");
+    const MIN: usize = <Option<crate::InstanceDirectory> as Wire>::MIN
+        + <Option<std::sync::Arc<dyn crate::StartupScreen>> as Wire>::MIN;
     fn put(&self, out: &mut Writer) {
         out.put(&self.instance_dir);
+        // The game's startup screen crosses as a resource the mod holds by id.
+        out.put(&self.startup);
     }
     fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
         let mut context = Self::new();
         context.instance_dir = input.take()?;
+        context.startup = input.take()?;
         Ok(context)
     }
 }

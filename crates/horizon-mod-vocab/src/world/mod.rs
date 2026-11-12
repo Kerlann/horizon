@@ -32,6 +32,7 @@ pub(crate) mod reload;
 pub(crate) mod reload_order;
 pub(crate) mod scheduler;
 pub(crate) mod server_reload;
+pub(crate) mod startup_progress;
 pub mod snapshots;
 pub(crate) mod structure_template;
 pub(crate) mod structure_type;

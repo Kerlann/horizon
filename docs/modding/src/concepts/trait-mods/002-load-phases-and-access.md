@@ -27,6 +27,16 @@ constructing a native filesystem path. Wasm receives the identical host-encoded
 value through Wire as data only; this does not grant filesystem access. A context
 with no engine snapshot returns `RegistrationReadError::Unavailable`.
 
+A mod that does slow work while the game starts shows it on the startup loading screen
+(NeoForge's `StartupNotificationManager` and `ProgressMeter`). `RegistrationContext::progress(label,
+steps)` opens a bar under the game's stage bar and returns a `StartupProgress`: `step()`, `set(n)` and
+`label(text)` move it, and dropping it removes the bar. The mod may keep the handle past
+`register` and step it from a worker thread, for example while client setup runs.
+`RegistrationContext::message(text)` shows a line for a few seconds. The newest four bars and the
+last three lines are drawn, each cut to one line. A dedicated server logs each label, line and
+tenth of a bar's steps instead. A wasm mod holds the game's screen by id, and each call crosses to
+the game. A custom loading window is not part of this.
+
 Registration runs once: `register`, `component_types`, `blocks`, `items` and `standalone_models`
 receive only `RegistrationContext`. Its `mods()`, `registry(name)` and `setting(mod_id, key)` read
 one view captured before the first of them runs, so every registration step sees the same values

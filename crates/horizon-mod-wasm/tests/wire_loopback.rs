@@ -22,6 +22,8 @@ mod loot_tags_wire;
 mod piglin_answers;
 #[path = "wire_loopback/piston_push_reaction.rs"]
 mod piston_push_reaction;
+#[path = "wire_loopback/startup_progress.rs"]
+mod startup_progress;
 #[path = "wire_loopback/use_item_hand.rs"]
 mod use_item_hand;
 /// The generated proxies' refusal reason; the loopback refuses only on its own encode errors.
@@ -239,8 +241,9 @@ fn __horizon_mod_hooks() -> Box<dyn Hooks> {
         fn register(
             &self,
             registrar: &mut dyn mod_api::Registrar,
-            _: &mod_api::RegistrationContext,
+            cx: &mod_api::RegistrationContext,
         ) {
+            startup_progress::register(cx);
             arm_pose_registration::check(registrar);
             biome_region_registration::register(registrar);
             REGISTERED_ITEM.set(Some(registrar.item_key("minecraft:stone")));
