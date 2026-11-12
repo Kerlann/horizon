@@ -64,6 +64,17 @@ transaction, refusing rather than recomputing on mismatch. Authoritative evaluat
 still runs independently of prediction. Dispenser and pickup retain their candidate
 iteration and other vanilla checks, using the same read adapter and stack data rule.
 
+Maintainer ruling on the revision recheck: on the native path the synchronous read-only
+borrow is the accepted equivalent of the recheck. The predicate is asked and its answer
+applied under one immutable borrow, through a Host adapter that offers observations only
+(no commands, storage writes, scheduling or random draws), so nothing can change in
+between and a revision token would compare a value with itself. The recheck stays required
+wherever deciding and applying are separated in time or state: (1) the prepared wasm
+crossing (#3549), where a payload prepared once is reused across candidates: a stack
+mutation invalidates it and a stale preparation refuses; (2) any path that keeps an answer
+beyond the call (a cache, a predicted answer applied later). A stale or missing entity
+handle refuses on every path.
+
 Native lends the prepared values. Wasm uses the shared-memory Wire boundary: prepare
 the stack and read-view payload once in guest storage, then send only call-scoped
 handles, slot and scalar answer per candidate. No engine pointers cross; release

@@ -9,6 +9,7 @@ use crate::{
     blocks::{BlockFacts, Fluid},
     collisions::SceneCollisions,
     items::ItemStack,
+    motion::block_friction,
     world::World,
 };
 use horizon_core::{
@@ -82,6 +83,7 @@ fn slime_at(world: &World, facts: &BlockFacts, position: BlockPos) -> bool {
 }
 
 mod fluids;
+mod item_environment;
 mod item_fall;
 mod item_no_physics;
 pub mod nameplate;
@@ -437,9 +439,9 @@ impl ItemEntity {
         border: Option<&BorderGeometry>,
         blocks: Option<&BoundMovementProperties>,
     ) -> bool {
+        let context = crate::test_resources::server_loop_context();
         let before = self.velocity;
-        let (water, lava) =
-            self.update_fluids(world, fluids, crate::test_resources::server_loop_context());
+        let (water, lava) = self.update_fluids(world, fluids, context);
         self.water_entry(water > 0.0, self.ticks == 0, before, &mut |_| {});
         self.lava_fall(lava > 0.0);
         let step = self.tick_move(
@@ -451,7 +453,7 @@ impl ItemEntity {
             entity_boxes,
             border,
             blocks,
-            crate::test_resources::server_loop_context(),
+            context,
         );
         crate::motion::bubble_column_push(
             world,
@@ -461,10 +463,9 @@ impl ItemEntity {
             self.bounds(),
             &mut self.velocity,
         );
-        let alive = self.tick_settle(world, facts, no_physics, step);
+        let alive = self.tick_settle(world, facts, no_physics, step, context);
         let before = self.velocity;
-        let (water, _) =
-            self.update_fluids(world, fluids, crate::test_resources::server_loop_context());
+        let (water, _) = self.update_fluids(world, fluids, context);
         self.water_entry(water > 0.0, false, before, &mut |_| {});
         alive
     }
@@ -504,105 +505,6 @@ impl ItemEntity {
                 self.position.z + h,
             ),
         )
-    }
-    pub fn environment_tick(
-        &mut self,
-        mut world: &World,
-        facts: &BlockFacts,
-        registry: &horizon_world::registry::BlockRegistry,
-        items: &crate::items::Items,
-    ) -> ItemEnvironmentTick {
-        self.environment_tick_inner(&mut world, facts, registry, items, |_, _| false)
-    }
-    /// As `environment_tick`, allowing the caller to decide each actual damage attempt.
-    pub fn environment_tick_with_hook(
-        &mut self,
-        mut world: &mut World,
-        facts: &BlockFacts,
-        registry: &horizon_world::registry::BlockRegistry,
-        items: &crate::items::Items,
-        mut invulnerable: impl FnMut(&mut World, &str) -> bool,
-    ) -> ItemEnvironmentTick {
-        self.environment_tick_inner(&mut world, facts, registry, items, |world, damage| {
-            invulnerable(world, damage)
-        })
-    }
-    fn environment_tick_inner<W: std::ops::Deref<Target = World>>(
-        &mut self,
-        world: &mut W,
-        facts: &BlockFacts,
-        registry: &horizon_world::registry::BlockRegistry,
-        items: &crate::items::Items,
-        mut invulnerable: impl FnMut(&mut W, &str) -> bool,
-    ) -> ItemEnvironmentTick {
-        let at = world.block(
-            self.position.x.floor() as i32,
-            (self.position.y + 0.1).floor() as i32,
-            self.position.z.floor() as i32,
-        );
-        let fluid = facts.get(at).fluid;
-        let fire_immune = items.resists_fire(&self.stack, "minecraft:in_fire");
-        let mut spilled = Vec::new();
-        if fluid == Fluid::Water || fire_immune {
-            self.fire_ticks = 0;
-        }
-        if self.fire_ticks > 0 {
-            if self.fire_ticks % 20 == 0
-                && fluid != Fluid::Lava
-                && !items.resists_fire(&self.stack, "minecraft:on_fire")
-                && !invulnerable(world, "minecraft:on_fire")
-            {
-                spilled.extend(self.hurt(1).unwrap_or_default());
-            }
-            self.fire_ticks -= 1;
-        }
-        let mut lava_hurt = false;
-        // LavaCauldronBlock.entityInside applies LAVA_IGNITE and then lavaHurt.
-        // A cauldron is not a lava fluid, and removed items get no block effects.
-        if self.health > 0 && !fire_immune {
-            let contacts = usize::from(fluid == Fluid::Lava)
-                + lava_cauldron_contacts(world, registry, self.bounds());
-            if contacts > 0 {
-                self.fire_ticks = self.fire_ticks.max(300);
-            }
-            // StepBasedCollector coalesces ignition, but keeps each block's
-            // runAfter(lavaHurt) callback. Stop once an item is destroyed.
-            for _ in 0..contacts {
-                if self.health <= 0 {
-                    break;
-                }
-                if !items.resists_fire(&self.stack, "minecraft:lava")
-                    && !invulnerable(world, "minecraft:lava")
-                {
-                    spilled.extend(self.hurt(4).unwrap_or_default());
-                    lava_hurt = true;
-                }
-            }
-        }
-        let fire_damage = crate::motion::environment::fire_contact(world, registry, self.bounds());
-        if fire_damage > 0.0 && !fire_immune {
-            self.fire_ticks = self.fire_ticks.max(160);
-            if !items.resists_fire(&self.stack, "minecraft:in_fire")
-                && !invulnerable(world, "minecraft:in_fire")
-            {
-                spilled.extend(self.hurt(fire_damage as i32).unwrap_or_default());
-            }
-        }
-        // CactusBlock.entityInside: `entity.hurt(cactus, 1.0)`. An item has no
-        // hurt cooldown, so it loses 1 health every tick it touches a cactus
-        // (5 health: gone in 5 ticks). Fire resistance does not help;
-        // `ItemStack.canBeHurtBy` only skips it for a damage_resistant stack.
-        if crate::motion::environment::cactus_contact(world, registry, self.bounds())
-            && !items.resists_cactus(&self.stack)
-            && !invulnerable(world, "minecraft:cactus")
-        {
-            spilled.extend(self.hurt(1).unwrap_or_default());
-        }
-        ItemEnvironmentTick {
-            alive: self.health > 0,
-            lava_hurt,
-            spilled,
-        }
     }
     /// `ItemEntity.hurtServer`'s health: `amount` off the health, and an item
     /// whose health reaches 0 is destroyed at once (`ItemStack.onDestroyed`,
@@ -971,6 +873,7 @@ impl ItemEntity {
         facts: &BlockFacts,
         no_physics: bool,
         step: ItemStep,
+        context: &horizon_world::native_load_context::LoopContext,
     ) -> bool {
         if step.movement.is_some() {
             // Entity.applyEffectsFromBlocks -> SlimeBlock.stepOn, with the
@@ -982,12 +885,9 @@ impl ItemEntity {
             // the block's friction as a float, then widened for the scale.
             let mut friction = 0.98_f32;
             if self.on_ground {
-                let below = world.block(
-                    self.position.x.floor() as i32,
-                    (self.position.y - 0.999_999).floor() as i32,
-                    self.position.z.floor() as i32,
-                );
-                friction *= facts.get(below).friction;
+                let below =
+                    BlockPos::containing(self.position.subtract(Vec3::new(0.0, 0.999_999, 0.0)));
+                friction *= block_friction(context, self.id, "minecraft:item", world, facts, below);
             }
             let friction = f64::from(friction);
             let air = f64::from(0.98_f32);
@@ -1740,12 +1640,10 @@ impl ExperienceOrb {
         // friction multiplied in as a float, widened once for the scale.
         let mut friction = 0.98_f32;
         if self.on_ground {
-            let below = world.block(
-                self.position.x.floor() as i32,
-                (self.position.y - 0.999_999).floor() as i32,
-                self.position.z.floor() as i32,
-            );
-            friction *= facts.get(below).friction;
+            let below =
+                BlockPos::containing(self.position.subtract(Vec3::new(0.0, 0.999_999, 0.0)));
+            let kind = "minecraft:experience_orb";
+            friction *= block_friction(context, self.id, kind, world, facts, below);
         }
         let friction = f64::from(friction);
         // The drag scales every axis by the same friction, the ground's
@@ -2342,7 +2240,8 @@ impl ArmorStand {
         in_water: bool,
         border: Option<&BorderGeometry>,
     ) {
-        if let Some(step) = self.tick_move(scene, facts, climbing, in_water, border, &[]) {
+        let context = crate::test_resources::server_loop_context();
+        if let Some(step) = self.tick_move(scene, facts, climbing, in_water, border, &[], context) {
             let medium = if in_water {
                 StandMedium::Water
             } else {
@@ -2671,6 +2570,7 @@ impl ArmorStand {
         in_water: bool,
         border: Option<&BorderGeometry>,
         entities: &[Aabb],
+        context: &horizon_world::native_load_context::LoopContext,
     ) -> Option<StandStep> {
         use crate::entity_rules::EntityRules;
         self.previous = self.position;
@@ -2698,12 +2598,10 @@ impl ArmorStand {
         // `travelInAir` reads ground friction before the move.
         let falling = wanted.y <= 0.0;
         let friction = if !in_water && self.on_ground {
-            let below = scene.world.block(
-                self.position.x.floor() as i32,
-                (self.position.y - 0.500_001).floor() as i32,
-                self.position.z.floor() as i32,
-            );
-            facts.get(below).friction
+            let below =
+                BlockPos::containing(self.position.subtract(Vec3::new(0.0, 0.500_001, 0.0)));
+            let kind = "minecraft:armor_stand";
+            block_friction(context, self.id, kind, scene.world, facts, below)
         } else {
             1.0
         };
@@ -2980,12 +2878,16 @@ mod experience_tests;
 #[cfg(test)]
 mod fire_environment_tests {
     use super::*;
-    use horizon_world::loot::PackOverlay;
     #[test]
+    #[ignore = "requires prepared resources"]
     fn ordinary_items_burn_but_native_netherite_resists_lava() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../.local/horizon-client")
-            .join(horizon_core::VANILLA_VERSION);
+        let root = std::env::var_os("HORIZON_TEST_RESOURCES")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../.local/horizon-client")
+                    .join(horizon_core::VANILLA_VERSION)
+            });
         if !root.join("items.json").exists() {
             crate::test_fixtures::report_missing();
             return;
@@ -2998,14 +2900,14 @@ mod fire_environment_tests {
             .unwrap();
         let facts = BlockFacts::load(&root, assets.registry).unwrap();
         let defaults = horizon_world::item_defaults::read(&root).unwrap();
-        let items = crate::items::Items::load(
-            &root,
-            assets.registry,
-            &facts,
-            &PackOverlay::NONE,
-            &defaults,
-        )
-        .unwrap();
+        let damage = crate::health::HealthResources::load(&root).unwrap();
+        let can_hurt = |stack: &ItemStack, name: &str| {
+            let default = defaults
+                .entries()
+                .get(stack.item.as_ref())
+                .and_then(|components| components.get("minecraft:damage_resistant"));
+            crate::item_damage::stack_can_be_hurt_by(default, &damage.damage, stack, name).unwrap()
+        };
         let mut world = World::test_scene(&assets, &render, 3).unwrap();
         let at = Vec3::new(20.5, 4.0, 20.5);
         world
@@ -3054,7 +2956,7 @@ mod fire_environment_tests {
             &mut world,
             &facts,
             assets.registry,
-            &items,
+            &can_hurt,
             |_, damage| {
                 heard.push(damage.to_owned());
                 damage == "minecraft:lava"
@@ -3069,7 +2971,7 @@ mod fire_environment_tests {
         );
         let mut wood = make("minecraft:oak_planks");
         let mut metal = make("minecraft:netherite_ingot");
-        let first = wood.environment_tick(&world, &facts, assets.registry, &items);
+        let first = wood.environment_tick(&world, &facts, assets.registry, &can_hurt);
         assert!(first.alive && first.lava_hurt);
         assert!(
             !first.should_play_lava_hurt_sound(1),
@@ -3080,7 +2982,7 @@ mod fire_environment_tests {
             wood.fire_ticks > 0,
             "lava contact must ignite dropped items"
         );
-        let last = wood.environment_tick(&world, &facts, assets.registry, &items);
+        let last = wood.environment_tick(&world, &facts, assets.registry, &can_hurt);
         assert!(
             !last.alive && last.lava_hurt,
             "lethal lava damage still emits burn sound"
@@ -3090,7 +2992,13 @@ mod fire_environment_tests {
             "the lethal hit must always play the sound"
         );
         for _ in 0..40 {
-            let result = metal.environment_tick(&world, &facts, assets.registry, &items);
+            let (result, allocations) = horizon_threads::allocation_probe::measure(|| {
+                metal.environment_tick(&world, &facts, assets.registry, &can_hurt)
+            });
+            assert_eq!(
+                allocations.calls, 0,
+                "immune environmental tick: {allocations:?}"
+            );
             assert!(result.alive && !result.lava_hurt);
             assert!(!result.should_play_lava_hurt_sound(10));
         }
@@ -3105,7 +3013,7 @@ mod fire_environment_tests {
             )
             .unwrap();
         let mut burning = make("minecraft:oak_planks");
-        let result = burning.environment_tick(&world, &facts, assets.registry, &items);
+        let result = burning.environment_tick(&world, &facts, assets.registry, &can_hurt);
         assert!(result.alive && !result.lava_hurt);
         assert!(burning.fire_ticks > 0);
         world
@@ -3120,7 +3028,7 @@ mod fire_environment_tests {
             )
             .unwrap();
         let mut soul = make("minecraft:oak_planks");
-        soul.environment_tick(&world, &facts, assets.registry, &items);
+        soul.environment_tick(&world, &facts, assets.registry, &can_hurt);
         assert_eq!(soul.health, 3);
         let mut stand = ArmorStand::new(2, at, 0.0);
         world
@@ -3171,16 +3079,20 @@ mod fire_environment_tests {
 #[cfg(test)]
 mod destroyed_bundle_environment_tests {
     use super::*;
-    use horizon_world::loot::PackOverlay;
 
     /// `BundleItem.onDestroyed`: the lava that destroys a dropped bundle
     /// hands its stacks to the item tick (`ItemUtils.onContainerDestroyed`),
     /// and the bundle keeps none of them.
     #[test]
+    #[ignore = "requires prepared resources"]
     fn lava_that_destroys_a_bundle_spills_its_contents() {
-        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../.local/horizon-client")
-            .join(horizon_core::VANILLA_VERSION);
+        let root = std::env::var_os("HORIZON_TEST_RESOURCES")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| {
+                std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+                    .join("../../.local/horizon-client")
+                    .join(horizon_core::VANILLA_VERSION)
+            });
         if !root.join("items.json").exists() {
             crate::test_fixtures::report_missing();
             return;
@@ -3193,14 +3105,14 @@ mod destroyed_bundle_environment_tests {
             .unwrap();
         let facts = BlockFacts::load(&root, assets.registry).unwrap();
         let defaults = horizon_world::item_defaults::read(&root).unwrap();
-        let items = crate::items::Items::load(
-            &root,
-            assets.registry,
-            &facts,
-            &PackOverlay::NONE,
-            &defaults,
-        )
-        .unwrap();
+        let damage = crate::health::HealthResources::load(&root).unwrap();
+        let can_hurt = |stack: &ItemStack, name: &str| {
+            let default = defaults
+                .entries()
+                .get(stack.item.as_ref())
+                .and_then(|components| components.get("minecraft:damage_resistant"));
+            crate::item_damage::stack_can_be_hurt_by(default, &damage.damage, stack, name).unwrap()
+        };
         let mut world = World::test_scene(&assets, &render, 3).unwrap();
         let at = Vec3::new(20.5, 4.0, 20.5);
         world
@@ -3244,9 +3156,9 @@ mod destroyed_bundle_environment_tests {
             was_touching_water: false,
         };
         // 5 health against 4 a tick: the first tick leaves 1 and nothing out.
-        let first = bundle.environment_tick(&world, &facts, assets.registry, &items);
+        let first = bundle.environment_tick(&world, &facts, assets.registry, &can_hurt);
         assert!(first.alive && first.spilled.is_empty());
-        let second = bundle.environment_tick(&world, &facts, assets.registry, &items);
+        let second = bundle.environment_tick(&world, &facts, assets.registry, &can_hurt);
         assert!(!second.alive);
         assert_eq!(
             second
@@ -4235,6 +4147,7 @@ mod slime_bounce_tests {
                 prior_fall: item.fall_distance,
                 fall_move: None,
             },
+            crate::test_resources::server_loop_context(),
         );
         assert_eq!(item.velocity.x.to_bits(), 0x3fb9_1687_3333_3334);
         assert_eq!(item.velocity.y.to_bits(), 0x3fc9_1687_3333_3334);
@@ -4897,6 +4810,7 @@ mod armor_stand_motion_tests {
         )
         .unwrap();
         let shulker = Aabb::new(Vec3::new(20.0, 4.0, 20.0), Vec3::new(21.0, 5.0, 21.0));
+        let context = crate::test_resources::server_loop_context();
         let run = |stand: &mut ArmorStand, boxes: &[Aabb], ticks: usize| {
             for _ in 0..ticks {
                 let mut scene = SceneCollisions {
@@ -4905,7 +4819,7 @@ mod armor_stand_motion_tests {
                     subject: None,
                 };
                 if let Some(step) =
-                    stand.tick_move(&mut scene, &facts, &climbing, false, None, boxes)
+                    stand.tick_move(&mut scene, &facts, &climbing, false, None, boxes, context)
                 {
                     stand.tick_settle(StandMedium::Air, step);
                 }

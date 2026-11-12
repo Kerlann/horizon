@@ -370,13 +370,26 @@ jobs:
         # A report only: an unreadable folder or a failed du/find/findmnt never fails the job.
         continue-on-error: true
         run: |
-          for dir in "${DYNA_CI_BUILD:-/build}" "${CARGO_TARGET_DIR:-}" "${CARGO_HOME:-}/registry" "${RUSTUP_HOME:-}/toolchains"; do
+          # RUSTUP_HOME is set by a later step (tools/ci/dyna_ci_deps.sh): read its folder directly.
+          for dir in "${DYNA_CI_BUILD:-/build}" "${CARGO_TARGET_DIR:-}" "${CARGO_HOME:-}/registry" "${DYNA_CI_BUILD:-/build}/rustup/toolchains"; do
             if [ ! -d "$dir" ]; then echo "build-folder $dir: absent"; continue; fi
             files=$(du -s --inodes "$dir" 2>/dev/null | cut -f1)
             size=$(du -sh "$dir" 2>/dev/null | cut -f1)
             oldest=$(find "$dir" -maxdepth 2 -printf '%TY-%Tm-%TdT%TH:%TM\n' 2>/dev/null | sort | head -1)
             mount=$(findmnt -n -o SOURCE,TARGET -T "$dir" 2>/dev/null | head -1)
             echo "build-folder $dir: entries=${files:-?} size=${size:-?} oldest=${oldest:-none} mount=${mount:-?}"
+          done | tee -a "$GITHUB_STEP_SUMMARY"
+          # Size against this host's cap (tools/ci/dyna-slot-caps.txt): over it, Dyna empties target/ before the next job.
+          host=$(sed -n 's/^dyna-ci-\(.*\)-[0-9a-f]\{8\}$/\1/p' <<< "${RUNNER_NAME:-}")
+          cap=$(awk -v h="$host" '$1 == h {print $2}' tools/ci/dyna-slot-caps.txt 2>/dev/null)
+          used=$(du -s --block-size=1G "${DYNA_CI_BUILD:-/build}" 2>/dev/null | cut -f1)
+          echo "build-folder cap: host=${host:-?} size=${used:-?} GiB cap=${cap:-80} GiB" | tee -a "$GITHUB_STEP_SUMMARY"
+          # What takes the room, toward that cap.
+          du -sh "${DYNA_CI_BUILD:-/build}"/* "${CARGO_TARGET_DIR:-/nonexistent}"/* 2>/dev/null | sort -rh | head -12 | sed 's/^/build-folder part /' | tee -a "$GITHUB_STEP_SUMMARY"
+          # Each kept toolchain and its components: a test runs rustfmt under whichever toolchain it selects.
+          for toolchain in "${DYNA_CI_BUILD:-/build}"/rustup/toolchains/*/; do
+            [ -f "$toolchain/lib/rustlib/components" ] || continue
+            echo "build-folder toolchain $(basename "$toolchain"): $(sed 's/-x86_64.*//;s/-aarch64.*//' "$toolchain/lib/rustlib/components" | sort -u | tr '\n' ' ')"
           done | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Check Dyna dependencies (install fallback without root)
         if: needs.changes.outputs.rust_required != 'false' && needs.changes.outputs.self_hosted == 'true'

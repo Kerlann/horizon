@@ -5,6 +5,7 @@ import unittest
 import sys
 from unittest.mock import patch
 import os
+import re
 import tempfile
 import io
 import json
@@ -434,18 +435,63 @@ class RustupRetryTests(unittest.TestCase):
             (bin_dir / "sleep").write_text("#!/bin/sh\n")
             for name in ("rustup", "sleep"):
                 (bin_dir / name).chmod(0o755)
+            # Not a kept Dyna slot, whatever runs the test: only the requested install is counted.
+            env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+            env.pop("DYNA_CI_BUILD", None)
             result = subprocess.run(["bash", str(script), "stable", "--profile", "minimal"], capture_output=True, text=True,
-                                    env={**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"})
+                                    env=env)
             return result.returncode, count.read_text().splitlines()
 
     @unittest.skipIf(os.name == "nt", "a bash script for Linux runners")
     def test_transient_failures_are_retried_then_bounded(self):
         status, calls = self.run_script(failures=2)
-        self.assertEqual((status, len(calls)), (0, 3))
-        self.assertEqual(calls[0], "toolchain install stable --profile minimal")
+        installs = [call for call in calls if call.startswith("toolchain install stable")]
+        self.assertEqual((status, len(installs)), (0, 3))
+        self.assertEqual(installs[0], "toolchain install stable --profile minimal")
         status, calls = self.run_script(failures=10)
         self.assertNotEqual(status, 0)
-        self.assertEqual(len(calls), 4)
+        self.assertEqual(calls, ["toolchain install stable --profile minimal"] * 4)
+
+
+class PinnedToolchainComponentsTests(unittest.TestCase):
+    """The wasm mods' pinned toolchain gets rustfmt and clippy: the mod API generator runs rustfmt under it."""
+
+    def run_script(self, installed, dyna=False):
+        root = Path(__file__).parents[1]
+        pin = re.search(r'pub const TOOLCHAIN: &str = "(.*)";', (root / "crates/cargo-horizon-mod/src/wasm.rs").read_text())[1]
+        with tempfile.TemporaryDirectory() as directory:
+            bin_dir = Path(directory)
+            calls = bin_dir / "calls"
+            listed = f"{pin}-x86_64-unknown-linux-gnu" if installed is not None else ""
+            components = "\\n".join(f"{c}-x86_64-unknown-linux-gnu" for c in installed or [])
+            (bin_dir / "rustup").write_text(
+                f'#!/bin/sh\necho "$@" >> {calls}\n'
+                f'case "$1 $2" in "toolchain list") printf "stable-x86_64-unknown-linux-gnu\\n{listed}\\n";; '
+                f'"component list") printf "{components}\\n";; esac\n')
+            (bin_dir / "rustup").chmod(0o755)
+            env = {**os.environ, "PATH": f"{bin_dir}:{os.environ['PATH']}"}
+            env.pop("DYNA_CI_BUILD", None)
+            if dyna:
+                env["DYNA_CI_BUILD"] = directory
+            result = subprocess.run(["bash", "tools/ci/rustup_install.sh", "stable"], cwd=root, capture_output=True,
+                                    text=True, env=env)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            return pin, calls.read_text().splitlines()
+
+    @unittest.skipIf(os.name == "nt", "a bash script for Linux runners")
+    def test_missing_components_are_added_and_present_ones_cost_nothing(self):
+        pin, calls = self.run_script(installed=["rust-src", "rustfmt"])
+        self.assertIn(f"component add --toolchain {pin} clippy", calls)
+        pin, calls = self.run_script(installed=["rustfmt", "clippy"])
+        self.assertFalse([call for call in calls if call.startswith("component add")])
+        self.assertEqual([call for call in calls if call.startswith("toolchain install")], ["toolchain install stable"])
+
+    @unittest.skipIf(os.name == "nt", "a bash script for Linux runners")
+    def test_a_kept_slot_installs_the_pin_with_them_and_a_fresh_runner_leaves_it_to_its_user(self):
+        pin, calls = self.run_script(installed=None, dyna=True)
+        self.assertIn(f"toolchain install {pin} --profile minimal --component rustfmt --component clippy", calls)
+        pin, calls = self.run_script(installed=None)
+        self.assertEqual([call for call in calls if call.startswith("toolchain install")], ["toolchain install stable"])
 
 
 class RunnerPackagesTests(unittest.TestCase):

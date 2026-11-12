@@ -111,3 +111,48 @@ fn mending_pick_head_effect_excludes_chestplate() {
         (20, 7)
     );
 }
+
+struct GrantMending;
+
+#[mod_api::__subscriptions]
+impl mod_api::Hooks for GrantMending {
+    fn get_enchantment_level(&self, event: &mut mod_api::GetEnchantmentLevelEvent<'_>) {
+        if mod_api::__private::item_key_id(event.stack.item()) != Some("minecraft:diamond_pickaxe")
+        {
+            return;
+        }
+        let mending = mod_api::Identifier::parse("minecraft:mending").unwrap();
+        if event.target.is_none_or(|target| *target == mending) {
+            event.enchantments.upgrade(mending, 1);
+        }
+    }
+}
+
+#[test]
+#[ignore = "requires prepared resources"]
+fn mending_pick_uses_hook_granted_enchantment() {
+    crate::game::api_values::install_stack_hooks();
+    let _ = horizon_items::native_enchantment_hooks::install(
+        crate::enchantment_levels::get_enchantment_level,
+    );
+    let mods = vec![mod_api::ModEntry::new(
+        "grant_mending",
+        Box::new(GrantMending),
+    )]
+    .into();
+    mod_platform::testing::with_mods(mods, || {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            game.inventory.fill(None);
+            game.armor.fill(None);
+            game.offhand = None;
+            let mut stack = ItemStack::new("minecraft:diamond_pickaxe", 1);
+            stack.damage = 20;
+            assert!(stack.enchantments().is_empty());
+            game.inventory[game.selected] = Some(stack);
+            assert_eq!(game.mending(7), 0);
+            let current = game.inventory[game.selected].as_ref().unwrap();
+            assert_eq!(current.damage, 6);
+            assert!(current.enchantments().is_empty());
+        });
+    });
+}

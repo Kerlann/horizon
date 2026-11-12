@@ -189,7 +189,6 @@ pub fn parse_consume_effect(effect: &serde_json::Value) -> Option<ConsumeEffect>
 
 #[derive(Clone, Debug)]
 pub struct ItemInfo {
-    pub fire_resistant: bool,
     pub id: Arc<str>,
     pub max_stack: u32,
     pub max_damage: u32,
@@ -804,56 +803,6 @@ pub fn villager_food(item: &str) -> Option<i32> {
 }
 
 impl Items {
-    pub fn resists_fire(&self, stack: &ItemStack, source: &str) -> bool {
-        if let Some(data) = stack.data()
-            && let Some((_, v)) = data
-                .other
-                .iter()
-                .find(|(key, _)| key == "minecraft:damage_resistant")
-        {
-            return match v.get("types") {
-                Some(horizon_core::nbt::Tag::String(tag)) => {
-                    tag.to_string().is_ok_and(|id|id=="#minecraft:is_fire" || id==source)
-                }
-                Some(horizon_core::nbt::Tag::List(tags)) => tags.iter().any(
-                    |t| matches!(t,horizon_core::nbt::Tag::String(id) if id.to_string().is_ok_and(|id|id==source)),
-                ),
-                _ => false,
-            };
-        }
-        self.get(&stack.item).is_some_and(|i| i.fire_resistant)
-    }
-
-    /// `ItemStack.canBeHurtBy` for the cactus damage type: a `damage_resistant`
-    /// component naming `minecraft:cactus`, or a damage type tag that holds it.
-    /// (`#minecraft:is_fire`, as on netherite gear, does not.)
-    pub fn resists_cactus(&self, stack: &ItemStack) -> bool {
-        const CACTUS_TAGS: [&str; 5] = [
-            "#minecraft:bypasses_shield",
-            "#minecraft:no_knockback",
-            "#minecraft:panic_environmental_causes",
-            "#minecraft:panic_causes",
-            "#minecraft:sulfur_cube_with_block_immune_to",
-        ];
-        let Some((_, v)) = stack.data().and_then(|data| {
-            data.other
-                .iter()
-                .find(|(key, _)| key == "minecraft:damage_resistant")
-        }) else {
-            return false;
-        };
-        match v.get("types") {
-            Some(horizon_core::nbt::Tag::String(id)) => id
-                .to_string()
-                .is_ok_and(|id| id == "minecraft:cactus" || CACTUS_TAGS.contains(&id.as_str())),
-            Some(horizon_core::nbt::Tag::List(ids)) => ids.iter().any(|t| {
-                matches!(t, horizon_core::nbt::Tag::String(id)
-                    if id.to_string().is_ok_and(|id| id == "minecraft:cactus"))
-            }),
-            _ => false,
-        }
-    }
-
     pub fn load(
         root: &Path,
         registry: &BlockRegistry,
@@ -1005,8 +954,6 @@ impl Items {
             items.insert(
                 id.clone(),
                 ItemInfo {
-                    fire_resistant: c["minecraft:damage_resistant"]["types"].as_str()
-                        == Some("#minecraft:is_fire"),
                     id: id.clone(),
                     max_stack: c["minecraft:max_stack_size"].as_u64().unwrap_or(64) as u32,
                     max_damage: c["minecraft:max_damage"].as_u64().unwrap_or(0) as u32,

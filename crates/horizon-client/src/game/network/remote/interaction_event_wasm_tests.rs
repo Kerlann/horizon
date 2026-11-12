@@ -349,6 +349,11 @@ fn native_interaction_shared_matrix() {
 #[test]
 #[ignore = "needs HORIZON_TEST_RESOURCES, HORIZON_WASM_FIXTURE and HORIZON_WASM_STD; build with horizon-mod-wasm/listener-fixture"]
 fn wasm_interaction_shared_matrix() {
+    // Enters the guest: libtest's thread is smaller than the guest stack policy requires.
+    horizon_guest_stack::run_on_guest_stack(wasm_interaction_shared_matrix_on_guest_stack);
+}
+
+fn wasm_interaction_shared_matrix_on_guest_stack() {
     use horizon_mod_package::manifest::Package;
     use horizon_mod_wasm::{WasmPackage, load};
     let path = std::path::PathBuf::from(std::env::var_os("HORIZON_WASM_FIXTURE").unwrap());

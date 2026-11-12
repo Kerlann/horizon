@@ -1160,14 +1160,14 @@ impl Game<'_> {
         };
         let changed = self.player_selected_slot(player) != Some(slot);
         if !self.native_as_player_handle(player, |game| {
-            game.selected = slot;
             if changed
                 && game
                     .using
                     .is_some_and(|(held, _)| held != crate::game::shield::OFFHAND_SLOT)
             {
-                game.using = None;
+                game.stop_active_item_use();
             }
+            game.selected = slot;
         }) {
             return false;
         }
@@ -1355,6 +1355,15 @@ impl Game<'_> {
             return Some(guest.brand.clone());
         }
         (self.native_acting_player() == Some(player)).then(String::new)
+    }
+
+    /// The plugin channels the player's client announced (`minecraft:register` less
+    /// `minecraft:unregister`), kept by its connection from configuration on.
+    pub(super) fn player_announced_channels(&self, player: PlayerRef) -> Option<Vec<String>> {
+        if let Some(guest) = self.online_player_record(player) {
+            return Some(guest.sender.announced.list());
+        }
+        (self.native_acting_player() == Some(player)).then(Vec::new)
     }
 
     /// Validate identity without requiring a live body: sending to an online

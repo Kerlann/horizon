@@ -11499,7 +11499,11 @@ mod armor_destroy_tests {
             game.hurt_mob_armor(21, 4.0, DamageKind::Generic);
             assert_eq!(game.mobs[0].item_by_slot(EquipmentSlot::Body), Some(sword));
             let resistant = ItemStack::new("minecraft:netherite_chestplate", 1);
-            assert!(game.items().resists_fire(&resistant, "minecraft:lava"));
+            assert!(
+                !game
+                    .stack_can_be_hurt_by(&resistant, "minecraft:lava")
+                    .unwrap()
+            );
             game.mobs[0].set_equipment_stack(EquipmentSlot::Body as usize, Some(resistant.clone()));
             game.hurt_mob_armor(21, 4.0, DamageKind::Lava);
             assert_eq!(

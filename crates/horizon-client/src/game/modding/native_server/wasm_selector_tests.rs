@@ -6,6 +6,13 @@ use horizon_core::geometry::Vec3;
 #[test]
 #[ignore = "needs HORIZON_TEST_RESOURCES, HORIZON_WASM_FIXTURE and HORIZON_WASM_STD built from this tree"]
 fn wasm_selectors_resolve_in_game_and_refuse_before_guest_dispatch() {
+    // Enters the guest: libtest's thread is smaller than the guest stack policy requires.
+    horizon_guest_stack::run_on_guest_stack(
+        wasm_selectors_resolve_in_game_and_refuse_before_guest_dispatch_on_guest_stack,
+    );
+}
+
+fn wasm_selectors_resolve_in_game_and_refuse_before_guest_dispatch_on_guest_stack() {
     use horizon_mod_package::manifest::Package;
     use horizon_mod_wasm::{WasmPackage, load};
     let path = std::env::var("HORIZON_WASM_FIXTURE").unwrap();
@@ -111,6 +118,13 @@ fn wasm_selectors_resolve_in_game_and_refuse_before_guest_dispatch() {
 #[test]
 #[ignore = "needs HORIZON_TEST_RESOURCES, HORIZON_WASM_FIXTURE and HORIZON_WASM_STD built from this tree"]
 fn wasm_server_tick_messages_reach_dedicated_game() {
+    // Enters the guest: libtest's thread is smaller than the guest stack policy requires.
+    horizon_guest_stack::run_on_guest_stack(
+        wasm_server_tick_messages_reach_dedicated_game_on_guest_stack,
+    );
+}
+
+fn wasm_server_tick_messages_reach_dedicated_game_on_guest_stack() {
     use horizon_mod_package::manifest::Package;
     use horizon_mod_wasm::{WasmPackage, load};
     let path = std::env::var("HORIZON_WASM_FIXTURE").unwrap();

@@ -11,7 +11,7 @@ ClientAdvancements.setSelectedTab	port	crates/horizon-client/src/game/interface/
 ClientAdvancements.setListener	skip:ui		listener plumbing for the advancements screen; Horizon's screen reads its state each frame
 ClientAdvancements.get	port	crates/horizon-client/src/advancements.rs::Tree::get	returns the advancement by id; holder wrapper is not needed
 ClientChunkCache.isValidChunk	skip:other		chunks are stored by position, so there is no ring slot to check
-ClientChunkCache.drop	port	crates/horizon-client-render/src/streaming.rs::Streaming::forget_columns	gap: minor: no ChunkEvent unload hook; block entities and renderer columns are cleared in Game::handle_packet
+ClientChunkCache.drop	port	crates/horizon-client-render/src/streaming.rs::Streaming::forget_columns	Game::client_chunk_unload tells mods (client_chunk_unload) before the column is freed; block entities and renderer columns are cleared in Game::handle_packet
 ClientChunkCache.getChunk	skip:java		lookup of a loaded chunk; Horizon reads world.chunks directly
 ClientChunkCache.replaceBiomes	port	crates/horizon-client/src/game/network/remote_chunks.rs::Game::remote_chunks_biomes	each loaded column takes the packet's biomes per section, then it and its neighbours are marked dirty so their sections are drawn again (/fillbiome reaches the client)
 ClientChunkCache.flipUpdateTrackingSets	skip:other		double-buffered change lists for LevelRenderer; Horizon hands changed columns to the renderer directly

@@ -1610,7 +1610,7 @@ fn mending_entries(stack: &ItemStack, slot: PlayerSlot, enchantments: &Enchantme
         return 0;
     }
     stack
-        .enchantments()
+        .all_enchantments()
         .iter()
         .filter(|(id, _)| {
             enchantments.get(id).is_some_and(|def| {
@@ -1900,6 +1900,58 @@ mod tests {
             None
         );
         assert_eq!(player_rng.next_long(), expected_player.next_long());
+    }
+
+    #[test]
+    fn mending_pick_counts_each_matching_enchantment() {
+        use super::{Enchantments, PLAYER_SLOTS, PlayerSlot};
+        let definition = serde_json::json!({
+            "description": "Repair", "supported_items": "minecraft:diamond_pickaxe",
+            "weight": 1, "max_level": 1, "anvil_cost": 1,
+            "min_cost": {"base": 1, "per_level_above_first": 0},
+            "max_cost": {"base": 1, "per_level_above_first": 0},
+            "slots": ["any"], "effects": {"minecraft:repair_with_xp": [
+                {"effect": {"type": "minecraft:multiply", "factor": 2}}
+            ]}
+        });
+        let enchantments = Enchantments::default()
+            .with_entries([
+                ("minecraft:mending", &definition),
+                ("test:patch", &definition),
+            ])
+            .unwrap()
+            .unwrap();
+        let mut main = ItemStack::new("minecraft:diamond_pickaxe", 1);
+        main.damage = 20;
+        main.set_crafting_enchantments(vec![
+            ("minecraft:mending".into(), 1),
+            ("test:patch".into(), 1),
+        ]);
+        let mut off = ItemStack::new("minecraft:diamond_pickaxe", 1);
+        off.damage = 20;
+        off.set_crafting_enchantments(vec![("minecraft:mending".into(), 1)]);
+        let (main, off, empty) = (Some(main), Some(off), None);
+        let slots = PLAYER_SLOTS.map(|slot| {
+            (
+                slot,
+                match slot {
+                    PlayerSlot::Main => &main,
+                    PlayerSlot::Off => &off,
+                    _ => &empty,
+                },
+            )
+        });
+        let candidates = [PlayerSlot::Main, PlayerSlot::Main, PlayerSlot::Off];
+        let mut actual = LegacyRandom::new(3215);
+        let mut expected = LegacyRandom::new(3215);
+        for _ in 0..64 {
+            let index = expected.next_int_bound(3).unwrap() as usize;
+            assert_eq!(
+                pick_mending_slot(slots, &enchantments, &mut actual),
+                Some(candidates[index])
+            );
+        }
+        assert_eq!(actual.next_long(), expected.next_long());
     }
 
     /// #11309: Soul Speed's tick effects draw the 35% sound requirement from

@@ -29,6 +29,7 @@ pub struct NativeClientHooks {
     pub is_ladder: fn(&LoopContext, u32, BlockPos, BlockStateId, &mut bool),
     pub makes_open_trapdoor_above_climbable:
         fn(&LoopContext, BlockStateId, BlockPos, BlockStateId, &mut bool),
+    pub friction: fn(&LoopContext, u32, &str, BlockPos, BlockStateId, &mut f32),
     pub player_stays_on_ground_surface: fn(&LoopContext, u32, &mut bool),
     pub ender_entity_teleport: fn(&LoopContext, u32, &str, [f64; 3], &mut [f64; 3], &mut bool),
     pub fluid_flow: fn(&LoopContext, &str, BlockPos, &mut [f64; 3]),
@@ -243,6 +244,19 @@ pub(crate) fn makes_open_trapdoor_above_climbable(
 ) {
     if let Some(hooks) = HOOKS.get() {
         (hooks.makes_open_trapdoor_above_climbable)(context, state, pos, trapdoor, climbable);
+    }
+}
+
+pub(crate) fn friction(
+    context: &LoopContext,
+    entity: u32,
+    kind: &str,
+    pos: BlockPos,
+    state: BlockStateId,
+    friction: &mut f32,
+) {
+    if let Some(hooks) = HOOKS.get() {
+        (hooks.friction)(context, entity, kind, pos, state, friction);
     }
 }
 

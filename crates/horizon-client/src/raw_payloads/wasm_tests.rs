@@ -22,6 +22,13 @@ use crate::lan::{NetEvent, PlayerSender};
 #[test]
 #[ignore = "requires compiled HORIZON_WASM_FIXTURE and HORIZON_WASM_STD"]
 fn compiled_guest_observes_physical_provider_pressure() {
+    // Enters the guest: libtest's thread is smaller than the guest stack policy requires.
+    horizon_guest_stack::run_on_guest_stack(
+        compiled_guest_observes_physical_provider_pressure_on_guest_stack,
+    );
+}
+
+fn compiled_guest_observes_physical_provider_pressure_on_guest_stack() {
     // Only this test initializes points in this process. Run explicitly by exact name.
     use horizon_mod_package::manifest::Package;
     let path = std::env::var("HORIZON_WASM_FIXTURE").unwrap();
