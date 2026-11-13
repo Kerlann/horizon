@@ -40,8 +40,11 @@ pub(crate) fn installed() -> Option<Arc<dyn StartupScreen>> {
 
 /// A mod's bar on the startup loading screen (NeoForge's `ProgressMeter`), from
 /// [`RegistrationContext::progress`](crate::RegistrationContext::progress). The mod may keep it
-/// past registration and step it from any thread, a worker it spawns during setup included.
-/// Dropping it completes the bar and removes it. With no game screen (a test, a tool), every call
+/// past registration and step it or post messages from any thread, including `client_setup`.
+/// Changes are drawn only while the loading screen is being drawn. Synchronous `client_setup`
+/// work is not displayed live; updates become visible only after the hook returns and only if
+/// a loading frame is drawn afterwards. Slow work may use a mod-owned worker, but that alone
+/// does not keep the loading screen open. Dropping it completes the bar and removes it. With no game screen (a test, a tool), every call
 /// does nothing.
 // exhaustive: its fields are private, so mods cannot build or destructure it
 // no wire: a mod-side handle around the game's screen, which crosses as its own resource.
@@ -51,6 +54,14 @@ pub struct StartupProgress {
 }
 
 impl StartupProgress {
+    /// Show a startup message through this retained handle, including during `client_setup`.
+    /// Like bar updates, it appears only on a subsequent loading frame; a dedicated server logs it.
+    pub fn message(&self, text: &str) {
+        if let Some(screen) = &self.screen {
+            screen.message(text.to_owned());
+        }
+    }
+
     /// One more step is done.
     pub fn step(&self) {
         if let Some(screen) = &self.screen {
@@ -150,7 +161,7 @@ mod tests {
         }
         bar.label("Baked");
         bar.set(10);
-        context.message("done");
+        bar.message("done");
         // A worker thread may step the bar.
         std::thread::scope(|scope| {
             scope.spawn(|| bar.step());
