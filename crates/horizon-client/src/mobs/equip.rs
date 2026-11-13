@@ -2,8 +2,11 @@
 //! `compareWeapons`, `canReplaceEqualItem` and the per-species gates that
 //! decide whether a mob takes an item off the ground at all (`wantsToPickUp`,
 //! `canHoldItem`). `game/mobs/mob_looting.rs` reads the item data and calls these.
+#[path = "equip_decision.rs"]
+mod decision;
 use super::Species;
 use crate::items::ItemStack;
+pub use decision::{EquipAnswer, EquipDecision, EquipEntityStamp, EquipStamp};
 use horizon_core::nbt::Tag;
 use std::collections::{HashMap, HashSet};
 
