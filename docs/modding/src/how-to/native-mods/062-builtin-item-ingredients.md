@@ -54,9 +54,13 @@ Native registrations retain their persistent NBT validation contract.
 
 The shared decoder currently covers `damage`, `repair_cost`, `max_damage`,
 `max_stack_size`, `rarity`, `enchantments`, `stored_enchantments`, `custom_name`,
-`item_name`, and `block_entity_data` in the `minecraft` namespace. The other
-112 registered built-ins use stored-value matching while their shared decoders
-are added incrementally in **#3875**. Their absence is not a load refusal.
+`item_name`, `block_entity_data`, and `base_color` in the `minecraft` namespace.
+`base_color` accepts exactly the 16 lowercase dye names (for example `red` and
+`light_blue`), not numeric dye ids or uppercase names. It compares the shield's
+stored base color; a banner's item color does not imply this component, and an
+undyed shield has no base color. The other 111 registered built-ins use
+stored-value matching while their shared decoders are added incrementally in
+**#3875**. Their absence is not a load refusal.
 
 Component ingredient displays contain the patch, including removals. Difference
 lists retain the base list and remove only items whose default stack passes the
