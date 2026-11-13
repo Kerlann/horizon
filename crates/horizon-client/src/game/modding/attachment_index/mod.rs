@@ -15,9 +15,9 @@ pub(super) type Indexes = HashMap<Dim, Arc<Mutex<AttachmentIndex<AttachmentHolde
 mod players;
 
 #[cfg(test)]
-mod idle_tests;
-#[cfg(test)]
 mod attached_storage_tests;
+#[cfg(test)]
+mod idle_tests;
 #[cfg(test)]
 mod mob_tests;
 #[cfg(test)]

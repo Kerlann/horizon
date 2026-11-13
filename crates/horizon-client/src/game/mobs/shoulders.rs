@@ -235,7 +235,12 @@ mod mod_parrot_tests {
             let mut player = PlayerMotion::new(game.motion, Vec3::new(0.5, 100.0, 0.5)).unwrap();
             player.ground.on_ground = true;
             game.player = Some(player);
-            let parrot = game.res.mob_types().get("minecraft:parrot").cloned().unwrap();
+            let parrot = game
+                .res
+                .mob_types()
+                .get("minecraft:parrot")
+                .cloned()
+                .unwrap();
             let mut macaw = (*parrot).clone();
             macaw.id = "ruby:macaw".into();
             for (n, (kind, variant)) in [(parrot, Some(0)), (Arc::new(macaw), None)]

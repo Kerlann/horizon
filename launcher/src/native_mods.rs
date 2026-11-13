@@ -16,6 +16,7 @@ use std::sync::Arc;
 use horizon_mod_package::dependencies;
 
 mod api;
+mod api_route;
 mod inject;
 mod planning;
 mod slots;
@@ -1717,6 +1718,19 @@ fn pipeline(
     if let Some(reason) = prebuilt::refusal(&projects) {
         return Err(reason.to_string().into());
     }
+    // The steps around the mods' compile, timed like each command (`run_checked`), so the log
+    // accounts for the whole build.
+    let timed = |step: &str, since: std::time::Instant| {
+        append_log(&trf(
+            "{step}: {ms} ms",
+            &[
+                ("step", step),
+                ("ms", &since.elapsed().as_millis().to_string()),
+            ],
+        ))
+    };
+    timed("Planning the build", started)?;
+    let fetching = std::time::Instant::now();
     let prebuilt = if exists {
         None
     } else {
@@ -1732,6 +1746,9 @@ fn pipeline(
             .map_err(|reason| reason.to_string())?,
         )
     };
+    if prebuilt.is_some() {
+        timed("Checking the prebuilt game", fetching)?;
+    }
     check_cancelled()?;
     let plan = if exists {
         Plan::UpToDate
@@ -1788,14 +1805,24 @@ fn pipeline(
         Target::Server => rust_toolchain::linker_server(),
     };
     if let Some(game) = &prebuilt {
+        let checking = std::time::Instant::now();
         linker()?;
         let rust = rust_toolchain::install(|f| progress(Step::Rust(f)))?;
+        timed("Checking the Rust toolchain", checking)?;
         progress(Step::PrebuiltMods);
         let compiling = std::time::Instant::now();
+        let route = prebuilt::Route::of(&projects);
+        append_log(&trf(
+            "Native mods route: {route}.",
+            &[("route", route.name())],
+        ))
+        .map_err(blame)?;
         let (binary, libraries) = prebuilt::compile(
             &rust,
             game,
             &root().join("prebuilt-build"),
+            folder,
+            route,
             &projects,
             &declared,
             &resolution,
@@ -1813,15 +1840,17 @@ fn pipeline(
         .map_err(blame)?;
         check_cancelled()?;
         progress(Step::Install);
+        let installing = std::time::Instant::now();
         install(
             base,
             &version,
             target,
             &binary,
             &libraries,
-            &about("prebuilt", &internals::Catalog::read(game)?),
+            &about(route.name(), &internals::Catalog::read(&game.api)?),
             &ordered,
         )?;
+        timed("Installing the build", installing)?;
     } else {
         // Used again: it counts as the newest of the builds kept (`prune`).
         let _ = fs::write(target.directory(&version).join(".installed"), "");
@@ -2478,7 +2507,7 @@ mod tests {
 
     /// The launcher's toolchain in `dir` for every host it ships one for: the build commands are
     /// checked for each host on whichever machine runs the tests, not only for its own.
-    fn toolchains(dir: impl Into<PathBuf>) -> Vec<Toolchain> {
+    pub(super) fn toolchains(dir: impl Into<PathBuf>) -> Vec<Toolchain> {
         let dir = dir.into();
         rust_toolchain::hosts()
             .iter()
@@ -3250,10 +3279,10 @@ mod tests {
         eprintln!("NATIVE_SERVER_EXPORT_STEP=load_runtime");
         let runtime = horizon_mod_package::runtime::Runtime::load(
             &output.join(Target::Server.binary()),
-            &[horizon_mod_package::runtime::BuiltMod {
+            &[mod_vocab::__private::native::BuiltMod {
                 id: "exported",
                 version: "0.1.0",
-                side: horizon_mod_package::Side::Client,
+                side: mod_vocab::Side::Client,
             }],
         )
         .unwrap();
