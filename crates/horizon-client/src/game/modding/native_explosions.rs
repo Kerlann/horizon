@@ -65,18 +65,7 @@ impl Game<'_> {
             return false;
         }
         let id = source.map(|(id, _)| id);
-        // `ServerLevel.explode`'s `ExplosionInteraction` to the blast's.
-        let interaction = match interaction {
-            ExplosionInteraction::None => BlockInteraction::Keep,
-            ExplosionInteraction::Block => self.destroy_type(vanilla::BLOCK_EXPLOSION_DROP_DECAY),
-            ExplosionInteraction::Mob if self.can_entity_grief(id) => {
-                self.destroy_type(vanilla::MOB_EXPLOSION_DROP_DECAY)
-            }
-            ExplosionInteraction::Mob => BlockInteraction::Keep,
-            ExplosionInteraction::Tnt => self.destroy_type(vanilla::TNT_EXPLOSION_DROP_DECAY),
-            ExplosionInteraction::Trigger => BlockInteraction::Trigger,
-            _ => unreachable!("ExplosionInteraction: unhandled variant"),
-        };
+        let interaction = self.native_blast_interaction(interaction, id);
         // Called from inside another blast (`native_explosion_detonate`), it
         // neither takes that blast's source, cause or flags nor leaves its own
         // behind: that blast gets them back after.
@@ -93,12 +82,32 @@ impl Game<'_> {
         done
     }
 
+    /// `ServerLevel.explode`'s `ExplosionInteraction` to the blast's, for a
+    /// blast whose source is `id`.
+    pub(super) fn native_blast_interaction(
+        &self,
+        interaction: ExplosionInteraction,
+        id: Option<u32>,
+    ) -> BlockInteraction {
+        match interaction {
+            ExplosionInteraction::None => BlockInteraction::Keep,
+            ExplosionInteraction::Block => self.destroy_type(vanilla::BLOCK_EXPLOSION_DROP_DECAY),
+            ExplosionInteraction::Mob if self.can_entity_grief(id) => {
+                self.destroy_type(vanilla::MOB_EXPLOSION_DROP_DECAY)
+            }
+            ExplosionInteraction::Mob => BlockInteraction::Keep,
+            ExplosionInteraction::Tnt => self.destroy_type(vanilla::TNT_EXPLOSION_DROP_DECAY),
+            ExplosionInteraction::Trigger => BlockInteraction::Trigger,
+            _ => unreachable!("ExplosionInteraction: unhandled variant"),
+        }
+    }
+
     /// The blast's source `id` and its causing entity
     /// (`Explosion.getIndirectSourceEntity`): a primed TNT's owner, a living
     /// entity itself (a player, or a mob, which `blast_attacker` falls back
     /// to), a projectile's owner when that is living; anything else causes
     /// none. The damage source and kill credit follow the cause.
-    fn attribute_native_blast(&mut self, id: u32, target: Target) {
+    pub(super) fn attribute_native_blast(&mut self, id: u32, target: Target) {
         self.combat.explosion_source = Some(id);
         // `getEntities(this.source, ...)`: the source is no victim of its own blast.
         self.combat.explosion_source_named = true;
@@ -121,7 +130,7 @@ impl Game<'_> {
     }
 
     /// The blast going off now, cleared to a sourceless one.
-    fn take_blast_state(&mut self) -> BlastState {
+    pub(super) fn take_blast_state(&mut self) -> BlastState {
         let c = &mut self.combat;
         BlastState {
             explicit_cause: c.explicit_explosion_cause.take(),
@@ -141,7 +150,7 @@ impl Game<'_> {
     }
 
     /// Puts back what `take_blast_state` cleared.
-    fn restore_blast_state(&mut self, s: BlastState) {
+    pub(super) fn restore_blast_state(&mut self, s: BlastState) {
         let c = &mut self.combat;
         c.explicit_explosion_cause = s.explicit_cause;
         c.blast_owner = s.blast_owner;
@@ -160,7 +169,7 @@ impl Game<'_> {
 }
 
 /// The fields of `CombatTracker` that describe the blast going off now.
-struct BlastState {
+pub(super) struct BlastState {
     explicit_cause: Option<Option<super::explosion::ExplosionCause>>,
     blast_owner: Option<(u32, horizon_client::text::Text)>,
     blast_guest: Option<u32>,
