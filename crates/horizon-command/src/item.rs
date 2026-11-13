@@ -33,6 +33,7 @@ pub const DECODED_COMPONENTS: &[&str] = &[
     "minecraft:custom_name",
     "minecraft:item_name",
     "minecraft:block_entity_data",
+    "minecraft:tooltip_style",
 ];
 
 /// Validate and decode a component into the value representation shared with stacks.
@@ -41,6 +42,9 @@ pub const DECODED_COMPONENTS: &[&str] = &[
 pub fn decoded_component_value(id: &str, value: &Tag, reg: &Registries) -> Result<Tag, String> {
     if !DECODED_COMPONENTS.contains(&id) {
         return Ok(value.clone());
+    }
+    if id == "minecraft:tooltip_style" {
+        return tooltip_style(value);
     }
     decode_component(id, value, reg)?;
     if id == "minecraft:block_entity_data" {
@@ -83,6 +87,7 @@ pub fn decoded_component_value(id: &str, value: &Tag, reg: &Registries) -> Resul
 /// The codecs of the item components commands commonly set.
 pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), String> {
     match id {
+        "minecraft:tooltip_style" => tooltip_style(t).map(|_| ()),
         "minecraft:damage" | "minecraft:repair_cost" => {
             let v = int_of(t).ok_or("Not a number")?;
             if v < 0 {
@@ -142,6 +147,18 @@ pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), Strin
         },
         _ => Ok(()),
     }
+}
+
+/// `DataComponents.TOOLTIP_STYLE`: `Identifier.CODEC`, not a registry reference.
+fn tooltip_style(value: &Tag) -> Result<Tag, String> {
+    let Tag::String(value) = value else {
+        return Err("Not a string".into());
+    };
+    let text =
+        String::from_utf16(&value.0).map_err(|_| "Not a valid resource location".to_owned())?;
+    let id = horizon_core::identifier::Identifier::parse(&text)
+        .map_err(|error| format!("Not a valid resource location: {text} {error}"))?;
+    Ok(Tag::String(id.to_string().as_str().into()))
 }
 /// `ItemEnchantments.CODEC`: registry keys and boxed-number levels in 1..=255.
 /// `UnboundedMapCodec` reports failed entries; commands do not retain its partial map.
@@ -729,6 +746,46 @@ pub fn suggest_predicate(builder: &mut SuggestionsBuilder, reg: &Registries) {
 #[cfg(test)]
 mod tests {
     use super::decode_component;
+
+    #[test]
+    fn tooltip_style_identifier_codec_normalizes_and_rejects_malformed_utf16() {
+        use super::{Registries, Tag, decoded_component_value};
+        use horizon_core::nbt::JavaString;
+        let registry = Registries::default();
+        for (raw, expected) in [
+            ("", "minecraft:"),
+            (":", "minecraft:"),
+            (":style", "minecraft:style"),
+            ("style", "minecraft:style"),
+            ("fixture:", "fixture:"),
+            ("fixture:../style", "fixture:../style"),
+        ] {
+            assert_eq!(
+                decoded_component_value(
+                    "minecraft:tooltip_style",
+                    &Tag::String(raw.into()),
+                    &registry
+                ),
+                Ok(Tag::String(expected.into()))
+            );
+        }
+        for invalid in [
+            Tag::Int(1),
+            Tag::String("Upper".into()),
+            Tag::String("..:style".into()),
+            Tag::String("a:b:c".into()),
+            Tag::String("a b".into()),
+            Tag::String("é".into()),
+            Tag::String(JavaString(vec![0xd800])),
+            Tag::String(JavaString(vec![0xdc00])),
+            Tag::String(JavaString(vec![0xd800, 0xdc00])),
+        ] {
+            assert!(
+                decoded_component_value("minecraft:tooltip_style", &invalid, &registry).is_err()
+            );
+            assert!(decode_component("minecraft:tooltip_style", &invalid, &registry).is_err());
+        }
+    }
 
     #[test]
     fn decoded_component_values_use_codec_numbers_and_retain_stored_values() {
