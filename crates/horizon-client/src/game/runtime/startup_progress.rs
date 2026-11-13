@@ -117,10 +117,8 @@ impl ModProgress {
         let Some(bar) = state.bars.iter_mut().find(|bar| bar.id == id) else {
             return;
         };
-        let old_label = bar.label.clone();
         change(bar);
         bar.done = bar.done.min(bar.steps);
-        let label_change = (self.dedicated && bar.label != old_label).then(|| bar.label.clone());
         let mut percentage = None;
         if self.dedicated && bar.steps > 0 {
             let tenths = u64::from(bar.done) * 10 / u64::from(bar.steps);
@@ -130,9 +128,6 @@ impl ModProgress {
             }
         }
         drop(state);
-        if let Some(label) = label_change {
-            log::info!("{label}");
-        }
         if let Some((label, percent)) = percentage {
             log::info!("{label}: {percent}%");
         }
@@ -173,7 +168,19 @@ impl mod_api::StartupScreen for ModProgress {
     }
     fn label(&self, bar: u32, label: String) {
         let label = one_line(&label);
-        self.update(bar, |bar| bar.label = label);
+        let mut state = self.state();
+        let Some(bar) = state.bars.iter_mut().find(|entry| entry.id == bar) else {
+            return;
+        };
+        if bar.label == label {
+            return;
+        }
+        bar.label = label;
+        let logged = self.dedicated.then(|| bar.label.clone());
+        drop(state);
+        if let Some(label) = logged {
+            log::info!("{label}");
+        }
     }
     fn close(&self, bar: u32) {
         self.state().bars.retain(|kept| kept.id != bar);
@@ -246,7 +253,7 @@ mod tests {
             screen.shown(now).1,
             ["message 30", "message 31", "message 32"]
         );
-        assert!(screen.shown(now + LINE_TIME).1.is_empty());
+        assert!(screen.shown(now + Duration::from_secs(5)).1.is_empty());
     }
 
     #[test]
