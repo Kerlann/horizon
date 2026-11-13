@@ -40,6 +40,14 @@ pub fn removed(stack: &ItemStack, id: &str) -> bool {
 /// Presence is checked by the caller, so empty decoded enchantment maps compare equal.
 pub fn component_equal(id: &str, a: &ItemStack, b: &ItemStack) -> bool {
     match id {
+        // Unit.CODEC ignores every map field, but does not accept scalar units.
+        "minecraft:intangible_projectile" => matches!(
+            (
+                a.data().and_then(|d| d.other(id)),
+                b.data().and_then(|d| d.other(id))
+            ),
+            (Some(Tag::Compound(_)), Some(Tag::Compound(_)))
+        ),
         "minecraft:damage" => a.damage == b.damage,
         "minecraft:repair_cost" => {
             a.data().map_or(0, |d| d.repair_cost) == b.data().map_or(0, |d| d.repair_cost)
@@ -288,6 +296,22 @@ fn text_value(tag: &Tag) -> &Tag {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn intangible_projectile_equality_borrows_unit_maps() {
+        let id = "minecraft:intangible_projectile";
+        let mut a = ItemStack::new("minecraft:arrow", 1);
+        let mut b = ItemStack::new("minecraft:arrow", 1);
+        a.data_mut()
+            .set_other(id, Some(Tag::Compound(Default::default())));
+        b.data_mut()
+            .set_other(id, Some(Tag::compound([("ignored", Tag::Int(42))])));
+        assert!(component_equal(id, &a, &b));
+        assert!(!stored_component_equal(id, &a, &b));
+        b.data_mut().set_other(id, Some(Tag::Byte(1)));
+        assert!(!component_equal(id, &a, &b));
+        b.data_mut().set_other(id, None);
+        assert!(!component_equal(id, &a, &b));
+    }
     #[test]
     fn decoded_component_equality_borrows_maps_and_plain_text() {
         let mut a = ItemStack::new("minecraft:stone", 1);

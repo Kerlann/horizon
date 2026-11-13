@@ -33,6 +33,7 @@ pub const DECODED_COMPONENTS: &[&str] = &[
     "minecraft:custom_name",
     "minecraft:item_name",
     "minecraft:block_entity_data",
+    "minecraft:intangible_projectile",
 ];
 
 /// Validate and decode a component into the value representation shared with stacks.
@@ -52,6 +53,7 @@ pub fn decoded_component_value(id: &str, value: &Tag, reg: &Registries) -> Resul
         }
     }
     Ok(match id {
+        "minecraft:intangible_projectile" => Tag::Compound(Compound::new()),
         "minecraft:damage"
         | "minecraft:repair_cost"
         | "minecraft:max_damage"
@@ -83,6 +85,11 @@ pub fn decoded_component_value(id: &str, value: &Tag, reg: &Registries) -> Resul
 /// The codecs of the item components commands commonly set.
 pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), String> {
     match id {
+        // Unit.CODEC uses MapCodec.unitCodec: only maps decode; all fields are ignored.
+        "minecraft:intangible_projectile" => match t {
+            Tag::Compound(_) => Ok(()),
+            _ => Err(not_map(t)),
+        },
         "minecraft:damage" | "minecraft:repair_cost" => {
             let v = int_of(t).ok_or("Not a number")?;
             if v < 0 {
@@ -729,6 +736,31 @@ pub fn suggest_predicate(builder: &mut SuggestionsBuilder, reg: &Registries) {
 #[cfg(test)]
 mod tests {
     use super::decode_component;
+
+    #[test]
+    fn intangible_projectile_unit_codec_requires_map_and_ignores_fields() {
+        use super::{Compound, Registries, Tag, decoded_component_value};
+        let registry = Registries::default();
+        let id = "minecraft:intangible_projectile";
+        for value in [
+            Tag::Compound(Compound::new()),
+            Tag::compound([("unknown", Tag::List(vec![Tag::Int(7)]))]),
+        ] {
+            assert_eq!(
+                decoded_component_value(id, &value, &registry).unwrap(),
+                Tag::Compound(Compound::new())
+            );
+        }
+        for value in [
+            Tag::Byte(1),
+            Tag::Int(0),
+            Tag::String("unit".into()),
+            Tag::List(vec![]),
+        ] {
+            assert!(decode_component(id, &value, &registry).is_err());
+            assert!(decoded_component_value(id, &value, &registry).is_err());
+        }
+    }
 
     #[test]
     fn decoded_component_values_use_codec_numbers_and_retain_stored_values() {
