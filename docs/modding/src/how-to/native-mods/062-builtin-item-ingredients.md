@@ -54,9 +54,14 @@ Native registrations retain their persistent NBT validation contract.
 
 The shared decoder currently covers `damage`, `repair_cost`, `max_damage`,
 `max_stack_size`, `rarity`, `enchantments`, `stored_enchantments`, `custom_name`,
-`item_name`, and `block_entity_data` in the `minecraft` namespace. The other
-112 registered built-ins use stored-value matching while their shared decoders
+`item_name`, `block_entity_data`, and `glider` in the `minecraft` namespace. The other
+111 registered built-ins use stored-value matching while their shared decoders
 are added incrementally in **#3875**. Their absence is not a load refusal.
+
+`minecraft:glider` requires an object (`{}`), not a scalar or list. Its unit codec
+ignores all object fields, so nonempty objects normalize to `{}` and compare equal.
+The component must still be present, including through an item default; an explicit
+removal overrides that default. `!minecraft:glider` requires absence instead.
 
 Component ingredient displays contain the patch, including removals. Difference
 lists retain the base list and remove only items whose default stack passes the

@@ -70,6 +70,11 @@ pub fn component_equal(id: &str, a: &ItemStack, b: &ItemStack) -> bool {
         ),
         "minecraft:item_name" => item_name_equal(a, b),
         "minecraft:rarity" => rarity(a) == rarity(b),
+        // Unit.CODEC ignores map fields; borrow only the map shape, not its contents.
+        "minecraft:glider" => {
+            matches!(a.data().and_then(|d| d.other(id)), Some(Tag::Compound(_)))
+                && matches!(b.data().and_then(|d| d.other(id)), Some(Tag::Compound(_)))
+        }
         _ => stored_component_equal(id, a, b),
     }
 }
