@@ -49,10 +49,31 @@ pub struct EffectKey(pub(crate) u32);
 /// registration order. Returned by `EntityRef::kind`; Copy/Eq comparisons do not
 /// allocate. Request `key.id(host)` for its namespaced name (an owned diagnostic
 /// string). A key stays valid until the game exits.
-// no wire: decoding validates the u32 slot with EntityTypeKey::from_slot on the host; wasm carries the host-issued opaque token without consulting guest tables.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-// exhaustive: only the load-owned table creates keys
+// The derived scalar codec validates host slots; wasm carries the host-issued token.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, horizon_mod_api_macros::Wire)]
+#[wire(via = u32)]
+// exhaustive: incoming scalar slots are checked against the host's registry
 pub struct EntityTypeKey(pub(crate) u32);
+
+impl From<&EntityTypeKey> for u32 {
+    fn from(key: &EntityTypeKey) -> Self {
+        key.0
+    }
+}
+impl TryFrom<u32> for EntityTypeKey {
+    type Error = &'static str;
+    fn try_from(slot: u32) -> Result<Self, Self::Error> {
+        // A guest transports the host-issued identity; only the host can validate it.
+        #[cfg(target_arch = "wasm32")]
+        {
+            Ok(Self(slot))
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            Self::from_slot(slot)
+        }
+    }
+}
 
 /// A playing sound's channel, for `play_sound_source` and
 /// `play_streaming_source`: an id only, to tell sounds apart across the two
@@ -1243,3 +1264,7 @@ pub enum Sentiment {
     /// Changes are neutral.
     Neutral,
 }
+
+#[cfg(test)]
+#[path = "entity_type_key_tests.rs"]
+mod entity_type_key_tests;

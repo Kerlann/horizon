@@ -31,6 +31,9 @@ owned diagnostic string and can allocate. Persist the name, never the scalar slo
 For example, retain the zombie key at setup, then compare
 `entity.kind(host) == Some(zombie_key)` in a predicate.
 
+The key derives `Wire` through its scalar slot: host decoding checks the registered
+slot, while a wasm guest carries the host-issued key without a separate name table.
+
 This is a clean break from `Option<String>`: callers that need textual names must
 request `.id(host)` explicitly. `UnspawnedMobRef::kind` keeps its separate scoped
 `Identifier`/error contract, and block-entity type reads keep `BlockEntityTypeKey`.
