@@ -54,9 +54,15 @@ Native registrations retain their persistent NBT validation contract.
 
 The shared decoder currently covers `damage`, `repair_cost`, `max_damage`,
 `max_stack_size`, `rarity`, `enchantments`, `stored_enchantments`, `custom_name`,
-`item_name`, and `block_entity_data` in the `minecraft` namespace. The other
-112 registered built-ins use stored-value matching while their shared decoders
+`item_name`, `block_entity_data`, and `note_block_sound` in the `minecraft` namespace. The other
+111 registered built-ins use stored-value matching while their shared decoders
 are added incrementally in **#3875**. Their absence is not a load refusal.
+
+`note_block_sound` accepts an identifier string, not a sound-registry entry.
+Omitted or empty namespaces become `minecraft`; empty paths are allowed, so
+`""`, `":"`, and `"minecraft:"` decode to the same identifier. Namespace and
+path characters follow vanilla's lowercase ASCII identifier rules (including
+the forbidden namespace `..`); malformed UTF-16 strings are rejected.
 
 Component ingredient displays contain the patch, including removals. Difference
 lists retain the base list and remove only items whose default stack passes the
