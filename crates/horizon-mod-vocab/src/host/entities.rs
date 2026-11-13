@@ -683,6 +683,24 @@ pub trait EntitiesBackendMut {
     #[access(WorldOnly)]
     fn entity_push(&mut self, entity: EntityRef, delta: [f64; 3]) -> bool;
     /// Side: server.
+    /// Sets the player's collision exclusions, boxes of its own level
+    /// (`[min_x, min_y, min_z, max_x, max_y, max_z]`) in which that level's blocks don't stop it:
+    /// the part of a block's collision shape inside a box doesn't collide, a block sharing volume
+    /// with one is no wall to suffocate in and doesn't act on the player inside it (cobwebs, powder
+    /// snow, damaging blocks), and the server's check of the player's moves reads
+    /// the same boxes. Entity colliders and the world border still stop it. Each call replaces
+    /// the last set; an empty slice clears it, and so do a change of level, a respawn and
+    /// leaving. Nothing is saved, and nothing reaches the player's client: its own half sets the
+    /// same boxes with `ClientHost::set_collision_exclusions`. Refused, keeping the set there
+    /// was: more than 64 boxes, a value that isn't finite, a minimum above its maximum, an
+    /// entity that isn't a player, a stale handle.
+    #[access(WorldOnly)]
+    fn entity_set_collision_exclusions(
+        &mut self,
+        entity: EntityRef,
+        boxes: &[[f64; 6]],
+    ) -> Result<(), CollisionExclusionsError>;
+    /// Side: server.
     /// Removes the entity with no death and no loot (`Entity.discard`): a
     /// chest boat or a minecart with a chest still drops what it holds, and
     /// a boat its lead, as vanilla's `remove` does. False for a player, a dragon

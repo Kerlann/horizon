@@ -328,6 +328,36 @@ impl LevelRef {
     }
 }
 
+/// A mod-owned watered area in one server level. Created by [`LevelRef::add_water_ticket`].
+/// Explicit removal, owner disable and level unload invalidate it. Never saved.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+// exhaustive: its fields are private, so mods cannot build or destructure it
+pub struct WaterTicket {
+    pub(crate) level: LevelRef,
+    pub(crate) id: u64,
+}
+
+impl WaterTicket {
+    /// Construct a handle at the game boundary.
+    // hidden: a game-side constructor; mods receive tickets from `add_water_ticket`
+    #[doc(hidden)]
+    pub fn new(level: LevelRef, id: u64) -> Self {
+        Self { level, id }
+    }
+    /// The level this transient ticket belongs to.
+    pub fn level(self) -> LevelRef {
+        self.level
+    }
+    /// The session-only identity used by the game.
+    // hidden: a game-side helper; mods use the handle's methods
+    #[doc(hidden)]
+    pub fn id(self) -> u64 {
+        self.id
+    }
+}
+
 /// A raid of a level (`Raid`), by the id `Raids` keeps it under, which the
 /// raids file saves. `level.raid_at(host, pos)`, `level.raids(host)`,
 /// `level.raid(host, id)` and `mob.raid(host)` make one. A handle resolves
@@ -1421,4 +1451,12 @@ impl StructureSearchResult {
             position,
         }
     }
+}
+
+/// Why a server-wide game rule read was refused.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, horizon_mod_api_macros::Wire)]
+#[non_exhaustive]
+pub enum GameRuleReadError {
+    /// No rule has this identifier.
+    UnknownRule,
 }

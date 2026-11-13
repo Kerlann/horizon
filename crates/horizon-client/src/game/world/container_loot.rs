@@ -1,7 +1,10 @@
 //! First-access loot shared by blocks and chest vehicles.
 use super::Game;
 use horizon_client::{containers::BlockEntity, save::PendingContainerLoot};
-use horizon_core::{nbt::Tag, random::LegacyRandom};
+use horizon_core::{
+    nbt::Tag,
+    random::{LegacyRandom, RandomSource},
+};
 
 #[derive(Clone, Copy)]
 pub(super) enum LootTarget {
@@ -158,8 +161,16 @@ impl Game<'_> {
             luck,
             entity: entity.as_ref(),
         };
-        let fill = |slots: &mut [Option<horizon_client::items::ItemStack>]| {
-            unpack_slots(&pending, slots, &loot, pos, context);
+        let mut fill = |slots: &mut [Option<horizon_client::items::ItemStack>]| {
+            fill_with_random(
+                &pending,
+                slots,
+                &loot,
+                &mut self.world.random,
+                &mut self.rand_sequences,
+                self.level.seed,
+                context,
+            );
         };
         match target {
             LootTarget::Block(key) => {
@@ -229,24 +240,36 @@ pub(super) fn take_block_pending(
     pending
 }
 
-/// The single roll/placement implementation used by Game and its mutable level adapter.
-fn unpack_slots(
+/// Vanilla LootContext.Builder: explicit seed, named sequence, then level random.
+fn fill_with_random(
     pending: &PendingContainerLoot,
     slots: &mut [Option<horizon_client::items::ItemStack>],
     loot: &horizon_world::loot::LootData,
-    pos: (i32, i32, i32),
+    level_random: &mut LegacyRandom,
+    sequences: &mut horizon_client::random_sequences::RandomSequences,
+    world_seed: i64,
+    context: horizon_world::loot::ContainerLootContext<'_>,
+) {
+    if let Some(seed) = pending.seed_value().filter(|seed| *seed != 0) {
+        unpack_slots(pending, slots, loot, &mut LegacyRandom::new(seed), context);
+    } else if let Some(id) = loot.random_sequence(&pending.table_id()) {
+        unpack_slots(pending, slots, loot, sequences.get(id, world_seed), context);
+    } else {
+        unpack_slots(pending, slots, loot, level_random, context);
+    }
+}
+
+/// The single roll/placement implementation used by Game and its mutable level adapter.
+fn unpack_slots<R: RandomSource + Clone>(
+    pending: &PendingContainerLoot,
+    slots: &mut [Option<horizon_client::items::ItemStack>],
+    loot: &horizon_world::loot::LootData,
+    random: &mut R,
     context: horizon_world::loot::ContainerLootContext<'_>,
 ) {
     // Entry points discard a pre-existing mixed state. Items added by the
     // player's advancement rewards keep their slots while this roll fills free ones.
-    // Zero/missing seed behavior is unchanged and tracked by #3690.
-    let seed = pending.seed_value().filter(|s| *s != 0).unwrap_or_else(|| {
-        horizon_core::random::position_seed(horizon_core::position::BlockPos::new(
-            pos.0, pos.1, pos.2,
-        ))
-    });
-    let mut random = LegacyRandom::new(seed);
-    let Some(items) = loot.roll_container_with(&pending.table_id(), &mut random, context) else {
+    let Some(items) = loot.roll_container_with(&pending.table_id(), random, context) else {
         return;
     };
     let mut placed = vec![None; slots.len()];
@@ -255,7 +278,7 @@ fn unpack_slots(
         .enumerate()
         .filter_map(|(i, s)| s.is_none().then_some(i))
         .collect();
-    loot.place_container_loot(items, &mut placed, free, &mut random);
+    loot.place_container_loot(items, &mut placed, free, random);
     for (slot, stack) in slots.iter_mut().zip(placed) {
         if let Some(stack) = stack {
             *slot = Some(horizon_client::structure_blocks::loot_item_with_components(
@@ -295,11 +318,13 @@ impl super::GameLevel<'_> {
                 if cart.items.iter().any(Option::is_some) {
                     return;
                 }
-                unpack_slots(
+                fill_with_random(
                     &pending,
                     &mut cart.items,
                     loot,
-                    pos,
+                    &mut self.world.random,
+                    self.rand_sequences,
+                    self.seed,
                     horizon_world::loot::ContainerLootContext {
                         biome: biome.as_deref(),
                         ..Default::default()
@@ -330,11 +355,13 @@ impl super::GameLevel<'_> {
             if entity.slots().iter().any(Option::is_some) {
                 return;
             }
-            unpack_slots(
+            fill_with_random(
                 &pending,
                 entity.slots_mut(),
                 loot,
-                key,
+                &mut self.world.random,
+                self.rand_sequences,
+                self.seed,
                 horizon_world::loot::ContainerLootContext {
                     biome: biome.as_deref(),
                     ..Default::default()

@@ -281,7 +281,7 @@ class DynaRoutingTests(unittest.TestCase):
         script = textwrap.dedent(setup.split("        run: |\n", 1)[1])
         restore = runtime.split("- name: Restore unchanged source timestamps\n", 1)[1].split("\n      - ", 1)[0]
         self.assertIn("if: needs.changes.outputs.rust_required != 'false'", restore)
-        self.assertIn("python3 tools/ci/source_mtimes.py target/ci-source-mtimes.json", restore)
+        self.assertIn("python3 tools/ci/source_mtimes.py target/ci-source-mtimes-v2.json", restore)
         self.assertLess(runtime.index("- name: Use persistent verify build artifacts"),
                         runtime.index("- name: Restore unchanged source timestamps"))
         self.assertLess(runtime.index("- name: Restore unchanged source timestamps"),
@@ -378,16 +378,24 @@ class DynaRoutingTests(unittest.TestCase):
         script = textwrap.dedent(aggregate.split("run: |\n", 1)[1])
         with tempfile.TemporaryDirectory() as directory:
             summary = Path(directory) / "summary"
-            for result in ("success", "skipped", "failure", "cancelled", ""):
-                for route in ("true", "false"):
-                    env = dict(os.environ, RESULT=result, ROUTE=route,
-                               REASON="enabled=true; lease=0; live=unreadable",
-                               CHANGES="success", FORCED_GITHUB="false",
-                               GITHUB_STEP_SUMMARY=str(summary))
+            stale = "snapshot rejected: run age outside 0..3600 s"
+            cases = [(event, result, route, reason)
+                     for event in ("push", "workflow_dispatch")
+                     for result in ("success", "skipped", "failure", "cancelled", "")
+                     for route in ("true", "false")
+                     for reason in ("enabled=true; lease=0; live=unreadable", stale)]
+            for event, result, route, reason in cases:
+                # Only a main push may pass without its own coverage: a newer push's shards carry it when this
+                # run's were superseded (cancelled) or skipped because it outwaited its routing snapshot.
+                neutral = event == "push" and (result == "cancelled" or (result == "skipped" and reason == stale))
+                # The runner's own GITHUB_EVENT_NAME (push on main) must not leak into the cases.
+                env = dict(os.environ, GITHUB_EVENT_NAME=event, RESULT=result, ROUTE=route, REASON=reason,
+                           CHANGES="success", FORCED_GITHUB="false", GITHUB_STEP_SUMMARY=str(summary))
+                with self.subTest(event=event, result=result, route=route, reason=reason):
                     run = subprocess.run(["bash", "-e", "-c", script], env=env,
                                          capture_output=True, text=True)
-                    self.assertEqual(run.returncode, 0 if result == "success" else 1)
-                    self.assertIn("live=unreadable", summary.read_text())
+                    self.assertEqual(run.returncode, 0 if result == "success" or neutral else 1)
+                    self.assertIn(reason, summary.read_text())
                     self.assertIn(f"Shard result: {result}", summary.read_text())
                     summary.unlink()
 
@@ -416,6 +424,27 @@ class DynaRoutingTests(unittest.TestCase):
         from test_ci_runners import jobs
         verify = dict(jobs((ROOT / ".github/workflows/dyna-ci.yml").read_text()))["verify"]
         self.assert_positive_stage_export(verify)
+
+    def test_the_surface_report_runs_after_the_stage_build_on_pull_requests_and_dispatches(self):
+        from test_ci_runners import jobs
+        verify = dict(jobs((ROOT / ".github/workflows/dyna-ci.yml").read_text()))["verify"]
+        name = "- name: Report the mod API surface change\n"
+        self.assertEqual(verify.count(name), 1)
+        step = verify.split(name, 1)[1].split("\n      - ", 1)[0]
+        fields = {}
+        for line in step.splitlines():
+            if ":" in line and not line.lstrip().startswith("#"):
+                key, value = line.strip().split(":", 1)
+                fields[key] = value.strip()
+        self.assertEqual(fields.get("run"), "python3 tools/ci/surface_report.py")
+        self.assertEqual(fields.get("if"), "needs.changes.outputs.rust_required != 'false' && "
+                                           "(github.event_name == 'pull_request' || inputs.pr != '')")
+        self.assertEqual(fields.get("EVENT"), "${{ github.event_name }}")
+        self.assertEqual(fields.get("PR"), "${{ inputs.pr }}")
+        self.assertEqual(fields.get("GH_TOKEN"), "${{ github.token }}")
+        self.assertNotIn("continue-on-error", fields)
+        # It needs the tool the stage build puts in HORIZON_STAGE_TOOL.
+        self.assertLess(verify.index("- name: Build the source stage generator (test profile)"), verify.index(name))
 
     def test_positive_stage_guard_rejects_commented_command_noop_and_ignored_failure(self):
         from test_ci_runners import jobs

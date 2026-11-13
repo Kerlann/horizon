@@ -256,9 +256,8 @@ impl Default for ColumnLayout {
     }
 }
 
-/// Biomes are 4x4x4 containers over the biome table (67 entries: a 7-bit
-/// global palette).
-pub const BIOME_STRATEGY: Strategy = Strategy::biomes(8);
+/// Biomes are 4x4x4 containers with 16-bit IDs, including saved placeholders.
+pub const BIOME_STRATEGY: Strategy = Strategy::biomes(16);
 
 /// Bits of the block states' global palette: 16 for vanilla's 35,723 states
 /// (what vanilla servers and clients send), more when content mods add states
@@ -1013,9 +1012,14 @@ impl PendingContainerLoot {
     pub fn seed_value(&self) -> Option<i64> {
         horizon_client_core::nbt_value::number(self.seed.as_ref())
     }
-    /// Overlay pending metadata without manufacturing an Items list.
+    /// Overlay pending metadata without manufacturing an Items list. The table is written as the
+    /// identifier it reads as (`RandomizableContainer.trySaveLootTable`,
+    /// `ContainerEntity.addChestVehicleSaveData`): an empty string is `minecraft:`.
     pub fn write_tags(&self, map: &mut Compound) {
-        map.insert("LootTable".into(), self.table.clone());
+        map.insert(
+            "LootTable".into(),
+            Tag::String(self.table_id().as_str().into()),
+        );
         map.remove(&"LootTableSeed".into());
         if let Some(seed) = &self.seed {
             map.insert("LootTableSeed".into(), seed.clone());

@@ -330,6 +330,17 @@ pub(super) fn surface<'a>(
     root: &'a Path,
     included: &'a [(&'a str, &'a str)],
 ) -> Result<Surface<'a>, String> {
+    surface_reading(root, included, None)
+}
+
+/// [`surface`]; with `missing`, a listed boundary trait the tree does not have is pushed there
+/// instead of refusing the tree (the surface export reads older trees whose API predates a
+/// listed trait; the build never does).
+pub(super) fn surface_reading<'a>(
+    root: &'a Path,
+    included: &'a [(&'a str, &'a str)],
+    mut missing: Option<&mut Vec<String>>,
+) -> Result<Surface<'a>, String> {
     let mut types = Types::new(Index::new(root, included))?;
     let api = types.index.module("mod_api", &[])?;
     let (imported, mut exported, paths) = trait_roles::declared(root)?;
@@ -349,8 +360,14 @@ pub(super) fn surface<'a>(
     let hooks = hook_ids(&mut types)?;
     for owner in imports().iter().chain(exports()) {
         let (path, args) = owner_parts(owner)?;
-        let Found::Item(id) = types.index.resolve_path(api, &path)? else {
-            return Err(format!("{owner} is not a mod_api trait"));
+        let id = match (types.index.resolve_path(api, &path), missing.as_deref_mut()) {
+            (Ok(Found::Item(id)), _) => id,
+            (_, Some(missing)) => {
+                missing.push((*owner).to_owned());
+                continue;
+            }
+            (Err(error), None) => return Err(error),
+            (Ok(_), None) => return Err(format!("{owner} is not a mod_api trait")),
         };
         let Item::Trait(item) = types.index.item(id).clone() else {
             return Err(format!("{owner} is not a trait"));
@@ -429,7 +446,8 @@ pub(super) fn surface<'a>(
         .module("mod_api", &["wire".into(), "wire_types".into()])?;
     for owner in exports() {
         let (path, _) = owner_parts(owner)?;
-        let Found::Item(id) = types.index.resolve_path(api, &path)? else {
+        // Missing only where `missing` let the first pass skip it.
+        let Ok(Found::Item(id)) = types.index.resolve_path(api, &path) else {
             continue;
         };
         let Item::Trait(item) = types.index.item(id) else {

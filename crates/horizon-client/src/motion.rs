@@ -20,6 +20,7 @@ use horizon_world::{
     block_landing::BlockLandingRegistry,
     climbing::{self, ClimbingRegistry, ClimbingWorld},
     collision_context::{CollisionContext, CollisionEntity, CollisionItem},
+    collision_exclusions,
     edge_backoff::{self, EdgeBackoffInput, EdgeBackoffWorld},
     entity_move::{self, CollisionFlags, EntityMoveWorld, MovementHistory, MoverType},
     entity_obstruction::EntityIdentity,
@@ -39,7 +40,7 @@ use horizon_world::{
     movement_statistics::{self, MovementStat, MovementStatisticsWorld},
     movement_support::{self, MovementLocation},
     registry::{BlockStateId, BlockTableFile},
-    world_movement::{self, MovementRequest},
+    world_movement::MovementRequest,
     worldgen::tags::TagDefinitions,
 };
 use std::{
@@ -48,6 +49,7 @@ use std::{
     path::Path,
     sync::Arc,
 };
+mod exclusions;
 mod restitution;
 
 /// A living entity jumped (`LivingEvent.LivingJumpEvent`).
@@ -555,6 +557,8 @@ pub struct PlayerMotion {
     /// The level's world border, whose walls stop the player's movement
     /// from inside (the game keeps it current; None: no border).
     pub border: Option<horizon_core::geometry::border::BorderGeometry>,
+    /// A mod's boxes in which the level's blocks don't stop this player (#3717).
+    pub collision_exclusions: horizon_world::collision_exclusions::CollisionExclusions,
 }
 impl PlayerMotion {
     /// `ServerGamePacketListenerImpl.handleMovePlayer`: the movement the client
@@ -1008,19 +1012,6 @@ impl MotionWorld<'_, '_, '_> {
             entities: self.entities,
             border: self.player.border.as_ref().map(|b| (b, at)),
         }
-    }
-    /// `Level.noCollision(player, bounds)`: blocks and the host's entity boxes.
-    pub fn no_player_collision(&mut self, bounds: Aabb) -> Result<bool> {
-        let context = self.context();
-        Ok(world_movement::no_world_collision(
-            &mut self.movement_collisions(),
-            world_movement::CollisionCheckRequest {
-                entity: EntityIdentity(0),
-                context,
-                bounds,
-                candidate_budget: 1_000_000,
-            },
-        )?)
     }
     fn block(&self, p: BlockPos) -> BlockStateId {
         self.scene.block(p.x, p.y, p.z)
@@ -2230,8 +2221,9 @@ impl EntityMoveWorld for MotionWorld<'_, '_, '_> {
     }
     fn collide(&mut self, movement: Vec3) -> Result<Vec3> {
         let max_step = self.player.attribute("minecraft:step_height")? as f32;
-        Ok(world_movement::resolve_world_movement(
+        Ok(collision_exclusions::resolve_world_movement(
             &mut self.movement_collisions(),
+            &self.player.collision_exclusions,
             MovementRequest {
                 entity: EntityIdentity(0),
                 context: self.context(),
@@ -2939,13 +2931,18 @@ impl crate::block_contact::InsideWalk for PlayerInside<'_, '_, '_, '_> {
     }
     /// `getEntityInsideCollisionShape` for the player: the whole block but for
     /// powder snow (its own collision shape), the filled cauldrons (their content
-    /// column) and the end portals and tripwires Horizon doesn't follow it into.
+    /// column), the end portals and tripwires Horizon doesn't follow it into, and
+    /// blocks inside the player's collision exclusions.
     fn inside_shape(
         &mut self,
         state: BlockStateId,
         p: BlockPos,
     ) -> crate::block_contact::InsideShape {
         use crate::block_contact::InsideShape;
+        // A block a mod's collision exclusions reach is none to be inside (#3717).
+        if self.m.player.collision_exclusions.spares(p) {
+            return InsideShape::Empty;
+        }
         let Some(definition) = self.m.assets.registry.state(state) else {
             return InsideShape::Full;
         };

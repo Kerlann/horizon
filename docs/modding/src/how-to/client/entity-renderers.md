@@ -80,3 +80,6 @@ flying item. Without a renderer, it draws its item.
 
 Registrations for other known entity families, including boats, displays, vanilla
 projectiles and mobs, are retained without changing their drawing.
+
+To draw over a living renderer instead of replacing it, add a layer
+([entity layers](entity-layers.md)).

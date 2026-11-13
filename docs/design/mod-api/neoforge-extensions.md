@@ -59,9 +59,9 @@ same facts is `StateFacts` in `crates/horizon-items/src/blocks.rs`.
 | `isBurning(state, level, pos)` | Missing | — | No per-block burning query; `block_burn` is fire removing a block. |
 | `canHarvestBlock(state, level, pos, player)` | Covered | `BlockPart::can_harvest_block` (`hooks/can_harvest_block.rs`) | Asked where `player_harvest_check` fires, before it: the global hook still hears and may change the part's answer. |
 | `onDestroyedByPlayer(state, level, pos, player, stack, willHarvest, fluid)` | Partial | `BlockPart::on_destroyed_by_player` (`hooks/on_destroyed_by_player.rs`) | Asked in the player's break after `break_block` allowed it, before anything of the break changes the world, with the tool and whether the break harvests. The part answers whether the block was destroyed (`Some(true)`: it removed the block itself, `Some(false)`: it stays) in place of all of `playerWillDestroy` (pot cracking, piglin anger, tripwire disarming, a creative shulker box's or beehive's drop) and the removal, and `None` keeps vanilla's. `willHarvest` is the tool's own answer; the mods' harvest listeners are asked once after the removal, of the adjusted state and the stack in the hand then, as vanilla does. The fluid is not an argument. |
-| `onDestroyedByPushReaction(state, level, pos, direction, fluid)` | Missing | — | No hook at the piston/fluid destruction point. |
+| `onDestroyedByPushReaction(state, level, pos, direction, fluid)` | Partial | `BlockPart::on_destroyed_by_push_reaction` (`hooks/on_destroyed_by_push_reaction.rs`) | A notice in `PistonBaseBlock.moveBlocks` after the block dropped its resources and before the engine sets air, with the direction the blocks move, the cell's fluid state and a level host that writes and schedules ticks. Here the removal always happens and writes to the move's cells are overwritten, and the fluid state of the cell is an argument. NeoForge's default performs the removal itself and an override may replace it: replacement parity remains unverified. |
 | `getRespawnPosition(state, entityType, level, pos, angle)` | Covered | `BlockPart::respawn_position` (`hooks/respawn_position.rs`) | Asked on the server as the respawn point is resolved (and as a player leaves the End), starting from the bed's, anchor's or forced point's spot; `None` sends the player to the world spawn. Asked for any block, where NeoForge asks only beds; an anchor loses a charge only when the answer is a spot. The global `player_respawn_position` still hears the result. |
-| `getExplosionResistance(state, level, pos, explosion)` | Partial | `BlockProperties.explosion_resistance` → `StateFacts.explosion_resistance` | Static; the explosion is not consulted. |
+| `getExplosionResistance(state, level, pos, explosion)` | Covered | `BlockPart::explosion_resistance` (`hooks/explosion_resistance.rs`), over `BlockProperties.explosion_resistance` → `StateFacts.explosion_resistance` | Asked with the position and the `ExplosionStart` as a ray enters the block; the answer replaces the static value before the fluid's 100, and the anchor's water cell, a TNT minecart's rails and a dangerous wither skull's cap keep winning. A negative or non-finite answer is refused. |
 | `getCloneItemStack(level, pos, state, includeData, player)` | Covered | `BlockPart::clone_item_stack` (`hooks/clone_item_stack.rs`) | `include_data` and the player are passed; leaving the stack unset keeps the game's item. |
 | `addLandingEffects(state, level, pos, stateBelow, entity, count)` | Missing | — | `fall_on` edits fall damage, not the landing particle/sound burst. |
 | `addRunningEffects(state, level, pos, entity)` | Missing | — | No hook for the running dust burst. |
@@ -69,10 +69,10 @@ same facts is `StateFacts` in `crates/horizon-items/src/blocks.rs`.
 | `playStepSound(state, level, pos, entity, volume, pitch)` | Partial | `BlockPart::sound_type` (`hooks/sound_type.rs`, `cause` `Step`) | Picks the event, volume and pitch of the one step sound the game plays; the part can't play or suppress its own. |
 | `canSustainPlant(state, level, pos, direction, plantState)` | Covered | `BlockPart::can_sustain_plant` (`hooks/can_sustain_plant.rs`) | The soil's answer for the plant above it (allow, deny or none), asked before the plant's `may_place_on`, which still answers for your plant. The direction is always up. |
 | `onTreeGrow(state, level, posConsumer, random, pos, feature)` | Covered | `BlockPart::on_tree_grow` (`hooks/on_tree_grow.rs`) | Asked of the soil under each trunk column a trunk placer starts, in worldgen and when a sapling grows, with the tree's random: answer a state, none, or leave it to the tree's provider. The first worldgen Part method: no `Host`, a `WorldgenHost`. `feature` is left out: an inline tree feature has no key. |
-| `isFertile(state, level, pos)` | Missing | — | No fertile-block query; bonemeal hooks fire later. |
+| `isFertile(state, level, pos)` | Covered | `BlockPart::is_fertile` (`hooks/is_fertile.rs`) | The soil's `fertile` (starting at `moisture > 0`) for each `#grows_crops` block under a crop, stem or pitcher crop in `CropBlock.getGrowthSpeed`; a block outside the tag is never asked. |
 | `getExpDrop(state, level, pos, blockEntity, breaker, tool)` | Partial | `break_block.exp_to_drop` (`hooks/base.rs`) | Replaces the XP sample for a player break; global, not per-block, and the block entity/tool/breaker are not arguments. [#1038](https://github.com/arismoko/horizon/issues/1038). |
 | `rotate(state, level, pos, rotation)` | Missing | — | Structure rotation is engine behaviour; no callback. |
-| `getEnchantPowerBonus(state, level, pos)` | Partial | `BlockPart::enchant_power_bonus` (`hooks/enchant_power_bonus.rs`) | Asked for each bookshelf offset with a clear transmitter as a single-player world or a LAN host makes the table's offers, with the table's position; the sum is truncated as NeoForge does and a negative one counts as 0. The table's enchant particles still read `#minecraft:enchantment_power_provider`: they are drawn inside the particle pass, which can lend no host. |
+| `getEnchantPowerBonus(state, level, pos)` | Covered | `BlockPart::enchant_power_bonus` (`hooks/enchant_power_bonus.rs`, contract v2, both sides) | Offers query each bookshelf offset with a clear transmitter; the sum is truncated and a negative one counts as 0. Client enchant particles use the same power source: any nonzero answer is a provider, subject to the same transmitter check. Particle answers are cached once per state at world entry, parts reload and received-server-tag publication, after tags, rebound parts and tag-update listeners are published. This also rebuilds vanilla provider/transmitter answers without mods. Both hook positions are at the origin, so particle answers must be state-only; a mod answer change needs that rebuild. No dispatch occurs per frame. The provider tag supplies the vanilla default only. |
 | `onNeighborChange(state, level, pos, fromPos)` | Missing | — | `neighbor_changed` is `Block.neighborChanged`, a different callback. [#1038](https://github.com/arismoko/horizon/issues/1038). |
 | `shouldCheckWeakPower(state, level, pos, direction)` | Covered | `BlockPart::should_check_weak_power` (`hooks/should_check_weak_power.rs`) | The argument direction is the input side, as NeoForge's. |
 | `getWeakChanges(state, level, pos)` | Missing | — | No weak-change observer query. [#1038](https://github.com/arismoko/horizon/issues/1038). |
@@ -92,9 +92,9 @@ same facts is `StateFacts` in `crates/horizon-items/src/blocks.rs`.
 | `getFlammability(state, level, pos, direction)` | Covered | `BlockPart::fire_odds` (`hooks/fire_odds.rs`) | Burn/destruction odds (the second element of `fire_odds`'s `(ignite, burn)` tuple) replace vanilla's table, with the block's position and the face toward the fire. |
 | `onCaughtFire(state, level, pos, direction, igniter, stack)` | Partial | `BlockPart::on_caught_fire` (`hooks/on_caught_fire.rs`) | A notice after the burn roll and spread/burn/ignite cancel gates, before replacing the block, with its old state and face toward the fire. Writes at that position are overwritten; TNT primes afterward. Fire has no igniter and an empty stack. Lava, lightning, spread into air, flint and steel, TNT use, burning projectiles, redstone and dispensers do not fire this spread-only hook. |
 | `isFireSource(state, level, pos, direction)` | Covered | `BlockPart::is_fire_source` (`hooks/is_fire_source.rs`) | Asked of the block under a fire on each fire tick, before the dimension's `infiniburn` tag: yes makes the fire endless, no refuses a tagged block. The direction is always up. |
-| `canEntityDestroy(state, level, pos, entity)` | Missing | — | Mob-grief checks are engine rules; `entity_mob_griefing` is a global event at a different moment. |
-| `canDropFromExplosion(state, level, pos, explosion)` | Partial | `explosion_detonate` (`hooks/base.rs`) | Removes positions from the blast before blocks are hit; no per-block keep/drop query. |
-| `onBlockExploded(state, level, pos, explosion)` | Partial | `explosion_detonate` (`hooks/base.rs`) | Same global pre-blast hook; no per-block callback after the block is removed. [#1038](https://github.com/arismoko/horizon/issues/1038). |
+| `canEntityDestroy(state, level, pos, entity)` | Partial | `BlockPart::can_entity_destroy` (`hooks/can_entity_destroy.rs`) | Asked where vanilla asks its per-block rule: the wither's block break, a dangerous wither skull's resistance cap (the entity is the skull, readable during the blast), the dragon's `checkWalls` (where `#dragon_immune` still holds after a yes), a zombie's door breaking and the turtle-egg `RemoveBlockGoal`'s target choice; after the griefing gate and before `living_destroy_block` (none at the egg goal's target choice). Ravager: griefing event only. The zombie door still asks `living_destroy_block` at the break, not at goal start with the other two (#3883). |
+| `canDropFromExplosion(state, level, pos, explosion)` | Covered | `BlockPart::can_drop_from_explosion` (`hooks/can_drop_from_explosion.rs`) | Asked where `onExplosionHit` asks `Block.dropFromExplosion`; the answer gates the loot and `spawnAfterBreak`, and a TNT still primes. |
+| `onBlockExploded(state, level, pos, explosion)` | Covered | `BlockPart::on_block_exploded` (`hooks/on_block_exploded.rs`) | A server notice per destroyed block after its loot and before the engine sets air, with a writable host, the live block entity and the `ExplosionStart`; the engine sets air even if the part wrote a block. |
 | `collisionExtendsVertically(state, level, pos, entity)` | Missing | — | Collision shapes are data; no per-entity extension query. |
 | `shouldDisplayFluidOverlay(state, level, pos, fluid)` | Missing | — | Overlay drawing is engine-owned. |
 | `getToolModifiedState(state, context, ability, simulate)` | Covered | `BlockPart::tool_modified_state` (`hooks/tool_modified_state.rs`) | Asked of the clicked block before the global `block_tool_modification`, with the vanilla result: the part allows, replaces or, cancelled, denies the action. `simulate` is `ToolUse::simulated`. Axe, shovel and hoe actions and a shovel dousing a campfire. |
@@ -102,7 +102,7 @@ same facts is `StateFacts` in `crates/horizon-items/src/blocks.rs`.
 | `hidesNeighborFace(level, pos, state, neighborState, direction)` | Missing | — | `block_render_visibility` hides a whole state from the mesher, not one face. |
 | `supportsExternalFaceHiding(state)` | Missing | — | No per-face culling query. |
 | `onBlockStateChange(level, pos, oldState, newState)` | Partial | `block_changed` (`hooks/base.rs`, a global server hook) | Fires after the commit but before block side effects and neighbour updates, and only on an authoritative server. It may not modify the level. |
-| `canBeHydrated(state, level, pos, fluid)` | Missing | — | Farmland hydration is engine-owned; fluid `canHydrate` is data. |
+| `canBeHydrated(state, level, pos, fluid)` | Covered | `BlockPart::can_be_hydrated` (`hooks/can_be_hydrated.rs`) | The farmland's answer for each non-empty fluid in its 9×2×9 scan (with the fluid's position), `None` for the `#water` rule. The fluid's own side (`IFluidExtension.canHydrate`) is a fluid row. |
 | `getMapColor(state, level, pos, defaultColor)` | Partial | `BlockProperties.map_color` → `StateFacts.map_color` | Static; no position. |
 | `getAppearance(state, level, pos, direction, neighborState, neighborPos)` | Missing | — | No appearance query. |
 | `getPistonPushReaction(state)` | Covered | `BlockPart::piston_push_reaction`, `BlockProperties.push_reaction` | State-only override cached on both sides at load and reload; `None` preserves properties. |
@@ -138,8 +138,9 @@ which is the same place NeoForge's item components live. Reads are on `host` (`h
 
 | Method | Verdict | Horizon | Notes |
 | --- | --- | --- | --- |
+| `MutableDataComponentHolder`: `set`, `remove`, `update`, `applyComponents`, `copyFrom` | Covered | `ItemStack::set`, `remove`, `get`, `apply_components`, `copy_component_from`; `ItemPlace::edit` | `update` is `get` then `set`. Patch merges retain unrelated overrides and normalize damage atomically; copying preserves the source's own value/removal or clears the target override when the source inherits. Server-side `edit` writes the whole slot without changing its item/count or splitting one off, and a transaction abort restores it. [#3339](https://github.com/arismoko/horizon/issues/3339). |
 | `getDefaultAttributeModifiers(stack)` | Partial | `item_attribute_modifier` (`hooks/item_attribute_modifier.rs`) | Global `ItemAttributeModifierEvent` edits the stack's modifiers; the stack filters it, but it is not a Part method. |
-| `onDroppedByPlayer(stack, player)` | Partial | `item_toss` (`hooks/item_toss.rs`) | Global `ItemTossEvent`, cancellable; the item is not a Part attachment. |
+| `onDroppedByPlayer(stack, player)` | Covered | `ItemPart::on_dropped_by_player` (`hooks/on_dropped_by_player.rs`) | Runs on the server where `ServerPlayer.drop(boolean)` starts, for the drop key, with the whole selected stack and whether all of it goes; a cancel keeps the stack in the slot (no item entity, no statistic, no `item_toss`) and sends a server's player the slot back. A menu's throw is not asked, as in NeoForge; the global `item_toss` still hears every toss the part allows. |
 | `getHighlightTip(stack, name)` | Missing | — | No highlight-name hook. |
 | `onItemUseFirst(stack, context)` | Covered | `ItemPart::on_item_use_first` (`hooks/on_item_use_first.rs`) | Runs after `use_item_on_block` let it through, before the block's own use. |
 | `isPiglinCurrency(stack)` | Covered | `ItemPart::is_piglin_currency` (`hooks/is_piglin_currency.rs`) | Starts from vanilla's answer, which is the item `minecraft:gold_ingot` (`PiglinAi.BARTERING_ITEM`; 26.3 has no currency tag), and is asked where vanilla asks: a piglin wanting a stack on the ground, an adult taking one from the hand (and the client's prediction of that click), and the end of the admiring, where currency is bartered or lost to a hit. A ground stack is admired only when it is also `#piglin_loved`. Both sides. [#3226](https://github.com/arismoko/horizon/issues/3226). |
@@ -275,6 +276,20 @@ not its type properties, so "partial" below means the vanilla answer is readable
 | `canExtinguish(state, level, pos)` | Partial | `FluidTypeProperties.can_extinguish` | Static, and only a water-family fluid extinguishes; a mod fluid cannot opt in. |
 | `appendHoverText(stack, context, display, lines, flag)` | Missing | — | `FluidStack` has no tooltip hook. |
 
+## `BlockItemExtension`
+
+| Method | Verdict | Horizon | Notes |
+| --- | --- | --- | --- |
+| `onBlockPlacedBy(context, level, pos, state, placer, stack)` | Covered | `ItemPart::on_block_placed_by` (`hooks/on_block_placed_by.rs`, hook version 1) | Server notice with a `ServerHost`, the pre-shrink stack, optional player, primary position, final state and placement face/click. Fires once after stack block-entity data and `Block.setPlacedBy` companions exist, before level events and consumption, on player and dispenser block-item placement; a dispenser has no placer. Refused, failed and `entity_place`-canceled placements never notify. An item with no subscribed Part costs one lookup and no stack conversion. |
+
+With `HORIZON_TEST_RESOURCES` pointing to prepared 26.3 resources, the isolated Game regression
+places a custom block item, a two-part red bed and a dispenser's shulker box, and checks cancellation
+and refusal without consuming the stack:
+
+```sh
+cargo test -p horizon-client --lib game::native_hooks::on_block_placed_by_tests::block_items_notify_after_setup_and_before_consumption -- --exact --ignored
+```
+
 ## `IMenuTypeExtension`
 
 Menu types are content data (`MenuType` in `crates/horizon-mod-package/src/content.rs`, files under
@@ -301,7 +316,7 @@ their rows have landed or become partial since and should be narrowed when they 
   `block_tool_modification`; `onDestroyedByPlayer` is `on_destroyed_by_player`.
 - **Changed on the item side:** `getEquipmentSlot` is `ItemResource::equippable_slot`; `getCraftingRemainder`
   has `ItemPart::crafting_remainder` plus content data and `host.item_crafting_remainder`; `canEquip` is `ItemPart::can_equip`; `getXpRepairRatio` is `ItemPart::xp_repair_ratio`.
-- **Block group rows that still need their own answer:** `getExpDrop`, `onBlockExploded`,
+- **Block group rows that still need their own answer:** `getExpDrop`,
   `getWeakChanges`, `onNeighborChange`, `getBounceRestitution`, `isSlimeBlock`, `isStickyBlock`,
   `canStickTo` (all Partial or Missing above).
 - **Item group rows that still need their own answer:** `onEntityItemUpdate`, `canPerformAction` (both
@@ -369,3 +384,32 @@ shearing when no part answers. Entity parts are native-only, so wasm mods do not
 | `isValidRailShape(shape)` | **Covered** | Server `BlockPart::rail_valid_shape` (`hooks/rail_valid_shape.rs`), with the rail's state, asked before `RailState` writes a shape; a refused shape keeps the current one. It starts false for a value the rail's `shape` property lacks, as NeoForge's default answers. |
 
 A minecart now treats any block in `#minecraft:rails` built on `BaseRailBlock` as track (`BaseRailBlock.isRail`), where it used to accept only the four vanilla rail names.
+
+## Standalone model baking
+
+These are model-registration counterparts, not object-extension methods (#3430).
+
+| NeoForge | Verdict | Horizon route |
+| --- | --- | --- |
+| `ModelEvent.RegisterStandalone.register` | **Covered for quad results** | Client `standalone_models` contract version 2 retains plain file ids in `models` and adds `forms: Vec<StandaloneModelForm>` on the same hook, with `RegistrationContext` on native and wasm. |
+| `SimpleUnbakedStandaloneModel` with a `ModelState` | **Covered for quad results** | `Rotated { id, model, turns, uvlock }` uses the blockstate baker's centered negative XYZ quarter-turns and inverse face UV transform; no draw-pose substitution. |
+| `UnbakedStandaloneModel.resolveDependencies` and quad composition | **Covered for declared file dependencies** | `Combined { id, parts }` loads all sources and their transitive dependencies, concatenates their quads and publishes one `ModelRef`. A missing dependency drops the entire form and logs its registering mod. |
+| Mod-defined baked result type `T` | **Out of scope** | Horizon's standalone result is baked quads, not arbitrary mod-owned objects. |
+
+The namespace rule, `RenderAssets::model` resolution and `model_baking_completed` publication
+are unchanged. Forms rebake on every resource load; failed reloads leave old handles valid.
+See [the model drawing guide](../../modding/src/how-to/client/model-drawing.md#bake-time-standalone-forms).
+
+CPU proof selectors in `horizon-client-render` are
+`models::catalog::standalone_tests::standalone_rotated_arrow_has_literal_geometry_and_world_locked_uvs`,
+`models::catalog::standalone_tests::standalone_combined_keeps_both_cubes_and_rebakes_changed_dependencies`
+and `models::catalog::standalone_tests::standalone_missing_dependency_drops_entire_form_and_logs_registering_mod`.
+The resource-backed `horizon-client` test
+`game::model_baking_completed_tests::standalone_forms_resolve_as_one_model_and_republish_after_resource_reload`
+exercises real Game publication, model-registry lookup, distinct full-block/slab geometry,
+missing-form refusal and stale/replacement handles. It requires `HORIZON_TEST_RESOURCES`
+and `--ignored`. These are CPU/model-registry proofs, not GPU rendering or screenshot proof.
+
+## Changes
+
+- `enchant_power_bonus` contract v2 widens server to both sides: client enchant particles now consume the shared power answer through a per-game cache, rebuilt after parts reload or complete server-tag publication, including tag-update listeners (#3749).

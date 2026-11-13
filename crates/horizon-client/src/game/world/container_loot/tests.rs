@@ -61,6 +61,7 @@ fn with_game(test: impl FnOnce(&mut Game<'_>)) {
             .insert((0, 0), Arc::new(horizon_client::chunk::Chunk::empty(0, 0)));
         let table = |item: &str, count: i32, bonus: i32| serde_json::json!({"pools":[{"rolls":1,"bonus_rolls":bonus,"entries":[{"type":"minecraft:item","name":item,"modifier":{"type":"minecraft:set_count","count":count}}]}]});
         let files = [
+            ("loot_table/test:sequence_position".into(), vec![serde_json::to_vec(&serde_json::json!({"random_sequence":"test:seq","pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:diamond"}]}]})).unwrap()]),
             ("loot_table/test:first_access".into(), vec![serde_json::to_vec(&table("minecraft:diamond",1,1)).unwrap()]),
             ("loot_table/test:left".into(), vec![serde_json::to_vec(&table("minecraft:diamond",1,0)).unwrap()]),
             ("loot_table/test:right".into(), vec![serde_json::to_vec(&table("minecraft:emerald",2,0)).unwrap()]),
@@ -783,5 +784,200 @@ fn clone_selection_modes_match_pending_payloads() {
         let before = pending_bytes(g, (12, 64, 8));
         assert!(!g.run_command("clone 8 64 8 8 64 8 12 64 8 filtered minecraft:stone"));
         assert_eq!(pending_bytes(g, (12, 64, 8)), before);
+    });
+}
+
+#[test]
+#[ignore = "requires prepared resources"]
+fn random_selection_streams() {
+    use horizon_client::random_sequences::RandomSequences;
+    let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+    let table = serde_json::json!({"pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"minecraft:diamond"}]}]});
+    let mut sequence_table = table.clone();
+    sequence_table["random_sequence"] = "test:seq".into();
+    let files = [
+        (
+            "loot_table/test:plain".into(),
+            vec![serde_json::to_vec(&table).unwrap()],
+        ),
+        (
+            "loot_table/test:sequence".into(),
+            vec![serde_json::to_vec(&sequence_table).unwrap()],
+        ),
+    ];
+    let loot = LootData::load(
+        &root,
+        &PackOverlay {
+            files: &files,
+            ..PackOverlay::NONE
+        },
+        &horizon_world::item_defaults::read(&root).unwrap(),
+    )
+    .unwrap();
+    let roll = |table: &str, seed, random: &mut LegacyRandom, sequences: &mut RandomSequences| {
+        let pending = PendingContainerLoot {
+            table: Tag::String(table.into()),
+            seed,
+        };
+        let mut slots = vec![None; 27];
+        fill_with_random(
+            &pending,
+            &mut slots,
+            &loot,
+            random,
+            sequences,
+            123,
+            Default::default(),
+        );
+        slots
+            .iter()
+            .enumerate()
+            .filter_map(|(i, s)| s.as_ref().map(|s| (i, s.item.to_string(), s.count)))
+            .collect::<Vec<_>>()
+    };
+    let plain = |seed| {
+        roll(
+            "test:plain",
+            None,
+            &mut LegacyRandom::new(seed),
+            &mut RandomSequences::default(),
+        )
+    };
+    let first = plain(1);
+    assert_eq!(first, vec![(24, "minecraft:diamond".to_owned(), 1)]);
+    assert_eq!(first, plain(1));
+    assert_ne!(first, plain(2));
+    let mut level = LegacyRandom::new(1);
+    let mut unchanged = level.clone();
+    let mut sequences = RandomSequences::default();
+    let before = sequences.get("test:seq", 123).state_words();
+    let result = roll("test:sequence", None, &mut level, &mut sequences);
+    assert_ne!(before, sequences.get("test:seq", 123).state_words());
+    assert_eq!(level.next_int(), unchanged.next_int());
+    assert_eq!(
+        result,
+        roll(
+            "test:sequence",
+            Some(Tag::Long(0)),
+            &mut LegacyRandom::new(2),
+            &mut RandomSequences::default()
+        )
+    );
+    assert_eq!(
+        roll(
+            "test:sequence",
+            Some(Tag::Long(37)),
+            &mut LegacyRandom::new(1),
+            &mut sequences
+        ),
+        roll(
+            "test:sequence",
+            Some(Tag::Long(37)),
+            &mut LegacyRandom::new(2),
+            &mut RandomSequences::default()
+        )
+    );
+}
+
+#[test]
+#[ignore = "requires prepared resources"]
+fn explicit_seed_is_position_independent() {
+    if fresh("explicit_seed_is_position_independent") {
+        return;
+    }
+    with_game(|g| {
+        let other = (100, 70, -5);
+        g.world.chunks.insert(
+            (6, -1),
+            Arc::new(horizon_client::chunk::Chunk::empty(6, -1)),
+        );
+        let snapshot = |g: &Game<'_>, pos| g.world.block_entities[&pos].slots().to_vec();
+        let mut level_results = Vec::new();
+        for seed in [1, 2, 1] {
+            g.run_command("setblock 8 64 8 minecraft:air");
+            assert!(g.run_command("setblock 8 64 8 minecraft:chest{LootTable:\"test:left\"}"));
+            *g.world.random = LegacyRandom::new(seed);
+            g.unpack_loot(LootTarget::Block(POS), None);
+            level_results.push(snapshot(g, POS));
+        }
+        assert_eq!(
+            level_results[0]
+                .iter()
+                .enumerate()
+                .filter_map(|(i, s)| s.as_ref().map(|s| (i, s.item.to_string(), s.count)))
+                .collect::<Vec<_>>(),
+            vec![(24, "minecraft:diamond".to_owned(), 1)]
+        );
+        assert_eq!(level_results[0], level_results[2]);
+        assert_ne!(level_results[0], level_results[1]);
+        for pos in [POS, other] {
+            g.run_command(&format!(
+                "setblock {} {} {} minecraft:air",
+                pos.0, pos.1, pos.2
+            ));
+            assert!(g.run_command(&format!(
+                "setblock {} {} {} minecraft:chest{{LootTable:\"test:sequence_position\"}}",
+                pos.0, pos.1, pos.2
+            )));
+            g.rand_sequences = Default::default();
+            g.unpack_loot(LootTarget::Block(pos), None);
+        }
+        assert_eq!(snapshot(g, POS), snapshot(g, other));
+        place(g, POS, TABLE, 37);
+        *g.world.random = LegacyRandom::new(1);
+        g.unpack_loot(LootTarget::Block(POS), None);
+        let contents = g.world.block_entities[&POS].slots().to_vec();
+        place(g, other, TABLE, 37);
+        *g.world.random = LegacyRandom::new(2);
+        g.unpack_loot(LootTarget::Block(other), None);
+        assert_eq!(contents, g.world.block_entities[&other].slots());
+    });
+}
+
+#[test]
+#[ignore = "requires prepared resources"]
+fn saved_carts_keep_a_loot_table_only_when_they_hold_a_container() {
+    with_game(|game| {
+        let keys: std::collections::HashSet<_> = [(0, 0)].into();
+        let cases = [
+            (
+                "minecraft:minecart",
+                "minecraft:chests/simple_dungeon",
+                None,
+            ),
+            (
+                "minecraft:tnt_minecart",
+                "minecraft:chests/simple_dungeon",
+                None,
+            ),
+            (
+                "minecraft:chest_minecart",
+                "minecraft:chests/simple_dungeon",
+                Some("minecraft:chests/simple_dungeon"),
+            ),
+            ("minecraft:hopper_minecart", "", Some("minecraft:")),
+            // readChestVehicleSaveData: a table that is not an identifier reads as none, so
+            // neither it nor the seed is saved.
+            ("minecraft:chest_minecart", "Bad Name!", None),
+        ];
+        for (i, (kind, table, kept)) in cases.into_iter().enumerate() {
+            let source =
+                format!(r#"{{Pos:[8.5d,64d,8.5d],LootTable:"{table}",LootTableSeed:73L}}"#);
+            let (tag, _) = horizon_core::nbt::parse_snbt(&source).unwrap();
+            game.load_cart(tag, Some([61, 0, 0, i as i32 + 1]), kind);
+            // The entity chunk's own writer, as a save writes it to disk.
+            let (_, saved) = game.save_cart(game.carts.len() - 1, &keys).unwrap();
+            assert_eq!(
+                (
+                    saved.get("LootTable").cloned(),
+                    saved.get("LootTableSeed").cloned()
+                ),
+                (
+                    kept.map(|table| Tag::String(table.into())),
+                    kept.map(|_| Tag::Long(73))
+                ),
+                "{kind}"
+            );
+        }
     });
 }

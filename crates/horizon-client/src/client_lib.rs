@@ -69,6 +69,7 @@ pub mod debug_entries;
 pub mod debug_keys;
 pub mod debug_overlay;
 pub mod debugworld;
+pub mod desktop;
 pub mod dialog;
 pub mod dialog_screen;
 pub mod enchantment_levels;
@@ -181,6 +182,7 @@ pub mod title;
 pub mod toasts;
 pub mod ui_theme;
 pub mod vanillagen;
+pub mod viewed_levels_net;
 pub mod voxel_occlusion;
 // Keep the old path for native callers while giving the implementation a name
 // that does not collide with the gameplay adapter in `game/interface/entity_culling/mod.rs`.

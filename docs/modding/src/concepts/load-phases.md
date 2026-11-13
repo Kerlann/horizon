@@ -79,6 +79,9 @@ reload cover common setup, client setup is `client_setup`, dedicated setup is `s
 and dependencies express intermod ordering. Load complete is the edge after initial Config and before
 `server_about_to_start`, not a hook.
 
+FML's file and path APIs (`ModList` file reads, config full paths, the game directory, update URLs) are
+replaced on purpose; [FML loader APIs and their Horizon routes](../reference/fml-loader-apis.md) lists each one.
+
 ## Settings snapshot limits
 
 Settings snapshots accept regular UTF-8 files only. File and package-directory symlinks,

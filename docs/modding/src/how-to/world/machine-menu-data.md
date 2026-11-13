@@ -64,6 +64,22 @@ component-overridden maximum return `BlockEntityItemError`, never a partial writ
 or silent count clamp. A stale handle refuses a replacement rather than accessing
 its container; acquire a new handle for the replacement.
 
+## Skip unchanged tick write-back
+
+The existing `BlockEntityPart::block_entity_tick` event has the same reply on native
+and wasm. It defaults to `Changed`, retaining full checked payload write-back.
+When no payload should be written back, set:
+
+```rust,ignore
+*event.reply = BlockEntityTickReply::Unchanged;
+```
+
+This discards all edits to `event.entity`, omits the reply snapshot encode/decode,
+preserves the original revision, and causes no tick-only chunk dirty mark or
+container/comparator effects. Removal or replacement during the callback prevents
+restoring the original entity. Independent Host writes still have their own normal
+effects. The input snapshot is still sent; this is not batching or a validity cache.
+
 ## One-shot client effects
 
 To tell clients about something that happened once, such as a burst of particles, queue

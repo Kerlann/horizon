@@ -186,6 +186,15 @@ Use API-owned values rather than importing engine or package-loader types.
 | `BlockEntityTypeDecl` | Declaration snapshot produced by `r.block_entity_type(...).build()`. |
 | `GuiDraw` | GUI commands; `DrawContext::gui_paint` returns a typed text-conversion result. Handle refusal before drawing. HUD hooks reject invalid writeback as a whole. |
 
+`ServerHost::game_rule(id)` reads the one server-wide rule store without a
+`LevelRef`, including in `server_about_to_start` and `server_starting`.
+It returns `Result<GameRuleValue, GameRuleReadError>`; an unknown identifier gives
+`GameRuleReadError::UnknownRule`. `ServerHost::game_rules()` lists every available
+rule and its current value by namespaced id. Both native and wasm mods can use
+these reads. Saved values and a new world's create-screen choices are installed
+before the first server hook, without firing `game_rule_changed` for loading.
+Level reads use the same store once the requested level exists.
+
 `mod_api::GameRuleValue` owns the `Bool(bool)` and `Int(i32)` cases, in that order.
 `level.game_rule(host, id)` returns `Result<Option<GameRuleValue>, LevelReadError>`:
 `Ok(None)` means unknown rule, `Stale` means a gone/reopened level, and `Unavailable`

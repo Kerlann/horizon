@@ -44,6 +44,7 @@
 # Reference
 
 - [The manifest and the package](reference/manifest.md)
+- [FML loader APIs and their Horizon routes](reference/fml-loader-apis.md)
 - [The registry index and `.hpack`](reference/registry-index.md)
 - [The mod API reference](reference/api.md)
 <!-- The hook-notes preprocessor supplies this chapter and its published URL from catalog notes. -->

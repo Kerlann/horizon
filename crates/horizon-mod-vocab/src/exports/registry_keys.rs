@@ -15,7 +15,6 @@ mod __private {
     pub use crate::content::registry_keys::{
         block_keys, effect_key, effect_key_by_index, enchantment_keys, entity_type_keys, fluid_id,
         fluid_key, fluid_key_utf16, item_key, item_key_by_identifier, item_keys, menu_keys,
-        resolve_fluids, resolve_items, resolved_entity_type_key, resolved_entity_type_key_parts,
-        world_fluid_key,
+        resolve_fluids, resolve_items, world_fluid_key,
     };
 }

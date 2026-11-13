@@ -374,6 +374,28 @@ impl ItemPlace {
         done.unwrap_or(0)
     }
 
+    /// Edit the whole stack here, keeping its item and count. Unlike exchanging one,
+    /// this changes every item in the slot together, without splitting off a copy.
+    /// A missing stack, changed item/count or refused exchange returns false without
+    /// changing the place. Successful writes are journaled in `tx` like [`Self::exchange`].
+    pub fn edit(
+        &self,
+        host: &mut dyn ServerHost,
+        tx: &Transaction,
+        edit: impl FnOnce(&mut ItemStack),
+    ) -> bool {
+        let Some(mut stack) = self.stack(host) else {
+            return false;
+        };
+        let item = stack.item();
+        let count = stack.count();
+        edit(&mut stack);
+        if stack.item() != item || stack.count() != count {
+            return false;
+        }
+        self.exchange(host, tx, &ItemResource::of(&stack), count) == count
+    }
+
     /// `insert` or `extract`, in a transaction of its own: a handler answering more than it was
     /// asked has it undone, and its mod named.
     fn moved(
