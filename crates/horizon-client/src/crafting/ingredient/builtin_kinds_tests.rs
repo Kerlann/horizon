@@ -602,7 +602,7 @@ fn parrot_variant_recipe_codec_presence_strictness_and_borrowed_matching() {
         let invalid = parrot_variant_recipes(&items, patch, false);
         assert!(invalid.crafting.is_empty());
         assert!(invalid.cooking.is_empty());
-        assert!(invalid.by_type.values().all(Vec::is_empty));
+        assert!(invalid.by_type.values().all(|recipes| recipes.is_empty()));
     }
     // Synthetic supplied prototype exercises inherited values; vanilla supplies none.
     let mut prototypes = Items::empty();
