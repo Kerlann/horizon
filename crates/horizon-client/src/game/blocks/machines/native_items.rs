@@ -29,7 +29,7 @@ impl Game<'_> {
     pub(super) fn native_level_here(&self) -> Option<LevelRef> {
         let epoch = self.native_lifecycle.epoch()?;
         self.native_simulates()
-            .then(|| LevelRef::new(epoch, self.dim.key()))
+            .then(|| self.level_ref(epoch, self.dim.key()))
     }
     /// Up to `count` out of slot `slot` of `view`, without `setChanged`.
     fn take_up_to(&mut self, view: &View, slot: usize, count: u32) -> Option<ItemStack> {
@@ -305,7 +305,9 @@ impl Game<'_> {
                 continue;
             };
             if !held.same_item_same_components(resource)
-                || at.side.is_some_and(|face| !c.can_take(&view, slot, held, face))
+                || at
+                    .side
+                    .is_some_and(|face| !c.can_take(&view, slot, held, face))
             {
                 continue;
             }

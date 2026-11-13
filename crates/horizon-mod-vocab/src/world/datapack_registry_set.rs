@@ -1,9 +1,9 @@
-//! The entries of the datapack registries mods declared, as one world loads them
-//! (arismoko/horizon#811, stage 3): a candidate built from the winning pack files and checked
+//! The entries of the datapack registries mods declared, as one world loads them:
+//! a candidate built from the winning pack files and checked
 //! as a whole, then published as a set with a session and a generation, and read through
 //! handles that check both. Nothing here touches the world; the game builds a candidate before
 //! it commits any table and keeps the old set when building fails. See
-//! `docs/modding/src/concepts/mod-datapack-registries.md`.
+//! `docs/design/mod-api/mod-datapack-registries.md`.
 use super::datapack_registry::{
     DatapackDecodeError, DatapackEntry, DatapackFieldKind, DatapackRegistryDeclaration,
     DatapackValue, valid_namespaced,
@@ -692,6 +692,7 @@ mod tests {
 
     /// 65,536 entries in a registry are accepted; one more refuses the candidate.
     #[test]
+    #[ignore = "daily"]
     fn a_registry_over_65536_entries_refuses_the_candidate() {
         let mut files: Vec<_> = (0..65_536)
             .map(|n| match n {
@@ -710,6 +711,7 @@ mod tests {
 
     /// Exactly 67,108,864 source bytes fit; one extra byte refuses the candidate.
     #[test]
+    #[ignore = "daily"]
     fn a_candidate_over_64_mib_refuses_the_candidate() {
         let full = padded(1_048_576);
         let mut files: Vec<_> = (0..63)
