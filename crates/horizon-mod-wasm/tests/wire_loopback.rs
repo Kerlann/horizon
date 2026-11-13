@@ -30,6 +30,7 @@ mod piglin_answers;
 mod piston_push_reaction;
 #[path = "wire_loopback/prepared_equip.rs"]
 mod prepared_equip;
+use prepared_equip::slots as prepared;
 #[path = "wire_loopback/use_item_hand.rs"]
 mod use_item_hand;
 /// The generated proxies' refusal reason; the loopback refuses only on its own encode errors.

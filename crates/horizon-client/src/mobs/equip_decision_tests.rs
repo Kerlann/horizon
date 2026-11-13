@@ -128,6 +128,10 @@ fn replacement_and_removal_change_identity_and_overflow_retires_scope() {
     let last = decision.stamp().unwrap();
     let _borrow = decision.count_mut();
     assert!(decision.stamp().is_none());
+    assert_eq!(
+        crate::mobs::equip::source_stamp_at(decision.stack().unwrap() as *const _ as usize),
+        Some(None)
+    );
     assert!(!decision.ask(last, |_| true));
 }
 #[test]

@@ -13,6 +13,27 @@ pub struct EquipStamp {
     scope: u64,
 }
 
+impl EquipStamp {
+    pub(super) fn fresh(location: u64) -> Self {
+        let scope = NEXT_SCOPE
+            .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
+            .ok()
+            .unwrap_or(0);
+        Self {
+            location,
+            identity: 1,
+            revision: 0,
+            scope,
+        }
+    }
+    pub(super) fn valid(self) -> bool {
+        self.scope != 0
+    }
+    pub fn scope(self) -> u64 {
+        self.scope
+    }
+}
+
 /// Residency and observation version of the target used to decide an answer.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EquipEntityStamp {
@@ -41,21 +62,20 @@ pub struct EquipDecision<'a> {
     source: &'a mut Option<ItemStack>,
     stamp: EquipStamp,
     retired: bool,
+    address: Option<usize>,
 }
 impl<'a> EquipDecision<'a> {
     pub fn new(location: u64, source: &'a mut Option<ItemStack>) -> Self {
-        let scope = NEXT_SCOPE
-            .try_update(Ordering::Relaxed, Ordering::Relaxed, |n| n.checked_add(1))
-            .ok();
+        let stamp = EquipStamp::fresh(location);
+        let address = source.as_ref().map(|stack| stack as *const _ as usize);
+        if let Some(address) = address {
+            super::source::publish(address, stamp.valid().then_some(stamp));
+        }
         Self {
             source,
-            stamp: EquipStamp {
-                location,
-                identity: 1,
-                revision: 0,
-                scope: scope.unwrap_or(0),
-            },
-            retired: scope.is_none(),
+            stamp,
+            retired: !stamp.valid(),
+            address,
         }
     }
     pub fn stack(&self) -> Option<&ItemStack> {
@@ -78,6 +98,9 @@ impl<'a> EquipDecision<'a> {
                 None => self.retired = true,
             }
         }
+        if let Some(address) = self.address {
+            super::source::publish(address, self.stamp());
+        }
     }
     pub fn count_mut(&mut self) -> Option<&mut u32> {
         self.invalidate(false);
@@ -97,7 +120,21 @@ impl<'a> EquipDecision<'a> {
     }
     pub fn replace(&mut self, stack: Option<ItemStack>) -> Option<ItemStack> {
         self.invalidate(true);
-        std::mem::replace(self.source, stack)
+        let old = std::mem::replace(self.source, stack);
+        if self.address.is_none() {
+            self.address = self.source.as_ref().map(|stack| stack as *const _ as usize);
+        }
+        if let Some(address) = self.address {
+            super::source::publish(address, self.stamp());
+        }
+        old
+    }
+    pub fn split(&mut self, count: u32) -> ItemStack {
+        let mut result = self.stack().expect("equipment source removed").clone();
+        let count = count.min(result.count);
+        result.count = count;
+        *self.count_mut().expect("equipment source removed") -= count;
+        result
     }
     pub fn remove(&mut self) -> Option<ItemStack> {
         self.replace(None)
@@ -143,3 +180,17 @@ impl<'a> EquipDecision<'a> {
 #[cfg(test)]
 #[path = "equip_decision_tests.rs"]
 mod tests;
+
+impl std::ops::Deref for EquipDecision<'_> {
+    type Target = ItemStack;
+    fn deref(&self) -> &ItemStack {
+        self.stack().expect("equipment source removed")
+    }
+}
+impl Drop for EquipDecision<'_> {
+    fn drop(&mut self) {
+        if let Some(address) = self.address {
+            super::source::forget(address);
+        }
+    }
+}
