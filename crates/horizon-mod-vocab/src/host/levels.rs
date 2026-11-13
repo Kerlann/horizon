@@ -1295,6 +1295,38 @@ pub trait LevelsBackendMut {
         interaction: ExplosionInteraction,
     ) -> Result<Vec<ExplosionResistance>, ResistanceCellsError>;
     /// Side: server.
+    /// Destroys the blocks at `positions` as the blast `level.explode(host, source, center,
+    /// radius, fire, interaction)` would destroy them, without casting its rays, hurting or
+    /// pushing entities, or any packet or sound: a mod that casts its own rays breaks what they
+    /// found with it, spread over ticks if it likes. A Horizon addition. Each call is one
+    /// explosion to the hooks: `explosion_start` first, which may cancel it (then nothing breaks
+    /// and the answer is 0), then, for a radius of at least 0.00001, `explosion_detonate` with
+    /// the positions as its block list, in the order given, a repeated one once; a listener may
+    /// only take positions out (spare them), and one it adds is ignored. Then the block step in
+    /// vanilla's order: the positions shuffled with the level's random, and each block hit as
+    /// the blast hits one (air skipped; `can_drop_from_explosion`; loot with the radius under
+    /// the decay interaction; experience when the causing entity is a player;
+    /// `on_block_exploded`, whose default sets air and primes TNT owned by the causing entity),
+    /// the drops of the whole call merged and popped after the last block; then, with `fire`, a
+    /// third of the cells left air above a solid block catch fire, under `None` too. `None`
+    /// breaks nothing else, and `Trigger` only works the blocks it may. Unlike vanilla's rays, a
+    /// position in a chunk that isn't loaded is skipped, never loaded and not counted, and so is
+    /// one outside the level's height. The number of blocks destroyed: those that were not air
+    /// when their turn came. `Err`, with nothing changed, for more than 65,536 positions
+    /// (`ExplosionDestroyError::MAX_POSITIONS`), a stale level or `source`, or a centre or
+    /// radius that isn't finite or a negative radius.
+    #[access(WorldOnly)]
+    fn level_explosion_destroy_blocks(
+        &mut self,
+        level: LevelRef,
+        positions: &[[i32; 3]],
+        source: Option<EntityRef>,
+        center: [f64; 3],
+        radius: f32,
+        fire: bool,
+        interaction: ExplosionInteraction,
+    ) -> Result<u32, ExplosionDestroyError>;
+    /// Side: server.
     /// Strikes lightning at `at`, as summoning a `minecraft:lightning_bolt`
     /// does: it sets fire, hurts and converts what it hits (a pig to a
     /// zombified piglin...) and every player hears the thunder. With

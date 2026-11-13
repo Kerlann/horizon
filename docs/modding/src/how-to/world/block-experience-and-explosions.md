@@ -167,6 +167,48 @@ answer depends on nothing but the state and the explosion; either way the
 answer stays a pure function of its inputs, since a ray asks once as it enters
 a block.
 
+## Destroying a list of blocks as a blast
+
+`level.explosion_destroy_blocks(host, &positions, source, center, radius,
+fire, interaction)` breaks the blocks at `positions` as the blast
+`level.explode(host, source, center, radius, fire, interaction)` would break
+them, without casting its rays, hurting or pushing entities, or sending a
+packet or a sound. A mod that casts its own rays (with
+`explosion_resistances`) breaks what they found with it, spread over several
+ticks if it likes, and does the entity damage, the push and the effects with
+the entity calls and `explode`. It is a Horizon addition: vanilla has no single
+call that does this.
+
+Each call is one explosion to the hooks. `explosion_start` hears it first and
+may cancel it: then nothing breaks and the answer is 0. For a radius of at
+least 0.00001, `explosion_detonate` hears the positions as its block list, in
+the order given, a repeated one once. A listener may
+only take positions out (spare them): one it adds is ignored. Then the block
+step runs as a blast's does, in vanilla's order:
+
+1. The positions are shuffled with the level's random.
+2. Each block is hit: air is skipped; `can_drop_from_explosion` decides the
+   drops; the loot gets the radius only under the decay interaction; the
+   experience drops when the causing entity is a player; then
+   `on_block_exploded`, whose default sets air and primes TNT owned by the
+   causing entity.
+3. The drops of the whole call are merged (a stack is offered to every earlier
+   pile, up to 16 a pile; the rest starts a pile at that block) and popped
+   after the last block, in the order the piles began.
+4. With `fire`, a third of the cells left air above a solid block catch fire,
+   under `None` too.
+
+`None` breaks nothing else, and `Trigger` only works the blocks it may. The
+causing entity and the damage type come from `source` as for `explode`.
+
+Unlike vanilla's rays, a position in a chunk that isn't loaded is skipped,
+never loaded and not counted, and so is one outside the level's height. The
+answer is the number of blocks destroyed: those that were not air when their
+turn came. `Err(ExplosionDestroyError)`, with nothing changed and no hook told,
+for more than 65,536 positions (`ExplosionDestroyError::MAX_POSITIONS`), a
+stale level or `source`, or a centre or radius that isn't finite or a negative
+radius.
+
 ## Entities that destroy blocks
 
 `can_entity_destroy(host, event)` answers whether `event.entity` may destroy the

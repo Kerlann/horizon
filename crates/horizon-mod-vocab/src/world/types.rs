@@ -633,6 +633,33 @@ impl crate::NoBackend for ResistanceCellsError {
     }
 }
 
+/// Why [`LevelRef::explosion_destroy_blocks`](crate::LevelRef::explosion_destroy_blocks)
+/// destroyed nothing, with nothing changed and no hook told.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[non_exhaustive]
+#[derive(horizon_mod_api_macros::Wire)]
+pub enum ExplosionDestroyError {
+    /// More positions than [`ExplosionDestroyError::MAX_POSITIONS`]: this many.
+    TooMany(u64),
+    /// A stale level, or one not in place; a stale source or one in another level; a client.
+    Unavailable,
+    /// A centre or radius that isn't finite, or a negative radius.
+    InvalidBlast,
+    /// A host without a game.
+    NoGame,
+}
+
+impl ExplosionDestroyError {
+    /// The most positions one call takes.
+    pub const MAX_POSITIONS: u64 = 65_536;
+}
+
+impl crate::NoBackend for ExplosionDestroyError {
+    fn no_backend() -> Self {
+        Self::NoGame
+    }
+}
+
 /// What made a `tags_updated` notice fire (`TagsUpdatedEvent`'s two subclasses).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
