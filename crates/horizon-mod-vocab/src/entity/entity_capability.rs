@@ -41,7 +41,7 @@ pub const ENTITY_ITEMS: EntityCapabilityKey<dyn ResourceHandler<ItemResource>> =
     EntityCapabilityKey {
         name: "horizon:entity_items",
         default: Some(|host, entity, ()| {
-            if !builtin_player_inventory_type(entity.kind(host)?.id(host)) {
+            if !builtin_player_inventory_type(&entity.kind(host)?.id(host)) {
                 if let Some(size) = backend_of(host)?.entity_container_size(entity.id()) {
                     return Some(Box::new(ContainerItems { entity, size }));
                 }

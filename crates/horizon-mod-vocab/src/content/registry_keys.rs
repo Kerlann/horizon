@@ -231,14 +231,13 @@ pub fn resolved_entity_type_key(id: &str) -> Option<EntityTypeKey> {
     if !id.contains(':') {
         return resolved_entity_type_key_parts(&["minecraft:", id]);
     }
-    let names = ENTITY_TYPES.read().ok()?;
-    Some(EntityTypeKey(*names.as_ref()?.slots.get(id)?))
+    let names = resolved_entity_types().get()?;
+    Some(EntityTypeKey(*names.slots.get(id)?))
 }
 
 /// Resolve a composed engine name (notably boat/raft types) without heap formatting.
 pub fn resolved_entity_type_key_parts(parts: &[&str]) -> Option<EntityTypeKey> {
-    let names = ENTITY_TYPES.read().ok()?;
-    let names = names.as_ref()?;
+    let names = resolved_entity_types().get()?;
     names.slots.iter().find_map(|(name, slot)| {
         name.bytes()
             .eq(parts.iter().flat_map(|part| part.bytes()))
