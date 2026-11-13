@@ -117,14 +117,24 @@ impl ModProgress {
         let Some(bar) = state.bars.iter_mut().find(|bar| bar.id == id) else {
             return;
         };
+        let old_label = bar.label.clone();
         change(bar);
         bar.done = bar.done.min(bar.steps);
+        let label_change = (self.dedicated && bar.label != old_label).then(|| bar.label.clone());
+        let mut percentage = None;
         if self.dedicated && bar.steps > 0 {
             let tenths = u64::from(bar.done) * 10 / u64::from(bar.steps);
             if tenths > bar.logged {
                 bar.logged = tenths;
-                log::info!("{}: {}%", bar.label, tenths * 10);
+                percentage = Some((bar.label.clone(), tenths * 10));
             }
+        }
+        drop(state);
+        if let Some(label) = label_change {
+            log::info!("{label}");
+        }
+        if let Some((label, percent)) = percentage {
+            log::info!("{label}: {percent}%");
         }
     }
 }
@@ -139,7 +149,12 @@ impl mod_api::StartupScreen for ModProgress {
         if self.dedicated {
             log::info!("{label}");
         }
-        state.next = state.next.wrapping_add(1).max(1);
+        loop {
+            state.next = state.next.wrapping_add(1).max(1);
+            if !state.bars.iter().any(|bar| bar.id == state.next) {
+                break;
+            }
+        }
         let id = state.next;
         state.bars.push(Bar {
             id,
@@ -181,6 +196,58 @@ impl mod_api::StartupScreen for ModProgress {
 mod tests {
     use super::*;
     use mod_api::StartupScreen;
+
+    #[test]
+    fn multibyte_labels_stop_at_the_last_complete_character() {
+        let screen = ModProgress::new(false);
+        screen.open(format!("{}界", "é".repeat(127)), 1);
+        let bars = screen.shown(Instant::now()).0;
+        assert_eq!(bars[0].0, "é".repeat(127));
+        screen.message("é".repeat(128));
+        assert_eq!(screen.shown(Instant::now()).1, ["é".repeat(128)]);
+    }
+
+    #[test]
+    fn sixty_fifth_bar_is_refused_and_ids_do_not_alias_after_wrap() {
+        let screen = ModProgress::new(false);
+        let first = screen.open("first".into(), 1);
+        screen.state().next = u32::MAX;
+        let second = screen.open("second".into(), 1);
+        assert_ne!(first, second);
+        for _ in 2..64 {
+            assert_ne!(screen.open("kept".into(), 1), 0);
+        }
+        let before = screen.shown(Instant::now()).0;
+        assert_eq!(screen.open("refused".into(), 1), 0);
+        screen.step(0);
+        screen.close(0);
+        assert_eq!(screen.shown(Instant::now()).0, before);
+        screen.close(first);
+        assert_ne!(screen.open("replacement".into(), 1), 0);
+    }
+
+    #[test]
+    fn zero_step_bar_remains_finite_and_clamped() {
+        let screen = ModProgress::new(false);
+        let bar = screen.open("empty".into(), 0);
+        screen.step(bar);
+        screen.set(bar, u32::MAX);
+        assert_eq!(screen.shown(Instant::now()).0, [("empty".into(), 0.0)]);
+    }
+
+    #[test]
+    fn thirty_third_message_keeps_the_newest_lines_and_expires() {
+        let screen = ModProgress::new(false);
+        for n in 0..33 {
+            screen.message(format!("message {n}"));
+        }
+        let now = Instant::now();
+        assert_eq!(
+            screen.shown(now).1,
+            ["message 30", "message 31", "message 32"]
+        );
+        assert!(screen.shown(now + LINE_TIME).1.is_empty());
+    }
 
     #[test]
     fn bars_read_their_steps_newest_first_and_leave_when_closed() {
