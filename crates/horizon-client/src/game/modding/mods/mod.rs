@@ -2,8 +2,9 @@
 //! Mods in the game (`docs/modding/src/how-to/content-mods.md`): content mods' blocks, items, data and
 //! assets (`content_root`), and the Mods page's rows. Code mods are native (`native_hooks.rs`)
 //! or wasm (`horizon-mod-wasm`, loaded at startup); any other executable file is refused.
-use super::{Game, execution_role::ExecutionRole};
+use super::{Game, execution_role::ExecutionRole, registration_capability_coverage as coverage};
 mod menu_books;
+mod standalone;
 use horizon_client::{
     lang,
     mod_list::{self, Installed},
@@ -15,6 +16,7 @@ use horizon_world::{
 };
 use mod_api::__private::game::*;
 use mod_api::RegistrationContext;
+use standalone::collect_standalone_models;
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
@@ -236,8 +238,7 @@ fn builtin_registry_names(root: &Path) -> horizon_client::Result<BTreeMap<String
     Ok(registries)
 }
 
-/// Capture what registration reads (registries and settings) before the first registration
-/// hook runs, so every step sees the same values.
+/// Capture registration's stable registries, settings and stock capability type owners.
 pub(super) fn install_registration_data(root: &Path) -> horizon_client::Result<()> {
     let packages = mod_api::__private::loaded_mods();
     let directory = Game::game_dir();
@@ -259,7 +260,9 @@ pub(super) fn install_registration_data(root: &Path) -> horizon_client::Result<(
                 packages.ids(),
             ),
             directory,
-        ),
+            crate::entry::runtime_environment::get().clone(),
+        )
+        .with_capability_coverage(coverage::builtin, coverage::block_entity),
     );
     Ok(())
 }
@@ -396,14 +399,6 @@ fn collect_fluid_models(
     )
 }
 
-fn collect_standalone_models(role: ExecutionRole) -> Option<Vec<String>> {
-    if !role.is_client() {
-        return None;
-    }
-    let mut names = Vec::new();
-    Game::native_standalone_models(&RegistrationContext::new(), &mut names);
-    Some(names)
-}
 pub(super) fn collect_key_mappings<'declared>(
     role: ExecutionRole,
     declared: &'declared [(&'static str, mod_api::KeyRegistration)],
@@ -412,14 +407,19 @@ pub(super) fn collect_key_mappings<'declared>(
 }
 
 /// The native mods' entity model layers (`native_register_layer_definitions`), kept
-/// once at start for `bake_layer`.
-pub(super) fn register_layer_definitions(role: ExecutionRole) {
+/// once at start for `bake_layer`, then their skull types (`native_create_skull_models`), baked
+/// once from those layers (or vanilla's under `vanilla_root`), so `minecraft:head` item models may
+/// name their kinds.
+pub(super) fn register_layer_definitions(role: ExecutionRole, vanilla_root: &std::path::Path) {
     if !role.is_client() {
         return;
     }
     let mut layers = Vec::new();
     Game::native_register_layer_definitions(&RegistrationContext::new(), &mut layers);
     horizon_client::mobs::model_layers::register(layers);
+    let mut models = Vec::new();
+    Game::native_create_skull_models(&RegistrationContext::new(), &mut models);
+    horizon_client::skull_models::register(models, vanilla_root);
 }
 /// The native mods' F3 debug entries (`native_register_debug_entries`), kept once at start.
 pub(super) fn register_debug_entries(role: ExecutionRole) {
@@ -515,13 +515,15 @@ pub(super) fn register_resource_sources(role: ExecutionRole) {
     Game::native_register_block_state_models(&RegistrationContext::new(), &mut definitions);
     horizon_client_render::mod_block_state_models::register(definitions);
 }
-/// The client presentation registrations, resolved once before the first level opens: the
-/// dimension transition screens and the entity spectator shaders.
+/// The client presentation registrations, kept once at start, before resources load: the
+/// dimension transition screens, the entity spectator shaders, the render pipelines and the entity
+/// renderers.
 pub(super) fn register_client_presentations(role: ExecutionRole) {
     register_preset_editors(role);
     register_dimension_transition_screens(role);
     register_entity_spectator_shaders(role);
     register_render_pipelines(role);
+    register_entity_renderers(role);
 }
 
 /// Resolve client dimension-transition registrations once, before the first level opens.
@@ -603,6 +605,16 @@ fn add_section_geometry(role: ExecutionRole) {
     Game::native_add_section_geometry(&RegistrationContext::new(), &mut registry);
     horizon_client::mesher::register_section_geometry(registry.into_renderers());
 }
+/// The native mods' entity renderers (`native_register_entity_renderers`), kept once at start,
+/// before resources load; every resource load resolves each type's renderer.
+pub(super) fn register_entity_renderers(role: ExecutionRole) {
+    if !role.is_client() {
+        return;
+    }
+    let mut registry = mod_api::EntityRendererRegistry::default();
+    Game::native_register_entity_renderers(&RegistrationContext::new(), &mut registry);
+    super::native_entity_renderers::register(registry.into_renderers());
+}
 /// The native mods' particle providers (`native_register_particle_providers`) and render groups
 /// (`native_register_particle_groups`), kept once at start, before resources load; every particle
 /// sprite-set load resolves each type's provider and group.
@@ -635,6 +647,8 @@ pub(super) struct ContentOverlay {
     pub(super) announced: Vec<horizon_protocol::mod_list::Entry>,
     /// Whether the protocol's local mod list is still unset.
     pub(super) announce: bool,
+    /// The accepted content-only mods, each with its version, for the worlds saved to record.
+    pub(super) content_mods: Vec<horizon_client::save::level_mods::ModRecord>,
 }
 
 /// Builds the content overlay: every enabled or dev content mod's files
@@ -671,6 +685,7 @@ pub(super) fn content_overlay(
 
     let mut known = None;
     let mut mods: Vec<ContentMod> = Vec::new();
+    let mut content_mods = Vec::new();
     let announce = !horizon_protocol::mod_list::is_set();
     let mut announced: Vec<_> = if announce {
         sources
@@ -766,8 +781,14 @@ pub(super) fn content_overlay(
             jars: m.jar.clone(),
         };
         match mod_content::accept_mod(&mut mods, candidate, known) {
-            Ok(_) if announce && source.content_only => {
-                announced.push(announced_entry(&m.id, &m.version, m.side))
+            Ok(_) if source.content_only => {
+                content_mods.push(horizon_client::save::level_mods::ModRecord {
+                    id: m.id.clone(),
+                    version: m.version.clone(),
+                });
+                if announce {
+                    announced.push(announced_entry(&m.id, &m.version, m.side));
+                }
             }
             Ok(_) => {}
             Err(e) => log::warn!("Horizon: mod {} content not loaded: {e}", m.id),
@@ -828,6 +849,7 @@ pub(super) fn content_overlay(
         mods,
         announced,
         announce,
+        content_mods,
     })
 }
 
@@ -931,6 +953,9 @@ pub(super) fn content_root(
     if overlay.announce {
         horizon_protocol::mod_list::set_local(overlay.announced);
     }
+    // What every level.dat saved from here on records, and what a world is checked against
+    // before it opens (`level_mods`).
+    horizon_client::save::level_mods::set_content_mods(Some(overlay.content_mods));
     if overlay.root.prepared() != root {
         log::info!(
             "Horizon: content from {} mod(s) in {}",
@@ -977,7 +1002,7 @@ pub(super) fn content_root(
 /// Publish the built-in registry orders mods iterate. The report already
 /// includes the types and menus the content overlay registered, in registration
 /// order (`BuiltInRegistries` protocol ids).
-fn register_iterated_registries(root: &std::path::Path) -> horizon_client::Result<()> {
+pub(super) fn register_iterated_registries(root: &std::path::Path) -> horizon_client::Result<()> {
     use horizon_protocol::registry::Builtin;
     let path = Builtin::find(root).ok_or("registries.json not found")?;
     let builtin = Builtin::load(&path)?;
@@ -1122,16 +1147,18 @@ fn register_block_entity_types(
 fn announced_entry(
     id: &str,
     version: &str,
-    side: horizon_mod_package::Side,
+    side: mod_api::Side,
 ) -> horizon_protocol::mod_list::Entry {
-    use horizon_mod_package::Side;
     use horizon_protocol::mod_list;
+    use mod_api::Side;
     mod_list::Entry {
         id: id.to_owned(),
         version: version.to_owned(),
-        side: match side {
-            Side::Both => mod_list::Side::Both,
-            Side::Client => mod_list::Side::Client,
+        // `Side` is open to new kinds; until the list carries one, such a mod stays local.
+        side: if side == Side::Both {
+            mod_list::Side::Both
+        } else {
+            mod_list::Side::Client
         },
     }
 }
@@ -1155,7 +1182,7 @@ fn register_mob_effects(mods: &[horizon_client::mod_content::ContentMod]) {
             EffectCategory::Harmful => Category::Harmful,
             EffectCategory::Neutral => Category::Neutral,
         };
-        (e.id.clone(), e.color, category)
+        (e.id.clone(), e.color, category, e.sort_order)
     }));
     if !set
         && brewing::mod_effects()
@@ -1167,24 +1194,32 @@ fn register_mob_effects(mods: &[horizon_client::mod_content::ContentMod]) {
     }
 }
 
-/// the mods' thrown entity types, as their mob effects: set once, from the
+/// the mods' entity types' templates, which the tracker reads their settings
+/// from, and their thrown types, as their mob effects: set once, from the
 /// startup root. Living types are mobs, loaded with vanilla's from the
 /// content root's `entity-types.json`.
 fn register_entity_types(mods: &[horizon_client::mod_content::ContentMod]) {
-    use horizon_client::projectiles;
+    use horizon_client::{lan::tracking, projectiles};
     let mut types = horizon_client::mod_content::entity_types(mods);
+    let templates = types.iter().map(|t| (t.id.clone(), t.template.clone()));
+    let templates_set = tracking::register_templates(templates);
+    let templates_changed = !templates_set
+        && tracking::templates()
+            .iter()
+            .copied()
+            .ne(types.iter().map(|t| (t.id.as_str(), t.template.as_str())));
     types.retain(|t| t.item.is_some());
     let set = projectiles::register_thrown_types(
         types
             .iter()
             .filter_map(|t| Some((t.id.clone(), t.item.clone()?, t.damage))),
     );
-    if !set
+    let thrown_changed = !set
         && projectiles::thrown_types()
             .iter()
             .map(|t| t.id)
-            .ne(types.iter().map(|t| t.id.as_str()))
-    {
+            .ne(types.iter().map(|t| t.id.as_str()));
+    if templates_changed || thrown_changed {
         log::warn!("Horizon: the mods' entity types changed; restart the game to use them");
     }
 }
@@ -1229,7 +1264,7 @@ fn register_menu_types(
 }
 
 /// The embedded inventory, formatted for the crash report.
-fn native_mods_detail(built: &[horizon_mod_package::runtime::BuiltMod]) -> Option<String> {
+fn native_mods_detail(built: &[mod_api::__private::native::BuiltMod]) -> Option<String> {
     let list = built
         .iter()
         .map(|m| format!("{} {}", m.id, m.version))
@@ -1314,7 +1349,7 @@ fn live_switch_of(
 /// Installed native mods not compiled into this executable get an explanatory row.
 fn not_built(
     dir: &std::path::Path,
-    built: &[horizon_mod_package::runtime::BuiltMod],
+    built: &[mod_api::__private::native::BuiltMod],
     rows: &[Installed],
 ) -> Vec<Installed> {
     let mut paths: Vec<PathBuf> = std::fs::read_dir(dir)
@@ -1491,6 +1526,12 @@ impl Game<'_> {
                 }
             })
             .collect();
+        for (id, info) in &mut info {
+            info.warnings = mod_api::__private::registration_warnings(id)
+                .into_iter()
+                .map(|w| (w.key().to_owned(), w.args().to_vec()))
+                .collect();
+        }
         self.settings.mods.info = info;
         (self.mods.content_ids, self.mods.live_ids) = (content_ids, live_ids);
         if self.mods.applied.is_none() {
@@ -1626,9 +1667,12 @@ impl Game<'_> {
 }
 
 /// Mob types loaded from a scratch root whose `entity-types.json` has a
-/// zombie, a villager, and the rows a content root writes for a mod's types
-/// (`mod_content`): `ruby:ghoul` (a zombie with 40 health), `ruby:settler` (a
-/// villager as it is) and `ruby:bolt` (a thrown snowball, not a mob).
+/// zombie, a villager, a wandering trader, a wolf, a cat and a parrot, and the
+/// rows a content root writes for a mod's types (`mod_content`): `ruby:ghoul`
+/// (a zombie with 40 health), `ruby:settler` (a villager as it is),
+/// `ruby:merchant` (a wandering trader), the tameable `ruby:hound`,
+/// `ruby:tabby` and `ruby:macaw` (a wolf, a cat and a parrot) and `ruby:bolt`
+/// (a thrown snowball, not a mob).
 #[cfg(test)]
 pub(super) fn living_mod_types()
 -> std::collections::HashMap<String, std::sync::Arc<horizon_client::mobs::MobType>> {
@@ -1638,14 +1682,26 @@ pub(super) fn living_mod_types()
         r#""width":0.6,"height":1.95,"eye_height":1.62,"category":"misc","fire_immune":false"#;
     let trader =
         r#""width":0.6,"height":1.95,"eye_height":1.62,"category":"creature","fire_immune":false"#;
+    let wolf =
+        r#""width":0.6,"height":0.85,"eye_height":0.68,"category":"creature","fire_immune":false"#;
+    let cat =
+        r#""width":0.6,"height":0.7,"eye_height":0.35,"category":"creature","fire_immune":false"#;
+    let parrot =
+        r#""width":0.5,"height":0.9,"eye_height":0.54,"category":"creature","fire_immune":false"#;
     let table = format!(
         r#"{{"minecraft:zombie":{{{zombie},"attributes":{{"minecraft:max_health":20.0,"minecraft:movement_speed":0.23000000417232513}}}},
         "minecraft:villager":{{{villager},"attributes":{{"minecraft:max_health":20.0,"minecraft:movement_speed":0.5}}}},
         "minecraft:wandering_trader":{{{trader},"attributes":{{"minecraft:max_health":20.0,"minecraft:movement_speed":0.7}}}},
+        "minecraft:wolf":{{{wolf},"attributes":{{"minecraft:max_health":8.0,"minecraft:movement_speed":0.30000001192092896}}}},
+        "minecraft:cat":{{{cat},"attributes":{{"minecraft:max_health":10.0,"minecraft:movement_speed":0.30000001192092896}}}},
+        "minecraft:parrot":{{{parrot},"attributes":{{"minecraft:max_health":6.0,"minecraft:movement_speed":0.20000000298023224}}}},
         "minecraft:snowball":{{"width":0.25,"height":0.25,"eye_height":0.0,"category":"misc","fire_immune":false}},
         "ruby:ghoul":{{{zombie},"attributes":{{"minecraft:max_health":40.0,"minecraft:movement_speed":0.23000000417232513}},"template":"minecraft:zombie"}},
         "ruby:settler":{{{villager},"attributes":{{"minecraft:max_health":20.0,"minecraft:movement_speed":0.5}},"template":"minecraft:villager"}},
         "ruby:merchant":{{{trader},"attributes":{{"minecraft:max_health":20.0,"minecraft:movement_speed":0.7}},"template":"minecraft:wandering_trader"}},
+        "ruby:hound":{{{wolf},"attributes":{{"minecraft:max_health":8.0,"minecraft:movement_speed":0.30000001192092896}},"template":"minecraft:wolf"}},
+        "ruby:tabby":{{{cat},"attributes":{{"minecraft:max_health":10.0,"minecraft:movement_speed":0.30000001192092896}},"template":"minecraft:cat"}},
+        "ruby:macaw":{{{parrot},"attributes":{{"minecraft:max_health":6.0,"minecraft:movement_speed":0.20000000298023224}},"template":"minecraft:parrot"}},
         "ruby:bolt":{{"width":0.25,"height":0.25,"eye_height":0.0,"category":"misc","fire_immune":false,"template":"minecraft:snowball"}}}}"#
     );
     // A folder per call: tests run in parallel in one process, and each removes its own.
@@ -1657,7 +1713,14 @@ pub(super) fn living_mod_types()
     ));
     std::fs::create_dir_all(&root).unwrap();
     std::fs::write(root.join("entity-types.json"), table).unwrap();
-    let types = horizon_client::mobs::MobTypes::load_for_server(&root).unwrap();
+    // No attribute catalog: the rows' values stay as written.
+    let attributes = &horizon_world::attributes::entity::Catalog::from_json(&serde_json::json!({
+        "data_version": horizon_world::DATA_VERSION,
+        "attributes": [],
+        "entities": {},
+    }))
+    .unwrap();
+    let types = horizon_client::mobs::MobTypes::load_for_server(&root, attributes).unwrap();
     let _ = std::fs::remove_dir_all(&root);
     types
         .types
@@ -1840,7 +1903,8 @@ mod tests {
     }
 
     use super::*;
-    use horizon_mod_package::runtime::{BuiltMod, Runtime};
+    use horizon_mod_package::runtime::Runtime;
+    use mod_api::__private::native::BuiltMod;
 
     #[test]
     fn only_clients_collect_registered_keys() {
@@ -1866,7 +1930,7 @@ mod tests {
     const BUILT: &[BuiltMod] = &[BuiltMod {
         id: "machine_sample",
         version: "0.3.0",
-        side: horizon_mod_package::Side::Both,
+        side: mod_api::Side::Both,
     }];
 
     struct Fixture(PathBuf);
@@ -1977,6 +2041,74 @@ mod tests {
         );
     }
 
+    /// A content mod's tameable type (#4031) is its template's mob: a wolf, a
+    /// cat or a parrot, tamed and sitting, saves its owner, sitting and its
+    /// template's own field (a collar's colour, a parrot's variant) under its
+    /// own id and loads back as itself with all of them.
+    #[test]
+    fn a_mod_tameable_type_saves_and_loads_its_owner() {
+        use horizon_client::mobs::{Mob, Species};
+        use horizon_core::geometry::Vec3;
+        let types = living_mod_types();
+        let owner = [1, 2, 3, 4];
+        use horizon_core::nbt::Tag;
+        for (id, species, own) in [
+            ("ruby:hound", Species::Wolf, ("CollarColor", Tag::Byte(14))),
+            ("ruby:tabby", Species::Cat, ("CollarColor", Tag::Byte(3))),
+            ("ruby:macaw", Species::Parrot, ("Variant", Tag::Int(2))),
+        ] {
+            let kind = types[id].clone();
+            assert_eq!(kind.species, species, "{id}");
+            let mut pet = Mob::new(1, kind, Vec3::new(0.5, 64.0, 0.5), 0.0);
+            pet.extra.tame = true;
+            pet.extra.owner = Some(owner);
+            pet.extra.sitting = true;
+            match species {
+                Species::Parrot => pet.extra.variant = 2,
+                _ => pet.extra.color = if species == Species::Wolf { 14 } else { 3 },
+            }
+            let tag =
+                horizon_client::entity_nbt::mob_to_nbt(&pet, [0, 0, 0, 1], None, None, |_| None);
+            let get = |key: &str| tag.get(key).cloned();
+            assert_eq!(
+                get("id"),
+                Some(horizon_core::nbt::Tag::String(id.into())),
+                "{id}"
+            );
+            assert_eq!(
+                get("Owner"),
+                Some(horizon_core::nbt::Tag::IntArray(owner.to_vec())),
+                "{id}"
+            );
+            assert_eq!(
+                get("Sitting"),
+                Some(horizon_core::nbt::Tag::Byte(1)),
+                "{id}"
+            );
+            assert_eq!(get(own.0), Some(own.1), "{id}");
+            let loaded = horizon_client::entity_nbt::mob_from_nbt(&tag, &types, 2, None)
+                .expect("it loads back");
+            assert_eq!(
+                (
+                    loaded.kind.id.as_str(),
+                    loaded.species(),
+                    loaded.extra.tame,
+                    loaded.extra.owner,
+                    loaded.extra.sitting,
+                    (loaded.extra.color, loaded.extra.variant)
+                ),
+                (
+                    id,
+                    species,
+                    true,
+                    Some(owner),
+                    true,
+                    (pet.extra.color, pet.extra.variant)
+                )
+            );
+        }
+    }
+
     /// A mod's declared attribute set (#845, `EntityAttributeCreationEvent`)
     /// reaches everything a mob of the type is: the fields it spawns with,
     /// the finalize defaults and the live attribute map's catalog row —
@@ -2076,7 +2208,10 @@ mod tests {
             id: id.into(),
             definition: Definition::ranged(default, 0.0, 100.0).unwrap(),
             syncable,
-            sentiment,
+            tooltip: horizon_world::attributes::Tooltip {
+                sentiment,
+                ..Default::default()
+            },
         };
         let grown = catalog
             .with_attributes(&[
@@ -2522,57 +2657,6 @@ mod tests {
         );
     }
 
-    #[test]
-    fn standalone_models_collect_only_on_the_client() {
-        use mod_api::{self, Hooks, ModEntry, StandaloneModelsEvent};
-        use mod_platform::testing::with_mods;
-        use std::sync::{
-            Arc,
-            atomic::{AtomicUsize, Ordering},
-        };
-        #[derive(Default)]
-        struct Models(Arc<AtomicUsize>);
-        #[mod_api::horizon_mod]
-        impl Hooks for Models {
-            fn standalone_models(
-                &self,
-                context: &RegistrationContext,
-                event: &mut StandaloneModelsEvent<'_>,
-            ) {
-                assert_eq!(
-                    context.mods().ids().collect::<Vec<_>>(),
-                    ["registration_test"]
-                );
-                self.0.fetch_add(1, Ordering::Relaxed);
-                event.models.push("registration_test:block/shaft".into());
-            }
-        }
-        let calls = Arc::new(AtomicUsize::new(0));
-        with_mods(
-            vec![ModEntry::new(
-                "registration_test",
-                Box::new(Models(calls.clone())),
-            )]
-            .into(),
-            || {
-                mod_platform::__private::with_test_packages(&["registration_test"], || {
-                    assert_eq!(
-                        collect_standalone_models(ExecutionRole::IntegratedServer),
-                        None
-                    );
-                    assert_eq!(
-                        collect_standalone_models(ExecutionRole::DedicatedServer),
-                        None
-                    );
-                    assert_eq!(calls.load(Ordering::Relaxed), 0);
-                    let models = collect_standalone_models(ExecutionRole::Client).unwrap();
-                    assert_eq!(calls.load(Ordering::Relaxed), 1);
-                    assert_eq!(models, ["registration_test:block/shaft"]);
-                })
-            },
-        );
-    }
-
     fn hmod(dir: &std::path::Path, id: &str) {
         let manifest = format!(
             "id = '{id}'\nname = '{id}'\nversion = '0.3.0'\napi = '0.2'\nside = 'both'\ncapabilities = ['registries']\n[native]\ngame = '26.3'\nhorizon = '{}'\nmixins = '{}'\n",
@@ -2854,7 +2938,7 @@ mod tests {
             BuiltMod {
                 id: "pipes",
                 version: "2.0",
-                side: horizon_mod_package::Side::Client,
+                side: mod_api::Side::Client,
             },
         ];
         assert_eq!(
@@ -2914,7 +2998,8 @@ mod tests {
         assert!(brewing::register_mod_effects([(
             "test:effect".to_owned(),
             0,
-            brewing::Category::Neutral
+            brewing::Category::Neutral,
+            None
         )]));
     }
 }
