@@ -426,10 +426,12 @@ impl crate::prelude::FluidsEnergyBackend for FakeHost {
 }
 impl crate::prelude::EntitiesBackend for FakeHost {
     fn entity_kind(&self, entity: EntityRef) -> Option<crate::EntityTypeKey> {
-        if self.players.by_entity(entity.id()).is_some() {
-            return Some("minecraft:player".to_owned());
-        }
-        Some(self.level.entity_at(entity.id())?.kind.clone())
+        let kind = if self.players.by_entity(entity.id()).is_some() {
+            "minecraft:player"
+        } else {
+            &self.level.entity_at(entity.id())?.kind
+        };
+        crate::content::registry_keys::resolved_entity_type_key(kind)
     }
     fn entity_level(&self, entity: EntityRef) -> Option<LevelRef> {
         if let Some((_, player)) = self.players.by_entity(entity.id()) {

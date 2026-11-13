@@ -816,10 +816,10 @@ impl Game<'_> {
     /// 373.
     pub(super) fn entity_kind(&self, entity: EntityRef) -> Option<mod_api::EntityTypeKey> {
         match self.native_entity_read_target(entity) {
-            Some(t) => Some(self.target_type(t)),
-            None => self
-                .native_client_tracked(entity)
-                .map(|(kind, _)| kind.to_owned()),
+            Some(target) => self.native_entity_kind_key(target),
+            None => {
+                mod_api::__private::resolved_entity_type_key(self.native_client_tracked(entity)?.0)
+            }
         }
     }
     /// The entity's UUID (`Entity.getUUID`), the one it is saved with; an
@@ -1267,6 +1267,7 @@ pub(super) mod tests {
             })
             .collect();
         crate::game::api_values::register_game_keys(ids);
+        let saves = tempfile::tempdir().unwrap();
         let settings = Settings::default();
         let loaded = load_resources(
             horizon_assets::resource_source::ResourceRoot::directory(root.clone()),
@@ -1284,6 +1285,7 @@ pub(super) mod tests {
         let mut options = Options::parse(std::iter::empty()).unwrap().unwrap();
         options.resources = root.clone();
         options.execution_role = role;
+        options.game_dir = Some(saves.path().to_path_buf());
         let mut game = Game::new(
             &loaded.resources,
             loaded.pack,
@@ -1305,17 +1307,11 @@ pub(super) mod tests {
         resolve_parts(&game).unwrap();
         // The title's save folder is under the working directory: give each test its own, so a
         // test that saves leaves the checkout clean and parallel tests don't share files.
-        let saves = std::env::temp_dir().join(format!(
-            "horizon-with-game-{}-{:?}",
-            std::process::id(),
-            std::thread::current().id()
-        ));
         game.save = std::sync::Arc::new(horizon_client::save::SaveDir::new(
-            saves.clone(),
+            saves.path().to_path_buf(),
             horizon_client::save::LevelShape::OVERWORLD,
         ));
         test(&mut game);
-        let _ = std::fs::remove_dir_all(saves);
     }
 
     #[test]
@@ -2697,7 +2693,10 @@ pub(super) mod tests {
             let other = game.entity(13).unwrap();
             assert_eq!(other.position(game), Some([3.0, 64.0, 5.0]));
             assert_eq!(other.uuid(game), Some(13));
-            assert_eq!(other.kind(game).as_deref(), Some("minecraft:player"));
+            assert_eq!(
+                other.kind(game).map(|kind| kind.id(game)).as_deref(),
+                Some("minecraft:player")
+            );
             let living = game.living(other).unwrap();
             assert_eq!(
                 living

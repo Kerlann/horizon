@@ -2526,7 +2526,7 @@ mod tests {
         );
         let item = game.living_drop(wolf, bone.clone(), false, true).unwrap();
         assert_eq!(
-            game.entity_kind(item).map(|kind| kind.id(game)).as_deref(),
+            game.entity_kind(item).map(|kind| kind.id(&game)).as_deref(),
             Some("minecraft:item")
         );
         let wolf_uuid = game.uuid_for(id);

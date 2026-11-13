@@ -219,6 +219,26 @@ pub fn item_keys() -> Vec<ItemKey> {
         .collect()
 }
 
+/// Resolve an entity type without materializing an owned name at a read boundary.
+pub fn resolved_entity_type_key(id: &str) -> Option<EntityTypeKey> {
+    if !id.contains(':') {
+        return resolved_entity_type_key_parts(&["minecraft:", id]);
+    }
+    let names = ENTITY_TYPES.read().ok()?;
+    Some(EntityTypeKey(*names.as_ref()?.slots.get(id)?))
+}
+
+/// Resolve a composed engine name (notably boat/raft types) without heap formatting.
+pub fn resolved_entity_type_key_parts(parts: &[&str]) -> Option<EntityTypeKey> {
+    let names = ENTITY_TYPES.read().ok()?;
+    let names = names.as_ref()?;
+    names.slots.iter().find_map(|(name, slot)| {
+        name.bytes()
+            .eq(parts.iter().flat_map(|part| part.bytes()))
+            .then_some(EntityTypeKey(*slot))
+    })
+}
+
 /// Every built-in entity-type key in registry order.
 pub fn entity_type_keys() -> Vec<EntityTypeKey> {
     ordered_keys(&ENTITY_TYPES, EntityTypeKey)
