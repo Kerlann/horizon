@@ -24,3 +24,4 @@ horizon-client game::runtime_levels_tests::a_failed_removal_leaves_the_level_clo
 horizon-client game::runtime_levels_tests::an_open_queued_behind_a_failed_removal_is_dropped HORIZON_TEST_RESOURCES needs
 horizon-client game::viewed_worlds::switch::tests::removed_block_entities_at_two_positions_do_not_return_on_travel HORIZON_TEST_RESOURCES needs
 horizon-client game::native_damage_tests::a_cancelled_deaths_post_fires_once_before_the_death_hooks HORIZON_TEST_RESOURCES needs
+horizon-client game::viewed_worlds::switch::tests::a_level_opened_after_login_is_forgotten_once_left HORIZON_TEST_RESOURCES needs
