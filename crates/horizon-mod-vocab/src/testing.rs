@@ -425,7 +425,7 @@ impl crate::prelude::FluidsEnergyBackend for FakeHost {
     }
 }
 impl crate::prelude::EntitiesBackend for FakeHost {
-    fn entity_kind(&self, entity: EntityRef) -> Option<String> {
+    fn entity_kind(&self, entity: EntityRef) -> Option<crate::EntityTypeKey> {
         if self.players.by_entity(entity.id()).is_some() {
             return Some("minecraft:player".to_owned());
         }

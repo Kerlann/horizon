@@ -278,7 +278,7 @@ impl GoalCx<'_, '_> {
         }
     }
 
-    fn r_entity_kind(&self, entity: EntityRef) -> Option<String> {
+    fn r_entity_kind(&self, entity: EntityRef) -> Option<mod_api::EntityTypeKey> {
         match self.resolve(entity)? {
             // The snapshot carries the species, not its type id.
             Resolved::Own => Some(self.m.kind.id.clone()),

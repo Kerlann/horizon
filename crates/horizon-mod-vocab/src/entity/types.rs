@@ -45,8 +45,10 @@ pub enum AttributeRegistrationError {
 // exhaustive: its field is private, so only registration creates a key
 pub struct EffectKey(pub(crate) u32);
 
-/// A mob entity type (`minecraft:zombie`) in the built-in entity-type registry, in
-/// registration order. A key stays valid until the game exits.
+/// An entity type (`minecraft:zombie`) in the built-in entity-type registry, in
+/// registration order. Returned by `EntityRef::kind`; Copy/Eq comparisons do not
+/// allocate. Request `key.id(host)` for its namespaced name (an owned diagnostic
+/// string). A key stays valid until the game exits.
 // no wire: decoding validates the u32 slot with EntityTypeKey::from_slot on the host; wasm carries the host-issued opaque token without consulting guest tables.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 // exhaustive: only the load-owned table creates keys

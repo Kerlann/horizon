@@ -814,7 +814,7 @@ impl Game<'_> {
     }
     /// The entity's type (`Entity.getType`): `minecraft:zombie`. API
     /// 373.
-    pub(super) fn entity_kind(&self, entity: EntityRef) -> Option<String> {
+    pub(super) fn entity_kind(&self, entity: EntityRef) -> Option<mod_api::EntityTypeKey> {
         match self.native_entity_read_target(entity) {
             Some(t) => Some(self.target_type(t)),
             None => self
@@ -2812,7 +2812,9 @@ pub(super) mod tests {
             assert_eq!(found.len(), 1);
             assert_eq!(game.entity_position(found[0]), Some([1.0, 0.0, 0.0]));
             assert_eq!(
-                game.entity_kind(found[0]).as_deref(),
+                game.entity_kind(found[0])
+                    .map(|kind| kind.id(game))
+                    .as_deref(),
                 Some("minecraft:armor_stand")
             );
             assert!(
