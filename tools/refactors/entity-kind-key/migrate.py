@@ -51,8 +51,11 @@ def main():
     mode.add_argument("--dry-run", action="store_true")
     mode.add_argument("--check", action="store_true", help="require an already-migrated tree; do not write")
     parser.add_argument("--report", type=Path, help="optional local JSON report, not source output")
+    parser.add_argument("--only", action="append", help="limit migration to these paths after a merge")
     args = parser.parse_args()
     rules = json.loads(RULES.read_text())
+    if args.only:
+        rules["edits"] = [edit for edit in rules["edits"] if edit["path"] in args.only]
     changes, counts = plan(args.root, rules)
     paths = sorted(changes)
     if args.apply:
