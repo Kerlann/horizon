@@ -54,9 +54,13 @@ Native registrations retain their persistent NBT validation contract.
 
 The shared decoder currently covers `damage`, `repair_cost`, `max_damage`,
 `max_stack_size`, `rarity`, `enchantments`, `stored_enchantments`, `custom_name`,
-`item_name`, and `block_entity_data` in the `minecraft` namespace. The other
-112 registered built-ins use stored-value matching while their shared decoders
-are added incrementally in **#3875**. Their absence is not a load refusal.
+`item_name`, `block_entity_data`, and `villager_food` in the `minecraft` namespace.
+`villager_food` requires a compound with positive integer `nutrition`: numeric
+NBT uses Java's 32-bit integer conversion before the positive check, and unknown
+fields do not participate in equality. Its recipe and item-default values are
+prepared at load; live candidates are borrowed without allocation.
+The other 111 registered built-ins use stored-value matching while their shared
+decoders are added incrementally in **#3875**. Their absence is not a load refusal.
 
 Component ingredient displays contain the patch, including removals. Difference
 lists retain the base list and remove only items whose default stack passes the

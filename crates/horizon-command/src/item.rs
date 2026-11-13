@@ -33,6 +33,7 @@ pub const DECODED_COMPONENTS: &[&str] = &[
     "minecraft:custom_name",
     "minecraft:item_name",
     "minecraft:block_entity_data",
+    "minecraft:villager_food",
 ];
 
 /// Validate and decode a component into the value representation shared with stacks.
@@ -58,6 +59,13 @@ pub fn decoded_component_value(id: &str, value: &Tag, reg: &Registries) -> Resul
         | "minecraft:max_stack_size" => {
             Tag::Int(int_of(value).expect("validated numeric component") as i32)
         }
+        "minecraft:villager_food" => Tag::compound([(
+            "nutrition",
+            Tag::Int(
+                int_of(value.get("nutrition").expect("validated nutrition"))
+                    .expect("validated numeric nutrition") as i32,
+            ),
+        )]),
         "minecraft:enchantments" | "minecraft:stored_enchantments" => {
             let Tag::Compound(entries) = value else {
                 unreachable!("validated enchantment map")
@@ -101,6 +109,18 @@ pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), Strin
             let v = int_of(t).ok_or("Not a number")?;
             if !(1..=99).contains(&v) {
                 return Err(format!("Value must be within range [1;99]: {v}"));
+            }
+            Ok(())
+        }
+        // `VillagerFood.CODEC`: a required positive Codec.INT; extra fields are ignored.
+        "minecraft:villager_food" => {
+            let Tag::Compound(_) = t else {
+                return Err(not_map(t));
+            };
+            let nutrition = t.get("nutrition").ok_or("Missing nutrition")?;
+            let value = int_of(nutrition).ok_or("Not a number")?;
+            if value <= 0 {
+                return Err(format!("Value must be positive: {value}"));
             }
             Ok(())
         }
