@@ -1036,6 +1036,11 @@ impl Game<'_> {
                                 .filter(|c| c.player)
                                 .map(|_| Who::Player)
                                 .or_else(|| {
+                                    let player = self.combat.blast_owner_player
+                                        && self.combat.explicit_explosion_cause.is_none();
+                                    player.then_some(Who::Player)
+                                })
+                                .or_else(|| {
                                     attacker
                                         .as_ref()
                                         .map(|&(id, _)| id)
@@ -1211,7 +1216,8 @@ impl Game<'_> {
     pub(super) fn explosion_kill_credit(&self) -> Option<super::commands::Target> {
         use super::commands::Target;
         // A primed TNT's owner (a player) names the blast before any mob does.
-        if self.combat.blast_owner.is_some() {
+        let player = self.combat.blast_owner_player || self.combat.explicit_explosion_cause.is_some();
+        if self.combat.blast_owner.is_some() && player {
             return Some(
                 self.combat
                     .blast_guest
@@ -1438,6 +1444,12 @@ impl Game<'_> {
             g.server_explode_as_source(center, radius, interaction, fire, damage_type, None, source)
         };
         match cause {
+            // A player causes it (a lit TNT's igniter, a mod blast's source):
+            // their hits land as that player's.
+            None if self.combat.blast_owner_player => {
+                let attack = self.blast_owner_attack();
+                self.with_attack(attack, blast)
+            }
             None => blast(self),
             Some(cause) => {
                 let (id, kind) = source.entity.ok_or_else(|| {

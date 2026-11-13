@@ -103,29 +103,54 @@ impl Game<'_> {
     }
 
     /// The blast's source `id` and its causing entity
-    /// (`Explosion.getIndirectSourceEntity`): a primed TNT's owner, a living
-    /// entity itself (a player, or a mob, which `blast_attacker` falls back
-    /// to), a projectile's owner when that is living; anything else causes
-    /// none. The damage source and kill credit follow the cause.
+    /// (`Explosion.getIndirectSourceEntity`): a primed TNT's owner; a living
+    /// entity itself (a player; a mob, which `blast_attacker` falls back to;
+    /// the dragon or an armour stand); a projectile's owner when that is
+    /// living (one in the projectile list, a thrown trident, a firework
+    /// rocket, a fishing bobber); anything else causes none. The damage
+    /// source and kill credit follow the cause.
     pub(super) fn attribute_native_blast(&mut self, id: u32, target: Target) {
         self.combat.explosion_source = Some(id);
         // `getEntities(this.source, ...)`: the source is no victim of its own blast.
         self.combat.explosion_source_named = true;
-        match target {
-            Target::Tnt(_) => self.set_tnt_blast_owner(id),
-            Target::Player => self.set_blast_owner(Some(Who::Player), self.lan_acting),
-            Target::Guest(conn) => self.set_blast_owner(Some(Who::Player), Some(conn)),
-            Target::Projectile(_) => {
-                let owner = self.creatures.projectiles.iter().find(|p| p.id == id);
-                match owner.map(|p| (p.owner, p.guest)) {
-                    Some((Some(Who::Player), guest)) => {
-                        self.set_blast_owner(Some(Who::Player), guest)
-                    }
-                    Some((Some(Who::Mob(mob)), _)) => self.combat.explosion_owner = Some(mob),
-                    _ => {}
-                }
+        let owner = match target {
+            Target::Tnt(_) => return self.set_tnt_blast_owner(id),
+            Target::Player => Some((Who::Player, self.lan_acting)),
+            Target::Guest(conn) => Some((Who::Player, Some(conn))),
+            Target::Dragon(_) | Target::Stand(_) => {
+                let kind = match target {
+                    Target::Dragon(_) => "minecraft:ender_dragon",
+                    _ => "minecraft:armor_stand",
+                };
+                self.combat.blast_owner = Some((id, self.explosion_entity_name(id, kind)));
+                return;
             }
-            _ => {}
+            Target::Projectile(_) => self
+                .creatures
+                .projectiles
+                .iter()
+                .find(|p| p.id == id)
+                .and_then(|p| Some((p.owner?, p.guest))),
+            Target::Rocket(_) => self
+                .rockets
+                .iter()
+                .find(|r| r.id == id)
+                .and_then(|r| Some((r.owner?, r.guest))),
+            // A thrown trident's owner is a player: a guest, or the player in place.
+            Target::Trident(_) => self.tridents.iter().find(|t| t.id == id).and_then(|t| {
+                let in_place = self.player.as_ref().map(|p| p.entity_id as u32);
+                (t.guest.is_some() || in_place == Some(t.owner)).then_some((Who::Player, t.guest))
+            }),
+            Target::Hook(_) => self.fishing_hook_by_id(id).map(|(_, caster)| match caster {
+                Target::Guest(conn) => (Who::Player, Some(conn)),
+                _ => (Who::Player, self.lan_acting),
+            }),
+            _ => None,
+        };
+        match owner {
+            Some((Who::Player, guest)) => self.set_blast_owner(Some(Who::Player), guest),
+            Some((Who::Mob(mob), _)) => self.combat.explosion_owner = Some(mob),
+            None => {}
         }
     }
 

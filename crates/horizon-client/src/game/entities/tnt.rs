@@ -637,6 +637,14 @@ impl Game<'_> {
         self.combat.blast_owner_player =
             owner == Some(Who::Player) && self.combat.blast_owner.is_some();
     }
+    /// The attack a player-owned blast's hits land in: its causing player's,
+    /// so a mob it kills is that player's kill.
+    pub(super) fn blast_owner_attack(&self) -> horizon_client::health::Attack {
+        let id = self.combat.blast_owner.as_ref().map_or(0, |(id, _)| *id as i32);
+        let mut attack = self.attack_of(id);
+        attack.player_uuid = self.player_uuid_of(self.combat.blast_guest);
+        attack
+    }
     /// `PrimedTnt.getOwner` for TNT loaded with an `owner`: looked up when
     /// asked, so a player who joined or a mob loaded since is found.
     fn loaded_tnt_owner(&self, id: u32) -> Option<(Who, Option<u32>)> {

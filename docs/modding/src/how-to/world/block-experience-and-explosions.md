@@ -65,8 +65,8 @@ vanilla's `Explosion.getIndirectSourceEntity` has it.
 | `source` | Causing entity |
 | --- | --- |
 | A primed TNT | Its owner (the player or mob that lit it), or none |
-| A living entity (a player, a mob) | The source itself |
-| A projectile | Its owner when that is living, else none |
+| A living entity (a player, a mob, the ender dragon, an armour stand) | The source itself |
+| A projectile (an arrow, a fireball, a thrown trident, a firework rocket, a fishing bobber...) | Its owner when that is living, else none |
 | Anything else, or `None` | None |
 
 With a source and a causing entity the damage is `minecraft:player_explosion`,

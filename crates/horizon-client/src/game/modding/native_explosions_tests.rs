@@ -184,11 +184,17 @@ impl Hooks for Deathwatch {
     }
 }
 
-/// A primed TNT lit by `owner` blows up beside a zombie on one health, with
-/// the TNT as the blast's source: what the zombie's death names.
-fn tnt_kill(via: Via, owner: Option<Who>) -> Vec<(u32, String, i32)> {
+/// A blast at (4.5, 80, 4.5) whose source `source` makes (it answers the
+/// source's entity id) kills a zombie on one health beside it: what the
+/// zombie's death names, and whether a player is credited with the kill
+/// (`last_hurt_by_player`). The player in place is entity 11, out of reach.
+fn kill(
+    via: Via,
+    source: impl Fn(&mut Game<'_>) -> u32,
+) -> (Vec<(u32, String, i32)>, bool) {
     crate::entry::install_client_hooks();
     let deaths = Deaths::default();
+    let mut credited = false;
     mod_platform::testing::with_mods(
         vec![ModEntry::new(
             "explode-deaths",
@@ -204,10 +210,9 @@ fn tnt_kill(via: Via, owner: Option<Who>) -> Vec<(u32, String, i32)> {
                 game.set_mode_id(0);
                 game.next_entity = 100;
                 mob(game, 41, "minecraft:zombie", Vec3::new(6.0, 80.0, 4.5), 1.0);
-                game.add_primed_tnt(BlockPos::new(4, 80, 4), 0.0, 80, owner, None);
-                let tnt = game.tnts.last().unwrap().id;
-                let source = game.entity(tnt);
-                assert!(source.is_some());
+                let id = source(game);
+                let source = game.entity(id);
+                assert!(source.is_some(), "the source {id} resolves");
                 let blast = Blast {
                     source,
                     center: [4.5, 80.0, 4.5],
@@ -216,50 +221,129 @@ fn tnt_kill(via: Via, owner: Option<Who>) -> Vec<(u32, String, i32)> {
                     interaction: ExplosionInteraction::None,
                 };
                 explode(game, via, blast, true);
+                credited = game.last_hurt_by_player.contains_key(&41);
                 game.tick_creature_entities().unwrap();
-                // The TNT that was the source is still there: the call is no fuse.
-                assert!(game.tnts.iter().any(|t| t.id == tnt));
             })
         },
     );
-    deaths.lock().unwrap().clone()
+    let deaths = deaths.lock().unwrap().clone();
+    (deaths, credited)
+}
+
+/// [`kill`] through both targets, each answering `expected`.
+fn kills(name: &str, source: fn(&mut Game<'_>) -> u32, expected: (i32, &'static str, bool)) {
+    crate::game::in_own_process(&format!("game::native_explosions_tests::{name}"), || {
+        run_on_guest_stack(move || {
+            for via in BOTH {
+                let (causing, damage_type, credited) = expected;
+                assert_eq!(
+                    kill(via, source),
+                    (vec![(41, damage_type.to_owned(), causing)], credited),
+                    "{via:?}"
+                );
+            }
+        });
+    });
+}
+
+/// Primed TNT lit by `owner` beside the zombie.
+fn tnt(game: &mut Game<'_>, owner: Option<Who>) -> u32 {
+    game.add_primed_tnt(BlockPos::new(4, 80, 4), 0.0, 80, owner, None);
+    game.tnts.last().unwrap().id
+}
+
+/// A summoned entity's id.
+fn summoned(game: &mut Game<'_>, kind: &str, nbt: &str) -> u32 {
+    let target = game
+        .summon_with_nbt(kind, [4.5, 80.5, 4.5], nbt)
+        .unwrap()
+        .unwrap();
+    use crate::game::commands::Target;
+    match target {
+        Target::Stand(id) | Target::Trident(id) | Target::Rocket(id) => id,
+        other => panic!("{kind} summoned as {other:?}"),
+    }
 }
 
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn player_lit_tnt_as_the_source_credits_the_player_with_the_kill() {
-    crate::game::in_own_process(
-        "game::native_explosions_tests::player_lit_tnt_as_the_source_credits_the_player_with_the_kill",
-        || {
-            run_on_guest_stack(|| {
-                for via in BOTH {
-                    assert_eq!(
-                        tnt_kill(via, Some(Who::Player)),
-                        [(41, "minecraft:player_explosion".to_owned(), 11)],
-                        "{via:?}"
-                    );
-                }
-            });
-        },
+    kills(
+        "player_lit_tnt_as_the_source_credits_the_player_with_the_kill",
+        |game| tnt(game, Some(Who::Player)),
+        (11, "minecraft:player_explosion", true),
     );
 }
 
 #[test]
 #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
 fn unowned_tnt_as_the_source_credits_no_one() {
-    crate::game::in_own_process(
-        "game::native_explosions_tests::unowned_tnt_as_the_source_credits_no_one",
-        || {
-            run_on_guest_stack(|| {
-                for via in BOTH {
-                    assert_eq!(
-                        tnt_kill(via, None),
-                        [(41, "minecraft:explosion".to_owned(), 0)],
-                        "{via:?}"
-                    );
-                }
-            });
+    kills(
+        "unowned_tnt_as_the_source_credits_no_one",
+        |game| tnt(game, None),
+        (0, "minecraft:explosion", false),
+    );
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn a_player_as_the_source_is_credited_as_a_player() {
+    kills(
+        "a_player_as_the_source_is_credited_as_a_player",
+        |_| 11,
+        (11, "minecraft:player_explosion", true),
+    );
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn a_living_entity_outside_the_mob_list_causes_its_own_blast() {
+    kills(
+        "a_living_entity_outside_the_mob_list_causes_its_own_blast",
+        |game| summoned(game, "minecraft:armor_stand", "{}"),
+        (101, "minecraft:player_explosion", false),
+    );
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn a_players_thrown_trident_credits_the_player() {
+    kills(
+        "a_players_thrown_trident_credits_the_player",
+        |game| {
+            let id = summoned(game, "minecraft:trident", "{NoGravity:1b}");
+            game.tridents.for_each_mut(|t| t.owner = 11);
+            id
         },
+        (11, "minecraft:player_explosion", true),
+    );
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn a_players_firework_rocket_credits_the_player() {
+    kills(
+        "a_players_firework_rocket_credits_the_player",
+        |game| {
+            let id = summoned(game, "minecraft:firework_rocket", "{LifeTime:100}");
+            game.rockets.for_each_mut(|r| r.owner = Some(Who::Player));
+            id
+        },
+        (11, "minecraft:player_explosion", true),
+    );
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+fn a_players_fishing_bobber_credits_the_player() {
+    kills(
+        "a_players_fishing_bobber_credits_the_player",
+        |game| {
+            let hook = crate::game::fishing::Hook::remote(900, Vec3::new(4.5, 81.0, 4.5), [1, 2, 3, 4]);
+            game.install_fishing_hook(hook);
+            900
+        },
+        (11, "minecraft:player_explosion", true),
     );
 }
 
