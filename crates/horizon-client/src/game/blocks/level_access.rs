@@ -884,6 +884,11 @@ impl LevelAccess for GameLevel<'_> {
         {
             log.push((pos.x, pos.y, pos.z));
         }
+        // Vanilla's full chunk status, not the stricter simulation-ticket gate
+        // used by the existing network log above. Independent of log presence.
+        if !self.client_side && self.tickets.loaded_ticking(pos.x >> 4, pos.z >> 4) {
+            self.world.path_type_block_updated(pos);
+        }
     }
     fn is_loaded(&self, pos: BlockPos) -> bool {
         self.world.loaded(pos.x, pos.z)
