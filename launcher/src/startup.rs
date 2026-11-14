@@ -1,12 +1,49 @@
 use super::*;
 
+// Windows' process-entry stack is only 1 MiB. Keep the entire launcher, including CLI
+// dispatch, on an explicitly sized stack instead of constructing startup frames there.
+// GPUI initializes OLE, creates windows and pumps their messages on this same thread:
+// no COM or GUI state is constructed on the entry thread that waits for it.
+#[cfg(windows)]
 pub(super) fn run() {
+    let launcher = std::thread::Builder::new()
+        .name("launcher".into())
+        .stack_size(16 * 1024 * 1024)
+        .spawn(run_launcher)
+        .unwrap_or_else(|error| {
+            eprintln!(
+                "{}",
+                trf(
+                    "Could not start the launcher: {error}",
+                    &[("error", &error.to_string())],
+                )
+            );
+            std::process::exit(1);
+        });
+    if let Err(payload) = launcher.join() {
+        std::panic::resume_unwind(payload);
+    }
+}
+
+// In particular, AppKit must stay on macOS's original main thread.
+#[cfg(not(windows))]
+pub(super) fn run() {
+    run_launcher();
+}
+
+fn run_launcher() {
     horizon_mod_package::holder::retain_capability();
     if let Some(code) = native_mods::internals_rustc_wrapper() {
         std::process::exit(code);
     }
     if let Err(error) = console::attach_for_cli() {
-        eprintln!("Could not restore the launcher's terminal streams: {error}");
+        eprintln!(
+            "{}",
+            trf(
+                "Could not restore the launcher's terminal streams: {error}",
+                &[("error", &error.to_string())],
+            )
+        );
         std::process::exit(1);
     }
     // Windows setup: `setup --quiet` / `uninstall --quiet` run here without a window, and never
