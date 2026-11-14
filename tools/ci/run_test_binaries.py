@@ -264,7 +264,8 @@ def main(argv: list[str]) -> int:
                  "CARGO": str(toolchain_cargo) if toolchain_cargo.is_file() else os.environ.get("CARGO", "cargo")}
     if limits:
         extra_env["RUSTC_BOOTSTRAP"] = "1"
-    print(f"running {len(binaries)} test binaries, {args.jobs} at a time", flush=True)
+    selection = f"isolated tests from {len(binaries)} binaries" if args.network_guard else f"{len(binaries)} test binaries"
+    print(f"running {selection}, {args.jobs} processes at a time", flush=True)
     failures, peaks, times, missing, started = [], [], [], [], time.monotonic()
     def results():
         with ThreadPoolExecutor(args.jobs) as pool:
