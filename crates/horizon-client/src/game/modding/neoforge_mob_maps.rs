@@ -138,13 +138,11 @@ pub(super) fn load<'a>(
                 builtin::decode_villager_type,
                 NeoForgeMobMaps::set_villager_types,
                 |value| {
-                    horizon_core::nbt::Tag::String(
-                        format!(
-                            "minecraft:{}",
-                            horizon_client::mobs::render::VILLAGER_TYPES[*value as usize]
-                        )
-                        .into(),
-                    )
+                    let id = format!(
+                        "minecraft:{}",
+                        horizon_client::mobs::render::VILLAGER_TYPES[*value as usize]
+                    );
+                    horizon_core::nbt::Tag::String(id.as_str().into())
                 },
             ),
             Kind::RaidHeroGifts => {
