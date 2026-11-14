@@ -390,7 +390,7 @@ mod resource_wire_tests {
                     .is_err()
             );
         }
-        assert!(Reader::new(&[2, 0, 0, 0]).take::<crate::Side>().is_err());
+        assert!(Reader::new(&[3, 0, 0, 0]).take::<crate::Side>().is_err());
         assert!(
             Reader::new(&[2, 0, 0, 0])
                 .take::<crate::PackageKind>()
