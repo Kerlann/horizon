@@ -615,16 +615,15 @@ jobs:
             [ -f "$timing" ] || continue
             { echo "points build script phases:"; cat "$timing"; } | tee -a "$GITHUB_STEP_SUMMARY"
           done
-      # The binaries built above, three at a time: Cargo runs them one by one, and a few large ones (the API
-      # generator's, the client library's, no_wire_registration) took most of this step while the runner idled.
-      # Three, not more: the job's memory.peak counts the build and page cache, so it says nothing about this
-      # step; the runner prints each binary's max RSS and the largest five, which sizes any later change.
-      # Every binary still runs every test, from its package directory; any failure fails the step, and the
-      # step ends with the failing binaries and test names.
+      # Binaries run normally, three at a time, under the inet/resolver preload guard. Only a binary
+      # recording a violation is rerun per test to name culprits, even if they swallow the refusal.
+      # The guard library is built here only; the daily run does not preload it. Unix sockets remain available.
       - name: Test Rust core and voxel kernel correctness
         id: test_rust_core_and_voxel_kernel_correctness
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && (needs.changes.outputs.rust_required != 'false') && steps.core_build.outcome == 'success' && steps.actor.outcome == 'success' }}
-        run: python3 tools/ci/run_test_binaries.py --jobs 3 --time-limits 2,5 -- cargo test $JOBS --profile test --workspace --lib --bins --tests
+        run: |
+          cc -shared -fPIC -O2 -Wall -Wextra -Werror tools/ci/network_guard.c -o target/network_guard.so
+          python3 tools/ci/run_test_binaries.py --jobs 3 --time-limits 2,5 --network-guard target/network_guard.so -- cargo test $JOBS --profile test --workspace --lib --bins --tests
       # Prepared-data content-root tests stay in the existing client-lib data leg.
       # Running them again here without the data only rebuilds targets before they return early.
       # One genuine pinned export also validates source staging and listed slots.

@@ -1,6 +1,5 @@
 """The parallel test-binary runner lists Cargo's test executables and reports every failure."""
 import contextlib
-import importlib.util
 import io
 import json
 import os
@@ -13,9 +12,8 @@ import unittest
 import unittest.mock
 
 ROOT = Path(__file__).resolve().parents[1]
-spec = importlib.util.spec_from_file_location("run_test_binaries", ROOT / "tools/ci/run_test_binaries.py")
-runner = importlib.util.module_from_spec(spec)
-spec.loader.exec_module(runner)
+sys.path.insert(0, str(ROOT / "tools/ci"))
+import run_test_binaries as runner
 
 
 def artifact(executable, test=True, name="horizon-world", kind="lib"):

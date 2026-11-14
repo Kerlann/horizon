@@ -1050,7 +1050,11 @@ fn the_registration_context_lists_installed_packages_with_their_details() {
             vec![crate::PackageDependency::new(
                 "base".to_owned(),
                 "^1".to_owned(),
-                false,
+                crate::DependencyKind::Required,
+                crate::DependencyOrder::After,
+                crate::Side::Both,
+                None,
+                None,
             )],
         )
         .with_details(details),

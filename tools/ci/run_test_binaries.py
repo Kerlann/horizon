@@ -11,6 +11,11 @@ binary and is printed whole when the binary ends. Binaries start largest first, 
 Every binary runs; one that fails, crashes, is killed or cannot start fails the run, and the run ends with a list of
 the failing binaries and their failed tests' names. A listing with no test binaries fails too.
 
+`--network-guard LIBRARY` (Linux verify) preloads each binary and records inet and resolver calls. Green
+binaries run normally, with the same timing logs and output. Only a binary recording a violation is rerun one
+test at a time to name the culprits, even when they swallow the refusal. A binary still fails if isolation cannot
+reproduce its violation. Missing preload fails closed by scheduled PID. Unix sockets remain allowed.
+
 `--time-limits WARN,FAIL` (verify uses `2,5`) is the unit tier's timing guard (CONTRIBUTING.md "CI tiers"): every
 binary also gets libtest's `-Z unstable-options --report-time --logfile FILE`. libtest then adds each test's time to
 its result line and writes one record per test (`ok a::b <0.012s>`) to FILE, from its own thread, apart from the
@@ -38,6 +43,8 @@ import tomllib
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+import network_guard
 
 
 def package_identity(package_id: str) -> tuple[str, str]:
@@ -127,7 +134,7 @@ def read_log(text: str) -> dict[str, tuple[str, float | None]]:
     return records
 
 
-def run_one(binary: dict, extra_env: dict, test_args: list[str], timed: bool = False) -> dict:
+def run_one(binary: dict, extra_env: dict, test_args: list[str], timed: bool = False, *, listing_env: dict | None = None) -> dict:
     """Run one test binary with its output in a temporary file, never raising: a binary that cannot start fails.
 
     `timed`: also list its tests and write libtest's per-test log, for the timing guard (`listed`, `log`)."""
@@ -136,7 +143,8 @@ def run_one(binary: dict, extra_env: dict, test_args: list[str], timed: bool = F
     log = None
     timed = timed and binary.get("libtest", True)
     if timed:
-        result["listed"] = listed_tests(binary, env, test_args)
+        list_env = env if listing_env is None else {**os.environ, **listing_env, **binary["env"]}
+        result["listed"] = [binary["isolated_test"]] if "isolated_test" in binary else listed_tests(binary, list_env, test_args)
         handle, log = tempfile.mkstemp(prefix="libtest-", suffix=".log")
         os.close(handle)
         test_args = [*test_args, "--logfile", log]
@@ -149,6 +157,7 @@ def run_one(binary: dict, extra_env: dict, test_args: list[str], timed: bool = F
         if log:
             os.unlink(log)
         return result
+    result["pid"] = process.pid
     _, wait_status, usage = os.wait4(process.pid, 0)
     process.returncode = code = os.waitstatus_to_exitcode(wait_status)
     status = "ok" if code == 0 else f"killed by signal {-code}" if code < 0 else f"exit {code}"
@@ -235,6 +244,7 @@ def confirm_slow_tests(times: list[tuple[float, str, str]], binaries: list[dict]
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--network-guard", type=Path, help="Linux preload library; fail recorded inet and resolver calls, rerunning only a violating binary test by test")
     parser.add_argument("--jobs", type=int, required=True, help="test binaries running at once")
     parser.add_argument("--time-limits", metavar="WARN,FAIL", help="seconds: warn about a test over WARN, fail one "
                         "over FAIL (adds libtest's --report-time)")
@@ -282,16 +292,23 @@ def main(argv: list[str]) -> int:
         extra_env["RUSTC_BOOTSTRAP"] = "1"
     print(f"running {len(binaries)} test binaries, {args.jobs} at a time", flush=True)
     failures, peaks, times, missing, started = [], [], [], [], time.monotonic()
-    with ThreadPoolExecutor(args.jobs) as pool:
-        for result in pool.map(lambda b: run_one(b, extra_env, test_args, timed=bool(limits)), binaries):
-            failed_tests = report(result)
-            times.extend((seconds, test, result["binary"]["label"])
-                         for test, (_, seconds) in result.get("log", {}).items() if seconds is not None)
-            if limits and (lost := untimed(result)):
-                missing.append((result["binary"]["label"], lost))
-            peaks.append((result["max_rss_kib"], result["binary"]["label"]))
-            if result["status"] != "ok":
-                failures.append((result["binary"]["label"], result["status"], failed_tests))
+    def results():
+        with ThreadPoolExecutor(args.jobs) as pool:
+            if not args.network_guard:
+                yield from pool.map(lambda b: run_one(b, extra_env, test_args, timed=bool(limits)), binaries)
+                return
+            yield from pool.map(lambda b: network_guard.run_binary(
+                b, extra_env, test_args, bool(limits), args.network_guard.resolve(), run_one, listed_tests), binaries)
+    for result in results():
+        failed_tests = report(result)
+        failed_tests.extend(name for name in result.get("network_tests", []) if name not in failed_tests)
+        times.extend((seconds, test, result["binary"]["label"])
+                     for test, (_, seconds) in result.get("log", {}).items() if seconds is not None)
+        if limits and (lost := untimed(result)):
+            missing.append((result["binary"]["label"], lost))
+        peaks.append((result["max_rss_kib"], result["binary"]["label"]))
+        if result["status"] != "ok":
+            failures.append((result["binary"]["label"], result["status"], failed_tests))
     print(f"ran {len(binaries)} test binaries in {time.monotonic() - started:.1f}s; {len(failures)} failed")
     print("largest resident sets: " + ", ".join(f"{label} {kib // 1024} MiB" for kib, label in sorted(peaks)[-5:][::-1]))
     slow = []
