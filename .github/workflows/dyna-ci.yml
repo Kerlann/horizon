@@ -597,8 +597,8 @@ jobs:
         id: why_the_core_build_is_not_fresh
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && (needs.changes.outputs.rust_required != 'false') && steps.core_build.outcome == 'success' }}
         run: cargo test $JOBS --profile test --workspace --lib --bins --tests --no-run -v 2>&1 | grep -E '^ +(Dirty|Compiling) ' || true
-      # Each unignored test runs alone, three processes at a time. The preload library records inet
-      # operations, including name resolution; the runner fails even if the test swallows the refusal.
+      # Binaries run normally, three at a time, under the inet/resolver preload guard. Only a binary
+      # recording a violation is rerun per test to name culprits, even if they swallow the refusal.
       # The guard library is built here only; the daily run does not preload it. Unix sockets remain available.
       - name: Test Rust core and voxel kernel correctness
         id: test_rust_core_and_voxel_kernel_correctness

@@ -20,6 +20,12 @@ class NetworkGuard(unittest.TestCase):
         source = Path(__file__).resolve().parents[1] / "tools/ci/network_guard.c"
         subprocess.run(["cc", "-shared", "-fPIC", "-Wall", "-Wextra", "-Werror", str(source), "-o", str(cls.shim)], check=True)
 
+        cls.probe = Path(cls.scratch.name, "tests-probe")
+        source = Path(cls.scratch.name, "probe.rs")
+        source.write_text('#[test] fn green() { assert_eq!(2 + 2, 4); }\n'
+                          '#[test] fn swallowed() { let _ = std::net::TcpListener::bind("127.0.0.1:0"); }\n')
+        subprocess.run(["rustc", "--edition", "2024", "--test", str(source), "-o", str(cls.probe)], check=True)
+
     @classmethod
     def tearDownClass(cls):
         cls.scratch.cleanup()
@@ -64,13 +70,42 @@ class NetworkGuard(unittest.TestCase):
                 self.assertEqual(result["status"], f"network guard: {operation}")
 
     def test_a_helper_loaded_marker_does_not_certify_the_scheduled_process(self):
-        def helper_only(binary, env, args, timed):
+        def helper_only(binary, env, args, timed, *, listing_env=None):
             # The scheduled target is unguarded, but its dynamic helper loads the library.
             subprocess.run([sys.executable, "-c", "pass"], env={**os.environ, **env}, check=True)
             return {"pid": os.getpid(), "status": "ok", "output": tempfile.TemporaryFile("w+")}
         result = network_guard.run(({"label": "static target"}, []), {}, False, self.shim, helper_only)
         self.addCleanup(result["output"].close)
         self.assertIn("did not load", result["status"])
+
+    def test_green_binary_does_not_isolate(self):
+        binary = {"executable": str(self.probe), "cwd": self.scratch.name, "env": {}, "label": "probe"}
+        def unexpected_listing(*args):
+            self.fail("a green binary must not be isolated")
+        result = network_guard.run_binary(binary, {}, ["--exact", "green"], False, self.shim,
+                                          run_test_binaries.run_one, unexpected_listing)
+        self.addCleanup(result["output"].close)
+        self.assertEqual(result["status"], "ok")
+        self.assertNotIn("network_tests", result)
+
+    def test_binary_violation_reruns_and_names_the_swallowed_refusal(self):
+        binary = {"executable": str(self.probe), "cwd": self.scratch.name, "env": {}, "label": "probe"}
+        result = network_guard.run_binary(binary, {}, [], False, self.shim, run_test_binaries.run_one,
+                                          run_test_binaries.listed_tests)
+        self.addCleanup(result["output"].close)
+        self.assertEqual(result["network_tests"], ["swallowed"])
+        self.assertNotEqual(result["status"], "ok")
+        result["output"].seek(0)
+        self.assertIn("probe: swallowed", result["output"].read())
+
+    def test_unreproduced_violation_still_fails_the_binary(self):
+        binary = {"executable": sys.executable, "cwd": self.scratch.name, "env": {}, "label": "shared-state"}
+        result = network_guard.run_binary(binary, {}, ["-c", "import socket; socket.socket()"], False,
+                                          self.shim, run_test_binaries.run_one, lambda *args: [])
+        self.addCleanup(result["output"].close)
+        result["output"].seek(0)
+        self.assertIn("no isolated culprit", result["output"].read())
+        self.assertNotEqual(result["status"], "ok")
 
     def test_unix_socket_is_allowed(self):
         result, _ = self.invoke('import socket; socket.socket(socket.AF_UNIX).close()')
