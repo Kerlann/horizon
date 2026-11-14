@@ -180,7 +180,7 @@ pub fn folder_hooks(directory: &Path) -> Result<String, String> {
             .iter()
             .map(|f| {
                 let owner = &f.owner;
-                quote::quote!(<#owner as Hooks>::#method(&#owner, #(#arguments),*))
+                quote::quote!(#owner::#method(&#owner, #(#arguments),*))
             })
             .collect();
         let body = if fragments.len() == 1 {
@@ -246,10 +246,10 @@ mod tests {
         let normalized: String = code.split_whitespace().collect::<Vec<_>>().join(" ");
         assert!(normalized.contains("struct Mod ; impl Hooks for Mod {"));
         assert!(normalized.contains(
-            "fn toss (& self , argument_1 : & dyn Host , argument_2 : & mut Event < '_ >) -> Flow { < b :: BHooks as Hooks > :: toss (& b :: BHooks , argument_1 , argument_2) }"
+            "fn toss (& self , argument_1 : & dyn Host , argument_2 : & mut Event < '_ >) -> Flow { b :: BHooks :: toss (& b :: BHooks , argument_1 , argument_2) }"
         ));
-        let a = normalized.find("< a :: AHooks as Hooks > :: register").unwrap();
-        let b = normalized.find("< b :: BHooks as Hooks > :: register").unwrap();
+        let a = normalized.find("a :: AHooks :: register").unwrap();
+        let b = normalized.find("b :: BHooks :: register").unwrap();
         assert!(a < b);
         assert!(!normalized.contains("Nope") && !normalized.contains("Native"));
         fs::remove_dir_all(root).unwrap();
