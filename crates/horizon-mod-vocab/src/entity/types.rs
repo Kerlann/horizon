@@ -921,8 +921,7 @@ impl NoBackend for CollisionExclusionsError {
 
 /// Why a client's hotbar selection was not made (`ClientHost::select_hotbar_slot`). The
 /// selection the player had stays.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[derive(horizon_mod_api_macros::Wire)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, horizon_mod_api_macros::Wire)]
 pub enum HotbarSlotError {
     /// The client shows no world, or has no player of its own.
     NoWorld,
