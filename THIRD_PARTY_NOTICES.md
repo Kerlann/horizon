@@ -31,7 +31,6 @@ OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR
 IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER
 DEALINGS IN THE SOFTWARE.
 
-
 ## horizon-mixins
 
 The raw injection schema in `crates/horizon-mod-package/src/manifest.rs` is adapted from
