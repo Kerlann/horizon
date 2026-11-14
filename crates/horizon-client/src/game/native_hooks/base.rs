@@ -1596,12 +1596,11 @@ impl Game<'_> {
     /// `native_tell`, the item helpers and the rest reach them. Heard for:
     /// Nether and End portals (also riding a vehicle, and leaving the End as
     /// its winner), `/execute in ... run tp` and any other command that
-    /// teleports a player into another level, and the death respawn, on a
-    /// dedicated server and on the integrated server of single player and
-    /// LAN. Not heard by a remote client window; listeners run on the server that simulates the world.
-    /// Not heard: a move within a level (`/tp`, an End gateway), a
-    /// player who leaves before the move ends, and a move that ends where it
-    /// started (a respawn in the dimension of the death).
+    /// teleports a player into another level, and death respawns, on dedicated
+    /// and integrated servers (single player and LAN), where the world is simulated.
+    /// Not heard by a remote client window, for a move within a level (`/tp`,
+    /// an End gateway), for a player who leaves before the move ends, or for a
+    /// move ending where it started (a respawn in the dimension of the death).
     pub(in crate::game) fn native_player_changed_dimension(
         &mut self,
         player: u128,
