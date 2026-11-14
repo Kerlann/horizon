@@ -81,6 +81,7 @@ pub const DECODED_COMPONENTS: &[&str] = &[
     "minecraft:axolotl/variant",
     "minecraft:salmon/size",
     "minecraft:parrot/variant",
+    "minecraft:tropical_fish/pattern",
 ];
 
 /// Validate and decode a component into the value representation shared with stacks.
@@ -394,6 +395,24 @@ pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), Strin
         "minecraft:parrot/variant" => {
             string_enum(t, &["red_blue", "blue", "green", "yellow_blue", "gray"])
         }
+        // TropicalFish.Pattern.CODEC uses serialized names, not packed network ids.
+        "minecraft:tropical_fish/pattern" => string_enum(
+            t,
+            &[
+                "kob",
+                "sunstreak",
+                "snooper",
+                "dasher",
+                "brinely",
+                "spotty",
+                "flopper",
+                "stripey",
+                "glitter",
+                "blockfish",
+                "betty",
+                "clayfish",
+            ],
+        ),
         "minecraft:enchantments" | "minecraft:stored_enchantments" => enchantment_map(t, reg),
         "minecraft:tooltip_display" => tooltip_display(t, reg).map(|_| ()),
         // DataComponents.ENCHANTMENT_GLINT_OVERRIDE: Codec.BOOL through NbtOps.

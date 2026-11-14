@@ -153,3 +153,13 @@ Numeric ordinals, namespaced names, case variants and null are refused.
 and namespaced values. Parrot spawn eggs have no prototype `parrot/variant`;
 the mob's default variant does not supply an item component.
 The other 110 registered built-ins use stored-value matching while their shared
+
+<!-- Member #4221 decoder documentation -->
+`item_name`, `block_entity_data`, `fox/variant`, and `tropical_fish/pattern` in the
+`minecraft` namespace. The `fox/variant` persistent codec accepts only the exact
+strings `"red"` and `"snow"`. The `tropical_fish/pattern` codec accepts only `"kob"`,
+`"sunstreak"`, `"snooper"`, `"dasher"`, `"brinely"`, `"spotty"`, `"flopper"`,
+`"stripey"`, `"glitter"`, `"blockfish"`, `"betty"`, and `"clayfish"`. Both reject
+numeric network ids, case variants and namespaced values. Tropical fish buckets
+have no pattern component by default; the mob's default pattern is not an item default.
+The other 110 registered built-ins use stored-value matching while their shared
