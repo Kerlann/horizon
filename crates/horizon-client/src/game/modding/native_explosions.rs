@@ -5,8 +5,9 @@ use super::{
     Game,
     commands::Target,
     explosion::{BlockInteraction, ExplosionSource},
+    minecarts::CartKind,
 };
-use horizon_client::{gamerules::vanilla, mobs::Who};
+use horizon_client::{gamerules::vanilla, mobs::Who, projectiles::ProjectileKind};
 use mod_api::{EntityRef, ExplosionInteraction};
 
 /// The largest radius `native_explode` takes. A blast's cost grows with its
@@ -72,6 +73,7 @@ impl Game<'_> {
         let outer = self.take_blast_state();
         if let Some((id, target)) = source {
             self.attribute_native_blast(id, target);
+            self.native_blast_calculator(id, target);
         }
         // Only the source's `isSilent` keeps the blast quiet.
         let blast = ExplosionSource::default().with_silence(id.is_some_and(|id| self.entity_silent(id)));
@@ -154,6 +156,38 @@ impl Game<'_> {
         }
     }
 
+    /// The damage calculator the source `id` brings to its blast, as vanilla's
+    /// `EntityBasedExplosionDamageCalculator` asks the source's own
+    /// `getBlockExplosionResistance` and `shouldBlockExplode`: a dangerous
+    /// wither skull caps a block it may destroy at 0.8 (`WitherSkull`), and a
+    /// primed TNT minecart neither resists on nor breaks its rails and the
+    /// blocks under them (`MinecartTNT`). Other sources bring the default
+    /// calculator. The rays and the resistance reads both take it from the
+    /// blast state (`blast_rules`).
+    pub(super) fn native_blast_calculator(&mut self, id: u32, target: Target) {
+        match target {
+            Target::Projectile(_)
+                if self.creatures.projectiles.iter().any(|p| {
+                    p.id == id && matches!(p.kind, ProjectileKind::WitherSkull { dangerous: true })
+                }) =>
+            {
+                self.combat.blast_resistance_cap = Some(0.8);
+                self.combat.explosion_direct = Some(id);
+            }
+            // MinecartTNT.isPrimed (fuse > -1).
+            Target::Cart(_)
+                if self
+                    .carts
+                    .iter()
+                    .any(|c| c.id == id && c.kind == CartKind::Tnt && c.fuse >= 0) =>
+            {
+                self.combat.rail_proof_blast = true;
+                self.combat.explosion_direct = Some(id);
+            }
+            _ => {}
+        }
+    }
+
     /// The blast going off now, cleared to a sourceless one.
     pub(super) fn take_blast_state(&mut self) -> BlastState {
         let c = &mut self.combat;
@@ -169,6 +203,7 @@ impl Game<'_> {
             in_water: std::mem::take(&mut c.explosion_in_water),
             hive_emptying: std::mem::take(&mut c.hive_emptying_blast),
             rail_proof: std::mem::take(&mut c.rail_proof_blast),
+            cap: c.blast_resistance_cap.take(),
             owner: c.explosion_owner.take(),
             tnt_owner_player: std::mem::take(&mut c.blast_owner_player),
         }
@@ -188,6 +223,7 @@ impl Game<'_> {
         c.explosion_in_water = s.in_water;
         c.hive_emptying_blast = s.hive_emptying;
         c.rail_proof_blast = s.rail_proof;
+        c.blast_resistance_cap = s.cap;
         c.explosion_owner = s.owner;
         c.blast_owner_player = s.tnt_owner_player;
     }
@@ -206,6 +242,7 @@ pub(super) struct BlastState {
     in_water: bool,
     hive_emptying: bool,
     rail_proof: bool,
+    cap: Option<f32>,
     owner: Option<u32>,
     tnt_owner_player: bool,
 }

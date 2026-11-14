@@ -1,13 +1,8 @@
 //! Explosion resistance reads for server mods: what a blast a mod could set off would meet in one
 //! cell or many, by the rule its rays use (`Game::cell_explosion_resistance`), without exploding
 //! anything.
-use super::{
-    Game,
-    commands::Target,
-    explosion::{BlastRules, PartAnswers},
-    minecarts::CartKind,
-};
-use horizon_client::{mobs::DamageKind, projectiles::ProjectileKind};
+use super::{Game, explosion::PartAnswers};
+use horizon_client::mobs::DamageKind;
 use mod_api::{
     EntityRef, ExplosionInteraction, ExplosionResistance, LevelRef, ResistanceCells,
     ResistanceCellsError,
@@ -113,8 +108,10 @@ impl Game<'_> {
         let outer = self.take_blast_state();
         if let Some((id, target)) = source {
             self.attribute_native_blast(id, target);
+            self.native_blast_calculator(id, target);
         }
-        let rules = self.source_blast_rules(source);
+        // The calculator `level.explode` would have: the same selection, read the same way.
+        let rules = self.blast_rules(None, false);
         let damage_type = super::creatures::damage_type(
             DamageKind::Explosion,
             self.blast_attacker().is_some(),
@@ -153,42 +150,6 @@ impl Game<'_> {
         }
         self.restore_blast_state(outer);
         out
-    }
-
-    /// The damage calculator a blast whose source is `source` has, as vanilla's sources choose
-    /// theirs: a wind charge's names the blocks that stop wind, a primed TNT minecart's spares
-    /// its rails, a dangerous wither skull's caps what it may destroy at 0.8.
-    fn source_blast_rules(&self, source: Option<(u32, Target)>) -> BlastRules {
-        let mut rules = BlastRules {
-            direct: source.map(|(id, _)| id),
-            ..BlastRules::default()
-        };
-        match source {
-            Some((id, Target::Projectile(_))) => {
-                match self.creatures.projectiles.iter().find(|p| p.id == id).map(|p| &p.kind) {
-                    Some(ProjectileKind::WindCharge | ProjectileKind::BreezeWindCharge) => {
-                        rules.immune = Some(
-                            self.block_tag_blocks("minecraft:blocks_wind_charge_explosions")
-                                .unwrap_or_default(),
-                        );
-                    }
-                    Some(ProjectileKind::WitherSkull { dangerous: true }) => {
-                        rules.cap = Some(0.8);
-                        rules.wither_immune = self.block_tag_blocks("minecraft:wither_immune");
-                    }
-                    _ => {}
-                }
-            }
-            Some((id, Target::Cart(_))) => {
-                // MinecartTNT.isPrimed (fuse > -1).
-                rules.rail_proof = self
-                    .carts
-                    .iter()
-                    .any(|c| c.id == id && c.kind == CartKind::Tnt && c.fuse >= 0);
-            }
-            _ => {}
-        }
-        rules
     }
 }
 

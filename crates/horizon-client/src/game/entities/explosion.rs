@@ -489,7 +489,7 @@ impl Game<'_> {
     }
     /// What the cell at `pos` resists the blast `explosion` with
     /// (`ExplosionDamageCalculator.getBlockExplosionResistance` and the
-    /// calculators that replace it, as `rules` has them): None for no
+    /// calculator overrides `rules` holds): None for no
     /// resistance at all, which costs a ray only its step. Also whether the
     /// block is spared. With `answers`, a state whose parts declare their
     /// answer pure is asked once and answered from there after. The level is
@@ -503,11 +503,6 @@ impl Game<'_> {
     ) -> (Option<f32>, bool) {
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let f = self.res.facts().get(state);
-        // SimpleExplosionDamageCalculator: its immune blocks resist, and
-        // nothing else does, a fluid included.
-        if let Some(immune) = &rules.immune {
-            return (immune.contains(&*f.name).then_some(3_600_000.0), false);
-        }
         // USED_PORTAL_DAMAGE_CALCULATOR returns no resistance and never explodes a portal.
         if rules.portal_proof && &*f.name == "minecraft:nether_portal" {
             return (None, true);
@@ -562,7 +557,11 @@ impl Game<'_> {
     }
     /// The rules of the blast going off now, `resists` overriding one block's
     /// resistance and `portal_proof` as its source has it.
-    fn blast_rules(&self, resists: Option<([i32; 3], f32)>, portal_proof: bool) -> BlastRules {
+    pub(super) fn blast_rules(
+        &self,
+        resists: Option<([i32; 3], f32)>,
+        portal_proof: bool,
+    ) -> BlastRules {
         let cap = self.combat.blast_resistance_cap;
         BlastRules {
             resists,
@@ -573,11 +572,10 @@ impl Game<'_> {
             wither_immune: cap.and_then(|_| self.block_tag_blocks("minecraft:wither_immune")),
             rail_proof: self.combat.rail_proof_blast,
             portal_proof,
-            immune: None,
         }
     }
     /// The blocks of tag `tag`, if the game has it.
-    pub(super) fn block_tag_blocks(&self, tag: &str) -> Option<HashSet<String>> {
+    fn block_tag_blocks(&self, tag: &str) -> Option<HashSet<String>> {
         self.res.items().block_tags.get(tag).cloned()
     }
     /// `ServerExplosion.calculateExplodedPositions`; `resists` overrides one
@@ -2011,24 +2009,20 @@ pub(super) type PartAnswers = std::collections::HashMap<BlockStateId, Option<f32
 /// What decides a blast's resistance in a cell besides the cell itself: the
 /// damage calculator's overrides (`ExplosionDamageCalculator` and the ones
 /// that replace it).
-#[derive(Default)]
 pub(super) struct BlastRules {
     /// One block that resists this much (a respawn anchor's water cell).
-    pub(super) resists: Option<([i32; 3], f32)>,
+    resists: Option<([i32; 3], f32)>,
     /// A dangerous wither skull's cap on what the wither may destroy.
-    pub(super) cap: Option<f32>,
+    cap: Option<f32>,
     /// The blast's direct source, which `cap` asks about the block.
-    pub(super) direct: Option<u32>,
+    direct: Option<u32>,
     /// `#wither_immune`, read while `cap` is set.
-    pub(super) wither_immune: Option<HashSet<String>>,
+    wither_immune: Option<HashSet<String>>,
     /// A primed TNT minecart's: its rails and the blocks under them neither
     /// resist nor break.
-    pub(super) rail_proof: bool,
+    rail_proof: bool,
     /// `USED_PORTAL_DAMAGE_CALCULATOR`: a nether portal neither resists nor breaks.
-    pub(super) portal_proof: bool,
-    /// `SimpleExplosionDamageCalculator`'s immune blocks, which replace every
-    /// other rule: they resist 3,600,000 and nothing else resists, a fluid included.
-    pub(super) immune: Option<HashSet<String>>,
+    portal_proof: bool,
 }
 
 /// `WitherSkull.getBlockExplosionResistance`: `isDangerous() &&

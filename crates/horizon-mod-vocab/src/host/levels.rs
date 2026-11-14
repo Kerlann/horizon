@@ -1254,10 +1254,11 @@ pub trait LevelsBackendMut {
     /// (`ExplosionDamageCalculator.getBlockExplosionResistance`), without exploding anything. The
     /// larger of the block's answer (its parts' `explosion_resistance` first, then its own value)
     /// and the fluid's (water and lava 100); `NoResistance` for air with no fluid. The blast's
-    /// calculator follows its source as vanilla's does: a wind charge's names the
-    /// `#blocks_wind_charge_explosions` blocks, which resist 3,600,000, and nothing else resists,
-    /// a fluid included; a primed TNT minecart's rails and the blocks under them resist 0; a
-    /// dangerous wither skull caps a block it may destroy at 0.8. A respawn anchor's water cell
+    /// calculator is the one `explode` gives that source, read from the same selection: as
+    /// vanilla's `EntityBasedExplosionDamageCalculator` asks the source, a primed TNT minecart's
+    /// rails and the blocks under them resist 0 (and the blast spares them), and a dangerous
+    /// wither skull caps a block it may destroy at 0.8; any other source has the default one.
+    /// A respawn anchor's water cell
     /// belongs to the anchor's own sourceless blast, which no description names, so no read sees
     /// it. The causing entity and damage type come from `source` as for `explode`, and parts are
     /// asked with that `ExplosionStart`. `Unavailable` for a stale level or `source`, a chunk
@@ -1276,9 +1277,10 @@ pub trait LevelsBackendMut {
     ) -> Option<ExplosionResistance>;
     /// Side: server.
     /// `level_explosion_resistance` for every cell of `cells`, one answer a cell in the order
-    /// `cells` gives them. A part that declares its answer pure
-    /// (`BlockPart::explosion_resistance_is_pure`) is asked once a state per call; any other once
-    /// a cell. Refused, with nothing read, for an inverted area or more than
+    /// `cells` gives them. A state is asked once per call only when every part on its block that
+    /// answers `explosion_resistance` declares the answer pure
+    /// (`BlockPart::explosion_resistance_is_pure`); otherwise its parts are asked once a cell.
+    /// Refused, with nothing read, for an inverted area or more than
     /// `ResistanceCells::MAX` (262,144) cells: it runs on the server tick, so read big areas in
     /// pieces.
     #[access(WorldOnly)]

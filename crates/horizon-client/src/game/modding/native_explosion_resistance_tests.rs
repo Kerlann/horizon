@@ -428,28 +428,118 @@ fn a_batched_read_answers_each_cell_in_order() {
 
 #[test]
 #[ignore = "daily"]
-fn a_wind_charges_calculator_replaces_the_rule_with_its_immune_blocks() {
-    each_target(|game, via, parts| {
-        assert!(game.run_command("summon minecraft:wind_charge 4.5 82 1.5"));
-        let charge = game
+fn a_two_layer_box_reads_y_after_z_after_x() {
+    each_target(|game, via, _| {
+        // [1, 81, 1] and [2, 81, 2] over the row.
+        assert!(game.run_command("setblock 1 81 1 minecraft:obsidian"));
+        assert!(game.run_command("setblock 2 81 2 minecraft:bedrock"));
+        let cells = ResistanceCells::Box {
+            min: [1, 80, 1],
+            max: [2, 81, 2],
+        };
+        assert_eq!(
+            reads(game, via, &cells, None).unwrap(),
+            [
+                // y 80: z 1 (stone, obsidian), z 2 (planks, planks)
+                Resists(6.0),
+                Resists(1200.0),
+                Resists(7.0),
+                Resists(7.0),
+                // y 81: z 1 (obsidian, air), z 2 (air, bedrock)
+                Resists(1200.0),
+                NoResistance,
+                NoResistance,
+                Resists(3_600_000.0),
+            ],
+            "{via:?}"
+        );
+    });
+}
+
+/// The source's calculator is the one `level.explode` uses: what a read says, the rays do.
+/// `name` is the block at `at`, read with and without `source` and then blasted from beside it
+/// with and without `source`; `kept` is whether it survives each blast.
+fn read_and_blast(
+    game: &mut Game<'_>,
+    via: Via,
+    source: Option<EntityRef>,
+    at: [i32; 3],
+    expected: [ExplosionResistance; 2],
+    kept: [bool; 2],
+) {
+    let level = game.level("minecraft:overworld").unwrap();
+    let block = game.world.block(at[0], at[1], at[2]);
+    let center = [f64::from(at[0]) + 0.5, f64::from(at[1]) + 0.5, f64::from(at[2]) + 1.5];
+    for (i, source) in [source, None].into_iter().enumerate() {
+        let read = |game: &mut Game<'_>| {
+            let native = level.explosion_resistance(
+                game,
+                at,
+                source,
+                center,
+                2.0,
+                false,
+                ExplosionInteraction::Block,
+            );
+            if let Via::Wasm = via {
+                let mut input = Writer::new();
+                input.put(&level);
+                input.put(&at);
+                input.put(&source);
+                input.put(&center);
+                input.put(&2.0f32);
+                input.put(&false);
+                input.put(&ExplosionInteraction::Block);
+                wasm_answer(game, level, "level_explosion_resistance", input, &native);
+            }
+            native
+        };
+        game.world.set(at[0], at[1], at[2], block).unwrap();
+        assert_eq!(read(game), Some(expected[i]), "{via:?} {source:?}");
+        assert!(level.explode(game, source, center, 2.0, false, ExplosionInteraction::Block));
+        let survived = game.world.block(at[0], at[1], at[2]) == block;
+        assert_eq!(survived, kept[i], "{via:?} {source:?}: the rays did as read");
+    }
+}
+
+#[test]
+#[ignore = "daily"]
+fn a_reads_calculator_is_the_one_the_blasts_rays_use() {
+    each_target(|game, via, _| {
+        // A dangerous wither skull caps obsidian at 0.8, and its blast breaks it; without it
+        // obsidian resists 1200 and stays.
+        assert!(game.run_command("summon minecraft:wither_skull 1.5 90 14.5 {dangerous:1b}"));
+        let skull = game
             .creatures
             .projectiles
             .iter()
-            .find(|p| matches!(p.kind, ProjectileKind::WindCharge))
+            .find(|p| matches!(p.kind, ProjectileKind::WitherSkull { dangerous: true }))
             .unwrap()
             .id;
-        let source = game.entity(charge);
-        assert!(source.is_some());
-        let cells = ResistanceCells::Box {
-            min: [1, 80, 1],
-            max: [8, 80, 1],
-        };
-        // `#blocks_wind_charge_explosions` (barrier, bedrock) resists 3,600,000; nothing else
-        // does, water included, and no part is asked.
-        let mut expected = vec![NoResistance; 8];
-        expected[2] = Resists(3_600_000.0);
-        assert_eq!(reads(game, via, &cells, source), Ok(expected), "{via:?}");
-        assert_eq!(read(game, via, SPOT, source), Some(NoResistance), "{via:?}");
-        assert_eq!(parts.spot.0.load(Ordering::Relaxed), 0, "{via:?}");
+        let skull = game.entity(skull);
+        assert!(game.run_command("setblock 12 80 12 minecraft:obsidian"));
+        read_and_blast(
+            game,
+            via,
+            skull,
+            [12, 80, 12],
+            [Resists(0.8), Resists(1200.0)],
+            [false, true],
+        );
+        // A primed TNT minecart's blast neither resists on nor breaks a rail; without it the
+        // rail resists 0.7 and breaks.
+        assert!(game.run_command("summon minecraft:tnt_minecart 2.5 80 12.5 {fuse:80s}"));
+        let cart = game.carts.iter().next().unwrap().id;
+        let cart = game.entity(cart);
+        assert!(game.run_command("setblock 12 80 4 minecraft:stone"));
+        assert!(game.run_command("setblock 12 81 4 minecraft:rail"));
+        read_and_blast(
+            game,
+            via,
+            cart,
+            [12, 81, 4],
+            [Resists(0.0), Resists(0.7)],
+            [true, false],
+        );
     });
 }

@@ -120,14 +120,14 @@ its rays use. The answer is typed, because no resistance is not a resistance of
 | `NoResistance` | Air with no fluid, or void air above and below the level |
 | `Unavailable` | A stale level or `source`, a chunk that isn't loaded, or a state the game doesn't know |
 
-A read never loads a chunk. The blast's calculator follows its source, as
-vanilla's sources choose theirs:
+A read never loads a chunk. The blast's calculator is the one `explode` gives
+the same source, chosen once for both: as vanilla's
+`EntityBasedExplosionDamageCalculator` asks the source itself,
 
-- A wind charge's names the blocks of `#blocks_wind_charge_explosions`. **It
-  replaces the whole rule**: those blocks resist 3,600,000 and every other cell
-  has no resistance, a fluid included, and no part is asked.
-- A primed TNT minecart's rails and the blocks under them resist 0.
-- A dangerous wither skull caps a block it may destroy at 0.8.
+- a primed TNT minecart's rails and the blocks under them resist 0, and its
+  blast spares them;
+- a dangerous wither skull caps a block it may destroy at 0.8;
+- any other source, and no source, has the default calculator.
 
 A respawn anchor's water cell belongs to the anchor's own blast, which has no
 source and no description a mod can give, so no read sees it. Parts are asked
@@ -145,8 +145,9 @@ interaction)` reads many cells in one call, one answer a cell in the order
 
 A read of more than `ResistanceCells::MAX` (262,144) cells, or of an inverted
 area, is refused with `ResistanceCellsError` and reads nothing. It runs on the
-server tick, so read a big area in pieces. A part's `explosion_resistance` is
-asked once a cell, unless the part declares its answer pure:
+server tick, so read a big area in pieces. A block's parts are asked once a
+cell, unless every part on the block that answers `explosion_resistance`
+declares its answer pure:
 
 ```rust
 #[mod_api::horizon_part]
@@ -160,7 +161,8 @@ impl BlockPart for Reinforced {
 }
 ```
 
-Then a batched read asks it once a state per call. Declare it only when the
+Then a batched read asks them once a state per call; one part that doesn't
+declare it keeps the whole block at once a cell. Declare it only when the
 answer depends on nothing but the state and the explosion; either way the
 answer stays a pure function of its inputs, since a ray asks once as it enters
 a block.
