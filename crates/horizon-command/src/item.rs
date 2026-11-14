@@ -86,6 +86,7 @@ pub const DECODED_COMPONENTS: &[&str] = &[
     "minecraft:unbreakable",
     "minecraft:base_color",
     "minecraft:note_block_sound",
+    "minecraft:tooltip_style",
 ];
 
 /// Validate and decode a component into the value representation shared with stacks.
@@ -108,7 +109,7 @@ pub fn decoded_component_value(id: &str, value: &Tag, reg: &Registries) -> Resul
     if id == "minecraft:potion_duration_scale" {
         return potion_duration_scale(value).map(|value| Tag::Float(value.to_bits()));
     }
-    if id == "minecraft:item_model" {
+    if matches!(id, "minecraft:item_model" | "minecraft:tooltip_style") {
         return identifier_value(value);
     }
     if id == "minecraft:food" {
@@ -453,7 +454,7 @@ pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), Strin
             .map(|_| ())
             .ok_or_else(|| "Not a number".into()),
         "minecraft:custom_name" | "minecraft:item_name" => super::component::decode(t),
-        "minecraft:item_model" => identifier_value(t).map(|_| ()),
+        "minecraft:item_model" | "minecraft:tooltip_style" => identifier_value(t).map(|_| ()),
         "minecraft:damage_resistant" => component_values::damage_resistant(t, reg).map(|_| ()),
         "minecraft:use_effects" => horizon_items::item_data::ingredient_components::use_effects(t)
             .map(|_| ())
@@ -2043,4 +2044,46 @@ mod tests {
             );
         }
     }
+
+    #[test]
+    fn tooltip_style_identifier_codec_normalizes_and_rejects_malformed_utf16() {
+        use super::{Registries, Tag, decoded_component_value};
+        use horizon_core::nbt::JavaString;
+        let registry = Registries::default();
+        for (raw, expected) in [
+            ("", "minecraft:"),
+            (":", "minecraft:"),
+            (":style", "minecraft:style"),
+            ("style", "minecraft:style"),
+            ("fixture:", "fixture:"),
+            ("fixture:../style", "fixture:../style"),
+        ] {
+            assert_eq!(
+                decoded_component_value(
+                    "minecraft:tooltip_style",
+                    &Tag::String(raw.into()),
+                    &registry
+                ),
+                Ok(Tag::String(expected.into()))
+            );
+        }
+        for invalid in [
+            Tag::Int(1),
+            Tag::String("Upper".into()),
+            Tag::String("..:style".into()),
+            Tag::String("a:b:c".into()),
+            Tag::String("a b".into()),
+            Tag::String("é".into()),
+            Tag::String(JavaString(vec![0xd800])),
+            Tag::String(JavaString(vec![0xdc00])),
+            Tag::String(JavaString(vec![0xd800, 0xdc00])),
+        ] {
+            assert!(
+                decoded_component_value("minecraft:tooltip_style", &invalid, &registry).is_err()
+            );
+            assert!(decode_component("minecraft:tooltip_style", &invalid, &registry).is_err());
+        }
+    }
+
+
 }
