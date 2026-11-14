@@ -5,6 +5,7 @@ static ENTITY_PRE_CALLS: AtomicU32 = AtomicU32::new(0);
 static ENTITY_POST_CALLS: AtomicU32 = AtomicU32::new(0);
 
 pub mod area_macros;
+pub mod block_state_notice;
 pub mod capability_registration;
 pub mod cauldron;
 pub mod datapack;
@@ -266,6 +267,7 @@ impl Hooks for Mod {
     }
 
     fn register(&self, registrar: &mut dyn mod_api::Registrar, cx: &mod_api::RegistrationContext) {
+        block_state_notice::register(registrar, cx);
         runtime_environment::register(cx);
         capability_registration::register(registrar, cx);
         game_payload::register(registrar);

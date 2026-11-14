@@ -50,8 +50,10 @@ state whose parts are asked. The host is a read-only `LevelSide`.
 | --- | --- |
 | Moment | After the client update, the neighbour updates and the neighbours' shape updates: a fence beside new stone already shows its connection. A write made inside those updates is heard after the updates it queued itself, so its neighbours are settled too; several such writes are heard in the order they happened. |
 | Replaced writes | A write whose `on_place` replaced the block is not heard; the write that replaced it is. |
-| Sides | Servers hear every write. Clients hear the blocks the server sends, their predictions and the settled states, and their replays of piston moves; not the guesses made while deciding what an action does.  Predicted mining breaks write air directly and do not fire this hook. |
-| Not heard | World generation's writes. |
+| Sides | Servers hear every changed write with `event.predicted: false`. Clients hear server updates, applied local predictions (including breaks and placements), settled corrections and piston replays. |
+| Predictions | Applied local writes are heard immediately with `event.predicted: true`. Server updates at predicted positions stay held and unheard until acknowledgement. A confirmation of the same state has no second event; a denial is heard once from the predicted state to the server's with `predicted: false`. |
+| Not heard | Equal-state writes, unapplied guesses made while deciding an action, and world generation's writes. |
+| Cost | Without a listener, one flag check; no event or level adapter is built. |
 | `block_changed` | The global server hook hears a change earlier, right after the state is written, and also for replaced writes. |
 | Panics | A panicking part is contained with a warning. |
 

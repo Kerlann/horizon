@@ -14,6 +14,11 @@ mod raw_ingress;
 mod recipe_properties;
 mod use_item;
 
+#[cfg(test)]
+mod predicted_block_notice_tests {
+    include!("predicted_block_notice_tests.rs");
+}
+
 mod block_entity_data;
 #[cfg(test)]
 mod block_entity_data_tests;
@@ -2951,7 +2956,7 @@ impl Game<'_> {
             p.state = state;
             return;
         }
-        self.set_block(pos, state);
+        self.set_block(pos, state, false);
     }
     /// BlockStatePredictionHandler.endPredictionsUpTo (ClientboundBlockChangedAckPacket): the
     /// actions up to `sequence` are settled, so the blocks they predicted take the state the
@@ -2974,7 +2979,7 @@ impl Game<'_> {
             if self.world.block(pos[0], pos[1], pos[2]).0 as i32 == prediction.state {
                 continue;
             }
-            self.set_block(pos, prediction.state);
+            self.set_block(pos, prediction.state, false);
             // ClientLevel.syncBlockState: the block that comes back may now hold
             // the player, and then it goes to the position the prediction
             // remembered.
@@ -3037,7 +3042,7 @@ impl Game<'_> {
         let z = at[2].clamp(-3.0e7, 3.0e7);
         player.position = Vec3::new(x, at[1], z);
     }
-    fn set_block(&mut self, pos: [i32; 3], state: i32) {
+    fn set_block(&mut self, pos: [i32; 3], state: i32, predicted: bool) {
         // A state we don't have (a server with mods we lack) reads as air, as in its chunks.
         let state = state.max(0) as u32;
         let known = horizon_client::chunk::known_block_state(state);
@@ -3047,7 +3052,7 @@ impl Game<'_> {
             && self.world.set(pos[0], pos[1], pos[2], state).is_ok()
         {
             self.sync_block_entity((pos[0], pos[1], pos[2]), Some(previous), state);
-            self.client_block_written(pos, previous, state);
+            self.client_block_written(pos, previous, state, predicted);
         }
         // A block we just placed: play its place sound (the server skips the placer).
         if let Some((target, _)) = self.remote.as_ref().and_then(|r| r.placing)
@@ -8268,9 +8273,13 @@ impl Game<'_> {
             self.destroy_particles(pos, state);
         }
         // The server's block update follows (waterlogged blocks leave water).
-        let air = self.world.air;
-        if self.world.set(pos[0], pos[1], pos[2], air).is_ok() {
+        if self
+            .world
+            .set(pos[0], pos[1], pos[2], self.world.air)
+            .is_ok()
+        {
             self.world.block_entities.remove(&(pos[0], pos[1], pos[2]));
+            self.client_block_written(pos, state, self.world.air, true);
         }
         self.mining = None;
     }
@@ -9085,7 +9094,7 @@ impl Game<'_> {
                         player_pos: here,
                     });
             }
-            self.set_block(pos, state.0 as i32);
+            self.set_block(pos, state.0 as i32, true);
         }
     }
 
