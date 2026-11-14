@@ -149,8 +149,27 @@ impl State {
 /// Explicit engine settings; the remaining defaults are covered by Wasmtime compatibility.
 pub(crate) const ENGINE_CONFIG: (&str, bool) = ("epoch_interruption", true);
 
+/// Wasm threads stay off: Wasmtime's `threads` feature is compiled in, which turns the proposal on
+/// by default, but no mod may define or import shared memory or run an atomic instruction. Pulley
+/// has no shared memory either way.
+pub(crate) const THREADS: [(&str, bool); 2] = [("wasm_threads", false), ("shared_memory", false)];
+
+/// Every engine that compiles or runs mod code, tests included, takes [`THREADS`] from here.
+pub(crate) fn without_threads(config: &mut wasmtime::Config) -> &mut wasmtime::Config {
+    config
+        .wasm_threads(THREADS[0].1)
+        .shared_memory(THREADS[1].1)
+}
+
+/// Wasmtime's other defaults with [`THREADS`]: for tests that need no epoch deadlines.
+#[cfg(test)]
+pub(crate) fn test_engine() -> Engine {
+    Engine::new(without_threads(&mut wasmtime::Config::new())).unwrap()
+}
+
 pub(crate) fn engine() -> wasmtime::Result<Engine> {
     let mut config = wasmtime::Config::new();
+    without_threads(&mut config);
     config.epoch_interruption(ENGINE_CONFIG.1);
     config.max_wasm_stack(horizon_guest_stack::GUEST_STACK_BYTES);
     // Wasmtime validates this bound even for synchronous engines. No async
