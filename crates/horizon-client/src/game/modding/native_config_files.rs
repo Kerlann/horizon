@@ -841,7 +841,7 @@ mod tests {
         });
     }
     #[test]
-    #[ignore = "needs HORIZON_TEST_RESOURCES, HORIZON_WASM_FIXTURE and HORIZON_WASM_STD built from this tree"]
+    #[ignore = "daily"]
     fn compiled_wasm_bulk_files_use_actual_game_filesystem_roots() {
         use crate::game::native_entity_refs::tests::run_fresh_cases;
         use crate::game::native_guest_turn_tests::with_guests_at;
