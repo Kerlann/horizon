@@ -179,7 +179,7 @@ mod tests {
     /// same id entered again (a level deleted and opened again) starts with no column of the old
     /// one.
     #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    #[ignore = "daily"]
     fn a_level_opened_after_login_is_forgotten_once_left() {
         use crate::game::Dim;
         const RUNTIME: &str = "test:instance/1";

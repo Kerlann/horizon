@@ -1265,7 +1265,7 @@ fn a_delete_keeps_references_when_shared_level_metadata_is_unreadable() {
 /// levels. A runtime level the server opened, which the client entered and left, stays the
 /// server's: it still unloads, and, opened again, entered and left again, still deletes.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_level_the_player_left_in_single_player_still_unloads_and_deletes() {
     use horizon_protocol::packets::play::{self, Clientbound as C};
     let travel = |dimension: &str| {
