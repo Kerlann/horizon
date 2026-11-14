@@ -150,10 +150,11 @@ class PrReadyTests(unittest.TestCase):
                 env.pop("RUSTC_WRAPPER", None)
                 if wrapper is not None:
                     env["RUSTC_WRAPPER"] = wrapper
-                step = pr_ready.Step("clippy", "printf 'ran\\n'")
+                steps = [pr_ready.Step(name, "printf 'ran\\n'")
+                         for name in ("clippy", "registry clippy", "launcher clippy")]
                 with mock.patch.dict(os.environ, env, clear=True), contextlib.redirect_stderr(io.StringIO()) as log:
-                    pr_ready.run_script([step], "local", verbose=False)
-                self.assertEqual((step.status, step.output.strip()), ("pass", "ran"))
+                    pr_ready.run_script(steps, "local", verbose=False)
+                self.assertEqual([(step.status, step.output.strip()) for step in steps], [("pass", "ran")] * 3)
                 expected = wrapper in (None, "", "other-wrapper")
                 self.assertEqual(log.getvalue().count(pr_ready.CLIPPY_CACHE_HINT), int(expected))
                 if expected:

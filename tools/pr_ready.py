@@ -513,8 +513,10 @@ def run_script(steps, host, verbose):
         run_windows(steps, verbose, environment)
         return
     parts = [HOST_SETUP.get(host, ""), "set +e"]
+    first_clippy = True
     for index, step in enumerate(steps):
-        if step.name.endswith("clippy"):
+        if step.name.endswith("clippy") and first_clippy:
+            first_clippy = False
             parts.append('case "${RUSTC_WRAPPER:-}" in sccache|*/sccache|sccache.exe|*/sccache.exe) ;; '
                          f'*) printf \'%s\\n\' {shlex.quote("@@pr_ready:hint:" + CLIPPY_CACHE_HINT)} ;; esac')
         parts.append(f"echo '@@pr_ready:begin:{index}'; started=$(date +%s)\n( {step.command}\n) 2>&1 < /dev/null\n"
@@ -555,6 +557,7 @@ def run_script(steps, host, verbose):
 def run_windows(steps, verbose, environment=None):
     """Run local checks directly on Windows without requiring a Unix shell. Each runs in its own job
     (tools/process_tree.py): what a check starts, a harness's game say, ends with it, or with this process."""
+    first_clippy = True
     for step in steps:
         command = shlex.split(step.command)
         cwd = ROOT
@@ -604,8 +607,10 @@ def run_windows(steps, verbose, environment=None):
         elif command and command[0] == "python3":
             command[0] = sys.executable
 
-        if step.name.endswith("clippy") and Path(env.get("RUSTC_WRAPPER", "")).name not in ("sccache", "sccache.exe"):
-            print(CLIPPY_CACHE_HINT, file=sys.stderr, flush=True)
+        if step.name.endswith("clippy") and first_clippy:
+            first_clippy = False
+            if Path(env.get("RUSTC_WRAPPER", "")).name not in ("sccache", "sccache.exe"):
+                print(CLIPPY_CACHE_HINT, file=sys.stderr, flush=True)
         print(f"  {step.name}...", file=sys.stderr, flush=True)
         started = time.monotonic()
         try:
