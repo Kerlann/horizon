@@ -1,7 +1,6 @@
 # Tests that load the compiled wasm fixture mod (REFERENCE is the variable). The slow shards refuse
 # them by name; wasm-mods.yml builds the fixture and runs each alone in its own process with
 # `ignored_tests.py --needs HORIZON_WASM_FIXTURE --one-process-each`.
-horizon-client game::native_config_files::tests::compiled_wasm_bulk_files_use_actual_game_filesystem_roots HORIZON_WASM_FIXTURE needs
 horizon-client game::native_server::wasm_selector_tests::wasm_selectors_resolve_in_game_and_refuse_before_guest_dispatch HORIZON_WASM_FIXTURE needs
 horizon-client game::native_server::wasm_selector_tests::wasm_server_tick_messages_reach_dedicated_game HORIZON_WASM_FIXTURE needs
 horizon-client game::native_hooks::math::tests::compiled_wasm_math_profile_import_matches_actual_game_host HORIZON_WASM_FIXTURE needs
