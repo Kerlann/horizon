@@ -35,8 +35,10 @@ impl EnabledMods {
             entries
                 .entry(id)
                 .and_modify(|old| {
-                    if side == Side::Both {
+                    if side == Side::Both || *old == Side::Both {
                         *old = Side::Both;
+                    } else if side == Side::Server {
+                        *old = Side::Server;
                     }
                 })
                 .or_insert(side);
@@ -44,16 +46,19 @@ impl EnabledMods {
         Self(entries)
     }
 
-    /// All accepted packages visible to the client preload.
+    /// All accepted packages visible to the client preload: not server-only ones.
     pub fn client_ids(&self) -> impl Iterator<Item = &str> {
-        self.0.keys().map(String::as_str)
+        self.0
+            .iter()
+            .filter(|(_, side)| matches!(side, Side::Client | Side::Both))
+            .map(|(id, _)| id.as_str())
     }
 
     /// Packages whose data may participate in the logical server's load.
     pub fn server_ids(&self) -> impl Iterator<Item = &str> {
         self.0
             .iter()
-            .filter(|(_, side)| **side == Side::Both)
+            .filter(|(_, side)| matches!(side, Side::Both | Side::Server))
             .map(|(id, _)| id.as_str())
     }
 
@@ -72,12 +77,16 @@ mod tests {
         let inventory = EnabledMods::new([
             ("integration".into(), Side::Both),
             ("client_overlay".into(), Side::Client),
+            ("server_only".into(), Side::Server),
         ]);
         assert_eq!(
             inventory.client_ids().collect::<Vec<_>>(),
             ["client_overlay", "integration"]
         );
-        assert_eq!(inventory.server_ids().collect::<Vec<_>>(), ["integration"]);
+        assert_eq!(
+            inventory.server_ids().collect::<Vec<_>>(),
+            ["integration", "server_only"]
+        );
         let restored: EnabledMods =
             serde_json::from_slice(&serde_json::to_vec(&inventory).unwrap()).unwrap();
         assert_eq!(restored, inventory);
@@ -87,9 +96,11 @@ mod tests {
     fn cache_identity_changes_with_membership_and_side_but_not_input_order() {
         let both = EnabledMods::new([("integration".into(), Side::Both)]);
         let client = EnabledMods::new([("integration".into(), Side::Client)]);
+        let server = EnabledMods::new([("integration".into(), Side::Server)]);
         let empty = EnabledMods::default();
         let encode = |mods: &EnabledMods| serde_json::to_vec(mods).unwrap();
         assert_ne!(encode(&both), encode(&client));
+        assert_ne!(encode(&client), encode(&server));
         assert_ne!(encode(&both), encode(&empty));
         let duplicate = EnabledMods::new([
             ("integration".into(), Side::Client),

@@ -14,6 +14,13 @@ impl Vec3 {
     fn subtract(self, o: Vec3) -> Vec3 { Vec3::new(self.x - o.x, self.y - o.y, self.z - o.z) }
     fn add_vector(self, o: Vec3) -> Vec3 { Vec3::new(self.x + o.x, self.y + o.y, self.z + o.z) }
 }
+mod orb_limits { pub const MAX_COUNT: u32 = i32::MAX as u32; }
+mod mod_api { pub mod __private {
+    pub struct ExperienceOrbMergeCall<'a> {
+        pub dimension: &'a str, pub into: u32, pub from: u32, pub into_value: i32,
+        pub into_count: u32, pub from_value: i32, pub from_count: u32, pub canceled: &'a mut bool,
+    }
+} }
 #[derive(Clone, Copy)] struct Aabb { lo: Vec3, hi: Vec3 }
 impl Aabb {
     fn new(lo: Vec3, hi: Vec3) -> Self { Aabb { lo, hi } }

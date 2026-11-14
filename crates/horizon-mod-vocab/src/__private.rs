@@ -84,6 +84,11 @@ pub fn enabled_listened(hook: HookId) -> bool {
     crate::runtime::enabled_listened(hook)
 }
 
+/// Whether installed mod `id` subscribes to a hook that runs on a client.
+pub fn uses_client_hooks(id: &str) -> bool {
+    crate::runtime::uses_client_hooks(id)
+}
+
 /// Whether any part subscribed to the scoped entity hook `hook` is attached to
 /// entity type `kind`, so a family's walk can resolve its rows' slots once per
 /// pass instead of naming each row's type.

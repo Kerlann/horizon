@@ -167,20 +167,6 @@ impl Game<'_> {
                 cells.remove(i, item.position);
                 continue;
             }
-            let from = item.previous;
-            let to = item.position;
-            if round.sections() {
-                let live = self.entity_section_step_visible(
-                    item.id,
-                    [from.x, from.y, from.z],
-                    [to.x, to.y, to.z],
-                );
-                if !live {
-                    removed[i] = true;
-                    cells.remove(i, to);
-                    continue;
-                }
-            }
             let item_id = item.id;
             let saved = native_components::ITEM_ENVIRONMENT_DAMAGE
                 .map(|damage| self.saved_refuses_damage(item_id, damage, false));
@@ -336,7 +322,7 @@ impl Game<'_> {
                 let o = &mut self.orbs[i];
                 // A mod's write in the merge hook is the merged orb; else one more in its count.
                 if (o.value, o.count) == (orb_value, count) {
-                    if count >= ExperienceOrb::MAX_COUNT {
+                    if count >= crate::orb_limits::MAX_COUNT {
                         continue;
                     }
                     o.count += 1;
@@ -408,7 +394,7 @@ impl Game<'_> {
                 continue;
             };
             let (a, b) = (&self.orbs[i], &self.orbs[j]);
-            let (into, into_value, into_count) = (a.id, a.value, a.count);
+            let (into, into_value, into_count, into_age) = (a.id, a.value, a.count, a.age);
             let (from, from_value, from_count) = (b.id, b.value, b.count);
             let vanilla = b.can_merge(a.id, a.value);
             if !self.orb_merges(
@@ -434,11 +420,12 @@ impl Game<'_> {
             } else {
                 into_count
                     .checked_add(from_count)
-                    .filter(|&c| c <= ExperienceOrb::MAX_COUNT)
+                    .filter(|&c| c <= crate::orb_limits::MAX_COUNT)
             };
             let (Some(j), Some(count)) = (fresh, count) else {
                 self.orbs[i].value = into_value;
                 self.orbs[i].count = into_count;
+                self.orbs[i].age = into_age;
                 continue;
             };
             let age = self.orbs[j].age;
