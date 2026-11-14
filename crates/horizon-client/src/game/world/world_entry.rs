@@ -274,9 +274,9 @@ impl Game<'_> {
         // hold its files so it is read once.
         let _recipe_files = horizon_client::json_folder::read(&root.join("data/minecraft/recipe"));
         let sources = if reload {
-            lan::prepare_server_sources(root, &self.res.core.item_data, &overlay)?
+            lan::sync::prepare_server_sources(root, &self.res.core.item_data, &overlay)?
         } else {
-            lan::load_sources(
+            lan::sync::load_sources(
                 root,
                 &self.res.core.item_data,
                 self.options.execution_role.data_load_origin(),
@@ -475,7 +475,7 @@ impl Game<'_> {
             wire,
             datapack_registries,
         } = prepared;
-        lan::forget_server_sources();
+        lan::sync::forget_server_sources();
         if let Some(tables) = &tables
             && let Some(sources) = &tables.reload_sources
         {
@@ -483,7 +483,7 @@ impl Game<'_> {
                 conditions: &tables.conditions,
                 files: &tables.files,
             };
-            lan::install_server_sources(
+            lan::sync::install_server_sources(
                 &self.options.resources,
                 &self.res.core.item_data,
                 &overlay,
@@ -519,7 +519,7 @@ impl Game<'_> {
         // PlayerList.reloadResources: the tags and recipes go to the players
         // and their advancements reload. The synchronized registries (the
         // dialogs, and the commands' ids of them) stay the hub's.
-        lan::install_wire_reload(
+        lan::sync::install_wire_reload(
             &self.options.resources,
             &self.res.core.item_data,
             &self.pack_files(),
@@ -584,7 +584,7 @@ impl Game<'_> {
                 self.res.item_defaults(),
             ) {
                 Ok(mut loot) => {
-                    let context = match lan::server_data_load(
+                    let context = match lan::sync::server_data_load(
                         &self.options.resources,
                         &self.res.core.item_data,
                     ) {
@@ -670,18 +670,26 @@ impl Game<'_> {
             .lan
             .as_ref()
             .map(|host| host.hub.lan.shared.sync())
-            .or_else(lan::cached_reload_sync);
+            .or_else(lan::sync::cached_reload_sync);
         let wire = if let Some(kept) = kept {
             let sources = match tables
                 .as_ref()
                 .and_then(|tables| tables.reload_sources.clone())
             {
                 Some(sources) => sources,
-                None => lan::prepare_server_sources(root, &self.res.core.item_data, &overlay)?,
+                None => {
+                    lan::sync::prepare_server_sources(root, &self.res.core.item_data, &overlay)?
+                }
             };
             Some(
-                lan::prepare_wire_reload(root, &self.res.core.item_data, &overlay, &kept, &sources)
-                    .map_err(|error| format!("wire reload: {error}"))?,
+                lan::sync::prepare_wire_reload(
+                    root,
+                    &self.res.core.item_data,
+                    &overlay,
+                    &kept,
+                    &sources,
+                )
+                .map_err(|error| format!("wire reload: {error}"))?,
             )
         } else {
             None

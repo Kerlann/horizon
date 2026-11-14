@@ -109,6 +109,13 @@ fn each_persistent_data_refusal_has_its_own_name_and_writes_nothing() {
             Err(PlayerDataRefusal::Stale)
         );
         assert_eq!(b.persistent_data(game), None);
+        game.options.execution_role = crate::game::execution_role::ExecutionRole::Client;
+        let (client, _server) = horizon_protocol::connection::Pipe::pair();
+        game.connect_local(client, "PlayerDataRefusalTest").unwrap();
+        assert_eq!(
+            b.set_persistent_data(game, Compound::new()),
+            Err(PlayerDataRefusal::Client)
+        );
     });
 }
 

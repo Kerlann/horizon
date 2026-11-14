@@ -6429,7 +6429,7 @@ impl Game<'_> {
         self.session_lock = Some(session_lock);
         // Keep the no-pack preload; a world's packs replace it atomically.
         // A later /reload keeps this session's synchronized registries.
-        lan::open_world_sync_data(
+        lan::sync::open_world_sync_data(
             &self.options.resources,
             &self.res.core.item_data,
             &pack_files(&self.world_tables),
@@ -6623,8 +6623,8 @@ impl Game<'_> {
         }
         // Clear sync data (registries, dialog tags) so dialogs don't leak
         // between worlds.
-        lan::forget_sync_data();
-        lan::forget_server_sources();
+        lan::sync::forget_sync_data();
+        lan::sync::forget_server_sources();
         let mut title = self
             .new_title(std::env::current_dir()?.join("saves"))
             .with_user(|| self.options.player_name());
@@ -8096,7 +8096,7 @@ impl Game<'_> {
         &mut self,
         consume: impl FnOnce(&mut Renderer, &Frame<'_>) -> Result<bool>,
     ) -> Result<bool> {
-        self.prepared_model_draws.borrow_mut().clear();
+        self.begin_frame_draws();
         let prepare = spans::guard("prepare");
         let mut pr = spans::laps();
         // The window's GPU holds the atlas: its copy in memory is kept
@@ -8582,7 +8582,6 @@ impl Game<'_> {
         let distance = (terrain_distance * 16) as f32;
         let depth_far =
             horizon_client::camera::depth_far(terrain_distance, self.settings.cloud_range);
-        // Only native mods read it: no matrices or allocation per frame without one.
         let mods_read_camera = !mod_api::__private::mods().is_empty();
         self.screen_blur_requested.set(false);
         self.native_camera_frame = (mods_read_camera && !title).then(|| {
@@ -8609,6 +8608,7 @@ impl Game<'_> {
                 dimension: self.dim.id().to_string(),
             }
         });
+        let _projection_frame = (!title).then(|| self.activate_projection_frame());
         pr.lap("pr_projection");
         // GUI hooks project against this frame's camera, including its bob/spin and FOV.
         let mut hud = horizon_client::spans::time("hud", || self.hud(size));

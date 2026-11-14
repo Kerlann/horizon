@@ -488,7 +488,9 @@ pub(super) fn register_select_item_model_properties(role: ExecutionRole) {
 /// animation files may name them.
 /// Block-state
 /// definition types (`native_register_block_state_models`), so blockstate files naming one get
-/// the models the mod picks.
+/// the models the mod picks; and special item model renderers
+/// (`native_register_special_model_renderer`), so special models of their types draw what the
+/// mod answers.
 pub(super) fn register_resource_sources(role: ExecutionRole) {
     if !role.is_client() {
         return;
@@ -511,6 +513,42 @@ pub(super) fn register_resource_sources(role: ExecutionRole) {
     let mut definitions = Vec::new();
     Game::native_register_block_state_models(&RegistrationContext::new(), &mut definitions);
     horizon_client_render::mod_block_state_models::register(definitions);
+    register_special_model_renderers();
+}
+/// The native mods' special item model renderers (`native_register_special_model_renderer`),
+/// kept once at start, before resources load: their types are what a `minecraft:special` model
+/// may name besides vanilla's, or in place of one. A later registration of a type replaces the
+/// earlier one, and the log names both mods.
+fn register_special_model_renderers() {
+    let mut registry = mod_api::SpecialModelRendererRegistry::default();
+    Game::native_register_special_model_renderer(&RegistrationContext::new(), &mut registry);
+    for (kind, owner) in registry.initial_owners() {
+        if horizon_assets::item_model::SpecialModel::is_builtin_type(kind) {
+            log::warn!(
+                "Horizon: special model type {kind} registered by the game is replaced by {}'s registration",
+                owner.unwrap_or("the game")
+            );
+        }
+    }
+    let (mut renderers, replaced) = registry.into_renderers();
+    for replaced in replaced {
+        let name = |id: Option<&str>| id.unwrap_or("the game").to_owned();
+        log::warn!(
+            "Horizon: special model type {} registered by {} is replaced by {}'s registration",
+            replaced.kind,
+            name(replaced.earlier),
+            name(replaced.later)
+        );
+    }
+    // In slot order: the types' models resolve to these slots as they decode.
+    let kept = horizon_assets::item_model::register_special_model_types(
+        renderers.keys().cloned().collect(),
+    );
+    super::native_special_renderers::register(
+        kept.into_iter()
+            .filter_map(|kind| renderers.remove(&kind).map(|renderer| (kind, renderer)))
+            .collect(),
+    );
 }
 /// The client presentation registrations, kept once at start, before resources load: the
 /// dimension transition screens, the entity spectator shaders, the render pipelines and the entity
