@@ -3,7 +3,7 @@
 //! files merged over vanilla's tables on every server data load, as a mod's own
 //! data maps are, and installed for the server's mobs and sculk sensors.
 use super::Game;
-use super::native_data_maps::merge_builtin;
+use super::data_map_files::merge_builtin;
 pub(in crate::game) use horizon_client::neoforge_mob_maps::vibration_frequency;
 use horizon_client::neoforge_mob_maps::{self, MAPS, NeoForgeMobMaps};
 use std::collections::{HashMap, HashSet};
