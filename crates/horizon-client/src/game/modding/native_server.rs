@@ -1855,7 +1855,10 @@ impl Game<'_> {
     /// (orbs merged into it, each worth `value`) and `age` (ticks lived; an orb
     /// despawns at 6000); a `None` is left as it is.
     /// False, and nothing written, for an orb not in the server level `dimension`, a
-    /// a `count` of 0, and on a client of a server.
+    /// `count` of 0 or above `i32::MAX`, a `value` outside -32768..=32767 (a save keeps
+    /// `Value` as a short and `Count` as an int, so a write it accepts reloads
+    /// unchanged), and on a client of a server. In `experience_orb_merge`, a write to
+    /// `into` is the merged orb.
     pub(super) fn set_experience_orb(
         &mut self,
         dimension: &str,
@@ -1867,6 +1870,8 @@ impl Game<'_> {
         if (self.serving.is_none() && self.options.dedicated.is_none())
             || dimension != self.dim.id()
             || count == Some(0)
+            || count.is_some_and(|c| c > crate::orb_limits::MAX_COUNT)
+            || value.is_some_and(|v| !crate::orb_limits::value_fits(v))
         {
             return false;
         }
