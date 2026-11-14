@@ -139,7 +139,8 @@ impl Game<'_> {
     /// damageSource, calculator, x, y, z, radius, fire, interaction, particles...,
     /// sound)` does (`native_explode`), the causing entity derived from
     /// `source`. Refused, with nothing exploded, for another level, a stale
-    /// `source` or one in another level, and as `native_explode` refuses.
+    /// `source` or one in another level, once the entity ids are exhausted, and as
+    /// `native_explode` refuses.
     pub(super) fn level_explode(
         &mut self,
         level: LevelRef,

@@ -47,11 +47,17 @@ pub trait Hooks {
     /// It only hears. It tells every kind `entity_join_level` does
     /// (`kind` is the type), each once, when the game next notices it gone
     /// (the tick or action that removed
-    /// it). Check `kind`. Server-side.
+    /// it). Inside a transaction (`Host::transaction`) an entity's removal
+    /// takes effect, and this hook fires, at the root commit, not at the
+    /// removal call: from the call on its handle and selectors no longer find
+    /// it. An aborted transaction removes nothing and tells nothing. An entity
+    /// the transaction spawned and removed is never told to join, so it never
+    /// leaves. Check `kind`. Server-side.
     #[hook(
         side = "server",
         contract = "listen",
-        neoforge = "EntityLeaveLevelEvent"
+        neoforge = "EntityLeaveLevelEvent",
+        version = 2
     )]
     fn entity_leave_level();
 }
