@@ -15,6 +15,13 @@ use horizon_client::join_seq::{JoinSeq, Joined as _};
 use mod_api::EntityRef;
 use std::collections::{HashMap, HashSet};
 
+/// A raw record of `persist.anon` (kind and position bits) as it was: what an aborted spawn
+/// puts back.
+pub(in crate::game) type KeptAnon = (
+    (String, [u64; 3]),
+    Option<(horizon_core::geometry::Vec3, horizon_core::nbt::Tag)>,
+);
+
 /// What a transaction did to entities, for its close.
 #[derive(Default)]
 pub(super) struct EntityJournal {
@@ -32,6 +39,9 @@ pub(super) struct EntityJournal {
     mob_removed: HashMap<u32, bool>,
     /// The join and leave announcements held for the root commit, in order.
     announcements: Vec<Announcement>,
+    /// Each raw record a spawn wrote over in `persist.anon` (by kind and position: an end
+    /// crystal standing there keeps its own there), as it was before the first such spawn.
+    anon: Vec<KeptAnon>,
 }
 
 /// A removal waiting for the root commit.
@@ -60,6 +70,9 @@ impl EntityJournal {
         for (id, was) in child.mob_removed {
             self.mob_removed.entry(id).or_insert(was);
         }
+        for kept in child.anon {
+            self.keep_anon(kept);
+        }
         for announcement in child.announcements {
             self.announce(announcement);
         }
@@ -67,6 +80,12 @@ impl EntityJournal {
     /// A nested abort: its arrivals stay out of the parent's abort too.
     pub(super) fn keep_arrivals(&mut self, arrivals: HashSet<u32>) {
         self.arrivals.extend(arrivals);
+    }
+    /// Keeps the first record each key had: a later spawn there wrote over this one's.
+    fn keep_anon(&mut self, kept: KeptAnon) {
+        if !self.anon.iter().any(|(key, _)| *key == kept.0) {
+            self.anon.push(kept);
+        }
     }
     fn announce(&mut self, announcement: Announcement) {
         if self.announcements.last() != Some(&announcement) {
@@ -95,6 +114,12 @@ impl Game<'_> {
                 true
             }
             _ => false,
+        }
+    }
+    /// A spawn wrote over `was` in `persist.anon` under `key`: an abort puts it back.
+    pub(in crate::game) fn journal_anon(&mut self, kept: KeptAnon) {
+        if let Some(level) = self.transactions.last_mut() {
+            level.lifetimes.keep_anon(kept);
         }
     }
     /// Entity `id` arrived from another level: an abort leaves it where it is.
@@ -177,6 +202,10 @@ impl Game<'_> {
         // One load when nothing joined anywhere since the transaction opened.
         if JoinSeq::latest() >= journal.mark {
             self.discard_joined_since(journal.mark, &journal.arrivals);
+        }
+        // After the discard: forgetting an aborted entity reads nothing keyed by position.
+        for kept in journal.anon {
+            self.persist.put_back_anon(kept);
         }
         journal.arrivals
     }

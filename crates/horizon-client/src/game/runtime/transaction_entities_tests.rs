@@ -599,3 +599,28 @@ fn exhausted_ids_stop_the_tick_spawners() {
         assert_eq!(game.next_entity, u32::MAX - ENTITY_ID_HEADROOM);
     });
 }
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+fn an_aborted_spawn_puts_back_the_raw_record_it_wrote_over() {
+    const NAME: &str =
+        "game::transaction_entities_tests::an_aborted_spawn_puts_back_the_raw_record_it_wrote_over";
+    with_observer(NAME, |game| {
+        // Crystals are kept as raw records by kind and position: a second one at the same place
+        // writes over the first's.
+        let own = summon(game, "minecraft:end_crystal", r#"{Tags:["own"]}"#).unwrap();
+        let seal = game.transaction_open();
+        summon(game, "minecraft:end_crystal", r#"{Tags:["aborted"]}"#).unwrap();
+        game.transaction_close(&seal, false);
+
+        assert!(game.entity(own).is_some());
+        let saved = game.entity_chunks(&std::collections::HashSet::from([(0, 0)]), false);
+        let tags: Vec<_> = saved
+            .iter()
+            .flat_map(|(_, records)| records)
+            .filter_map(|record| record.get("Tags").cloned())
+            .collect();
+        let own_tags = Tag::List(vec![Tag::String("own".into())]);
+        assert_eq!(tags, [own_tags], "the crystal is saved with its own record");
+    });
+}
