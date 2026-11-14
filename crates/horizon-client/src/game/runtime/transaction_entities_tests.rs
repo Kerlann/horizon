@@ -51,7 +51,9 @@ static HEARD: Mutex<Heard> = Mutex::new(Heard {
 static ON_JOIN: Mutex<(Option<u32>, Vec<u32>, Option<EntityRef>)> =
     Mutex::new((None, Vec::new(), None));
 
-/// What `entity_kind` answered the listener for the entity a commit still has to remove.
+/// The entity a nested commit removed, still waiting for its removal to run, and then what
+/// `entity_kind` answered the listener of the next join for it.
+static PENDING: Mutex<Option<EntityRef>> = Mutex::new(None);
 static KIND_OF_PENDING: Mutex<Option<Option<String>>> = Mutex::new(None);
 
 /// Where the observer is in the nested script of
@@ -80,15 +82,16 @@ impl Hooks for Observer {
             heard.from_disk.push(event.entity);
         }
         drop(heard);
+        let pending = PENDING.lock().unwrap().take();
+        if let Some(entity) = pending {
+            *KIND_OF_PENDING.lock().unwrap() = Some(entity.kind(host));
+        }
         let answers = {
             let mut on_join = ON_JOIN.lock().unwrap();
             (on_join.0 == Some(event.entity)).then(|| on_join.0.take())
         };
         if answers.is_some() {
             let removes = ON_JOIN.lock().unwrap().2.take();
-            if let Some(entity) = removes {
-                *KIND_OF_PENDING.lock().unwrap() = Some(entity.kind(host));
-            }
             let seal = removes.map(|_| host.transaction_open());
             let spawned = host.summon(
                 "minecraft:overworld",
@@ -99,6 +102,7 @@ impl Hooks for Observer {
             ON_JOIN.lock().unwrap().1.extend(spawned);
             if let (Some(entity), Some(seal)) = (removes, seal) {
                 entity.remove(host, RemovalReason::Discarded);
+                *PENDING.lock().unwrap() = Some(entity);
                 host.transaction_close(&seal, true);
             }
         }
@@ -917,7 +921,8 @@ fn a_level_holds_its_spawns_for_its_own_transaction_under_another_levels() {
 fn a_nested_commit_from_a_join_listener_tells_its_join_before_its_removal() {
     const NAME: &str = "game::transaction_entities_tests::a_nested_commit_from_a_join_listener_tells_its_join_before_its_removal";
     with_observer(NAME, |game| {
-        let d = summon(game, "minecraft:pig", "{}").unwrap();
+        // A boat, not a mob: a mob reads as removed by its flag, not by the pending list.
+        let d = summon(game, "minecraft:oak_boat", "{}").unwrap();
         game.native_joins_flush(false, 0);
         heard();
         let seal = game.transaction_open();
@@ -939,7 +944,7 @@ fn a_nested_commit_from_a_join_listener_tells_its_join_before_its_removal() {
         assert_eq!(
             KIND_OF_PENDING.lock().unwrap().take(),
             Some(None),
-            "d reads as gone to the listener while its removal waits"
+            "d reads as gone to c's join listener while its removal waits"
         );
         assert_eq!(game.entity(d), None);
         game.native_joins_flush(false, 0);

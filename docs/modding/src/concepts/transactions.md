@@ -73,7 +73,8 @@ Entities a transaction spawns or removes follow the same commit and rollback rul
   tells no mod: neither `entity_join_level` nor `entity_leave_level` runs. An entity id is
   never reused, so the aborted entity's id stays burnt and a stale handle never names a later entity.
 - A removal (`EntityRef::discard`, a kill) marks the entity at the call: its handle and selectors
-  stop finding it, and a mob reads as removed. Passengers dismount, the leave
+  stop finding it, and a mob reads as removed (it is flagged at the call; any other entity is
+  listed as removed until the commit has run its removal, joins told by then included). Passengers dismount, the leave
   is told and the other effects of removal wait for the outermost commit; an abort puts the
   entity back as it was and tells no one. An entity spawned and removed in the same
   transaction is never announced, so it never leaves.
