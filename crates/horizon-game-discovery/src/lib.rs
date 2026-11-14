@@ -121,10 +121,11 @@ pub fn folder_modules(directory: &Path) -> Result<String, String> {
 const FAN_OUT_HOOK: &str = "register";
 
 /// Assemble the one `Hooks` object of a test target from the fragments in `directory`: every `*.rs` file may hold
-/// inherent `impl <Feature>Hooks { pub(super) fn <hook>(&self, ..) }` blocks (`<Feature>Hooks` a unit struct of that file; the hook signature is `Hooks`'s own, checked where the assembled impl forwards to it), and the result is `struct Mod;` with one
-/// `impl Hooks for Mod` whose methods forward, signature copied verbatim, to the fragments. A hook method has one
-/// owner: two files defining it is an error naming both. The exception is `register`, the registration moment
-/// every feature takes part in: it forwards to each definition in file-name order.
+/// inherent `impl <Feature>Hooks { pub(super) fn <hook>(&self, ..) }` blocks (`<Feature>Hooks` a unit struct of that
+/// file), and the result is `struct Mod;` with one `impl Hooks for Mod` whose methods forward to the fragments, each
+/// signature copied verbatim, so the compiler checks it against `Hooks` there. A hook method has one owner: two files
+/// defining it is an error naming both. The exception is `register`, the registration moment every feature takes part
+/// in: it forwards to each definition in file-name order.
 pub fn folder_hooks(directory: &Path) -> Result<String, String> {
     struct Fragment {
         file: String,
