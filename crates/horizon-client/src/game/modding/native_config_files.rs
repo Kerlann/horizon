@@ -843,7 +843,7 @@ mod tests {
     #[test]
     #[ignore = "needs HORIZON_TEST_RESOURCES, HORIZON_WASM_FIXTURE and HORIZON_WASM_STD built from this tree"]
     fn compiled_wasm_bulk_files_use_actual_game_filesystem_roots() {
-        use crate::game::native_entity_refs::tests::{run_fresh_cases, with_game};
+        use crate::game::native_entity_refs::tests::{run_fresh_cases, with_game_at};
         if run_fresh_cases(
             "game::native_config_files::tests::compiled_wasm_bulk_files_use_actual_game_filesystem_roots",
             "HORIZON_WASM_BULK_FILES_CHILD",
@@ -875,8 +875,13 @@ mod tests {
                 );
                 assert!(loaded.refused.is_empty(), "{:?}", loaded.refused);
                 loaded.initialize(&[info]).unwrap();
-                mod_platform::testing::with_mods(loaded.mods.into(), || {
-                    with_game(|game| {
+                let mods: mod_api::Mods = loaded.mods.into();
+                mod_platform::testing::with_mods(mods.clone(), || {
+                    crate::game::api_values::install_parts(&mods).unwrap();
+                    let base = PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+                    let root =
+                        super::super::mods::content_root(&base, &Default::default()).unwrap();
+                    with_game_at(root.prepared().to_owned(), |game| {
                         let world = Root::new("wasm-world");
                         game.world_root = world.0.path.clone();
                         game.set_allow_commands(true);
