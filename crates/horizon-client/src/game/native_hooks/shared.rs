@@ -2718,7 +2718,7 @@ impl Game<'_> {
     /// The acting player's hit landed on mob `index`, holding `stack`.
     pub(super) fn native_hurt_enemy_event(&mut self, stack: &ItemStack, index: usize) {
         let mob = &self.mobs[index];
-        let kind = crate::game::native_namespaced_id::namespaced(&mob.kind.id);
+        let kind = ["minecraft:", mob.kind.id.trim_start_matches("minecraft:")].concat();
         self.native_hurt_enemy(stack, mob.id, &kind);
     }
     /// `Inventory.tick` for the acting player: each carried stack goes through
