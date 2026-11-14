@@ -2,6 +2,8 @@
 /// A snapshot of another entity mobs can see this tick.
 #[derive(Clone, Debug)]
 pub struct Seen {
+    /// Actual registry type, retained without copying its id string.
+    pub kind: Arc<MobType>,
     pub in_water: bool,
     pub playing_dead: bool,
     pub last_damage: Option<Damage>,

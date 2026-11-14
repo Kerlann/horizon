@@ -2713,6 +2713,7 @@ impl Mob {
         let m = self;
         let villager = m.species() == Species::Villager;
         Seen {
+            kind: Arc::clone(&m.kind),
             in_water: self.fluids.in_water,
             playing_dead: axolotl::is_playing_dead(self),
             last_damage: self.last_damage.map(|(d, _)| d),
@@ -3182,6 +3183,7 @@ pub trait LiveMobs {
 
 #[derive(Clone)]
 pub struct MobWorld<'a> {
+    pub mob_maps: &'a crate::neoforge_mob_maps::NeoForgeMobMaps,
     pub professions: &'a villager::ResolvedProfessions,
     /// What the motion value hooks are given: the loop context of the side that
     /// ticks these mobs.
