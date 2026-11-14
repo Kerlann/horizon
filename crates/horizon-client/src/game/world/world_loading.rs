@@ -498,8 +498,8 @@ pub(super) fn preload_world_data(
             if left.elapsed() >= PRELOAD_KEPT && thread.is_finished() {
                 horizon_client::vanillagen::forget_shared_data();
                 horizon_client::structure_blocks::forget_loot_data();
-                super::lan::forget_sync_data();
-                super::lan::forget_server_sources();
+                super::lan::sync::forget_sync_data();
+                super::lan::sync::forget_server_sources();
                 horizon_threads::release_free_memory();
                 *preload = Preload::Idle;
                 log::info!("Horizon: preloaded world data dropped, no world opened");

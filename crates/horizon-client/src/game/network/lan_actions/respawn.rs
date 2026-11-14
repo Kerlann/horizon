@@ -33,11 +33,10 @@ impl Game<'_> {
         // AbstractContainerScreen.tick / ServerPlayer.closeContainer: the dead
         // player's open container goes with it, so a chest's lid (its opener
         // count) falls instead of staying up for a player who is gone.
-        self.guest_container_closed(conn);
+        self.guest_close_menus_and_tell(conn);
         let Some(host) = self.lan.as_mut() else {
             return;
         };
-        host.hub.close_container(conn);
         // PlayerList.respawn builds a new `ServerPlayer`, whose `lastEquipmentItems` starts
         // empty: the mods hear each worn item again from empty (`native_players_equipment`).
         if let Some(play) = host.play.get_mut(&conn) {

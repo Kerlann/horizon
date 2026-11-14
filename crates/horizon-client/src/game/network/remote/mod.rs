@@ -1548,7 +1548,7 @@ impl Game<'_> {
         if let Some(mut r) = self.remote.take() {
             r.session.disconnect();
         }
-        super::lan::forget_sync_data();
+        super::lan::sync::forget_sync_data();
         self.gui.atlas.clear_object_skins();
         self.server_packs_disconnect();
         self.code_of_conduct = None;
@@ -9247,12 +9247,11 @@ impl Game<'_> {
         self.stop_sprint_after_extra_knockback();
     }
     /// The latency the server's player list gives this player
-    /// (`PlayerInfo.getLatency`). A new entry reads 0 until the server's first
-    /// latency update (every 600 ticks), so 0 shows nothing rather than `0 ms`.
-    pub(super) fn own_latency(&self) -> Option<i32> {
+    /// (`PlayerInfo.getLatency`), none before the server lists it. A new entry reads 0 until the
+    /// server's first latency update (every 600 ticks).
+    pub(in crate::game) fn own_latency(&self) -> Option<i32> {
         let r = self.remote.as_ref()?;
-        let me = r.tab_players.get(&r.profile)?;
-        (me.latency > 0).then_some(me.latency)
+        r.tab_players.get(&r.profile).map(|me| me.latency)
     }
 
     /// An attribute's value on this client's player, if its map has the attribute.

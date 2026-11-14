@@ -999,19 +999,31 @@ pub(super) fn check_entry_root(source: &str, id: &str) -> Result<(), String> {
     let Ok(file) = syn::parse_file(source) else {
         return Ok(());
     };
-    for attr in file.attrs {
-        if attr.path().is_ident("forbid") {
-            let Ok(lints) = attr.parse_args_with(
-                syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
-            ) else {
-                continue;
-            };
-            if lints.iter().any(|lint| lint.path().is_ident("unsafe_code")) {
-                return Err(trf("{mod}: its crate root forbids unsafe code, which the launcher's generated library entry needs; use #![deny(unsafe_code)] instead", &[("mod", id)]));
-            }
-        }
+    if file.attrs.iter().any(|attr| forbids_unsafe(&attr.meta)) {
+        return Err(trf("{mod}: its crate root forbids unsafe code, which the launcher's generated library entry needs; use #![deny(unsafe_code)] instead", &[("mod", id)]));
     }
     Ok(())
+}
+
+/// Whether the attribute `meta` forbids unsafe code: `forbid(unsafe_code)`, or a `cfg_attr` (nested
+/// ones too) carrying it. The launcher doesn't evaluate cfg predicates, so any predicate counts.
+fn forbids_unsafe(meta: &syn::Meta) -> bool {
+    let syn::Meta::List(list) = meta else {
+        return false;
+    };
+    let Ok(items) = list.parse_args_with(
+        syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+    ) else {
+        return false;
+    };
+    if list.path.is_ident("forbid") {
+        items.iter().any(|lint| lint.path().is_ident("unsafe_code"))
+    } else if list.path.is_ident("cfg_attr") {
+        // The first item is the predicate; the rest are the attributes it applies.
+        items.iter().skip(1).any(forbids_unsafe)
+    } else {
+        false
+    }
 }
 
 /// What the build log and a failure call compiling mod `id`: a failure starts
@@ -1165,6 +1177,20 @@ mod tests {
                 .contains("safe")
         );
         assert!(super::check_entry_root("// #![forbid(unsafe_code)]", "safe").is_ok());
+        let plain = super::check_entry_root("#![forbid(unsafe_code)]", "safe").unwrap_err();
+        for root in [
+            "#![cfg_attr(feature = \"x\", forbid(unsafe_code))]",
+            "#![cfg_attr(all(unix, not(test)), allow(unused), forbid(unsafe_code))]",
+            "#![cfg_attr(unix, cfg_attr(test, forbid(unsafe_code)))]",
+        ] {
+            assert_eq!(
+                super::check_entry_root(root, "safe").unwrap_err(),
+                plain,
+                "{root}"
+            );
+        }
+        assert!(super::check_entry_root("#![cfg_attr(unix, deny(unsafe_code))]", "safe").is_ok());
+        assert!(super::check_entry_root("#![cfg_attr(unix, forbid(", "safe").is_ok());
     }
 
     #[test]

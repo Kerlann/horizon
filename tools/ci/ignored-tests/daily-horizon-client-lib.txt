@@ -84,3 +84,5 @@ horizon-client-lib telemetry::tests::benchmark_reports_need_their_own_consent_an
 horizon-client-lib ticket_levels::tests::grid_matches_the_map lib daily slow
 horizon-client-lib ticket_levels::tiled_tests::tiles_match_scalar_levels_with_overlaps_and_portals lib daily slow
 horizon-client-lib title::tests::f5_reloads_the_server_list lib daily network
+horizon-client-lib mobs::villager_client_visual_tests::villager_client_partial_hat_cache_refreshes lib daily resources
+horizon-client-lib item_render::special_parts_tests::a_registered_special_model_draws_its_renderers_resource_models lib daily resources

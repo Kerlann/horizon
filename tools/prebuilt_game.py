@@ -581,7 +581,8 @@ def check(out: Path) -> None:
 
 
 def smoke(out: Path) -> None:
-    """Build a starter mod dylib and install the fixed executable from OUT alone."""
+    """Build two starter mod dylibs, the second calling into the first, and install the fixed executable from OUT
+    alone."""
     deps = out / "deps"
     assert_externs(out, json.loads((out / IDENTITY).read_text())["facade_crates"])
 
@@ -598,31 +599,43 @@ def smoke(out: Path) -> None:
     origin = {"linux": ["-Wl,-rpath,$ORIGIN"], "darwin": ["-Wl,-rpath,@executable_path"]}.get(sys.platform, [])
     identity = json.loads((out / IDENTITY).read_text())
     release = next(line.removeprefix("release: ") for line in identity["rustc"].splitlines() if line.startswith("release: "))
-    build = f"{identity['commit']} smoke 0.1.0 {release}"
-    library = f"{dylib_prefix()}smoke{dylib_suffix()}"
+    starter = (ROOT / "crates/cargo-horizon-mod/template/native/lib.rs").read_text()
+    template = (out / NATIVE_MODS_TEMPLATE).read_text()
+    smoke_library = installed / f"{dylib_prefix()}smoke{dylib_suffix()}"
+    # `smoke_user` calls `smoke` through its library, as a mod calls a declared dependency: rustc links it against
+    # `smoke`'s library (on windows-gnu through its import library) and the loader resolves the call at start.
+    mods = {
+        "smoke": (SMOKE_LIBRARY_ITEM, [], ""),
+        "smoke_user": (SMOKE_USER_ITEM, ["--extern", f"smoke={smoke_library}"], '\n[dependencies]\nsmoke = "^0.1"\n'),
+    }
+    records = []
     with tempfile.TemporaryDirectory(dir=out.parent) as scratch:
         scratch = Path(scratch)
-        starter = (ROOT / "crates/cargo-horizon-mod/template/native/lib.rs").read_text()
-        entry = (out / NATIVE_MODS_TEMPLATE).read_text()
-        rows = {"NATIVE_BUILD": build, "MOD_ENTRIES": '"smoke" => crate::hooks,',
-                "BUILT_MODS": 'mod_api::__private::native::BuiltMod { id: "smoke", version: "0.1.0", side: mod_api::Side::Both },',
-                "MOD_SLOTS": "", "MOD_REDIRECTS": ""}
-        for marker, value in rows.items():
-            entry = entry.replace(f"/* {marker} */", value)
-        (scratch / "entry.rs").write_text(entry)
-        (scratch / "smoke.rs").write_text(starter.replace("{id}", "smoke") + '\n#[path = "entry.rs"] mod entry;\n')
-        run(["rustc", *common, "--crate-type", "dylib", "--crate-name", "smoke", *extern("mod_api"),
-             "--extern", f"horizon_mod_host={dylib(deps, 'horizon_mod_host')}",
-             *(flag for arg in origin for flag in ("-C", f"link-arg={arg}")),
-             "-o", str(installed / library), str(scratch / "smoke.rs")])
+        for mod, (item, externs, dependencies) in mods.items():
+            build = f"{identity['commit']} {mod} 0.1.0 {release}"
+            rows = {"NATIVE_BUILD": build, "MOD_ENTRIES": f'"{mod}" => crate::hooks,',
+                    "BUILT_MODS": f'mod_api::__private::native::BuiltMod {{ id: "{mod}", version: "0.1.0", side: mod_api::Side::Both }},',
+                    "MOD_SLOTS": "", "MOD_REDIRECTS": ""}
+            entry = template
+            for marker, value in rows.items():
+                entry = entry.replace(f"/* {marker} */", value)
+            source = starter.replace("{id}", mod) + item
+            (scratch / f"{mod}_entry.rs").write_text(entry)
+            (scratch / f"{mod}.rs").write_text(source + f'\n#[path = "{mod}_entry.rs"] mod entry;\n')
+            library = installed / f"{dylib_prefix()}{mod}{dylib_suffix()}"
+            run(["rustc", *common, "-L", f"dependency={installed}", "--crate-type", "dylib", "--crate-name", mod,
+                 *extern("mod_api"), "--extern", f"horizon_mod_host={dylib(deps, 'horizon_mod_host')}", *externs,
+                 *(flag for arg in origin for flag in ("-C", f"link-arg={arg}")),
+                 "-o", str(library), str(scratch / f"{mod}.rs")])
+            records.append({"file": library.name, "sha256": sha256(library), "kind": "mod", "mod": mod,
+                            "identity": build})
+            install_package(installed / "horizon-native-mods" / mod, mod, source, dependencies)
     shutil.copy2(out / RUNTIME / EXECUTABLE, installed / EXECUTABLE)
-    (installed / "native-mods.json").write_text(json.dumps({"libraries": [{"file": library,
-        "sha256": sha256(installed / library), "kind": "mod", "mod": "smoke", "identity": build}]}))
+    (installed / "native-mods.json").write_text(json.dumps({"libraries": records}))
     if holder_mark() not in (installed / EXECUTABLE).read_bytes():
         sys.exit("smoke: holder capability missing from the executable")
     for library in runtime_libraries(out):
         shutil.copy2(library, installed / library.name)
-    install_package(installed / "horizon-native-mods" / "smoke", starter.replace("{id}", "smoke"))
     # The same executable as shipped, with no native libraries selected.
     api = out.parent / SMOKE_API
     if api.exists():
@@ -630,14 +643,32 @@ def smoke(out: Path) -> None:
     shutil.copytree(out / RUNTIME, api)
     for library in runtime_libraries(out):
         shutil.copy2(library, api / library.name)
-    print(f"smoke: the starter mod and the game executable built against {out} alone, installed in {installed}")
+    print(f"smoke: two starter mods, one calling the other, and the game executable built against {out} alone, "
+          f"installed in {installed}")
 
 
-def install_package(folder: Path, source: str) -> None:
-    """The mod's package as the launcher leaves it beside the executable, which reads it back at start
-    (horizon-mod-package `runtime::Runtime::load`): the starter manifest with its [native] pins, and its source."""
+# What `smoke` adds to the starter for `smoke_user` to call; never inlined, so the call crosses the libraries.
+SMOKE_LIBRARY_ITEM = """
+/// Called from `smoke_user`'s library.
+#[inline(never)]
+pub fn greeting() -> &'static str {
+    "smoke"
+}
+"""
+SMOKE_USER_ITEM = """
+/// A call into `smoke`'s library.
+pub fn greeting_length() -> usize {
+    smoke::greeting().len()
+}
+"""
+
+
+def install_package(folder: Path, mod: str, source: str, dependencies: str) -> None:
+    """Mod MOD's package as the launcher leaves it beside the executable, which reads it back at start
+    (horizon-mod-package `runtime::Runtime::load`): the starter manifest with its DEPENDENCIES table and its
+    [native] pins, and its source."""
     manifest = (ROOT / "crates/cargo-horizon-mod/template/native/horizon-mod.toml").read_text()
-    manifest = manifest.replace("{id}", "smoke").replace("{name}", "Smoke")
+    manifest = manifest.replace("{id}", mod).replace("{name}", mod) + dependencies
     mixins = re.search(r'pub const REV: &str = "([0-9a-f]{40})";',
                        (ROOT / "crates/horizon-mod-package/src/mixins_tool.rs").read_text())[1]
     game = re.search(r'pub const VERSION_ID: &str = "([^"]+)";',
@@ -646,7 +677,7 @@ def install_package(folder: Path, source: str) -> None:
     manifest += f'\n[native]\ngame = "{game}"\nhorizon = "{horizon}"\nmixins = "{mixins}"\n'
     (folder / "src").mkdir(parents=True)
     (folder / "horizon-mod.toml").write_text(manifest)
-    (folder / "Cargo.toml").write_text('[package]\nname = "smoke"\nversion = "0.1.0"\nedition = "2024"\n')
+    (folder / "Cargo.toml").write_text(f'[package]\nname = "{mod}"\nversion = "0.1.0"\nedition = "2024"\n')
     (folder / "src/lib.rs").write_text(source)
 
 
@@ -669,7 +700,7 @@ def runtime_libraries(out: Path) -> list[Path]:
 
 
 def start(out: Path) -> None:
-    """Start two installations of the fixed executable (with the starter library and without mods),
+    """Start two installations of the fixed executable (with smoke's two libraries and without mods),
     each as a dedicated server with no game data: it loads the game's libraries
     and sets up the mods' runtime, then stops at the missing prepared files. Fails on a crash, a hang or any other
     stop, so an archive whose libraries disagree (two allocators, #3877) cannot ship. On Windows it runs without
@@ -846,8 +877,11 @@ def index(dist: Path, nightly: str | None, previous: tuple[str, Path] | None = N
          *(["--previous", previous[0], str(previous[1])] if previous else [])], cwd=ROOT)
 
 
-# Warns here, ahead of Windows' hard 65,535 (the linker's own failure), so a growing export list is seen first.
-EXPORT_WARNING = 49_000
+# Windows refuses a DLL past 65,535 exported names at link time. `exports` warns past 80% of that and fails past 90%, so
+# a growing export list stops a package build with room left to cut it.
+EXPORT_LIMIT = 65_535
+EXPORT_WARNING = EXPORT_LIMIT * 8 // 10
+EXPORT_FAILURE = EXPORT_LIMIT * 9 // 10
 
 
 def export_count(library: Path) -> int:
@@ -869,18 +903,23 @@ def export_count(library: Path) -> int:
 
 
 def exports(out: Path) -> None:
-    """Report every DLL's Windows export count (#589), the separate wasm runtime included, and warn on
-    one near the limit: the linker's own failure at 65,535 is the real one."""
+    """Report every DLL's Windows export count (#589), the separate wasm runtime included; warn on one past 80% of
+    the limit and fail, after reporting them all, on any past 90%."""
+    over = []
     for library in sorted((out / "deps").glob("*.dll")):
         names = export_count(library)
-        print(f"{library.name}: {names} exported names (Windows' limit is 65,535)")
-        if names >= EXPORT_WARNING:
-            warning = (f"{library.name} exports {names:,} names, {65_535 - names:,} short of Windows' 65,535: "
-                       "cut exported names before adding points or internals (#589)")
+        print(f"{library.name}: {names} exported names (Windows' limit is {EXPORT_LIMIT:,})")
+        if names > EXPORT_WARNING:
+            warning = (f"{library.name} exports {names:,} names, {EXPORT_LIMIT - names:,} short of Windows' "
+                       f"{EXPORT_LIMIT:,}: cut exported names before adding points or internals (#589)")
             print(f"::warning::{warning}")
             if summary := os.environ.get("GITHUB_STEP_SUMMARY"):
                 with open(summary, "a", encoding="utf-8") as file:
                     file.write(f"- {warning}\n")
+        if names > EXPORT_FAILURE:
+            over.append(f"{library.name} ({names:,})")
+    if over:
+        sys.exit(f"past 90% of Windows' {EXPORT_LIMIT:,} exported names: {', '.join(over)}; cut exported names (#589)")
 
 
 def main() -> None:

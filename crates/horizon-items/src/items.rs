@@ -754,6 +754,7 @@ fn worn_mob_visibility(
 }
 
 impl Items {
+    /// Load item data; bind the world's damage catalog before preparing recipes.
     pub fn load(
         root: &Path,
         registry: &BlockRegistry,
@@ -838,6 +839,7 @@ impl Items {
     pub fn catalog(root: &Path, overlay: &PackOverlay, defaults: &ItemDefaults) -> Result<Self> {
         let mut items = Self::load_with(root, &HashMap::new(), overlay, defaults)?;
         items.block_items = Arc::new(ingredient_defaults::block_items(root)?);
+        ingredient_defaults::load_component_damage_registry(root, overlay, &mut items)?;
         Ok(items)
     }
     fn load_with(

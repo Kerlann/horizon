@@ -94,6 +94,13 @@ pub trait ItemsClientHost {
     #[access(WorldOnly)]
     fn give(&mut self, item: ItemKey, count: u32) -> Result<(), String>;
     /// Side: client.
+    /// `ItemStack.getHoverName()` as plain text: the custom name, else a written book's non-blank
+    /// title, else the item's name in the client's language (potion contents, a head's owner and
+    /// the `item_name` component as vanilla). No rarity colour or italics. An invalid stack reads
+    /// an empty string.
+    #[access(ClientSetup)]
+    fn hover_name(&self, stack: &ItemStack) -> String;
+    /// Side: client.
     /// Registered enchantments, in registry order.
     #[access(ClientSetup)]
     fn enchantments(&self) -> Vec<EnchantmentInfo>;

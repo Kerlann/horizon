@@ -156,23 +156,6 @@ impl Watchdog {
     }
 }
 
-/// Double.toString for the magnitudes positions have (no exponent form
-/// between 1e-3 and 1e7).
-pub(super) fn java_double(v: f64) -> String {
-    if v == 0.0 || (1e-3..1e7).contains(&v.abs()) {
-        format!("{v:?}")
-    } else {
-        let s = format!("{v:E}");
-        let (m, e) = s.split_once('E').unwrap_or((&s, "0"));
-        let m = if m.contains('.') {
-            m.to_owned()
-        } else {
-            format!("{m}.0")
-        };
-        format!("{m}E{e}")
-    }
-}
-
 /// What the startup read before the game's resources were loaded.
 struct Setup {
     props: ServerProperties,
@@ -1176,7 +1159,7 @@ impl Game<'_> {
         self.native_server_starting(true);
         self.native_lifecycle_open_started();
         // The registries the server sends are read while the world prepares.
-        let sync = super::lan::preload_sync_data(&self.res.core.item_data);
+        let sync = super::lan::sync::preload_sync_data(&self.res.core.item_data);
         self.finish_open_world(prepared)?;
         // WorldLoader: the world's packs must load before the server starts. The data store is read
         // now rather than at the first tick (reading parses functions; it runs none), and a broken

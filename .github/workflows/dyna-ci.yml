@@ -64,7 +64,8 @@ jobs:
   changes:
     if: github.event_name != 'schedule' && !inputs.prepare-output-check && (github.event_name != 'pull_request' || !github.event.pull_request.draft)
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    # Selection normally finishes in two minutes; allow two bounded history fetches.
+    timeout-minutes: 13
     permissions:
       contents: read
       actions: read
@@ -98,7 +99,17 @@ jobs:
         run: python3 tools/ci/pr_gate.py >> "$GITHUB_OUTPUT"
       - name: Fetch this commit's history for selection
         if: github.event_name == 'pull_request'
-        run: git fetch -q --no-tags --unshallow origin "$(git rev-parse HEAD)"
+        timeout-minutes: 11
+        env:
+          FETCH_STEP: Fetch this commit's history for selection
+        run: |
+          for attempt in 1 2; do
+            if [ "$(git rev-parse --is-shallow-repository)" = false ]; then exit 0; fi
+            if timeout --kill-after=10s 300s git fetch -q --no-tags --unshallow origin "$(git rev-parse HEAD)"; then exit 0; fi
+            echo "$FETCH_STEP: GitHub fetch attempt $attempt failed or timed out."
+          done
+          echo "::error::$FETCH_STEP: history fetch from GitHub failed or timed out twice."
+          exit 1
       - name: Select checks once for this pull request
         if: github.event_name == 'pull_request'
         id: selection
@@ -262,8 +273,9 @@ jobs:
     needs: changes
     if: ${{ always() && !cancelled() && needs.changes.result != 'skipped' && (needs.changes.result != 'success' || needs.changes.outputs.heavy == 'true') }}
     runs-on: ${{ needs.changes.outputs.rust_required == 'false' && 'ubuntu-latest' || needs.changes.outputs.self_hosted == 'true' && needs.changes.outputs.trusted == 'true' && 'dyna-large' || needs.changes.outputs.hosted_label || 'ubuntu-latest' }}
-    # A cold lint (two full clippy graphs) takes 40+ minutes on GitHub runners: room to finish, main to save its cache.
-    timeout-minutes: ${{ github.event_name == 'pull_request' && 75 || 100 }}
+    # Recent green lint peaked at 53.5 minutes on a cold runner (including the wasm check).
+    # Cold GitHub/boat lint was not represented in that sample; retain its previous allowance.
+    timeout-minutes: ${{ needs.changes.outputs.self_hosted == 'true' && needs.changes.outputs.trusted == 'true' && 60 || github.event_name == 'pull_request' && 75 || 100 }}
     env:
       # dyna (Dyna's pool: persistent build folder, no sudo), boat (a fresh VM like GitHub's, 16 GiB) or github.
       RUNNER_KIND: ${{ needs.changes.outputs.self_hosted == 'true' && needs.changes.outputs.trusted == 'true' && 'dyna' || startsWith(needs.changes.outputs.hosted_label, 'boat') && 'boat' || 'github' }}
@@ -408,6 +420,10 @@ jobs:
       - name: The prebuilt SDK's Windows library builds without warnings
         id: sdk_windows
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.changes.outputs.rust_required != 'false' }}
+        env:
+          # MinGW ignores mimalloc's MSVC pragmas. CFLAGS replaces cc's default warning flags,
+          # so retain -Wall/-Wextra for both mimalloc and hidapi; silence only unknown pragmas.
+          CFLAGS_x86_64_pc_windows_gnu: -Wall -Wextra -Wno-unknown-pragmas
         run: |
           started=$SECONDS
           # hidapi and libmimalloc-sys compile C for the target in their build scripts.
@@ -451,7 +467,7 @@ jobs:
     needs: changes
     if: ${{ always() && !cancelled() && needs.changes.result != 'skipped' && (needs.changes.result != 'success' || needs.changes.outputs.heavy == 'true') }}
     runs-on: ${{ needs.changes.outputs.rust_required == 'false' && 'ubuntu-latest' || needs.changes.outputs.self_hosted == 'true' && 'dyna-large' || !inputs.github-fallback && needs.changes.outputs.forced_github != 'true' && vars.SELF_HOSTED_CI == 'all' && needs.changes.outputs.trusted == 'true' && fromJSON('["self-hosted", "linux", "playhorizon-ci"]') || needs.changes.outputs.hosted_label || 'ubuntu-latest' }}
-    timeout-minutes: 45
+    timeout-minutes: ${{ needs.changes.outputs.self_hosted == 'true' && 50 || 45 }}
     # Dyna's runner image now carries lavapipe, Mesa's software Vulkan driver, for ignored-tests' `gpu` tests.
     # verify's tests were written to skip GPU work when no adapter exists, and one of them
     # (gfx::frame_gen::optical_flow, horizon-rust/horizon#8627) fails on lavapipe, so verify hides the driver and runs
@@ -579,7 +595,15 @@ jobs:
       - name: Build Rust core test binaries
         id: core_build
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && (needs.changes.outputs.rust_required != 'false') }}
-        run: cargo build $JOBS --keep-going --profile test --workspace --lib --bins --tests --timings
+        # Build the exact test graph on green. A workspace proc-macro can have different build/test
+        # dependency profiles; cargo build first would make cargo test compile its consumers again.
+        run: |
+          if cargo test $JOBS --profile test --workspace --lib --bins --tests --no-run --timings; then
+            exit 0
+          fi
+          # Only red runs pay for the other graph, to collect independent targets' errors too.
+          cargo build $JOBS --keep-going --profile test --workspace --lib --bins --tests || true
+          exit 1
       # What bounds the build: the slowest compile units, from the report --timings writes.
       - name: Slowest compile units
         if: ${{ !cancelled() && needs.changes.outputs.rust_required != 'false' }}
@@ -591,12 +615,6 @@ jobs:
             [ -f "$timing" ] || continue
             { echo "points build script phases:"; cat "$timing"; } | tee -a "$GITHUB_STEP_SUMMARY"
           done
-      # Measurement: the test step below recompiled horizon-mod-points and every crate after it, minutes after
-      # the build above. Cargo's verbose output says which tracked file or variable made each unit dirty.
-      - name: Why the core build is not fresh
-        id: why_the_core_build_is_not_fresh
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' && (needs.changes.outputs.rust_required != 'false') && steps.core_build.outcome == 'success' }}
-        run: cargo test $JOBS --profile test --workspace --lib --bins --tests --no-run -v 2>&1 | grep -E '^ +(Dirty|Compiling) ' || true
       # Binaries run normally, three at a time, under the inet/resolver preload guard. Only a binary
       # recording a violation is rerun per test to name culprits, even if they swallow the refusal.
       # The guard library is built here only; the daily run does not preload it. Unix sockets remain available.
@@ -702,7 +720,7 @@ jobs:
     # A contributor's pull request gets GitHub's runners: these checks compile nothing heavy, and
     # its only two checks must not depend on a paid pool's balance.
     runs-on: ${{ needs.changes.outputs.rust_required == 'false' && 'ubuntu-latest' || needs.changes.outputs.trusted != 'true' && 'ubuntu-latest' || needs.changes.outputs.self_hosted == 'true' && 'dyna-large' || !inputs.github-fallback && needs.changes.outputs.forced_github != 'true' && vars.SELF_HOSTED_CI == 'all' && needs.changes.outputs.trusted == 'true' && fromJSON('["self-hosted", "linux", "playhorizon-ci"]') || needs.changes.outputs.hosted_label || 'ubuntu-latest' }}
-    timeout-minutes: 45
+    timeout-minutes: ${{ needs.changes.outputs.self_hosted == 'true' && needs.changes.outputs.trusted == 'true' && 20 || 45 }}
     # Dyna's runner image now carries lavapipe, Mesa's software Vulkan driver, for ignored-tests' `gpu` tests.
     # verify's tests were written to skip GPU work when no adapter exists, and one of them
     # (gfx::frame_gen::optical_flow, horizon-rust/horizon#8627) fails on lavapipe, so verify hides the driver and runs
@@ -726,7 +744,17 @@ jobs:
       # Public-tree ranges and file-size ancestry need full history of this exact commit,
       # not every branch and tag. The Rust job only needs its checkout's HEAD and tracked files.
       - name: Fetch this commit's history
-        run: git fetch -q --no-tags --unshallow origin "$(git rev-parse HEAD)"
+        timeout-minutes: 11
+        env:
+          FETCH_STEP: Fetch this commit's history
+        run: |
+          for attempt in 1 2; do
+            if [ "$(git rev-parse --is-shallow-repository)" = false ]; then exit 0; fi
+            if timeout --kill-after=10s 300s git fetch -q --no-tags --unshallow origin "$(git rev-parse HEAD)"; then exit 0; fi
+            echo "$FETCH_STEP: GitHub fetch attempt $attempt failed or timed out."
+          done
+          echo "::error::$FETCH_STEP: history fetch from GitHub failed or timed out twice."
+          exit 1
       - uses: actions/setup-python@v5
         if: needs.changes.outputs.tooling_required != 'false' && (env.RUNNER_KIND == 'github' || env.RUNNER_KIND == 'boat')
         with:

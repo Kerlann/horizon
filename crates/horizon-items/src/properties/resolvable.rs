@@ -24,10 +24,14 @@ impl PartialEq for Identifier<'_> {
 impl Eq for Identifier<'_> {}
 
 impl Identifier<'_> {
+    /// Canonical UTF-16 length without allocating the encoded identifier.
+    pub fn utf16_len(&self) -> usize {
+        self.namespace.map_or("minecraft".len(), <[u16]>::len) + 1 + self.path.len()
+    }
+
     /// Encode the canonical key once while loading, not while matching a stack.
     pub fn to_tag(self) -> Tag {
-        let namespace_len = self.namespace.map_or("minecraft".len(), <[u16]>::len);
-        let mut value = Vec::with_capacity(namespace_len + 1 + self.path.len());
+        let mut value = Vec::with_capacity(self.utf16_len());
         if let Some(namespace) = self.namespace {
             value.extend_from_slice(namespace);
         } else {
@@ -36,6 +40,21 @@ impl Identifier<'_> {
         value.push(u16::from(b':'));
         value.extend_from_slice(self.path);
         Tag::String(JavaString(value))
+    }
+
+    /// Compare a snapshot's UTF-8 key without allocating a canonical tag or UTF-16 buffer.
+    pub fn matches_str(&self, value: &str) -> bool {
+        let (namespace, path) = value.split_once(':').unwrap_or(("minecraft", value));
+        let namespace = if namespace.is_empty() {
+            "minecraft"
+        } else {
+            namespace
+        };
+        self.path.iter().copied().eq(path.encode_utf16())
+            && match self.namespace {
+                Some(units) => units.iter().copied().eq(namespace.encode_utf16()),
+                None => namespace == "minecraft",
+            }
     }
 }
 
@@ -139,6 +158,44 @@ pub fn float(value: &Tag) -> Option<Float<'_>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn identifier_matches_snapshot_keys_without_allocating() {
+        let key = Tag::String("stone".into());
+        let key = identifier(&key).unwrap();
+        assert!(key.matches_str("minecraft:stone"));
+        assert!(key.matches_str(":stone"));
+        assert!(!key.matches_str("mod:stone"));
+        assert!(!key.matches_str("minecraft:stone_extra"));
+        for (raw, snapshot) in [
+            ("mod:path", "mod:path"),
+            ("minecraft:", "minecraft:"),
+            (":", "minecraft:"),
+        ] {
+            let raw = Tag::String(raw.into());
+            assert!(identifier(&raw).unwrap().matches_str(snapshot));
+        }
+        let raw = Tag::String("stone".into());
+        let id = identifier(&raw).unwrap();
+        assert!(!id.matches_str("minecraft:stone:extra"));
+        assert!(!id.matches_str("minecraft:stöne"));
+    }
+
+    #[test]
+    fn identifier_utf16_lengths_match_canonical_keys() {
+        for (raw, canonical, length) in [
+            ("stone", "minecraft:stone", 15),
+            ("provider", "minecraft:provider", 18),
+            (":", "minecraft:", 10),
+            ("", "minecraft:", 10),
+            ("a:b", "a:b", 3),
+        ] {
+            let raw = Tag::String(raw.into());
+            let key = identifier(&raw).unwrap();
+            assert_eq!(key.utf16_len(), length);
+            assert_eq!(key.to_tag(), Tag::String(canonical.into()));
+        }
+    }
 
     #[test]
     fn number_and_provider_codecs_preserve_java_equality_and_identifier_rules() {

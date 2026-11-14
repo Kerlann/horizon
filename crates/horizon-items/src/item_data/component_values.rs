@@ -109,3 +109,31 @@ pub fn holder_set_equal(a: &Tag, b: &Tag) -> bool {
         _ => false,
     }
 }
+
+/// `DamageResistant.CODEC` has one required field and ignores unknown record fields.
+fn damage_types(value: &Tag) -> Option<&Tag> {
+    let Tag::Compound(_) = value else {
+        return None;
+    };
+    value.get("types")
+}
+
+/// Full persistent `DamageResistant.CODEC`, without inline damage definitions.
+pub fn damage_resistant(value: &Tag, registry: &Registries) -> Result<Tag, String> {
+    let types = holder_set(
+        damage_types(value).ok_or("Missing field types in damage resistance map")?,
+        "minecraft:damage_type",
+        registry,
+    )?;
+    Ok(Tag::compound([("types", types)]))
+}
+
+pub(crate) fn damage_resistant_equal(a: Option<&Tag>, b: Option<&Tag>) -> bool {
+    let (Some(a), Some(b)) = (a, b) else {
+        return false;
+    };
+    match (damage_types(a), damage_types(b)) {
+        (Some(a), Some(b)) => holder_set_equal(a, b),
+        _ => false,
+    }
+}
