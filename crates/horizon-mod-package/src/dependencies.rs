@@ -250,7 +250,8 @@ pub fn resolve_manifests(
 fn diagnostic_note(reason: Option<&str>, url: Option<&str>) -> String {
     // Diagnostics remain one logical line; only the Mods-page renderer adds line breaks.
     let reason = reason.map(|text| text.trim_end().replace(['\r', '\n'], " "));
-    match (reason.as_deref(), url) {
+    let url = url.map(|text| text.replace(['\r', '\n'], " "));
+    match (reason.as_deref(), url.as_deref()) {
         (Some(reason), Some(url)) => format!(" ({reason} {url})"),
         (Some(text), None) | (None, Some(text)) => format!(" ({text})"),
         (None, None) => String::new(),
@@ -657,6 +658,33 @@ mod tests {
             "owner works badly with target 1.0.0 (First sentence. Second sentence. https://example.test/details)"
         );
     }
+    #[test]
+    fn diagnostic_url_line_breaks_do_not_reach_refusals_or_logs() {
+        let url = "https://example.test/\r\ndetails";
+        let refusal = Error::Incompatible {
+            owner: "owner".into(),
+            target: "target".into(),
+            version: "1".into(),
+            note: diagnostic_note(Some("Reason."), Some(url)),
+        };
+        assert_eq!(
+            refusal.to_string(),
+            "owner is incompatible with target 1 (Reason. https://example.test/  details)"
+        );
+        let notice = Notice {
+            owner: "owner".into(),
+            target: "target".into(),
+            version: Some("1".into()),
+            reason: Some("Reason.".into()),
+            url: Some(url.into()),
+            kind: NoticeKind::Discouraged,
+        };
+        assert_eq!(
+            notice.to_string(),
+            "owner works badly with target 1 (Reason. https://example.test/  details)"
+        );
+    }
+
     fn deps(text: &str) -> Vec<Dependency> {
         let value: toml::Table = text.parse().unwrap();
         parse("user", value.get("dependencies")).unwrap()
@@ -856,7 +884,7 @@ mod tests {
         let refused = with(&[("broken", "1.5")], &server, &none).unwrap_err();
         assert_eq!(
             refused.to_string(),
-            "user is incompatible with broken 1.5\nCorrupts saves\nhttps://example.com/why"
+            "user is incompatible with broken 1.5 (Corrupts saves https://example.com/why)"
         );
         assert!(with(&[("broken", "2.0")], &server, &none).is_ok());
         // A client-only rule holds nothing on a dedicated server.
@@ -887,7 +915,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             [
                 "dependency override: user -> broken only discouraged",
-                "user works badly with broken 1.5\nCorrupts saves\nhttps://example.com/why"
+                "user works badly with broken 1.5 (Corrupts saves https://example.com/why)"
             ]
         );
         let drop: Overrides = toml::from_str("[user]\nbroken = 'drop'\n").unwrap();
@@ -969,7 +997,7 @@ mod tests {
                 .unwrap_err();
             assert_eq!(
                 error.to_string(),
-                "owner is incompatible with other 1\nBad interaction\nhttps://example.test/why"
+                "owner is incompatible with other 1 (Bad interaction https://example.test/why)"
             );
         }
         let mut dependent = manifest("dependent", "[dependencies]\nother='^1'");
