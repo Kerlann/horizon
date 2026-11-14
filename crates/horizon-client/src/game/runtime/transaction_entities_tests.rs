@@ -109,7 +109,7 @@ fn boat_with_rider(game: &mut Game<'_>) -> (EntityRef, EntityRef) {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn a_spawn_then_abort_leaves_no_entity_map_or_hook() {
     const NAME: &str =
         "game::transaction_entities_tests::a_spawn_then_abort_leaves_no_entity_map_or_hook";
@@ -134,7 +134,7 @@ fn a_spawn_then_abort_leaves_no_entity_map_or_hook() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn a_spawn_joins_at_the_root_commit() {
     const NAME: &str = "game::transaction_entities_tests::a_spawn_joins_at_the_root_commit";
     with_observer(NAME, |game| {
@@ -150,7 +150,7 @@ fn a_spawn_joins_at_the_root_commit() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn a_join_cancelled_at_commit_leaves_a_stale_handle() {
     const NAME: &str =
         "game::transaction_entities_tests::a_join_cancelled_at_commit_leaves_a_stale_handle";
@@ -172,7 +172,7 @@ fn a_join_cancelled_at_commit_leaves_a_stale_handle() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn outside_a_transaction_joins_and_leaves_are_told_at_the_call() {
     const NAME: &str = "game::transaction_entities_tests::outside_a_transaction_joins_and_leaves_are_told_at_the_call";
     with_observer(NAME, |game| {
@@ -193,7 +193,7 @@ fn outside_a_transaction_joins_and_leaves_are_told_at_the_call() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn a_removal_then_abort_keeps_the_row_map_and_rider() {
     const NAME: &str =
         "game::transaction_entities_tests::a_removal_then_abort_keeps_the_row_map_and_rider";
@@ -225,7 +225,7 @@ fn a_removal_then_abort_keeps_the_row_map_and_rider() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn a_removal_then_commit_runs_each_effect_once() {
     const NAME: &str =
         "game::transaction_entities_tests::a_removal_then_commit_runs_each_effect_once";
@@ -247,7 +247,7 @@ fn a_removal_then_commit_runs_each_effect_once() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn a_killed_mobs_oozing_spawns_only_at_commit() {
     const NAME: &str =
         "game::transaction_entities_tests::a_killed_mobs_oozing_spawns_only_at_commit";
@@ -270,7 +270,7 @@ fn a_killed_mobs_oozing_spawns_only_at_commit() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn a_nested_commit_goes_with_its_parents_abort() {
     const NAME: &str =
         "game::transaction_entities_tests::a_nested_commit_goes_with_its_parents_abort";
@@ -294,7 +294,7 @@ fn a_nested_commit_goes_with_its_parents_abort() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn a_nested_abort_takes_back_only_its_own() {
     const NAME: &str = "game::transaction_entities_tests::a_nested_abort_takes_back_only_its_own";
     with_observer(NAME, |game| {
@@ -324,7 +324,7 @@ fn a_nested_abort_takes_back_only_its_own() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn a_spawned_then_removed_entity_never_joins_or_leaves() {
     const NAME: &str =
         "game::transaction_entities_tests::a_spawned_then_removed_entity_never_joins_or_leaves";
@@ -345,7 +345,7 @@ fn a_spawned_then_removed_entity_never_joins_or_leaves() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn another_writer_sees_the_spawn_and_its_writes_roll_back() {
     const NAME: &str =
         "game::transaction_entities_tests::another_writer_sees_the_spawn_and_its_writes_roll_back";
@@ -367,7 +367,7 @@ fn another_writer_sees_the_spawn_and_its_writes_roll_back() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn ids_never_go_back_and_a_stale_handle_names_no_later_entity() {
     const NAME: &str = "game::transaction_entities_tests::ids_never_go_back_and_a_stale_handle_names_no_later_entity";
     with_observer(NAME, |game| {
@@ -384,7 +384,7 @@ fn ids_never_go_back_and_a_stale_handle_names_no_later_entity() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn late_id_kinds_spawned_then_aborted_are_removed() {
     const NAME: &str =
         "game::transaction_entities_tests::late_id_kinds_spawned_then_aborted_are_removed";
@@ -421,7 +421,7 @@ fn late_id_kinds_spawned_then_aborted_are_removed() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn a_traveller_arriving_inside_an_aborted_action_stays() {
     const NAME: &str =
         "game::transaction_entities_tests::a_traveller_arriving_inside_an_aborted_action_stays";
@@ -454,7 +454,7 @@ fn a_traveller_arriving_inside_an_aborted_action_stays() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn an_aborted_spawn_is_in_no_tracking_pass() {
     const NAME: &str = "game::transaction_entities_tests::an_aborted_spawn_is_in_no_tracking_pass";
     with_observer(NAME, |game| {
@@ -487,7 +487,7 @@ struct Fixture {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn exhausted_ids_refuse_every_mod_spawn() {
     const NAME: &str = "game::transaction_entities_tests::exhausted_ids_refuse_every_mod_spawn";
     let rows: [(&str, Spawn); 12] = [
@@ -586,7 +586,7 @@ fn exhausted_ids_refuse_every_mod_spawn() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn exhausted_ids_stop_the_tick_spawners() {
     const NAME: &str = "game::transaction_entities_tests::exhausted_ids_stop_the_tick_spawners";
     with_observer(NAME, |game| {
@@ -601,7 +601,7 @@ fn exhausted_ids_stop_the_tick_spawners() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+#[ignore = "daily"]
 fn an_aborted_spawn_puts_back_the_raw_record_it_wrote_over() {
     const NAME: &str =
         "game::transaction_entities_tests::an_aborted_spawn_puts_back_the_raw_record_it_wrote_over";
