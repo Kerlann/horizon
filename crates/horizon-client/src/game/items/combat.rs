@@ -402,7 +402,8 @@ impl Game<'_> {
                     self.combat.note_hurt_by_player(PlayerCredit(uuid), now);
                 }
             }
-            Some(m) if m.extra.tame && &*m.kind.id == "minecraft:wolf" => {
+            // `instanceof Wolf`: a content mod's type copying the wolf is one.
+            Some(m) if m.extra.tame && m.species() == Species::Wolf => {
                 self.combat.last_hurt_by_player = m.extra.owner.map(|o| {
                     let owner = horizon_client::lan::playerdata::ints_uuid(o);
                     (PlayerCredit(owner), now)
@@ -1090,6 +1091,42 @@ mod kill_credit_tests {
         assert_eq!(hurt_at(1_000).kill_credit(1_099), Some(7));
         assert_eq!(hurt_at(1_000).kill_credit(1_100), Some(7));
         assert_eq!(hurt_at(1_000).kill_credit(1_101), None);
+    }
+}
+
+#[cfg(test)]
+mod pet_credit_tests {
+    use horizon_client::lan::playerdata::uuid_ints;
+    use horizon_client::mobs::Mob;
+    use horizon_core::geometry::Vec3;
+    use std::sync::Arc;
+
+    /// A tame wolf's hit on the player in place is its owner's
+    /// (`resolvePlayerResponsibleForDamage` asks `instanceof Wolf`), so a
+    /// content mod's type copying the wolf (#4031) names its owner too, and
+    /// an untamed one names no one.
+    #[test]
+    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    fn a_tame_mod_wolf_types_hit_is_its_owners() {
+        crate::game::native_entity_refs::tests::with_game(|game| {
+            let wolf = game.res.mob_types().get("minecraft:wolf").cloned().unwrap();
+            let mut hound = (*wolf).clone();
+            hound.id = "ruby:hound".into();
+            for (kind, tame, credit) in [
+                (wolf.clone(), true, Some(12)),
+                (Arc::new(hound.clone()), true, Some(12)),
+                (Arc::new(hound), false, None),
+            ] {
+                game.combat.last_hurt_by_player = None;
+                game.mobs.clear();
+                let mut pet = Mob::new(7, kind, Vec3::ZERO, 0.0);
+                pet.extra.tame = tame;
+                pet.extra.owner = Some(uuid_ints(12));
+                game.mobs.push(pet);
+                game.resolve_player_responsible_for_player(7);
+                assert_eq!(game.combat.last_hurt_by_player.map(|(c, _)| c.0), credit);
+            }
+        });
     }
 }
 

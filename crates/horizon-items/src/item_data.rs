@@ -1643,7 +1643,7 @@ pub fn decode_components(components: Option<&Tag>) -> (u32, Option<Box<StackData
             .get("minecraft:kinetic_weapon")
             .cloned()
             .map(crate::kinetic_weapon::KineticComponent::new),
-        map_id: c.get("minecraft:map_id").and_then(int).map(|v| v as i32),
+        map_id: seen.map_id.and_then(crate::properties::component_int),
         banner_patterns: crate::banner_layer::layers_from_nbt(c.get("minecraft:banner_patterns")),
         base_color: c
             .get("minecraft:base_color")
@@ -1670,7 +1670,9 @@ pub fn decode_components(components: Option<&Tag>) -> (u32, Option<Box<StackData
             })
             .filter(|(flight, explosions)| !(*flight == 1 && explosions.is_empty())),
         firework_explosion: seen.firework_explosion.map(explosion_from),
-        dyed_color: seen.dyed_color.and_then(int).map(|v| v as i32),
+        dyed_color: seen
+            .dyed_color
+            .and_then(horizon_core::color::rgb_color_from_tag),
         pot_decorations: seen
             .pot_decorations
             .map(|p| {
@@ -1727,7 +1729,11 @@ pub fn decode_components(components: Option<&Tag>) -> (u32, Option<Box<StackData
             && matches!(
                 seen.banner_patterns,
                 Some(Tag::List(layers)) if layers.len() == OMINOUS_LAYERS.len()),
-        ominous_amplifier: seen.amplifier.and_then(int).map(|v| v.clamp(0, 4) as u8),
+        ominous_amplifier: seen
+            .amplifier
+            .and_then(crate::properties::component_int)
+            .filter(|v| (0..=4).contains(v))
+            .map(|v| v as u8),
         trim: seen.trim.and_then(trim::from_nbt),
         bundle_selected: BundleSelected::default(),
         other: Vec::new(),
@@ -3028,8 +3034,7 @@ mod tests {
             firework_explosion: c.get("minecraft:firework_explosion").map(explosion_from),
             dyed_color: c
                 .get("minecraft:dyed_color")
-                .and_then(int)
-                .map(|v| v as i32),
+                .and_then(horizon_core::color::rgb_color_from_tag),
             pot_decorations: c
                 .get("minecraft:pot_decorations")
                 .map(|p| {

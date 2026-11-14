@@ -2185,7 +2185,7 @@ impl Game<'_> {
         context: Context,
     ) -> Result<mod_api::CommandInvocation, horizon_client::command::CommandError> {
         use super::commands::err;
-        use mod_api::{CommandArgument, CommandArgumentValue as Value, CommandInvocation};
+        use mod_api::{CommandArgument, CommandArgumentValue as Value};
         let mut arguments = Vec::with_capacity(context.args.len());
         for argument in context.args {
             let value = match argument.value {
@@ -2271,7 +2271,7 @@ impl Game<'_> {
             };
             arguments.push(CommandArgument::new(argument.name, value));
         }
-        Ok(CommandInvocation::new(context.literals, arguments))
+        Ok(self.native_invocation(context.literals, arguments))
     }
 
     /// A guest's command for the mods, inside their swap
@@ -5692,6 +5692,7 @@ fn proxy_forwarding_of(config: &horizon_client::lan::NetConfig) -> &'static str 
 mod network_settings_tests {
     use super::*;
     #[test]
+    #[ignore = "daily"]
     fn server_settings_follow_the_network_config() {
         use horizon_client::lan::{NetConfig, OnlineMode};
         let mut config = NetConfig::loopback(25565, String::new(), 20);

@@ -1,7 +1,8 @@
 name: release
 # Game builds (docs/release-flow.md). Two kinds go through here (CI tiers, owner 2026-11-13):
-# - nightly: the daily run (daily.yml) calls this when every leg is green, with that commit; by hand it defaults to
-#   `daily-green`. It refuses a commit that is not `daily-green` or an ancestor of it.
+# - nightly: the daily run (daily.yml) calls this when every leg is green, with that commit, and then publishes
+#   whenever a player-facing pull request merged since the published Nightly (no batch-size or age rule); by hand it
+#   defaults to `daily-green` and keeps the batch rules. It refuses any commit but the one `daily-green` points to.
 # - snapshot: by hand from main's head; it needs only dyna-checks' gate (lint, verify, verify-static, launcher)
 #   green on that commit. Publishing a snapshot under its own tag and channel is not built yet: the kind checks
 #   and decides, then stops.
@@ -28,10 +29,14 @@ on:
       force:
         type: boolean
         default: false
+      daily:
+        description: The daily run's call for its daily-green commit (no batch-size or age rule)
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       kind:
-        description: snapshot (main's head, gate green) or nightly (daily-green or an ancestor of it)
+        description: snapshot (main's head, gate green) or nightly (the daily-green commit only)
         type: choice
         options: [snapshot, nightly]
         default: snapshot
@@ -83,8 +88,9 @@ jobs:
           # Empty: daily-green for a nightly, main's head for a snapshot (release_train.py --channel).
           HEAD_SHA: ${{ inputs.commit }}
           FORCE: ${{ inputs.force && 'yes' || '' }}
+          DAILY: ${{ inputs.daily && 'yes' || '' }}
         run: |
-          python3 tools/release_train.py decide --kind game --channel "$KIND" ${HEAD_SHA:+--head "$HEAD_SHA"} ${FORCE:+--force} | tee decision.json
+          python3 tools/release_train.py decide --kind game --channel "$KIND" ${HEAD_SHA:+--head "$HEAD_SHA"} ${FORCE:+--force} ${DAILY:+--daily} | tee decision.json
           echo "### $KIND: $(jq -r '.reason' decision.json)" >> "$GITHUB_STEP_SUMMARY"
 
   nightly:

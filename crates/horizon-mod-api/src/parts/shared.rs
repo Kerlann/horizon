@@ -51,6 +51,8 @@ pub struct PartRegistrar {
     pub(crate) custom_stats: Vec<String>,
     pub(crate) mod_id: &'static str,
     pub(crate) mod_index: usize,
+    /// Whether the registering mod was loaded as a wasm module.
+    pub(crate) mod_wasm: bool,
     /// Parts registered so far, by every mod: the next part's `order`.
     pub(crate) registered: usize,
     pub(crate) parts: Parts,
@@ -74,6 +76,8 @@ pub struct PartRegistrar {
     pub(crate) chunk_generators: Vec<ChunkGeneratorInfo>,
     pub(crate) biome_sources: Vec<BiomeSourceInfo>,
     pub(crate) refused: Vec<String>,
+    /// The Part state keys this mod declared, with their types' Wire layouts and names.
+    pub(crate) part_states: HashMap<(&'static str, &'static str), (u64, &'static str)>,
 }
 
 impl PartRegistrar {
@@ -92,6 +96,7 @@ impl PartRegistrar {
             custom_stats: Vec::new(),
             mod_id,
             mod_index: 0,
+            mod_wasm: false,
             registered: 0,
             parts: Self::capability_parts(),
             tags: TagParts::default(),
@@ -114,6 +119,7 @@ impl PartRegistrar {
             chunk_generators: Vec::new(),
             biome_sources: Vec::new(),
             refused: Vec::new(),
+            part_states: HashMap::new(),
         }
     }
     /// `part`, of kind `kind`, for tag `tag`; none if it is refused.
@@ -208,6 +214,7 @@ pub(crate) fn register_all(
     for (index, hooks) in mod_vocab::__private::entered_registration(mods, "register").enumerate() {
         registrar.mod_id = mod_vocab::__private::parts_installation::mod_entry_id(&mods[index]);
         registrar.mod_index = index;
+        registrar.mod_wasm = mod_vocab::__private::parts_installation::mod_entry_wasm(&mods[index]);
         let context = crate::RegistrationContext::new();
         let rollback = registrar.registration_checkpoint();
         hooks.register(&mut registrar, &context);

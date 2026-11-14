@@ -585,8 +585,15 @@ admission errors name the file. Radius 0 disables its shadow. Radius follows `mi
 baby age scaling and the template's extra baby factors; cube sizes, pufferfish and dragon retain
 their renderer rules. The usual visibility, 32-block radius cap and distance fade still apply.
 
-A living type copies a mob, `minecraft:zombie` or `minecraft:villager`, the way NeoForge's
-`EntityType.Builder.of(Zombie::new, ...)` makes a type of a vanilla class. It has no `item` or `damage`. `attributes`
+A living type copies a mob, the way NeoForge's `EntityType.Builder.of(Zombie::new, ...)` makes a type of a vanilla
+class: `minecraft:zombie`, `minecraft:villager`, `minecraft:wandering_trader`, or one of the tameable mobs
+(`TamableAnimal`), `minecraft:wolf`, `minecraft:cat` and `minecraft:parrot`. A tameable type tames with its template's
+item, then sits, follows and teleports to its owner, and fights for it, as its template does. Its owner, sitting state
+and its template's own fields (a wolf's collar, a cat's or a parrot's variant) save and load under the type's id. A
+tamed wolf type's hits are its owner's, as a wolf's are. A parrot type rides a player's shoulder and comes back off
+as itself; drawing it there is its mod's (an [entity layer](client/entity-layers.md)), as vanilla draws only its own
+parrot there. Every living type is tracked to clients as far, and as often, as its template. It has no `item` or
+`damage`. `attributes`
 sets default attribute values that differ from its template's (`EntityAttributeCreationEvent`), by attribute id, and
 only for attributes the template has; one it lacks stops the content root's build:
 

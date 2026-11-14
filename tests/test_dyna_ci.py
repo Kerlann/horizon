@@ -260,8 +260,8 @@ class DynaRoutingTests(unittest.TestCase):
         self.assertNotIn("cargo test", static)
         self.assertNotIn("Swatinem/rust-cache", static)
         self.assertNotIn("runner-packages.txt", static)
-        self.assertIn("cargo build $JOBS --profile test -p horizon-mod-package --features runtime-process --example holder_actor", runtime)
-        self.assertIn("python3 tools/ci/run_test_binaries.py --jobs 3 -- cargo test $JOBS --profile test --workspace --lib --bins --tests", runtime)
+        self.assertIn("python3 tools/ci/ignored_shards.py --prepare horizon-mod-package $JOBS", runtime)
+        self.assertIn("python3 tools/ci/run_test_binaries.py --jobs 3 --time-limits 2,5 -- cargo test $JOBS --profile test --workspace --lib --bins --tests", runtime)
         self.assertIn("cargo test $JOBS --no-fail-fast --profile test --workspace --doc", runtime)
         tools = static.split("- name: Install Rust tools for isolated tooling fixtures\n", 1)[1].split("\n      - ", 1)[0]
         self.assertIn("if: needs.changes.outputs.rust_required != 'false' || needs.changes.outputs.tooling_required != 'false'", tools)
@@ -269,7 +269,7 @@ class DynaRoutingTests(unittest.TestCase):
         # GITHUB_PATH, not a shell-local export, carries Cargo into later steps.
         self.assertIn('echo "$CARGO_HOME/bin" >> "$GITHUB_PATH"', tools)
         self.assertLess(static.index("- name: Install Rust tools for isolated tooling fixtures"),
-                        static.index("- name: Test offline research tooling"))
+                        static.index("- name: Python tests of the repository's tools"))
 
     @unittest.skipUnless(POSIX_BASH and os.name != "nt", "needs the runner's bash and POSIX paths")
     def test_verify_reuses_persistent_target_without_replacing_existing_paths(self):
@@ -441,7 +441,7 @@ class DynaRoutingTests(unittest.TestCase):
         # Failed setup must not produce secondary failures from compiler fixtures (#2920).
         from test_ci_runners import jobs
         verify = dict(jobs((ROOT / ".github/workflows/dyna-ci.yml").read_text()))["verify-static"]
-        step = verify.split("- name: Test offline research tooling\n", 1)[1].split("\n      - ", 1)[0]
+        step = verify.split("- name: Python tests of the repository's tools\n", 1)[1].split("\n      - ", 1)[0]
         condition = step.split("if:", 1)[1].split("\n", 1)[0]
         self.assertIn("success()", condition)
         self.assertNotIn("cancelled()", condition)

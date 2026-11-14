@@ -7,15 +7,17 @@
     nightly.py prune-builds [--days 7]   deletes the nightly/build-<date>-<n> branches older than that, but the
                                    newest and any a published nightly points to (Ludovic, 2026-10-27)
     nightly.py keep-source <sha> <date>  tags the nightly's commit nightly-source/<date>-<short>, for good
+    nightly.py sdk-archives        the archives a complete prebuilt-<sha> release holds, one per line
 
 A nightly builds main plus the pull requests the trusted reviewers picked (the set: tools/ci/nightly_set.py), merged
 in their order and pushed as nightly/build-<date>-<n>; with no set, main alone. Main is its newest commit where
 this repository's checks passed (`dyna-checks` on the fork, `checks` and `parity-main` upstream), as for a release
 (release_train.green_main_head), or NIGHTLY_BASE when the caller gives that commit. It is published as the
 `nightly` pre-release; the previous one stays a week as nightly-<date>.
-On arismoko/horizon only, the base must also be `daily-green` or an ancestor of it (the daily run passed it whole:
-release_train.daily_green), and automatic selection additionally requires a complete published v5 SDK for the
-exact SHA. Explicit bases without either fail; PR picks are disabled, and the final SHA is rechecked before pushing.
+On arismoko/horizon only, the base is the commit `daily-green` points to (the newest daily run that passed every
+leg, which also published its SDK: release_train.daily_green_commit), with a complete published SDK of the current
+package format for that exact SHA. An explicit base that is any other commit, or has no SDK, fails; PR picks are
+disabled, and the final SHA is rechecked before pushing.
 Its notes list what reached main since the previous nightly, then the picked pull requests. Runs from main's
 checkout with `gh`; it reads and merges the branches with git and never runs anything from them.
 
@@ -226,14 +228,22 @@ def build_set(main: Ref, prs: list[dict], left_out: list[str], today: str, force
           + "".join(f" + #{e['number']}" for e in kept))
 
 
+def package_format() -> int:
+    """The prebuilt package's layout number, from its one place; anything but a number fails."""
+    return int((Path(__file__).resolve().parents[2] / "crates/horizon-mod-package/src/sdk/package-format").read_text().rstrip())
+
+
+# The archives a complete prebuilt-<sha> release holds, beside SHA256SUMS: what a nightly requires, and what the
+# daily run's sdk-publish refuses to release without (`nightly.py sdk-archives`).
+SDK_ARCHIVES = tuple(f"horizon-prebuilt-v{package_format()}-{target}.tar.gz" for target in (
+    "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-gnu-server", "x86_64-pc-windows-gnu", "aarch64-apple-darwin"))
+
+
 def ready_sdk_shas() -> set[str]:
-    """Snapshot complete published v4 pairs; API failures fail closed."""
+    """Snapshot complete published pairs of the current package format; API failures fail closed."""
     releases = train.gh_json("api", "--paginate", "--slurp",
                              f"repos/arismoko/horizon/releases?per_page=100")
-    required = {"SHA256SUMS"} | {
-        f"horizon-prebuilt-v5-{target}.tar.gz" for target in (
-            "x86_64-unknown-linux-gnu", "x86_64-unknown-linux-gnu-server",
-            "x86_64-pc-windows-gnu", "aarch64-apple-darwin")}
+    required = {"SHA256SUMS", *SDK_ARCHIVES}
     return {release["tag_name"].removeprefix("prebuilt-")
             for page in releases for release in page
             if not release["draft"] and re.fullmatch(r"prebuilt-[0-9a-f]{40}", release["tag_name"])
@@ -248,7 +258,7 @@ def sdk_ready(sha: str) -> bool:
 def require_sdk(sha: str) -> None:
     """Refuse before rotating/publishing Nightly if its SDK disappeared."""
     if os.environ.get("GITHUB_REPOSITORY") == "arismoko/horizon" and not sdk_ready(sha):
-        raise SystemExit(f"Nightly publication refused: {sha} has no complete published v5 SDK pair")
+        raise SystemExit(f"Nightly publication refused: {sha} has no complete published v{package_format()} SDK pair")
 
 
 def green_base(repo: str, issue: str) -> Ref:
@@ -259,22 +269,21 @@ def green_base(repo: str, issue: str) -> Ref:
     if explicit:
         sha = explicit
     elif fork:
-        ready = ready_sdk_shas()
-        sha = train.green_main_head(parity=True, eligible=lambda sha: sha in ready and train.daily_green(sha))
+        sha = train.daily_green_commit()
     else:
         sha = train.green_main_head(parity=True)
     if not sha:
-        checks = ("dyna-checks and the daily run and has a complete published v5 SDK" if fork
-                  else "checks and parity-main")
+        checks = "every leg of a daily run (no `daily-green` tag yet)" if fork else "checks and parity-main"
         stop(repo, issue, f"the build stopped: no recent commit of main passed {checks}, so "
                           "none is green to build on. The next build after they pass takes it.")
     if not is_ancestor(sha, "refs/remotes/origin/main"):
         stop(repo, issue, f"the build stopped: {sha[:9]} is not on main.")
     sha = git("rev-parse", sha)
-    if fork and explicit and not train.daily_green(sha):
-        stop(repo, issue, f"the build stopped: {sha} is not `daily-green` or an ancestor of it.")
-    if fork and explicit and not sdk_ready(sha):
-        stop(repo, issue, f"the build stopped: {sha} has no complete published v5 SDK pair.")
+    if fork and explicit and sha != train.daily_green_commit():
+        stop(repo, issue, f"the build stopped: {sha} is not the commit `daily-green` points to; a nightly builds "
+                          "only the newest fully green daily run's commit, never an older one without its own daily run.")
+    if fork and not sdk_ready(sha):
+        stop(repo, issue, f"the build stopped: {sha} has no complete published v{package_format()} SDK pair.")
     return Ref("main", sha, dt.datetime.fromisoformat(git("show", "-s", "--format=%cI", sha)))
 
 
@@ -401,6 +410,7 @@ def main() -> None:
     sub.add_parser("pick").add_argument("--force", action="store_true")
     sub.add_parser("rotate")
     sub.add_parser("require-sdk").add_argument("sha")
+    sub.add_parser("sdk-archives")
     sub.add_parser("prune").add_argument("--days", type=int, default=7)
     sub.add_parser("prune-builds").add_argument("--days", type=int, default=7)
     keep = sub.add_parser("keep-source")
@@ -411,6 +421,8 @@ def main() -> None:
         pick(args.force)
     elif args.cmd == "require-sdk":
         require_sdk(args.sha)
+    elif args.cmd == "sdk-archives":
+        print("\n".join(SDK_ARCHIVES))
     elif args.cmd == "rotate":
         rotate()
     elif args.cmd == "prune-builds":

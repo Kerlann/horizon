@@ -111,15 +111,28 @@ jobs:
         run: python3 tools/ci/cargo_jobs.py --job-mib 3072 --cap
       # The SDK is built with the launcher's Rust: a mod's code is compiled against its metadata.
       - name: Server SDK, warnings denied
+        # Release with ThinLTO as published, but 16 codegen units instead of 1: the same features,
+        # flags, exports and link, built in parallel. A fault only one unit's inlining shows first
+        # appears at the prebuilt-game publish.
+        env:
+          CARGO_PROFILE_RELEASE_CODEGEN_UNITS: 16
         run: python3 tools/prebuilt_game.py build "$FNR_SCRATCH/prebuilt" --server
       - name: Build the launcher
         run: cargo build --release --locked --manifest-path launcher/Cargo.toml
       - name: Function replacement check (build and link)
         run: |
           launcher="${CARGO_TARGET_DIR:-launcher/target}/release/horizon-launcher"
-          FNR_MODS="alpha beta one ten fdshape support registry lower loop loop_second" tools/ci/fn_replace_check.sh \
-            "$launcher" "$FNR_SCRATCH/prebuilt" "$FNR_SCRATCH/check" 2>&1 | tee "$FNR_SCRATCH/fnr-check.log"
-          grep -F 'Function replacement:' "$FNR_SCRATCH/fnr-check.log" >> "$GITHUB_STEP_SUMMARY"
+          # api_only has no [native] row; beside alpha the mixed set still takes the engine route.
+          FNR_ROUTE=prebuilt FNR_MODS="alpha beta one ten fdshape support registry lower loop loop_second api_only" \
+            tools/ci/fn_replace_check.sh "$launcher" "$FNR_SCRATCH/prebuilt" "$FNR_SCRATCH/check" 2>&1 \
+            | tee "$FNR_SCRATCH/fnr-check.log"
+          grep -E 'Function replacement:|: [0-9]+ ms$|^Mods compiled against the prebuilt game in |^Runner load:' \
+            "$FNR_SCRATCH/fnr-check.log" >> "$GITHUB_STEP_SUMMARY"
+      - name: An API-only set takes the API route (build and link)
+        run: |
+          launcher="${CARGO_TARGET_DIR:-launcher/target}/release/horizon-launcher"
+          FNR_KEEP=1 FNR_ROUTE=prebuilt-api FNR_MODS="api_only" tools/ci/fn_replace_check.sh \
+            "$launcher" "$FNR_SCRATCH/prebuilt" "$FNR_SCRATCH/check"
       # It also builds horizon-mixins from source, where the runs before it download the prebuilt tool.
       # On its own: with no mod filling the loop, a mixin on the loop's function is compiled for the
       # empty slot. Beside the `loop` mod it would be compiled for that mod's slots instead.

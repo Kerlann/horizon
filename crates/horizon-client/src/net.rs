@@ -2368,7 +2368,7 @@ mod tests {
         for packet in [
             cfg::Clientbound::CustomPayload(cfg::CustomPayload {
                 channel: "horizon:levels".into(),
-                data: vec![0, 2],
+                data: vec![0, 3],
             }),
             cfg::Clientbound::FinishConfiguration(Empty),
         ] {
@@ -2377,7 +2377,7 @@ mod tests {
         for expected in [
             cfg::Serverbound::CustomPayload(cfg::CustomPayload {
                 channel: "horizon:levels".into(),
-                data: vec![1, 2, 2],
+                data: vec![1, 3, 2],
             }),
             cfg::Serverbound::FinishConfiguration(Empty),
         ] {
@@ -2844,6 +2844,7 @@ mod tests {
     /// No account never joins; the signed-in rule is compared with the real
     /// client login listener by test_lan_auth_parity.py.
     #[test]
+    #[ignore = "daily"]
     fn lan_login_continues_after_authentication_failure() {
         let (root, data) = empty_item_data("lan-auth");
         for lan in [true, false] {

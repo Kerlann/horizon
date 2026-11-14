@@ -879,6 +879,7 @@ mod tests {
     /// The generated impls depend on the hand-written `Wire` impls the generator skips, so an
     /// edit to that file must rerun the build script.
     #[test]
+    #[ignore = "daily"]
     fn enchantment_damage_registrar_and_callback_cross_to_wire() {
         std::thread::Builder::new()
             .stack_size(64 << 20)
@@ -916,6 +917,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "daily"]
     fn a_worldgen_part_method_crosses_and_waits_for_its_group_as_a_worker_call() {
         std::thread::Builder::new()
             .stack_size(64 << 20)
@@ -950,6 +952,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "daily"]
     fn the_hand_written_wire_impls_are_tracked_sources() {
         std::thread::Builder::new()
             .stack_size(64 << 20)
@@ -973,6 +976,7 @@ mod tests {
             .unwrap();
     }
     #[test]
+    #[ignore = "daily"]
     fn layout_includes_private_borrowed_shapes() {
         let run = || {
             let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
@@ -1048,6 +1052,7 @@ mod tests {
     /// The book renders the coverage page from the generator at build time; what the page
     /// promises is checked here, against the generator itself.
     #[test]
+    #[ignore = "daily"]
     fn coverage_page_is_well_formed() {
         std::thread::Builder::new()
             .stack_size(64 << 20)

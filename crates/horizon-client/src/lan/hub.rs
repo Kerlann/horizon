@@ -7307,6 +7307,7 @@ mod tests {
     /// A player walking a loop, sending a few chunks a tick: the queue
     /// after every move is the one the scan built.
     #[test]
+    #[ignore = "daily"]
     fn requeue_matches_the_scan() {
         for r in [2, 5, 10, 12, 32] {
             let (mut a, mut b) = (Vec::new(), Vec::new());

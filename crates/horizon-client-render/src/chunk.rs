@@ -1176,6 +1176,7 @@ mod tests {
     /// The kept WORLD_SURFACE heights match a scan of every column after
     /// each of a few thousand writes (air, cave air, stone, whole sections).
     #[test]
+    #[ignore = "daily"]
     fn world_surface_follows_writes() {
         let (air, cave_air, stone) = (0, 7, 1);
         let is_air = |v: u32| v == air || v == cave_air;
@@ -1276,6 +1277,7 @@ mod tests {
     /// Chunk snapshots can be cloned while helper threads refresh a stale height. No snapshot
     /// may retain the old height with its stale bit cleared, for either map.
     #[test]
+    #[ignore = "daily"]
     fn cloning_during_a_height_refresh_keeps_the_new_height() {
         for _ in 0..4096 {
             let mut chunk = Chunk::empty(0, 0);
@@ -1302,6 +1304,7 @@ mod tests {
     /// MOTION_BLOCKING ignores states that don't count (air, grass) and
     /// follows writes as the surface map does, both maps kept at once.
     #[test]
+    #[ignore = "daily"]
     fn motion_blocking_follows_writes() {
         let (air, grass, water, stone) = (0, 3, 5, 1);
         let blocks = |v: u32| v == water || v == stone;

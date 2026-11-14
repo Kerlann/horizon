@@ -246,10 +246,10 @@ class PruneBuildsTests(unittest.TestCase):
 class SdkPairTests(unittest.TestCase):
     def test_only_complete_published_exact_pair_is_eligible(self):
         assets = [{"name": name} for name in (
-            "SHA256SUMS", "horizon-prebuilt-v5-x86_64-unknown-linux-gnu.tar.gz",
-            "horizon-prebuilt-v5-x86_64-unknown-linux-gnu-server.tar.gz",
-            "horizon-prebuilt-v5-x86_64-pc-windows-gnu.tar.gz",
-            "horizon-prebuilt-v5-aarch64-apple-darwin.tar.gz")]
+            "SHA256SUMS", "horizon-prebuilt-v6-x86_64-unknown-linux-gnu.tar.gz",
+            "horizon-prebuilt-v6-x86_64-unknown-linux-gnu-server.tar.gz",
+            "horizon-prebuilt-v6-x86_64-pc-windows-gnu.tar.gz",
+            "horizon-prebuilt-v6-aarch64-apple-darwin.tar.gz")]
         release = {"draft": False, "tag_name": "prebuilt-" + "a" * 40, "assets": assets}
         for changes, expected in [({}, True), ({"draft": True}, False),
                                   ({"tag_name": "prebuilt-" + "b" * 40}, False)]:
@@ -270,22 +270,23 @@ class SdkPairTests(unittest.TestCase):
                 mock.patch.object(nightly, "is_ancestor", return_value=True), \
                 mock.patch.object(nightly, "git", return_value="a" * 40), \
                 mock.patch.object(nightly, "sdk_ready", return_value=False), \
-                mock.patch.object(nightly.train, "daily_green", return_value=True), \
+                mock.patch.object(nightly.train, "daily_green_commit", return_value="a" * 40), \
                 mock.patch.object(nightly.train, "green_main_head") as automatic:
             with self.assertRaises(SystemExit):
                 nightly.green_base("arismoko/horizon", "")
             automatic.assert_not_called()
 
-    def test_explicit_base_must_be_daily_green(self):
+    def test_an_explicit_base_must_be_the_daily_green_commit_itself(self):
+        # "a" is an ancestor of daily-green ("b"), but had no daily run of its own.
         with mock.patch.dict(nightly.os.environ, {"NIGHTLY_BASE": "a" * 40}), \
                 mock.patch.object(nightly, "is_ancestor", return_value=True), \
                 mock.patch.object(nightly, "git", return_value="a" * 40), \
                 mock.patch.object(nightly, "sdk_ready", return_value=True), \
-                mock.patch.object(nightly.train, "daily_green", return_value=False), \
+                mock.patch.object(nightly.train, "daily_green_commit", return_value="b" * 40), \
                 mock.patch.object(nightly, "stop", side_effect=SystemExit) as stop:
             with self.assertRaises(SystemExit):
                 nightly.green_base("arismoko/horizon", "")
-        self.assertIn("is not `daily-green` or an ancestor of it", stop.call_args.args[2])
+        self.assertIn("is not the commit `daily-green` points to", stop.call_args.args[2])
 
     def test_final_sha_change_or_disappearing_sdk_stops_before_pushing(self):
         for sha, sdk_ready in (("a" * 40, False), ("b" * 40, True)):
@@ -298,21 +299,25 @@ class SdkPairTests(unittest.TestCase):
                     nightly.build_set(nightly.Ref("main", "a" * 40, T), [], [], "2026-11-11", True, False)
                 push.assert_not_called()
 
-    def test_automatic_selection_reads_inventory_once_for_all_candidates(self):
-        def choose(*, parity, eligible):
-            self.assertTrue(parity)
-            self.assertFalse(eligible("b" * 40), "no SDK")
-            self.assertFalse(eligible("c" * 40), "SDK but not daily-green")
-            self.assertTrue(eligible("a" * 40))
-            return "a" * 40
+    def test_automatic_selection_takes_the_daily_green_commit_with_its_sdk(self):
         with mock.patch.dict(nightly.os.environ, {"NIGHTLY_BASE": ""}), \
-                mock.patch.object(nightly, "ready_sdk_shas", return_value={"a" * 40, "c" * 40}) as inventory, \
-                mock.patch.object(nightly.train, "daily_green", side_effect=lambda sha: sha == "a" * 40), \
-                mock.patch.object(nightly.train, "green_main_head", side_effect=choose), \
+                mock.patch.object(nightly.train, "daily_green_commit", return_value="a" * 40), \
+                mock.patch.object(nightly, "sdk_ready", return_value=True), \
+                mock.patch.object(nightly.train, "green_main_head") as automatic, \
                 mock.patch.object(nightly, "is_ancestor", return_value=True), \
                 mock.patch.object(nightly, "git", side_effect=["a" * 40, NOW]):
             self.assertEqual(nightly.green_base("arismoko/horizon", "").sha, "a" * 40)
-            inventory.assert_called_once_with()
+            automatic.assert_not_called()
+        for green, ready in (("", True), ("a" * 40, False)):
+            with self.subTest(green=green, ready=ready), \
+                    mock.patch.dict(nightly.os.environ, {"NIGHTLY_BASE": ""}), \
+                    mock.patch.object(nightly.train, "daily_green_commit", return_value=green), \
+                    mock.patch.object(nightly, "sdk_ready", return_value=ready), \
+                    mock.patch.object(nightly, "is_ancestor", return_value=True), \
+                    mock.patch.object(nightly, "git", return_value="a" * 40), \
+                    mock.patch.object(nightly, "stop", side_effect=SystemExit):
+                with self.assertRaises(SystemExit):
+                    nightly.green_base("arismoko/horizon", "")
 
     def test_publication_checks_fresh_inventory_and_leaves_upstream_unchanged(self):
         with mock.patch.dict(nightly.os.environ, {"GITHUB_REPOSITORY": "arismoko/horizon"}), \

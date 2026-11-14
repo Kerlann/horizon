@@ -2222,6 +2222,7 @@ mod allay_owner_damage_tests {
     use horizon_core::geometry::Vec3;
 
     #[test]
+    #[ignore = "daily"]
     fn allay_owner_adapters_compare_the_actual_player_uuid() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../.local/horizon-client")

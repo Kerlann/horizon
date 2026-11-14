@@ -204,20 +204,29 @@ trigger since 2026-11-13.
 
 ### Daily run
 
-`.github/workflows/daily.yml` runs every in-game test once a day, at 09:00 UTC on main's head, and when root
-dispatches it (`-f commit=<sha>`, `-f dry_run=false` to write). Its legs are the workflows that left main pushes:
+`.github/workflows/daily.yml` runs the in-game legs once a day, at 09:00 UTC on main's head, and when root
+dispatches it (`-f commit=<sha>`, `-f dry_run=false` to write). One run runs and at most one waits; a newer waiting
+dispatch replaces an older waiting one. The schedule stops when main's head already has a completed real daily run;
+a hand dispatch never does, so it retries a run whose tag move, issues or nightly failed. Its legs are the workflows that left main pushes:
 the ignored-tests data shards (`ignored-tests.yml`), the wasm fixture and guest stacks (`wasm-mods.yml`),
-`fn-replace-check.yml` and the native linkage probe (`native-dylib-probe.yml`), each called with the commit. Its
+`fn-replace-check.yml`, the native linkage probe (`native-dylib-probe.yml`), the launcher's Windows runtime-lease
+tests (`launcher-windows-check.yml`), the machine sample built against the commit's mod API (`machine-sample.yml`)
+and the prebuilt SDK of the commit
+(`prebuilt-game-build.yml`; its archives are published as `prebuilt-<sha>` by `sdk-publish` only after a green summary on a real run on main, before the Nightly that needs them), each called
+with the commit. Its
 summary (`tools/ci/daily_summary.py`) reads each leg's result and its sanitised verdict file, never a log:
 
-- every leg green: the tag `daily-green` moves to the commit, and `release.yml` (kind `nightly`) decides the
-  Nightly of that commit;
+- every leg green: the tag `daily-green` moves to the commit, and `release.yml` (kind `nightly`) publishes the
+  Nightly of that commit whenever a player-facing pull request merged since the published one (no batch-size or
+  age rule; the pause switch and release-blockers still hold it);
 - a failing test: one issue `Daily: <crate> <test>` (label `bug`) with its panic location, the first daily run that
   saw it and the pull requests merged since the last green daily as suspects; later runs comment on it, and the
-  first run where it passes closes it. A leg that failed without a test name gets one issue per leg.
+  first run where it passes closes it. A leg that failed without a test name gets one issue per leg. A red machine
+  sample is no break: its one issue, `Daily: update the machine sample for the mod API change`, asks for the sample
+  to follow the API change and its pin to move.
 
 Only a run on `main` with `dry_run` false moves the tag, files issues or publishes; any other run prints what it
-would do. A Nightly ships only a commit that is `daily-green` or an ancestor of it (`release.yml`, `nightly build`).
+would do. A Nightly ships only the commit `daily-green` points to, with its SDK (`release.yml`, `nightly build`).
 A snapshot (`release.yml -f kind=snapshot`) needs only dyna-checks' gate on main's head; publishing it under its own
 tag and channel is not built yet, so it checks and stops.
 
@@ -429,7 +438,7 @@ The fork's [Nightly workflow](../.github/workflows/nightly-build.yml) selects an
 [`tools/ci/nightly.py`](../tools/ci/nightly.py), then calls `require-sdk` before rotation and again before
 publication. A complete pair currently means a published, non-draft `prebuilt-<40 lowercase hex SHA>` release
 with `SHA256SUMS` and the four v4 archives (Linux client, Linux server, Windows GNU and macOS ARM64).
-The [SDK workflow](../.github/workflows/prebuilt-game.yml) publishes those exact-SHA releases without pruning.
+The daily run (`sdk-publish` in [daily.yml](../.github/workflows/daily.yml)) and the [SDK workflow](../.github/workflows/prebuilt-game.yml)'s hand dispatch publish those exact-SHA releases without pruning.
 These workflows currently have separate concurrency groups (`nightly-build` and `prebuilt-game`): the two
 publication-time checks alone would not make concurrent deletion safe.
 

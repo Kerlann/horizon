@@ -388,6 +388,20 @@ class ReleaseTrainTests(unittest.TestCase):
             records[:] = records[:2]
             self.assertIsNone(train.green_main_head(), "PR checks cannot supply a release base")
 
+    def test_the_daily_nightly_skips_only_the_batch_rules(self):
+        fresh = [{"number": 7, "labels": [], "paths": ["crates/horizon-world/src/lib.rs"],
+                  "merged_at": NOW - dt.timedelta(minutes=1)}]
+        self.assertFalse(train.decision("game", fresh, NOW)[0], "the batch train waits for more")
+        release, reason = train.decision("game", fresh, NOW, daily=True)
+        self.assertTrue(release, "one fresh player-facing pull request publishes from a green daily")
+        self.assertIn("daily run", reason)
+        self.assertEqual(train.decision("game", fresh, NOW, paused=True, daily=True),
+                         (False, "RELEASES_PAUSED is set"))
+        self.assertEqual(train.decision("game", [], NOW, daily=True),
+                         (False, "no merged pull request changed what players run"),
+                         "the commit the published nightly was built on: nothing to publish")
+        self.assertFalse(train.decision("game", fresh, NOW, blockers=[4], daily=True)[0])
+
     def test_fork_channels_check_daily_green_or_the_gate(self):
         with tempfile.TemporaryDirectory() as folder:
             def git(*args):
@@ -402,9 +416,10 @@ class ReleaseTrainTests(unittest.TestCase):
             git("tag", "daily-green", commits[1])
             with mock.patch.object(train, "ROOT", Path(folder)):
                 self.assertEqual(train.channel_head("nightly", ""), commits[1], "the default is daily-green itself")
-                self.assertEqual(train.channel_head("nightly", commits[0]), commits[0], "an ancestor is green")
-                with self.assertRaisesRegex(SystemExit, "is not `daily-green` or an ancestor of it"):
-                    train.channel_head("nightly", commits[2])
+                self.assertEqual(train.channel_head("nightly", "daily-green"), commits[1])
+                for other in (commits[0], commits[2]):
+                    with self.assertRaisesRegex(SystemExit, "is not the commit `daily-green` points to"):
+                        train.channel_head("nightly", other)
                 git("tag", "-d", "daily-green")
                 with self.assertRaisesRegex(SystemExit, "no `daily-green` tag yet"):
                     train.channel_head("nightly", "")

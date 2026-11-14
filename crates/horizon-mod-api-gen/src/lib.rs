@@ -10,7 +10,6 @@ mod interface_cache_tests;
 mod listener_output_fixture;
 #[cfg(feature = "mixed-output-fixture")]
 mod mixed_output_fixture;
-pub mod sdk_catalog;
 #[doc(hidden)]
 pub use dispatch_fixtures::layout as dispatch_fixture_layout;
 pub use game_modules::materialize_game_modules;
@@ -671,9 +670,11 @@ pub(crate) fn rerun_if_changed(path: &impl std::fmt::Display) {
     }
 }
 pub use wire::generate_host as generate_wire_host;
+pub mod functions;
 pub mod internals;
 pub mod internals_view;
 pub mod loops;
+pub mod mod_uses;
 pub mod notes;
 pub mod patch;
 pub mod points;
@@ -731,6 +732,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "daily"]
     fn fragment_hooks_generate() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
         let catalog = super::Catalog::load(&root).unwrap();
@@ -900,6 +902,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "daily"]
     fn only_a_game_hooks_placeholder_body_is_filled() {
         let fill = |body: &str, in_game: bool| {
             let method: syn::ItemFn = syn::parse_str(&format!(
@@ -953,6 +956,7 @@ mod tests {
     /// generator brings back the shipped file byte for byte with the generated
     /// code unchanged.
     #[test]
+    #[ignore = "daily"]
     fn new_hook_placeholder_is_reported_then_filled() {
         fn copy(from: &std::path::Path, to: &std::path::Path) {
             if from.is_dir() {

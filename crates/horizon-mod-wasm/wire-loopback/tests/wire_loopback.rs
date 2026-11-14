@@ -405,6 +405,13 @@ fn __horizon_mod_hooks() -> Box<dyn Hooks> {
             )));
             *event.remaining = None;
         }
+        fn viewed_level_sound(
+            &self,
+            _: &mut dyn mod_api::ClientHost,
+            event: &mut mod_api::ViewedLevelSoundEvent<'_>,
+        ) {
+            viewed_level_sound::listen(event);
+        }
         fn item_toss(
             &self,
             _: &mut dyn mod_api::ServerHost,

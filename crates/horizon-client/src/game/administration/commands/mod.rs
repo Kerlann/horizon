@@ -478,7 +478,7 @@ impl Game<'_> {
         );
         displayname
     }
-    fn source_position(&self) -> [f64; 3] {
+    pub(super) fn source_position(&self) -> [f64; 3] {
         if let Some(s) = &self.command_source {
             return s.pos;
         }
@@ -4862,6 +4862,7 @@ mod selector_bounds_tests {
     use horizon_core::geometry::Vec3;
 
     #[test]
+    #[ignore = "daily"]
     fn actual_selector_uses_body_overlap_but_distance_stays_at_the_origin() {
         let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
             .join("../../.local/horizon-client")

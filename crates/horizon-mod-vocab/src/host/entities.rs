@@ -904,6 +904,22 @@ pub trait EntitiesBackendMut {
     #[access(WorldOnly)]
     fn entity_set_ticks_frozen(&mut self, entity: EntityRef, ticks: i32) -> bool;
     /// Side: server.
+    /// Sets the entity's portal cooldown (`Entity.setPortalCooldown`), the
+    /// value `entity_portal_cooldown` reads, where that read keeps it: the
+    /// level's portal state for the kinds its portal walk carries (mobs,
+    /// items, experience orbs, boats, minecarts, primed TNT, fireworks,
+    /// tridents, arrows and the thrown items and fireballs a chunk saves).
+    /// Server-only; a negative value or a client-side write is refused. Takes
+    /// effect on the next tick: a positive value blocks portal entry (and is
+    /// refilled while the entity stands in a portal), and 0 lets it enter at
+    /// once. Not synced except in the spawn information at login, respawn and
+    /// dimension change. Refused by name for a player, an acting guest, a
+    /// falling block and an ender pearl, whose cooldown lives in a store of
+    /// its own that this write does not own. False for a kind the read
+    /// refuses, a stale handle, or on a client.
+    #[access(WorldOnly)]
+    fn entity_set_portal_cooldown(&mut self, entity: EntityRef, ticks: i32) -> bool;
+    /// Side: server.
     /// Sets the entity's shared invisibility flag (`Entity.setInvisible`). Returns false for players and guests.
     #[access(WorldOnly)]
     fn entity_set_invisible(&mut self, entity: EntityRef, invisible: bool) -> bool;
