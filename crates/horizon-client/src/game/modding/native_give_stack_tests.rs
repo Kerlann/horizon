@@ -12,7 +12,7 @@ fn api_item(game: &super::Game<'_>, snbt: &str) -> Option<ItemStack> {
 /// What a mod reads from SNBT and writes back is the compound `ItemStack.CODEC` started
 /// from, through the API's own stack and back.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn an_snbt_item_goes_through_the_api_unchanged() {
     with_guests(|game| {
         for snbt in [
@@ -44,7 +44,7 @@ fn an_snbt_item_goes_through_the_api_unchanged() {
 /// whitespace after the compound, text over 2 MiB, nesting past 512 levels, air and an item
 /// the world lacks, and a count outside 1 to 99.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn item_from_snbt_refuses_what_is_not_one_item_compound() {
     with_guests(|game| {
         let host: &dyn Host = game;
@@ -103,7 +103,7 @@ fn item_from_snbt_refuses_what_is_not_one_item_compound() {
 /// A given stack goes into the inventory where it fits, components and all; the rest is
 /// thrown for the player alone, with no pickup delay.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_given_stack_fills_the_inventory_then_drops_for_its_player() {
     with_guests(|game| {
         let b = game.players().server_players()[1];
@@ -152,7 +152,7 @@ fn a_given_stack_fills_the_inventory_then_drops_for_its_player() {
 
 /// This API refuses a dead player with its own name and gives nothing.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_dead_player_is_given_nothing() {
     with_guests(|game| {
         let b = game.players().server_players()[1];

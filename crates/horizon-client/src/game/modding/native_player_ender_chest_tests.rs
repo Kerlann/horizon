@@ -14,7 +14,7 @@ const BOOK: &str = r#"{id:"minecraft:written_book",count:1,components:{"minecraf
 /// Ender chest slots are written and read back by number, out of the player's turn and in
 /// it, components and all, and each player has their own.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn ender_chest_slots_are_read_and_written() {
     with_guests(|game| {
         let players = game.players().server_players();
@@ -42,7 +42,7 @@ fn ender_chest_slots_are_read_and_written() {
 /// Each refusal has its own name and writes nothing: a slot past 26 (never a panic), a stack
 /// the item does not allow, a dead player, and a handle whose player has left.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn each_ender_chest_refusal_has_its_own_name_and_writes_nothing() {
     with_guests(|game| {
         let b = game.players().server_players()[1];
@@ -103,7 +103,7 @@ fn each_ender_chest_refusal_has_its_own_name_and_writes_nothing() {
 /// A stack written to an ender chest slot the player's open ender chest menu shows replaces
 /// the old one in that menu slot, and clicking the slot picks up the new stack.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_written_slot_is_what_the_open_ender_chest_menu_shows_and_clicks() {
     use horizon_client::lan::menu::Slots;
     use horizon_protocol::packets::play::{ContainerClick, Serverbound};
@@ -153,7 +153,7 @@ fn a_written_slot_is_what_the_open_ender_chest_menu_shows_and_clicks() {
 /// The local player's open ender chest menu holds a copy that closing writes back over the
 /// chest: a write made while it is open goes into that copy and survives the close.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_write_while_the_local_ender_chest_is_open_survives_closing_it() {
     use horizon_client::containers::BlockEntity;
     with_guests(|game| {

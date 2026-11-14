@@ -23,7 +23,7 @@ const BLADE: &str = r#"{id:"minecraft:diamond_sword",count:1,components:{"minecr
 /// inventory menu has the changed slots left to send, and a stack with components comes back
 /// as it went in.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn inventory_slots_are_read_and_written_by_vanillas_numbers() {
     with_guests(|game| {
         let (a, b) = {
@@ -83,7 +83,7 @@ fn inventory_slots_are_read_and_written_by_vanillas_numbers() {
 /// Each refusal has its own name and writes nothing: a slot past 42 (never a panic), a stack
 /// the item does not allow, a dead player, and a handle whose player has left.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn each_inventory_refusal_has_its_own_name_and_writes_nothing() {
     with_guests(|game| {
         let b = game.players().server_players()[1];
@@ -149,7 +149,7 @@ fn each_inventory_refusal_has_its_own_name_and_writes_nothing() {
 /// A stack written to a slot the open inventory menu shows replaces the old one in that
 /// menu slot, and clicking the slot picks up the new stack: no stale copy of the old one.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_written_slot_is_what_the_open_inventory_menu_shows_and_clicks() {
     use horizon_protocol::packets::play::{ContainerClick, Serverbound};
     with_guests(|game| {

@@ -28,7 +28,7 @@ fn nested(levels: usize) -> Compound {
 /// The mods' compound goes into the player's own saved record, in their turn or out of it,
 /// and an empty one takes the key away.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn persistent_data_is_kept_in_the_players_record() {
     with_guests(|game| {
         let players = game.players().server_players();
@@ -55,7 +55,7 @@ fn persistent_data_is_kept_in_the_players_record() {
 /// This API refuses with its own names, writing nothing: data 512 levels deep or more in the
 /// player's file (511 are written), a dead player, and a handle whose player has left.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn each_persistent_data_refusal_has_its_own_name_and_writes_nothing() {
     with_guests(|game| {
         let b = game.players().server_players()[1];
@@ -115,7 +115,7 @@ fn each_persistent_data_refusal_has_its_own_name_and_writes_nothing() {
 /// A death respawn carries only `PlayerPersisted` of the mods' compound: a key outside it is
 /// lost, a key inside it is read back.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_respawn_keeps_only_player_persisted() {
     with_guests(|game| {
         let b = game.players().server_players()[1];
