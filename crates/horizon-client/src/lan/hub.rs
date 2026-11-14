@@ -4961,6 +4961,7 @@ impl Hub {
     ) {
         let info = self.spawn_info(i, portal_cooldown, ctx.sea_level);
         self.close_container_for(i);
+        self.before_travel(i);
         let left = self.guests[i].dimension.clone();
         self.guests.update(i, |g| {
             // Out of the old level with its chunks (ChunkMap.removeEntity).

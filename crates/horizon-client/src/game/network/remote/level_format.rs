@@ -25,8 +25,8 @@ pub(in crate::game) struct LevelFormat {
 impl crate::game::Game<'_> {
     /// The client's table of the server's levels on entering `entered`: a level past vanilla's
     /// three is added, so that [`Dim::from_id`] finds it, and the level left is dropped when the
-    /// server opened it after Login (a runtime level). Such a level is not in Login's `levels`, so
-    /// it is never a viewed world, and a long session through many of them keeps none.
+    /// server opened it after Login (a runtime level), so that a long session through many of
+    /// them keeps none. A viewed world of such a level needs no entry: it keeps its own name.
     pub(in crate::game) fn track_remote_levels(&mut self, entered: &str) {
         if let Some(r) = self.remote.as_mut()
             && r.level != entered
