@@ -10,7 +10,7 @@ fn kicked() -> Text {
 /// The client leaves at the end of the frame, not inside the call, and the disconnect screen
 /// shows the reason. With no world joined, the call is refused as unavailable.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_client_mod_leaves_at_the_end_of_the_frame_with_its_reason() {
     with_client_game(|game| {
         game.title = None;
@@ -45,7 +45,7 @@ fn a_client_mod_leaves_at_the_end_of_the_frame_with_its_reason() {
 /// A request made in one world never leaves the next: the world switches before the frame
 /// ends, and the client stays in the new one.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_leave_request_does_not_follow_a_world_switch() {
     with_client_game(|game| {
         game.title = None;
