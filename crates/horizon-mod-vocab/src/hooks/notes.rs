@@ -1144,12 +1144,12 @@ criterion resources; the private advancement world remains solely in the native 
 `crates/horizon-client/src/game/modding/native_explosions.rs`: for server mods, in the level in place; the full contract,
 with the causing-entity table, is the book's "Setting off an explosion" (how-to/world/block-experience-and-explosions.md).
 
-- `LevelRef::explode(host, source, center, radius, fire, interaction)` is `Level.explode(source, ...)` in vanilla's order.
-  The causing entity comes from `source`, never the caller: a primed TNT's owner, a living entity itself, a projectile's
-  living owner, else none; with both the damage is `minecraft:player_explosion` and a kill credits the cause.
-  `interaction` is `None`, `Block`, `Mob` (the source's `entity_mob_griefing`), `Tnt` or `Trigger` (no breaks; buttons,
-  doors and the like react); `fire` works with any. False, doing nothing, for an unavailable level, a stale `source` or
-  one in another level, an unloaded chunk, or a radius outside `0 < radius <= 32`.
+- `LevelRef::explode(host, source, center, radius, fire, interaction, settings)` is vanilla's full `Level.explode`. The
+  causing entity comes from `source`, never the caller (a primed TNT's owner, a living entity itself, a projectile's
+  living owner); with both the damage is `minecraft:player_explosion`. `interaction` is `None`, `Block`, `Mob`, `Tnt` or
+  `Trigger`; `fire` works with any. `ExplosionSettings` names a damage type, an `ExplosionCalculator` (blocks, entities,
+  knockback, an immune tag that replaces the resistance rule), particles and sound, each `None` vanilla's. No radius
+  limit. Refused with an `ExplodeError`, doing nothing; the book lists when.
 - A blast set off inside `explosion_detonate` runs that hook again, so a mod that chains blasts keeps its own guard.
 
 ### Camera shake
@@ -1719,9 +1719,9 @@ still go on each event or registrar.
 
 - `component_types(context, types)` runs once before content loads. Append namespaced component IDs; duplicates, invalid IDs and the `minecraft` namespace stop startup. `native_component`, `native_set_component` and `native_remove_component` read, set and remove registered components, including item defaults. Values use NBT and must fit the network reader limits.
 
-- [explosions](#explosions) for server mods: `LevelRef::explode(host, source, center, radius, fire, interaction)` sets one
-  off as `Level.explode` does, with an optional source entity and `ExplosionInteraction::None`, `Block`, `Mob`, `Tnt` or
-  `Trigger` for what it does to blocks.
+- [explosions](#explosions) for server mods: `LevelRef::explode(host, source, center, radius, fire, interaction, settings)`
+  sets one off as `Level.explode` does, with an optional source entity, `ExplosionInteraction::None`, `Block`, `Mob`, `Tnt`
+  or `Trigger` for what it does to blocks, and `ExplosionSettings` for its damage type, calculator, particles and sound.
 
 - Dispenser behaviours are chosen at `DispenserBlock.getDispenseMethod`, before any vanilla behaviour, for mod or vanilla items, on the authoritative server only (droppers are unaffected). The block the dispenser faces is asked first: `dispense_method` gives its part the dimension, dispenser position, facing, the selected stack and `state`, the block at `pos` moved by `facing` (air included), and the part is asked only for that block. Then, unless that part answered, the item's own part is asked by `dispense_item` with the same dimension, position, facing and stack. Either answer is `Some((remainder, event))`: a `None` remainder empties the slot, `Some(stack)` writes that remainder without consuming again, and `event` is the level event played with the smoke (1000 click, 1001 fail, 0 nothing, as `NOOP`). The first answer wins: the other part is not asked and vanilla's behaviour doesn't run. `host.dispense_default(dimension, pos, facing, stack)` drops one item normally, including items with a special vanilla behaviour: answer its remainder with 1000. Leave the answer `None` to let vanilla decide, as before.
 

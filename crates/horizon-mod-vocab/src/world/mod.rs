@@ -17,6 +17,7 @@ pub(crate) mod datapack_registry_set;
 pub(crate) mod datapack_snapshot;
 pub(crate) mod dimension;
 pub(crate) mod dimension_transition;
+pub(crate) mod explosion_settings;
 pub(crate) mod game_rule_value;
 // hidden: a module of game-side types; mods use their re-exports
 #[doc(hidden)]
