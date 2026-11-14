@@ -82,7 +82,8 @@ impl Game<'_> {
         if radius >= DETONATE_RADIUS {
             // A listener only spares: what it takes out stays, what it adds is ignored.
             let mut told = targets.clone();
-            self.native_explosion_detonate(self.dim.id(), center, &mut told);
+            // This block-only phase has no entity victims.
+            self.native_explosion_detonate(self.dim.id(), center, &mut told, &mut Vec::new());
             let kept: HashSet<[i32; 3]> = told.into_iter().collect();
             targets.retain(|p| kept.contains(p));
         }

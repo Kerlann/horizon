@@ -6,7 +6,7 @@ use crate::game::Game;
 use crate::game::native_entity_refs::tests::{bind_local_player, run_on_guest_stack, with_game};
 use crate::game::native_explosion_resistance_tests::{BOTH, Via, wasm_answer};
 use horizon_client::{chunk::Chunk, mobs::Who, motion::PlayerMotion};
-use horizon_core::{geometry::Vec3, position::ChunkPos};
+use horizon_core::{geometry::Vec3, position::ChunkPos, random::RandomSource};
 use mod_api::{
     BlockPart, EntityRef, ExplosionDestroyError, ExplosionDetonateEvent, ExplosionInteraction,
     ExplosionStartEvent, Flow, ModEntry, OnBlockExplodedEvent, Registrar, RegistrationContext,
