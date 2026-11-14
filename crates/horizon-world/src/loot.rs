@@ -2366,6 +2366,12 @@ mod namespace_tests {
             fs::create_dir_all(path.parent().unwrap()).unwrap();
             fs::write(path, text).unwrap();
         }
+        // A valid folder or namespace named enchantment must not change another kind's error policy.
+        let unrelated = root.join("data/enchantment/recipe/enchantment/broken.json");
+        fs::create_dir_all(unrelated.parent().unwrap()).unwrap();
+        fs::write(&unrelated, b"{").unwrap();
+        assert!(load_kind(&root.join("data"), "recipe", &mut HashMap::new()).is_err());
+        fs::remove_file(unrelated).unwrap();
         let defaults = crate::item_defaults::read(&root).unwrap();
         let data = LootData::load(&root, &PackOverlay::NONE, &defaults).unwrap();
         let level = |data: &LootData, name: &str| {

@@ -119,7 +119,11 @@ fn mod_entries(resources: &Path, dir: &str, entries: &mut Vec<((String, String),
     let namespaces = horizon_world::json_folder::namespaces(&resources.join("data"));
     for ns in namespaces.into_iter().filter(|ns| ns != "minecraft") {
         let mut found = BTreeMap::new();
-        walk(&resources.join("data").join(&ns).join(dir), &mut found);
+        walk(
+            &resources.join("data").join(&ns).join(dir),
+            &mut found,
+            dir == "enchantment",
+        );
         entries.extend(found.into_iter().map(|(p, v)| ((ns.clone(), p), v, true)));
     }
 }
@@ -182,16 +186,13 @@ use crate::crafting::qualified;
 /// Every `*.json` under `dir`, as (path without extension relative to dir, value), sorted;
 /// a file that can't be read or doesn't parse is left out. Through `json_folder`: from the
 /// prepared data file, and read once for the tables a load builds from the same folder.
-fn walk(dir: &Path, out: &mut BTreeMap<String, Value>) {
+fn walk(dir: &Path, out: &mut BTreeMap<String, Value>, enchantment: bool) {
     let Ok(folder) = horizon_world::json_folder::read(dir) else {
         return;
     };
     for file in &folder.files {
         let bytes = file.bytes().unwrap_or_default();
-        let value = if dir
-            .components()
-            .any(|part| part.as_os_str() == "enchantment")
-        {
+        let value = if enchantment {
             horizon_world::json_folder::enchantment_definition(
                 bytes,
                 &dir.join(format!("{}.json", file.name)),
@@ -480,7 +481,11 @@ impl SyncData {
             }
             let path = key.trim_start_matches("minecraft:");
             let mut found = BTreeMap::new();
-            walk(&root.join(path), &mut found);
+            walk(
+                &root.join(path),
+                &mut found,
+                *key == "minecraft:enchantment",
+            );
             let mut entries: Vec<_> = found
                 .into_iter()
                 .map(|(p, v)| (("minecraft".to_owned(), p), v, false))
@@ -862,7 +867,7 @@ impl SyncData {
         };
         let mut files: BTreeMap<String, Vec<Value>> = BTreeMap::new();
         let mut own = BTreeMap::new();
-        walk(&root.join("tags").join(kind), &mut own);
+        walk(&root.join("tags").join(kind), &mut own, false);
         for (name, value) in own {
             Self::add_tag_values(files.entry(qualified(&name)).or_default(), &value);
         }
@@ -1014,7 +1019,7 @@ impl SyncData {
                 continue;
             }
             let mut files = BTreeMap::new();
-            walk(&dir, &mut files);
+            walk(&dir, &mut files, false);
             if files.is_empty() {
                 continue;
             }

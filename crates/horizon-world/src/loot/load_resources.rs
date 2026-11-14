@@ -6,7 +6,13 @@ pub(super) fn load_kind(
     out: &mut HashMap<String, Value>,
 ) -> io::Result<()> {
     for ns in crate::json_folder::namespaces(data) {
-        load_dir(&data.join(&ns).join(kind), &ns, "", out)?;
+        load_dir(
+            &data.join(&ns).join(kind),
+            &ns,
+            "",
+            out,
+            kind == "enchantment",
+        )?;
     }
     Ok(())
 }
@@ -39,6 +45,7 @@ pub(super) fn load_dir(
     namespace: &str,
     prefix: &str,
     out: &mut HashMap<String, Value>,
+    enchantment: bool,
 ) -> io::Result<()> {
     // Through `json_folder`: a load holding the folder (the recipes, read by
     // the item tables, the recipe book and the server's sync too) shares one
@@ -48,10 +55,7 @@ pub(super) fn load_dir(
     };
     for file in &folder.files {
         let bytes = file.bytes()?;
-        let value = if dir
-            .components()
-            .any(|part| part.as_os_str() == "enchantment")
-        {
+        let value = if enchantment {
             let Some(value) = crate::json_folder::enchantment_definition(
                 bytes,
                 &dir.join(format!("{}.json", file.name)),
