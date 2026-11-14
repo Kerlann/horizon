@@ -62,7 +62,7 @@ impl Hooks for PanicPickup {
     }
 }
 #[test]
-#[ignore = "needs prepared resources and isolated homes"]
+#[ignore = "daily"]
 fn visibility_listener_unwind_does_not_block_an_outside_save() {
     // Save admission is process-wide, even when this game's visibility is settled.
     // Other fixtures may legitimately hold leases; isolate the real save proof.
