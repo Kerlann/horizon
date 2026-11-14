@@ -292,6 +292,30 @@ fn rollup_rejection_and_absence_matrix_4221() {
     (_, stack.extra) = crate::item_data::decode_components(Some(&removal));
     assert!(absent.test_in(&context, &stack));
     assert!(!positive.test_in(&context, &stack));
+    for malformed in [
+        Tag::End,
+        Tag::Byte(0),
+        Tag::List(vec![]),
+        Tag::String(horizon_core::nbt::JavaString(vec![0xd800])),
+        Tag::String("unknown".into()),
+    ] {
+        stack
+            .data_mut()
+            .set_loot_component("minecraft:tropical_fish/pattern", &Some(malformed.clone()));
+        assert!(!positive.test_in(&context, &stack));
+        let rule = IngredientRule::Components {
+            patch: [("minecraft:tropical_fish/pattern".into(), malformed)]
+                .into_iter()
+                .collect(),
+            removed: vec![],
+            strict: false,
+        };
+        assert!(
+            components::validate(&rule, &items)
+                .unwrap_err()
+                .contains("minecraft:tropical_fish/pattern")
+        );
+    }
     for tag in [Tag::End, Tag::Byte(0), Tag::List(vec![])] {
         let rule = IngredientRule::Components {
             patch: [("minecraft:tropical_fish/pattern".into(), tag)]
@@ -307,6 +331,9 @@ fn rollup_rejection_and_absence_matrix_4221() {
         serde_json::Value::Null,
         serde_json::json!(false),
         serde_json::json!([]),
+        serde_json::json!("unknown"),
+        serde_json::json!("Minecraft:kob"),
+        serde_json::json!("kob".to_uppercase()),
     ] {
         let ingredient = serde_json::json!({"type":"neoforge:components","items":"minecraft:stone","components":{"minecraft:tropical_fish/pattern":value}});
         let error = components::validate_recipe_components(&ingredient, &items).unwrap_err();
