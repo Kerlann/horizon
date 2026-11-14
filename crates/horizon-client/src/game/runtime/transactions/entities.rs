@@ -2,8 +2,9 @@
 //! since the transaction opened, with its attachment map, residency and saved memory, and tells
 //! no one. A removal inside one only marks the entity, whose handle reads stale at once; the root
 //! commit removes it as a removal outside one does, and an abort unmarks it. While one is open in
-//! the level the game is in, mods hear of joins and leaves at the root commit only, and an abort
-//! tells them nothing. Construction (`entity_constructing`, a mob's finalize) stays at the spawn
+//! the level the game is in, mods hear of joins and leaves at the root commit only (the joins, in
+//! the order the entities were added, before the removals' effects), and an abort tells them
+//! nothing. Construction (`entity_constructing`, a mob's finalize) stays at the spawn
 //! call.
 //!
 //! Join numbers, not ids, name what a transaction added: every kind takes one as it is put in its
@@ -47,15 +48,22 @@ pub(super) struct EntityJournal {
 /// A removal waiting for the root commit.
 enum Removal {
     /// The mob is marked already; a killed one's effects that act on removal wait.
-    Mob { id: u32, killed: bool },
+    Mob {
+        id: u32,
+        killed: bool,
+    },
     Other(EntityRef),
 }
 
 /// What mods are told of entities joining and leaving, held while a transaction is open.
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub(in crate::game) enum Announcement {
-    /// `native_joins_flush`.
-    Joins,
+    /// `native_joins_flush` of the entities that joined through `through`, as the caller said
+    /// whether they came with a chunk.
+    Joins {
+        loaded_from_disk: bool,
+        through: JoinSeq,
+    },
     /// `native_entity_left`.
     Left(u32),
     /// `native_leaves_flush`.
@@ -88,8 +96,20 @@ impl EntityJournal {
         }
     }
     fn announce(&mut self, announcement: Announcement) {
-        if self.announcements.last() != Some(&announcement) {
-            self.announcements.push(announcement);
+        match (self.announcements.last_mut(), announcement) {
+            // One flush covers both when they were told alike.
+            (
+                Some(Announcement::Joins {
+                    loaded_from_disk: held,
+                    through: held_through,
+                }),
+                Announcement::Joins {
+                    loaded_from_disk,
+                    through,
+                },
+            ) if *held == loaded_from_disk => *held_through = (*held_through).max(through),
+            (Some(last), announcement) if *last == announcement => {}
+            _ => self.announcements.push(announcement),
         }
     }
 }
@@ -159,20 +179,33 @@ impl Game<'_> {
         }
         true
     }
-    /// What `journal` left for the root commit: its removals, in order, then the announcements
-    /// it held. An entity added and removed in it is never announced, so it never leaves.
+    /// What `journal` left for the root commit: the joins it held, then its removals, in order,
+    /// then the leaves it held. An entity added and removed in it is never announced, so it never
+    /// leaves.
     pub(super) fn commit_entity_journal(&mut self, journal: EntityJournal) {
-        let mut removed = Vec::with_capacity(journal.removals.len());
+        let removed: Vec<u32> = (journal.removals.iter())
+            .map(|removal| match removal {
+                Removal::Mob { id, .. } => *id,
+                Removal::Other(entity) => entity.id(),
+            })
+            .collect();
+        for announcement in &journal.announcements {
+            if let Announcement::Joins {
+                loaded_from_disk,
+                through,
+            } = *announcement
+            {
+                self.flush_joins(loaded_from_disk, 0, &removed, Some(through));
+            }
+        }
         for removal in journal.removals {
             match removal {
                 Removal::Mob { id, killed } => {
-                    removed.push(id);
                     if killed {
                         self.mob_removal_effects(id);
                     }
                 }
                 Removal::Other(entity) => {
-                    removed.push(entity.id());
                     if let Some(target) = self.native_entity_target(entity) {
                         self.remove_target_now(entity, target);
                     }
@@ -181,9 +214,7 @@ impl Game<'_> {
         }
         for announcement in journal.announcements {
             match announcement {
-                Announcement::Joins => {
-                    self.flush_joins(false, 0, &removed);
-                }
+                Announcement::Joins { .. } => {}
                 Announcement::Left(id) => self.native_entity_left(id),
                 Announcement::Leaves => self.native_leaves_flush(),
             }

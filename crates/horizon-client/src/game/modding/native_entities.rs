@@ -184,34 +184,44 @@ impl Game<'_> {
     /// entity it announces; nothing runs when no mod is loaded, on a client
     /// of a server (which tells nothing), or when nothing is new.
     /// Inside a transaction open in this level, construction is still told now, and the join
-    /// at its root commit (`transactions/entities.rs`); the entity is kept until then.
+    /// at its root commit (`transactions/entities.rs`), with this call's `loaded_from_disk`, in
+    /// insertion order and before the transaction's removals take effect; the entity is kept
+    /// until then.
     pub(super) fn native_joins_flush(&mut self, loaded_from_disk: bool, watch: u32) -> bool {
-        self.flush_joins(loaded_from_disk, watch, &[])
+        self.flush_joins(loaded_from_disk, watch, &[], None)
     }
-    /// [`Self::native_joins_flush`], never announcing the entities `removed` names: a root
-    /// commit's, for the entities its transaction added and removed.
+    /// [`Self::native_joins_flush`], never announcing the entities `removed` names and, with a
+    /// `through`, none that joined after it: a root commit's, for the entities its transaction
+    /// added and removed, each held flush keeping its own `loaded_from_disk`.
     pub(in crate::game) fn flush_joins(
         &mut self,
         loaded_from_disk: bool,
         watch: u32,
         removed: &[u32],
+        through: Option<horizon_client::join_seq::JoinSeq>,
     ) -> bool {
         if self.remote.is_some() || mod_api::__private::mods().is_empty() || !self.joins_pending() {
             return true;
         }
         self.assign_pending_join_ids();
-        if self.hold_announcement(super::transactions::Announcement::Joins) {
+        if self.hold_announcement(super::transactions::Announcement::Joins {
+            loaded_from_disk,
+            through: horizon_client::join_seq::JoinSeq::latest(),
+        }) {
             let mut mark = self.persist.joined_seq;
-            while let Some((slot, id, seq)) = self.next_unannounced(mark, &[]) {
+            while let Some((slot, id, seq)) = self.next_unannounced(mark, &[], None) {
                 mark = seq;
                 let kind = self.slot_kind_and_position(slot).0;
                 self.construct_joining(id, &kind);
             }
             return true;
         }
-        let observed = horizon_client::join_seq::JoinSeq::latest();
+        let latest = horizon_client::join_seq::JoinSeq::latest();
+        let observed = through.map_or(latest, |through| through.min(latest));
         let mut kept = true;
-        while let Some((slot, id, seq)) = self.next_unannounced(self.persist.joined_seq, removed) {
+        while let Some((slot, id, seq)) =
+            self.next_unannounced(self.persist.joined_seq, removed, through)
+        {
             self.persist.joined_seq = seq;
             let (kind, at) = self.slot_kind_and_position(slot);
             let mut canceled = false;
@@ -289,11 +299,13 @@ impl Game<'_> {
         assign_resident_ids!(self.tridents, t, &mut self.next_entity, None);
         assign_resident_ids!(self.rockets, r, &mut self.next_entity, None);
     }
-    /// The entity inserted earliest after `mark`, but the `skipped`.
+    /// The entity inserted earliest after `mark` (and, with a `through`, no later than it), but
+    /// the `skipped`.
     fn next_unannounced(
         &self,
         mark: horizon_client::join_seq::JoinSeq,
         skipped: &[u32],
+        through: Option<horizon_client::join_seq::JoinSeq>,
     ) -> Option<(Slot, u32, horizon_client::join_seq::JoinSeq)> {
         use super::entity::Entity;
         use horizon_client::join_seq::{JoinSeq, Joined};
@@ -304,7 +316,10 @@ impl Game<'_> {
             }) {
                 return;
             }
-            if seq > mark && best.is_none_or(|(_, _, previous)| seq < previous) {
+            if seq > mark
+                && through.is_none_or(|through| seq <= through)
+                && best.is_none_or(|(_, _, previous)| seq < previous)
+            {
                 best = Some((slot, id, seq));
             }
         };
@@ -395,7 +410,9 @@ impl Game<'_> {
         let observed = horizon_client::join_seq::JoinSeq::latest();
         if self.remote.is_none() && !mod_api::__private::mods().is_empty() {
             self.assign_pending_join_ids();
-            while let Some((slot, id, seq)) = self.next_unannounced(self.persist.joined_seq, &[]) {
+            while let Some((slot, id, seq)) =
+                self.next_unannounced(self.persist.joined_seq, &[], None)
+            {
                 self.persist.joined_seq = seq;
                 let kind = self.slot_kind_and_position(slot).0.into_owned();
                 self.remember_join(id, kind);
