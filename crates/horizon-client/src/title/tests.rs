@@ -307,6 +307,7 @@ fn a_gated_title_asks_for_the_multiplayer_lists_steps() {
 }
 
 #[test]
+#[ignore = "daily"]
 fn f5_reloads_the_server_list() {
     let mut f = Fixture::new();
     f.click("Multiplayer");
