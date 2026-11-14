@@ -763,7 +763,7 @@ fn mob_death_and_handle_preserve_namespaced_types() {
         "game::native_hooks::death_source_tests::mob_death_and_handle_preserve_namespaced_types",
         || {
             observed(false, false, |game, seen| {
-                let sheep = game.res.mob_types().get("sheep").unwrap().clone();
+                let sheep = game.res.mob_types().get("minecraft:sheep").unwrap().clone();
                 for (index, id) in ["vulture:vulture", "sheep", "minecraft:sheep"]
                     .into_iter()
                     .enumerate()
