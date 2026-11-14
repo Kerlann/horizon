@@ -101,7 +101,7 @@ mod hotbar_slot_tests {
     }
 
     #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    #[ignore = "daily"]
     fn a_selection_reaches_the_server_at_the_next_tick_and_only_once() {
         with_client_game(|game| {
             let mut reader = logged_in(game);
@@ -123,7 +123,7 @@ mod hotbar_slot_tests {
     }
 
     #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    #[ignore = "daily"]
     fn a_selection_goes_out_before_an_attack_in_the_same_tick() {
         with_client_game(|game| {
             let mut reader = logged_in(game);
@@ -146,7 +146,7 @@ mod hotbar_slot_tests {
     }
 
     #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    #[ignore = "daily"]
     fn an_out_of_range_slot_is_refused_and_keeps_the_selection() {
         with_client_game(|game| {
             let mut reader = logged_in(game);
@@ -162,7 +162,7 @@ mod hotbar_slot_tests {
     }
 
     #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    #[ignore = "daily"]
     fn a_spectator_gets_no_hotbar_selection() {
         with_client_game(|game| {
             let mut reader = logged_in(game);
