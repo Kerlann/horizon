@@ -16,7 +16,8 @@ struct Thorny;
 #[mod_api::horizon_part]
 impl BlockPart for Thorny {
     fn block_path_type(&self, host: &dyn Host, event: &mut BlockPathTypeEvent) -> Option<PathType> {
-        let answer = match event.pos {
+        let pos = [event.pos.x, event.pos.y, event.pos.z];
+        let answer = match pos {
             [4, 64, _] if host.block_state_id("minecraft:smooth_stone") == Some(event.state) => {
                 Some(PathType::Damaging)
             }
@@ -29,7 +30,7 @@ impl BlockPart for Thorny {
             // These override positions are in the loaded fixture chunk. Finder
             // also asks void-air positions outside it, where the Host read is None.
             let level = host.level(host.dimension()).unwrap();
-            assert_eq!(level.block_state(host, event.pos), Some(event.state));
+            assert_eq!(level.block_state(host, pos), Some(event.state));
         }
         answer
     }
@@ -59,7 +60,7 @@ impl BlockPart for Beside {
         if event.kind == PathComputationType::Land
             && host.block_state_id("minecraft:glass") == Some(event.state)
         {
-            *event.pathfindable = true;
+            event.pathfindable = true;
         }
     }
     fn block_path_type(&self, host: &dyn Host, event: &mut BlockPathTypeEvent) -> Option<PathType> {
@@ -71,10 +72,11 @@ impl BlockPart for Beside {
         host: &dyn Host,
         event: &mut AdjacentBlockPathTypeEvent,
     ) -> Option<PathType> {
+        let pos = [event.pos.x, event.pos.y, event.pos.z];
         let level = host.level(host.dimension()).unwrap();
-        assert_eq!(level.block_state(host, event.pos), Some(event.state));
-        self.0.lock().unwrap().push((event.pos, event.path_type));
-        if event.pos == [0, 64, 0] {
+        assert_eq!(level.block_state(host, pos), Some(event.state));
+        self.0.lock().unwrap().push((pos, event.path_type));
+        if pos == [0, 64, 0] {
             Some(PathType::Walkable)
         } else if host.block_state_id("minecraft:glass") == Some(event.state) {
             Some(PathType::FireInNeighbor)
