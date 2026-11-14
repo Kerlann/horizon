@@ -41,6 +41,11 @@ pub fn removed(stack: &ItemStack, id: &str) -> bool {
 /// Presence is checked by the caller, so empty decoded enchantment maps compare equal.
 pub fn component_equal(id: &str, a: &ItemStack, b: &ItemStack) -> bool {
     match id {
+        "minecraft:waxed" => {
+            matches!(a.data().and_then(|d| d.other(id)), Some(Tag::Compound(_)))
+                && matches!(b.data().and_then(|d| d.other(id)), Some(Tag::Compound(_)))
+        }
+
         "minecraft:cat/sound_variant"
         | "minecraft:cat/variant"
         | "minecraft:wolf/sound_variant"
