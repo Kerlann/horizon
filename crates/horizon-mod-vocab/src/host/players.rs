@@ -880,6 +880,9 @@ pub trait PlayersBackendMut {
         input: PlayerInput,
     ) -> Option<SimulatedMove>;
     /// Side: server.
+    /// Numbers: 0..35 main (0..8 hotbar), 36..39 feet to head, 40 offhand,
+    /// 41 body, 42 saddle. ItemPlace uses 100..103 for armour and -106 for offhand;
+    /// InventoryMenu has no 41 or 42.
     /// `Inventory.setItem(slot, stack)` by `player_inventory_slots`' numbers: `stack` (None
     /// empties it) goes into that slot as `/item replace entity <player> <slot>` puts it,
     /// without the slot's item check, so a worn slot takes any item; the equip sound and
@@ -888,6 +891,8 @@ pub trait PlayersBackendMut {
     /// writes nothing and is named by `PlayerDataRefusal`: `Stale` (no online player behind
     /// the handle), `Client`, `Dead`, `SlotOutOfRange` (a slot past 42, never a panic) and
     /// `Stack` (an item the world lacks, a count or damage the item does not allow).
+    /// An open transaction journals this write; an abort restores the previous value.
+    /// Equipment effects wait for the outermost commit.
     #[access(WorldOnly)]
     fn player_set_inventory_slot(
         &mut self,
@@ -900,6 +905,7 @@ pub trait PlayersBackendMut {
     /// chest slot `slot` (0 to 26). A player looking into their ender chest is sent the slot
     /// with the open menu's sync. Refuses as `player_set_inventory_slot` does, with
     /// `SlotOutOfRange { last: 26 }` for a slot past 26 (never a panic).
+    /// An open transaction journals this write; an abort restores the previous value.
     #[access(WorldOnly)]
     fn player_set_ender_chest_slot(
         &mut self,
@@ -913,6 +919,8 @@ pub trait PlayersBackendMut {
     /// the player's eyes with no pickup delay and only they may pick it up; a stack that went
     /// in whole plays the pickup sound. Refuses, with nothing given, with `Stale`, `Client`,
     /// `Dead` or `Stack`, as `player_set_inventory_slot` does.
+    /// An open transaction journals this write; an abort restores the previous value.
+    /// Overflow drops and pickup sounds wait for the outermost commit.
     #[access(WorldOnly)]
     fn player_give_stack(
         &mut self,
@@ -929,6 +937,7 @@ pub trait PlayersBackendMut {
     /// teleports keep the whole compound. For ports: new mods use attachments. Refuses,
     /// writing nothing: `Stale`, `Client`, `Dead`, and `TooDeep` for data that would sit 512
     /// levels deep or more in the player's file.
+    /// An open transaction journals this write; an abort restores the previous value.
     #[access(WorldOnly)]
     fn player_set_persistent_data(
         &mut self,
