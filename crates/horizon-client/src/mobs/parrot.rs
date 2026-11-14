@@ -152,7 +152,7 @@ pub fn shoulder_sound(
     if player_alive && !player_silent && random.next_int_bound(2).unwrap_or(1) == 0 {
         let candidates: Vec<_> = nearby
             .iter()
-            .filter(|(s, _)| maps.parrot_imitation(*s).is_some())
+            .filter(|(s, _)| maps.parrot_imitation(s).is_some())
             .collect();
         if !candidates.is_empty() {
             let (species, silent) =

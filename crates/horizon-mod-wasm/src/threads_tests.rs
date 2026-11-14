@@ -104,9 +104,7 @@ fn the_mod_engine_refuses_guest_shared_memory_and_atomics() {
     }
 
     let wasm = wat::parse_str(USES_ATOMICS).expect("the module parses");
-    let err = Module::new(&engine, &wasm)
-        .err()
-        .expect("a module using an atomic load was accepted");
+    let err = Module::new(&engine, &wasm).expect_err("a module using an atomic load was accepted");
     let text = chain(&err);
     assert!(
         text.contains("threads support is not enabled"),
@@ -114,8 +112,7 @@ fn the_mod_engine_refuses_guest_shared_memory_and_atomics() {
     );
 
     let err = SharedMemory::new(&engine, MemoryType::shared(1, 1))
-        .err()
-        .expect("the mod engine created a shared memory");
+        .expect_err("the mod engine created a shared memory");
     let text = chain(&err);
     assert!(
         text.contains("shared memory support is disabled for this engine"),
