@@ -11,7 +11,6 @@
 //! share a namespace ([`clash`]).
 use crate::manifest::Manifest;
 pub use horizon_core::arm_pose::ArmPose;
-use mod_vocab::Side as ManifestSide;
 use serde::Deserialize;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -916,26 +915,6 @@ impl FileReader<'_> {
     }
 }
 
-/// Why a mod declared `side = "server"` may not load beside this content: it registers
-/// something a client must know (registry content, client hooks or assets). `None` for
-/// another side, or for a data-only server mod.
-pub fn server_side_refusal(
-    manifest: &Manifest,
-    content: &Content,
-    client_hooks: bool,
-) -> Option<String> {
-    if manifest.side != ManifestSide::Server {
-        return None;
-    }
-    let what = content
-        .client_requirement()
-        .or(client_hooks.then_some("client hooks"))?;
-    Some(format!(
-        "mod {} declares side = \"server\" but registers {what}, which a client must know",
-        manifest.id
-    ))
-}
-
 /// Why two content mods cannot be on together: a namespace both own (one's
 /// id or listed namespace is the other's), which would mix their files.
 /// `a` and `b` are (mod id, owned namespaces).
@@ -1121,27 +1100,6 @@ impl Content {
     /// No files: a mod with code only.
     pub fn is_empty(&self) -> bool {
         self.files.is_empty()
-    }
-
-    /// What this mod makes a client know when it declares `side = "server"`: its registry
-    /// entries (`blocks`, `items`, effects, tabs, fluids, types, menus) or its `assets/`.
-    /// `None` for a data-only server mod, which a server loads alone.
-    pub fn client_requirement(&self) -> Option<&'static str> {
-        let registry = !self.blocks.is_empty()
-            || !self.items.is_empty()
-            || !self.effects.is_empty()
-            || !self.creative_tabs.is_empty()
-            || !self.fluids.is_empty()
-            || !self.entity_types.is_empty()
-            || !self.block_entity_types.is_empty()
-            || !self.menu_types.is_empty();
-        if registry {
-            Some("registry content")
-        } else if self.files.iter().any(|file| file.starts_with("assets/")) {
-            Some("assets")
-        } else {
-            None
-        }
     }
 
     /// One content file's bytes.

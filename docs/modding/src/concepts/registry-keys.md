@@ -174,7 +174,7 @@ Use API-owned values rather than importing engine or package-loader types.
 | `TooltipDisplay::for_stack` | Takes an API `ItemStack`; its effective tooltip component includes vanilla's implicit defaults. |
 | `LootContext`, `LootStack` | Own their facts. Candidate items use `ItemKey`; counts are signed. Ordered `Option<Tag>` patches preserve removals and NBT types; names are `Text` trees. Writeback is atomic. |
 | `ItemBar`, `ItemRarity` | Describe item resource properties. |
-| `Side` | Package metadata: `Client`, `Both` or `Server`, not the executing logical `HostSide`. |
+| `Side` | Package metadata: `Client` or `Both`, not the executing logical `HostSide`. |
 | `Suggestion` | Construct with `Suggestion::new((start, end), text)`. Offsets are bytes; `tooltip` and `int_value` are writable. |
 | `Block`, `Item` | Registration declarations. Component patches are `(String, Option<Tag>)` entries; `None` removes a component. Content-file admission checks apply. |
 | `BlockEntityTypeDecl` | Declaration snapshot produced by `r.block_entity_type(...).build()`. |

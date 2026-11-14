@@ -794,13 +794,6 @@ pub(super) fn content_overlay(
                 continue;
             }
         };
-        let hooks = mod_api::__private::uses_client_hooks(&m.id);
-        if let Some(refusal) = horizon_mod_package::content::server_side_refusal(m, &content, hooks)
-        {
-            log::warn!("Horizon: {refusal}; not loaded");
-            mod_api::__private::set_mod_enabled(&m.id, false);
-            continue;
-        }
         let known = match &mut known {
             Some(types) => types,
             None => match mod_content::known_components(root) {
@@ -856,25 +849,6 @@ pub(super) fn content_overlay(
             log::warn!("Horizon: {e}");
         }
     }
-    // Native code may declare registry content after the file check above: refuse a
-    // `side = "server"` mod by name once its final content is known.
-    let mut refused_server = Vec::new();
-    for source in &packages {
-        let m = source.manifest;
-        let Some(i) = mods.iter().position(|content| content.id == m.id) else {
-            continue;
-        };
-        let hooks = mod_api::__private::uses_client_hooks(&m.id);
-        if let Some(refusal) =
-            horizon_mod_package::content::server_side_refusal(m, &mods[i].content, hooks)
-        {
-            log::warn!("Horizon: {refusal}; not loaded");
-            mod_api::__private::set_mod_enabled(&m.id, false);
-            mods.remove(i);
-            refused_server.push(m.id.clone());
-        }
-    }
-    announced.retain(|entry| !refused_server.contains(&entry.id));
     // Content validation may refuse a package. Revalidate against what really
     // loaded so dependents cannot start with a missing required content mod.
     let loaded: Vec<_> = manifests
@@ -1214,12 +1188,11 @@ fn announced_entry(
     mod_list::Entry {
         id: id.to_owned(),
         version: version.to_owned(),
-        // The manifest and the list carry the same kinds; a future kind stays local.
-        side: match side {
-            Side::Both => mod_list::Side::Both,
-            Side::Client => mod_list::Side::Client,
-            Side::Server => mod_list::Side::Server,
-            _ => mod_list::Side::Client,
+        // `Side` is open to new kinds; until the list carries one, such a mod stays local.
+        side: if side == Side::Both {
+            mod_list::Side::Both
+        } else {
+            mod_list::Side::Client
         },
     }
 }
