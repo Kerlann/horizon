@@ -2607,6 +2607,7 @@ mod tests {
                 }
             }
             let w = MobWorld {
+                mob_maps: horizon_client::neoforge_mob_maps::NeoForgeMobMaps::vanilla(),
                 goal_host: None,
                 live_mobs: None,
                 teams: Default::default(),
@@ -2738,6 +2739,7 @@ mod tests {
                 .set(1, 0, 0, registry.default_state("minecraft:stone").unwrap())
                 .unwrap();
             let w = MobWorld {
+                mob_maps: horizon_client::neoforge_mob_maps::NeoForgeMobMaps::vanilla(),
                 goal_host: None,
                 live_mobs: None,
                 teams: Default::default(),
@@ -2870,6 +2872,7 @@ mod tests {
             }
         }
         let w = MobWorld {
+            mob_maps: horizon_client::neoforge_mob_maps::NeoForgeMobMaps::vanilla(),
             goal_host: None,
             live_mobs: None,
             teams: Default::default(),
@@ -3007,6 +3010,7 @@ mod tests {
         let mut landing = |below: &Mob| -> f64 {
             let others = [below.seen(None, &crate::items::Items::empty())];
             let w = MobWorld {
+                mob_maps: horizon_client::neoforge_mob_maps::NeoForgeMobMaps::vanilla(),
                 professions: crate::mobs::villager::profession_table(),
                 loop_context: crate::test_resources::server_loop_context(),
                 attributes: &motion.attributes,
