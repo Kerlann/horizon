@@ -26,6 +26,8 @@ tests and the summed test seconds. (libtest's own `--ensure-time` was the altern
 the binary with libtest's words, not the instruction, and needs a threshold variable per kind of test target.)
 """
 import argparse
+import itertools
+
 import json
 import os
 import re
@@ -37,6 +39,9 @@ import tomllib
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+from tools.ci import network_guard
 
 
 def package_identity(package_id: str) -> tuple[str, str]:
@@ -135,7 +140,7 @@ def run_one(binary: dict, extra_env: dict, test_args: list[str], timed: bool = F
     log = None
     timed = timed and binary.get("libtest", True)
     if timed:
-        result["listed"] = listed_tests(binary, env, test_args)
+        result["listed"] = [binary["isolated_test"]] if "isolated_test" in binary else listed_tests(binary, env, test_args)
         handle, log = tempfile.mkstemp(prefix="libtest-", suffix=".log")
         os.close(handle)
         test_args = [*test_args, "--logfile", log]
@@ -207,6 +212,7 @@ def timing_verdict(times: list[tuple[float, str, str]], warn: float, fail: float
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--network-guard", type=Path, help="Linux preload library; run each test alone and fail recorded inet calls")
     parser.add_argument("--jobs", type=int, required=True, help="test binaries running at once")
     parser.add_argument("--time-limits", metavar="WARN,FAIL", help="seconds: warn about a test over WARN, fail one "
                         "over FAIL (adds libtest's --report-time)")
@@ -254,8 +260,19 @@ def main(argv: list[str]) -> int:
         extra_env["RUSTC_BOOTSTRAP"] = "1"
     print(f"running {len(binaries)} test binaries, {args.jobs} at a time", flush=True)
     failures, peaks, times, missing, started = [], [], [], [], time.monotonic()
-    with ThreadPoolExecutor(args.jobs) as pool:
-        for result in pool.map(lambda b: run_one(b, extra_env, test_args, timed=bool(limits)), binaries):
+    def results():
+        with ThreadPoolExecutor(args.jobs) as pool:
+            if not args.network_guard:
+                yield from pool.map(lambda b: run_one(b, extra_env, test_args, timed=bool(limits)), binaries)
+                return
+            work = iter(network_guard.invocations(binaries, extra_env, test_args, listed_tests))
+            # Bound completed result files as well as running subprocesses.
+            while batch := list(itertools.islice(work, args.jobs * 2)):
+                yield from pool.map(lambda item: network_guard.run(
+                    item, extra_env, bool(limits), args.network_guard.resolve(), run_one), batch)
+    try:
+        completed = results()
+        for result in completed:
             failed_tests = report(result)
             times.extend((seconds, test, result["binary"]["label"])
                          for test, (_, seconds) in result.get("log", {}).items() if seconds is not None)
@@ -264,6 +281,9 @@ def main(argv: list[str]) -> int:
             peaks.append((result["max_rss_kib"], result["binary"]["label"]))
             if result["status"] != "ok":
                 failures.append((result["binary"]["label"], result["status"], failed_tests))
+    except ValueError as error:
+        print(f"::error::{error}")
+        return 1
     print(f"ran {len(binaries)} test binaries in {time.monotonic() - started:.1f}s; {len(failures)} failed")
     print("largest resident sets: " + ", ".join(f"{label} {kib // 1024} MiB" for kib, label in sorted(peaks)[-5:][::-1]))
     slow = []
