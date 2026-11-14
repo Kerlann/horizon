@@ -23,3 +23,19 @@ pub struct EquipReadRow {
     /// Eight equipment slots in EquipmentSlot order; empty or unsupported slots are None.
     pub equipment: [Option<ItemStack>; 8],
 }
+impl EquipReadRow {
+    /// The row for `entity` with nothing read yet: no kind, position or health, not living,
+    /// every equipment slot empty. The engine fills in what it prepared.
+    pub fn new(entity: EntityRef) -> Self {
+        Self {
+            entity,
+            kind: None,
+            position: None,
+            health: None,
+            max_health: None,
+            alive: None,
+            living: false,
+            equipment: Default::default(),
+        }
+    }
+}

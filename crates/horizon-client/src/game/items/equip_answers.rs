@@ -103,7 +103,6 @@ impl Game<'_> {
             mod_api::EquipmentSlot::Saddle,
         ];
         Some(mod_api::EquipReadRow {
-            entity,
             kind: self.entity_kind(entity),
             position: self.entity_position(entity),
             health: self.living_health(living),
@@ -114,6 +113,7 @@ impl Game<'_> {
                 self.living_equipment(living, slots[i])
                     .and_then(|stack| stack.try_into_api().ok())
             }),
+            ..mod_api::EquipReadRow::new(entity)
         })
     }
     pub(in crate::game) fn equip_can_apply(&self, prepared: &EquipStack, id: u32) -> bool {

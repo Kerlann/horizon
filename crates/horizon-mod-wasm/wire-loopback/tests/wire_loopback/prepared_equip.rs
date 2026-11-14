@@ -320,24 +320,16 @@ fn prepared_target_reads_need_no_host_round_trip_or_payload_conversion() {
         )]))
         .unwrap();
     let entity = event(&stack, "head").entity.entity();
+    let mut equipment: [Option<mod_api::ItemStack>; 8] = Default::default();
+    equipment[0] = Some(stack.clone());
     let row = mod_api::EquipReadRow {
-        entity,
-        kind: None,
         position: Some([1.0, 64.0, 2.0]),
         health: Some(17.0),
         max_health: Some(20.0),
         alive: Some(true),
         living: true,
-        equipment: [
-            Some(stack.clone()),
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-            None,
-        ],
+        equipment,
+        ..mod_api::EquipReadRow::new(entity)
     };
     let proxy = WasmHandler {
         index: guest::add_handler(vec![guest::view::<dyn mod_api::ItemPart>(Arc::new(
