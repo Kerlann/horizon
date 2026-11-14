@@ -151,10 +151,9 @@ The `fox/variant` persistent codec accepts only the exact strings `"red"` and
 and namespaced values. Parrot spawn eggs have no prototype `parrot/variant`;
 the mob's default variant does not supply an item component.
 
-The `fox/variant` persistent codec accepts only the exact
-strings `"red"` and `"snow"`. The `tropical_fish/pattern` codec accepts only `"kob"`,
+The `tropical_fish/pattern` codec accepts only `"kob"`,
 `"sunstreak"`, `"snooper"`, `"dasher"`, `"brinely"`, `"spotty"`, `"flopper"`,
-`"stripey"`, `"glitter"`, `"blockfish"`, `"betty"`, and `"clayfish"`. Both reject
+`"stripey"`, `"glitter"`, `"blockfish"`, `"betty"`, and `"clayfish"`. It rejects
 numeric network ids, case variants and namespaced values. Tropical fish buckets
 have no pattern component by default; the mob's default pattern is not an item default.
 
