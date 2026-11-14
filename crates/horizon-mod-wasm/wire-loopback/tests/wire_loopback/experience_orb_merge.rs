@@ -45,6 +45,7 @@ fn wire_loopback_orb_merge_delivers_signed_values_and_counts_and_honours_cancel(
         into_count: i32::MAX as u32,
         from_value: 5,
         from_count: 1,
+        cancelled: false,
     };
     assert_eq!(
         module.experience_orb_merge(&mut World, &mut event("test:orb_merge")),

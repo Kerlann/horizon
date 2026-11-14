@@ -795,7 +795,8 @@ pub(super) fn content_overlay(
             }
         };
         let hooks = mod_api::__private::uses_client_hooks(&m.id);
-        if let Some(refusal) = horizon_mod_package::content::server_side_refusal(m, &content, hooks) {
+        if let Some(refusal) = horizon_mod_package::content::server_side_refusal(m, &content, hooks)
+        {
             log::warn!("Horizon: {refusal}; not loaded");
             mod_api::__private::set_mod_enabled(&m.id, false);
             continue;
