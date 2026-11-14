@@ -52,23 +52,27 @@ print("finished all crates", file=sys.stderr)
 sys.exit(17 if mode == "error" else 0)
 ''')
             for encoded in (False, True):
-                for mode, code in (("clean", 0), ("warning", 1), ("script", 1), ("error", 17)):
+                for mode, code in (("clean", 0), ("warning", 1), ("script", 0), ("error", 17)):
                     with self.subTest(encoded=encoded, mode=mode):
                         env = {key: value for key, value in os.environ.items()
                                if key not in ("RUSTFLAGS", "CARGO_ENCODED_RUSTFLAGS")}
                         env.update(MODE=mode, RUSTFLAGS="-C prefer-dynamic")
                         if encoded:
                             env["CARGO_ENCODED_RUSTFLAGS"] = "-C\x1fprefer-dynamic"
+                        kind = "check" if mode == "script" else "clippy"
+                        tail = ["--", "-Wclippy::all"] if kind == "clippy" else []
                         result = subprocess.run([sys.executable, str(ROOT / "tools/ci/check_warnings.py"),
-                                                 sys.executable, str(cargo), "clippy", "--keep-going", "--", "-Wclippy::all"],
+                                                 sys.executable, str(cargo), kind, "--keep-going", *tail],
                                                 env=env, capture_output=True, text=True, timeout=10)
                         self.assertEqual(result.returncode, code, result.stderr + result.stdout)
                         self.assertIn("finished all crates", result.stdout)
                         separator = "\x1f" if encoded else " "
-                        self.assertIn(f"prefer-dynamic{separator}--cap-lints=warn", result.stdout)
+                        flags = next(line[6:] for line in result.stdout.splitlines() if line.startswith("flags="))
+                        original = "-C\x1fprefer-dynamic" if encoded else "-C prefer-dynamic"
+                        self.assertEqual(flags, original + (f"{separator}--cap-lints=warn" if kind == "check" else ""))
                         args = json.loads(next(line[5:] for line in result.stdout.splitlines() if line.startswith("args=")))
-                        self.assertEqual(args, ["clippy", "--keep-going", "--message-format=json-diagnostic-rendered-ansi",
-                                                "--", "-Wclippy::all"])
+                        self.assertEqual(args, [kind, "--keep-going", "--message-format=json-diagnostic-rendered-ansi",
+                                                *tail, *(["--cap-lints=warn"] if kind == "clippy" else [])])
                         self.assertNotIn('"compiler-artifact"', result.stdout)
                         if mode == "warning":
                             self.assertIn("warning: lint in lower", result.stdout)

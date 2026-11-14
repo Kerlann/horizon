@@ -7,13 +7,9 @@ severity here rather than in rustc: a denied lint otherwise prevents metadata fo
 """
 import json
 import os
-import re
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor
-
-
-ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 
 def forward_diagnostics(stream, structured: bool) -> int:
@@ -32,22 +28,26 @@ def forward_diagnostics(stream, structured: bool) -> int:
             print(diagnostic.get("rendered") or diagnostic["message"] + "\n", end="", flush=True)
         elif not isinstance(message, dict) or "reason" not in message:
             print(line, end="", flush=True)
-            # Cargo/build-script warnings are plain text, not compiler-message records. Counting a Cargo
-            # summary again is harmless: this is a warning-record count, not a distinct-lint count.
-            warnings += bool(re.match(r"^warning(?:\[[^]]+\])?:", ANSI.sub("", line)))
+            # Cargo/build-script warnings were never denied by rustc's -D warnings. Keep them visible only.
     return warnings
 
 
 def main(command: list[str]) -> int:
     # Cargo flags precede the rustc/clippy argument separator. The gate owns this command, not untrusted input.
     split = command.index("--") if "--" in command else len(command)
+    clippy = "clippy" in command[:split]
     command = [*command[:split], "--message-format=json-diagnostic-rendered-ansi", *command[split:]]
     env = dict(os.environ)
-    # Cap explicit crate-level deny/forbid lints too; genuine type/parse/link errors remain compiler errors.
-    # Preserve encoded flags' precedence and SDK prefer-dynamic. Dependencies retain Cargo's own lint cap.
-    if "CARGO_ENCODED_RUSTFLAGS" in env:
+    # Workspace crates have explicit deny/forbid lints. Cap those too, without changing clippy dependencies'
+    # RUSTFLAGS fingerprints/cache keys. Clippy forwards arguments after -- only to workspace members.
+    if clippy:
+        if "--" not in command:
+            command.append("--")
+        command.append("--cap-lints=warn")
+    elif "CARGO_ENCODED_RUSTFLAGS" in env:
         env["CARGO_ENCODED_RUSTFLAGS"] += "\x1f--cap-lints=warn"
     else:
+        # SDK cargo-check steps already use their own RUSTFLAGS and target directory.
         env["RUSTFLAGS"] = env.get("RUSTFLAGS", "") + " --cap-lints=warn"
     with subprocess.Popen(command, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                           text=True, errors="replace") as process, ThreadPoolExecutor(1) as pool:
@@ -55,7 +55,7 @@ def main(command: list[str]) -> int:
         warnings = forward_diagnostics(process.stdout, True) + stderr.result()
         code = process.wait()
     if warnings:
-        print(f"::error::{warnings} warning records emitted; warnings fail this check after all crates finish",
+        print(f"::error::{warnings} compiler warning records emitted; warnings fail this check after all crates finish",
               flush=True)
     return code if code else int(bool(warnings))
 

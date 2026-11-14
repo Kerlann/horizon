@@ -405,7 +405,7 @@ class PrReadyTests(unittest.TestCase):
             with self.subTest(uname=uname, metal=metal):
                 self.assertEqual(self.launcher_step_arguments(command, uname, metal),
                                  ["clippy", "--keep-going", "--all-targets", "--locked", *features,
-                                  "--message-format=json-diagnostic-rendered-ansi"])
+                                  "--message-format=json-diagnostic-rendered-ansi", "--", "--cap-lints=warn"])
 
     def launcher_step_arguments(self, command, uname, metal):
         """Run a launcher step's shell snippet with fake uname, xcrun, pkg-config and cargo; what the fake
