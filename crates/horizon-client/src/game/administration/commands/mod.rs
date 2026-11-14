@@ -486,7 +486,7 @@ impl Game<'_> {
             [s.x.floor(), s.y.floor(), s.z.floor()]
         })
     }
-    fn source_rotation(&self) -> [f32; 2] {
+    pub(super) fn source_rotation(&self) -> [f32; 2] {
         self.command_source
             .map_or([self.yaw, self.pitch], |s| s.rot)
     }

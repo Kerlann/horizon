@@ -919,6 +919,29 @@ impl NoBackend for CollisionExclusionsError {
     }
 }
 
+/// Why a client's hotbar selection was not made (`ClientHost::select_hotbar_slot`). The
+/// selection the player had stays.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, horizon_mod_api_macros::Wire)]
+// exhaustive: the three refusals are the contract; a new reason is a breaking change
+pub enum HotbarSlotError {
+    /// The client shows no world, or has no player of its own.
+    NoWorld,
+    /// A slot above 8: vanilla's range is 0 to 8, and the server ignores others.
+    OutOfRange {
+        /// The slot the caller asked for.
+        slot: u8,
+    },
+    /// The number keys do nothing for the local player, as for a spectator (its keys open
+    /// the spectator menu instead).
+    Refused,
+}
+
+impl NoBackend for HotbarSlotError {
+    fn no_backend() -> Self {
+        Self::NoWorld
+    }
+}
+
 /// A vanilla `AbstractMinecart`, narrowed from an entity with `host.minecart(entity)`.
 #[derive(horizon_mod_api_macros::Wire)]
 #[wire(internal_field_layouts)]
