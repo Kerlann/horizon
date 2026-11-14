@@ -1226,18 +1226,23 @@ pub trait LevelsBackendMut {
         b: i32,
     ) -> bool;
     /// Side: server.
-    /// Explodes at `center` as `Level.explode(source, x, y, z, radius, fire,
-    /// interaction)` does (`native_explode`), `source` being the exploding
-    /// entity, or none. The causing entity comes from it, never from the
-    /// caller: a primed TNT's owner, a living entity itself, a projectile's
-    /// owner when that is living, else none. With both the damage is
-    /// `minecraft:player_explosion`, else `minecraft:explosion`, and a kill
-    /// credits the causing entity. `interaction` says what happens to blocks
-    /// (`Mob` asks the source's `entity_mob_griefing`, `Trigger` only works
-    /// buttons, levers, doors and the like); `fire` lights some of the air
-    /// around whatever it is. False, with nothing exploded, for a stale
-    /// `source` or one in another level, a chunk that isn't loaded or a
-    /// radius outside `0 < radius <= 32`.
+    /// Explodes at `center` as vanilla's full `Level.explode(source,
+    /// damageSource, calculator, x, y, z, radius, fire, interaction,
+    /// smallParticles, largeParticles, blockParticles, sound)` does
+    /// (`native_explode`), `source` being the exploding entity, or none. The
+    /// causing entity comes from it, never from the caller: a primed TNT's
+    /// owner, a living entity itself, a projectile's owner when that is
+    /// living, else none. With both the damage is
+    /// `minecraft:player_explosion`, else `minecraft:explosion`, unless
+    /// `settings` names a damage type, and a kill credits the causing entity.
+    /// `interaction` says what happens to blocks (`Mob` asks the source's
+    /// `entity_mob_griefing`, `Trigger` only works buttons, levers, doors and
+    /// the like); `fire` lights some of the air around whatever it is.
+    /// `settings` holds the damage calculator, particles and sound, each
+    /// vanilla's default when `None`. There is no radius limit, as in
+    /// vanilla: a big blast costs the blocks its rays find, and one of 0 or
+    /// below finds none. Refused, with nothing exploded and no hook told, as
+    /// [`ExplodeError`] says.
     #[access(WorldOnly)]
     fn level_explode(
         &mut self,
@@ -1247,7 +1252,8 @@ pub trait LevelsBackendMut {
         radius: f32,
         fire: bool,
         interaction: ExplosionInteraction,
-    ) -> bool;
+        settings: ExplosionSettings,
+    ) -> Result<(), ExplodeError>;
     /// Side: server.
     /// Strikes lightning at `at`, as summoning a `minecraft:lightning_bolt`
     /// does: it sets fire, hurts and converts what it hits (a pig to a

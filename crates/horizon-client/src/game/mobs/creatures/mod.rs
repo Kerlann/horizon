@@ -222,9 +222,8 @@ pub(super) struct Creatures {
     /// (game/network/lan_pvp.rs).
     pub sweeps: Vec<super::lan_pvp::Sweep>,
     /// Explosion packets from a guest's turn, waiting for it to end
-    /// (centre, small, radius, blocks hit, the players it pushed;
-    /// game/network/lan_particles.rs).
-    pub lan_explosions: Vec<([f64; 3], bool, f32, usize, Vec<(u32, [f64; 3])>)>,
+    /// (game/network/lan_particles.rs).
+    pub lan_explosions: Vec<super::lan_particles::LanExplosion>,
     /// The snapshot's buffer between ticks, empty: ~400 bytes a mob, so
     /// thousands of mobs would allocate and free megabytes every tick.
     seen_buf: Vec<Seen>,
