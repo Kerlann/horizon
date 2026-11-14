@@ -10,8 +10,8 @@ use std::fs;
 use std::io::{BufRead, BufReader, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 
 use horizon_mod_package::dependencies;
 
@@ -32,7 +32,7 @@ mod registry_lock;
 mod registry_plan;
 mod registry_runtime;
 mod registry_rustc;
-pub use internals_sync::{DiscoveryCatalog, pinned_catalog_with_modules};
+pub use internals_sync::{pinned_catalog_with_modules, DiscoveryCatalog};
 mod isolate;
 mod mixins_patch;
 mod package;
@@ -42,7 +42,7 @@ mod prebuilt;
 
 pub use isolate::LeftOut;
 pub use picker::{Route, Routes};
-pub use prebuilt::{Refusal, prebuilt_availability};
+pub use prebuilt::{prebuilt_availability, Refusal};
 pub use registry_inventory::Inventory as RegistryInventory;
 
 // Settings and logs are shared by native-build and diagnostics tests.
@@ -1692,11 +1692,13 @@ fn pipeline(
         .map_err(|error| error.to_string())?;
     }
     // Said with a failure: a mod made for another revision may not apply or compile on this one.
-    let blame = |e: String| match &other {
+    let blame = |e: String| {
+        match &other {
         Some(list) => format!(
             "{e}\n\nSome mods were made for other Horizon versions ({list}), which may be why. Install versions made for the same Nightly."
         ),
         None => e,
+    }
     };
     let mixins = newest(
         &mods,
@@ -2412,11 +2414,9 @@ mod tests {
 
         image[64] = b'X';
         fs::write(&executable, image).unwrap();
-        assert!(
-            pe_machine(&executable)
-                .unwrap_err()
-                .contains("missing PE signature")
-        );
+        assert!(pe_machine(&executable)
+            .unwrap_err()
+            .contains("missing PE signature"));
         let _ = fs::remove_dir_all(dir);
     }
 
@@ -2443,20 +2443,16 @@ mod tests {
             Some(rust_toolchain::WINDOWS_ARM64_TARGET)
         );
 
-        assert!(
-            windows_build_platform(
-                rust_toolchain::WINDOWS_X64_MACHINE,
-                rust_toolchain::WINDOWS_ARM64_TARGET,
-            )
-            .is_err()
-        );
-        assert!(
-            windows_build_platform(
-                rust_toolchain::WINDOWS_ARM64_MACHINE,
-                rust_toolchain::WINDOWS_X64_TARGET,
-            )
-            .is_err()
-        );
+        assert!(windows_build_platform(
+            rust_toolchain::WINDOWS_X64_MACHINE,
+            rust_toolchain::WINDOWS_ARM64_TARGET,
+        )
+        .is_err());
+        assert!(windows_build_platform(
+            rust_toolchain::WINDOWS_ARM64_MACHINE,
+            rust_toolchain::WINDOWS_X64_TARGET,
+        )
+        .is_err());
         assert!(windows_build_platform(0xa641, rust_toolchain::WINDOWS_ARM64_TARGET).is_err());
     }
 
@@ -3850,22 +3846,16 @@ mod registry_binary_tests {
                 .name,
             "coords_hud-0.1.0.hmod"
         );
-        assert!(
-            version
-                .native_binary("other-build", "aarch64-apple-darwin")
-                .is_err()
-        );
-        assert!(
-            version
-                .native_binary("exact-build", "x86_64-apple-darwin")
-                .is_err()
-        );
+        assert!(version
+            .native_binary("other-build", "aarch64-apple-darwin")
+            .is_err());
+        assert!(version
+            .native_binary("exact-build", "x86_64-apple-darwin")
+            .is_err());
         version.native_binaries.clear();
-        assert!(
-            version
-                .native_binary("exact-build", "aarch64-apple-darwin")
-                .is_err()
-        );
+        assert!(version
+            .native_binary("exact-build", "aarch64-apple-darwin")
+            .is_err());
     }
 }
 
