@@ -199,7 +199,10 @@ pub fn decoded_component_value(id: &str, value: &Tag, reg: &Registries) -> Resul
         }
     }
     Ok(match id {
-        "minecraft:unbreakable" | "minecraft:waxed" => Tag::Compound(Compound::new()),
+        "minecraft:unbreakable"
+        | "minecraft:waxed"
+        | "minecraft:intangible_projectile"
+        | "minecraft:glider" => Tag::Compound(Compound::new()),
         "minecraft:damage"
         | "minecraft:repair_cost"
         | "minecraft:max_damage"
@@ -321,7 +324,10 @@ pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), Strin
             .map(|_| ())
             .ok_or_else(|| "Invalid attack_range".into()),
         // `Unit.CODEC` uses MapCodec.unitCodec: a map is required, its fields are ignored.
-        "minecraft:unbreakable" | "minecraft:waxed" => match t {
+        "minecraft:unbreakable"
+        | "minecraft:waxed"
+        | "minecraft:intangible_projectile"
+        | "minecraft:glider" => match t {
             Tag::Compound(_) => Ok(()),
             _ => Err(not_map(t)),
         },
@@ -2088,8 +2094,6 @@ mod tests {
         }
     }
 
-
-
     #[test]
     fn waxed_unit_codec_requires_maps_and_discards_unknown_fields() {
         use super::{Compound, Registries, Tag, decoded_component_value};
@@ -2113,8 +2117,6 @@ mod tests {
             assert!(decoded_component_value("minecraft:waxed", &value, &registry).is_err());
         }
     }
-
-
 
     #[test]
     fn intangible_projectile_unit_codec_requires_map_and_ignores_fields() {
@@ -2141,8 +2143,6 @@ mod tests {
         }
     }
 
-
-
     #[test]
     fn glider_unit_codec_requires_maps_and_discards_unknown_fields() {
         use super::{Registries, Tag, decoded_component_value};
@@ -2168,6 +2168,4 @@ mod tests {
             assert!(decoded_component_value("minecraft:glider", &value, &registry).is_err());
         }
     }
-
-
 }
