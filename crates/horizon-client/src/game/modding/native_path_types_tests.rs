@@ -7,7 +7,8 @@ use horizon_client::mobs::{
 };
 use horizon_core::geometry::Vec3;
 use mod_api::{
-    AdjacentBlockPathTypeEvent, BlockPart, BlockPathTypeEvent, Hooks, Host, PathType, Registrar,
+    AdjacentBlockPathTypeEvent, BlockPart, BlockPathTypeEvent, Hooks, Host, IsPathfindableEvent,
+    PathComputationType, PathType, Registrar,
 };
 use std::sync::{Arc, Mutex};
 
@@ -18,8 +19,12 @@ impl BlockPart for Thorny {
         let level = host.level(host.dimension()).unwrap();
         assert_eq!(level.block_state(host, event.pos), Some(event.state));
         match event.pos {
-            [4, 64, _] => Some(PathType::Damaging),
-            [15, 65, 1] => Some(PathType::Blocked),
+            [4, 64, _] if host.block_state_id("minecraft:smooth_stone") == Some(event.state) => {
+                Some(PathType::Damaging)
+            }
+            [15, 65, 1] if host.block_state_id("minecraft:air") == Some(event.state) => {
+                Some(PathType::Blocked)
+            }
             _ => None,
         }
     }
@@ -32,6 +37,7 @@ impl Hooks for ThornyMod {
             "minecraft:smooth_stone",
             "minecraft:air",
             "minecraft:oak_fence",
+            "minecraft:oak_door",
         ] {
             let key = r.block_key(name);
             r.block_part(key, Thorny);
@@ -44,6 +50,13 @@ type AdjacentCalls = Arc<Mutex<Vec<([i32; 3], PathType)>>>;
 struct Beside(AdjacentCalls);
 #[mod_api::horizon_part]
 impl BlockPart for Beside {
+    fn is_pathfindable(&self, host: &dyn Host, event: &mut IsPathfindableEvent) {
+        if event.kind == PathComputationType::Land
+            && host.block_state_id("minecraft:glass") == Some(event.state)
+        {
+            *event.pathfindable = true;
+        }
+    }
     fn block_path_type(&self, host: &dyn Host, event: &mut BlockPathTypeEvent) -> Option<PathType> {
         (host.block_state_id("minecraft:seagrass") == Some(event.state))
             .then_some(PathType::Blocked)
@@ -153,6 +166,22 @@ fn cache_follows_update_flags_and_direct_block_entity_notifications() {
             "log deduplication must not suppress invalidation"
         );
     });
+    super::native_entity_refs::tests::with_client_game(|game| {
+        let _world = game.mob_world_base(&[]);
+        let calls = std::cell::Cell::new(0);
+        for _ in 0..2 {
+            game.world
+                .cached_path_type(horizon_core::position::BlockPos::new(0, 64, 0), || {
+                    calls.set(calls.get() + 1);
+                    PathType::Open
+                });
+        }
+        assert_eq!(
+            calls.get(),
+            2,
+            "a client mob view must not initialize a server cache"
+        );
+    });
 }
 
 fn with_parts(id: &'static str, hooks: impl Hooks + 'static, test: impl FnOnce(&mut Game<'_>)) {
@@ -192,11 +221,23 @@ fn a_block_part_gives_its_block_a_path_type() {
                 registry.default_state("minecraft:oak_fence").unwrap(),
             )
             .unwrap();
+        game.world
+            .set(
+                13,
+                65,
+                1,
+                registry.default_state("minecraft:oak_door").unwrap(),
+            )
+            .unwrap();
         let world = game.mob_world_base(&[]);
         // The same state answers differently by position; None keeps vanilla's special cases.
         assert_eq!(world.path_type_from_state(4, 64, 1), PathType::Damaging);
         assert_eq!(world.path_type_from_state(2, 64, 1), PathType::Blocked);
         assert_eq!(world.path_type_from_state(14, 65, 1), PathType::Fence);
+        assert_eq!(
+            world.path_type_from_state(13, 65, 1),
+            PathType::DoorWoodClosed
+        );
         // The override runs even before the air early return.
         assert_eq!(world.path_type_from_state(15, 65, 1), PathType::Blocked);
         assert_eq!(world.path_type_static(4, 65, 1), PathType::Damaging);
@@ -252,5 +293,11 @@ fn a_block_part_gives_the_nodes_beside_its_block_a_path_type() {
         // asks its water fluid before trying the vanilla type mappings.
         assert_eq!(world.path_type_from_state(7, 64, 7), PathType::Blocked);
         assert_eq!(world.path_type_static(8, 65, 8), PathType::WaterBorder);
+        let observed = calls.lock().unwrap();
+        // Land made glass Open, the positional path query declined, and adjacency
+        // saw that final baseline. Seagrass instead reached adjacency as the
+        // positional override's Blocked, not its exported Water or the node type.
+        assert!(observed.contains(&([1, 65, 4], PathType::Open)));
+        assert!(observed.contains(&([7, 64, 7], PathType::Blocked)));
     });
 }

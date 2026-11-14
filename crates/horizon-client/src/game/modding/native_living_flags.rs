@@ -1432,7 +1432,7 @@ pub(in crate::game) mod tests {
     }
 
     #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    #[ignore = "daily"]
     fn a_block_part_decides_whether_an_open_trapdoor_above_it_climbs() {
         let mods: mod_api::Mods = vec![mod_api::ModEntry::new(
             "trapdoor_ladder",
