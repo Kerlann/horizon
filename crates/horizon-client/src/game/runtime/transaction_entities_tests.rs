@@ -273,7 +273,7 @@ fn outside_a_transaction_joins_and_leaves_are_told_at_the_call() {
                 joined: vec![boat],
                 from_disk: vec![],
                 left: vec![],
-                order: vec![],
+                order: vec![(true, boat)],
             }
         );
         assert!(game.entity_discard(game.entity(boat).unwrap()));
@@ -418,7 +418,7 @@ fn a_nested_abort_takes_back_only_its_own() {
                 joined: vec![kept],
                 from_disk: vec![],
                 left: vec![],
-                order: vec![],
+                order: vec![(true, kept)],
             }
         );
     });
