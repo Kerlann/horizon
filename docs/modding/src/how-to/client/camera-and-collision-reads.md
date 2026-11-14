@@ -19,6 +19,15 @@ editor or book, so keys and zoom apply. `ClientHost::mapping(name)` reads a vani
 `mapping.down` and the bound key's Controls label in `mapping.label`. Other names return
 `Ok(None)`; an invalid label returns `TextFormError`, including components deeper than 512 nodes. Both read without `&mut`, so the HUD and screen hooks can ask them.
 
+`ClientHost::select_hotbar_slot(slot)` chooses the local player's hotbar slot (0 to 8) as a number key
+does (`Inventory.setSelectedSlot`), and sends nothing itself. The game sends the carried-item packet
+exactly when it does for a key press: at the next tick's start at the latest, and before an attack, a
+use, an interact, a release, a drop and a continued block break (not before a block break start), so a
+selection made earlier in the same tick goes out before the action. One packet goes per change. A slot
+above 8 is `OutOfRange { slot }`, a client with no world or player is `NoWorld`, and a spectator is
+`Refused` (its number keys open the spectator menu); each leaves the selection unchanged. Read the slot
+back with `player_selected_slot` on the local player. Native and wasm mods use the same call.
+
 `ClientHost::clipboard_text()` reads the system clipboard (`KeyboardHandler.getClipboard`, empty text when it
 holds none) and `ClientHost::set_clipboard_text(text)` writes it (`setClipboard`; empty text copies nothing). Both
 work only while the game handles a key, mouse or typed-text event, from the window or from the control socket
