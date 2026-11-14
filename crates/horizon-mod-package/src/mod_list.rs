@@ -291,8 +291,25 @@ impl ModList {
             .iter()
             .map(|row| (row.id.as_str(), row))
             .collect();
+        let names: BTreeMap<_, _> = self
+            .installed
+            .iter()
+            .map(|row| {
+                let name = self
+                    .info
+                    .get(&row.id)
+                    .map(|info| info.name.as_str())
+                    .filter(|name| !name.is_empty())
+                    .or_else(|| (!row.title.is_empty()).then_some(row.title.as_str()))
+                    .unwrap_or(&row.id);
+                (row.id.clone(), name.to_owned())
+            })
+            .collect();
         for notice in notices {
-            let message = notice.message();
+            let (key, mut args) = notice.message();
+            args[0] = names.get(&notice.owner).unwrap_or(&notice.owner).clone();
+            args[1] = names.get(&notice.target).unwrap_or(&notice.target).clone();
+            let message = (key, args);
             for (index, id) in [&notice.owner, &notice.target].into_iter().enumerate() {
                 if index == 1 && notice.owner == notice.target {
                     continue;
@@ -582,7 +599,7 @@ mod tests {
         );
         assert_eq!(
             list.info["target"].warnings[0].1,
-            ["owner", "target", "1", " (reason)"]
+            ["Owner", "Target fallback", "1", " (reason)"]
         );
         assert_eq!(
             list.info["target"].warnings[1].0,
@@ -590,7 +607,7 @@ mod tests {
         );
         assert_eq!(
             list.info["target"].warnings[1].1,
-            ["owner", "target", " (override)"]
+            ["Owner", "Target fallback", " (override)"]
         );
     }
 

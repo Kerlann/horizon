@@ -248,9 +248,10 @@ pub fn resolve_manifests(
 }
 
 fn diagnostic_note(reason: Option<&str>, url: Option<&str>) -> String {
+    let reason = reason.map(|text| text.trim_end_matches(|c: char| c == '.' || c.is_whitespace()));
     match (reason, url) {
-        (Some(reason), Some(url)) => format!(" ({reason}, {url})"),
-        (Some(text), None) | (None, Some(text)) => format!(" ({text})"),
+        (Some(reason), Some(url)) => format!("\n{reason}\n{url}"),
+        (Some(text), None) | (None, Some(text)) => format!("\n{text}"),
         (None, None) => String::new(),
     }
 }
@@ -273,7 +274,7 @@ pub struct Rule {
     pub id: String,
     /// The other mod's versions the rule matches.
     pub requirement: VersionReq,
-    /// The mod's reason and link, ` (reason, url)`, or empty.
+    /// The mod's complete reason and link on separate lines, or empty.
     pub note: String,
 }
 
@@ -627,6 +628,17 @@ pub fn rewrite(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn diagnostic_reason_and_link_have_separate_lines_without_join_punctuation() {
+        assert_eq!(
+            diagnostic_note(
+                Some("Keep the complete author sentence.  "),
+                Some("https://example.test/details")
+            ),
+            "\nKeep the complete author sentence\nhttps://example.test/details"
+        );
+    }
     fn deps(text: &str) -> Vec<Dependency> {
         let value: toml::Table = text.parse().unwrap();
         parse("user", value.get("dependencies")).unwrap()
@@ -826,7 +838,7 @@ mod tests {
         let refused = with(&[("broken", "1.5")], &server, &none).unwrap_err();
         assert_eq!(
             refused.to_string(),
-            "user is incompatible with broken 1.5 (Corrupts saves, https://example.com/why)"
+            "user is incompatible with broken 1.5\nCorrupts saves\nhttps://example.com/why"
         );
         assert!(with(&[("broken", "2.0")], &server, &none).is_ok());
         // A client-only rule holds nothing on a dedicated server.
@@ -857,7 +869,7 @@ mod tests {
                 .collect::<Vec<_>>(),
             [
                 "dependency override: user -> broken only discouraged",
-                "user works badly with broken 1.5 (Corrupts saves, https://example.com/why)"
+                "user works badly with broken 1.5\nCorrupts saves\nhttps://example.com/why"
             ]
         );
         let drop: Overrides = toml::from_str("[user]\nbroken = 'drop'\n").unwrap();
@@ -899,7 +911,7 @@ mod tests {
         assert_eq!(logical.warnings[0].kind, NoticeKind::OverrideDropped);
         assert_eq!(
             logical.warnings[0].note,
-            " (Integration, https://example.test/base)"
+            "\nIntegration\nhttps://example.test/base"
         );
         assert_eq!(resolve_links(&mods).unwrap().order, [1, 0]);
         assert_eq!(
@@ -938,7 +950,7 @@ mod tests {
                 .unwrap_err();
             assert_eq!(
                 error.to_string(),
-                "owner is incompatible with other 1 (Bad interaction, https://example.test/why)"
+                "owner is incompatible with other 1\nBad interaction\nhttps://example.test/why"
             );
         }
         let mut dependent = manifest("dependent", "[dependencies]\nother='^1'");
