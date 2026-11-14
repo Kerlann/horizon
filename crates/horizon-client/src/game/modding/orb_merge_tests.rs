@@ -40,7 +40,7 @@ fn every_accepted_orb_value_and_count_survives_save_and_reload() {
 
 /// A write outside the save's range is refused whole: no value changed, no count changed.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn set_experience_orb_refuses_a_write_a_save_cannot_hold() {
     with_game(|game| {
         game.options.dedicated = Some(Vec::new());
