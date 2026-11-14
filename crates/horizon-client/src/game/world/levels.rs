@@ -241,6 +241,14 @@ impl Game<'_> {
         self.levels.parked.get(&dim)?.locate_resident_owner(at)
     }
 
+    /// Whether `target` counts as removed in the level in place: a mod removed it, or an open
+    /// transaction did and its root commit has not run the removal yet.
+    pub(in crate::game) fn target_removed(&self, target: &Target) -> bool {
+        self.persist.removals.contains(target)
+            || self.persist.destroying_vehicles.contains(target)
+            || self.removal_pending(target)
+    }
+
     pub(super) fn resident_source_target_visible(
         &self,
         dimension: DimensionKey,
@@ -258,8 +266,7 @@ impl Game<'_> {
             return false;
         }
         if dimension == self.dim.key() {
-            return !self.persist.removals.contains(&target)
-                && !self.persist.destroying_vehicles.contains(&target);
+            return !self.target_removed(&target);
         }
         let dim = match dimension {
             DimensionKey::OVERWORLD => Dim::Overworld,
