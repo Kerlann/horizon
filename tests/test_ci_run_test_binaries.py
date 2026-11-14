@@ -164,6 +164,10 @@ for arg in "$@"; do [ "$previous" = "--logfile" ] && log="$arg"; previous="$arg"
 echo "args=$* bootstrap=$RUSTC_BOOTSTRAP"
 echo 'child says hi test a::slow ... okok'
 [ -n "$log" ] || exit 0
+case " $* " in *' --exact '*)
+  [ "$NO_RETRY_RECORD" = 1 ] || printf 'ok a::slow <%ss>\\n' "${RETRY_SECONDS:-7.500}" > "$log"
+  exit "${RETRY_EXIT:-0}";;
+esac
 printf 'ok a::slow <7.500s>\\nok a::fast <0.001s>\\n' > "$log"
 [ -n "$LOSE" ] || echo 'ok a::lost <0.002s>' >> "$log"
 """
@@ -193,6 +197,28 @@ printf 'ok a::slow <7.500s>\\nok a::fast <0.001s>\\n' > "$log"
             code, output = self.run_main("--jobs", "1", "--", str(cargo), "test")
             self.assertEqual(code, 0)
             self.assertIn("args= bootstrap=\n", output)
+
+    @unittest.skipUnless(os.name == "posix" and shutil.which("sh"), "requires a POSIX shell")
+    def test_only_an_isolated_passing_measurement_can_clear_a_hard_limit(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            (root / "crates/horizon-world").mkdir(parents=True)
+            binary = root / "timed"
+            binary.write_text(self.FAKE_LIBTEST)
+            binary.chmod(0o755)
+            cargo = self.fake_toolchain(root, [binary])
+            for env, expected, measured in [
+                ({"RETRY_SECONDS": "0.125"}, 0, "0.12s"),
+                ({"RETRY_SECONDS": "5.001"}, 1, "5.00s"),
+                ({"RETRY_SECONDS": "0.125", "RETRY_EXIT": "101"}, 1, "0.12s"),
+                ({"NO_RETRY_RECORD": "1"}, 1, "unavailable"),
+            ]:
+                with self.subTest(env=env), unittest.mock.patch.dict(os.environ, env):
+                    code, output = self.run_main("--jobs", "2", "--time-limits", "2,5", "--", str(cargo), "test")
+                    self.assertEqual(code, expected, output)
+                    self.assertIn("--exact a::slow --test-threads=1 --logfile", output)
+                    self.assertEqual(output.count("timing confirmation:"), 1)
+                    self.assertIn(f"first 7.50s, isolated {measured}", output)
 
     @unittest.skipUnless(os.name == "posix" and shutil.which("sh"), "requires a POSIX shell")
     def test_a_listing_without_test_binaries_fails(self):
