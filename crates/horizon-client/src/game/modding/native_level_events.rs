@@ -150,6 +150,9 @@ impl Game<'_> {
         interaction: ExplosionInteraction,
         settings: ExplosionSettings,
     ) -> Result<(), ExplodeError> {
+        if self.entity_ids_exhausted() {
+            return Err(ExplodeError::Unavailable);
+        }
         if !self.level_in_place(level) {
             return Err(ExplodeError::Unavailable);
         }
