@@ -47,7 +47,6 @@ horizon-client-lib menu::equip_movement::tests::four_slot_menu_transfer_prepares
 horizon-client-lib menu::equip_movement::tests::menus_without_actor_or_equipment_candidates_do_not_prepare lib daily resources
 horizon-client-lib menu::equip_movement::tests::occupied_equipment_cursor_and_hotbar_swaps_ask_once_per_click lib daily resources
 horizon-client-lib mobs::villager_brain::mob_map_tests::hostile_sensor_matches_registered_ids_and_world_snapshot lib daily resources
-horizon-client-lib mobs::villager_client_visual_tests::villager_client_partial_hat_cache_refreshes lib daily resources
 horizon-client-lib mobs::world::missing_data_report_tests::missing_mob_data_reports_one_counted_skip_per_test lib daily child-process
 horizon-client-lib mod_content::tests::registered_conditions_tests::failed_condition_build_removes_generated_staging lib daily resources
 horizon-client-lib mod_content::tests::registered_conditions_tests::registered_conditions_select_content_root_tags_and_structure_modifiers lib daily resources
