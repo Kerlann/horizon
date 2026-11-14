@@ -218,6 +218,26 @@ printf 'ok a::slow <7.500s>\\nok a::fast <0.001s>\\n' > "$log"
                     self.assertEqual(output.count("timing confirmation:"), 1)
                     self.assertIn(f"first 7.50s, isolated {measured}", output)
 
+    def test_a_guarded_run_confirms_a_slow_test_under_the_guard(self):
+        binary = {"label": "horizon-world lib.rs"}
+        seen = []
+
+        def guarded(invocation, env, timed, shim, run_one):
+            seen.append((invocation, shim, run_one))
+            return {"binary": binary, "seconds": 0.1, "max_rss_kib": 0, "status": "network guard: socket",
+                    "output": io.StringIO(), "log": {"a::slow": ("ok", 0.1)}}
+
+        with unittest.mock.patch.object(runner.network_guard, "run", guarded), \
+                contextlib.redirect_stdout(io.StringIO()):
+            errors = runner.confirm_slow_tests([(7.5, "a::slow", binary["label"])], [binary], {}, [], 5.0,
+                                               Path("/guard.so"))
+        self.assertEqual(len(seen), 1)
+        (rerun, args), shim, run_one = seen[0]
+        self.assertEqual((rerun, shim, run_one), (binary, Path("/guard.so"), runner.run_one))
+        self.assertIn("--exact", args)
+        self.assertEqual(len(errors), 1)
+        self.assertIn("network guard: socket", errors[0])
+
     @unittest.skipUnless(os.name == "posix" and shutil.which("sh"), "requires a POSIX shell")
     def test_a_listing_without_test_binaries_fails(self):
         with tempfile.TemporaryDirectory() as directory:

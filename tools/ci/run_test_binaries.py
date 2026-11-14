@@ -216,8 +216,9 @@ def timing_verdict(times: list[tuple[float, str, str]], warn: float, fail: float
 
 
 def confirm_slow_tests(times: list[tuple[float, str, str]], binaries: list[dict], extra_env: dict,
-                       test_args: list[str], fail: float) -> list[str]:
-    """Retry only hard-limit candidates, serially after the pool drains; never forgive a functional failure."""
+                       test_args: list[str], fail: float, guard: Path | None = None) -> list[str]:
+    """Retry only hard-limit candidates, serially after the pool drains; never forgive a functional failure.
+    With `guard` the rerun is preloaded with the network guard like the first run."""
     errors = []
     by_label = {binary["label"]: binary for binary in binaries}
     for first, test, label in sorted(times, reverse=True):
@@ -226,9 +227,9 @@ def confirm_slow_tests(times: list[tuple[float, str, str]], binaries: list[dict]
         # Replace filters/thread counts rather than append: libtest ORs positional filters. Keep ignored selection
         # when this runner is used outside verify, but run exactly this test on one libtest thread.
         selection = [arg for arg in test_args if arg in ("--ignored", "--include-ignored")]
-        result = run_one(by_label[label], extra_env,
-                         ["-Z", "unstable-options", "--report-time", *selection, "--exact", test,
-                          "--test-threads=1"], timed=True)
+        args = ["-Z", "unstable-options", "--report-time", *selection, "--exact", test, "--test-threads=1"]
+        result = (network_guard.run((by_label[label], args), extra_env, True, guard, run_one) if guard
+                  else run_one(by_label[label], extra_env, args, timed=True))
         report(result)
         status, seconds = result.get("log", {}).get(test, (None, None))
         measured = f"{seconds:.2f}s" if seconds is not None else "unavailable"
@@ -314,7 +315,8 @@ def main(argv: list[str]) -> int:
     slow = []
     if limits:
         _, warnings = timing_verdict(times, *limits)
-        slow = confirm_slow_tests(times, binaries, extra_env, test_args, limits[1])
+        slow = confirm_slow_tests(times, binaries, extra_env, test_args, limits[1],
+                                  args.network_guard.resolve() if args.network_guard else None)
         print(f"{len(times)} tests timed, {sum(seconds for seconds, _, _ in times):.1f} test-seconds in total; "
               "slowest: " + ", ".join(f"{test} {seconds:.2f}s" for seconds, test, _ in sorted(times)[-5:][::-1]))
         for warning in warnings:
