@@ -136,6 +136,11 @@ fn villager_food_codec_compiles_recipes_and_matches_borrowed_nutrition() {
     let matches = |stack: &ItemStack| {
         recipes.recipe_matches(&context, "fixture:villager_food", &[Some(stack.clone())], 1)
     };
+    let absent = parse(
+        r#"{"type":"neoforge:components","items":"minecraft:carrot","components":{"!minecraft:villager_food":{}}}"#,
+        &items,
+    );
+    assert!(!absent.test_in(&context, &carrot));
     assert!(matches(&carrot), "prototype nutrition must participate");
     carrot.data_mut().set_loot_component(
         "minecraft:villager_food",
@@ -168,11 +173,13 @@ fn villager_food_codec_compiles_recipes_and_matches_borrowed_nutrition() {
         &Some(Tag::compound([("nutrition", Tag::Int(4))])),
     );
     assert!(!matches(&carrot));
+    assert!(!absent.test_in(&context, &carrot));
     let removal = Tag::compound([(
         "!minecraft:villager_food",
         Tag::Compound(Default::default()),
     )]);
     (_, carrot.extra) = crate::item_data::decode_components(Some(&removal));
+    assert!(absent.test_in(&context, &carrot));
     assert!(
         !matches(&carrot),
         "explicit removal overrides the prototype"

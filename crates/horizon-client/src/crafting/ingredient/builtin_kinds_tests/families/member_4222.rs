@@ -272,6 +272,14 @@ fn rollup_rejection_and_absence_matrix_4222() {
     }
     for value in [
         serde_json::Value::Null,
+        serde_json::json!(0),
+        serde_json::json!(4),
+        serde_json::json!(1.0),
+        serde_json::json!({}),
+        serde_json::json!("RED_BLUE"),
+        serde_json::json!("red"),
+        serde_json::json!("minecraft:blue"),
+        serde_json::json!(""),
         serde_json::json!(false),
         serde_json::json!([]),
         serde_json::json!("unknown"),
