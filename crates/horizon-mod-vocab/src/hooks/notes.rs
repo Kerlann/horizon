@@ -2800,10 +2800,10 @@ registration path.
   for one component; all run in registration order at an equal placement. The player is always the local player,
   including for nested crossbow projectiles where vanilla passes no player; use `nested` to distinguish those calls.
 
-- An item's own server behaviour: `ItemPart::use_on(host, event)` hears a right click with its item on a
-  block once the block let it through (`ItemStack.useOn`), and `ItemPart::use_item(host, event)` hears the
-  item's own use, in the air or after `use_on` let it through (`Item.use`). Each hears a click once.
-  Claiming either skips the template and swings the hand. These scoped methods have no global `Hooks` equivalent.
+- `ItemPart::use_on` and `use_item` run on both sides (`HostSide`), version 2, with
+  `Option<InteractionResult>` answers. `None` defers; `Some` replaces the template.
+  Consuming answers end the client's hand loop: `Success` swings client-side, `SuccessServer`
+  server-side, `Consume` never. Client hosts permit reads/effects, not authoritative writes.
 
 - A block's own item-use behaviour, on the server for every player: attach a `BlockPart` and implement
   `use_item_on(host, event) -> Option<InteractionResult>`. `event.state` keys the per-state table;
@@ -2823,9 +2823,9 @@ registration path.
   (default `TryWithEmptyHand`); a main-hand block-phase TRY can still run the empty method.
   `UsePhase::ItemBeforeBlock` fires first, before the item's `on_item_use_first` Part and before
   the block is asked anything (ahead of the sneak gate, unless `right_click_block` denied the item);
-  canceling skips that item's Part, but `Pass` continues to the block. Any non-`Pass` answer ends the block interaction. On the client only this broadcast event fires:
-  a Part's claim comes from the server, which corrects the predicted click as it does for the block
-  Part.
+  canceling skips that item's Part, but `Pass` continues to the block. Any non-`Pass` answer ends the block interaction.
+  Client Parts predict hands only; server-only answers cannot retroactively suppress client offhand use.
+  `Fail` ends only block interaction; `Pass`/`TryWithEmptyHand` fall through.
 - `ItemPart::on_item_use_first(host, event)` is `IItemExtension.onItemUseFirst`, server side, for the
   held item (`event.click` is the same `BlockClick`). Return `Some(result)` to end the click:
   neither the block nor the item's `use_on` runs, and `Success` swings the hand. `None` or `Pass`
@@ -2950,9 +2950,9 @@ registration path.
   asked while the chat is hidden (F1 with the chat closed). Only the drawing moves; the input box and clicks on
   messages stay in vanilla's place, as with NeoForge.
 
-- Right-clicking an entity, on the server for every player: `entity_interact` hears a right click on
-  an entity (its id and type, the typed `Hand::Main` or `Hand::Off`, and the stack in that hand) where `Player.interactOn` starts, once per hand. A mod that claims
-  it swings the hand instead of the entity's and the item's own interaction.
+- `entity_interact` and `ItemPart::item_interact_mob` run on both sides with native `HostSide`,
+  version 2, answering `Option<InteractionResult>`; the latter includes the interaction hand.
+  `None` defers; consuming results end the hand loop with the swing rules above; nonconsuming entity answers fall through.
 
 - Left-clicking a block, on the server for every player: `left_click_block` hears the start of a dig
   (the block, the face hit) once the game allowed it, before the block is attacked (a note block plays) or broken in

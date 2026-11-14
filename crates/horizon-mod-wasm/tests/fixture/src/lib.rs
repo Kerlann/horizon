@@ -14,6 +14,7 @@ pub mod lending;
 pub mod matrix;
 pub mod movement;
 pub mod part_state;
+pub mod predicted_use;
 pub mod projectile_owner;
 pub mod replace;
 pub mod runtime_environment;
@@ -33,6 +34,23 @@ pub struct Mod;
 
 #[mod_api::horizon_mod]
 impl Hooks for Mod {
+    fn entity_interact(
+        &self,
+        host: mod_api::HostSide<'_>,
+        event: &mut mod_api::EntityInteractEvent<'_>,
+    ) -> Option<mod_api::InteractionResult> {
+        predicted_use::entity_interact(host, event)
+    }
+
+    fn client_packet_send(
+        &self,
+        _: &dyn mod_api::ClientHost,
+        event: &mut mod_api::ClientPacketSendEvent<'_>,
+    ) -> mod_api::Flow {
+        predicted_use::packet(event);
+        mod_api::Flow::Continue
+    }
+
     fn living_death(
         &self,
         host: &mut dyn mod_api::ServerHost,
@@ -117,6 +135,9 @@ impl Hooks for Mod {
         _: &mut dyn mod_api::ClientHost,
         event: &mut mod_api::InteractionKeyMappingTriggeredEvent,
     ) -> mod_api::Flow {
+        if predicted_use::active() {
+            return mod_api::Flow::Continue;
+        }
         event.swing_hand = event.attempt == mod_api::InteractionAttempt::Held;
         if event.hand == mod_api::Hand::Off {
             mod_api::Flow::Cancel
@@ -270,6 +291,7 @@ impl Hooks for Mod {
         capability_registration::register(registrar, cx);
         game_payload::register(registrar);
         interaction::register(registrar);
+        predicted_use::register(registrar);
         cauldron::register(registrar);
         tick_reply::register(registrar);
         part_state::register(registrar);

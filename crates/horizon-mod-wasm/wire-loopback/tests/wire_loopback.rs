@@ -205,6 +205,13 @@ impl LoopContext for Context {
 fn __horizon_mod_hooks() -> Box<dyn Hooks> {
     struct Mod;
     impl Hooks for Mod {
+        fn entity_interact(
+            &self,
+            _: mod_api::HostSide<'_>,
+            event: &mut mod_api::EntityInteractEvent<'_>,
+        ) -> Option<mod_api::InteractionResult> {
+            use_item_hand::entity_answer(event)
+        }
         fn datapack_sync(
             &self,
             _: &mut dyn mod_api::ServerHost,

@@ -1211,10 +1211,10 @@ mod tests {
         // The held items' own `Item.useOn`, counted, taking the click.
         #[mod_api::horizon_part]
         impl ItemPart for User {
-            fn use_on(&self, _: &mut dyn ServerHost, _: &mut UseOnEvent<'_>) -> Flow {
+            fn use_on(&self, _: mod_api::HostSide<'_>, _: &mut UseOnEvent<'_>) -> Option<Answer> {
                 self.item_uses
                     .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                Flow::Cancel
+                Some(Answer::SuccessServer)
             }
         }
         struct Mod {

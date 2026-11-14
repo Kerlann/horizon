@@ -5,6 +5,8 @@ mod interaction_event_wasm_tests;
 mod item_fallthrough_tests;
 #[path = "item_used_on_block_tests.rs"]
 mod item_used_on_block_tests;
+#[path = "predicted_use_tests.rs"]
+mod predicted_use_tests;
 #[path = "use_item_hand_tests.rs"]
 mod use_item_hand_tests;
 #[path = "use_item_result_tests.rs"]
@@ -247,9 +249,12 @@ impl ItemPart for Observer {
         }
         state.first_part_answer
     }
-    fn use_on(&self, _: &mut dyn ServerHost, _: &mut UseOnEvent<'_>) -> Flow {
+    fn use_on(&self, host: HostSide<'_>, _: &mut UseOnEvent<'_>) -> Option<Answer> {
+        let HostSide::Server(_) = host else {
+            return None;
+        };
         self.0.lock().unwrap().steps.push(Step::UseOnPart);
-        Flow::Cancel
+        Some(Answer::SuccessServer)
     }
     fn use_item(&self, host: HostSide<'_>, event: &mut UseItemEvent<'_>) -> Option<Answer> {
         if let Some(hand) = self.0.lock().unwrap().expected_hand {

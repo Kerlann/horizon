@@ -4200,7 +4200,8 @@ impl Game<'_> {
     /// The `ItemStack.interactLivingEntity` fallback in `Player.interactOn`,
     /// currently for native Mob entries after the entity's own action passed.
     fn item_interact_mob(&mut self, target: Option<InteractTarget>) -> bool {
-        if self.spectator() {
+        if self.spectator() || !mod_api::__private::has_part_hook(mod_api::HookId::ItemInteractMob)
+        {
             return false;
         }
         let Some(index) = self.mob_interaction_target(target) else {
@@ -4217,12 +4218,9 @@ impl Game<'_> {
         let Some(stack) = self.held().filter(|stack| stack.count > 0).cloned() else {
             return false;
         };
-        let mut swing = None;
-        self.native_item_interact_mob(entity, &kind, &stack, &mut swing);
-        if swing == Some(true) {
-            self.swing_arm();
-        }
-        swing.is_some()
+        let mut result = None;
+        self.native_item_interact_mob(self.hand, entity, &kind, &stack, &mut result);
+        result.is_some_and(|answer| self.interaction_consumed(answer))
     }
     /// `ItemStack.applyAfterUseComponentSideEffects`: a used stack with a
     /// `use_cooldown` component starts its entry (`UseCooldown.apply`). A

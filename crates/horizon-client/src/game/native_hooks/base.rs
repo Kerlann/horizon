@@ -738,21 +738,17 @@ impl Game<'_> {
     pub(in crate::game) fn native_gui_layer_post(&self, layer: &str, draw: &mut HudBatch) {
         self.fire_gui_layer_post(layer, draw);
     }
-    /// A player right-clicks the entity `entity` (`Entity.getId`) of type
-    /// `kind` (`minecraft:cow`) with `hand`, holding `stack` (none in an
-    /// empty hand): where `Player.interactOn` starts, before the entity's own
-    /// `interact` and the item's `interactLivingEntity`. Set `claimed` to take
-    /// the click: the hand swings and neither runs. Asked once per hand, as
-    /// vanilla tries main then off hand. Server-side, for every acting player.
+    /// `Player.interactOn`: both logical sides answer before entity interaction.
+    /// Only the client's own consuming answer stops its hand loop.
     pub(in crate::game) fn native_entity_interact(
         &mut self,
         hand: Hand,
         entity: i32,
         kind: &str,
         stack: Option<&ItemStack>,
-        claimed: &mut bool,
+        result: &mut Option<mod_api::InteractionResult>,
     ) {
-        self.fire_entity_interact(hand, entity, kind, stack, claimed);
+        self.fire_entity_interact(hand, entity, kind, stack, result);
     }
     /// A player left-clicks the block `state` at `pos`, `face` the face hit
     /// (`[0, 1, 0]` is the top): where `ServerPlayerGameMode.handleBlockBreakAction`
@@ -3261,16 +3257,8 @@ impl Game<'_> {
     ) {
         self.fire_item_decorations(stack, x, y, draw);
     }
-    /// A player uses `stack` (right click) with `self.hand` on the block at
-    /// `pos`, `face` the face clicked (`[0, 1, 0]` is the top), once the
-    /// block itself let the click through (a chest still opens): where
-    /// `ItemStack.useOn` starts. Set `claimed` to take the use: the hand
-    /// swings and neither the item's `useOn` nor its `use` runs.
-    /// Server-side, for every player of the world (the helpers read the
-    /// acting one); an item on cooldown is never used. `hand`, `hit`
-    /// (`UseOnContext.getClickLocation`, `getClickedFace`, `isInside`) and
-    /// `player` (the acting player's UUID) and `player_entity_id` (the server's
-    /// entity id),.
+    /// `ItemStack.useOn`: both logical sides answer after the block passed.
+    /// Client reads and local effects cannot perform authoritative writes.
     pub(in crate::game) fn native_use_on(&mut self, call: mod_api::__private::UseOnCall<'_>) {
         self.fire_use_on(call);
     }
