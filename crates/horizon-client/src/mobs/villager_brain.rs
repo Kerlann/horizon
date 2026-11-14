@@ -2807,7 +2807,7 @@ impl B {
                 if close {
                     if now - *started > 20 {
                         cx.events.push(MobEvent::ThrowGift {
-                            table: super::villager::gift_table(m, w.mob_maps),
+                            table: super::villager::gift_table(m, cx.w.mob_maps),
                             from: [m.position.x, m.eye_y() - 0.3, m.position.z],
                             to: [p.position.x, p.position.y, p.position.z],
                         });

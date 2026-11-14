@@ -443,7 +443,7 @@ mod tests {
         .unwrap();
         assert_eq!((sound, volume), ("entity.parrot.imitate.zombie", 0.7));
         assert_eq!(pitch.to_bits(), 0x3f8b_df3a);
-        assert_eq!(random.next_int_bound(1_000_000), Some(475_581));
+        assert_eq!(random.next_int_bound(1_000_000), Ok(475_581));
     }
 
     /// `ServerPlayer.playShoulderEntityAmbientSound`: with a mob to imitate

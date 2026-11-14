@@ -48,6 +48,8 @@ mod mob_map_tests {
         ];
         let mut first = NeoForgeMobMaps::default();
         first.set_distances(BTreeMap::from([("test:wraith".into(), 20.0)]));
+        let mut bounded = NeoForgeMobMaps::default();
+        bounded.set_distances(BTreeMap::from([("test:wraith".into(), 8.0)]));
         let mut second = NeoForgeMobMaps::default();
         second.set_distances(BTreeMap::from([("minecraft:zombie".into(), 5.0)]));
         let mut removed = NeoForgeMobMaps::default();
@@ -79,7 +81,7 @@ mod mob_map_tests {
                 }
             },
         ));
-        for distance in [7.0, 9.0] {
+        for (distance, bounded_expected) in [(7.0, Some(Who::Mob(2))), (9.0, None)] {
             let candidates = [
                 Mob::new(2, seen[0].kind.clone(), Vec3::new(distance, 1.0, 0.0), 0.0)
                     .seen(None, &items),
@@ -95,6 +97,7 @@ mod mob_map_tests {
                     let mut view = world.clone();
                     for (snapshot, expected) in [
                         (&first, Some(Who::Mob(2))),
+                        (&bounded, bounded_expected),
                         (&removed, None),
                         (NeoForgeMobMaps::vanilla().as_ref(), None),
                     ] {
