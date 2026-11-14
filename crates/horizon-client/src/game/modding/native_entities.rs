@@ -71,7 +71,7 @@ impl Game<'_> {
     /// <kind> <pos> <nbt>` takes it; passengers included): its id. None on a
     /// client's copy of the world, for another dimension, a position outside
     /// `/summon`'s bounds, a chunk that isn't loaded, a kind Horizon can't
-    /// load, or one a mod kept out (`native_entity_join_level`).
+    /// load, one a mod kept out (`native_entity_join_level`), or with the entity ids exhausted.
     /// Inside a transaction the id comes back at once: a join a mod cancels at the root commit
     /// leaves its handle stale.
     pub(super) fn summon(
@@ -81,6 +81,9 @@ impl Game<'_> {
         pos: [f64; 3],
         nbt: Compound,
     ) -> Option<u32> {
+        if self.entity_ids_exhausted() {
+            return None;
+        }
         if !self.native_simulates_level(dimension) || !position_ok(pos) {
             return None;
         }

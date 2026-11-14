@@ -103,6 +103,9 @@ impl Game<'_> {
         stack: ItemStack,
         y_offset: f32,
     ) -> Option<EntityRef> {
+        if self.entity_ids_exhausted() {
+            return None;
+        }
         if !self.stack_spawns(&stack) {
             return None;
         }

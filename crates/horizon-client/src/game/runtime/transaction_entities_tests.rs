@@ -1,9 +1,9 @@
 //! Entities added and removed inside a transaction (#796), on a real `Game`: an abort takes
 //! back what the action spawned and undoes what it removed, telling no one; a commit announces
-//! joins and runs removals at the root commit.
+//! joins and runs removals at the root commit; and a spawn refuses near the end of the ids.
 use std::sync::{Arc, Mutex};
 
-use horizon_client::{chunk::Chunk, mobs::StoredEffect};
+use horizon_client::{chunk::Chunk, items::ItemStack, mobs::StoredEffect};
 use horizon_core::nbt::{Tag, parse_snbt};
 use horizon_mod_runtime::attachments::Holder;
 use mod_api::{
@@ -11,7 +11,7 @@ use mod_api::{
     EntityRef, Flow, Hooks, HostSide, RemovalReason, ServerHost,
 };
 
-use super::{Dim, Game, commands::Target};
+use super::{Dim, Game, commands::Target, lan_entities::ENTITY_ID_HEADROOM};
 
 /// Kept for the session only.
 static MARK: AttachmentType<i32> = AttachmentType {
@@ -474,5 +474,128 @@ fn an_aborted_spawn_is_in_no_tracking_pass() {
         game.transaction_close(&seal, true);
         assert!(!tracked(game, aborted));
         assert!(tracked(game, committed));
+    });
+}
+
+/// One mod spawn function, called with everything it needs: whether it spawned.
+type Spawn = fn(&mut Game<'_>, Fixture) -> bool;
+
+#[derive(Clone, Copy)]
+struct Fixture {
+    level: mod_api::LevelRef,
+    mob: EntityRef,
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+fn exhausted_ids_refuse_every_mod_spawn() {
+    const NAME: &str = "game::transaction_entities_tests::exhausted_ids_refuse_every_mod_spawn";
+    let rows: [(&str, Spawn); 12] = [
+        ("summon", |game, _| {
+            summon(game, "minecraft:pig", "{}").is_some()
+        }),
+        ("spawn_falling_block", |game, _| {
+            let sand = (game.pack.assets.registry)
+                .default_state("minecraft:sand")
+                .unwrap();
+            let dimension = game.dim.id();
+            game.spawn_falling_block(
+                dimension,
+                sand,
+                [1.5, 72.0, 1.5],
+                [0.0; 3],
+                Default::default(),
+            )
+        }),
+        ("entity_spawn_at_location", |game, f| {
+            let stack = ItemStack::new("minecraft:stone", 1);
+            game.entity_spawn_at_location(f.mob, stack, 0.0).is_some()
+        }),
+        ("drop_at", |game, _| {
+            let before = game.dropped.len();
+            game.drop_at([1, 70, 1], ItemStack::new("minecraft:stone", 1));
+            game.dropped.len() > before
+        }),
+        ("level_spawn_mob", |game, f| {
+            let reason = mod_api::SpawnReason::Command;
+            (game.level_spawn_mob(f.level, "minecraft:cow", [1.5, 70.0, 1.5], reason)).is_some()
+        }),
+        ("level_block_drops", |game, f| {
+            game.level_block_drops(f.level, [1, 70, 1], None, None)
+                .is_some()
+        }),
+        ("level_explode", |game, f| {
+            let none = mod_api::ExplosionInteraction::None;
+            game.level_explode(f.level, [1.5, 70.0, 14.5], 1.0, false, none)
+        }),
+        ("level_spawn_item", |game, f| {
+            let stack = ItemStack::new("minecraft:stone", 1);
+            (game.level_spawn_item(f.level, 1.5, 70.0, 1.5, stack, 10)).is_some()
+        }),
+        ("level_spawn_item_with_motion", |game, f| {
+            let stack = ItemStack::new("minecraft:stone", 1);
+            game.level_spawn_item_with_motion(f.level, 1.5, 70.0, 1.5, stack, [0.0; 3], 10)
+                .is_some()
+        }),
+        ("living_drop", |game, f| {
+            let living = game.living(f.mob).unwrap();
+            let stack = ItemStack::new("minecraft:stone", 1);
+            game.living_drop(living, stack, true, false).is_some()
+        }),
+        ("player_drop_stack", |game, _| {
+            let player = game.player(123).unwrap();
+            let stack = ItemStack::new("minecraft:stone", 1);
+            game.player_drop_stack(player, stack, false).is_none()
+        }),
+        ("spawn_projectile_from_rotation", |game, f| {
+            let owner = game.living(f.mob).unwrap();
+            let snowball = mod_api::Identifier::parse("minecraft:snowball").unwrap();
+            let stack = ItemStack::new("minecraft:snowball", 1);
+            (game.spawn_projectile_from_rotation(owner, &snowball, &stack, 0.0, 1.5, 1.0))
+                .is_some()
+        }),
+    ];
+    with_observer(NAME, |game| {
+        let player = horizon_client::motion::PlayerMotion::new(
+            game.motion,
+            horizon_core::geometry::Vec3::new(1.5, 70.0, 1.5),
+        );
+        game.player = Some(player.unwrap());
+        super::native_entity_refs::tests::bind_local_player(game, 20, 123);
+        let mob = summon(game, "minecraft:zombie", "{}").unwrap();
+        let fixture = Fixture {
+            level: game.level(game.dim.id()).unwrap(),
+            mob: game.entity(mob).unwrap(),
+        };
+        // Each spawns below the headroom; ids only ever go up.
+        let last = u32::MAX - ENTITY_ID_HEADROOM;
+        game.next_entity = last - 1024;
+        for (name, spawn) in rows {
+            assert!(spawn(game, fixture), "{name} spawns below the headroom");
+        }
+        assert!(!game.native_lifecycle.ids_exhausted_told);
+        game.next_entity = last;
+        for (name, spawn) in rows {
+            let entities = game.live_entity_ids().len();
+            assert!(!spawn(game, fixture), "{name} refuses");
+            assert_eq!(game.next_entity, last, "{name} takes no id");
+            assert_eq!(game.live_entity_ids().len(), entities, "{name} adds nothing");
+        }
+        assert!(game.native_lifecycle.ids_exhausted_told);
+    });
+}
+
+#[test]
+#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES; runs in an isolated scratch process"]
+fn exhausted_ids_stop_the_tick_spawners() {
+    const NAME: &str = "game::transaction_entities_tests::exhausted_ids_stop_the_tick_spawners";
+    with_observer(NAME, |game| {
+        game.next_entity = u32::MAX - ENTITY_ID_HEADROOM - 1;
+        game.tick_spawners();
+        assert!(!game.native_lifecycle.ids_exhausted_told);
+        game.next_entity = u32::MAX - ENTITY_ID_HEADROOM;
+        game.tick_spawners();
+        assert!(game.native_lifecycle.ids_exhausted_told, "named in the log");
+        assert_eq!(game.next_entity, u32::MAX - ENTITY_ID_HEADROOM);
     });
 }
