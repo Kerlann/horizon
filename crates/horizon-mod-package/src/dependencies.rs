@@ -458,25 +458,22 @@ fn resolve_all(
         for rule in rules.get(index).into_iter().flatten() {
             let target = ids.get(rule.id.as_str()).copied();
             let mut kind = rule.kind;
-            match overrides.get(item.id, &rule.id) {
-                Some(action) => {
-                    warnings.push(Notice {
-                        owner: item.id.into(),
-                        target: rule.id.clone(),
-                        version: target.map(|i| mods[i].version.to_owned()),
-                        reason: rule.reason.clone(),
-                        url: rule.url.clone(),
-                        kind: match action {
-                            Override::Drop => NoticeKind::OverrideDropped,
-                            Override::Discourage => NoticeKind::OverrideDiscouraged,
-                        },
-                    });
-                    if action == Override::Drop || kind == RuleKind::LoadBefore {
-                        continue;
-                    }
-                    kind = RuleKind::Discouraged;
+            if let Some(action) = overrides.get(item.id, &rule.id) {
+                warnings.push(Notice {
+                    owner: item.id.into(),
+                    target: rule.id.clone(),
+                    version: target.map(|i| mods[i].version.to_owned()),
+                    reason: rule.reason.clone(),
+                    url: rule.url.clone(),
+                    kind: match action {
+                        Override::Drop => NoticeKind::OverrideDropped,
+                        Override::Discourage => NoticeKind::OverrideDiscouraged,
+                    },
+                });
+                if action == Override::Drop || kind == RuleKind::LoadBefore {
+                    continue;
                 }
-                None => {}
+                kind = RuleKind::Discouraged;
             }
             let Some(target) = target else {
                 continue;
