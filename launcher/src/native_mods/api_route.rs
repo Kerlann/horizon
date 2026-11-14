@@ -59,7 +59,7 @@ pub(super) fn compile(
         )?;
         rlibs.insert(project.bundle.manifest.id.as_str(), rlib);
     }
-    let mut installed = prebuilt::runtime_libraries(rust, &runtime.join("deps"))?;
+    let mut installed = prebuilt::runtime_libraries(rust, &sdk, runtime)?;
     for &index in &resolution.order {
         installed.push(rlibs[projects[index].bundle.manifest.id.as_str()].clone());
     }

@@ -24,6 +24,13 @@ has no such rule: Horizon adds it.
 
 The `ClientHost::camera()` helper returns the most recently extracted world frame's camera, or none before one exists. Its position, interpolated eye height, partial tick, angles, final FOV, near/far planes and dimension accompany column-major view and projection matrices. The view is camera-relative and includes bob and spin; projection uses reversed Z. Earlier callbacks in a frame can see the previous frame. `block_collision(pos)` returns block-local `[min_x, min_y, min_z, max_x, max_y, max_z]` boxes with an empty collision context; unloaded blocks and collision errors give no boxes.
 
+`ClientHost::project(at)` places a world point on this frame's screen, as vanilla's
+`GameRenderer.projectPointToScreen`: normalised device x and y (-1 to 1, x right, y up) and a
+reversed depth z. A HUD or screen hook turns it into GUI pixels with the `DrawContext`'s size
+`[w, h]`: `((x + 1) / 2 * w, (1 - y) / 2 * h)`. It is `None` for a point behind the camera or a
+non-finite one (vanilla returns a mirrored point there), outside a world, before extraction and between render frames. It is supported in GUI, screen
+and world drawing callbacks after camera extraction, not setup or tick callbacks.
+
 `ClientHost::set_camera_type(type)` is a queued client-only effect and takes `&self`, so
 shared callbacks such as `camera_pose` can request a perspective. `camera_type()` reports
 the latest request immediately; several requests coalesce to the last one. Requests before

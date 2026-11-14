@@ -193,7 +193,7 @@ fn java_float(v: f64) -> String {
 /// String.format(Locale.ROOT, "%.<decimals>f"): Java rounds the shortest
 /// decimal text half-up, which `{:.N}` (exact value, half-even) does not.
 pub(super) fn percent_f(v: f64, decimals: usize) -> String {
-    horizon_client::java_text::format_fixed(v, decimals)
+    horizon_core::java_number::format_fixed(v, decimals)
 }
 /// String.format(Locale.ROOT, "%f").
 fn format_double(v: f64) -> String {

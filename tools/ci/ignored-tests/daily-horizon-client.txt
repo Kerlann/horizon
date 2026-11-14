@@ -33,6 +33,7 @@ horizon-client game::native_hooks::player_bed_leave::player_bed_leave_tests::act
 horizon-client game::native_hooks::player_bed_leave::player_bed_leave_tests::bed_leave_carries_the_wake_flags_before_the_sleep_clears lib daily game-boot
 horizon-client game::native_hooks::player_bed_leave::player_bed_leave_tests::guest_missing_bed_death_and_bed_rule_keep_their_distinct_literal_pairs lib daily game-boot
 horizon-client game::native_hooks::player_bed_leave::player_bed_leave_tests::guest_wake_counters_match_the_same_reasons_without_listeners lib daily game-boot
+horizon-client game::native_menus::tests::container_hooks_follow_actual_open_boundaries_without_a_tick lib daily game-boot
 horizon-client game::native_server::network_settings_tests::server_settings_follow_the_network_config lib daily slow
 horizon-client game::natural_spawning::tests::spawn_candidates_match_the_uncached_union_while_players_move lib daily slow
 horizon-client game::screen_render_phase_tests::chest_render_phases_cover_panel_but_preserve_items_tooltips_and_carried_stack lib daily resources # HORIZON_TEST_RESOURCES and software Vulkan required.

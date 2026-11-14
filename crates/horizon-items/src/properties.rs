@@ -1,7 +1,11 @@
 //! Stack property calculations shared by gameplay, display and mod queries.
 use horizon_core::{color::hsv_to_argb, nbt::Tag};
 
+pub mod attack_range;
+pub mod pet_variants;
 pub mod resolvable;
+pub mod swing_animation;
+pub mod tooltip_display;
 
 /// The effective rarity of an item stack, after its enchantment upgrade.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

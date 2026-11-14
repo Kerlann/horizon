@@ -336,6 +336,21 @@ class SdkAssetTests(unittest.TestCase):
             self.assertEqual((root / "fixture.tar.xz").read_bytes(), fixture.read_bytes())
 
 
+class TrackedBlobsTests(unittest.TestCase):
+    def test_bytes_are_the_commits_whatever_the_line_ending_settings(self):
+        # Git for Windows' default (core.autocrlf=true) made the Windows leg's function index differ from the others.
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            git = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-C", folder]
+            subprocess.run([*git, "init", "-q"], check=True)
+            (root / "a.rs").write_bytes(b"fn a() {}\nfn b() {}\n")
+            subprocess.run([*git, "add", "a.rs"], check=True)
+            subprocess.run([*git, "commit", "-q", "-m", "a"], check=True)
+            subprocess.run([*git, "config", "core.autocrlf", "true"], check=True)
+            blobs = dict(prebuilt_game.tracked_blobs(root, "HEAD"))
+        self.assertEqual(blobs, {"a.rs": b"fn a() {}\nfn b() {}\n"})
+
+
 class AllocatorSelectionTests(unittest.TestCase):
     def test_package_format_comes_from_its_one_place(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -642,18 +657,30 @@ class PrebuiltContentsTests(unittest.TestCase):
         for name, count in (("horizon_client", 45000), ("horizon_mod_wasm", 12000), ("serde_derive", 1)):
             self.assertIn(f"{name}.dll: {count} exported names", output.getvalue())
 
-    def test_exports_warns_about_any_dll_near_the_limit_without_failing(self):
+    def test_exports_warns_past_80_percent_without_failing(self):
         for large in ("horizon_client", "horizon_mod_wasm"):
             root = self.folder("deps/libhorizon_client.so")
             for name in ("horizon_client", "horizon_mod_wasm"):
-                self.dll(root, f"{name}.dll", 49000 if name == large else 48999)
+                self.dll(root, f"{name}.dll", 52429 if name == large else 52428)
             output = io.StringIO()
             with self.subTest(large), contextlib.redirect_stdout(output):
                 prebuilt_game.exports(root)
             warnings = [line for line in output.getvalue().splitlines() if line.startswith("::warning::")]
             self.assertEqual(len(warnings), 1)
-            self.assertIn(f"{large}.dll exports 49,000 names", warnings[0])
+            self.assertIn(f"{large}.dll exports 52,429 names", warnings[0])
             self.assertEqual(output.getvalue().count("exported names (Windows' limit"), 2)
+
+    def test_exports_fails_past_90_percent_after_reporting_every_dll(self):
+        root = self.folder("deps/libhorizon_client.so")
+        self.dll(root, "horizon_client.dll", 58982)
+        self.dll(root, "horizon_mod_wasm.dll", 58981)
+        self.dll(root, "mod_api.dll", 171)
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as failed:
+            prebuilt_game.exports(root)
+        self.assertIn("horizon_client.dll (58,982)", str(failed.exception.code))
+        self.assertNotIn("horizon_mod_wasm", str(failed.exception.code))
+        self.assertEqual(output.getvalue().count("exported names (Windows' limit"), 3)
 
     def test_exports_is_silent_without_dlls(self):
         output = io.StringIO()
