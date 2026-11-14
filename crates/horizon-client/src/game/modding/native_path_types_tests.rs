@@ -16,9 +16,7 @@ struct Thorny;
 #[mod_api::horizon_part]
 impl BlockPart for Thorny {
     fn block_path_type(&self, host: &dyn Host, event: &mut BlockPathTypeEvent) -> Option<PathType> {
-        let level = host.level(host.dimension()).unwrap();
-        assert_eq!(level.block_state(host, event.pos), Some(event.state));
-        match event.pos {
+        let answer = match event.pos {
             [4, 64, _] if host.block_state_id("minecraft:smooth_stone") == Some(event.state) => {
                 Some(PathType::Damaging)
             }
@@ -26,7 +24,14 @@ impl BlockPart for Thorny {
                 Some(PathType::Blocked)
             }
             _ => None,
+        };
+        if answer.is_some() {
+            // These override positions are in the loaded fixture chunk. Finder
+            // also asks void-air positions outside it, where the Host read is None.
+            let level = host.level(host.dimension()).unwrap();
+            assert_eq!(level.block_state(host, event.pos), Some(event.state));
         }
+        answer
     }
 }
 struct ThornyMod;
