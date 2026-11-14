@@ -7,8 +7,8 @@ the root may not name one of them with a hand-written `#[path = "wire_loopback/.
 appended to the root kept conflicting; a file of their own does not. The target's old place in horizon-mod-wasm's
 tests/ may not come back: nothing compiles a file there, so a test carried to it would vanish silently. The guest's one
 `Hooks` object is assembled by build.rs from the folder's files: a feature writes its hook methods in
-`impl <Feature>Hooks { pub(super) fn <hook>(&self, ..) }` (inherent, on a unit struct of its own file) and never hand-writes `impl Hooks for Mod`, a second
-or a second `__horizon_mod_hooks` of its own. `register` is the one method several files may define; they run
+`impl <Feature>Hooks { pub(super) fn <hook>(&self, ..) }` (inherent, on a unit struct of its own file) and never hand-writes `impl Hooks for Mod`
+or a second `__horizon_mod_hooks`. `register` is the one method several files may define; they run
 in file-name order. Without
 --base the test count is not checked (main's pushes have nothing to compare with).
 
