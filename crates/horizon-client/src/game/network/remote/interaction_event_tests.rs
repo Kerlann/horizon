@@ -279,7 +279,16 @@ impl ItemPart for Observer {
 // The same real Game runs either its server path or its normal local-client
 // connection/prediction path, as the existing remote menu fixture does.
 fn with_interaction_game(client: bool, test: impl FnOnce(&mut Game<'_>)) {
-    with_game(|game| {
+    let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+    with_interaction_game_at(client, root, test);
+}
+
+fn with_interaction_game_at(
+    client: bool,
+    root: std::path::PathBuf,
+    test: impl FnOnce(&mut Game<'_>),
+) {
+    super::super::native_entity_refs::tests::with_game_at(root, |game| {
         let _peer = if client {
             game.options.execution_role = ExecutionRole::Client;
             let (client, server) = Pipe::pair();

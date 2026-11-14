@@ -2,11 +2,7 @@
 use mod_api::{Hand, HostSide, InteractionResult as Answer};
 use std::sync::Mutex;
 
-static STATE: Mutex<([i32; 3], [i32; 3])> = Mutex::new(([0; 3], [0; 3]));
-
-pub fn active() -> bool {
-    STATE.lock().unwrap().0[0] != 0
-}
+pub(super) static STATE: Mutex<([i32; 3], [i32; 3])> = Mutex::new(([0; 3], [0; 3]));
 
 fn answer(path: i32, host: HostSide<'_>, hand: Hand) -> Option<Answer> {
     let state = STATE.lock().unwrap();

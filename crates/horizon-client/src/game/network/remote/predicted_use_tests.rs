@@ -29,7 +29,9 @@ impl Hooks for Native {
 fn matrix(mods: mod_api::Mods) {
     mod_platform::testing::with_mods(mods.clone(), || {
         crate::game::api_values::install_parts(&mods).unwrap();
-        with_interaction_game(true, |game| {
+        let base = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+        let root = super::super::super::mods::content_root(&base, &Default::default()).unwrap();
+        with_interaction_game_at(true, root.prepared().to_owned(), |game| {
             let stone = game
                 .pack
                 .assets

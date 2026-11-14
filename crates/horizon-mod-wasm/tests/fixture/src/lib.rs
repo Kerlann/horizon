@@ -135,7 +135,7 @@ impl Hooks for Mod {
         _: &mut dyn mod_api::ClientHost,
         event: &mut mod_api::InteractionKeyMappingTriggeredEvent,
     ) -> mod_api::Flow {
-        if predicted_use::active() {
+        if predicted_use::STATE.lock().unwrap().0[0] != 0 {
             return mod_api::Flow::Continue;
         }
         event.swing_hand = event.attempt == mod_api::InteractionAttempt::Held;
