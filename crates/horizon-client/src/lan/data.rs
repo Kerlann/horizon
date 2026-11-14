@@ -192,7 +192,10 @@ fn walk(dir: &Path, out: &mut BTreeMap<String, Value>) {
     };
     for file in &folder.files {
         let bytes = file.bytes().unwrap_or_default();
-        let value = if dir.file_name().is_some_and(|name| name == "enchantment") {
+        let value = if dir
+            .components()
+            .any(|part| part.as_os_str() == "enchantment")
+        {
             horizon_world::json_folder::enchantment_definition(
                 bytes,
                 &dir.join(format!("{}.json", file.name)),
@@ -1318,6 +1321,7 @@ mod tests {
                 r#"{"max_level":1}"#,
             ),
             ("data/harvestmod/recipe/x.json", r#"{}"#),
+            ("data/harvestmod/enchantment/tools/broken.json", "{"),
         ] {
             let path = root.join(path);
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -1351,6 +1355,37 @@ mod tests {
         assert!(!found[0].2, "vanilla's entry stays the known pack's");
         assert!(found[1].2 && found[2].2, "a mod's entries carry their data");
         assert_eq!(found[1].1["max_level"], 5, "a pack overrides a mod's entry");
+        let mut sync = SyncData::empty();
+        sync.registries.push((
+            "minecraft:enchantment".into(),
+            Entries {
+                names: names.clone(),
+                data: found
+                    .iter()
+                    .map(|(_, value, _)| json_to_nbt(value))
+                    .collect(),
+                from_pack: found.iter().map(|(_, _, packed)| *packed).collect(),
+            },
+        ));
+        let packets = sync.registry_packets(true, &LevelShapes::VANILLA);
+        assert_eq!(
+            packets[0]
+                .entries
+                .iter()
+                .map(|entry| entry.name.as_str())
+                .collect::<Vec<_>>(),
+            [
+                "minecraft:mending",
+                "harvestmod:scythe",
+                "harvestmod:tools/sweep"
+            ]
+        );
+        assert!(packets[0].entries[0].data.is_none());
+        assert_eq!(
+            packets[0].entries[1].data,
+            Some(json_to_nbt(&serde_json::json!({"max_level": 5})))
+        );
+        assert!(packets[0].entries[2].data.is_some());
         std::fs::remove_dir_all(root).unwrap();
     }
 

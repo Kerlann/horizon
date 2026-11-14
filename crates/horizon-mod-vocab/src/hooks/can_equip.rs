@@ -34,6 +34,7 @@ pub trait Hooks {
     /// equipment are retained outside traversal; other Host reads can allocate.
     #[hook(
         side = "both",
+        version = 2,
         contract = "listen",
         scope = "item",
         key = "stack",

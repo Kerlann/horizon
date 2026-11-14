@@ -48,7 +48,10 @@ pub(super) fn load_dir(
     };
     for file in &folder.files {
         let bytes = file.bytes()?;
-        let value = if dir.file_name().is_some_and(|name| name == "enchantment") {
+        let value = if dir
+            .components()
+            .any(|part| part.as_os_str() == "enchantment")
+        {
             let Some(value) = crate::json_folder::enchantment_definition(
                 bytes,
                 &dir.join(format!("{}.json", file.name)),
