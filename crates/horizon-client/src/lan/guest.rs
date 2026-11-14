@@ -2418,9 +2418,10 @@ mod tests {
         let mut writer = Writer::new();
         horizon_protocol::item::Slot::write(&sent, &mut writer);
         let mut reader = Reader::new(&writer.data);
-        let received = horizon_protocol::item::Slot::read(&mut reader)
+        let mut received = horizon_protocol::item::Slot::read(&mut reader)
             .unwrap()
             .unwrap();
+        received.removed.sort_unstable();
         assert_eq!(received.removed, [4, 10, 300]);
         assert!(received.added.is_empty());
     }
