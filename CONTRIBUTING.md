@@ -137,7 +137,8 @@ wasm fixture, and finishes in under 2 seconds. Any other test is a daily test: i
 seconds and `verify-static` one that boots the game; existing tests over 2 seconds and those that boot the game are
 already daily tests, and the existing ones that need resources or a child process are being moved over.
 In Linux `verify`, tests run in isolated processes under an inet guard: opening, binding or connecting an IPv4/IPv6
-socket or calling `getaddrinfo` fails the test by its full name, even if it handles the refusal. Unix sockets remain
+socket or calling libc name-resolution APIs (`getaddrinfo`, `gethostbyname`/`gethostbyname2`/`gethostbyaddr`, their reentrant
+variants, or `getnameinfo`) fails the test by its full name, even if it handles the refusal. Unix sockets remain
 allowed. Move a network test with `tools/ci/move_to_daily.py`, using reason `network`; daily runs without the guard.
 
 - A pull request is reviewed and merged on the push and gate tiers. Nothing else is asked of you.

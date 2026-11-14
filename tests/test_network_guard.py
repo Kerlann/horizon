@@ -43,6 +43,35 @@ class NetworkGuard(unittest.TestCase):
         result, _ = self.invoke('import socket\ntry: socket.getaddrinfo("localhost", 80)\nexcept OSError: pass')
         self.assertIn("getaddrinfo", result["status"])
 
+    def test_other_libc_resolvers_fail_even_when_the_result_is_swallowed(self):
+        calls = {
+            "gethostbyname": 'lib.gethostbyname(b"localhost")',
+            "gethostbyname2": 'lib.gethostbyname2(b"localhost", 2)',
+            "gethostbyname_r": 'lib.gethostbyname_r(b"localhost", host, buf, 1024, ctypes.byref(result), ctypes.byref(error))',
+            "gethostbyname2_r": 'lib.gethostbyname2_r(b"localhost", 2, host, buf, 1024, ctypes.byref(result), ctypes.byref(error))',
+            "gethostbyaddr": 'lib.gethostbyaddr(ip, 4, 2)',
+            "gethostbyaddr_r": 'lib.gethostbyaddr_r(ip, 4, 2, host, buf, 1024, ctypes.byref(result), ctypes.byref(error))',
+            "getnameinfo": 'lib.getnameinfo(address, 16, buf, 1024, None, 0, 0)',
+        }
+        setup = ('import ctypes; lib = ctypes.CDLL(None); '
+                 'host = ctypes.create_string_buffer(256); buf = ctypes.create_string_buffer(1024); '
+                 'result = ctypes.c_void_p(); error = ctypes.c_int(); '
+                 'ip = ctypes.create_string_buffer(bytes([127, 0, 0, 1])); '
+                 'address = ctypes.create_string_buffer(bytes([2, 0, 0, 0, 127, 0, 0, 1]) + bytes(8)); ')
+        for operation, call in calls.items():
+            with self.subTest(operation=operation):
+                result, _ = self.invoke(setup + call)
+                self.assertEqual(result["status"], f"network guard: {operation}")
+
+    def test_a_helper_loaded_marker_does_not_certify_the_scheduled_process(self):
+        def helper_only(binary, env, args, timed):
+            # The scheduled target is unguarded, but its dynamic helper loads the library.
+            subprocess.run([sys.executable, "-c", "pass"], env={**os.environ, **env}, check=True)
+            return {"pid": os.getpid(), "status": "ok", "output": tempfile.TemporaryFile("w+")}
+        result = network_guard.run(({"label": "static target"}, []), {}, False, self.shim, helper_only)
+        self.addCleanup(result["output"].close)
+        self.assertIn("did not load", result["status"])
+
     def test_unix_socket_is_allowed(self):
         result, _ = self.invoke('import socket; socket.socket(socket.AF_UNIX).close()')
         self.assertEqual(result["status"], "ok")

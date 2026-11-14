@@ -157,6 +157,7 @@ def run_one(binary: dict, extra_env: dict, test_args: list[str], timed: bool = F
         if log:
             os.unlink(log)
         return result
+    result["pid"] = process.pid
     _, wait_status, usage = os.wait4(process.pid, 0)
     process.returncode = code = os.waitstatus_to_exitcode(wait_status)
     status = "ok" if code == 0 else f"killed by signal {-code}" if code < 0 else f"exit {code}"

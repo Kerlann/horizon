@@ -1,5 +1,6 @@
 """Linux verify network guard: isolated libtest invocations and an inherited violation channel."""
 import os
+import re
 import tempfile
 from pathlib import Path
 
@@ -49,8 +50,9 @@ def run(invocation, env, timed, shim, run_one):
         preload = os.pathsep.join(filter(None, [str(shim), os.environ.get("LD_PRELOAD")]))
         result = run_one(binary, {**env, "LD_PRELOAD": preload, "HORIZON_NETWORK_GUARD_LOG": str(log)}, args, timed)
         records = log.read_text().splitlines()
-        operations = sorted(set(records) - {"loaded"})
-        if "loaded" not in records or operations:
+        markers = {line for line in records if re.fullmatch(r"loaded [0-9]+", line)}
+        operations = sorted(set(records) - markers)
+        if f"loaded {result.get('pid')}" not in markers or operations:
             detail = ", ".join(operations) if operations else "guard library did not load"
             result["status"] = f"network guard: {detail}"
             result["output"].write(f"\n::error::network guard: {binary['label']}: {detail}; "
