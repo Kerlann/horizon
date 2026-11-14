@@ -47,7 +47,18 @@ pub(super) fn load_dir(
         return Ok(());
     };
     for file in &folder.files {
-        let value = serde_json::from_slice(file.bytes()?)?;
+        let bytes = file.bytes()?;
+        let value = if dir.file_name().is_some_and(|name| name == "enchantment") {
+            let Some(value) = crate::json_folder::enchantment_definition(
+                bytes,
+                &dir.join(format!("{}.json", file.name)),
+            ) else {
+                continue;
+            };
+            value
+        } else {
+            serde_json::from_slice(bytes)?
+        };
         out.insert(format!("{namespace}:{prefix}{}", file.name), value);
     }
     Ok(())

@@ -191,7 +191,16 @@ fn walk(dir: &Path, out: &mut BTreeMap<String, Value>) {
         return;
     };
     for file in &folder.files {
-        if let Ok(value) = serde_json::from_slice::<Value>(file.bytes().unwrap_or_default()) {
+        let bytes = file.bytes().unwrap_or_default();
+        let value = if dir.file_name().is_some_and(|name| name == "enchantment") {
+            horizon_world::json_folder::enchantment_definition(
+                bytes,
+                &dir.join(format!("{}.json", file.name)),
+            )
+        } else {
+            serde_json::from_slice::<Value>(bytes).ok()
+        };
+        if let Some(value) = value {
             out.insert(file.name.clone(), value);
         }
     }

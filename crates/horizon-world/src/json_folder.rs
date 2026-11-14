@@ -308,3 +308,14 @@ mod tests {
         assert!(read(&dir).is_err());
     }
 }
+
+/// Decode an enchantment definition at its resource boundary, naming a malformed file.
+pub fn enchantment_definition(bytes: &[u8], path: &Path) -> Option<serde_json::Value> {
+    match serde_json::from_slice(bytes) {
+        Ok(value) => Some(value),
+        Err(error) => {
+            log::warn!("Skipping malformed enchantment {}: {error}", path.display());
+            None
+        }
+    }
+}
