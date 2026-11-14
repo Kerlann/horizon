@@ -1128,8 +1128,8 @@ mod tests {
         use horizon_protocol::packets::{configuration::ClientInformation, play};
         use mod_api::InteractionResult as Answer;
         use mod_api::{
-            self, BlockPart, CloneItemStackEvent, Flow, Hooks, Host, ItemPart, ItemStack,
-            Registrar, ServerHost, UseItemOnEvent, UseOnEvent, UseWithoutItemEvent,
+            self, BlockPart, CloneItemStackEvent, Hooks, Host, ItemPart, ItemStack, Registrar,
+            ServerHost, UseItemOnEvent, UseOnEvent, UseWithoutItemEvent,
         };
         use std::sync::{
             Arc, Mutex,

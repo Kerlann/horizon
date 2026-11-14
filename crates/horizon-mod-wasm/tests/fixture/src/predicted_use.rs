@@ -72,6 +72,9 @@ impl mod_api::ItemPart for Part {
 
 pub struct Control;
 #[mod_api::horizon_part]
+impl mod_api::BlockPart for Control {}
+
+#[mod_api::horizon_part]
 impl mod_api::BlockEntityPart for Control {
     fn block_entity_tick(
         &self,
