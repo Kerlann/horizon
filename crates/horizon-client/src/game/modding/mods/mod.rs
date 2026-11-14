@@ -736,7 +736,6 @@ pub(super) fn content_overlay(
         &overrides,
     )
     .map_err(|error| error.to_string())?;
-    *sources.load_notices.lock().unwrap() = resolution.warnings;
     let order = resolution.order;
     // Hooks are queried on the calling thread, never from a content reader.
     let native_items = &native_declared().items;
@@ -817,7 +816,7 @@ pub(super) fn content_overlay(
     }
     // Content validation may refuse a package. Revalidate against what really
     // loaded so dependents cannot start with a missing required content mod.
-    let loaded: Vec<_> = inputs
+    let loaded: Vec<_> = manifests
         .into_iter()
         .filter(|package| {
             mods.iter().any(|content| content.id == package.id)
@@ -828,7 +827,12 @@ pub(super) fn content_overlay(
                     .any(|native| native.id == package.id)
         })
         .collect();
-    horizon_mod_package::dependencies::resolve(&loaded).map_err(|error| error.to_string())?;
+    let resolved = horizon_mod_package::dependencies::resolve_manifests(
+        &loaded,
+        sources.installation_side,
+        &overrides,
+    )
+    .map_err(|error| error.to_string())?;
     let cache = here.join(".horizon-cache");
     // Content admission and the live code-dispatch boundary jointly determine
     // what loaded. Namespaces and raw startup metadata cannot answer this.
@@ -838,6 +842,7 @@ pub(super) fn content_overlay(
     )?;
     let root = mod_content::resolved_resources(root, prepared, jar_store, &mods, cache)?;
     let _ = sources.content_base.set(original_base);
+    *sources.load_notices.lock().unwrap() = resolved.warnings;
     Ok(ContentOverlay {
         root,
         mods,
