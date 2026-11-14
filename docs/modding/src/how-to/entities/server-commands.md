@@ -23,6 +23,23 @@ as vanilla's `minecraft:resource_key`, so unmodded clients complete it too. The 
 must be a `namespace:path` resource location of at most 256 bytes, and the server takes at
 most 256 distinct registries; a usage past either is left out, with the reason in the log. Block positions are resolved and floored
 from the source's world, relative or local coordinates without loading chunks.
+
+Positions, rotations, dimensions and compound tags have their own kinds, each sent to clients
+as vanilla's parser so `~`, `^` and the dimension list complete as in a vanilla command:
+
+| Kind | Vanilla parser | `CommandArgumentValue` |
+|---|---|---|
+| `vec3` | `minecraft:vec3`, whole `x` and `z` centred on the block | `Vec3([f64; 3])` |
+| `vec3_uncentered` | `minecraft:vec3`, coordinates as written | `Vec3([f64; 3])` |
+| `column_pos` | `minecraft:column_pos` | `ColumnPos([i32; 2])`, floored |
+| `rotation` | `minecraft:rotation` | `Rotation([f32; 2])`, yaw then pitch |
+| `dimension` | `minecraft:dimension` | `Dimension(LevelRef)` |
+| `nbt` | `minecraft:nbt_compound_tag` | `Nbt(Compound)` |
+
+`~` and `^` resolve against the command source's position and rotation, as `block_pos` does. A
+`dimension` the world has not loaded is refused with `argument.dimension.invalid` before a
+listener runs. A `vec3` and a `vec3_uncentered` cannot share a position in one command's
+usages, as they look the same to a client.
 A player's source is their position and rotation. The console has no source
 entity and uses the Overworld spawn's block corner with zero rotation, so `@s`
 cannot resolve there. Every source receives the same owned data, on native and wasm.
