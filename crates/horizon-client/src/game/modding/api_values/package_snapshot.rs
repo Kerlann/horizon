@@ -39,10 +39,13 @@ fn package_snapshot(
             .chain(&manifest.namespaces)
             .cloned()
             .collect(),
-        horizon_mod_package::dependencies::from_manifest(&manifest.dependencies)
-            .into_iter()
-            .map(|d| mod_api::PackageDependency::new(d.id, d.requirement.to_string(), d.optional))
-            .collect(),
+        horizon_mod_package::dependencies::from_manifest(
+            &manifest.dependencies,
+            horizon_mod_package::manifest::Side::Both,
+        )
+        .into_iter()
+        .map(|d| mod_api::PackageDependency::new(d.id, d.requirement.to_string(), d.optional))
+        .collect(),
     )
     .with_details(details)
 }

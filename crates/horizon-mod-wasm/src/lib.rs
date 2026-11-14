@@ -236,7 +236,12 @@ fn groups(packages: &[WasmPackage]) -> (Vec<Vec<usize>>, Vec<(String, Refusal)>)
     let mut refused: BTreeMap<usize, Refusal> = BTreeMap::new();
     let declared: Vec<_> = packages
         .iter()
-        .map(|p| dependencies::from_manifest(&p.manifest.dependencies))
+        .map(|p| {
+            dependencies::from_manifest(
+                &p.manifest.dependencies,
+                horizon_mod_package::manifest::Side::Both,
+            )
+        })
         .collect();
     // Engine internals are native-only. A mod dependency's internals stay inside the group.
     for (i, package) in packages.iter().enumerate() {
@@ -1019,7 +1024,12 @@ mod tests {
         assert_eq!(ids(&packages, &group), [vec!["lib", "z", "a"]]);
         let declared: Vec<_> = packages
             .iter()
-            .map(|p| dependencies::from_manifest(&p.manifest.dependencies))
+            .map(|p| {
+                dependencies::from_manifest(
+                    &p.manifest.dependencies,
+                    horizon_mod_package::manifest::Side::Both,
+                )
+            })
             .collect();
         let native: Vec<_> = packages
             .iter()

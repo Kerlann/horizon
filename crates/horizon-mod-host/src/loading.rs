@@ -65,7 +65,12 @@ pub fn main_with(
             );
             let declared: Vec<_> = manifests
                 .iter()
-                .map(|m| horizon_mod_package::dependencies::from_manifest(&m.dependencies))
+                .map(|m| {
+                    horizon_mod_package::dependencies::from_manifest(
+                        &m.dependencies,
+                        horizon_mod_package::manifest::Side::Both,
+                    )
+                })
                 .collect();
             let inputs: Vec<_> = manifests
                 .iter()

@@ -105,12 +105,18 @@ pub struct Dependency {
     pub order: mod_vocab::DependencyOrder,
 }
 
-pub fn from_manifest(values: &BTreeMap<String, crate::manifest::Dependency>) -> Vec<Dependency> {
+pub fn from_manifest(
+    values: &BTreeMap<String, crate::manifest::Dependency>,
+    running: Side,
+) -> Vec<Dependency> {
     values
         .iter()
-        .map(|(id, value)| {
+        .filter_map(|(id, value)| {
             let details = value.details();
-            Dependency {
+            if running != Side::Both && details.side != Side::Both && details.side != running {
+                return None;
+            }
+            Some(Dependency {
                 id: id.clone(),
                 requirement: details.version,
                 optional: details.optional,
@@ -118,7 +124,7 @@ pub fn from_manifest(values: &BTreeMap<String, crate::manifest::Dependency>) -> 
                 reason: details.reason,
                 url: details.url,
                 order: details.order,
-            }
+            })
         })
         .collect()
 }
@@ -144,7 +150,10 @@ fn parse(owner: &str, value: Option<&toml::Value>) -> Result<Vec<Dependency>, Er
             target: "[dependencies]".into(),
             reason,
         })?;
-    Ok(from_manifest(&manifest.dependencies))
+    Ok(from_manifest(
+        &manifest.dependencies,
+        crate::manifest::Side::Both,
+    ))
 }
 
 #[derive(Clone)]
@@ -519,7 +528,7 @@ mod tests {
             "[dependencies]\nbase='^1'\nextra={version='^2', optional=true}",
         );
         let base = manifest("base", "1.2", "");
-        let dependencies = from_manifest(&addon.dependencies);
+        let dependencies = from_manifest(&addon.dependencies, crate::manifest::Side::Both);
         let mods = [
             Mod {
                 id: &addon.id,
@@ -550,7 +559,10 @@ mod tests {
             resolve_content(&[mods[0].clone(), incompatible]),
             Err(Error::Version { .. })
         ));
-        let back = from_manifest(&manifest("base", "1", "[dependencies]\naddon='^1'").dependencies);
+        let back = from_manifest(
+            &manifest("base", "1", "[dependencies]\naddon='^1'").dependencies,
+            crate::manifest::Side::Both,
+        );
         assert!(matches!(
             resolve_content(&[
                 mods[0].clone(),

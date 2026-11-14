@@ -725,7 +725,10 @@ pub(super) fn content_overlay(
     let dependencies: Vec<_> = packages
         .iter()
         .map(|source| {
-            horizon_mod_package::dependencies::from_manifest(&source.manifest.dependencies)
+            horizon_mod_package::dependencies::from_manifest(
+                &source.manifest.dependencies,
+                horizon_mod_package::manifest::Side::Both,
+            )
         })
         .collect();
     let inputs: Vec<_> = packages
