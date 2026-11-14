@@ -2338,8 +2338,8 @@ fn contended_prepared_release_at_capacity_cleans_up_before_slot_reuse() {
     });
 }
 
-/// A member as the production engine links it, alone in its group; the error if it is refused.
-fn link_alone(text: &str) -> Option<String> {
+/// A member as the production engine links it, alone in its group; the refusal if there is one.
+fn link_alone(text: &str) -> Option<crate::link::LinkError> {
     let bytes = wat::parse_str(text).unwrap();
     let engine = crate::runtime::engine().unwrap();
     crate::test_stack::on_guest_stack(|| {
@@ -2351,40 +2351,39 @@ fn link_alone(text: &str) -> Option<String> {
             }],
         )
         .err()
-        .map(|error| error.to_string())
     })
 }
 
+fn refused_with(text: &str, fragment: &str) {
+    match link_alone(text) {
+        Some(crate::link::LinkError::Malformed { member, why }) => {
+            assert_eq!(member, "threads");
+            assert!(why.contains(fragment), "{why}");
+        }
+        other => panic!("expected a malformed refusal containing {fragment:?}, got {other:?}"),
+    }
+}
+
 #[test]
+#[ignore = "daily"]
 fn shared_memory_and_atomics_are_refused_and_an_ordinary_member_links() {
-    assert_eq!(
-        link_alone(
-            r#"(module (@custom "dylink.0" "\01\04\00\00\00\00")
-            (import "env" "memory" (memory 1 1 shared)))"#
-        )
-        .as_deref(),
-        Some(
-            "threads: failed to parse WebAssembly module: threads must be enabled for shared memories (at offset 0xb)"
-        )
+    refused_with(
+        r#"(module (@custom "dylink.0" "\01\04\00\00\00\00")
+        (import "env" "memory" (memory 1 1 shared)))"#,
+        "threads must be enabled for shared memories",
     );
-    assert_eq!(
-        link_alone(
-            r#"(module (@custom "dylink.0" "\01\04\00\00\00\00")
-            (import "env" "memory" (memory 1))
-            (func (export "read") (result i32) i32.const 0 i32.atomic.load))"#
-        )
-        .as_deref(),
-        Some(
-            "threads: failed to compile: wasm[0]::function[0]: WebAssembly translation error: \
-             Invalid input WebAssembly code at offset 53: threads support is not enabled"
-        )
+    refused_with(
+        r#"(module (@custom "dylink.0" "\01\04\00\00\00\00")
+        (import "env" "memory" (memory 1))
+        (func (export "read") (result i32) i32.const 0 i32.atomic.load))"#,
+        "threads support is not enabled",
     );
-    assert_eq!(
+    assert!(
         link_alone(
             r#"(module (@custom "dylink.0" "\01\04\00\00\00\00")
             (import "env" "memory" (memory 1))
             (func (export "read") (result i32) i32.const 0 i32.load))"#
-        ),
-        None
+        )
+        .is_none()
     );
 }

@@ -170,7 +170,8 @@ pub(crate) fn test_engine() -> Engine {
     Engine::new(without_threads(&mut wasmtime::Config::new())).unwrap()
 }
 
-pub(crate) fn engine() -> wasmtime::Result<Engine> {
+/// The settings of the engine mods run on, without its epoch ticker.
+pub(crate) fn engine_config() -> wasmtime::Config {
     let mut config = wasmtime::Config::new();
     without_threads(&mut config);
     config.epoch_interruption(ENGINE_CONFIG.1);
@@ -180,6 +181,11 @@ pub(crate) fn engine() -> wasmtime::Result<Engine> {
     config.async_stack_size(
         horizon_guest_stack::GUEST_STACK_BYTES + horizon_guest_stack::HOST_HEADROOM,
     );
+    config
+}
+
+pub(crate) fn engine() -> wasmtime::Result<Engine> {
+    let config = engine_config();
     let engine = Engine::new(&config)?;
     let weak = engine.weak();
     std::thread::Builder::new()
