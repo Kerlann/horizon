@@ -87,10 +87,10 @@ mod while_playing;
 mod worlds_page;
 
 use gpui::{
-    actions, div, ease_out_quint, prelude::*, px, relative, size, Animation, AnimationExt,
-    AnyElement, App, Bounds, ClickEvent, Context, Div, ElementId, FocusHandle, FontWeight, Hsla,
-    KeyBinding, KeyDownEvent, Menu, MenuItem, MouseDownEvent, PathPromptOptions, Pixels, Point,
-    SharedString, Stateful, Subscription, Window, WindowBounds, WindowOptions,
+    Animation, AnimationExt, AnyElement, App, Bounds, ClickEvent, Context, Div, ElementId,
+    FocusHandle, FontWeight, Hsla, KeyBinding, KeyDownEvent, Menu, MenuItem, MouseDownEvent,
+    PathPromptOptions, Pixels, Point, SharedString, Stateful, Subscription, Window, WindowBounds,
+    WindowOptions, actions, div, ease_out_quint, prelude::*, px, relative, size,
 };
 use horizon_launcher::account::{self, Accounts, SignIn, SignInState};
 use horizon_launcher::backend::{self, Job, Msg, Release, Running, Settings, Updates};
@@ -105,9 +105,9 @@ use native_consent::PendingConsent;
 use scrollbar::Scrollbar;
 use std::borrow::Cow;
 use std::collections::{HashMap, VecDeque};
-use std::sync::atomic::Ordering;
-use std::sync::mpsc::{channel, Receiver, Sender};
 use std::sync::Mutex;
+use std::sync::atomic::Ordering;
+use std::sync::mpsc::{Receiver, Sender, channel};
 use std::time::{Duration, Instant};
 use theme::Theme;
 
@@ -524,39 +524,44 @@ impl Launcher {
             cx.notify();
         });
         let window_handle = window.window_handle();
-        cx.spawn(async move |this, cx| loop {
-            cx.background_executor()
-                .timer(Duration::from_millis(80))
-                .await;
-            if this
-                .update(cx, |this, cx| this.drain(window_handle, cx))
-                .is_err()
-            {
-                break;
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_millis(80))
+                    .await;
+                if this
+                    .update(cx, |this, cx| this.drain(window_handle, cx))
+                    .is_err()
+                {
+                    break;
+                }
             }
         })
         .detach();
         // Counts the time a partner banner is on screen, until it may be hidden.
-        cx.spawn(async move |this, cx| loop {
-            cx.background_executor()
-                .timer(Duration::from_secs(10))
-                .await;
-            let counting = this.update(cx, |this, cx| {
-                let s = &mut this.settings;
-                if s.partner_hidden || s.partner_seen_secs >= partner::SEEN_BEFORE_HIDE {
-                    return false;
+        cx.spawn(async move |this, cx| {
+            loop {
+                cx.background_executor()
+                    .timer(Duration::from_secs(10))
+                    .await;
+                let counting = this.update(cx, |this, cx| {
+                    let s = &mut this.settings;
+                    if s.partner_hidden || s.partner_seen_secs >= partner::SEEN_BEFORE_HIDE {
+                        return false;
+                    }
+                    // On screen on every page: the card in the sidebar, the banner on Servers.
+                    s.partner_seen_secs += 10;
+                    if s.partner_seen_secs % 60 == 0
+                        || s.partner_seen_secs >= partner::SEEN_BEFORE_HIDE
+                    {
+                        this.save_settings();
+                        cx.notify();
+                    }
+                    true
+                });
+                if !matches!(counting, Ok(true)) {
+                    break;
                 }
-                // On screen on every page: the card in the sidebar, the banner on Servers.
-                s.partner_seen_secs += 10;
-                if s.partner_seen_secs % 60 == 0 || s.partner_seen_secs >= partner::SEEN_BEFORE_HIDE
-                {
-                    this.save_settings();
-                    cx.notify();
-                }
-                true
-            });
-            if !matches!(counting, Ok(true)) {
-                break;
             }
         })
         .detach();
@@ -4874,7 +4879,7 @@ impl Launcher {
                             },
                         )),
                     ),
-                )
+                );
             }
             Load::Ready(r) if r.is_empty() => {
                 return page.child(centered(tr("No releases yet."), &t));
@@ -5549,117 +5554,10 @@ fn menus() -> Vec<Menu> {
     ]
 }
 
+mod startup;
+
 fn main() {
-    horizon_mod_package::holder::retain_capability();
-    if let Some(code) = native_mods::internals_rustc_wrapper() {
-        std::process::exit(code);
-    }
-    if let Err(error) = console::attach_for_cli() {
-        eprintln!("Could not restore the launcher's terminal streams: {error}");
-        std::process::exit(1);
-    }
-    // Windows setup: `setup --quiet` / `uninstall --quiet` run here without a window, and never
-    // reach the CLI parser below (so neither the MCP tools nor the completions list them).
-    #[cfg(windows)]
-    if let Some(code) = horizon_launcher::installer::run_quiet() {
-        std::process::exit(code);
-    }
-    if let Some(code) = horizon_launcher::relocation::run_worker() {
-        std::process::exit(code);
-    }
-    // A broken location must still open a window: startup() falls back to the default
-    // folders and records the error, which Settings shows with Retry and Use the default folder.
-    // It keeps the migration lease for the life of the process.
-    let _location_error = horizon_launcher::data_location::startup();
-    perf::process_started();
-    backend::exe_path();
-    if let Some(code) = horizon_launcher::update_handoff::run() {
-        std::process::exit(code);
-    }
-    #[cfg(windows)]
-    backend::remove_replaced_binaries();
-    backend::cleanup_launcher_updates();
-    // What the launcher downloads goes through the player's proxy, if they set one: the parts
-    // that build their own agents (`horizon-port-pack`) are told before anything starts.
-    horizon_launcher::proxy::announce(horizon_launcher::backend::Settings::load().proxy);
-    // The setup wizard and `horizon-launcher.exe uninstall` (what Control Panel runs) are windows,
-    // not CLI commands: asked of the CLI parser first, `uninstall` was refused as an unknown
-    // subcommand, with the error going to the console that Control Panel's start doesn't have.
-    #[cfg(windows)]
-    let setup_window = horizon_launcher::installer::window_mode();
-    #[cfg(not(windows))]
-    let setup_window: Option<horizon_launcher::setup_args::Mode> = None;
-    if setup_window.is_none() {
-        if let Some(code) = cli::run() {
-            std::process::exit(code);
-        }
-    }
-    // The GPU's texture limit, which caps the pictures made from disk (`picture_cache`).
-    horizon_launcher::pictures::probe_gpu_limit();
-    gpui_platform::application()
-        .with_assets(blocks::Assets)
-        // `move`: the closure owns `setup_window`; `run` wants it to outlive this frame.
-        .run(move |cx: &mut App| {
-            cx.text_system()
-                .add_fonts(vec![
-                    Cow::Borrowed(horizon_theme::fonts::GEIST_MONO),
-                    Cow::Borrowed(horizon_theme::fonts::BRICOLAGE_REGULAR),
-                    Cow::Borrowed(horizon_theme::fonts::BRICOLAGE_MEDIUM),
-                    Cow::Borrowed(horizon_theme::fonts::BRICOLAGE_SEMIBOLD),
-                    Cow::Borrowed(horizon_theme::fonts::BRICOLAGE_BOLD),
-                    Cow::Borrowed(horizon_theme::fonts::BRICOLAGE_DISPLAY_BOLD),
-                    Cow::Borrowed(horizon_theme::fonts::BRICOLAGE_DISPLAY_SEMIBOLD),
-                    Cow::Borrowed(horizon_theme::fonts::BRICOLAGE_HEADING_SEMIBOLD),
-                    Cow::Borrowed(horizon_theme::fonts::GEIST_REGULAR),
-                    Cow::Borrowed(horizon_theme::fonts::GEIST_MEDIUM),
-                    Cow::Borrowed(horizon_theme::fonts::GEIST_SEMIBOLD),
-                ])
-                .expect("bundled fonts");
-            cx.bind_keys(key_bindings());
-            cx.on_action(|_: &Quit, cx| shut_down(cx));
-            // The key press is being handled inside the window, so the window can only be
-            // removed once that update has finished.
-            cx.on_action(|_: &CloseWindow, cx| {
-                cx.defer(|cx| {
-                    for window in cx.windows() {
-                        let _ = window.update(cx, |_, window, _| window.remove_window());
-                    }
-                })
-            });
-            cx.set_menus(menus());
-            // The setup exe (and `horizon-launcher.exe uninstall`) opens its own window instead.
-            #[cfg(windows)]
-            if let Some(mode) = setup_window {
-                setup_page::open(mode, cx);
-                return;
-            }
-            #[cfg(not(windows))]
-            let _ = setup_window;
-            let bounds = Bounds::centered(None, size(px(1180.), px(760.)), cx);
-            cx.open_window(
-                WindowOptions {
-                    window_bounds: Some(WindowBounds::Windowed(bounds)),
-                    window_min_size: Some(size(px(960.), px(600.))),
-                    titlebar: Some(titlebar::options()),
-                    #[cfg(target_os = "linux")]
-                    window_decorations: Some(gpui::WindowDecorations::Client),
-                    app_id: Some(identity::APP_ID.into()),
-                    // GPUI draws a window without focus at most every 33 ms to save energy. A
-                    // benchmark's window often starts without it (KDE keeps focus from windows
-                    // a background process opens), and it measures drawing, not that limit.
-                    inactive_frame_interval: if perf::Bench::wanted() {
-                        None
-                    } else {
-                        WindowOptions::default().inactive_frame_interval
-                    },
-                    ..Default::default()
-                },
-                |window, cx| cx.new(|cx| Launcher::new(window, cx)),
-            )
-            .expect("window");
-            cx.on_window_closed(|cx, _| shut_down(cx)).detach();
-            cx.activate(true);
-        });
+    startup::run();
 }
 
 /// Whether the click `event` began with the mouse-down that closed a menu at `closed_at`.
@@ -5672,7 +5570,7 @@ fn closed_by_press(closed_at: Option<Point<Pixels>>, event: &ClickEvent) -> bool
 mod tests {
     #[test]
     fn an_unopenable_data_folder_starts_on_settings_instead_of_exiting() {
-        use super::{page_after_startup, Page};
+        use super::{Page, page_after_startup};
         assert!(matches!(
             page_after_startup(Page::Play, true),
             Page::Settings
@@ -5684,7 +5582,7 @@ mod tests {
     #[test]
     fn a_menu_button_stays_closed_after_the_press_that_closed_its_menu() {
         use super::closed_by_press;
-        use gpui::{point, px, ClickEvent, KeyboardClickEvent, MouseClickEvent, MouseDownEvent};
+        use gpui::{ClickEvent, KeyboardClickEvent, MouseClickEvent, MouseDownEvent, point, px};
         let click = |x: f32| {
             ClickEvent::Mouse(MouseClickEvent {
                 down: MouseDownEvent {
@@ -5707,7 +5605,7 @@ mod tests {
     #[cfg(target_os = "macos")]
     #[test]
     fn cmd_q_quits_and_cmd_w_closes_the_window() {
-        use super::{key_bindings, CloseWindow, Quit};
+        use super::{CloseWindow, Quit, key_bindings};
         use gpui::{Keymap, Keystroke};
         let keymap = Keymap::new(key_bindings());
         let key = |s: &'static str| [Keystroke::parse(s).unwrap()];
@@ -5773,7 +5671,7 @@ mod tests {
     /// it stays off: signing in comes first.
     #[test]
     fn play_prepares_first_for_an_owner() {
-        use super::{play_press, PlayPress};
+        use super::{PlayPress, play_press};
         assert_eq!(play_press(true, Some(true), false), PlayPress::Play);
         assert_eq!(play_press(true, None, false), PlayPress::Play);
         assert_eq!(
@@ -5803,7 +5701,7 @@ mod tests {
 
     #[test]
     fn a_completed_sign_in_is_handled_once_across_ui_polls() {
-        use super::{sign_in_change, SignInState};
+        use super::{SignInState, sign_in_change};
         let mut shown = None;
         let completed = SignInState::Done(Ok(horizon_launcher::account::Account {
             uuid: "11111111111111111111111111111111".into(),
