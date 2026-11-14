@@ -130,7 +130,12 @@ impl Game<'_> {
             };
             // A controller's stick click acts as the key without setting the modifier: it is held
             // while the pad holds it (or its release waits for a tick), not when the keyboard says.
-            let pad = self.input_holds(mapping);
+            // Nor does the modifier say anything of a mod's hold (`set_mapping_down`).
+            let pad = self.input_holds(mapping)
+                || self.keys.held_by(
+                    &[KeyCode::ShiftLeft, KeyCode::ControlLeft][slot],
+                    Source::Mod,
+                );
             if !held && !pad {
                 self.toggles.0[slot].set_down(false, needs_toggle);
                 self.sync_toggle(slot);
@@ -151,7 +156,7 @@ impl Game<'_> {
                     .translate_all(*physical)
                     .contains(&Ok(key))
             }),
-            Source::Agent => false,
+            Source::Agent | Source::Mod => false,
         }
     }
     /// Apply a physical key to every mapping bound to it.
@@ -377,7 +382,7 @@ impl Game<'_> {
             _ => return false,
         };
         match source {
-            Source::Keyboard | Source::Agent => self.input_holds(mapping),
+            Source::Keyboard | Source::Agent | Source::Mod => self.input_holds(mapping),
             Source::Pad => {
                 let keys = &self.settings.keys;
                 self.physical_buttons
@@ -413,31 +418,59 @@ impl Game<'_> {
             }
             return Ok(());
         }
-        if self.remote.is_some() {
-            return self.remote_mouse(button, pressed);
+        // MouseHandler.onButton: `KeyMapping.set`, then `KeyMapping.click` for a press.
+        self.mouse_mapping_set_down(button, pressed);
+        if pressed {
+            self.mouse_mapping_click(button);
+        }
+        Ok(())
+    }
+    /// `KeyMapping.setDown` for the mapping on `button`: attack and use, toggled by their option;
+    /// nothing reads the pick mapping's held state.
+    pub(super) fn mouse_mapping_set_down(&mut self, button: MouseButton, down: bool) {
+        let (slot, option) = match button {
+            MouseButton::Left => (2, self.settings.toggle_attack),
+            MouseButton::Right => (3, self.settings.toggle_use),
+            _ => return,
+        };
+        self.toggles.0[slot].set_down(down, option);
+        self.left = self.toggles.is_down(2);
+        self.right = self.toggles.is_down(3);
+    }
+    /// `KeyMapping.click` for the mapping on `button`: on a server, the queued click
+    /// `handleKeybinds` takes on the next tick (`interaction_input`); with no server, the attack
+    /// and use clicks `tick_local_hand` takes, and pick block at once.
+    pub(super) fn mouse_mapping_click(&mut self, button: MouseButton) {
+        use horizon_client::interaction_input::Button;
+        if let Some(slot) = match button {
+            MouseButton::Left => Some(2),
+            MouseButton::Right => Some(3),
+            _ => None,
+        } {
+            self.toggles.0[slot].click();
+        }
+        if let Some(remote) = self.remote.as_mut() {
+            let input = match button {
+                MouseButton::Left => Button::Attack,
+                MouseButton::Right => Button::Use,
+                MouseButton::Middle => Button::Pick,
+                _ => return,
+            };
+            remote.input.press(input);
+            return;
         }
         match button {
-            MouseButton::Left => {
-                // KeyMapping.click: Minecraft.tick starts the attack.
-                if pressed {
-                    self.attack_clicks += 1;
-                }
-                self.toggles
-                    .button(2, pressed, false, self.settings.toggle_attack);
-                self.left = self.toggles.is_down(2);
-            }
+            // KeyMapping.click: Minecraft.tick starts the attack.
+            MouseButton::Left => self.attack_clicks += 1,
+            // handleKeybinds consumes use clicks without acting while an
+            // item is in use. Minecraft.tick runs them after the attack
+            // clicks, so a place and a break in one tick replace the block.
             MouseButton::Right => {
-                self.toggles
-                    .button(3, pressed, false, self.settings.toggle_use);
-                self.right = self.toggles.is_down(3);
-                // handleKeybinds consumes use clicks without acting while an
-                // item is in use. Minecraft.tick runs them after the attack
-                // clicks, so a place and a break in one tick replace the block.
-                if pressed && self.using.is_none() {
+                if self.using.is_none() {
                     self.use_clicks += 1;
                 }
             }
-            MouseButton::Middle if pressed => {
+            MouseButton::Middle => {
                 // handleKeybinds: the number keys select before key.pickItem.
                 self.select_queued_hotbar();
                 // Minecraft.pickBlockOrEntity -> the server's handlePickItemFromBlock:
@@ -469,7 +502,6 @@ impl Game<'_> {
             }
             _ => {}
         }
-        Ok(())
     }
 }
 
