@@ -58,6 +58,16 @@ pub trait ClientViewClientHost {
     #[access(ClientSetup)]
     fn camera(&self) -> Option<Camera>;
     /// Side: client.
+    /// World point `at` projected on this frame's screen (`GameRenderer.projectPointToScreen`):
+    /// normalised device x and y, -1 to 1 across the screen (x to the right, y up), and depth z
+    /// (reversed: nearer is larger). The view is the camera's rotation without bob or spin, as
+    /// vanilla's. Unlike vanilla, None for a point behind the camera or a non-finite `at`; also None
+    /// outside a world, before extraction, and between render frames. Supported during GUI,
+    /// screen and world drawing after camera extraction. In GUI pixels of a [`DrawContext`] of size
+    /// `[w, h]`: `((x + 1) / 2 * w, (1 - y) / 2 * h)`.
+    #[access(ClientSetup)]
+    fn project(&self, at: [f64; 3]) -> Option<[f32; 3]>;
+    /// Side: client.
     /// The entity the view follows (`Minecraft.getCameraEntity`): the entity a server attached
     /// the camera to, else the local player. None outside a client world.
     #[access(ClientSetup)]

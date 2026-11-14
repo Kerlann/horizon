@@ -97,12 +97,14 @@ impl Game<'_> {
             MenuReplace::CloseFirst => self.guest_close_menus_and_tell(conn),
             MenuReplace::InPlace => self.guest_close_all(conn),
         }
-        self.lan.as_mut()?.hub.open_native_menu(
+        let window = self.lan.as_mut()?.hub.open_native_menu(
             conn,
             rows,
             component_nbt(&title.component()),
             items,
-        )
+        )?;
+        self.player_menu_opening(conn);
+        Some(window)
     }
     /// `ServerPlayer.openMenu(provider, extraDataWriter)` for a content mod menu type and no
     /// block: the type's container slots show empty and their clicks reach the mods, as
@@ -144,7 +146,7 @@ impl Game<'_> {
         // ServerPlayer.openMenu closes the menu that was open.
         self.guest_close_all(conn);
         let host = self.lan.as_mut().ok_or(OpenMenuError::PlayerUnavailable)?;
-        Ok(host.hub.open_menu_window(
+        let window = host.hub.open_menu_window(
             conn,
             &id,
             component_nbt(&title.component()),
@@ -152,7 +154,11 @@ impl Game<'_> {
             horizon_client::lan::menu::Slots::Native,
             vec![None; kind.slots],
             Some(extra),
-        ))
+        );
+        if window.is_some() {
+            self.player_menu_opening(conn);
+        }
+        Ok(window)
     }
     /// The native menu the player has open as window `window`, for its slots;
     /// None for another window, a menu the game opened, or a player not here.
@@ -180,7 +186,7 @@ impl Game<'_> {
                 .and_then(|g| g.menu.as_ref())
                 .is_some_and(|m| m.slots == horizon_client::lan::menu::Slots::Native)
         {
-            host.hub.close_container(conn);
+            self.guest_close_menus_and_tell(conn);
         }
     }
 }
@@ -189,8 +195,6 @@ impl Game<'_> {
 /// (`native_player_container_open`).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct HeardMenu {
-    /// The window id the player's client knows it by.
-    window: i32,
     /// The menu type's name; a mount's inventory has none in vanilla.
     menu: String,
     /// The block the menu is of.
@@ -244,61 +248,22 @@ pub(super) fn open_menu_of(host: &LanHost, conn: u32) -> Option<(i32, &str, Opti
 
 /// Where the game calls the menu hook points.
 impl Game<'_> {
-    /// The mods hear the menus the players here opened or closed since the
-    /// last tick (`PlayerContainerEvent`), in that order for a menu another
-    /// replaced: what each player has open is compared with what the mods last
-    /// heard. A menu opened and closed again inside one tick is not heard.
-    pub(super) fn tick_player_menus(&mut self) {
-        let Some(host) = self.lan.as_ref() else {
+    /// `ServerPlayer.openMenu` / `openHorseInventory`: called only after
+    /// constructing the menu, queuing its open packet and sending full contents.
+    /// Remember it before dispatch so a hook can close it synchronously.
+    pub(super) fn player_menu_opening(&mut self, conn: u32) {
+        let Some(host) = self.lan.as_mut() else {
             return;
         };
-        let conns: Vec<u32> = host
-            .hub
-            .guests
-            .iter()
-            .filter(|g| host.hub.here(g))
-            .map(|g| g.conn)
-            .collect();
-        for conn in conns {
-            let Some(host) = self.lan.as_ref() else {
-                return;
-            };
-            // `AbstractContainerScreen.tick` closes the container once the player is no longer
-            // alive, so a death closes the menu now (the lid falls, the mods hear Close), not at
-            // the respawn.
-            let dead = host.hub.guest(conn).is_some_and(|g| g.dead);
-            if dead && host.hub.guest(conn).is_some_and(|g| g.menu.is_some()) {
-                self.guest_container_closed(conn);
-                if let Some(host) = self.lan.as_mut() {
-                    host.hub.close_container(conn);
-                }
-            }
-            let Some(host) = self.lan.as_mut() else {
-                return;
-            };
-            // Compared as borrowed: nothing is built each tick while it stays open.
-            let now = if dead { None } else { open_menu_of(host, conn) };
-            let heard = host.play.get(&conn).and_then(|p| p.menu_heard.as_ref());
-            if now == heard.map(|h| (h.window, h.menu.as_str(), h.pos)) {
-                continue;
-            }
-            let now = now.map(|(window, menu, pos)| HeardMenu {
-                window,
-                menu: menu.to_owned(),
-                pos,
-            });
-            let heard = host.play.get(&conn).and_then(|p| p.menu_heard.clone());
-            // Remembered first: a hook can run commands that close menus.
-            if let Some(p) = host.play.get_mut(&conn) {
-                p.menu_heard.clone_from(&now);
-            }
-            if let Some(old) = heard {
-                self.player_menu_closed(conn, old);
-            }
-            if let Some(new) = now {
-                self.player_menu_opened(conn, new);
-            }
-        }
+        let Some((_, menu, pos)) = open_menu_of(host, conn) else {
+            return;
+        };
+        let menu = HeardMenu {
+            menu: menu.to_owned(),
+            pos,
+        };
+        host.menus.entry(conn).or_default().menu_heard = Some(menu.clone());
+        self.player_menu_opened(conn, menu);
     }
 
     /// `conn`'s menu closes with the guest in the level in place
@@ -308,7 +273,7 @@ impl Game<'_> {
         let heard = self
             .lan
             .as_mut()
-            .and_then(|host| host.play.get_mut(&conn))
+            .and_then(|host| host.menus.get_mut(&conn))
             .and_then(|p| p.menu_heard.take());
         if let Some(old) = heard {
             self.player_menu_closed(conn, old);
@@ -437,6 +402,157 @@ mod tests {
         )
         .unwrap()
         .unwrap()
+    }
+
+    #[test]
+    #[ignore = "daily"]
+    fn container_hooks_follow_actual_open_boundaries_without_a_tick() {
+        use mod_api::{Hooks, ModEntry, Mods, PlayerContainerCloseEvent, PlayerContainerOpenEvent};
+        use std::sync::Mutex;
+        if super::super::native_entity_refs::tests::run_fresh_cases(
+            "game::native_menus::tests::container_hooks_follow_actual_open_boundaries_without_a_tick",
+            "HORIZON_CONTAINER_BOUNDARY_CASE",
+            &["same_tick", "replace", "mount", "guest"],
+        ) {
+            return;
+        }
+        struct Watch {
+            events: Arc<Mutex<Vec<(bool, String)>>>,
+            packets: Arc<Mutex<Option<mpsc::Receiver<Out>>>>,
+        }
+        #[mod_api::__subscriptions]
+        impl Hooks for Watch {
+            fn player_container_open(
+                &self,
+                _host: &mut dyn ServerHost,
+                event: &mut PlayerContainerOpenEvent<'_>,
+            ) {
+                // Both packets must precede the callback, not just the open's return.
+                let packets = self.packets.lock().unwrap();
+                let packets = sent(packets.as_ref().unwrap());
+                let open = packets
+                    .iter()
+                    .find_map(|packet| match packet {
+                        C::OpenScreen(p) => Some(p.container),
+                        C::MountScreenOpen(p) => Some(p.container),
+                        _ => None,
+                    })
+                    .unwrap();
+                assert!(packets.iter().any(|packet| {
+                    matches!(packet, C::ContainerSetContent(p) if p.container == open)
+                }));
+                self.events
+                    .lock()
+                    .unwrap()
+                    .push((true, event.menu.to_string()));
+            }
+            fn player_container_close(
+                &self,
+                _host: &mut dyn ServerHost,
+                event: &mut PlayerContainerCloseEvent<'_>,
+            ) {
+                self.events
+                    .lock()
+                    .unwrap()
+                    .push((false, event.menu.to_string()));
+            }
+        }
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let packets = Arc::new(Mutex::new(None));
+        let mods: Mods = vec![ModEntry::new(
+            "watch",
+            Box::new(Watch {
+                events: events.clone(),
+                packets: packets.clone(),
+            }),
+        )]
+        .into();
+        mod_platform::__private::install(mods.clone());
+        crate::game::api_values::install_parts(&mods).unwrap();
+        with_game(|game| {
+            *packets.lock().unwrap() = Some(watched_guest(game));
+            let case = std::env::var("HORIZON_CONTAINER_BOUNDARY_CASE").unwrap();
+            // Own inventory and unsuccessful construction have no open boundary.
+            game.lan_guest_packet(1, S::ContainerClose(play::ContainerClose { container: 0 }));
+            game.lan_open_mount(1, u32::MAX);
+            assert!(!game.lan_open_container(1, (0, 64, 0)));
+            assert!(events.lock().unwrap().is_empty());
+            if case == "mount" {
+                game.mobs.push(horizon_client::mobs::Mob::new(
+                    31,
+                    game.res.mob_types().get("minecraft:horse").unwrap().clone(),
+                    horizon_core::geometry::Vec3::new(0.0, 0.0, 0.0),
+                    0.0,
+                ));
+                game.lan_open_mount(1, 31);
+                assert_eq!(
+                    open_menu_of(game.lan.as_ref().unwrap(), 1),
+                    Some((1, "horizon:mount_inventory", None))
+                );
+                game.lan_guest_packet(1, S::ContainerClose(play::ContainerClose { container: 1 }));
+                assert_eq!(
+                    *events.lock().unwrap(),
+                    vec![
+                        (true, "horizon:mount_inventory".into()),
+                        (false, "horizon:mount_inventory".into()),
+                    ]
+                );
+                return;
+            }
+            let first = if case == "guest" {
+                let mut window = None;
+                game.as_guest(1, |game| {
+                    window = Some(open(game, 1, "first", MenuReplace::CloseFirst));
+                });
+                window.unwrap()
+            } else {
+                open(game, 1, "first", MenuReplace::CloseFirst)
+            };
+            assert_eq!(first, 1);
+            assert_eq!(
+                open_menu_of(game.lan.as_ref().unwrap(), 1),
+                Some((1, "minecraft:generic_9x1", None))
+            );
+            assert_eq!(
+                *events.lock().unwrap(),
+                vec![(true, "minecraft:generic_9x1".into())]
+            );
+            if case == "replace" {
+                assert_eq!(open(game, 2, "second", MenuReplace::InPlace), 2);
+                // A stale close must not notify the replacement.
+                game.lan_guest_packet(1, S::ContainerClose(play::ContainerClose { container: 1 }));
+                assert_eq!(
+                    *events.lock().unwrap(),
+                    vec![
+                        (true, "minecraft:generic_9x1".into()),
+                        (false, "minecraft:generic_9x1".into()),
+                        (true, "minecraft:generic_9x2".into()),
+                    ]
+                );
+                game.close_menu(123);
+                assert_eq!(
+                    *events.lock().unwrap(),
+                    vec![
+                        (true, "minecraft:generic_9x1".into()),
+                        (false, "minecraft:generic_9x1".into()),
+                        (true, "minecraft:generic_9x2".into()),
+                        (false, "minecraft:generic_9x2".into()),
+                    ]
+                );
+            } else {
+                game.lan_guest_packet(
+                    1,
+                    S::ContainerClose(play::ContainerClose { container: first }),
+                );
+                assert_eq!(
+                    *events.lock().unwrap(),
+                    vec![
+                        (true, "minecraft:generic_9x1".into()),
+                        (false, "minecraft:generic_9x1".into()),
+                    ]
+                );
+            }
+        });
     }
 
     #[test]
