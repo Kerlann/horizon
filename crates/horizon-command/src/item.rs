@@ -88,6 +88,7 @@ pub const DECODED_COMPONENTS: &[&str] = &[
     "minecraft:note_block_sound",
     "minecraft:tooltip_style",
     "minecraft:waxed",
+    "minecraft:intangible_projectile",
 ];
 
 /// Validate and decode a component into the value representation shared with stacks.
@@ -2109,6 +2110,33 @@ mod tests {
         ] {
             assert!(decode_component("minecraft:waxed", &value, &registry).is_err());
             assert!(decoded_component_value("minecraft:waxed", &value, &registry).is_err());
+        }
+    }
+
+
+
+    #[test]
+    fn intangible_projectile_unit_codec_requires_map_and_ignores_fields() {
+        use super::{Compound, Registries, Tag, decoded_component_value};
+        let registry = Registries::default();
+        let id = "minecraft:intangible_projectile";
+        for value in [
+            Tag::Compound(Compound::new()),
+            Tag::compound([("unknown", Tag::List(vec![Tag::Int(7)]))]),
+        ] {
+            assert_eq!(
+                decoded_component_value(id, &value, &registry).unwrap(),
+                Tag::Compound(Compound::new())
+            );
+        }
+        for value in [
+            Tag::Byte(1),
+            Tag::Int(0),
+            Tag::String("unit".into()),
+            Tag::List(vec![]),
+        ] {
+            assert!(decode_component(id, &value, &registry).is_err());
+            assert!(decoded_component_value(id, &value, &registry).is_err());
         }
     }
 
