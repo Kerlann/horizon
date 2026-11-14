@@ -804,25 +804,158 @@ fn an_unknown_damage_type_particle_or_tag_explodes_nothing() {
         ),
     ];
     for (settings, refusal) in refusals {
-        heard(move |game, via, heard| {
-            mob(
-                game,
-                47,
-                "minecraft:zombie",
-                Vec3::new(10.5, 80.0, 8.5),
-                20.0,
-            );
+        refused(settings, refusal);
+    }
+}
+
+/// A blast with `settings` beside a zombie answers `refusal` through both
+/// targets: no block breaks, the zombie keeps its health and no hook hears it.
+fn refused(settings: ExplosionSettings, refusal: ExplodeError) {
+    heard(move |game, via, heard| {
+        mob(
+            game,
+            47,
+            "minecraft:zombie",
+            Vec3::new(10.5, 80.0, 8.5),
+            20.0,
+        );
+        let blast = Blast {
+            settings: settings.clone(),
+            ..Blast::at([8.5, 80.5, 8.5], 4.0)
+        };
+        explode(game, via, blast, Err(refusal));
+        assert_eq!(stone(game), 256, "{via:?} {refusal:?}");
+        assert_eq!(game.mobs[0].health, 20.0, "{via:?} {refusal:?}");
+        assert!(
+            heard.lock().unwrap().starts.is_empty(),
+            "{via:?} {refusal:?}"
+        );
+    });
+}
+
+/// Smoke block particles with these weights.
+fn weighted(weights: &[u32]) -> ExplosionSettings {
+    let list = weights
+        .iter()
+        .map(|&weight| mod_api::ExplosionBlockParticle {
+            weight,
+            ..Default::default()
+        });
+    ExplosionSettings {
+        block_particles: Some(list.collect()),
+        ..Default::default()
+    }
+}
+
+#[test]
+#[ignore = "daily"]
+fn a_block_particle_weight_past_the_packets_int_explodes_nothing() {
+    let past = i32::MAX as u32 + 1;
+    refused(weighted(&[past]), ExplodeError::InvalidParticle);
+}
+
+#[test]
+#[ignore = "daily"]
+fn block_particle_weights_whose_total_is_past_an_int_explode_nothing() {
+    let max = i32::MAX as u32;
+    refused(weighted(&[max, 1]), ExplodeError::InvalidParticle);
+}
+
+/// A nether portal block at (8, 80, 10) between obsidian on its axis (x) and
+/// above and below, which nothing around it changes.
+fn portal(game: &mut Game<'_>) {
+    for pos in ["7 80 10", "9 80 10", "8 81 10", "8 79 10"] {
+        assert!(game.run_command(&format!("setblock {pos} minecraft:obsidian")));
+    }
+    assert!(game.run_command("setblock 8 80 10 minecraft:nether_portal[axis=x]"));
+}
+
+#[test]
+#[ignore = "daily"]
+fn primed_tnt_that_went_through_a_portal_spares_a_portal_unless_a_calculator_is_passed() {
+    // (source, calculator, the portal survives)
+    let cases = [
+        (true, false, true),
+        (false, false, false),
+        (true, true, false),
+    ];
+    for (source, calculator, survives) in cases {
+        heard(move |game, via, _| {
+            portal(game);
+            let source = source.then(|| {
+                let id = tnt(game, None);
+                game.tnts.last_mut().unwrap().used_portal = true;
+                game.entity(id).unwrap()
+            });
             let blast = Blast {
-                settings: settings.clone(),
+                source,
+                settings: ExplosionSettings {
+                    calculator: calculator.then(ExplosionCalculator::default),
+                    ..Default::default()
+                },
                 ..Blast::at([8.5, 80.5, 8.5], 4.0)
             };
-            explode(game, via, blast, Err(refusal));
-            assert_eq!(stone(game), 256, "{via:?} {refusal:?}");
-            assert_eq!(game.mobs[0].health, 20.0, "{via:?} {refusal:?}");
-            assert!(
-                heard.lock().unwrap().starts.is_empty(),
-                "{via:?} {refusal:?}"
+            explode(game, via, blast, Ok(()));
+            let case = (source.is_some(), calculator);
+            assert_eq!(name(game, [8, 79, 8]), "minecraft:air", "{via:?} {case:?}");
+            let expected = if survives {
+                "minecraft:nether_portal"
+            } else {
+                "minecraft:air"
+            };
+            assert_eq!(name(game, [8, 80, 10]), expected, "{via:?} {case:?}");
+            assert_eq!(
+                name(game, [7, 80, 10]),
+                "minecraft:obsidian",
+                "{via:?} {case:?}"
             );
+        });
+    }
+}
+
+#[test]
+#[ignore = "daily"]
+fn a_wind_charge_source_brings_its_tag_calculator_unless_a_calculator_is_passed() {
+    use horizon_client::projectiles::{Projectile, ProjectileKind};
+    // (source, calculator, obsidian survives)
+    let cases = [
+        (true, false, false),
+        (false, false, true),
+        (true, true, true),
+    ];
+    for (source, calculator, survives) in cases {
+        heard(move |game, via, _| {
+            assert!(game.run_command("setblock 8 80 10 minecraft:obsidian"));
+            assert!(game.run_command("setblock 8 80 6 minecraft:bedrock"));
+            let source = source.then(|| {
+                let charge =
+                    Projectile::new(ProjectileKind::WindCharge, Vec3::new(4.5, 80.5, 4.5), None);
+                let id = game.add_projectile(charge);
+                game.entity(id).unwrap()
+            });
+            let blast = Blast {
+                source,
+                settings: ExplosionSettings {
+                    calculator: calculator.then(ExplosionCalculator::default),
+                    ..Default::default()
+                },
+                ..Blast::at([8.5, 80.5, 8.5], 4.0)
+            };
+            explode(game, via, blast, Ok(()));
+            let case = (source.is_some(), calculator);
+            assert_eq!(name(game, [8, 79, 8]), "minecraft:air", "{via:?} {case:?}");
+            // `#blocks_wind_charge_explosions` (barrier, bedrock) stands either way.
+            assert_eq!(
+                name(game, [8, 80, 6]),
+                "minecraft:bedrock",
+                "{via:?} {case:?}"
+            );
+            let expected = if survives {
+                "minecraft:obsidian"
+            } else {
+                "minecraft:air"
+            };
+            assert_eq!(name(game, [8, 80, 10]), expected, "{via:?} {case:?}");
         });
     }
 }

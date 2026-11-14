@@ -110,7 +110,7 @@ Every `ExplosionSettings` field left `None` is vanilla's own choice.
 | Field | What it does | `None` |
 | --- | --- | --- |
 | `damage_type` | A registered damage type (`mymod:fuel_tank`): its death message, its tags (`#is_explosion`, armour, immunity), and the type `living_damage` and `explosion_start` hear | The one derived above |
-| `calculator` | `ExplosionCalculator`, vanilla's `SimpleExplosionDamageCalculator` | The default calculator |
+| `calculator` | `ExplosionCalculator`, vanilla's `SimpleExplosionDamageCalculator` | The source's calculator (below) |
 | `small_particle` | The centre particle of a small blast (a radius under 2, or one that keeps its blocks) | `minecraft:explosion` |
 | `large_particle` | The centre particle of any other blast | `minecraft:explosion_emitter` |
 | `block_particles` | `ExplosionBlockParticle`s (particle, scaling, speed, weight), one picked by weight for each bit of debris; an empty list throws none | `minecraft:poof` (scaling 0.5) and `minecraft:smoke`, one each |
@@ -132,10 +132,21 @@ The calculator's fields:
   `explosion_resistance` is asked. Leave it `None` to keep the usual rule, with
   your parts' answers.
 
+Without a calculator the source brings its own, as its own blast does in
+vanilla:
+
+| Source | Calculator |
+| --- | --- |
+| A primed TNT that went through a portal | Nether portal blocks resist nothing and never break; every other cell as usual |
+| A wind charge (a player's or a breeze's) | The blocks of `#blocks_wind_charge_explosions` (barrier, bedrock) resist 3,600,000; every other cell, fluids included, nothing |
+| Anything else, or `None` | The default calculator |
+
+With a calculator given, the source's is not used, as in vanilla.
+
 A particle is a vanilla particle type that takes no options (`minecraft:flame`,
-`minecraft:end_rod`; not `minecraft:block` or `minecraft:item`). With a
-calculator given, a source's own calculator (a wither skull's, a TNT
-minecart's) is not used, as in vanilla.
+`minecraft:end_rod`; not `minecraft:block` or `minecraft:item`). The packet
+holds each block particle's weight as an `int`, so a weight, or the list's
+total, past 2,147,483,647 is refused.
 
 ### Refusals
 
@@ -147,7 +158,7 @@ minecart's) is not used, as in vanilla.
 | `InvalidBlast` | A centre outside the world or not finite, a radius or knockback multiplier that isn't finite |
 | `UnknownDamageType` | A damage type that isn't registered |
 | `UnknownBlockTag` | An `immune_blocks` that names no block tag |
-| `InvalidParticle` | A particle that isn't a particle type taking no options, or a block particle with a weight of 0 or a scaling or speed that isn't finite |
+| `InvalidParticle` | A particle that isn't a particle type taking no options, a block particle with a weight of 0 or a scaling or speed that isn't finite, or a weight or total of weights past 2,147,483,647 |
 | `UnknownSound` | A sound that isn't a sound event id, or a `minecraft:` one the server doesn't have |
 
 ## Entities that destroy blocks

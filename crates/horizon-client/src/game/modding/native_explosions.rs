@@ -5,10 +5,11 @@ use super::{
     Game,
     commands::Target,
     explosion::{BlockInteraction, ExplosionSource},
-    explosion_settings::{BlastCalculator, BlastEffects, BlastSettings},
+    explosion_settings::{BlastCalculator, BlastEffects, BlastSettings, SourceCalculator},
     native_hooks::{mod_particles_ok, sound_id},
 };
 use horizon_client::particles::{ExplosionParticle, ParticleOptions, ParticleType};
+use horizon_client::projectiles::ProjectileKind;
 use horizon_client::{
     gamerules::vanilla,
     mobs::{NamedDamage, Who},
@@ -99,10 +100,16 @@ impl Game<'_> {
         // neither takes that blast's source, cause or flags nor leaves its own
         // behind: that blast gets them back after.
         let outer = self.take_blast_state();
+        let mod_calculator = settings.calculator.is_some();
+        self.combat.blast_settings = settings;
         if let Some((id, target)) = source {
             self.attribute_native_blast(id, target);
+            // `damageCalculator == null ? makeDamageCalculator(source)`: a
+            // calculator the mod passes replaces the source's.
+            if !mod_calculator {
+                self.native_blast_calculator(id, target);
+            }
         }
-        self.combat.blast_settings = settings;
         // Only the source's `isSilent` keeps the blast quiet.
         let blast =
             ExplosionSource::default().with_silence(id.is_some_and(|id| self.entity_silent(id)));
@@ -113,8 +120,9 @@ impl Game<'_> {
 
     /// `settings` checked against the game's registries and resolved for the
     /// blast: a registered damage type, a finite knockback multiplier, a block
-    /// tag that exists, particle types that need no options with a weight and
-    /// finite numbers, and a sound event id (a `minecraft:` one the server has).
+    /// tag that exists, particle types that need no options with finite
+    /// numbers and weights the packet holds (each at least 1, their total at
+    /// most `i32::MAX`), and a sound event id (a `minecraft:` one the server has).
     fn native_blast_settings(
         &self,
         settings: ExplosionSettings,
@@ -165,6 +173,14 @@ impl Game<'_> {
                 effects.large = blast_particle(id)?;
             }
             if let Some(list) = &settings.block_particles {
+                // The packet writes each weight as an `int` and `WeightedList`
+                // refuses a total past `Integer.MAX_VALUE`.
+                let total = list.iter().try_fold(0i32, |total, p| {
+                    total.checked_add(i32::try_from(p.weight).ok()?)
+                });
+                if total.is_none() {
+                    return Err(ExplodeError::InvalidParticle);
+                }
                 effects.block_particles = list
                     .iter()
                     .map(|p| {
@@ -194,6 +210,7 @@ impl Game<'_> {
         Ok(BlastSettings {
             damage,
             calculator,
+            source_calculator: SourceCalculator::Default,
             effects,
         })
     }
@@ -248,6 +265,38 @@ impl Game<'_> {
             Some((Who::Mob(mob), _)) => self.combat.explosion_owner = Some(mob),
             None => {}
         }
+    }
+
+    /// The damage calculator the source `id` brings to its blast when the mod
+    /// passes none (`ServerExplosion.makeDamageCalculator`), as the source's
+    /// own blast has it: a primed TNT that went through a portal the
+    /// portal-proof one (`PrimedTnt.explode`), a wind charge the tag one
+    /// (`AbstractWindCharge.explode`). Other sources bring the default
+    /// calculator. The rays take it from the blast state
+    /// (`blast_calculator_step`).
+    pub(super) fn native_blast_calculator(&mut self, id: u32, target: Target) {
+        let calculator = match target {
+            Target::Tnt(_) if self.tnts.iter().any(|t| t.id == id && t.used_portal) => {
+                SourceCalculator::PortalProof
+            }
+            Target::Projectile(_)
+                if self.creatures.projectiles.iter().any(|p| {
+                    p.id == id
+                        && matches!(
+                            p.kind,
+                            ProjectileKind::WindCharge | ProjectileKind::BreezeWindCharge
+                        )
+                }) =>
+            {
+                let items = self.res.items();
+                let tag = items
+                    .block_tags
+                    .get("minecraft:blocks_wind_charge_explosions");
+                SourceCalculator::WindCharge(tag.cloned().unwrap_or_default())
+            }
+            _ => return,
+        };
+        self.combat.blast_settings.source_calculator = calculator;
     }
 
     /// The blast going off now, cleared to a sourceless one.

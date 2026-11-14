@@ -130,9 +130,17 @@ impl ParticleEngine {
             let speed =
                 0.5 / (distance / explosion.radius + 0.1) * r.next_float() * r.next_float() + 0.3;
             // `WeightedList.getRandomOrThrow`: one `nextInt(totalWeight)`,
-            // even for a single entry.
-            let total = explosion.particles.iter().map(|p| p.weight).sum::<u32>();
-            let mut pick = r.next_int_bound(total as i32).unwrap_or(0) as u32;
+            // even for a single entry. A list whose total is past an `int`
+            // (which `WeightedList` refuses) throws nothing.
+            let total = explosion
+                .particles
+                .iter()
+                .map(|p| u64::from(p.weight))
+                .sum::<u64>();
+            let Ok(total) = i32::try_from(total) else {
+                continue;
+            };
+            let mut pick = r.next_int_bound(total).unwrap_or(0) as u32;
             let Some(particle) = explosion.particles.iter().find(|p| {
                 let here = pick < p.weight;
                 pick = pick.saturating_sub(p.weight);
@@ -153,5 +161,42 @@ impl ParticleEngine {
                 [d.x * speed, d.y * speed, d.z * speed],
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use horizon_assets::resource_source::ResourceSource;
+    use std::collections::{HashMap, HashSet};
+
+    /// The debris one tick throws in air for a blast of 100 blocks at the
+    /// camera whose block particles are smoke with these weights.
+    fn debris(weights: &[u32]) -> usize {
+        let mut engine = ParticleEngine::new(
+            &ResourceSource::indexed(Default::default()),
+            &HashMap::new(),
+            &HashSet::new(),
+        );
+        let particles: Vec<_> = weights
+            .iter()
+            .map(|&weight| ExplosionParticle {
+                weight,
+                ..ExplosionParticle::defaults().remove(1)
+            })
+            .collect();
+        engine.track_explosion([0.0; 3], 4.0, 100, &particles);
+        engine.tick_explosions_with(&|_| true);
+        engine.pending.len()
+    }
+
+    #[test]
+    fn weights_whose_total_is_past_an_int_throw_no_debris() {
+        let max = i32::MAX as u32;
+        assert_eq!(debris(&[max, max, max]), 0);
+        assert_eq!(debris(&[1 << 30, 1 << 30]), 0);
+        assert_eq!(debris(&[u32::MAX, 1]), 0);
+        assert_eq!(debris(&[max - 1, 1]), 100);
+        assert_eq!(debris(&[1, 1]), 100);
     }
 }

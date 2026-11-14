@@ -15,7 +15,12 @@ pub struct ExplosionSettings {
     /// (`minecraft:player_explosion` or `minecraft:explosion`).
     pub damage_type: Option<String>,
     /// The damage calculator (`SimpleExplosionDamageCalculator`); `None` is
-    /// the default one, which asks each block's parts and its own resistance.
+    /// the source's own, as vanilla has it: a primed TNT that went through a
+    /// portal passes through nether portals and spares them, a wind charge's
+    /// blast resists 3,600,000 in `#blocks_wind_charge_explosions` and nothing
+    /// in every other cell. Any other source, or none, takes the default one,
+    /// which asks each block's parts and its own resistance. A calculator
+    /// given replaces the source's.
     pub calculator: Option<ExplosionCalculator>,
     /// The centre particle of a small blast (a radius under 2, or one that
     /// keeps its blocks); `None` is `minecraft:explosion`.
@@ -72,7 +77,8 @@ pub struct ExplosionBlockParticle {
     pub scaling: f32,
     /// What its speed is multiplied by.
     pub speed: f32,
-    /// Its weight in the pick, at least 1.
+    /// Its weight in the pick, at least 1. The packet holds it as an `int`:
+    /// a weight, or the list's total, past `i32::MAX` is refused.
     pub weight: u32,
 }
 
@@ -116,7 +122,9 @@ pub enum ExplodeError {
     /// The calculator's `immune_blocks` names no block tag.
     UnknownBlockTag,
     /// A particle is not a particle type that takes no options, or a block
-    /// particle has a weight of 0 or a scaling or speed that is not finite.
+    /// particle has a weight of 0 or past `i32::MAX` or a scaling or speed
+    /// that is not finite, or the block particles' weights total past
+    /// `i32::MAX`.
     InvalidParticle,
     /// The sound is not a sound event id, or is a `minecraft:` one the
     /// server does not have.

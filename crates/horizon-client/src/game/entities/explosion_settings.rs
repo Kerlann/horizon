@@ -18,7 +18,25 @@ pub(super) struct BlastSettings {
     /// The damage type, in place of the one the blast derives.
     pub(super) damage: Option<NamedDamage>,
     pub(super) calculator: Option<BlastCalculator>,
+    /// The calculator the blast's source brings, used only when the mod
+    /// passes none (`ServerExplosion.makeDamageCalculator`).
+    pub(super) source_calculator: SourceCalculator,
     pub(super) effects: Option<Box<BlastEffects>>,
+}
+
+/// The resistance rule a mod blast's source brings with it.
+#[derive(Default)]
+pub(super) enum SourceCalculator {
+    /// The default calculator.
+    #[default]
+    Default,
+    /// `PrimedTnt.USED_PORTAL_DAMAGE_CALCULATOR`, a primed TNT's that went
+    /// through a portal: a nether portal neither resists nor breaks.
+    PortalProof,
+    /// `AbstractWindCharge`'s calculator: the blocks of
+    /// `#blocks_wind_charge_explosions` resist 3,600,000 and every other
+    /// cell, fluids included, nothing.
+    WindCharge(HashSet<String>),
 }
 
 /// `SimpleExplosionDamageCalculator(explodesBlocks, damagesEntities,
@@ -78,16 +96,23 @@ impl Game<'_> {
         damage.map_or(DamageKind::Explosion, DamageKind::Named)
     }
     /// What a ray's step through block `name` takes and whether the block is
-    /// spared, when the calculator names immune blocks: they resist 3,600,000
-    /// and every other cell, fluids included, nothing; no part is asked.
-    pub(super) fn blast_immune_step(&self, name: &str) -> Option<(f32, bool)> {
-        let immune = self
-            .combat
-            .blast_settings
-            .calculator
-            .as_ref()?
-            .immune
-            .as_ref()?;
+    /// spared, when the blast's calculator overrides the resistance rule: the
+    /// mod's calculator when it passes one, else its source's
+    /// (`SourceCalculator`). An immune set (the mod's `immune_blocks`, a wind
+    /// charge's tag) resists 3,600,000 in its blocks and nothing in every
+    /// other cell, fluids included, and no part is asked; a portal-proof
+    /// blast passes through a nether portal and spares it. None for the
+    /// usual rule. The rays and every resistance read take it from here.
+    pub(super) fn blast_calculator_step(&self, name: &str) -> Option<(f32, bool)> {
+        let settings = &self.combat.blast_settings;
+        let immune = match (&settings.calculator, &settings.source_calculator) {
+            (Some(c), _) => c.immune.as_ref()?,
+            (None, SourceCalculator::WindCharge(tag)) => tag,
+            (None, SourceCalculator::PortalProof) => {
+                return (name == "minecraft:nether_portal").then_some((0.0, true));
+            }
+            (None, SourceCalculator::Default) => return None,
+        };
         let taken = if immune.contains(name) {
             (IMMUNE_RESISTANCE + 0.3) * 0.3
         } else {

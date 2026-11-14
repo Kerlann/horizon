@@ -506,7 +506,7 @@ impl Game<'_> {
     ) -> (f32, bool) {
         let state = self.world.block(pos[0], pos[1], pos[2]);
         let f = self.res.facts().get(state);
-        if let Some(step) = self.blast_immune_step(&f.name) {
+        if let Some(step) = self.blast_calculator_step(&f.name) {
             return step;
         }
         // USED_PORTAL_DAMAGE_CALCULATOR returns no resistance and never explodes a portal.
