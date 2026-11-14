@@ -31,7 +31,8 @@ impl Game<'_> {
         if !(center.iter().all(|v| v.is_finite()) && radius.is_finite() && radius >= 0.0) {
             return Err(ExplosionDestroyError::InvalidBlast);
         }
-        if !self.level_in_place(level) || (self.serving.is_none() && self.options.dedicated.is_none())
+        if !self.level_in_place(level)
+            || (self.serving.is_none() && self.options.dedicated.is_none())
         {
             return Err(ExplosionDestroyError::Unavailable);
         }
@@ -65,17 +66,19 @@ impl Game<'_> {
         fire: bool,
         interaction: super::explosion::BlockInteraction,
     ) -> u32 {
-        let damage_type = super::creatures::damage_type(
-            DamageKind::Explosion,
-            self.blast_attacker().is_some(),
-        );
+        let damage_type =
+            super::creatures::damage_type(DamageKind::Explosion, self.blast_attacker().is_some());
         let start = self.explosion_start(center, radius, interaction, fire, damage_type);
         if self.explosion_start_cancelled(&start) {
             return 0;
         }
         // The positions in the order given, a repeated one once.
         let mut seen = HashSet::with_capacity(positions.len());
-        let mut targets: Vec<[i32; 3]> = positions.iter().copied().filter(|p| seen.insert(*p)).collect();
+        let mut targets: Vec<[i32; 3]> = positions
+            .iter()
+            .copied()
+            .filter(|p| seen.insert(*p))
+            .collect();
         if radius >= DETONATE_RADIUS {
             // A listener only spares: what it takes out stays, what it adds is ignored.
             let mut told = targets.clone();
@@ -86,7 +89,8 @@ impl Game<'_> {
         // Unlike the reference's rays, a mod's list never loads terrain.
         let (min_y, max_y) = (self.world.bottom_y(), self.world.top_y());
         targets.retain(|p| {
-            (min_y..max_y).contains(&p[1]) && self.world.chunks.contains_key(&(p[0] >> 4, p[2] >> 4))
+            (min_y..max_y).contains(&p[1])
+                && self.world.chunks.contains_key(&(p[0] >> 4, p[2] >> 4))
         });
         match self.explosion_block_step(&mut targets, radius, interaction, fire, &start) {
             Ok(hit) => hit as u32,
