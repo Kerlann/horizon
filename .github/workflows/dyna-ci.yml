@@ -575,7 +575,7 @@ jobs:
         run: cargo test $JOBS --profile test --workspace --lib --bins --tests --no-run -v 2>&1 | grep -E '^ +(Dirty|Compiling) ' || true
       # Each unignored test runs alone, three processes at a time. The preload library records inet
       # operations, including name resolution; the runner fails even if the test swallows the refusal.
-      # Build once here, never in daily. Unix sockets remain available.
+      # The guard library is built here only; the daily run does not preload it. Unix sockets remain available.
       - name: Test Rust core and voxel kernel correctness
         if: needs.changes.outputs.rust_required != 'false'
         run: |

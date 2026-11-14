@@ -330,7 +330,7 @@ mod tests {
         &mut owner.states
     }
     fn run<T: LoopSlots>(owner: &mut Owner, slot: impl FnOnce(&mut T)) -> Result<()> {
-        mod_platform::testing::with_mods(Default::default(), || {});
+        mod_platform::__private::initialize().unwrap();
         run_with_slots(
             owner,
             states,

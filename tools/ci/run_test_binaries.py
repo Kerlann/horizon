@@ -33,7 +33,6 @@ the binary with libtest's words, not the instruction, and needs a threshold vari
 """
 import argparse
 import itertools
-
 import json
 import os
 import re
@@ -46,8 +45,7 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from tools.ci import network_guard
+import network_guard
 
 
 def package_identity(package_id: str) -> tuple[str, str]:
@@ -278,8 +276,7 @@ def main(argv: list[str]) -> int:
                 yield from pool.map(lambda item: network_guard.run(
                     item, extra_env, bool(limits), args.network_guard.resolve(), run_one), batch)
     try:
-        completed = results()
-        for result in completed:
+        for result in results():
             failed_tests = report(result)
             times.extend((seconds, test, result["binary"]["label"])
                          for test, (_, seconds) in result.get("log", {}).items() if seconds is not None)
@@ -288,7 +285,7 @@ def main(argv: list[str]) -> int:
             peaks.append((result["max_rss_kib"], result["binary"]["label"]))
             if result["status"] != "ok":
                 failures.append((result["binary"]["label"], result["status"], failed_tests))
-    except ValueError as error:
+    except network_guard.ListingFailed as error:
         print(f"::error::{error}")
         return 1
     print(f"ran {len(binaries)} test binaries in {time.monotonic() - started:.1f}s; {len(failures)} failed")

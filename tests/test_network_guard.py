@@ -6,7 +6,9 @@ import sys
 import tempfile
 import unittest
 
-from tools.ci import network_guard, run_test_binaries
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "tools/ci"))
+import network_guard
+import run_test_binaries
 
 
 @unittest.skipUnless(sys.platform == "linux", "Linux preload guard")
@@ -68,6 +70,21 @@ class NetworkGuard(unittest.TestCase):
         self.assertEqual(tasks[0][1], ["--exact", "full::test"])
         self.assertEqual(tasks[0][0]["isolated_test"], "full::test")
 
+    def test_isolated_selection_removes_filters_but_keeps_option_values(self):
+        binary = {"label": "package target", "env": {}}
+        args = ["alpha", "beta", "--exact", "--test-threads", "2", "-Z", "unstable-options", "--skip=gamma"]
+        def listing(binary, env, selected):
+            self.assertEqual(selected[:len(args)], args)
+            return [] if "--ignored" in selected else ["alpha", "beta"]
+        tasks = list(network_guard.invocations([binary], {}, args, listing))
+        options = ["--test-threads", "2", "-Z", "unstable-options", "--skip=gamma"]
+        self.assertEqual([task[1] for task in tasks], [options + ["--exact", "alpha"],
+                                                      options + ["--exact", "beta"]])
+
+    def test_an_extra_option_separator_is_refused_before_listing(self):
+        with self.assertRaises(network_guard.ListingFailed):
+            list(network_guard.invocations([], {}, ["--", "alpha"], lambda *args: None))
+
     def test_unreadable_listing_fails_closed(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(network_guard.ListingFailed):
             list(network_guard.invocations([{"label": "target", "env": {}}], {}, [], lambda *args: None))
