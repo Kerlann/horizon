@@ -19,7 +19,7 @@ class GateFailuresTests(unittest.TestCase):
         step = next(s for s in workflow["jobs"]["verify"]["steps"] if s.get("id") == "core_build")
         for mode, expected in [("green", 0), ("red-build-success", 1), ("red-build-failure", 1),
                                ("sccache-kill-recovered", 0), ("rustc-kill-recovered", 0),
-                               ("kill-twice", 1)]:
+                               ("linker-kill-recovered", 0), ("kill-twice", 1)]:
             with self.subTest(mode=mode), tempfile.TemporaryDirectory() as directory:
                 root = Path(directory)
                 cargo = root / "cargo"
@@ -30,7 +30,10 @@ class GateFailuresTests(unittest.TestCase):
                                  "if sys.argv[1] == 'test':\n"
                                  "    if mode == 'green' or ('-j1' in sys.argv and mode.endswith('-recovered')): sys.exit(0)\n"
                                  "    if 'kill' in mode:\n"
-                                 "        print('signal: 9, SIGKILL: kill' if mode.startswith('rustc') else 'sccache: Compile terminated by signal 9', file=sys.stderr)\n"
+                                 "        if mode.startswith('linker'):\n"
+                                 "            print('collect2: fatal error: ld terminated with signal 9 [Killed]', file=sys.stderr)\n"
+                                 "        else:\n"
+                                 "            print('signal: 9, SIGKILL: kill' if mode.startswith('rustc') else 'sccache: Compile terminated by signal 9', file=sys.stderr)\n"
                                  "    print('error: could not compile `horizon-client-lib` (lib test)', file=sys.stderr)\n"
                                  "    sys.exit(1)\n"
                                  "sys.exit(0 if mode == 'red-build-success' else 1)\n")
