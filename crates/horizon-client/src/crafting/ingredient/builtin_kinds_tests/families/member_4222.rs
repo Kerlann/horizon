@@ -227,10 +227,11 @@ fn rollup_rejection_and_absence_matrix_4222() {
     (_, stack.extra) = crate::item_data::decode_components(Some(&Tag::Compound(payload)));
     assert!(!absent.test_in(&context, &stack));
     assert!(positive.test_in(&context, &stack));
-    stack.data_mut().set_loot_component(
+    let removal = Tag::compound([(
         "!minecraft:parrot/variant",
-        &Some(Tag::Compound(Default::default())),
-    );
+        Tag::Compound(Default::default()),
+    )]);
+    (_, stack.extra) = crate::item_data::decode_components(Some(&removal));
     assert!(absent.test_in(&context, &stack));
     assert!(!positive.test_in(&context, &stack));
     for tag in [Tag::End, Tag::Byte(0), Tag::List(vec![])] {
