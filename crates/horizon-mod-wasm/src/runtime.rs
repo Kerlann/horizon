@@ -6,6 +6,9 @@
 #[cfg(test)]
 #[path = "runtime_tests.rs"]
 mod runtime_tests;
+#[cfg(test)]
+#[path = "threads_tests.rs"]
+mod threads_tests;
 use crate::{
     Refusal,
     boundary::{Cx, Frame, serve},
