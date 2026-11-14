@@ -1367,7 +1367,7 @@ mod tests {
             packets[0]
                 .entries
                 .iter()
-                .map(|entry| entry.name.as_str())
+                .map(|entry| entry.id.as_str())
                 .collect::<Vec<_>>(),
             [
                 "minecraft:mending",
