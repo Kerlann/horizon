@@ -216,7 +216,7 @@ def timing_verdict(times: list[tuple[float, str, str]], warn: float, fail: float
 
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--network-guard", type=Path, help="Linux preload library; run each test alone and fail recorded inet calls")
+    parser.add_argument("--network-guard", type=Path, help="Linux preload library; fail recorded inet and resolver calls, rerunning only a violating binary test by test")
     parser.add_argument("--jobs", type=int, required=True, help="test binaries running at once")
     parser.add_argument("--time-limits", metavar="WARN,FAIL", help="seconds: warn about a test over WARN, fail one "
                         "over FAIL (adds libtest's --report-time)")
