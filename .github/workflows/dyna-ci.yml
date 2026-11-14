@@ -595,7 +595,15 @@ jobs:
       - name: Build Rust core test binaries
         id: core_build
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && (needs.changes.outputs.rust_required != 'false') }}
-        run: cargo build $JOBS --keep-going --profile test --workspace --lib --bins --tests --timings
+        # Build the exact test graph on green. A workspace proc-macro can have different build/test
+        # dependency profiles; cargo build first would make cargo test compile its consumers again.
+        run: |
+          if cargo test $JOBS --profile test --workspace --lib --bins --tests --no-run --timings; then
+            exit 0
+          fi
+          # Only red runs pay for the other graph, to collect independent targets' errors too.
+          cargo build $JOBS --keep-going --profile test --workspace --lib --bins --tests || true
+          exit 1
       # What bounds the build: the slowest compile units, from the report --timings writes.
       - name: Slowest compile units
         if: ${{ !cancelled() && needs.changes.outputs.rust_required != 'false' }}
@@ -607,12 +615,6 @@ jobs:
             [ -f "$timing" ] || continue
             { echo "points build script phases:"; cat "$timing"; } | tee -a "$GITHUB_STEP_SUMMARY"
           done
-      # Measurement: the test step below recompiled horizon-mod-points and every crate after it, minutes after
-      # the build above. Cargo's verbose output says which tracked file or variable made each unit dirty.
-      - name: Why the core build is not fresh
-        id: why_the_core_build_is_not_fresh
-        if: ${{ !cancelled() && steps.setup.outcome == 'success' && (needs.changes.outputs.rust_required != 'false') && steps.core_build.outcome == 'success' }}
-        run: cargo test $JOBS --profile test --workspace --lib --bins --tests --no-run -v 2>&1 | grep -E '^ +(Dirty|Compiling) ' || true
       # The binaries built above, three at a time: Cargo runs them one by one, and a few large ones (the API
       # generator's, the client library's, no_wire_registration) took most of this step while the runner idled.
       # Three, not more: the job's memory.peak counts the build and page cache, so it says nothing about this
