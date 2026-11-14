@@ -1,7 +1,8 @@
 use super::*;
 use crate::mobs::{Damage, DamageKind, Mob, MobEvent, MobTypes, MobWorld};
 use horizon_core::geometry::Vec3;
-use horizon_mod_package::{Package, Side, content::Content, enabled::EnabledMods};
+use horizon_mod_package::{Package, content::Content, enabled::EnabledMods};
+use mod_api::Side;
 use std::{path::PathBuf, sync::Arc};
 
 fn fixture(template: &str, sounds: serde_json::Value, run: impl FnOnce(&MobWorld, &MobTypes)) {
@@ -255,7 +256,14 @@ fn entity_sounds_malformed_row_reports_entity_id() {
             serde_json::to_vec(&serde_json::json!({"bird:vulture":row})).unwrap(),
         )
         .unwrap();
-        let Err(error) = MobTypes::load_for_server(dir.path()) else {
+        let attributes =
+            horizon_world::attributes::entity::Catalog::from_json(&serde_json::json!({
+                "data_version": horizon_world::DATA_VERSION,
+                "attributes": [],
+                "entities": {},
+            }))
+            .unwrap();
+        let Err(error) = MobTypes::load_for_server(dir.path(), &attributes) else {
             panic!("malformed sounds were admitted by the entity loader");
         };
         assert!(error.to_string().contains("bird:vulture"), "{error}");

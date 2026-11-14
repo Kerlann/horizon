@@ -5,6 +5,21 @@ use crate::*;
 #[path = "__private/registry_installation.rs"]
 mod registry_installation;
 
+/// The native mods compiled into a game: the launcher-to-game build contract, not a mod-facing
+/// API. The launcher generates the rows from the selected manifests, independently of the mods'
+/// hook factories; the game checks them against the packages beside its executable
+/// (`horizon_mod_package::runtime`). It lives in the API's closure so that the launcher's
+/// `horizon_native_mods` library, built from the API slice alone, can name it.
+pub mod native {
+    /// One native mod compiled into the executable, with its manifest's `side`.
+    #[derive(Clone, Copy, Debug, Default, PartialEq)]
+    pub struct BuiltMod {
+        pub id: &'static str,
+        pub version: &'static str,
+        pub side: crate::Side,
+    }
+}
+
 /// Switch an installed mod's dispatches on or off, returning whether it was found.
 pub fn set_mod_enabled(id: &str, on: bool) -> bool {
     crate::set_mod_enabled(id, on)
@@ -36,14 +51,28 @@ pub fn listened(hook: HookId) -> bool {
     crate::listened(hook)
 }
 
+/// Whether at least one enabled mod subscribes to `hook`, visiting only its subscribers.
+pub fn enabled_listened(hook: HookId) -> bool {
+    crate::runtime::enabled_listened(hook)
+}
+
+/// Whether any part subscribed to the scoped entity hook `hook` is attached to
+/// entity type `kind`, so a family's walk can resolve its rows' slots once per
+/// pass instead of naming each row's type.
+pub fn entity_part_hooked(hook: HookId, name: &'static str, kind: &str) -> bool {
+    crate::parts::parts(hook, name)
+        .for_hook(hook)
+        .is_some_and(|table| !table.entity(|| Some(kind)).is_empty())
+}
+
 /// A read backend wrapper for a host the game builds narrowed: the mob tick's
-/// goal view hands itself out as its own backend (#1077).
+/// goal view hands itself out as its own backend.
 pub fn backend_ref(inner: &dyn Backend) -> crate::BackendRef<'_> {
     crate::BackendRef::of(inner)
 }
 /// Call `read` on `host`'s real backend, or `None` where the host has none:
 /// the mob tick's goal view forwards the level's own reads — blocks, loaded
-/// chunks, time, height, weather, block entities — through it (#1077); the
+/// chunks, time, height, weather, block entities — through it; the
 /// entity data its snapshot does not carry stays refused. Returned borrows stay tied to the host.
 pub fn backend_read<'a, R>(
     host: &'a dyn crate::Host,

@@ -14,15 +14,14 @@ import sys
 import prebuilt_game as sdk_tools
 
 FIXTURES = Path(__file__).with_suffix("")
-PINNED = sdk_tools.ROOT / "launcher/src/rust_toolchain.rs"
+PINNED = sdk_tools.ROOT / "tools/ci/rust-version"
 # The allocator shim's entry points. Matched as name suffixes: mangled names that merely mention `alloc`
 # (backtrace frames over `alloc::vec`) are not an allocator.
 ALLOCATOR = tuple(f"___rust_{kind}" for kind in ("alloc", "dealloc", "realloc", "alloc_zeroed"))
 
 
 def pinned_release():
-    text = PINNED.read_text()
-    return text.split('pub const VERSION: &str = "', 1)[1].split('"', 1)[0]
+    return PINNED.read_text().strip()
 
 
 def pe_symbols(path):
@@ -194,7 +193,7 @@ def main():
     template = (sdk / sdk_tools.TEMPLATE).read_text()
     (shipped / "main.rs").write_text(template.replace("/* MOD_ENTRIES */", '        "probe" => mod_0::hooks,\n').replace(
         "/* BUILT_MODS */",
-        '    horizon_mod_package::runtime::BuiltMod { id: "probe", version: "0.1.0", side: horizon_mod_package::Side::Both },\n'))
+        '    mod_api::__private::native::BuiltMod { id: "probe", version: "0.1.0", side: mod_api::Side::Both },\n'))
     shipped_exe = shipped / ("horizon-client.exe" if windows else "horizon-client")
     subprocess.run([*route, "--crate-type", "bin", "--crate-name", "horizon_native_game",
                     *(flag for arg in identity["link_args"] for flag in ("-C", f"link-arg={arg}")),

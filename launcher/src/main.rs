@@ -284,6 +284,9 @@ struct Launcher {
     /// How the last native build ended ("Built (balanced, incremental)", or "Up to date").
     native_done: Option<String>,
     native_error: Option<String>,
+    /// Mods the last build would have switched off that worlds were saved with: the choice
+    /// between staying and backing those worlds up first, shown with `native_error`.
+    native_worlds: Option<native_mods::AtStake>,
     pending_consent: Option<PendingConsent>,
     /// Why the last Allow or Cancel failed, shown inside the dialog that the page is behind.
     consent_error: Option<String>,
@@ -632,6 +635,7 @@ impl Launcher {
             native_progress: None,
             native_done: None,
             native_error: None,
+            native_worlds: None,
             pending_consent: None,
             consent_error: None,
             native_for: None,
@@ -1289,6 +1293,9 @@ impl Launcher {
                     if let (Err(e), false) = (result, cancelled) {
                         if matches!(e, native_mods::Failed::NoConsent) {
                             self.request_native_build_consent();
+                        }
+                        if let native_mods::Failed::Worlds(stake) = &e {
+                            self.native_worlds = Some(stake.clone());
                         }
                         self.native_error = Some(String::from(e));
                     }
@@ -5543,6 +5550,7 @@ fn menus() -> Vec<Menu> {
 }
 
 fn main() {
+    horizon_mod_package::holder::retain_capability();
     if let Some(code) = native_mods::internals_rustc_wrapper() {
         std::process::exit(code);
     }
@@ -5565,7 +5573,6 @@ fn main() {
     let _location_error = horizon_launcher::data_location::startup();
     perf::process_started();
     backend::exe_path();
-    // The launcher's own installer (`update_handoff`): no window, no CLI parser.
     if let Some(code) = horizon_launcher::update_handoff::run() {
         std::process::exit(code);
     }

@@ -13,6 +13,7 @@ pub use jar::{
 };
 pub use wasm::{MAX_WASM, Wasm, WasmError, sha512_of};
 
+use mod_surface::uses::USES_FILE;
 use serde::{Deserialize, Serialize};
 use std::{
     fmt,
@@ -24,6 +25,8 @@ use std::{
 pub const MANIFEST: &str = "horizon-mod.toml";
 /// Executable components are not content and are refused in a `.hmod`.
 pub const WASM: &str = "mod.wasm";
+/// The largest uses table ([`USES_FILE`]) a package may carry: what the surface crate reads.
+pub const MAX_USES: u64 = mod_surface::uses::MAX_USES_BYTES as u64;
 /// The content manifest API this build loads.
 pub const API: &str = "0.2";
 /// Namespaces no mod may claim: vanilla's, the convention tags' (mods add
@@ -31,6 +34,10 @@ pub const API: &str = "0.2";
 const RESERVED_NAMESPACES: [&str; 3] = ["minecraft", "c", "horizon"];
 /// A mod's saved settings, shared by native mods and modpack overrides.
 pub const STORAGE_DIR: &str = ".horizon-mod-data";
+/// wasm32's whole address space in MiB (4 GiB): the most a mod may declare in `wasm_memory_mib`,
+/// and an instance's group memory cap unless the player lowers it (`horizon-mods.txt`).
+pub const MAX_WASM_MEMORY_MIB: u32 = 4096;
+
 /// The largest manifest this build reads.
 /// Maximum manifest bytes accepted by package readers and developer tools.
 pub const MAX_MANIFEST: u64 = 32 << 20;
@@ -82,11 +89,35 @@ pub struct Manifest {
     pub native: Option<Native>,
     /// A wasm mod's `mod.wasm`, its toolchain and what it was linked against.
     pub wasm: Option<Wasm>,
+    /// The linear memory, in MiB (1 to [`MAX_WASM_MEMORY_MIB`]), this wasm mod or library expects
+    /// its dependency group to have. The group gets the largest any member declares, up to the
+    /// instance's cap; with none declared it gets 1 GiB. Native mods are not wasm groups: they
+    /// share the game's memory, and the key means nothing to them.
+    #[serde(default)]
+    pub wasm_memory_mib: Option<u32>,
     /// Game internals used by this mod, fingerprinted against its pinned build.
     #[serde(default)]
     pub internals: Vec<Internal>,
     #[serde(default, deserialize_with = "inject::rows")]
     pub inject: Vec<inject::Inject>,
+    /// Free-form values other mods read through `PackageInfo::property`.
+    #[serde(default)]
+    pub properties: std::collections::BTreeMap<String, Property>,
+}
+
+/// The most `[properties]` keys a manifest may declare.
+pub const MAX_PROPERTIES: usize = 64;
+/// The most `[properties]` bytes: keys and strings by length, 8 per number, 1 per boolean.
+pub const MAX_PROPERTY_BYTES: usize = 8 << 10;
+
+/// One `[properties]` value: a table or array is refused.
+#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[serde(untagged)]
+pub enum Property {
+    Boolean(bool),
+    Integer(i64),
+    Float(f64),
+    String(String),
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -157,15 +188,7 @@ pub struct Module {
     pub visibility: Option<String>,
 }
 
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
-pub enum Side {
-    /// Local content, not compared with the server's mods when joining.
-    #[default]
-    Client,
-    /// Both, and the server tells clients which version it expects.
-    Both,
-}
+use mod_vocab::Side;
 
 /// What a content mod adds; the player sees it before turning the mod on.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]
@@ -334,6 +357,13 @@ impl Manifest {
                 return Err(format!("{MANIFEST}: invalid dependency id {id:?}"));
             }
         }
+        if let Some(mib) = m.wasm_memory_mib
+            && !(1..=MAX_WASM_MEMORY_MIB).contains(&mib)
+        {
+            return Err(format!(
+                "{MANIFEST}: wasm_memory_mib {mib} is not 1 to {MAX_WASM_MEMORY_MIB} (wasm32's 4 GiB)"
+            ));
+        }
         if m.native.is_some() && m.wasm.is_some() {
             if let Some(refusal) = wasm_loop() {
                 return Err(refusal);
@@ -457,6 +487,25 @@ impl Manifest {
                 m.api
             ));
         }
+        let property_bytes: usize = m
+            .properties
+            .iter()
+            .map(|(key, value)| {
+                key.len()
+                    + match value {
+                        Property::Boolean(_) => 1,
+                        Property::Integer(_) | Property::Float(_) => 8,
+                        Property::String(text) => text.len(),
+                    }
+            })
+            .sum();
+        if m.properties.len() > MAX_PROPERTIES || property_bytes > MAX_PROPERTY_BYTES {
+            return Err(format!(
+                "{MANIFEST}: [properties] holds at most {MAX_PROPERTIES} keys and {MAX_PROPERTY_BYTES} \
+                 bytes; this one has {} keys and {property_bytes} bytes",
+                m.properties.len()
+            ));
+        }
         if m.capabilities != [Capability::Registries] {
             return Err(format!(
                 "{MANIFEST}: a content mod has capabilities = [\"registries\"]"
@@ -504,12 +553,13 @@ impl Manifest {
     }
 }
 
+/// Folders of a mod's project that are never part of its package: Git's, Cargo's build output
+/// and the pinned SDK the mod tool fetches into `.horizon/`.
+pub const NOT_PACKAGED: [&str; 3] = [".git", "target", ".horizon"];
+
 /// A source file that belongs to the flat Cargo project, not its resource packs.
 pub fn source_file(name: &str) -> bool {
-    if name
-        .split('/')
-        .any(|part| matches!(part, ".git" | "target"))
-    {
+    if name.split('/').any(|part| NOT_PACKAGED.contains(&part)) {
         return false;
     }
     name == "Cargo.toml"
@@ -686,6 +736,7 @@ impl Package {
         let mut has_wasm = false;
         let mut entries = Vec::new();
         let mut layouts = None;
+        let mut uses = false;
         for i in 0..zip.len() {
             let mut entry = zip.by_index(i).map_err(|e| e.to_string())?;
             let name = entry.name().map_err(|e| e.to_string())?.into_owned();
@@ -713,6 +764,16 @@ impl Package {
                     return Err("duplicate layouts.json".into());
                 }
                 layouts = Some(crate::layouts::Layouts::read(&mut entry)?);
+                continue;
+            }
+            if name == USES_FILE && matches!(mode & 0o170000, 0 | 0o100000) {
+                if uses {
+                    return Err(format!("duplicate {USES_FILE}"));
+                }
+                if entry.size() > MAX_USES {
+                    return Err(format!("{USES_FILE} exceeds {} MiB", MAX_USES >> 20));
+                }
+                uses = true;
                 continue;
             }
             check_file(&name, mode, || Ok(&mut entry)).map_err(|e| e.to_string())?;
@@ -743,6 +804,9 @@ impl Package {
             return Err(format!("{MANIFEST}: over {} MiB", MAX_MANIFEST >> 20));
         }
         let mut package = Self::from_parts(&toml, icon, has_cargo, has_source, has_wasm)?;
+        if uses && package.manifest.native.is_none() && package.manifest.wasm.is_none() {
+            return Err(format!("a content mod has no code, so no {USES_FILE}"));
+        }
         if let Some(wasm) = &package.manifest.wasm {
             let mut bytes = Vec::new();
             zip.by_name(WASM)
@@ -771,6 +835,7 @@ impl Package {
                 if !directory {
                     if name != MANIFEST
                         && name != crate::layouts::FILE
+                        && name != USES_FILE
                         && name != "icon.png"
                         && !(name == WASM && package.manifest.wasm.is_some())
                         && !name.starts_with("assets/")
@@ -892,7 +957,10 @@ impl Package {
                         .replace('\\', "/");
                     let kind = entry.file_type().map_err(|e| e.to_string())?;
                     if kind.is_dir() {
-                        if matches!(entry.file_name().to_str(), Some(".git" | "target"))
+                        if entry
+                            .file_name()
+                            .to_str()
+                            .is_some_and(|name| NOT_PACKAGED.contains(&name))
                             || matches!(name.as_str(), "assets" | "data")
                         {
                             continue;
@@ -929,8 +997,39 @@ impl Package {
     /// Pack a flat project, selecting its source and resource files deterministically.
     #[cfg(not(target_arch = "wasm32"))]
     pub fn pack_directory(root: &Path) -> Result<Vec<u8>, String> {
+        Self::pack_directory_with(root, None)
+    }
+
+    /// The bytes of entry `name` in the `.hmod` at `path`, refused past `most` bytes; `None` when
+    /// it has no such entry.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn entry(path: &Path, name: &str, most: u64) -> Result<Option<Vec<u8>>, String> {
+        let file = std::fs::File::open(path).map_err(|e| format!("{}: {e}", path.display()))?;
+        let mut zip = zip::ZipArchive::new(file).map_err(|e| format!("{}: {e}", path.display()))?;
+        let entry = match zip.by_name(name) {
+            Ok(entry) => entry,
+            Err(zip::result::ZipError::FileNotFound) => return Ok(None),
+            Err(e) => return Err(format!("{}: {e}", path.display())),
+        };
+        let mut bytes = Vec::new();
+        entry
+            .take(most + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| format!("{name}: {e}"))?;
+        if bytes.len() as u64 > most {
+            return Err(format!("{name}: over {most} bytes"));
+        }
+        Ok(Some(bytes))
+    }
+
+    /// [`Package::pack_directory`], carrying `uses` as the package's [`USES_FILE`] table when given.
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn pack_directory_with(root: &Path, uses: Option<&[u8]>) -> Result<Vec<u8>, String> {
         let package = Self::read(root)?;
         let mut files = package.directory_files(root)?;
+        if let Some(uses) = uses {
+            files.insert(USES_FILE.to_owned(), uses.to_vec());
+        }
         let text = String::from_utf8(files.remove(MANIFEST).expect("selected manifest"))
             .map_err(|e| e.to_string())?;
         let files: Vec<_> = files
@@ -962,6 +1061,13 @@ impl Package {
                 continue;
             }
             if *name == WASM && manifest.wasm.is_some() {
+                put(name, bytes)?;
+                continue;
+            }
+            if *name == USES_FILE && code {
+                if bytes.len() as u64 > MAX_USES {
+                    return Err(format!("{USES_FILE} exceeds {} MiB", MAX_USES >> 20));
+                }
                 put(name, bytes)?;
                 continue;
             }
@@ -1115,6 +1221,27 @@ mod tests {
             error.contains("chemlib::transfer") && error.contains("own hooks and functions"),
             "{error}"
         );
+    }
+
+    #[test]
+    fn declared_wasm_memory_is_one_mib_to_wasm32s_four_gib() {
+        let declare = |value: &str| {
+            Manifest::parse(&EXAMPLE.replace(
+                "capabilities = [\"registries\"]\n",
+                &format!("capabilities = [\"registries\"]\nwasm_memory_mib = {value}\n"),
+            ))
+        };
+        assert_eq!(Manifest::parse(EXAMPLE).unwrap().wasm_memory_mib, None);
+        assert_eq!(declare("1").unwrap().wasm_memory_mib, Some(1));
+        assert_eq!(declare("4096").unwrap().wasm_memory_mib, Some(4096));
+        for value in ["0", "4097"] {
+            assert!(
+                declare(value)
+                    .unwrap_err()
+                    .contains(&format!("wasm_memory_mib {value} is not 1 to 4096")),
+                "{value}"
+            );
+        }
     }
 
     #[test]
@@ -1299,6 +1426,21 @@ capabilities = ["registries"]
     }
 
     #[test]
+    fn properties_are_typed_and_bounded() {
+        let properties = |rows: &str| Manifest::parse(&format!("{EXAMPLE}[properties]\n{rows}"));
+        let manifest = properties("tier = 3\nratio = 0.5\nlabel = 'x'\nfast = true\n").unwrap();
+        assert_eq!(manifest.properties["tier"], Property::Integer(3));
+        assert_eq!(manifest.properties["ratio"], Property::Float(0.5));
+        assert_eq!(manifest.properties["label"], Property::String("x".into()));
+        assert_eq!(manifest.properties["fast"], Property::Boolean(true));
+        let many: String = (0..65).map(|i| format!("k{i} = {i}\n")).collect();
+        let error = properties(&many).unwrap_err();
+        assert!(error.contains("at most 64 keys"), "{error}");
+        assert!(properties(&format!("text = '{}'\n", "a".repeat(8 << 10))).is_err());
+        assert!(properties("list = [1]\n").is_err());
+    }
+
+    #[test]
     fn dependencies_are_typed_for_content_and_code_mods() {
         let deps =
             "[dependencies]\ncreate = '^6.0'\naddon = { version = '^1.2', optional = true }\n";
@@ -1325,6 +1467,62 @@ capabilities = ["registries"]
         ] {
             assert!(Manifest::parse(&bad).is_err());
         }
+    }
+
+    #[test]
+    fn a_code_mod_carries_one_bounded_uses_table_and_a_content_mod_none() {
+        let native = format!(
+            "{EXAMPLE}[native]\ngame = '26.3'\nhorizon = '{}'\nmixins = '{}'\n",
+            "a".repeat(40),
+            "b".repeat(40)
+        );
+        let cargo = b"[package]\nname = 'ruby'\n".as_slice();
+        let lib = b"pub fn f() {}\n".as_slice();
+        let table = br#"{"schema":1,"made_for":"x","entries":[]}"#.as_slice();
+        let bytes = Package::write_files(
+            &native,
+            &[
+                ("Cargo.toml", cargo),
+                ("src/lib.rs", lib),
+                (USES_FILE, table),
+            ],
+        )
+        .unwrap();
+        let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        Package::read_zip(&mut zip).unwrap();
+        let mut read = Vec::new();
+        zip.by_name(USES_FILE)
+            .unwrap()
+            .read_to_end(&mut read)
+            .unwrap();
+        assert_eq!(read, table);
+        let large = vec![b' '; MAX_USES as usize + 1];
+        assert!(
+            Package::write_files(
+                &native,
+                &[
+                    ("Cargo.toml", cargo),
+                    ("src/lib.rs", lib),
+                    (USES_FILE, &large)
+                ],
+            )
+            .unwrap_err()
+            .contains(USES_FILE)
+        );
+        // A content mod has no code to scan, so no table either, written or read.
+        assert!(Package::write_files(EXAMPLE, &[(USES_FILE, table)]).is_err());
+        use std::io::Write;
+        let mut zip = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        for (name, bytes) in [(MANIFEST, EXAMPLE.as_bytes()), (USES_FILE, table)] {
+            zip.start_file(name, zip::write::SimpleFileOptions::default())
+                .unwrap();
+            zip.write_all(bytes).unwrap();
+        }
+        let mut archive = zip::ZipArchive::new(zip.finish().unwrap()).unwrap();
+        let error = Package::read_zip(&mut archive)
+            .err()
+            .expect("a content package's uses.json is refused");
+        assert!(error.contains(USES_FILE), "{error}");
     }
 
     #[test]
@@ -1407,6 +1605,11 @@ capabilities = ["registries"]
         std::fs::write(root.join("Cargo.lock"), registry_lock).unwrap();
         std::fs::write(root.join(".git/hooks/pre-commit"), "#!/bin/sh\n").unwrap();
         std::fs::write(root.join("target/generated/bad.rs"), "#!/bin/sh\n").unwrap();
+        // The SDK the mod tool fetched: the API's own crate, which is never the mod's.
+        let sdk = root.join(".horizon/sdk/api/crates/horizon-mod-api/src");
+        std::fs::create_dir_all(&sdk).unwrap();
+        std::fs::write(sdk.join("lib.rs"), "pub fn api() {}\n").unwrap();
+        std::fs::write(root.join(".horizon/sdk/sdk.json"), "{}").unwrap();
         let bytes = Package::pack_directory(&root).unwrap();
         let mut zip = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
         assert_eq!(Package::read_zip(&mut zip).unwrap().manifest.id, "ruby");
@@ -1418,6 +1621,17 @@ capabilities = ["registries"]
         assert_eq!(packed_lock, registry_lock);
         assert!(zip.by_name(".git/hooks/pre-commit").is_err());
         assert!(zip.by_name("target/generated/bad.rs").is_err());
+        assert!(
+            zip.file_names_raw()
+                .all(|name| !name.starts_with(b".horizon")),
+            "{:?}",
+            zip.file_names_raw()
+                .map(String::from_utf8_lossy)
+                .collect::<Vec<_>>()
+        );
+        assert!(!source_file(
+            ".horizon/sdk/api/crates/horizon-mod-api/src/lib.rs"
+        ));
         std::fs::write(root.join("src/lib.rs"), b"MZ executable").unwrap();
         assert!(
             Package::pack_directory(&root)
@@ -1640,6 +1854,7 @@ issues = \"http://example.org/issues\"
     }
 
     #[test]
+    #[ignore = "daily"]
     fn project_folder_loads_without_packaging_git_hooks() {
         let root = std::env::temp_dir().join(format!("horizon-mod-git-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&root);

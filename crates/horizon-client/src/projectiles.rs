@@ -104,6 +104,8 @@ pub struct ThrownType {
     pub id: &'static str,
     pub item: &'static str,
     pub damage: f32,
+    /// its index in [`thrown_types`]: the slot a per-type table keeps it under.
+    pub slot: usize,
 }
 /// the thrown types content mods declare, in registry order.
 static THROWN_TYPES: std::sync::OnceLock<Vec<ThrownType>> = std::sync::OnceLock::new();
@@ -114,22 +116,34 @@ pub fn register_thrown_types(types: impl IntoIterator<Item = (String, String, f3
         return false;
     }
     let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
-    let types = types.into_iter().map(|(id, item, damage)| ThrownType {
-        id: leak(id),
-        item: leak(item),
-        damage,
-    });
+    let types = types
+        .into_iter()
+        .enumerate()
+        .map(|(slot, (id, item, damage))| ThrownType {
+            id: leak(id),
+            item: leak(item),
+            damage,
+            slot,
+        });
     THROWN_TYPES.set(types.collect()).is_ok()
 }
 /// the content mods' thrown types, in registry order.
 pub fn thrown_types() -> &'static [ThrownType] {
     THROWN_TYPES.get().map_or(&[], Vec::as_slice)
 }
-/// the lib's tests' one mod type, `ruby:bolt` thrown from `ruby:gem`: the
-/// registry is set once per process, so every test registers the same.
+/// the lib's tests' mod types, `ruby:bolt` thrown from `ruby:gem` and the
+/// tameable `ruby:hound`, `ruby:tabby` and `ruby:macaw` (a wolf, a cat and a
+/// parrot): the registries are set once per process, so every test registers
+/// the same.
 #[cfg(test)]
 pub(crate) fn register_test_types() {
     let _ = register_thrown_types([("ruby:bolt".into(), "ruby:gem".into(), 2.0)]);
+    let _ = crate::lan::tracking::register_templates([
+        ("ruby:bolt".into(), "minecraft:snowball".into()),
+        ("ruby:hound".into(), "minecraft:wolf".into()),
+        ("ruby:macaw".into(), "minecraft:parrot".into()),
+        ("ruby:tabby".into(), "minecraft:cat".into()),
+    ]);
 }
 /// the mod type with entity type `id`; out of line, as vanilla's never are.
 #[cold]
@@ -2595,6 +2609,7 @@ mod tests {
             id: "ruby:bolt",
             item: "ruby:gem",
             damage: 2.0,
+            slot: 0,
         };
         let start = Vec3::new(0.0, 100.0, 0.0);
         let mut snowball = Projectile::new(ProjectileKind::Snowball, start, None);
@@ -2642,9 +2657,19 @@ mod tests {
         assert!(
             thrown_type("ruby:late").is_none() && thrown_by_item("minecraft:snowball").is_none()
         );
-        // its template's tracking settings, not the builder defaults.
+        // its template's tracking settings, not the builder defaults, as a
+        // living type's are (#4031): a wolf's range of 10 chunks, a cat's and
+        // a parrot's of 8, not 5; the vanilla types' own stay as they are.
         let settings = crate::lan::tracking::settings;
         assert_eq!(settings("ruby:bolt"), settings("minecraft:snowball"));
+        for (vanilla, range, kind) in [
+            ("minecraft:wolf", 10, "ruby:hound"),
+            ("minecraft:cat", 8, "ruby:tabby"),
+            ("minecraft:parrot", 8, "ruby:macaw"),
+        ] {
+            assert_eq!(settings(vanilla), (range, 3, true), "{vanilla}");
+            assert_eq!(settings(kind), (range, 3, true), "{kind}");
+        }
         assert_eq!(settings("ruby:late"), (5, 3, true));
     }
 
