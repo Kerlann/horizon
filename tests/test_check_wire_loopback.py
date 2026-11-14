@@ -39,6 +39,20 @@ class WireLoopbackRootTests(unittest.TestCase):
                 "crates/horizon-mod-wasm/tests/wire_loopback/ingredient_builtins.rs: nothing compiles this; "
                 "move it to crates/horizon-mod-wasm/wire-loopback/tests/wire_loopback/<topic>.rs"])
 
+    def test_hand_written_hooks_objects_are_refused_but_a_feature_fragment_is_not(self):
+        fragment = "pub(super) struct ItemTossHooks;\nimpl Hooks for ItemTossHooks {}\n"
+        self.assertEqual(check_wire_loopback.hook_problems("f.rs", fragment, False), [])
+        self.assertEqual(check_wire_loopback.hook_problems("f.rs", "impl mod_api::Hooks for Mod {}\n", False)[0][:4],
+                         "f.rs")
+        for text in ("struct Other { x: u8 }\nimpl Hooks for Other {}\n",
+                     "fn __horizon_mod_hooks() -> Box<dyn Hooks> { todo!() }\n"):
+            found = check_wire_loopback.hook_problems("f.rs", text, False)
+            self.assertEqual(len(found), 1, text)
+            self.assertIn("<Feature>Hooks", found[0])
+        self.assertEqual(len(check_wire_loopback.hook_problems("r.rs", fragment, True)), 1)
+        export = "fn __horizon_mod_hooks() -> Box<dyn Hooks> {\n    Box::new(Mod)\n}\n"
+        self.assertEqual(check_wire_loopback.hook_problems("r.rs", export, True), [])
+
 
 if __name__ == "__main__":
     unittest.main()

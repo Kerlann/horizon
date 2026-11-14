@@ -117,6 +117,87 @@ pub fn folder_modules(directory: &Path) -> Result<String, String> {
     Ok(code)
 }
 
+/// The hook method that several files may define: its forwarder calls each in file-name order.
+const FAN_OUT_HOOK: &str = "register";
+
+/// Assemble the one `Hooks` object of a test target from the fragments in `directory`: every `*.rs` file may hold
+/// `impl Hooks for <Type>` blocks (`<Type>` a unit struct of that file), and the result is `struct Mod;` with one
+/// `impl Hooks for Mod` whose methods forward, signature copied verbatim, to the fragments. A hook method has one
+/// owner: two files defining it is an error naming both. The exception is `register`, the registration moment
+/// every feature takes part in: it forwards to each definition in file-name order.
+pub fn folder_hooks(directory: &Path) -> Result<String, String> {
+    struct Fragment {
+        file: String,
+        owner: proc_macro2::TokenStream,
+        sig: syn::Signature,
+    }
+    let mut methods: BTreeMap<String, Vec<Fragment>> = BTreeMap::new();
+    for stem in module_files(directory)? {
+        let file = format!("{stem}.rs");
+        let text = fs::read_to_string(directory.join(&file)).map_err(|e| format!("{file}: {e}"))?;
+        let parsed = syn::parse_file(&text).map_err(|e| format!("{file}: {e}"))?;
+        let module = syn::Ident::new(&stem, proc_macro2::Span::call_site());
+        for item in parsed.items {
+            let syn::Item::Impl(item) = item else { continue };
+            let is_hooks = item
+                .trait_
+                .as_ref()
+                .is_some_and(|(_, path, _)| path.segments.last().is_some_and(|s| s.ident == "Hooks"));
+            let syn::Type::Path(owner) = &*item.self_ty else { continue };
+            let Some(owner) = owner.path.get_ident().filter(|_| is_hooks) else { continue };
+            for member in item.items {
+                let syn::ImplItem::Fn(method) = member else { continue };
+                methods.entry(method.sig.ident.to_string()).or_default().push(Fragment {
+                    file: file.clone(),
+                    owner: quote::quote!(#module::#owner),
+                    sig: method.sig,
+                });
+            }
+        }
+    }
+    let mut forwarders = Vec::new();
+    for (name, fragments) in methods {
+        if fragments.len() > 1 && name != FAN_OUT_HOOK {
+            let files: Vec<_> = fragments.iter().map(|f| f.file.as_str()).collect();
+            return Err(format!(
+                "hook `{name}` is defined in {}: `Hooks` has one method per moment; keep it in one file",
+                files.join(" and ")
+            ));
+        }
+        let mut sig = fragments[0].sig.clone();
+        let mut arguments = Vec::new();
+        for (index, input) in sig.inputs.iter_mut().enumerate() {
+            if let syn::FnArg::Typed(typed) = input {
+                let argument = syn::Ident::new(&format!("argument_{index}"), proc_macro2::Span::call_site());
+                typed.pat = Box::new(syn::parse_quote!(#argument));
+                arguments.push(argument);
+            }
+        }
+        let method = &sig.ident;
+        let calls: Vec<_> = fragments
+            .iter()
+            .map(|f| {
+                let owner = &f.owner;
+                quote::quote!(<#owner as Hooks>::#method(&#owner, #(#arguments),*))
+            })
+            .collect();
+        let body = if fragments.len() == 1 {
+            quote::quote!(#(#calls)*)
+        } else if matches!(sig.output, syn::ReturnType::Default) {
+            quote::quote!(#(#calls;)*)
+        } else {
+            return Err(format!("hook `{name}` is defined in several files but returns a value"));
+        };
+        forwarders.push(quote::quote!(#sig { #body }));
+    }
+    let tokens = quote::quote!(struct Mod; impl Hooks for Mod { #(#forwarders)* });
+    Ok(format!(
+        "// The guest's one Hooks object, assembled by horizon_game_discovery::folder_hooks from the\n\
+         // `impl Hooks for <Feature>Hooks` blocks of tests/wire_loopback/*.rs; each hook method has one owner file.\n\
+         // `register` is the one method several files may define; they run in file-name order.\n{tokens}\n"
+    ))
+}
+
 fn module_files(directory: &Path) -> Result<Vec<String>, String> {
     let mut names = Vec::new();
     for entry in fs::read_dir(directory).map_err(|e| e.to_string())? {
@@ -138,6 +219,52 @@ fn module_files(directory: &Path) -> Result<Vec<String>, String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn hook_folder(name: &str, files: &[(&str, &str)]) -> std::path::PathBuf {
+        let root = std::env::temp_dir().join(format!("{name}-{}", std::process::id()));
+        fs::create_dir_all(&root).unwrap();
+        for (file, text) in files {
+            fs::write(root.join(file), text).unwrap();
+        }
+        root
+    }
+
+    #[test]
+    fn folder_hooks_forward_each_method_to_its_file_and_fan_out_register_in_file_order() {
+        let root = hook_folder(
+            "folder-hooks",
+            &[
+                ("b.rs", "pub(super) struct BHooks;\nimpl Hooks for BHooks {\n fn register(&self, r: &mut dyn Registrar) {}\n fn toss(&self, _: &dyn Host, e: &mut Event<'_>) -> Flow { Flow::Cancel }\n}\n"),
+                ("a.rs", "pub(super) struct AHooks;\nimpl Hooks for AHooks { fn register(&self, r: &mut dyn Registrar) {} }\nimpl Other for AHooks { fn toss(&self) {} }\n"),
+                ("c.txt", "impl Hooks for Nope { fn toss(&self) {} }"),
+            ],
+        );
+        let code = folder_hooks(&root).unwrap();
+        let normalized: String = code.split_whitespace().collect::<Vec<_>>().join(" ");
+        assert!(normalized.contains("struct Mod ; impl Hooks for Mod {"));
+        assert!(normalized.contains(
+            "fn toss (& self , argument_1 : & dyn Host , argument_2 : & mut Event < '_ >) -> Flow { < b :: BHooks as Hooks > :: toss (& b :: BHooks , argument_1 , argument_2) }"
+        ));
+        let a = normalized.find("< a :: AHooks as Hooks > :: register").unwrap();
+        let b = normalized.find("< b :: BHooks as Hooks > :: register").unwrap();
+        assert!(a < b);
+        assert!(!normalized.contains("Nope"));
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn folder_hooks_name_both_files_of_a_method_defined_twice() {
+        let root = hook_folder(
+            "folder-hooks-clash",
+            &[
+                ("one.rs", "struct One;\nimpl Hooks for One { fn toss(&self) {} }"),
+                ("two.rs", "struct Two;\nimpl Hooks for Two { fn toss(&self) {} }"),
+            ],
+        );
+        let error = folder_hooks(&root).unwrap_err();
+        assert!(error.contains("`toss`") && error.contains("one.rs and two.rs"), "{error}");
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn generic_headers_and_explicit_roots_preserve_the_module_contract() {
