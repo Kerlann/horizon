@@ -497,17 +497,49 @@ fn registration_and_attribute_records_have_declared_field_bytes() {
         ),
     );
     fields(PropertyValue::Integer(3), (1u32, 3i64));
+    let dependency = PackageDependency::new(
+        "library".into(),
+        "^1".into(),
+        crate::DependencyKind::Optional,
+        crate::DependencyOrder::After,
+        crate::Side::Both,
+        None,
+        None,
+    );
     fields(
-        PackageDependency::new(
-            "library".into(),
-            "^1".into(),
+        dependency.clone(),
+        (
+            "library".to_owned(),
+            "^1".to_owned(),
             crate::DependencyKind::Optional,
             crate::DependencyOrder::After,
             crate::Side::Both,
-            None,
-            None,
+            (None::<String>, None::<String>),
         ),
-        ("library".to_owned(), "^1".to_owned(), true),
+    );
+    // Independently check actual enum discriminants, not just a round trip
+    // through the same enum codec: Optional = 1, After = 0, Both = 1.
+    let mut bytes = Writer::new();
+    bytes.put(&dependency);
+    let raw = Reader::decode::<(
+        String,
+        String,
+        u32,
+        u32,
+        u32,
+        (Option<String>, Option<String>),
+    )>(bytes.bytes())
+    .unwrap();
+    assert_eq!(
+        raw,
+        (
+            "library".to_owned(),
+            "^1".to_owned(),
+            1u32,
+            0u32,
+            1u32,
+            (None::<String>, None::<String>)
+        )
     );
     let details = PackageDetails {
         name: "Example".into(),

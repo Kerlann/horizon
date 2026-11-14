@@ -1392,7 +1392,7 @@ mod tests {
                 assert_eq!(
                     note,
                     format!(
-                        "{}\\n\\nFirst warning: other\\n\\nSecond override: third",
+                        "{}\n\nFirst warning: other\n\nSecond override: third",
                         problem.unwrap_or("Off for this launch")
                     )
                 );

@@ -142,7 +142,7 @@ pub struct DependencyDetails {
     #[serde(default)]
     pub optional: bool,
     /// The installation on which this dependency declaration applies.
-    #[serde(default)]
+    #[serde(default = "both_sides")]
     pub side: Side,
     /// A mod-provided explanation, at most 512 bytes.
     #[serde(default)]
@@ -194,8 +194,12 @@ pub struct RuleDetails {
     #[serde(default)]
     pub url: Option<String>,
     /// Where the rule holds: both sides, or only the client or the dedicated server.
-    #[serde(default)]
+    #[serde(default = "both_sides")]
     pub side: Side,
+}
+
+fn both_sides() -> Side {
+    Side::Both
 }
 
 fn any_version() -> semver::VersionReq {

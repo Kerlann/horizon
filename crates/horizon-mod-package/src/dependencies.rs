@@ -662,6 +662,20 @@ mod tests {
     }
 
     #[test]
+    fn detailed_dependency_and_rule_defaults_apply_to_dedicated_installations() {
+        let source = manifest(
+            "owner",
+            "[dependencies]\nbase={version='^1'}\n[incompatible]\nbad={version='*'}",
+        );
+        let declared = from_manifest(&source.dependencies, Side::Server);
+        assert_eq!(declared.len(), 1);
+        assert_eq!(declared[0].side, Side::Both);
+        let active = rules(&source, Side::Server);
+        assert_eq!(active.len(), 1);
+        assert_eq!(active[0].id, "bad");
+    }
+
+    #[test]
     fn declaration_boundaries_apply_to_dependencies_and_pair_rules() {
         for table in ["dependencies", "incompatible", "discouraged"] {
             let manifest = |entry: &str| {
