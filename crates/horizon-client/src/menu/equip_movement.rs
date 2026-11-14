@@ -159,6 +159,7 @@ impl Menu {
         let Some(stack) = input.as_ref() else { return };
         if let (Some(parts), Some(player)) = (env.can_equip, env.player_entity_id)
             && parts.listens(stack)
+            && matches!(self.state.slots[s].role, Role::Armor(_))
         {
             let location = stack as *const _ as usize as u64;
             let mut source = EquipDecision::new(location, input);
@@ -351,6 +352,35 @@ mod tests {
             self.asks.set(self.asks.get() + 1);
             slot == "feet"
         }
+    }
+    struct Unpreparable;
+    impl CanEquip for Unpreparable {
+        fn prepare(&self, _: &ItemStack, _: u32, _: &str) -> bool {
+            false
+        }
+        fn can_equip(&self, _: &ItemStack, _: &str, _: u32, _: &str, _: bool) -> bool {
+            panic!("unprepared equipment must refuse");
+        }
+    }
+    #[test]
+    #[ignore = "daily"]
+    fn unpreparable_cursor_helmet_enters_inventory_but_not_head() {
+        super::super::tests::with_menu(Kind::Inventory, |env, menu| {
+            let env = Env {
+                can_equip: Some(&Unpreparable),
+                player_entity_id: Some(7),
+                ..*env
+            };
+            menu.carried = Some(ItemStack::new("minecraft:iron_helmet", 3));
+            menu.click(&env, 9, 0, Input::Pickup).unwrap();
+            assert_eq!(menu.slot(9).unwrap().item.as_ref(), "minecraft:iron_helmet");
+            assert_eq!(menu.slot(9).unwrap().count, 1);
+            assert_eq!(menu.carried.as_ref().unwrap().count, 2);
+            menu.carried = Some(ItemStack::new("minecraft:iron_helmet", 3));
+            menu.click(&env, 5, 0, Input::Pickup).unwrap();
+            assert!(menu.slot(5).is_none());
+            assert_eq!(menu.carried.as_ref().unwrap().count, 3);
+        });
     }
     #[test]
     #[ignore = "daily"]

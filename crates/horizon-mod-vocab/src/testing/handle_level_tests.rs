@@ -40,3 +40,13 @@ fn player_level_and_dimension_reads() {
         assert_eq!(disconnected.dimension(&host), None);
     }
 }
+
+#[test]
+fn fresh_fake_player_kind_has_player_id() {
+    use crate::host::players::PlayersHost;
+    let mut host = FakeHost::new();
+    host.join(1, 10);
+    let player = host.player(1).unwrap();
+    let kind = player.entity().kind(&host).unwrap();
+    assert_eq!(kind.id(&host), "minecraft:player");
+}
