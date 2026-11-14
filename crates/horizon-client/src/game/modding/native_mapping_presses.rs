@@ -38,6 +38,85 @@ fn toggle_slot(key: KeyCode) -> Option<usize> {
 }
 
 impl Game<'_> {
+    /// `KeyMapping.setDown` for the mapping on `button`: attack and use, toggled by their option;
+    /// nothing reads the pick mapping's held state.
+    pub(super) fn mouse_mapping_set_down(&mut self, button: MouseButton, down: bool) {
+        let (slot, option) = match button {
+            MouseButton::Left => (2, self.settings.toggle_attack),
+            MouseButton::Right => (3, self.settings.toggle_use),
+            _ => return,
+        };
+        self.toggles.0[slot].set_down(down, option);
+        self.left = self.toggles.is_down(2);
+        self.right = self.toggles.is_down(3);
+    }
+    /// `KeyMapping.click` for the mapping on `button`: on a server, the queued click
+    /// `handleKeybinds` takes on the next tick (`interaction_input`); with no server, the attack
+    /// and use clicks `tick_local_hand` takes, and pick block at once.
+    pub(super) fn mouse_mapping_click(&mut self, button: MouseButton) {
+        use horizon_client::interaction_input::Button;
+        if let Some(slot) = match button {
+            MouseButton::Left => Some(2),
+            MouseButton::Right => Some(3),
+            _ => None,
+        } {
+            self.toggles.0[slot].click();
+        }
+        if let Some(remote) = self.remote.as_mut() {
+            let input = match button {
+                MouseButton::Left => Button::Attack,
+                MouseButton::Right => Button::Use,
+                MouseButton::Middle => Button::Pick,
+                _ => return,
+            };
+            remote.input.press(input);
+            return;
+        }
+        // Mod callbacks may enqueue repeatedly before a local tick: never wrap the counters.
+        match button {
+            // KeyMapping.click: Minecraft.tick starts the attack.
+            MouseButton::Left => self.attack_clicks = self.attack_clicks.saturating_add(1),
+            // handleKeybinds consumes use clicks without acting while an
+            // item is in use. Minecraft.tick runs them after the attack
+            // clicks, so a place and a break in one tick replace the block.
+            MouseButton::Right => {
+                if self.using.is_none() {
+                    self.use_clicks = self.use_clicks.saturating_add(1);
+                }
+            }
+            MouseButton::Middle => {
+                // handleKeybinds: the number keys select before key.pickItem.
+                self.select_queued_hotbar();
+                // Minecraft.pickBlockOrEntity -> the server's handlePickItemFromBlock:
+                // the block's clone item, with its block entity's data on Ctrl in
+                // creative, picked from the inventory (`pick_item`).
+                if let Some(entity) = self.pick_entity_hit() {
+                    // handlePickItemFromEntity: the entity's pick result.
+                    if let Some(stack) = entity.and_then(|id| self.entity_pick_result(id)) {
+                        let infinite = self.creative;
+                        horizon_client::pick_item::pick(
+                            &mut self.inventory[..36],
+                            &mut self.selected,
+                            &stack,
+                            infinite,
+                        );
+                    }
+                } else if let Some(hit) = self.pick() {
+                    let include_data = self.creative && self.has_control_down();
+                    if let Some(stack) = self.picked_stack(hit.pos, include_data) {
+                        let infinite = self.creative;
+                        horizon_client::pick_item::pick(
+                            &mut self.inventory[..36],
+                            &mut self.selected,
+                            &stack,
+                            infinite,
+                        );
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
     /// `KeyMapping.setDown` for the vanilla gameplay mapping `key`, from a mod: attack and use as
     /// their mouse button sets them, sneak and sprint toggled by their option, the other keys held
     /// as their key holds them. With a screen or overlay open a press does nothing: the mappings
