@@ -94,26 +94,30 @@ impl fmt::Display for Error {
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Dependency {
     pub id: String,
     pub requirement: VersionReq,
     pub optional: bool,
+    pub side: Side,
+    pub reason: Option<String>,
+    pub url: Option<String>,
+    pub order: mod_vocab::DependencyOrder,
 }
 
 pub fn from_manifest(values: &BTreeMap<String, crate::manifest::Dependency>) -> Vec<Dependency> {
-    use crate::manifest::Dependency as Declared;
     values
         .iter()
         .map(|(id, value)| {
-            let (requirement, optional) = match value {
-                Declared::Version(version) => (version, false),
-                Declared::Detailed(details) => (&details.version, details.optional),
-            };
+            let details = value.details();
             Dependency {
                 id: id.clone(),
-                requirement: requirement.clone(),
-                optional,
+                requirement: details.version,
+                optional: details.optional,
+                side: details.side,
+                reason: details.reason,
+                url: details.url,
+                order: details.order,
             }
         })
         .collect()

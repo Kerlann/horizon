@@ -141,6 +141,35 @@ pub struct DependencyDetails {
     pub version: semver::VersionReq,
     #[serde(default)]
     pub optional: bool,
+    /// The installation on which this dependency declaration applies.
+    #[serde(default)]
+    pub side: Side,
+    /// A mod-provided explanation, at most 512 bytes.
+    #[serde(default)]
+    pub reason: Option<String>,
+    /// An HTTPS link with more information.
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Dispatch ordering only; `none` does not remove a code link requirement.
+    #[serde(default)]
+    pub order: mod_vocab::DependencyOrder,
+}
+
+impl Dependency {
+    /// The dependency's typed declaration, with bare-version defaults filled in.
+    pub fn details(&self) -> DependencyDetails {
+        match self {
+            Self::Version(version) => DependencyDetails {
+                version: version.clone(),
+                optional: false,
+                side: Side::Both,
+                reason: None,
+                url: None,
+                order: mod_vocab::DependencyOrder::After,
+            },
+            Self::Detailed(details) => details.clone(),
+        }
+    }
 }
 
 /// An `[incompatible]` or `[discouraged]` entry: the versions of the other mod it matches
@@ -416,20 +445,19 @@ impl Manifest {
                 return Err(format!("{MANIFEST}: invalid dependency id {id:?}"));
             }
         }
-        for (id, rule) in rules {
-            let rule = rule.details();
-            if rule
-                .reason
-                .as_ref()
-                .is_some_and(|reason| reason.len() > 512)
-            {
+        let rule_notes = rules.map(|(id, rule)| {
+            let details = rule.details();
+            (id, details.reason, details.url)
+        });
+        let dependency_notes = m.dependencies.iter().map(|(id, dependency)| {
+            let details = dependency.details();
+            (id, details.reason, details.url)
+        });
+        for (id, reason, url) in rule_notes.chain(dependency_notes) {
+            if reason.as_ref().is_some_and(|reason| reason.len() > 512) {
                 return Err(format!("{MANIFEST}: rule for {id}: reason over 512 bytes"));
             }
-            if rule
-                .url
-                .as_ref()
-                .is_some_and(|url| !url.starts_with("https://"))
-            {
+            if url.as_ref().is_some_and(|url| !url.starts_with("https://")) {
                 return Err(format!("{MANIFEST}: rule for {id}: url is not https://"));
             }
         }

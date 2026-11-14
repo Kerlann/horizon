@@ -14,6 +14,25 @@ pub enum PackageRuntime {
     Wasm,
 }
 
+/// Dispatch ordering requested by a manifest dependency.
+///
+/// This changes listener/content ordering only. `None` never removes a code
+/// library's Cargo or wasm link requirements.
+#[derive(horizon_mod_api_macros::Wire)]
+#[wire(internal_field_layouts)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "lowercase")]
+#[non_exhaustive]
+pub enum DependencyOrder {
+    /// The dependency dispatches before its owner (the default).
+    #[default]
+    After,
+    /// The owner dispatches before the dependency.
+    Before,
+    /// Do not impose a dispatch edge.
+    None,
+}
+
 /// One `[dependencies]` row of a package's manifest.
 #[derive(horizon_mod_api_macros::Wire)]
 #[wire(internal_field_layouts)]
