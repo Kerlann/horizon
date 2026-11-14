@@ -50,8 +50,9 @@ type ComposterRandoms =
 pub(super) struct OpenTransactions {
     levels: Vec<Level>,
     closing: Option<TransactionLifecycle>,
-    /// The root commit telling its joins and leaves, if one is.
-    committing: Option<entities::Committing>,
+    /// The root commits telling their joins and leaves, outermost first: a listener's command in
+    /// another level can commit a transaction there while this level's commit is told.
+    committing: Vec<entities::Committing>,
     composter_epoch: Option<mod_api::WorldEpoch>,
     /// Each composter port owns its transactional random stream, independently of Level.random.
     composter_randoms: ComposterRandoms,

@@ -73,6 +73,24 @@ pub(in crate::game) enum Announcement {
     Leaves,
 }
 
+/// One place in a commit's queue.
+enum Step {
+    Tell(Announcement),
+    /// The removals of a transaction, run once its joins are told.
+    Remove(Vec<Removal>),
+}
+
+impl Step {
+    /// A journal's steps: its joins, then its removals, then the rest of what it held.
+    fn of(announcements: Vec<Announcement>, removals: Vec<Removal>) -> Vec<Step> {
+        let (joins, rest): (Vec<_>, Vec<_>) = (announcements.into_iter())
+            .partition(|announcement| matches!(announcement, Announcement::Joins { .. }));
+        let steps = joins.into_iter().map(Step::Tell);
+        let steps = steps.chain([Step::Remove(removals)]);
+        steps.chain(rest.into_iter().map(Step::Tell)).collect()
+    }
+}
+
 /// A root commit telling its joins and leaves, kept in `OpenTransactions` while it does. Whatever
 /// a listener of the commit asks for meanwhile (a spawn, a removal, a transaction of its own) is
 /// queued behind what is being told, so no flush a listener starts sees the commit's
@@ -84,20 +102,30 @@ pub(super) struct Committing {
     removed: Vec<u32>,
     /// What is left to tell, in the order it was asked for: the transaction's own
     /// announcements, then those the listeners ask for. Entries stay, so an index is a place.
-    queue: Vec<Announcement>,
+    queue: Vec<Step>,
 }
 
-/// Puts back the commit a telling found (none, but for a listener's commit in another level)
-/// when it ends, however it ends.
+/// Takes the commit it pushed, and any a listener's left, off the stack when it ends, however
+/// it ends.
 struct Telling<'a, 'g> {
     game: &'a mut Game<'g>,
-    outer: Option<Committing>,
+    /// The stack's length before the commit was pushed: its place.
+    frame: usize,
 }
 
 impl Drop for Telling<'_, '_> {
     fn drop(&mut self) {
-        self.game.transactions.committing = self.outer.take();
+        self.game.transactions.committing.truncate(self.frame);
     }
+}
+
+/// The innermost commit being told in `dimension`: a listener's commit in another level sits
+/// above it on the stack and must not hide it.
+fn committing_in(commits: &mut [Committing], dimension: Dim) -> Option<&mut Committing> {
+    commits
+        .iter_mut()
+        .rev()
+        .find(|commit| commit.dimension == dimension)
 }
 
 /// The innermost open transaction of `dimension`: it journals what happens in that level only,
@@ -173,12 +201,12 @@ impl Game<'_> {
             level.lifetimes.announce(announcement);
             return true;
         }
-        match self.transactions.committing.as_mut() {
-            Some(commit) if commit.dimension == dim => {
-                commit.queue.push(announcement);
+        match committing_in(&mut self.transactions.committing, dim) {
+            Some(commit) => {
+                commit.queue.push(Step::Tell(announcement));
                 true
             }
-            _ => false,
+            None => false,
         }
     }
     /// A spawn wrote over `was` in `persist.anon` under `key`: an abort puts it back.
@@ -198,10 +226,14 @@ impl Game<'_> {
     /// Whether an open transaction removes `target`, which reads as gone until it closes.
     pub(in crate::game) fn removal_pending(&self, target: &Target) -> bool {
         let id = super::super::native_entities::target_id(*target);
-        self.transactions.iter().any(|level| {
+        let open = self.transactions.iter().any(|level| {
             level.dimension == Some(self.dim)
                 && (level.lifetimes.removals.iter())
                     .any(|removal| matches!(removal, Removal::Other(e) if Some(e.id()) == id))
+        });
+        // A commit's removals wait for its joins to be told: its entities read as gone until then.
+        open || (self.transactions.committing.iter()).any(|commit| {
+            commit.dimension == self.dim && id.is_some_and(|id| commit.removed.contains(&id))
         })
     }
     /// `entity_remove` of `target`, which `entity` names, inside a transaction: marked now and
@@ -241,58 +273,64 @@ impl Game<'_> {
             })
             .collect();
         let dimension = self.dim;
-        if let Some(commit) =
-            (self.transactions.committing.as_mut()).filter(|commit| commit.dimension == dimension)
-        {
+        let steps = Step::of(journal.announcements, journal.removals);
+        if let Some(commit) = committing_in(&mut self.transactions.committing, dimension) {
             commit.removed.extend(removed);
-            commit.queue.extend(journal.announcements);
-            self.remove_committed(journal.removals);
+            commit.queue.extend(steps);
             return;
         }
         let commit = Committing {
             dimension,
             removed,
-            queue: journal.announcements,
+            queue: steps,
         };
-        let outer = self.transactions.committing.replace(commit);
-        let telling = Telling { game: self, outer };
-        telling.game.tell_commit(journal.removals);
+        let frame = self.transactions.committing.len();
+        self.transactions.committing.push(commit);
+        let telling = Telling { game: self, frame };
+        telling.game.tell_commit(frame);
     }
-    /// The step `next` of the running commit's queue, with the entities never to join.
-    fn commit_step(&self, next: usize) -> Option<(Announcement, Vec<u32>)> {
-        let commit = self.transactions.committing.as_ref()?;
-        Some((*commit.queue.get(next)?, commit.removed.clone()))
+    /// The step `next` of the queue of the commit at `frame`, with the entities never to join. The
+    /// removals of a step are taken when `run`, so they run once.
+    fn commit_step(&mut self, frame: usize, next: usize, run: bool) -> Option<(Step, Vec<u32>)> {
+        let commit = self.transactions.committing.get_mut(frame)?;
+        let step = match commit.queue.get_mut(next)? {
+            Step::Tell(announcement) => Step::Tell(*announcement),
+            Step::Remove(removals) if run => Step::Remove(std::mem::take(removals)),
+            Step::Remove(_) => Step::Remove(Vec::new()),
+        };
+        Some((step, commit.removed.clone()))
     }
-    /// Tells the running commit's queue: the joins, then `removals`, then the rest.
-    fn tell_commit(&mut self, removals: Vec<Removal>) {
+    /// Tells the running commit's queue: every join first, as the queue grows with what the
+    /// listeners ask for, then each step in order, the joins already told skipped.
+    fn tell_commit(&mut self, frame: usize) {
         let mut next = 0;
-        while let Some((announcement, removed)) = self.commit_step(next) {
+        while let Some((step, removed)) = self.commit_step(frame, next, false) {
             next += 1;
-            if let Announcement::Joins {
+            if let Step::Tell(Announcement::Joins {
                 loaded_from_disk,
                 through,
-            } = announcement
+            }) = step
             {
                 self.flush_joins(loaded_from_disk, 0, &removed, Some(through));
             }
         }
         let joined = next;
-        self.remove_committed(removals);
         let mut next = 0;
-        while let Some((announcement, removed)) = self.commit_step(next) {
-            match announcement {
-                Announcement::Joins { .. } if next < joined => {}
-                Announcement::Joins {
+        while let Some((step, removed)) = self.commit_step(frame, next, true) {
+            match step {
+                Step::Tell(Announcement::Joins { .. }) if next < joined => {}
+                Step::Tell(Announcement::Joins {
                     loaded_from_disk,
                     through,
-                } => {
+                }) => {
                     self.flush_joins(loaded_from_disk, 0, &removed, Some(through));
                 }
-                Announcement::Left(id) => self.entity_left_now(id),
-                Announcement::Leaves => {
+                Step::Tell(Announcement::Left(id)) => self.entity_left_now(id),
+                Step::Tell(Announcement::Leaves) => {
                     self.native_removals_flush();
                     self.leaves_now();
                 }
+                Step::Remove(removals) => self.remove_committed(removals),
             }
             next += 1;
         }
