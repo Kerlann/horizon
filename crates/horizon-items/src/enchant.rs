@@ -216,15 +216,8 @@ fn read_tag_dir(
 /// order: content mods' files land there (`horizon_client::mod_content`'s
 /// overlay), as a data pack's namespaces do in `RegistryDataLoader`.
 fn other_namespaces(root: &Path) -> Vec<String> {
-    let mut out: Vec<String> = std::fs::read_dir(root.join("data"))
-        .into_iter()
-        .flatten()
-        .flatten()
-        .filter(|e| e.path().is_dir())
-        .filter_map(|e| e.file_name().to_str().map(str::to_owned))
-        .filter(|ns| ns != "minecraft")
-        .collect();
-    out.sort();
+    let mut out = horizon_world::json_folder::namespaces(&root.join("data"));
+    out.retain(|ns| ns != "minecraft");
     out
 }
 fn read_tag_dir_in(

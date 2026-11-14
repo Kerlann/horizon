@@ -757,16 +757,7 @@ pub fn native_loot_table_load(context: &LoadContext, id: &str, table: &mut Value
 }
 
 fn load_kind(data: &Path, kind: &str, out: &mut HashMap<String, Value>) -> io::Result<()> {
-    let Ok(entries) = fs::read_dir(data) else {
-        return Ok(());
-    };
-    let mut namespaces: Vec<String> = entries
-        .flatten()
-        .filter(|e| e.path().is_dir())
-        .filter_map(|e| e.file_name().to_str().map(str::to_owned))
-        .collect();
-    namespaces.sort();
-    for ns in namespaces {
+    for ns in crate::json_folder::namespaces(data) {
         load_dir(&data.join(&ns).join(kind), &ns, "", out)?;
     }
     Ok(())

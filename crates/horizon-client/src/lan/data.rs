@@ -121,17 +121,8 @@ const MOD_REGISTRIES: &[&str] = &["minecraft:enchantment"];
 /// A registry's entries from the resource root's namespaces other than
 /// `minecraft` (`data/<ns>/<dir>/`): content mods' own, marked as no client's.
 fn mod_entries(resources: &Path, dir: &str, entries: &mut Vec<((String, String), Value, bool)>) {
-    let Ok(namespaces) = std::fs::read_dir(resources.join("data")) else {
-        return;
-    };
-    let mut namespaces: Vec<String> = namespaces
-        .flatten()
-        .filter(|e| e.path().is_dir())
-        .filter_map(|e| e.file_name().to_str().map(str::to_owned))
-        .filter(|ns| ns != "minecraft")
-        .collect();
-    namespaces.sort();
-    for ns in namespaces {
+    let namespaces = horizon_world::json_folder::namespaces(&resources.join("data"));
+    for ns in namespaces.into_iter().filter(|ns| ns != "minecraft") {
         let mut found = BTreeMap::new();
         walk(&resources.join("data").join(&ns).join(dir), &mut found);
         entries.extend(found.into_iter().map(|(p, v)| ((ns.clone(), p), v, true)));
