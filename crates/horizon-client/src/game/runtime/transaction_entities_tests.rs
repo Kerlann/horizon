@@ -1,7 +1,10 @@
 //! Entities added and removed inside a transaction (#796), on a real `Game`: an abort takes
 //! back what the action spawned and undoes what it removed, telling no one; a commit announces
 //! joins and runs removals at the root commit; and a spawn refuses near the end of the ids.
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicU8, Ordering},
+};
 
 use horizon_client::{chunk::Chunk, items::ItemStack, mobs::StoredEffect};
 use horizon_core::nbt::{Tag, parse_snbt};
@@ -31,6 +34,8 @@ struct Heard {
     /// The joined entities told `loaded_from_disk`.
     from_disk: Vec<u32>,
     left: Vec<u32>,
+    /// Every join (`true`) and leave (`false`) in the order heard.
+    order: Vec<(bool, u32)>,
 }
 
 static HEARD: Mutex<Heard> = Mutex::new(Heard {
@@ -38,10 +43,20 @@ static HEARD: Mutex<Heard> = Mutex::new(Heard {
     joined: Vec::new(),
     from_disk: Vec::new(),
     left: Vec::new(),
+    order: Vec::new(),
 });
 
-/// The entity whose join the observer answers with a spawn of its own, and what it spawned.
-static ON_JOIN: Mutex<(Option<u32>, Vec<u32>)> = Mutex::new((None, Vec::new()));
+/// The entity whose join the observer answers with a spawn of its own, what it spawned, and an
+/// entity it removes in a transaction of its own that it commits around the spawn.
+static ON_JOIN: Mutex<(Option<u32>, Vec<u32>, Option<EntityRef>)> =
+    Mutex::new((None, Vec::new(), None));
+
+/// What `entity_kind` answered the listener for the entity a commit still has to remove.
+static KIND_OF_PENDING: Mutex<Option<Option<String>>> = Mutex::new(None);
+
+/// Where the observer is in the nested script of
+/// `a_level_commit_told_inside_another_levels_commit_keeps_its_own_batch`: 0 is off.
+static NEST: AtomicU8 = AtomicU8::new(0);
 
 /// Hears construction, joins and leaves; marks each entity it constructs; keeps sheep out.
 struct Observer;
@@ -60,6 +75,7 @@ impl Hooks for Observer {
     ) -> Flow {
         let mut heard = HEARD.lock().unwrap();
         heard.joined.push(event.entity);
+        heard.order.push((true, event.entity));
         if event.loaded_from_disk {
             heard.from_disk.push(event.entity);
         }
@@ -69,6 +85,11 @@ impl Hooks for Observer {
             (on_join.0 == Some(event.entity)).then(|| on_join.0.take())
         };
         if answers.is_some() {
+            let removes = ON_JOIN.lock().unwrap().2.take();
+            if let Some(entity) = removes {
+                *KIND_OF_PENDING.lock().unwrap() = Some(entity.kind(host));
+            }
+            let seal = removes.map(|_| host.transaction_open());
             let spawned = host.summon(
                 "minecraft:overworld",
                 "minecraft:pig",
@@ -76,6 +97,38 @@ impl Hooks for Observer {
                 Default::default(),
             );
             ON_JOIN.lock().unwrap().1.extend(spawned);
+            if let (Some(entity), Some(seal)) = (removes, seal) {
+                entity.remove(host, RemovalReason::Discarded);
+                host.transaction_close(&seal, true);
+            }
+        }
+        let stage = NEST.load(Ordering::SeqCst);
+        match (stage, event.kind) {
+            // A's commit tells a pig: a command in the nether spawns a zombie, told at once.
+            (1, "minecraft:pig") => {
+                NEST.store(2, Ordering::SeqCst);
+                host.commands().run_command(
+                    "execute in minecraft:the_nether run summon minecraft:zombie 1.5 70 1.5",
+                );
+            }
+            // Its listener commits a nether transaction of its own that spawned a cow.
+            (2, "minecraft:zombie") => {
+                NEST.store(3, Ordering::SeqCst);
+                let seal = host.transaction_open();
+                host.commands().run_command(
+                    "execute in minecraft:the_nether run summon minecraft:cow 1.5 70 1.5",
+                );
+                host.transaction_close(&seal, true);
+            }
+            // The cow's join is told while that commit runs: a command in the overworld
+            // spawns a chicken, which A's commit still holds.
+            (3, "minecraft:cow") => {
+                NEST.store(0, Ordering::SeqCst);
+                host.commands().run_command(
+                    "execute in minecraft:overworld run summon minecraft:chicken 1.5 70 1.5",
+                );
+            }
+            _ => {}
         }
         if event.kind == "minecraft:sheep" {
             Flow::Cancel
@@ -84,7 +137,9 @@ impl Hooks for Observer {
         }
     }
     fn entity_leave_level(&self, _: &mut dyn ServerHost, event: &mut EntityLeaveLevelEvent<'_>) {
-        HEARD.lock().unwrap().left.push(event.entity);
+        let mut heard = HEARD.lock().unwrap();
+        heard.left.push(event.entity);
+        heard.order.push((false, event.entity));
     }
 }
 
@@ -214,6 +269,7 @@ fn outside_a_transaction_joins_and_leaves_are_told_at_the_call() {
                 joined: vec![boat],
                 from_disk: vec![],
                 left: vec![],
+                order: vec![],
             }
         );
         assert!(game.entity_discard(game.entity(boat).unwrap()));
@@ -358,6 +414,7 @@ fn a_nested_abort_takes_back_only_its_own() {
                 joined: vec![kept],
                 from_disk: vec![],
                 left: vec![],
+                order: vec![],
             }
         );
     });
@@ -775,18 +832,16 @@ fn a_spawn_a_join_listener_makes_during_the_commit_joins_once_after_it() {
         let [c] = spawned[..] else {
             panic!("the listener spawned one entity, not {spawned:?}")
         };
+        let told = heard();
         assert_eq!(
-            heard().joined,
+            told.joined,
             [a, c],
             "a, then c once, and never the removed b"
         );
+        assert!(told.left.is_empty(), "b never leaves: {:?}", told.left);
         game.native_joins_flush(false, 0);
         game.native_leaves_flush();
-        assert_eq!(
-            heard(),
-            Heard::default(),
-            "nothing is told twice, and b never leaves"
-        );
+        assert_eq!(heard(), Heard::default(), "nothing is told twice");
         assert!(game.entity(c).is_some());
         assert_eq!(game.entity(b), None);
     });
@@ -854,5 +909,74 @@ fn a_level_holds_its_spawns_for_its_own_transaction_under_another_levels() {
         );
         game.native_joins_flush(false, 0);
         assert_eq!(heard(), Heard::default(), "and never told");
+    });
+}
+
+#[test]
+#[ignore = "daily"]
+fn a_nested_commit_from_a_join_listener_tells_its_join_before_its_removal() {
+    const NAME: &str = "game::transaction_entities_tests::a_nested_commit_from_a_join_listener_tells_its_join_before_its_removal";
+    with_observer(NAME, |game| {
+        let d = summon(game, "minecraft:pig", "{}").unwrap();
+        game.native_joins_flush(false, 0);
+        heard();
+        let seal = game.transaction_open();
+        let a = summon(game, "minecraft:pig", "{}").unwrap();
+        // a's join listener commits a transaction of its own that spawns c and removes d.
+        {
+            let mut on_join = ON_JOIN.lock().unwrap();
+            on_join.0 = Some(a);
+            on_join.2 = game.entity(d);
+        }
+        game.transaction_close(&seal, true);
+
+        let c = ON_JOIN.lock().unwrap().1[0];
+        assert_eq!(
+            heard().order,
+            [(true, a), (true, c), (false, d)],
+            "c's join is told before d's removal takes effect, and nothing twice"
+        );
+        assert_eq!(
+            KIND_OF_PENDING.lock().unwrap().take(),
+            Some(None),
+            "d reads as gone to the listener while its removal waits"
+        );
+        assert_eq!(game.entity(d), None);
+        game.native_joins_flush(false, 0);
+        game.native_leaves_flush();
+        assert_eq!(heard(), Heard::default());
+    });
+}
+
+#[test]
+#[ignore = "daily"]
+fn a_level_commit_told_inside_another_levels_commit_keeps_its_own_batch() {
+    const NAME: &str = "game::transaction_entities_tests::a_level_commit_told_inside_another_levels_commit_keeps_its_own_batch";
+    with_observer(NAME, |game| {
+        game.enter_level(Dim::Nether).unwrap();
+        game.world
+            .chunks
+            .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        game.enter_level(Dim::Overworld).unwrap();
+        let seal = game.transaction_open();
+        let a = summon(game, "minecraft:pig", "{}").unwrap();
+        let b = summon(game, "minecraft:pig", "{}").unwrap();
+        assert!(game.entity_discard(game.entity(b).unwrap()));
+        NEST.store(1, Ordering::SeqCst);
+        game.transaction_close(&seal, true);
+
+        let told = heard();
+        assert_eq!(NEST.load(Ordering::SeqCst), 0, "the script ran to its end");
+        assert_eq!(
+            told.joined.len(),
+            4,
+            "a, the zombie, the cow, the chicken: {told:?}"
+        );
+        assert_eq!(told.joined[0], a);
+        assert!(!told.joined.contains(&b), "the removed b is never told");
+        assert!(told.left.is_empty(), "and never leaves: {:?}", told.left);
+        game.native_joins_flush(false, 0);
+        game.native_leaves_flush();
+        assert_eq!(heard(), Heard::default(), "nothing is told twice");
     });
 }
