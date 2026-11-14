@@ -161,3 +161,100 @@ fn waxed_malformed_payloads_reject_whole_recipes_with_component_errors() {
         assert!(recipes.by_type.values().all(|recipes| recipes.is_empty()));
     }
 }
+
+#[test]
+fn rollup_boundary_and_absence_4105() {
+    let load = load();
+    let context = load.loop_context(LoopSide::Server, []);
+    for inherited in [false, true] {
+        let mut items = Items::empty();
+        let defaults = crate::json_nbt::json_to_compound(
+            serde_json::json!({"minecraft:waxed":{}})
+                .as_object()
+                .unwrap(),
+        )
+        .unwrap();
+        if inherited {
+            items.component_defaults = std::sync::Arc::new(std::collections::HashMap::from([(
+                "minecraft:map".into(),
+                defaults.clone(),
+            )]));
+        }
+        let positive = parse(
+            r#"{"type":"neoforge:components","items":"minecraft:map","components":{"minecraft:waxed":{}}}"#,
+            &items,
+        );
+        let absent = parse(
+            r#"{"type":"neoforge:components","items":"minecraft:map","components":{"!minecraft:waxed":{}}}"#,
+            &items,
+        );
+        let mut stack = ItemStack::new("minecraft:map", 1);
+        assert_eq!(positive.test_in(&context, &stack), inherited);
+        assert_eq!(absent.test_in(&context, &stack), !inherited);
+        (_, stack.extra) = crate::item_data::decode_components(Some(&Tag::Compound(defaults)));
+        assert!(positive.test_in(&context, &stack));
+        assert!(!absent.test_in(&context, &stack));
+        let removal = Tag::compound([("!minecraft:waxed", Tag::Compound(Default::default()))]);
+        (_, stack.extra) = crate::item_data::decode_components(Some(&removal));
+        assert!(absent.test_in(&context, &stack));
+        assert!(!positive.test_in(&context, &stack));
+    }
+    let items = Items::empty();
+    for tag in [Tag::End, Tag::Byte(0), Tag::List(vec![])] {
+        let registry = horizon_command::Registries::default();
+        let error =
+            horizon_command::item::decoded_component_value("minecraft:waxed", &tag, &registry)
+                .unwrap_err();
+        assert!(!error.is_empty());
+        let rule = IngredientRule::Components {
+            patch: [("minecraft:waxed".into(), tag)].into_iter().collect(),
+            removed: vec![],
+            strict: false,
+        };
+        let error = components::validate(&rule, &items).unwrap_err();
+        assert!(error.contains("minecraft:waxed"), "{error}");
+    }
+    for value in [
+        serde_json::Value::Null,
+        serde_json::json!(false),
+        serde_json::json!([]),
+    ] {
+        let ingredient = serde_json::json!({"type":"neoforge:components","items":"minecraft:map","components":{"minecraft:waxed":value}});
+        let error = components::validate_recipe_components(&ingredient, &items).unwrap_err();
+        assert!(error.contains("minecraft:waxed"), "{error}");
+        let recipe = |ingredient| serde_json::json!({"type":"minecraft:crafting_shapeless","ingredients":[ingredient],"result":{"id":"minecraft:diamond"}});
+        let root = tempfile::tempdir().unwrap();
+        let recipes = crate::crafting::Recipes::from_sources(
+            root.path(),
+            &items,
+            &horizon_world::loot::PackOverlay::NONE,
+            vec![
+                ("fixture:invalid_waxed".into(), recipe(ingredient)),
+                (
+                    "fixture:valid".into(),
+                    recipe(serde_json::json!("minecraft:map")),
+                ),
+            ],
+            &load,
+        )
+        .unwrap();
+        assert_eq!(recipes.crafting.len(), 1);
+        assert!(!recipes.recipe_matches(
+            &context,
+            "fixture:invalid_waxed",
+            &[Some(ItemStack::new("minecraft:map", 1))],
+            1
+        ));
+        assert!(recipes.recipe_matches(
+            &context,
+            "fixture:valid",
+            &[Some(ItemStack::new("minecraft:map", 1))],
+            1
+        ));
+        assert!(
+            recipes
+                .craft(&context, &[Some(ItemStack::new("minecraft:map", 1))], 1)
+                .is_some()
+        );
+    }
+}
