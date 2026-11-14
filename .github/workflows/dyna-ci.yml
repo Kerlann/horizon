@@ -408,6 +408,7 @@ jobs:
       # cargo_features). The checks above unify test and dev features (test-support) into one host build, which hid
       # an unused import (Linux) and a unix-only binding (Windows) from everything but the SDK builds on main. Its own
       # target folder: these flags would otherwise invalidate the workspace's artifacts for the other steps.
+      # --target leaves host units uncapped as before; stable Cargo has no host-rustflags, so their denies can stop dependents.
       - name: The prebuilt SDK's host library builds without warnings
         id: sdk_host
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && needs.changes.outputs.rust_required != 'false' }}

@@ -415,7 +415,7 @@ class PrReadyTests(unittest.TestCase):
                        "xcrun": f"#!/bin/sh\nexit {0 if metal else 1}\n",
                        # xkbcommon found: Linux never looks for nix-shell (a NixOS host would have it).
                        "pkg-config": "#!/bin/sh\nexit 0\n",
-                       "cargo": "#!/bin/sh\nprintf '%s\\n' \"$@\"\n"}
+                       "cargo": '#!/bin/sh\nif [ "$1" = metadata ]; then echo \'{"workspace_members": []}\'; else printf \'%s\\n\' "$@"; fi\n'}
             for name, script in scripts.items():
                 path = os.path.join(fake_bin, name)
                 # LF on every host: text mode makes the shebang "#!/bin/sh\r" on
