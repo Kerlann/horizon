@@ -27,7 +27,14 @@ Keep the callback a pure function of the level, position and state, without side
 `BlockPart::block_path_type` answers for `event.state` at `event.pos`, with a read-only
 host for the owning level. Return `Some(PathType)` to replace the whole static classification,
 even for air, or `None` to use vanilla. The same state may answer differently by position.
-This is separate from `is_pathfindable`, which remains state-only.
+This is separate from `is_pathfindable`, which remains state-only. The server caches the final
+static classification in 4096 direct-mapped positional slots shared by its AI workers, including
+`Open` for missing navigation-region chunks. A collision replaces a slot. A matching
+`sendBlockUpdated` notification clears it: ordinary writes require an actual state change,
+`UPDATE_CLIENTS` and full chunk status at least `BLOCK_TICKING`; direct block-entity notifications
+clear even unchanged state. Time, `/reload`, chunk load and chunk unload do not clear it. Keep
+the answer deterministic for that lifetime. Neighbour and mob-specific adjustments are not
+stored in this cache; existing per-search evaluator caches remain.
 
 `BlockPart::adjacent_block_path_type` answers for a neighbour at its own `event.pos`;
 `event.path_type` is that neighbour's classified type, not the node's type. Return `Some`

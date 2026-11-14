@@ -9,6 +9,7 @@ use super::{
 use crate::blocks::Fluid;
 use crate::fast_hash::FxHashMap;
 use horizon_core::geometry::{Aabb, Vec3};
+use horizon_core::position::BlockPos;
 
 /// The node kinds, moved to `mod_api` so mods can name them (#944).
 pub use mod_api::PathType;
@@ -16,10 +17,12 @@ pub const PATH_TYPES: usize = PathType::COUNT;
 
 impl MobWorld<'_> {
     pub fn path_type_from_state(&self, x: i32, y: i32, z: i32) -> PathType {
-        let state = self.world.block(x, y, z);
-        self.mob_hooks
-            .and_then(|hooks| hooks.block_path_type(state, [x, y, z]))
-            .unwrap_or_else(|| self.data.path_type(state))
+        self.world.cached_path_type(BlockPos::new(x, y, z), || {
+            let state = self.world.block(x, y, z);
+            self.mob_hooks
+                .and_then(|hooks| hooks.block_path_type(state, [x, y, z]))
+                .unwrap_or_else(|| self.data.path_type(state))
+        })
     }
     /// WalkNodeEvaluator.getPathTypeStatic.
     pub fn path_type_static(&self, x: i32, y: i32, z: i32) -> PathType {

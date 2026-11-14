@@ -81,6 +81,80 @@ impl Hooks for BesideMod {
     }
 }
 
+#[test]
+#[ignore = "daily"]
+fn cache_follows_update_flags_and_direct_block_entity_notifications() {
+    with_game(|game| {
+        use horizon_core::position::BlockPos;
+        use std::cell::Cell;
+        let pos = [5, 64, 5];
+        let packed_pos = BlockPos::new(pos[0], pos[1], pos[2]);
+        let air = game.res.facts().air;
+        let stone = game
+            .pack
+            .assets
+            .registry
+            .default_state("minecraft:stone")
+            .unwrap();
+        game.world
+            .chunks
+            .insert((0, 0), Arc::new(horizon_client::chunk::Chunk::empty(0, 0)));
+        game.world.block_log = None;
+        game.world.enable_path_type_cache();
+        let calls = Cell::new(0);
+        let read = |game: &Game<'_>| {
+            game.world.cached_path_type(packed_pos, || {
+                calls.set(calls.get() + 1);
+                if game.world.block(pos[0], pos[1], pos[2]) == air {
+                    PathType::Open
+                } else {
+                    PathType::Blocked
+                }
+            })
+        };
+        assert_eq!(read(game), PathType::Open);
+        game.level_set_with_flags(pos, stone, 0).unwrap();
+        assert_eq!(read(game), PathType::Open);
+        assert_eq!(
+            calls.get(),
+            1,
+            "a non-notifying write must leave the cached type stale"
+        );
+        game.level_set_with_flags(pos, stone, 2).unwrap();
+        read(game);
+        assert_eq!(
+            calls.get(),
+            1,
+            "an unchanged state must not reach sendBlockUpdated"
+        );
+        game.level_set_with_flags(pos, air, 2).unwrap();
+        read(game);
+        assert_eq!(
+            calls.get(),
+            2,
+            "UPDATE_CLIENTS clears despite the absent network log"
+        );
+        game.mark_block_entity_updated((pos[0], pos[1], pos[2]));
+        read(game);
+        assert_eq!(
+            calls.get(),
+            3,
+            "direct block-entity notification clears unchanged state"
+        );
+        game.notify_block_clients((pos[0], pos[1], pos[2]));
+        read(game);
+        assert_eq!(calls.get(), 4);
+        game.world.block_log = Some(vec![(pos[0], pos[1], pos[2])]);
+        game.notify_block_clients((pos[0], pos[1], pos[2]));
+        read(game);
+        assert_eq!(
+            calls.get(),
+            5,
+            "log deduplication must not suppress invalidation"
+        );
+    });
+}
+
 fn with_parts(id: &'static str, hooks: impl Hooks + 'static, test: impl FnOnce(&mut Game<'_>)) {
     let mods: mod_api::Mods = vec![mod_api::ModEntry::new(id, Box::new(hooks))].into();
     crate::game::api_values::install_parts(&mods).unwrap();

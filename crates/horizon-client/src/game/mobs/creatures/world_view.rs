@@ -3,6 +3,9 @@ use super::*;
 
 impl Game<'_> {
     pub(in crate::game) fn mob_world_base<'s>(&'s self, others: &'s [Seen]) -> MobWorld<'s> {
+        if self.is_logical_server() {
+            self.world.enable_path_type_cache();
+        }
         let (rain, thunder) = self.weather_levels(1.0);
         let weather = self.can_have_weather();
         let player = self.player_view();
