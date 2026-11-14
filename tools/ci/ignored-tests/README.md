@@ -51,7 +51,8 @@ verify-static fails an un-ignored test that starts a child process (`check_proce
 `Command`, directly or through a helper of its file or one listed in `tools/ci/process-spawns.txt`. Such a test is a
 `daily` row with reason `child-process`.
 
-`verify` times its test binaries (`tools/ci/run_test_binaries.py --time-limits 2,5`): a test over 5 s fails by name,
-one over 2 s only warns, so it stays until someone moves it. The times are wall time with three binaries and their
-test threads running at once, not isolated measurements. Documentation examples and `verify`'s Python steps are not
-timed.
+`verify` times its test binaries (`tools/ci/run_test_binaries.py --time-limits 2,5`): a test over 5 s is rerun once,
+alone after all binary workers finish, with the same binary and environment. It fails by name if that isolated
+rerun also exceeds 5 s, fails, or has no passing timed record; both times are printed. The 2 s warnings stay as they
+are, so a warned test stays until someone moves it. Initial times are wall time with three binaries and their test
+threads running at once, not isolated measurements. Documentation examples and `verify`'s Python steps are not timed.
