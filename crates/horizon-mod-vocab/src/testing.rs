@@ -536,11 +536,13 @@ impl crate::prelude::FluidsEnergyBackend for FakeHost {
     }
 }
 impl crate::prelude::EntitiesBackend for FakeHost {
-    fn entity_kind(&self, entity: EntityRef) -> Option<String> {
-        if self.players.by_entity(entity.id()).is_some() {
-            return Some("minecraft:player".to_owned());
-        }
-        Some(self.level.entity_at(entity.id())?.kind.clone())
+    fn entity_kind(&self, entity: EntityRef) -> Option<crate::EntityTypeKey> {
+        let kind = if self.players.by_entity(entity.id()).is_some() {
+            "minecraft:player"
+        } else {
+            &self.level.entity_at(entity.id())?.kind
+        };
+        crate::content::registry_keys::resolved_entity_type_key(kind)
     }
     fn entity_level(&self, entity: EntityRef) -> Option<LevelRef> {
         if let Some((_, player)) = self.players.by_entity(entity.id()) {
@@ -550,6 +552,11 @@ impl crate::prelude::EntitiesBackend for FakeHost {
     }
 }
 impl crate::prelude::KeysBackend for FakeHost {
+    fn entity_type_key_id(&self, key: crate::EntityTypeKey) -> String {
+        crate::content::registry_keys::entity_type_key_id(key)
+            .expect("fake entity type key belongs to its load")
+    }
+
     fn item_key_id(&self, key: crate::ItemKey) -> String {
         crate::content::registry_keys::item_id(key)
             .expect("fake item key belongs to its load")
