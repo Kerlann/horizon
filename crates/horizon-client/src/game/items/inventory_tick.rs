@@ -63,7 +63,7 @@ fn lodestone_target_gone(world: &World, facts: &BlockFacts, dim: &str, stack: &I
     }) else {
         return false;
     };
-    horizon_client::save::text(target.get("dimension")).as_deref() == Some(dim)
+    matches!(target.get("dimension"), Some(Tag::String(name)) if name.0.iter().copied().eq(dim.encode_utf16()))
         && world.chunks.contains_key(&(x >> 4, z >> 4))
         && facts.get(world.block(x, y, z)).name.as_ref() != "minecraft:lodestone"
 }
