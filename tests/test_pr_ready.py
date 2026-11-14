@@ -1,4 +1,6 @@
 import argparse
+import contextlib
+import io
 import datetime
 import json
 import os
@@ -140,6 +142,27 @@ class GitChangedPathsTests(unittest.TestCase):
 
 
 class PrReadyTests(unittest.TestCase):
+    @unittest.skipUnless(POSIX_BASH and os.name != "nt", "executes the POSIX self-check")
+    def test_cold_clippy_hint_precedes_the_step_and_respects_sccache(self):
+        for wrapper in (None, "", "other-wrapper", "sccache", "/opt/bin/sccache", "sccache.exe"):
+            with self.subTest(wrapper=wrapper):
+                env = dict(os.environ)
+                env.pop("RUSTC_WRAPPER", None)
+                if wrapper is not None:
+                    env["RUSTC_WRAPPER"] = wrapper
+                step = pr_ready.Step("clippy", "printf 'ran\\n'")
+                with mock.patch.dict(os.environ, env, clear=True), contextlib.redirect_stderr(io.StringIO()) as log:
+                    pr_ready.run_script([step], "local", verbose=False)
+                self.assertEqual((step.status, step.output.strip()), ("pass", "ran"))
+                expected = wrapper in (None, "", "other-wrapper")
+                self.assertEqual(log.getvalue().count(pr_ready.CLIPPY_CACHE_HINT), int(expected))
+                if expected:
+                    self.assertLess(log.getvalue().index(pr_ready.CLIPPY_CACHE_HINT), log.getvalue().index("  clippy..."))
+        step = pr_ready.Step("tests", "printf 'ran\\n'")
+        with mock.patch.dict(os.environ, {"RUSTC_WRAPPER": ""}), contextlib.redirect_stderr(io.StringIO()) as log:
+            pr_ready.run_script([step], "local", verbose=False)
+        self.assertNotIn(pr_ready.CLIPPY_CACHE_HINT, log.getvalue())
+
     def test_data_backed_summary_with_and_without_prepared_data(self):
         with tempfile.TemporaryDirectory() as directory, \
                 mock.patch.object(pr_ready, "ROOT", Path(directory) / "checkout/repo"), \

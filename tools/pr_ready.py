@@ -493,6 +493,12 @@ PARITY_HOSTS= python3 tools/parity.py --changed-files "$RUNNER_TEMP/changed" --t
     return steps
 
 
+CLIPPY_CACHE_HINT = (
+    "pr_ready: the first clippy run builds the whole workspace once (cold, can take 20+ min); later runs are warm. "
+    "Set RUSTC_WRAPPER=sccache with CARGO_INCREMENTAL=0 to reuse dependency builds across branches and checkouts."
+)
+
+
 def run_script(steps, host, verbose):
     """Runs the steps in one shell on host (here for "local"), each between markers, reading results as they come."""
     if not steps:
@@ -508,6 +514,9 @@ def run_script(steps, host, verbose):
         return
     parts = [HOST_SETUP.get(host, ""), "set +e"]
     for index, step in enumerate(steps):
+        if step.name.endswith("clippy"):
+            parts.append('case "${RUSTC_WRAPPER:-}" in sccache|*/sccache|sccache.exe|*/sccache.exe) ;; '
+                         f'*) printf \'%s\\n\' {shlex.quote("@@pr_ready:hint:" + CLIPPY_CACHE_HINT)} ;; esac')
         parts.append(f"echo '@@pr_ready:begin:{index}'; started=$(date +%s)\n( {step.command}\n) 2>&1 < /dev/null\n"
                      f"status=$?; echo; echo \"@@pr_ready:end:{index}:$status:$(( $(date +%s) - started ))\"")
     script = "\n".join(parts)
@@ -529,6 +538,8 @@ def run_script(steps, host, verbose):
                 step.seconds = int(marker.group(4))
                 finish(step, verbose)
                 current = None
+            elif line.startswith("@@pr_ready:hint:"):
+                print(line.removeprefix("@@pr_ready:hint:"), end="", file=sys.stderr, flush=True)
             elif current is not None:
                 current.output += line
                 if verbose:
@@ -593,6 +604,8 @@ def run_windows(steps, verbose, environment=None):
         elif command and command[0] == "python3":
             command[0] = sys.executable
 
+        if step.name.endswith("clippy") and Path(env.get("RUSTC_WRAPPER", "")).name not in ("sccache", "sccache.exe"):
+            print(CLIPPY_CACHE_HINT, file=sys.stderr, flush=True)
         print(f"  {step.name}...", file=sys.stderr, flush=True)
         started = time.monotonic()
         try:
