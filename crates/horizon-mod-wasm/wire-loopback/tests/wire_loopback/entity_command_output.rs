@@ -1,4 +1,5 @@
 use super::*;
+use mod_api::__private::game::BackendMutRefOf;
 
 struct Server;
 impl mod_api::Host for Server {}
