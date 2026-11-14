@@ -217,6 +217,17 @@ pub fn list(dir: &Path) -> io::Result<Vec<(String, PathBuf)>> {
     Ok(named)
 }
 
+/// Decode an enchantment definition at its resource boundary, naming a malformed file.
+pub fn enchantment_definition(bytes: &[u8], path: &Path) -> Option<serde_json::Value> {
+    match serde_json::from_slice(bytes) {
+        Ok(value) => Some(value),
+        Err(error) => {
+            log::warn!("Skipping malformed enchantment {}: {error}", path.display());
+            None
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -306,16 +317,5 @@ mod tests {
         let dir =
             std::env::temp_dir().join(format!("horizon-json-folder-none-{}", std::process::id()));
         assert!(read(&dir).is_err());
-    }
-}
-
-/// Decode an enchantment definition at its resource boundary, naming a malformed file.
-pub fn enchantment_definition(bytes: &[u8], path: &Path) -> Option<serde_json::Value> {
-    match serde_json::from_slice(bytes) {
-        Ok(value) => Some(value),
-        Err(error) => {
-            log::warn!("Skipping malformed enchantment {}: {error}", path.display());
-            None
-        }
     }
 }
