@@ -131,5 +131,6 @@ horizon-client game::tnt::tests::silent_launched_potions_and_bottles_keep_their_
 horizon-client game::tnt::tests::silent_potions_keep_the_splash_without_its_sound lib daily game-boot
 horizon-client game::tnt::tests::silent_tnt_keeps_the_blast_without_its_sound lib daily game-boot
 horizon-client game::tnt::tests::tnt_primed_by_a_blast_waits_for_the_next_tick lib daily game-boot
+horizon-client game::visibility_unwind_tests::visibility_listener_unwind_does_not_block_an_outside_save lib daily child-process
 horizon-client game::wake_time::tests::a_later_listener_reads_and_replaces_the_earlier_adjustment lib daily resources
 horizon-client game::wither_star_tests::a_withers_nether_star_lives_12000_ticks lib daily game-boot

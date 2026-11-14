@@ -2614,7 +2614,7 @@ impl Game<'_> {
     fn loot_block_entity(&self, pos: [i32; 3], block: &str) -> Option<horizon_core::nbt::Tag> {
         let key = (pos[0], pos[1], pos[2]);
         match self.world.block_entities.get(&key) {
-            Some(entity) => Some(horizon_client::save::encode_block_entity(
+            Some(entity) => Some(horizon_client::save::block_entity_encode::encode(
                 key, entity, block,
             )),
             None => spill::saved_entity(&self.world, pos),
@@ -8638,10 +8638,8 @@ impl Game<'_> {
             }
             _ => None,
         };
-        self.view_frustum = self
-            .renderer
-            .as_mut()
-            .map(|r| r.camera_frustum(camera, fov_degrees, yaw, pitch, bob * spin, depth_far));
+        self.view_frustum =
+            self.world_view_frustum(camera, [fov_degrees, yaw, pitch], bob * spin, depth_far);
         let billboard_frustum = if self.settings.horizon.taa {
             self.renderer.as_ref().map(|r| {
                 r.camera_frustum_with_jitter(fov_degrees, yaw, pitch, bob * spin, depth_far)
