@@ -31,7 +31,6 @@ fn compiled_guest_reads_predicted_like_native() {
             )
         };
         let infos = [info(&manifest.id), info("block_notice_probe")];
-        mod_api::__private::install_packages(&infos, &[]);
         let loaded = horizon_mod_wasm::load(
             &std::fs::read(std).unwrap(),
             vec![horizon_mod_wasm::WasmPackage {
@@ -43,10 +42,28 @@ fn compiled_guest_reads_predicted_like_native() {
         assert_eq!(loaded.mods.len(), 1);
         loaded.initialize(&infos).unwrap();
         mod_api::testing::with_mods(loaded.mods.into(), || {
+            mod_api::__private::install_packages(&infos, &[]);
             mod_api::__private::part_tests::install_parts_fixture(mod_api::__private::mods())
                 .unwrap();
             mod_api::__private::mark_game_thread();
             let world = support::World::new();
+            mod_api::__private::resolve_parts(
+                &std::collections::HashMap::new(),
+                &std::collections::HashMap::new(),
+                mod_api::__private::KnownIds {
+                    block: &|id| {
+                        matches!(
+                            id,
+                            "minecraft:stone"
+                                | "minecraft:air"
+                                | "minecraft:water_cauldron"
+                                | "wasm_fixture:part_state"
+                        )
+                    },
+                    item: &|id| matches!(id, "minecraft:paper" | "minecraft:snowball"),
+                },
+            )
+            .unwrap();
             let _phase = mod_api::__private::PhaseOwner::scope(mod_api::__private::ModPhase::World);
             world.check(&fixture::NoticePart);
             world.read.borrow_mut().clear();
