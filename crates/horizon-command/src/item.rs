@@ -1871,4 +1871,176 @@ mod tests {
             Err("Unknown registry key in ResourceKey[minecraft:root / minecraft:block_entity_type]: example:nope".into())
         );
     }
+
+    #[test]
+    fn unbreakable_unit_codec_requires_maps_and_discards_unknown_fields() {
+        use super::{Compound, Registries, Tag, decoded_component_value};
+        let registry = Registries::default();
+        let empty = Tag::Compound(Compound::new());
+        for value in [
+            empty.clone(),
+            Tag::compound([
+                ("show_in_tooltip", Tag::Byte(0)),
+                ("unknown", Tag::List(vec![Tag::Int(7)])),
+            ]),
+        ] {
+            assert_eq!(
+                decoded_component_value("minecraft:unbreakable", &value, &registry).unwrap(),
+                empty
+            );
+        }
+        for value in [
+            Tag::Byte(1),
+            Tag::Int(0),
+            Tag::String("unit".into()),
+            Tag::List(vec![]),
+            Tag::IntArray(vec![]),
+        ] {
+            assert!(decode_component("minecraft:unbreakable", &value, &registry).is_err());
+            assert!(decoded_component_value("minecraft:unbreakable", &value, &registry).is_err());
+        }
+    }
+
+    #[test]
+    fn base_color_codec_accepts_only_exact_dye_names() {
+        use super::{Registries, Tag, decoded_component_value};
+        let registry = Registries::default();
+        for name in [
+            "white",
+            "orange",
+            "magenta",
+            "light_blue",
+            "yellow",
+            "lime",
+            "pink",
+            "gray",
+            "light_gray",
+            "cyan",
+            "purple",
+            "blue",
+            "brown",
+            "green",
+            "red",
+            "black",
+        ] {
+            let value = Tag::String(name.into());
+            assert_eq!(
+                decoded_component_value("minecraft:base_color", &value, &registry).unwrap(),
+                value
+            );
+            assert!(decode_component("minecraft:base_color", &value, &registry).is_ok());
+            assert!(
+                decoded_component_value(
+                    "minecraft:base_color",
+                    &Tag::String(name.to_uppercase().as_str().into()),
+                    &registry
+                )
+                .is_err()
+            );
+        }
+        for value in [
+            "",
+            "silver",
+            "RED",
+            "Red",
+            " red",
+            "red ",
+            "minecraft:red",
+            "16",
+        ] {
+            assert!(
+                decoded_component_value(
+                    "minecraft:base_color",
+                    &Tag::String(value.into()),
+                    &registry
+                )
+                .is_err(),
+                "{value}"
+            );
+        }
+        let surrogate = Tag::String(horizon_core::nbt::JavaString(vec![0xD800]));
+        assert!(decoded_component_value("minecraft:base_color", &surrogate, &registry).is_err());
+        for value in [
+            Tag::Byte(0),
+            Tag::Short(0),
+            Tag::Int(14),
+            Tag::Long(14),
+            Tag::Float(14.0f32.to_bits()),
+            Tag::Double(14.0f64.to_bits()),
+            Tag::List(vec![]),
+            Tag::Compound(Default::default()),
+            Tag::ByteArray(vec![]),
+            Tag::IntArray(vec![]),
+            Tag::LongArray(vec![]),
+        ] {
+            assert_eq!(
+                decoded_component_value("minecraft:base_color", &value, &registry),
+                Err("Not a string".into())
+            );
+            assert_eq!(
+                decode_component("minecraft:base_color", &value, &registry),
+                Err("Not a string".into())
+            );
+        }
+    }
+
+    #[test]
+    fn note_block_sound_identifier_codec_normalizes_and_validates() {
+        use super::{Registries, Tag, decoded_component_value};
+        let registry = Registries::default();
+        for (input, canonical) in [
+            ("unregistered/sound", "minecraft:unregistered/sound"),
+            (":unregistered/sound", "minecraft:unregistered/sound"),
+            (
+                "minecraft:unregistered/sound",
+                "minecraft:unregistered/sound",
+            ),
+            ("fixture:unregistered/sound", "fixture:unregistered/sound"),
+            ("", "minecraft:"),
+            (":", "minecraft:"),
+            ("minecraft:", "minecraft:"),
+            ("fixture:", "fixture:"),
+            (".:..", ".:.."),
+            ("a-z_0.9:/a.._-0", "a-z_0.9:/a.._-0"),
+        ] {
+            let value = Tag::String(input.into());
+            assert_eq!(
+                decoded_component_value("minecraft:note_block_sound", &value, &registry),
+                Ok(Tag::String(canonical.into())),
+                "{input:?}",
+            );
+            assert!(decode_component("minecraft:note_block_sound", &value, &registry).is_ok());
+        }
+        for input in [
+            "Minecraft:sound",
+            "minecraft:Sound",
+            "bad namespace:sound",
+            "bad/namespace:sound",
+            "..:sound",
+            "a:b:c",
+            "sound with spaces",
+            "café",
+            "sound\u{0}",
+        ] {
+            let value = Tag::String(input.into());
+            assert!(
+                decoded_component_value("minecraft:note_block_sound", &value, &registry).is_err(),
+                "{input:?}",
+            );
+            assert!(decode_component("minecraft:note_block_sound", &value, &registry).is_err());
+        }
+        for value in [
+            Tag::Int(1),
+            Tag::compound([] as [(&str, Tag); 0]),
+            Tag::List(vec![]),
+            Tag::String(horizon_core::nbt::JavaString(vec![0xd800])),
+            Tag::String(horizon_core::nbt::JavaString(vec![0xdc00])),
+            Tag::String(horizon_core::nbt::JavaString(vec![0xd83d, 0xde00])),
+        ] {
+            assert!(
+                decoded_component_value("minecraft:note_block_sound", &value, &registry).is_err(),
+                "{value:?}",
+            );
+        }
+    }
 }
