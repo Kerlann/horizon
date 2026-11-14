@@ -1,3 +1,4 @@
+use super::*;
 /// The region the guest declares: fractional and negative climate bounds, so the host reads
 /// every float back bit for bit.
 pub(super) fn region() -> mod_api::BiomeRegion {
@@ -33,4 +34,11 @@ pub(super) fn register(registrar: &mut dyn mod_api::Registrar) {
     registrar
         .declare_biome_region("ember_marsh", region())
         .unwrap();
+}
+
+pub(super) struct BiomeRegionRegistrationHooks;
+impl BiomeRegionRegistrationHooks {
+    pub(super) fn register(&self, registrar: &mut dyn mod_api::Registrar, cx: &mod_api::RegistrationContext) {
+        self::register(registrar);
+    }
 }
