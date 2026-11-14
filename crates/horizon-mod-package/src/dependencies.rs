@@ -227,11 +227,13 @@ pub fn rules(manifest: &crate::Manifest, running: Side) -> Vec<Rule> {
                 (Some(text), None) | (None, Some(text)) => format!(" ({text})"),
                 (None, None) => String::new(),
             };
-            (rule.side == Side::Both || rule.side == running).then(|| Rule {
-                kind,
-                id: id.clone(),
-                requirement: rule.version,
-                note,
+            (running == Side::Both || rule.side == Side::Both || rule.side == running).then(|| {
+                Rule {
+                    kind,
+                    id: id.clone(),
+                    requirement: rule.version,
+                    note,
+                }
             })
         })
     }
@@ -275,7 +277,21 @@ impl Overrides {
     pub fn read(mods_dir: &Path) -> Result<Self, String> {
         let path = mods_dir.join(OVERRIDES);
         match std::fs::read_to_string(&path) {
-            Ok(text) => toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display())),
+            Ok(text) => {
+                let overrides: Self =
+                    toml::from_str(&text).map_err(|e| format!("{}: {e}", path.display()))?;
+                for (owner, targets) in &overrides.0 {
+                    for id in std::iter::once(owner).chain(targets.keys()) {
+                        if !crate::manifest::valid_mod_id(id) {
+                            return Err(format!(
+                                "{}: invalid dependency override mod id {id:?}",
+                                path.display()
+                            ));
+                        }
+                    }
+                }
+                Ok(overrides)
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Self::default()),
             Err(e) => Err(format!("{}: {e}", path.display())),
         }
@@ -515,6 +531,94 @@ mod tests {
             dependencies,
         }
     }
+    #[test]
+    fn a_client_only_required_dependency_does_not_refuse_a_dedicated_installation() {
+        let manifest = crate::Manifest::parse("id='server'\nname='Server'\nversion='1'\napi='0.2'\ncapabilities=['registries']\n[dependencies]\nclient={version='^1',side='client',order='none',reason='Client integration',url='https://example.test/client'}").unwrap();
+        let dedicated = from_manifest(&manifest.dependencies, Side::Server);
+        assert_eq!(
+            resolve(&[item("server", "1", &dedicated)]).unwrap().order,
+            [0]
+        );
+        let client = from_manifest(&manifest.dependencies, Side::Client);
+        assert_eq!(client.len(), 1);
+        assert_eq!(client[0].reason.as_deref(), Some("Client integration"));
+        assert_eq!(
+            client[0].url.as_deref(),
+            Some("https://example.test/client")
+        );
+        assert_eq!(client[0].order, mod_vocab::DependencyOrder::None);
+        assert!(
+            matches!(resolve(&[item("server", "1", &client)]), Err(Error::Missing { owner, target }) if owner == "server" && target == "client")
+        );
+    }
+
+    #[test]
+    fn declaration_boundaries_apply_to_dependencies_and_pair_rules() {
+        for table in ["dependencies", "incompatible", "discouraged"] {
+            let manifest = |entry: &str| {
+                crate::Manifest::parse(&format!(
+                    "id='owner'\nname='Owner'\nversion='1'\napi='0.2'\ncapabilities=['registries']\n[{table}]\n{entry}"
+                ))
+            };
+            assert!(
+                manifest(&format!(
+                    "target={{version='^1',reason='{}',url='https://example.test'}}",
+                    "a".repeat(512)
+                ))
+                .is_ok()
+            );
+            let error = manifest(&format!(
+                "target={{version='^1',reason='{}'}}",
+                "a".repeat(513)
+            ))
+            .unwrap_err();
+            assert!(error.contains("target") && error.contains("reason over 512 bytes"));
+            assert!(
+                manifest("target={version='^1',url='http://example.test'}")
+                    .unwrap_err()
+                    .contains("url is not https://")
+            );
+            assert!(
+                manifest("'bad id'='^1'")
+                    .unwrap_err()
+                    .contains("invalid dependency id")
+            );
+            assert!(manifest("target='not a semver requirement'").is_err());
+        }
+    }
+
+    #[test]
+    fn override_files_validate_ids_and_include_the_path_in_read_and_parse_errors() {
+        let home = tempfile::tempdir().unwrap();
+        let path = home.path().join(OVERRIDES);
+        assert_eq!(
+            Overrides::read(home.path()).unwrap().get("owner", "target"),
+            None
+        );
+        std::fs::write(&path, "[owner]\ntarget='drop'").unwrap();
+        assert_eq!(
+            Overrides::read(home.path()).unwrap().get("owner", "target"),
+            Some(Override::Drop)
+        );
+        for text in [
+            "[",
+            "['bad owner']\ntarget='drop'",
+            "[owner]\n'bad target'='drop'",
+            "[owner]\ntarget='unknown action'",
+        ] {
+            std::fs::write(&path, text).unwrap();
+            let error = Overrides::read(home.path()).unwrap_err();
+            assert!(error.contains(path.to_str().unwrap()), "{error}");
+            if text.contains("bad ") {
+                assert!(error.contains("invalid dependency override mod id"));
+            }
+        }
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        let error = Overrides::read(home.path()).unwrap_err();
+        assert!(error.contains(path.to_str().unwrap()));
+    }
+
     #[test]
     fn content_dependencies_validate_and_order_without_native_api_packages() {
         let manifest = |id: &str, version: &str, dependencies: &str| {

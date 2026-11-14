@@ -63,14 +63,19 @@ pub fn main_with(
                 mods.len(),
                 "loaded code has checked manifests"
             );
+            // Load rules hold on the side this process runs as.
+            let dedicated = launch
+                .rest
+                .iter()
+                .any(|arg| matches!(arg, horizon_mod_package::selection::Argument::Dedicated(_)));
+            let side = if dedicated {
+                horizon_mod_package::manifest::Side::Server
+            } else {
+                horizon_mod_package::manifest::Side::Client
+            };
             let declared: Vec<_> = manifests
                 .iter()
-                .map(|m| {
-                    horizon_mod_package::dependencies::from_manifest(
-                        &m.dependencies,
-                        horizon_mod_package::manifest::Side::Both,
-                    )
-                })
+                .map(|m| horizon_mod_package::dependencies::from_manifest(&m.dependencies, side))
                 .collect();
             let inputs: Vec<_> = manifests
                 .iter()
@@ -82,16 +87,6 @@ pub fn main_with(
                     dependencies,
                 })
                 .collect();
-            // Load rules hold on the side this process runs as.
-            let dedicated = launch
-                .rest
-                .iter()
-                .any(|arg| matches!(arg, horizon_mod_package::selection::Argument::Dedicated(_)));
-            let side = if dedicated {
-                horizon_mod_package::manifest::Side::Server
-            } else {
-                horizon_mod_package::manifest::Side::Client
-            };
             let rules: Vec<_> = manifests
                 .iter()
                 .map(|m| horizon_mod_package::dependencies::rules(m, side))
@@ -106,7 +101,11 @@ pub fn main_with(
                 horizon_mod_package::dependencies::resolve_with_rules(&inputs, &rules, &overrides)
                     .map_err(|error| error.to_string())
             })
-            .unwrap_or_else(|error| panic!("mod load refused: {error}"));
+            .unwrap_or_else(|error| {
+                eprintln!("Horizon: mod load refused: {error}");
+                horizon_client::logging::flush();
+                std::process::exit(1);
+            });
             for warning in &order.warnings {
                 log::warn!("Horizon: {warning}");
             }
