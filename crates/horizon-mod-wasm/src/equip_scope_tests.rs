@@ -4,6 +4,7 @@ struct ReadHost;
 impl mod_api::Host for ReadHost {}
 mod_api::impl_host_areas!(ReadHost);
 #[test]
+#[ignore = "daily"]
 fn equip_scope_copies_once_per_instance_for_eight_candidates_and_two_parts() {
     crate::test_stack::on_guest_stack(|| {
         let ask_reply = (1024u64 << 32) | 13;

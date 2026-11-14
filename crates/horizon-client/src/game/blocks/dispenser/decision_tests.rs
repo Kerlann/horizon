@@ -27,7 +27,7 @@ impl mod_api::Hooks for Register {
     }
 }
 #[test]
-#[ignore = "requires prepared resources"]
+#[ignore = "daily"]
 fn crown_is_prepared_once_for_three_and_eight_dispenser_candidates() {
     for ids in [vec![21, 22, 23], vec![16, 17, 18, 19, 20, 21, 22, 23]] {
         let asked = Arc::new(Mutex::new(Vec::new()));

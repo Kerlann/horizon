@@ -498,7 +498,7 @@ mod tests {
         });
     }
     #[test]
-    #[ignore = "requires prepared resources"]
+    #[ignore = "daily"]
     fn an_unpreparable_listening_stack_refuses_instead_of_using_the_data_answer() {
         with_cobbler(|game, asked| {
             let player = game.own_entity_id() as u32;
@@ -513,7 +513,7 @@ mod tests {
         });
     }
     #[test]
-    #[ignore = "requires prepared resources"]
+    #[ignore = "daily"]
     fn local_shift_click_prepares_once_and_preserves_a_refused_helmet() {
         with_cobbler(|game, asked| {
             use horizon_client::menu::{Input, Kind, Menu};
@@ -532,7 +532,7 @@ mod tests {
         });
     }
     #[test]
-    #[ignore = "requires prepared resources"]
+    #[ignore = "daily"]
     fn menu_replacement_with_an_unsubscribed_item_stays_stale() {
         use horizon_client::mobs::equip::EquipDecision;
         with_cobbler(|game, asked| {
@@ -562,7 +562,7 @@ mod tests {
         });
     }
     #[test]
-    #[ignore = "requires prepared resources"]
+    #[ignore = "daily"]
     fn source_mutations_refuse_prepared_equip_without_reconversion_or_callback() {
         use horizon_client::mobs::equip::EquipDecision;
         with_cobbler(|game, asked| {
@@ -602,7 +602,7 @@ mod tests {
         });
     }
     #[test]
-    #[ignore = "requires prepared resources"]
+    #[ignore = "daily"]
     fn missing_despawned_and_readmitted_entities_refuse_but_no_listener_keeps_data() {
         use horizon_client::{mobs::Mob, mobs::equip::EquipInput};
         with_cobbler(|game, asked| {

@@ -89,7 +89,7 @@ impl Menu {
                     true
                 } else if let Some(id) = self.registry_id() {
                     !apply_menu_slot_rules(
-                        env.loop_context,
+                        env.slot_rules,
                         id,
                         self.state.slots[dest].index,
                         stack,
@@ -353,7 +353,7 @@ mod tests {
         }
     }
     #[test]
-    #[ignore = "requires prepared resources"]
+    #[ignore = "daily"]
     fn four_slot_menu_transfer_prepares_once_and_stale_placement_refuses() {
         super::super::tests::with_menu(Kind::Inventory, |env, menu| {
             let parts = FeetOnly::default();
@@ -386,7 +386,7 @@ mod tests {
         });
     }
     #[test]
-    #[ignore = "requires prepared resources"]
+    #[ignore = "daily"]
     fn menus_without_actor_or_equipment_candidates_do_not_prepare() {
         super::super::tests::with_menu(Kind::Inventory, |env, menu| {
             let parts = FeetOnly::default();
@@ -414,7 +414,7 @@ mod tests {
         });
     }
     #[test]
-    #[ignore = "requires prepared resources"]
+    #[ignore = "daily"]
     fn occupied_equipment_cursor_and_hotbar_swaps_ask_once_per_click() {
         for input in [Input::Pickup, Input::Swap] {
             super::super::tests::with_menu(Kind::Inventory, |env, menu| {
