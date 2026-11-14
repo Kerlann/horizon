@@ -28,12 +28,15 @@ static MARK: AttachmentType<i32> = AttachmentType {
 struct Heard {
     constructed: Vec<u32>,
     joined: Vec<u32>,
+    /// The joined entities told `loaded_from_disk`.
+    from_disk: Vec<u32>,
     left: Vec<u32>,
 }
 
 static HEARD: Mutex<Heard> = Mutex::new(Heard {
     constructed: Vec::new(),
     joined: Vec::new(),
+    from_disk: Vec::new(),
     left: Vec::new(),
 });
 
@@ -52,7 +55,12 @@ impl Hooks for Observer {
         _: &mut dyn ServerHost,
         event: &mut EntityJoinLevelEvent<'_>,
     ) -> Flow {
-        HEARD.lock().unwrap().joined.push(event.entity);
+        let mut heard = HEARD.lock().unwrap();
+        heard.joined.push(event.entity);
+        if event.loaded_from_disk {
+            heard.from_disk.push(event.entity);
+        }
+        drop(heard);
         if event.kind == "minecraft:sheep" {
             Flow::Cancel
         } else {
@@ -155,7 +163,11 @@ fn a_join_cancelled_at_commit_leaves_a_stale_handle() {
     const NAME: &str =
         "game::transaction_entities_tests::a_join_cancelled_at_commit_leaves_a_stale_handle";
     with_observer(NAME, |game| {
-        assert_eq!(summon(game, "minecraft:sheep", "{}"), None, "kept out at once");
+        assert_eq!(
+            summon(game, "minecraft:sheep", "{}"),
+            None,
+            "kept out at once"
+        );
         heard();
         let sheep_before = game.mobs.len();
         let seal = game.transaction_open();
@@ -184,6 +196,7 @@ fn outside_a_transaction_joins_and_leaves_are_told_at_the_call() {
             Heard {
                 constructed: vec![boat],
                 joined: vec![boat],
+                from_disk: vec![],
                 left: vec![],
             }
         );
@@ -209,8 +222,18 @@ fn a_removal_then_abort_keeps_the_row_map_and_rider() {
         assert_eq!(game.entity(boat.id()), None, "stale at once");
         assert_eq!(game.entity(pig.id()), None);
         assert!(!game.entity_discard(boat), "not removed twice");
-        assert!(game.boats.iter().any(|b| b.id == boat.id()), "the row stays");
-        let mount = |game: &Game<'_>| game.mobs.iter().find(|m| m.id == cow.id()).unwrap().extra.mount;
+        assert!(
+            game.boats.iter().any(|b| b.id == boat.id()),
+            "the row stays"
+        );
+        let mount = |game: &Game<'_>| {
+            game.mobs
+                .iter()
+                .find(|m| m.id == cow.id())
+                .unwrap()
+                .extra
+                .mount
+        };
         assert_eq!(mount(game), Some(boat.id()), "the rider stays on");
         game.transaction_close(&seal, false);
 
@@ -317,6 +340,7 @@ fn a_nested_abort_takes_back_only_its_own() {
             Heard {
                 constructed: vec![kept, dropped],
                 joined: vec![kept],
+                from_disk: vec![],
                 left: vec![],
             }
         );
@@ -430,7 +454,11 @@ fn a_traveller_arriving_inside_an_aborted_action_stays() {
         game.world
             .chunks
             .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
-        let item = summon(game, "minecraft:item", "{Item:{id:\"minecraft:diamond\",count:3}}");
+        let item = summon(
+            game,
+            "minecraft:item",
+            "{Item:{id:\"minecraft:diamond\",count:3}}",
+        );
         game.enter_level(Dim::Overworld).unwrap();
         let diamonds = |game: &Game<'_>| {
             (game.dropped.iter())
@@ -526,7 +554,9 @@ fn exhausted_ids_refuse_every_mod_spawn() {
         }),
         ("level_explode", |game, f| {
             let none = mod_api::ExplosionInteraction::None;
-            game.level_explode(f.level, [1.5, 70.0, 14.5], 1.0, false, none)
+            let settings = mod_api::ExplosionSettings::default();
+            (game.level_explode(f.level, None, [1.5, 70.0, 14.5], 1.0, false, none, settings))
+                .is_ok()
         }),
         ("level_spawn_item", |game, f| {
             let stack = ItemStack::new("minecraft:stone", 1);
@@ -551,8 +581,7 @@ fn exhausted_ids_refuse_every_mod_spawn() {
             let owner = game.living(f.mob).unwrap();
             let snowball = mod_api::Identifier::parse("minecraft:snowball").unwrap();
             let stack = ItemStack::new("minecraft:snowball", 1);
-            (game.spawn_projectile_from_rotation(owner, &snowball, &stack, 0.0, 1.5, 1.0))
-                .is_some()
+            (game.spawn_projectile_from_rotation(owner, &snowball, &stack, 0.0, 1.5, 1.0)).is_some()
         }),
     ];
     with_observer(NAME, |game| {
@@ -579,7 +608,11 @@ fn exhausted_ids_refuse_every_mod_spawn() {
             let entities = game.live_entity_ids().len();
             assert!(!spawn(game, fixture), "{name} refuses");
             assert_eq!(game.next_entity, last, "{name} takes no id");
-            assert_eq!(game.live_entity_ids().len(), entities, "{name} adds nothing");
+            assert_eq!(
+                game.live_entity_ids().len(),
+                entities,
+                "{name} adds nothing"
+            );
         }
         assert!(game.native_lifecycle.ids_exhausted_told);
     });
@@ -622,5 +655,90 @@ fn an_aborted_spawn_puts_back_the_raw_record_it_wrote_over() {
             .collect();
         let own_tags = Tag::List(vec![Tag::String("own".into())]);
         assert_eq!(tags, [own_tags], "the crystal is saved with its own record");
+    });
+}
+
+#[test]
+#[ignore = "daily"]
+fn a_held_join_keeps_loaded_from_disk() {
+    const NAME: &str = "game::transaction_entities_tests::a_held_join_keeps_loaded_from_disk";
+    with_observer(NAME, |game| {
+        let seal = game.transaction_open();
+        let fresh = summon(game, "minecraft:pig", "{}").unwrap();
+        let (saved, _) = parse_snbt(r#"{id:"minecraft:cow",Pos:[1.5d,70.0d,1.5d]}"#).unwrap();
+        game.spawn_loaded_entity((0, 0), saved, None);
+        assert!(heard().joined.is_empty(), "both joins wait");
+        game.transaction_close(&seal, true);
+
+        let heard = heard();
+        assert_eq!(heard.joined.len(), 2);
+        assert_eq!(heard.joined[0], fresh, "in the order they were added");
+        assert_eq!(
+            heard.from_disk,
+            [heard.joined[1]],
+            "only the saved cow came from disk"
+        );
+    });
+}
+
+#[test]
+#[ignore = "daily"]
+fn commit_tells_the_joins_before_the_effects_of_the_removals() {
+    const NAME: &str = "game::transaction_entities_tests::commit_tells_the_joins_before_the_effects_of_the_removals";
+    with_observer(NAME, |game| {
+        let zombie = summon(game, "minecraft:zombie", "{}").unwrap();
+        let at = game.mobs.iter().position(|m| m.id == zombie).unwrap();
+        (game.mobs[at].extra.effects).push(StoredEffect::new("minecraft:oozing", 600, 0));
+        let zombie = game.entity(zombie).unwrap();
+        heard();
+        let seal = game.transaction_open();
+        assert!(game.entity_remove(zombie, RemovalReason::Killed));
+        let pig = summon(game, "minecraft:pig", "{}").unwrap();
+        game.transaction_close(&seal, true);
+
+        let heard = heard();
+        assert_eq!(
+            heard.joined.len(),
+            3,
+            "the pig, then the two slimes the death spawns"
+        );
+        assert_eq!(heard.joined[0], pig, "the tentative entity joins first");
+        assert!(heard.joined[1..].iter().all(|id| *id > pig));
+    });
+}
+
+#[test]
+#[ignore = "daily"]
+fn a_pending_boat_removal_is_hidden_from_selectors_until_it_commits() {
+    const NAME: &str = "game::transaction_entities_tests::a_pending_boat_removal_is_hidden_from_selectors_until_it_commits";
+    with_observer(NAME, |game| {
+        let boat = summon(game, "minecraft:oak_boat", "{}").unwrap();
+        let handle = game.entity(boat).unwrap();
+        let target = Target::Boat(boat);
+        assert!(game.level_candidates().contains(&target));
+
+        let seal = game.transaction_open();
+        assert!(game.entity_discard(handle));
+        assert_eq!(game.entity(boat), None, "the handle is stale");
+        assert!(
+            !game.level_candidates().contains(&target),
+            "selectors do not find it"
+        );
+        assert!(!game.global_selector_candidates().contains(&target));
+        game.transaction_close(&seal, false);
+        assert_eq!(game.entity(boat), Some(handle));
+        assert!(
+            game.level_candidates().contains(&target),
+            "an abort brings it back"
+        );
+
+        let seal = game.transaction_open();
+        assert!(game.entity_discard(handle));
+        game.transaction_close(&seal, true);
+        assert_eq!(game.entity(boat), None);
+        assert!(
+            !game.level_candidates().contains(&target),
+            "a commit removed it"
+        );
     });
 }
