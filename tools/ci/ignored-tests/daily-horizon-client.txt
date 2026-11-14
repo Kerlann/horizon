@@ -97,6 +97,16 @@ horizon-client game::remote::interaction_event_tests::mapping_press_tests::click
 horizon-client game::remote::interaction_event_tests::mapping_press_tests::holding_use_draws_a_bow_once_and_letting_go_releases_it lib daily resources
 horizon-client game::remote::interaction_event_tests::mapping_press_tests::opening_a_screen_releases_mod_holds lib daily resources
 horizon-client game::remote::interaction_event_tests::mapping_press_tests::the_host_presses_by_name_and_refuses_the_others lib daily resources
+horizon-client game::remote::interaction_event_tests::predicted_use_tests::native_client_prediction_owns_the_hand_loop lib daily game-boot
+horizon-client game::remote::interaction_event_tests::predicted_use_tests::wasm_client_prediction_owns_the_hand_loop lib daily wasm-fixture
+horizon-client game::remote::tests::predicted_block_notice_tests::applied_placement_carries_predicted_true lib daily game-boot
+horizon-client game::remote::tests::predicted_block_notice_tests::confirmed_prediction_has_no_duplicate lib daily game-boot
+horizon-client game::remote::tests::predicted_block_notice_tests::denied_prediction_notifies_predicted_to_server_once lib daily game-boot
+horizon-client game::remote::tests::predicted_block_notice_tests::equal_state_writes_are_not_notices lib daily game-boot
+horizon-client game::remote::tests::predicted_block_notice_tests::local_break_notifies_at_application lib daily game-boot
+horizon-client game::remote::tests::predicted_block_notice_tests::ordinary_server_write_is_not_predicted lib daily game-boot
+horizon-client game::remote::tests::predicted_block_notice_tests::pre_ack_server_update_stays_unheard_and_unapplied lib daily game-boot
+horizon-client game::remote::tests::predicted_block_notice_tests::unapplied_guesses_are_unheard lib daily game-boot
 horizon-client game::screen_render_phase_tests::chest_render_phases_cover_panel_but_preserve_items_tooltips_and_carried_stack lib daily resources # HORIZON_TEST_RESOURCES and software Vulkan required.
 horizon-client game::server_reload::tests::datapack_publication_tests::data_map_first_open_uses_staged_membership lib daily game-boot
 horizon-client game::server_reload::tests::datapack_publication_tests::data_map_later_enabled_layer_uses_staged_membership lib daily game-boot

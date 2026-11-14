@@ -65,6 +65,10 @@ name = "native_listener"
 required-features = ["listener-fixture"]
 
 [[test]]
+name = "predicted_block_notice"
+required-features = ["listener-fixture"]
+
+[[test]]
 name = "no_wire_registration"
 required-features = ["listener-fixture"]
 
