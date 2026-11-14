@@ -31,6 +31,7 @@ fn compiled_guest_reads_predicted_like_native() {
             )
         };
         let infos = [info(&manifest.id), info("block_notice_probe")];
+        mod_api::__private::install_packages(&infos, &[]);
         let loaded = horizon_mod_wasm::load(
             &std::fs::read(std).unwrap(),
             vec![horizon_mod_wasm::WasmPackage {
