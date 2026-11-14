@@ -89,6 +89,7 @@ pub const DECODED_COMPONENTS: &[&str] = &[
     "minecraft:tooltip_style",
     "minecraft:waxed",
     "minecraft:intangible_projectile",
+    "minecraft:glider",
 ];
 
 /// Validate and decode a component into the value representation shared with stacks.
@@ -2137,6 +2138,34 @@ mod tests {
         ] {
             assert!(decode_component(id, &value, &registry).is_err());
             assert!(decoded_component_value(id, &value, &registry).is_err());
+        }
+    }
+
+
+
+    #[test]
+    fn glider_unit_codec_requires_maps_and_discards_unknown_fields() {
+        use super::{Registries, Tag, decoded_component_value};
+        let registry = Registries::default();
+        let empty = Tag::Compound(Default::default());
+        for value in [
+            empty.clone(),
+            Tag::compound([("ignored", Tag::List(vec![Tag::Int(7)]))]),
+        ] {
+            assert_eq!(
+                decoded_component_value("minecraft:glider", &value, &registry).unwrap(),
+                empty
+            );
+        }
+        for value in [
+            Tag::Byte(1),
+            Tag::Int(0),
+            Tag::String("unit".into()),
+            Tag::List(vec![]),
+            Tag::ByteArray(vec![]),
+        ] {
+            assert!(decode_component("minecraft:glider", &value, &registry).is_err());
+            assert!(decoded_component_value("minecraft:glider", &value, &registry).is_err());
         }
     }
 
