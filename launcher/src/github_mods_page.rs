@@ -517,6 +517,10 @@ impl Launcher {
                     )),
                 );
         }
+        // A mod the stop names is decided on the panel: removing it here would skip the backup
+        // that keeps its worlds' content.
+        let named = self.stop_names(&row.id);
+        let reason = tr("Choose what to do about your worlds first");
         let confirming = self.github.confirm_remove.as_deref() == Some(&row.file);
         let row = row.clone();
         let remove = button(
@@ -530,7 +534,9 @@ impl Launcher {
             &t,
         )
         .when(confirming, |b| b.text_color(t.danger));
-        right = right.child(if busy {
+        right = right.child(if named {
+            self.with_reason(disabled(remove), reason)
+        } else if busy {
             disabled(remove)
         } else {
             remove.on_click(cx.listener(move |this, _: &ClickEvent, _, cx| {
