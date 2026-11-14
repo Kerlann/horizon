@@ -31,10 +31,13 @@ impl Game<'_> {
     /// server or when no window exists. `gui_options().gui_scale` is only the
     /// option, where 0 means automatic.
     pub(in crate::game) fn gui_scale(&self) -> Option<u32> {
-        let framebuffer = self.window.as_ref().map(|window| {
-            let size = window.inner_size();
-            [size.width, size.height]
-        });
+        // The size the renderer applies, as the drawing code reads it: it keeps its previous
+        // configuration when the window reports a size it cannot draw at.
+        let framebuffer = self
+            .window
+            .as_ref()
+            .and(self.renderer.as_ref())
+            .map(|r| [r.config.width, r.config.height]);
         resolved_gui_scale(
             framebuffer,
             self.settings.gui_scale,
@@ -117,6 +120,15 @@ mod tests {
         assert_eq!(resolved_gui_scale(Some([320, 240]), 0, false), Some(1));
         // The Unicode font raises an odd resolved scale by one.
         assert_eq!(resolved_gui_scale(Some([1920, 1080]), 3, true), Some(4));
+    }
+
+    /// A window the renderer did not resize (an undrawable size keeps its previous
+    /// configuration) resolves from the renderer's 1280x720, not the window's own
+    /// 1920x1080, which alone would give 4.
+    #[test]
+    fn gui_scale_follows_the_size_the_renderer_applies() {
+        assert_eq!(resolved_gui_scale(Some([1280, 720]), 0, false), Some(3));
+        assert_eq!(resolved_gui_scale(Some([1920, 1080]), 0, false), Some(4));
     }
 
     #[test]
