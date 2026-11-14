@@ -527,6 +527,8 @@ pub(super) struct Remote {
             Arc<horizon_world::dimension_type::DimensionFacts>,
         ),
     >,
+    /// The levels this connection added to the process's table of levels: the only ones it drops.
+    added_levels: std::collections::HashSet<String>,
     /// `ClientPlayerNetworkEvent.LoggingOut` was fired for this connection: every way out
     /// of a world reports it once.
     logged_out: bool,
@@ -1140,6 +1142,7 @@ impl Game<'_> {
             level_facts: None,
             level_environment: None,
             facts_cache: Default::default(),
+            added_levels: Default::default(),
             viewed: Default::default(),
             hashed_seed: 0,
             chunk_format: Arc::new(ChunkFormat::new(
@@ -1382,6 +1385,7 @@ impl Game<'_> {
             level_facts: None,
             level_environment: None,
             facts_cache: Default::default(),
+            added_levels: Default::default(),
             viewed: Default::default(),
             hashed_seed: 0,
             chunk_format: Arc::new(ChunkFormat::new(
