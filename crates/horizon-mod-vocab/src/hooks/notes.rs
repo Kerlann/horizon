@@ -90,6 +90,7 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
   (also riding, and leaving the End as its winner), `/execute in ... run tp` and any command teleporting into another
   level, and the death respawn, on dedicated, integrated (single player) and LAN-hosted servers. Not heard: a move
   within a level (`/tp`, an End gateway), a player who leaves before the move ends, a respawn in the death's level.
+  Not heard by a remote client window; listeners run on the server that simulates the world.
 - **`player_toggle_flight(player, name, flying, cancel)`**: a player's client started (`flying`) or stopped
   flying, once per change, for a player who may fly (creative or spectator), on a server. The player's state is swapped
   in, so `PlayerRef::tell` and the other helpers reach them. Set `cancel` to refuse it: the player keeps the state they
@@ -2313,7 +2314,7 @@ registration path.
 - `native_physical_window_size()`, the window's width and height in physical pixels, independent of GUI scale. It returns no size on a server or when no window exists.
 
 
-- a player changing dimension: `player_changed_dimension(player, name, from, to)` is heard once per move of a server's player into another level, when the move has ended (a portal's exit found and the player standing there, a command's teleport landed, a respawn in another level placed for good), with `from` and `to` as dimension ids (`minecraft:overworld`, `minecraft:the_nether`, `minecraft:the_end`) and the player's state swapped in so that `PlayerRef::tell` and the other helpers reach them. A move within a level is not heard.
+- a player changing dimension: `player_changed_dimension(player, name, from, to)` is heard once per move of a server's player into another level, when the move has ended (a portal's exit found and the player standing there, a command's teleport landed, a respawn in another level placed for good), with `from` and `to` as dimension ids (`minecraft:overworld`, `minecraft:the_nether`, `minecraft:the_end`) and the player's state swapped in so that `PlayerRef::tell` and the other helpers reach them. A move within a level is not heard. Not heard by a remote client window; listeners run on the server that simulates the world.
 
 - `pickup_xp(player, dimension, orb, value, count, canceled)` runs before a server player takes an orb; with no listener the server skips swapping a guest in for it (the shared `listened` probe). Canceling leaves the orb and the pickup delay unchanged; otherwise the signed value is preserved, including zero and negative values, and the count is clamped to at least one, then one count is taken. It runs on the integrated and the dedicated server, guests included.
 

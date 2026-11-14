@@ -56,6 +56,9 @@ horizon-client game::server_reload::tests::datapack_publication_tests::data_map_
 horizon-client game::server_reload::tests::datapack_publication_tests::datapack_game_open_reload_and_exhaustion_are_atomic lib daily game-boot
 horizon-client game::server_reload::tests::datapack_publication_tests::refused_reload_names_the_pack_and_keeps_the_old_generation lib daily game-boot
 horizon-client game::server_reload::tests::datapack_publication_tests::remote_reload_never_decodes_local_registry_files lib daily game-boot
+horizon-client game::server_travel::changed_dimension_tests::a_command_teleport_into_the_nether_is_heard_once_on_every_server lib daily resources
+horizon-client game::server_travel::changed_dimension_tests::a_nether_portal_trip_is_heard_once_on_every_server lib daily resources
+horizon-client game::server_travel::changed_dimension_tests::an_end_gateway_jump_within_the_level_is_not_heard_on_any_server lib daily resources
 horizon-client game::split::players::tests::offline_guests_join_only_local_servers lib daily network
 horizon-client game::stats::phantom_spawn_tests::no_phantoms_under_a_roof_the_sky_light_does_not_reach lib daily game-boot
 horizon-client game::stats::phantom_spawn_tests::phantoms_spawn_under_a_glass_roof lib daily game-boot

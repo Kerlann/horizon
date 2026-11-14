@@ -1,5 +1,6 @@
 //! `player_changed_dimension` is heard on every logical server: the integrated server that runs
 //! single player and the LAN world opened from it, and a dedicated server (#3250).
+//! All three tests are daily resource tests registered in `daily-horizon-client.txt`.
 use super::Dim;
 use crate::game::{
     Game, execution_role::ExecutionRole, lan::LanSettings, lan_actions::GuestCommand,
@@ -174,7 +175,7 @@ fn overworld_to_nether() -> Vec<(String, String)> {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_nether_portal_trip_is_heard_once_on_every_server() {
     for role in SERVERS {
         heard_on(role, |game, heard| {
@@ -208,7 +209,7 @@ fn a_nether_portal_trip_is_heard_once_on_every_server() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_command_teleport_into_the_nether_is_heard_once_on_every_server() {
     for role in SERVERS {
         heard_on(role, |game, heard| {
@@ -224,7 +225,7 @@ fn a_command_teleport_into_the_nether_is_heard_once_on_every_server() {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn an_end_gateway_jump_within_the_level_is_not_heard_on_any_server() {
     for role in SERVERS {
         heard_on(role, |game, heard| {
