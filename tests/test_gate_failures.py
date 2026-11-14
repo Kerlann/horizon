@@ -40,6 +40,10 @@ class GateFailuresTests(unittest.TestCase):
                 else:
                     self.assertEqual(calls[1:], [["build", "-j2", "--keep-going", "--profile", "test",
                                                    "--workspace", "--lib", "--bins", "--tests"]])
+                    self.assertIn("::error::The test build failed", result.stdout)
+                    # A failure the keep-going build cannot reproduce is named as one, not left silent.
+                    self.assertEqual("not a compile error in the code" in result.stdout,
+                                     mode == "red-build-success")
 
     def test_summary_lists_failures_not_skips_or_successes(self):
         self.assertEqual(summary({"lint": {"outcome": "failure"}, "test": {"outcome": "success"},
