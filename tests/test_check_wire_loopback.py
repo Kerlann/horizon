@@ -48,7 +48,8 @@ class WireLoopbackRootTests(unittest.TestCase):
             found = check_wire_loopback.hook_problems("f.rs", text, False)
             self.assertEqual(len(found), 1, text)
             self.assertIn("<Feature>Hooks", found[0])
-        self.assertEqual(len(check_wire_loopback.hook_problems("r.rs", "impl Hooks for Native {}\n", True)), 1)
+        self.assertEqual(check_wire_loopback.hook_problems("r.rs", "impl Hooks for First {}\n", True), [])
+        self.assertEqual(len(check_wire_loopback.hook_problems("r.rs", "impl Hooks for Mod {}\n", True)), 1)
         export = "fn __horizon_mod_hooks() -> Box<dyn Hooks> {\n    Box::new(Mod)\n}\n"
         self.assertEqual(check_wire_loopback.hook_problems("r.rs", export, True), [])
 
