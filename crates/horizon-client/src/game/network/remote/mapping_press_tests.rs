@@ -10,6 +10,7 @@ use mod_api::{ClientHost, InteractionKeyMappingTriggeredEvent, MappingError};
 struct Heard {
     packets: Arc<Mutex<Vec<String>>>,
     triggered: Arc<Mutex<Vec<Hand>>>,
+    click_in_callback: Arc<std::sync::atomic::AtomicBool>,
 }
 #[mod_api::__subscriptions]
 impl Hooks for Heard {
@@ -23,10 +24,16 @@ impl Hooks for Heard {
     }
     fn interaction_key_mapping_triggered(
         &self,
-        _: &mut dyn ClientHost,
+        host: &mut dyn ClientHost,
         e: &mut InteractionKeyMappingTriggeredEvent,
     ) -> Flow {
         self.triggered.lock().unwrap().push(e.hand);
+        if self
+            .click_in_callback
+            .swap(false, std::sync::atomic::Ordering::Relaxed)
+        {
+            host.click_mapping("key.attack").unwrap();
+        }
         Flow::Continue
     }
 }
@@ -34,6 +41,12 @@ impl Hooks for Heard {
 /// A survival player on a server's client, playing with nothing open, the tick's first packets
 /// (the held slot) sent: `test` gets the game, the packets sent since and the hands triggered.
 fn with_pressing_game(test: impl FnOnce(&mut Game<'_>, &Mutex<Vec<String>>, &Mutex<Vec<Hand>>)) {
+    with_callback_game(false, test);
+}
+fn with_callback_game(
+    click: bool,
+    test: impl FnOnce(&mut Game<'_>, &Mutex<Vec<String>>, &Mutex<Vec<Hand>>),
+) {
     let packets = Arc::new(Mutex::new(Vec::new()));
     let triggered = Arc::new(Mutex::new(Vec::new()));
     let mods = vec![mod_api::ModEntry::new(
@@ -41,6 +54,7 @@ fn with_pressing_game(test: impl FnOnce(&mut Game<'_>, &Mutex<Vec<String>>, &Mut
         Box::new(Heard {
             packets: packets.clone(),
             triggered: triggered.clone(),
+            click_in_callback: Arc::new(std::sync::atomic::AtomicBool::new(click)),
         }),
     )]
     .into();
@@ -77,7 +91,7 @@ fn stone_under_the_crosshair(game: &mut Game<'_>) {
 /// Holding use with a bow drawn starts one use and repeats nothing while the bow is in use;
 /// letting go releases it, as letting go of the key does.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn holding_use_draws_a_bow_once_and_letting_go_releases_it() {
     with_pressing_game(|game, packets, triggered| {
         game.inventory[game.selected] = Some(ItemStack::new("minecraft:bow", 1));
@@ -117,7 +131,7 @@ fn holding_use_draws_a_bow_once_and_letting_go_releases_it() {
 /// the key not held, the same tick's `continueAttack(false)` stops it, as a tap between two ticks
 /// does. Held, the break goes on, punching each tick, and the release stops it.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn clicking_attack_on_a_block_starts_the_break_and_punches() {
     with_pressing_game(|game, packets, triggered| {
         stone_under_the_crosshair(game);
@@ -160,7 +174,7 @@ fn clicking_attack_on_a_block_starts_the_break_and_punches() {
 /// A click on nothing punches and sets the miss cooldown (not in creative); a second click inside
 /// it does nothing.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn clicking_attack_on_nothing_punches_and_waits_out_the_miss_cooldown() {
     with_pressing_game(|game, packets, _| {
         game.forced_hit = None;
@@ -187,7 +201,7 @@ fn clicking_attack_on_nothing_punches_and_waits_out_the_miss_cooldown() {
 /// Behind a screen a click is dropped and a press holds nothing, and a click queued before the
 /// screen opened is not acted on.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_screen_drops_the_clicks_and_holds_nothing() {
     with_pressing_game(|game, packets, triggered| {
         stone_under_the_crosshair(game);
@@ -213,7 +227,7 @@ fn a_screen_drops_the_clicks_and_holds_nothing() {
 /// A hotbar click selects its slot on the next tick, through the host as a mod calls it; the names
 /// are refused as the contract lists, and nothing is pressed with no player in a world.
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn the_host_presses_by_name_and_refuses_the_others() {
     with_pressing_game(|game, packets, _| {
         assert_eq!(
@@ -241,5 +255,40 @@ fn the_host_presses_by_name_and_refuses_the_others() {
             ClientInputClientHost::set_mapping_down(game, "key.forward", true),
             Err(MappingError::NoWorld)
         );
+    });
+}
+
+#[test]
+#[ignore = "daily"]
+fn a_callback_click_survives_until_the_next_tick() {
+    with_callback_game(true, |game, _, triggered| {
+        stone_under_the_crosshair(game);
+        game.click_mapping("key.attack").unwrap();
+        game.remote_handle_input();
+        assert_eq!(triggered.lock().unwrap().len(), 1);
+        // The callback's second click is not processed recursively in this tick.
+        game.remote_handle_input();
+        assert_eq!(triggered.lock().unwrap().len(), 2);
+        game.remote_handle_input();
+        assert_eq!(triggered.lock().unwrap().len(), 2);
+    });
+}
+
+#[test]
+#[ignore = "daily"]
+fn opening_a_screen_releases_mod_holds() {
+    with_pressing_game(|game, _, _| {
+        game.set_mapping_down("key.forward", true).unwrap();
+        game.set_mapping_down("key.attack", true).unwrap();
+        assert!(game.left);
+        game.was_playing = true;
+        game.screen = Screen::Inventory;
+        game.build_screen();
+        game.track_toggle_screens();
+        assert!(!game.left);
+        assert!(!game.keys.held_by(
+            &winit::keyboard::KeyCode::KeyW,
+            horizon_client::held::Source::Mod
+        ));
     });
 }
