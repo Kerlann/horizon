@@ -41,8 +41,10 @@ fn register(cx: &mod_api::RegistrationContext) {
 
 #[test]
 fn wire_loopback_a_guest_bar_reaches_the_game_screen_by_id() {
-    let record = Arc::new(Record::default());
-    mod_api::__private::game::install_startup_screen(record.clone()).unwrap();
+    static RECORD: std::sync::OnceLock<Arc<Record>> = std::sync::OnceLock::new();
+    let record = RECORD.get_or_init(|| Arc::new(Record::default())).clone();
+    // Repeated fixture installation retains the same observable screen.
+    let _ = mod_api::__private::game::install_startup_screen(record.clone());
     mod_api::__private::initialize().unwrap();
     let _phase = mod_api::__private::PhaseOwner::scope(mod_api::__private::ModPhase::World);
     struct Fixture;
@@ -65,13 +67,8 @@ fn wire_loopback_a_guest_bar_reaches_the_game_screen_by_id() {
             let _resources = unsafe { boundary::resource_scope(pointer, true) };
             let mut out = Writer::new();
             out.put(context);
-            let transport: guest::Transport = Rc::new(move |id, bytes| {
-                let mut out = Writer::new();
-                // SAFETY: the outer fixture owns the context until this transport drops.
-                let _resources = unsafe { boundary::resource_scope(pointer, false) };
-                unsafe { boundary::serve(id, pointer, bytes, &mut out) }.unwrap();
-                out.into_bytes()
-            });
+            // SAFETY: the fixture owns cx until the transport scope drops.
+            let transport = unsafe { host_dispatch::transport(pointer) };
             let _transport = TransportScope(None);
             guest::set_transport(Some(transport));
             let _guest = guest::resource_scope();

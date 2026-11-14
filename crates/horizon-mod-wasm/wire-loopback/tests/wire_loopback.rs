@@ -114,16 +114,8 @@ impl WasmMod {
         let pointer = &mut *cx as *mut boundary::Cx;
         let _resources = unsafe { boundary::resource_scope(pointer, true) };
         // The pointer remains live until this synchronous call finishes; guest callbacks never retain it.
-        let transport: guest::Transport = Rc::new(move |id, bytes| {
-            if id == mod_api::wire::HOST_LOG {
-                eprintln!("{}", Reader::new(bytes).take::<String>().unwrap());
-                return Vec::new();
-            }
-            let mut out = Writer::new();
-            let _resources = unsafe { boundary::resource_scope(pointer, false) };
-            unsafe { boundary::serve(id, pointer, bytes, &mut out) }.unwrap();
-            out.into_bytes()
-        });
+        // SAFETY: the transport is restored before this synchronous call drops cx.
+        let transport = unsafe { host_dispatch::transport(pointer) };
         let previous =
             LOOPBACK_TRANSPORT.with(|active| active.borrow_mut().replace(transport.clone()));
         let _transport = TransportScope(previous);
