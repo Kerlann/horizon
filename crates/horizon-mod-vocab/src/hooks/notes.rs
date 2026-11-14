@@ -88,8 +88,8 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
   level than the death's is placed for good. `to` is the level in place and the player's state is swapped in (as in
   `run_mod_command`), so `host.players().acting_player` and `PlayerRef::tell` reach them. Heard for Nether and End portals
   (also riding, and leaving the End as its winner), `/execute in ... run tp` and any command teleporting into another
-  level, and the death respawn. Not heard: a move within a level (`/tp`, an End gateway), a player who leaves before
-  the move ends, a respawn in the dimension of the death, and anything outside a dedicated server.
+  level, and the death respawn, on dedicated, integrated (single player) and LAN-hosted servers. Not heard: a move
+  within a level (`/tp`, an End gateway), a player who leaves before the move ends, a respawn in the death's level.
 - **`player_toggle_flight(player, name, flying, cancel)`**: a player's client started (`flying`) or stopped
   flying, once per change, for a player who may fly (creative or spectator), on a server. The player's state is swapped
   in, so `PlayerRef::tell` and the other helpers reach them. Set `cancel` to refuse it: the player keeps the state they
