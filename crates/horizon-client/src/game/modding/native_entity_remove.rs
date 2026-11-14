@@ -52,12 +52,8 @@ impl Game<'_> {
     pub(in crate::game) fn remove_target_now(&mut self, entity: EntityRef, t: Target) {
         // Read before the entity counts as removed: its handle stops resolving.
         let vehicle_y = match t {
-            Target::Boat(id) => {
-                self.boats.iter().find(|b| b.id == id).map(|b| b.position.y)
-            }
-            Target::Cart(id) => {
-                self.carts.iter().find(|c| c.id == id).map(|c| c.position.y)
-            }
+            Target::Boat(id) => self.boats.iter().find(|b| b.id == id).map(|b| b.position.y),
+            Target::Cart(id) => self.carts.iter().find(|c| c.id == id).map(|c| c.position.y),
             _ => None,
         };
         let passengers: Vec<_> = self
@@ -66,10 +62,7 @@ impl Game<'_> {
             .into_iter()
             .filter(|passenger| {
                 vehicle_y.is_none()
-                    || !matches!(
-                        self.native_entity_target(*passenger),
-                        Some(Target::Mob(_))
-                    )
+                    || !matches!(self.native_entity_target(*passenger), Some(Target::Mob(_)))
             })
             .collect();
         // `Entity.setRemoved`: the reason first, so the hooks below see
