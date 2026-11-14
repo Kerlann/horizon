@@ -729,27 +729,16 @@ impl Game<'_> {
     }
     pub(super) fn resolve_block_paths(&self) {
         use horizon_client::mobs::data::PartAnswers;
-        use mod_api::{__private::has_scoped_hook, HookId, PathComputationType, PathType};
+        use mod_api::{__private::has_scoped_hook, HookId, PathComputationType};
         let pathfindable: &dyn Fn(BlockStateId, PathComputationType, bool) -> bool =
             &|state, kind, mut pathfindable| {
                 self.native_is_pathfindable(state, kind, &mut pathfindable);
                 pathfindable
             };
-        let path_type: &dyn Fn(BlockStateId, PathType) -> PathType = &|state, mut path_type| {
-            self.native_block_path_type(state, &mut path_type);
-            path_type
-        };
-        let adjacent: &dyn Fn(BlockStateId, PathType, Option<PathType>) -> Option<PathType> =
-            &|state, path_type, mut adjacent| {
-                self.native_adjacent_block_path_type(state, path_type, &mut adjacent);
-                adjacent
-            };
         self.res.mob_data().resolve_parts(
             self.res.facts(),
             &PartAnswers {
                 pathfindable: has_scoped_hook(HookId::IsPathfindable).then_some(pathfindable),
-                path_type: has_scoped_hook(HookId::BlockPathType).then_some(path_type),
-                adjacent: has_scoped_hook(HookId::AdjacentBlockPathType).then_some(adjacent),
             },
         );
     }

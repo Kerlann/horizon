@@ -82,7 +82,13 @@ impl Game<'_> {
                 ]
                 .into_iter()
                 .any(mod_api::__private::listened)
-                    || mod_api::__private::has_scoped_hook(mod_api::HookId::CanEntityDestroy)))
+                    || [
+                        mod_api::HookId::CanEntityDestroy,
+                        mod_api::HookId::BlockPathType,
+                        mod_api::HookId::AdjacentBlockPathType,
+                    ]
+                    .into_iter()
+                    .any(mod_api::__private::has_scoped_hook)))
             .then_some(self as &dyn horizon_client::mobs::MobHooks),
             goal_host: (self.native_authoritative()
                 && (mod_api::__private::has_entity_parts()

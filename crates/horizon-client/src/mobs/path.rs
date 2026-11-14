@@ -16,7 +16,10 @@ pub const PATH_TYPES: usize = PathType::COUNT;
 
 impl MobWorld<'_> {
     pub fn path_type_from_state(&self, x: i32, y: i32, z: i32) -> PathType {
-        self.data.path_type(self.world.block(x, y, z))
+        let state = self.world.block(x, y, z);
+        self.mob_hooks
+            .and_then(|hooks| hooks.block_path_type(state, [x, y, z]))
+            .unwrap_or_else(|| self.data.path_type(state))
     }
     /// WalkNodeEvaluator.getPathTypeStatic.
     pub fn path_type_static(&self, x: i32, y: i32, z: i32) -> PathType {
@@ -44,11 +47,36 @@ impl MobWorld<'_> {
         for dx in -1..=1 {
             for dy in -1..=1 {
                 for dz in -1..=1 {
-                    if (dx != 0 || dz != 0)
-                        && let Some(adjacent) =
-                            self.data
-                                .adjacent_path_type(self.world.block(x + dx, y + dy, z + dz))
-                    {
+                    if dx == 0 && dz == 0 {
+                        continue;
+                    }
+                    let pos = [x + dx, y + dy, z + dz];
+                    let state = self.world.block(pos[0], pos[1], pos[2]);
+                    let own = self.path_type_from_state(pos[0], pos[1], pos[2]);
+                    let facts = self.facts.get(state);
+                    let default = if facts.name.as_ref() == "minecraft:sweet_berry_bush" {
+                        Some(PathType::DamagingInNeighbor)
+                    } else if data::vanilla_burning_block(
+                        &facts.name,
+                        facts.emission > 0,
+                        self.has_tag("minecraft:fire", &facts.name),
+                    ) {
+                        Some(PathType::FireInNeighbor)
+                    } else {
+                        None
+                    };
+                    let adjacent = self.mob_hooks.map_or(default, |hooks| {
+                        hooks.adjacent_block_path_type(state, pos, own, default)
+                    });
+                    if let Some(adjacent) = adjacent {
+                        return adjacent;
+                    }
+                    // A declined block answer keeps this neighbour's fluid
+                    // contribution before the vanilla type mappings.
+                    if matches!(facts.fluid, Fluid::Water | Fluid::Modded) {
+                        return PathType::WaterBorder;
+                    }
+                    if let Some(adjacent) = data::vanilla_adjacent(own) {
                         return adjacent;
                     }
                 }

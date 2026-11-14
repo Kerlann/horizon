@@ -1,58 +1,86 @@
-//! `block_path_type` and `adjacent_block_path_type` answered by block Parts (#3190): the answers
-//! are asked once per state when parts resolve, and the walk evaluator reads them.
+//! Positional block Parts run against the owning readonly level, not during state resolution.
 use super::Game;
 use super::native_entity_refs::tests::with_game;
 use horizon_client::mobs::{
     Mob,
-    data::PartAnswers,
     path::{Evaluator, Finder},
 };
 use horizon_core::geometry::Vec3;
 use mod_api::{
     AdjacentBlockPathTypeEvent, BlockPart, BlockPathTypeEvent, Hooks, Host, PathType, Registrar,
 };
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
-/// Smooth stone hurts a mob that walks on it, as a cactus does.
 struct Thorny;
 #[mod_api::horizon_part]
 impl BlockPart for Thorny {
-    fn block_path_type(&self, _: &dyn Host, event: &mut BlockPathTypeEvent) {
-        *event.path_type = PathType::Damaging;
+    fn block_path_type(&self, host: &dyn Host, event: &mut BlockPathTypeEvent) -> Option<PathType> {
+        let level = host.level(host.dimension()).unwrap();
+        assert_eq!(level.block_state(host, event.pos), Some(event.state));
+        match event.pos {
+            [4, 64, _] => Some(PathType::Damaging),
+            [15, 65, 1] => Some(PathType::Blocked),
+            _ => None,
+        }
     }
 }
-
 struct ThornyMod;
 #[mod_api::__subscriptions]
 impl Hooks for ThornyMod {
     fn register(&self, r: &mut dyn Registrar, _: &mod_api::RegistrationContext) {
-        let smooth_stone = r.block_key("minecraft:smooth_stone");
-        r.block_part(smooth_stone, Thorny);
+        for name in [
+            "minecraft:smooth_stone",
+            "minecraft:air",
+            "minecraft:oak_fence",
+        ] {
+            let key = r.block_key(name);
+            r.block_part(key, Thorny);
+        }
     }
 }
 
-/// Gives the nodes beside its block `adjacent`.
-struct Beside(Option<PathType>);
+type AdjacentCalls = Arc<Mutex<Vec<([i32; 3], PathType)>>>;
+
+struct Beside(AdjacentCalls);
 #[mod_api::horizon_part]
 impl BlockPart for Beside {
-    fn adjacent_block_path_type(&self, _: &dyn Host, event: &mut AdjacentBlockPathTypeEvent) {
-        *event.adjacent = self.0;
+    fn block_path_type(&self, host: &dyn Host, event: &mut BlockPathTypeEvent) -> Option<PathType> {
+        (host.block_state_id("minecraft:seagrass") == Some(event.state))
+            .then_some(PathType::Blocked)
+    }
+    fn adjacent_block_path_type(
+        &self,
+        host: &dyn Host,
+        event: &mut AdjacentBlockPathTypeEvent,
+    ) -> Option<PathType> {
+        let level = host.level(host.dimension()).unwrap();
+        assert_eq!(level.block_state(host, event.pos), Some(event.state));
+        self.0.lock().unwrap().push((event.pos, event.path_type));
+        if event.pos == [0, 64, 0] {
+            Some(PathType::Walkable)
+        } else if host.block_state_id("minecraft:glass") == Some(event.state) {
+            Some(PathType::FireInNeighbor)
+        } else {
+            None
+        }
     }
 }
-
-struct BesideMod;
+struct BesideMod(AdjacentCalls);
 #[mod_api::__subscriptions]
 impl Hooks for BesideMod {
     fn register(&self, r: &mut dyn Registrar, _: &mod_api::RegistrationContext) {
-        // Magma burns, but leaves the nodes beside it alone; glass makes them fire's neighbours.
-        let magma = r.block_key("minecraft:magma_block");
-        r.block_part(magma, Beside(None));
-        let glass = r.block_key("minecraft:glass");
-        r.block_part(glass, Beside(Some(PathType::FireInNeighbor)));
+        for name in [
+            "minecraft:stone",
+            "minecraft:magma_block",
+            "minecraft:glass",
+            "minecraft:seagrass",
+        ] {
+            let key = r.block_key(name);
+            r.block_part(key, Beside(Arc::clone(&self.0)));
+        }
     }
 }
 
-/// Run `test` in a game with `hooks`' parts installed, over an empty chunk.
 fn with_parts(id: &'static str, hooks: impl Hooks + 'static, test: impl FnOnce(&mut Game<'_>)) {
     let mods: mod_api::Mods = vec![mod_api::ModEntry::new(id, Box::new(hooks))].into();
     crate::game::api_values::install_parts(&mods).unwrap();
@@ -61,32 +89,44 @@ fn with_parts(id: &'static str, hooks: impl Hooks + 'static, test: impl FnOnce(&
             game.world
                 .chunks
                 .insert((0, 0), Arc::new(horizon_client::chunk::Chunk::empty(0, 0)));
+            game.resolve_block_paths();
             test(game);
         })
     });
 }
 
-/// Every state answers as its block does, as if no part were attached.
-fn without_parts(game: &Game<'_>) {
-    game.res
-        .mob_data()
-        .resolve_parts(game.res.facts(), &PartAnswers::default());
-}
-
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_block_part_gives_its_block_a_path_type() {
     with_parts("thorny", ThornyMod, |game| {
         let registry = game.pack.assets.registry;
         let stone = registry.default_state("minecraft:stone").unwrap();
-        let smooth_stone = registry.default_state("minecraft:smooth_stone").unwrap();
-        // A floor 9 blocks long and 3 wide over the void, with a smooth stone row across it.
+        let smooth = registry.default_state("minecraft:smooth_stone").unwrap();
         for x in 0..9 {
             for z in 0..3 {
-                let floor = if x == 4 { smooth_stone } else { stone };
-                game.world.set(x, 64, z, floor).unwrap();
+                game.world
+                    .set(x, 64, z, if x == 4 { smooth } else { stone })
+                    .unwrap();
             }
         }
+        game.world.set(2, 64, 1, smooth).unwrap();
+        game.world
+            .set(
+                14,
+                65,
+                1,
+                registry.default_state("minecraft:oak_fence").unwrap(),
+            )
+            .unwrap();
+        let world = game.mob_world_base(&[]);
+        // The same state answers differently by position; None keeps vanilla's special cases.
+        assert_eq!(world.path_type_from_state(4, 64, 1), PathType::Damaging);
+        assert_eq!(world.path_type_from_state(2, 64, 1), PathType::Blocked);
+        assert_eq!(world.path_type_from_state(14, 65, 1), PathType::Fence);
+        // The override runs even before the air early return.
+        assert_eq!(world.path_type_from_state(15, 65, 1), PathType::Blocked);
+        assert_eq!(world.path_type_static(4, 65, 1), PathType::Damaging);
+        assert_eq!(world.path_type_static(1, 65, 1), PathType::Walkable);
         let kind = game
             .res
             .mob_types()
@@ -95,58 +135,48 @@ fn a_block_part_gives_its_block_a_path_type() {
             .clone();
         let mut zombie = Mob::new(50, kind, Vec3::new(0.5, 65.0, 1.5), 0.0).path_mob();
         zombie.on_ground = true;
-        // A path from one end to the other, and where it ends.
-        let walk = |game: &Game<'_>| {
-            let world = game.mob_world_base(&[]);
-            Finder::new(&world, &zombie, Evaluator::Walk)
-                .find(&[[8, 65, 1]], 16.0, 0, 256)
-                .map(|path| (path.reached, path.nodes.iter().map(|node| node.x).max()))
-        };
-
-        without_parts(game);
-        let world = game.mob_world_base(&[]);
-        assert_eq!(world.path_type_static(4, 65, 1), PathType::Walkable);
-        assert_eq!(walk(game), Some((true, Some(8))));
-
-        // With the part, the row is `Damaging` (a malus of -1) and there is no way around it.
-        game.resolve_block_paths();
-        let world = game.mob_world_base(&[]);
-        assert_eq!(world.path_type_static(4, 65, 1), PathType::Damaging);
-        assert_eq!(world.path_type_static(1, 65, 1), PathType::Walkable);
-        assert!(
-            walk(game).is_none_or(|(reached, furthest)| !reached && furthest < Some(4)),
-            "{:?}",
-            walk(game)
-        );
+        let path = Finder::new(&world, &zombie, Evaluator::Walk).find(&[[8, 65, 1]], 16.0, 0, 256);
+        assert!(path.is_none_or(
+            |path| !path.reached && path.nodes.iter().map(|node| node.x).max() < Some(4)
+        ));
     });
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_block_part_gives_the_nodes_beside_its_block_a_path_type() {
-    with_parts("beside", BesideMod, |game| {
+    let calls = Arc::new(Mutex::new(Vec::new()));
+    with_parts("beside", BesideMod(Arc::clone(&calls)), |game| {
         let registry = game.pack.assets.registry;
         let state = |name: &str| registry.default_state(name).unwrap();
         for x in 0..6 {
-            game.world.set(x, 64, 0, state("minecraft:stone")).unwrap();
+            for z in 0..6 {
+                game.world.set(x, 64, z, state("minecraft:stone")).unwrap();
+            }
         }
         game.world
             .set(1, 64, 0, state("minecraft:magma_block"))
             .unwrap();
-
-        // Vanilla: magma burns (`Fire`), so the node beside it is `FireInNeighbor`.
-        without_parts(game);
-        let node = |game: &Game<'_>, x| game.mob_world_base(&[]).path_type_static(x, 65, 0);
-        assert_eq!(node(game, 0), PathType::FireInNeighbor);
-
-        // Magma's part leaves the nodes beside it their own type.
-        game.resolve_block_paths();
-        assert_eq!(node(game, 0), PathType::Walkable);
-
-        // Glass gives the nodes beside it `FireInNeighbor`, and only those.
-        game.world.set(1, 64, 0, state("minecraft:stone")).unwrap();
-        game.world.set(1, 65, 0, state("minecraft:glass")).unwrap();
-        assert_eq!(node(game, 0), PathType::FireInNeighbor);
-        assert_eq!(node(game, 4), PathType::Walkable);
+        game.world.set(1, 65, 4, state("minecraft:glass")).unwrap();
+        game.world.set(8, 64, 8, state("minecraft:stone")).unwrap();
+        game.world
+            .set(7, 64, 7, state("minecraft:seagrass"))
+            .unwrap();
+        let world = game.mob_world_base(&[]);
+        // First neighbour is (0,64,0), whose own type is Blocked, not the node's Walkable.
+        // Some(Walkable) ends the scan even though it equals the node's incoming type.
+        assert_eq!(
+            world.check_neighbours(1, 65, 1, PathType::Walkable),
+            PathType::Walkable
+        );
+        assert_eq!(*calls.lock().unwrap(), [([0, 64, 0], PathType::Blocked)]);
+        // None from magma does not suppress its vanilla fire contribution.
+        assert_eq!(world.path_type_static(0, 65, 0), PathType::FireInNeighbor);
+        assert_eq!(world.path_type_static(0, 65, 4), PathType::FireInNeighbor);
+        assert_eq!(world.path_type_static(4, 65, 4), PathType::Walkable);
+        // Seagrass is overridden to Blocked, but a declined adjacent answer still
+        // asks its water fluid before trying the vanilla type mappings.
+        assert_eq!(world.path_type_from_state(7, 64, 7), PathType::Blocked);
+        assert_eq!(world.path_type_static(8, 65, 8), PathType::WaterBorder);
     });
 }

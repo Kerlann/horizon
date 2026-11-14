@@ -23,7 +23,6 @@ const AIR: u16 = 4;
 /// Set in a state's override byte once a mod part answered `isPathfindable` for it.
 const OVERRIDDEN: u8 = 0x80;
 /// A resolved state's adjacent byte when it gives the nodes beside it no type.
-const NO_ADJACENT: u8 = u8::MAX;
 /// `isValidSpawn` for a typical monster (zombie).
 pub const VALID_SPAWN: u16 = 8;
 /// `isValidSpawn` for ocelots/parrots (leaves allowed).
@@ -47,8 +46,19 @@ fn path_bit(kind: PathComputationType) -> u16 {
     }
 }
 
+/// Vanilla's state-based burning-block predicate, shared by spawn safety and
+/// the default block adjacent-path answer.
+pub(super) fn vanilla_burning_block(block: &str, emits_light: bool, in_fire_tag: bool) -> bool {
+    in_fire_tag
+        || matches!(
+            block,
+            "minecraft:lava" | "minecraft:magma_block" | "minecraft:lava_cauldron"
+        )
+        || matches!(block, "minecraft:campfire" | "minecraft:soul_campfire") && emits_light
+}
+
 /// `WalkNodeEvaluator.checkNeighbourBlocks`: the type a neighbour of type `t` gives a node.
-fn vanilla_adjacent(t: PathType) -> Option<PathType> {
+pub(super) fn vanilla_adjacent(t: PathType) -> Option<PathType> {
     match t {
         PathType::Damaging => Some(PathType::DamagingInNeighbor),
         PathType::Fire | PathType::Lava => Some(PathType::FireInNeighbor),
@@ -95,9 +105,6 @@ pub struct ResolvedState {
     pathfindable: AtomicU8,
     /// `getPathTypeFromState`, as `PathType as u8`.
     path: AtomicU8,
-    /// The type it gives a node beside it (`checkNeighbourBlocks`) as `PathType as u8`, or
-    /// [`NO_ADJACENT`].
-    adjacent: AtomicU8,
 }
 impl ResolvedState {
     /// The answers of a state no part was asked about: the export's.
@@ -105,7 +112,6 @@ impl ResolvedState {
         Self {
             pathfindable: AtomicU8::new(0),
             path: AtomicU8::new(data.path as u8),
-            adjacent: AtomicU8::new(vanilla_adjacent(data.path).map_or(NO_ADJACENT, |t| t as u8)),
         }
     }
 }
@@ -115,10 +121,6 @@ impl ResolvedState {
 pub struct PartAnswers<'a> {
     /// `isPathfindable`, given the block's own answer.
     pub pathfindable: Option<&'a dyn Fn(BlockStateId, PathComputationType, bool) -> bool>,
-    /// `getBlockPathType`, given vanilla's type after the answers above.
-    pub path_type: Option<&'a dyn Fn(BlockStateId, PathType) -> PathType>,
-    /// `getAdjacentBlockPathType`, given the state's type and vanilla's answer for it.
-    pub adjacent: Option<&'a dyn Fn(BlockStateId, PathType, Option<PathType>) -> Option<PathType>>,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Placement {
@@ -223,23 +225,13 @@ impl MobData {
             self.state(state).flags & path_bit(kind) != 0
         }
     }
-    /// `WalkNodeEvaluator.getPathTypeFromState`: the state's type, as its mod parts left it.
+    /// Vanilla static classification after state-only `isPathfindable` resolution.
+    /// Positional path-type overrides are applied by `MobWorld`, never stored here.
     pub fn path_type(&self, state: BlockStateId) -> PathType {
         self.resolved_state(state).map_or_else(
             || self.state(state).path,
             |slot| PathType::ALL[usize::from(slot.path.load(Ordering::Relaxed))],
         )
-    }
-    /// The type the state gives a walk node beside it (`checkNeighbourBlocks`), as its mod parts
-    /// left it; `None` leaves the node its own type.
-    pub fn adjacent_path_type(&self, state: BlockStateId) -> Option<PathType> {
-        match self.resolved_state(state) {
-            // `NO_ADJACENT` is past the end of the kinds.
-            Some(slot) => PathType::ALL
-                .get(usize::from(slot.adjacent.load(Ordering::Relaxed)))
-                .copied(),
-            None => vanilla_adjacent(self.state(state).path),
-        }
     }
     /// Ask each state's mod parts once, in vanilla's order, and keep the answers: they depend on
     /// the state alone, so path finding and spawning read them with nothing dispatched. Called
@@ -264,18 +256,9 @@ impl MobData {
                 data.flags & LAND != 0
             };
             let water = facts.get(state).fluid == Fluid::Water;
-            let mut path = data.path_with_land(land, facts.is_air(state), water);
-            if let Some(answer) = answers.path_type {
-                path = answer(state, path);
-            }
-            let mut adjacent = vanilla_adjacent(path);
-            if let Some(answer) = answers.adjacent {
-                adjacent = answer(state, path, adjacent);
-            }
+            let path = data.path_with_land(land, facts.is_air(state), water);
             slot.pathfindable.store(given, Ordering::Relaxed);
             slot.path.store(path as u8, Ordering::Relaxed);
-            slot.adjacent
-                .store(adjacent.map_or(NO_ADJACENT, |t| t as u8), Ordering::Relaxed);
         }
     }
     pub fn entity_has(&self, tag: &str, entity: &str) -> bool {

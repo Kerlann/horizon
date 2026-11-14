@@ -22,6 +22,20 @@ to replace the state's emission or `None` to keep it.
 
 Keep the callback a pure function of the level, position and state, without side effects.
 
+## Path classification
+
+`BlockPart::block_path_type` answers for `event.state` at `event.pos`, with a read-only
+host for the owning level. Return `Some(PathType)` to replace the whole static classification,
+even for air, or `None` to use vanilla. The same state may answer differently by position.
+This is separate from `is_pathfindable`, which remains state-only.
+
+`BlockPart::adjacent_block_path_type` answers for a neighbour at its own `event.pos`;
+`event.path_type` is that neighbour's classified type, not the node's type. Return `Some`
+to end the scan immediately, even if the answer equals the node's current type. Return
+`None` to retain that neighbour's fluid and vanilla contribution. Neighbours are visited
+in x, y, z order, each from -1 to 1, excluding the node's own column. No mob is supplied
+to either query. A panicking callback is contained and falls back to the default.
+
 ## Connections
 
 `BlockPart::can_be_connected_to` lets the block beside a fence, a wall, or iron bars or a pane

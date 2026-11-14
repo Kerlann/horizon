@@ -1,0 +1,4 @@
+# Positional block path queries and their prepared vanilla Land baseline.
+horizon-client game::native_path_types_tests::a_block_part_gives_its_block_a_path_type lib daily resources
+horizon-client game::native_path_types_tests::a_block_part_gives_the_nodes_beside_its_block_a_path_type lib daily resources
+horizon-client-lib mobs::data::path_type_tests::a_states_path_type_follows_the_land_answer_its_parts_gave lib daily resources

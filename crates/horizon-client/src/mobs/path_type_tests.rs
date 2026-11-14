@@ -22,7 +22,7 @@ fn load() -> (&'static BlockRegistry, BlockFacts, MobData) {
 }
 
 #[test]
-#[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+#[ignore = "daily"]
 fn a_states_path_type_follows_the_land_answer_its_parts_gave() {
     let (registry, facts, data) = load();
     let state = |name: &str| registry.default_state(name).unwrap();
@@ -59,7 +59,6 @@ fn a_states_path_type_follows_the_land_answer_its_parts_gave() {
         &facts,
         &PartAnswers {
             pathfindable: Some(&land),
-            ..PartAnswers::default()
         },
     );
     assert_eq!(
@@ -74,15 +73,10 @@ fn a_states_path_type_follows_the_land_answer_its_parts_gave() {
             PathType::Open,
         ]
     );
-    // The nodes beside seagrass no longer border water: it is no longer a `Water` state.
-    assert_eq!(data.adjacent_path_type(state("minecraft:seagrass")), None);
+    // Adjacency is positional now; its fluid fallback is covered by native_path_types_tests.
     // Without the answers, every state is back to its exported type.
     data.resolve_parts(&facts, &PartAnswers::default());
     assert_eq!(names.map(|name| data.path_type(state(name))), exported);
-    assert_eq!(
-        data.adjacent_path_type(state("minecraft:seagrass")),
-        Some(PathType::WaterBorder)
-    );
     for (i, row) in data.states.iter().enumerate() {
         assert_eq!(data.path_type(BlockStateId(i as u32)), row.path);
     }

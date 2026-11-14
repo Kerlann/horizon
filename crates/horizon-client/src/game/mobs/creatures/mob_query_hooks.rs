@@ -1,5 +1,60 @@
 // Included in creatures/mod.rs to preserve its existing scope.
 impl horizon_client::mobs::MobHooks for Game<'_> {
+    fn block_path_type(
+        &self,
+        state: horizon_world::registry::BlockStateId,
+        pos: [i32; 3],
+    ) -> Option<mod_api::PathType> {
+        if !self.is_logical_server()
+            || !crate::game::api_values::block_state::block_listens(
+                mod_api::HookId::BlockPathType,
+                state,
+            )
+        {
+            return None;
+        }
+        let mut answer = None;
+        if let Err(error) = horizon_client::crash::contain(|| {
+            self.native_block_path_type(
+                horizon_core::position::BlockPos::new(pos[0], pos[1], pos[2]),
+                state,
+                &mut answer,
+            );
+        }) {
+            log::warn!("block_path_type callback failed: {error}");
+            return None;
+        }
+        answer
+    }
+    fn adjacent_block_path_type(
+        &self,
+        state: horizon_world::registry::BlockStateId,
+        pos: [i32; 3],
+        path_type: mod_api::PathType,
+        default: Option<mod_api::PathType>,
+    ) -> Option<mod_api::PathType> {
+        if !self.is_logical_server()
+            || !crate::game::api_values::block_state::block_listens(
+                mod_api::HookId::AdjacentBlockPathType,
+                state,
+            )
+        {
+            return default;
+        }
+        let mut answer = None;
+        if let Err(error) = horizon_client::crash::contain(|| {
+            self.native_adjacent_block_path_type(
+                horizon_core::position::BlockPos::new(pos[0], pos[1], pos[2]),
+                state,
+                path_type,
+                &mut answer,
+            );
+        }) {
+            log::warn!("adjacent_block_path_type callback failed: {error}");
+            return default;
+        }
+        answer
+    }
     fn living_change_target(
         &self,
         mob: &mut Mob,

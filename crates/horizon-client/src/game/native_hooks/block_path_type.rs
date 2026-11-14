@@ -1,15 +1,14 @@
 use super::*;
 
 impl Game<'_> {
-    /// `IBlockExtension.getBlockPathType`: set `path_type` to change the `PathType` `state` is to
-    /// a mob's path finder. It starts with vanilla's answer after the state's `is_pathfindable`
-    /// answers and depends on the state alone, so the game asks once per state when the parts
-    /// resolve (at load and on every `/reload`) and path finding reads the answers. Server-side.
+    /// Positional `IBlockExtension.getBlockPathType`, before all vanilla classification.
+    /// `None` declines; the readonly host reads this same owning level.
     pub(in crate::game) fn native_block_path_type(
         &self,
+        pos: BlockPos,
         state: BlockStateId,
-        path_type: &mut mod_api::PathType,
+        path_type: &mut Option<mod_api::PathType>,
     ) {
-        self.fire_block_path_type(state, path_type);
+        self.fire_block_path_type(pos, state, path_type);
     }
 }
