@@ -603,7 +603,11 @@ jobs:
             exit 0
           fi
           # Only red runs pay for the other graph, to collect independent targets' errors too.
-          cargo build $JOBS --keep-going --profile test --workspace --lib --bins --tests || true
+          echo "::error::The test build failed (its errors are above); building again with --keep-going to list every target's errors."
+          if cargo build $JOBS --keep-going --profile test --workspace --lib --bins --tests; then
+            # Main 9918e72ba0: two compiles killed by signal 9, then this build passed and the step ended with no message.
+            echo "::error::The --keep-going build passed, but it builds a different graph and does not clear the failed test build: check the errors above, including any 'signal 9' (a compile killed, usually for memory), before rerunning."
+          fi
           exit 1
       # What bounds the build: the slowest compile units, from the report --timings writes.
       - name: Slowest compile units
