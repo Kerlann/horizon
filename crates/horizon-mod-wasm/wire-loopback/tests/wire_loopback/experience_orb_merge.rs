@@ -87,15 +87,11 @@ fn wire_loopback_set_experience_orb_carries_its_limits_and_its_refusal() {
     let mut level = Level::default();
     let mut frame = boundary::Frame::default();
     frame.set_server_host_mut(&mut level);
-    let mut cx = boundary::Cx::default();
+    let mut cx = Box::new(boundary::Cx::default());
     cx.frames.push(frame);
-    let cx = std::cell::RefCell::new(cx);
-    guest::set_transport(Some(Rc::new(move |id, bytes| {
-        let mut out = Writer::new();
-        // SAFETY: level and its frame remain live for this synchronous transport.
-        unsafe { boundary::serve(id, &mut *cx.borrow_mut(), bytes, &mut out) }.unwrap();
-        out.into_bytes()
-    })));
+    let pointer = &mut *cx as *mut boundary::Cx;
+    // SAFETY: cx outlives the synchronous calls below; the transport is cleared before it drops.
+    guest::set_transport(Some(unsafe { host_dispatch::transport(pointer) }));
     let overworld = "minecraft:overworld";
     let answers = [
         guest::Guest.set_experience_orb(overworld, 1, Some(-32768), Some(1), None),
