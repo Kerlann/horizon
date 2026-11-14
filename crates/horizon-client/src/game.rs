@@ -8801,10 +8801,8 @@ impl Game<'_> {
             }
             _ => None,
         };
-        self.view_frustum = self
-            .renderer
-            .as_mut()
-            .map(|r| r.camera_frustum(camera, fov_degrees, yaw, pitch, bob * spin, depth_far));
+        self.view_frustum =
+            self.world_view_frustum(camera, [fov_degrees, yaw, pitch], bob * spin, depth_far);
         let billboard_frustum = if self.settings.horizon.taa {
             self.renderer.as_ref().map(|r| {
                 r.camera_frustum_with_jitter(fov_degrees, yaw, pitch, bob * spin, depth_far)
