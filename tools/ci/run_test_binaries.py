@@ -11,6 +11,12 @@ binary and is printed whole when the binary ends. Binaries start largest first, 
 Every binary runs; one that fails, crashes, is killed or cannot start fails the run, and the run ends with a list of
 the failing binaries and their failed tests' names. A listing with no test binaries fails too.
 
+`--network-guard LIBRARY` (Linux verify) lists each binary, subtracts ignored tests, and runs each selected test
+alone with LIBRARY preloaded. Inet calls and name resolution are recorded in a private inherited channel; a
+violation fails the test even when it handles the error and exits successfully. Unix sockets remain allowed.
+The worker count limits test processes globally; results are buffered in bounded batches. A missing preload or
+unreadable test listing fails closed. Non-libtest targets run as a single guarded invocation.
+
 `--time-limits WARN,FAIL` (verify uses `2,5`) is the unit tier's timing guard (CONTRIBUTING.md "CI tiers"): every
 binary also gets libtest's `-Z unstable-options --report-time --logfile FILE`. libtest then adds each test's time to
 its result line and writes one record per test (`ok a::b <0.012s>`) to FILE, from its own thread, apart from the

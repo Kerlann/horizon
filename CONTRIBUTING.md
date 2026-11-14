@@ -135,7 +135,10 @@ network and are still in `verify` are being moved by the next change of #4022.
 wasm fixture, and finishes in under 2 seconds. Any other test is a daily test: it carries `#[ignore]` and a row in
 `tools/ci/ignored-tests/` (the format is in that folder's README). `verify` fails a unit test that takes over 5
 seconds and `verify-static` one that boots the game; existing tests over 2 seconds and those that boot the game are
-already daily tests, and the existing ones that need resources, a child process or the network are being moved over.
+already daily tests, and the existing ones that need resources or a child process are being moved over.
+In Linux `verify`, tests run in isolated processes under an inet guard: opening, binding or connecting an IPv4/IPv6
+socket or calling `getaddrinfo` fails the test by its full name, even if it handles the refusal. Unix sockets remain
+allowed. Move a network test with `tools/ci/move_to_daily.py`, using reason `network`; daily runs without the guard.
 
 - A pull request is reviewed and merged on the push and gate tiers. Nothing else is asked of you.
 - Write a quick test where a quick test can catch the mistake. A test that needs the game or prepared resources is
