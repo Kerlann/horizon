@@ -7,17 +7,13 @@
 //! client predicts its own movement; the server stays authoritative for
 //! everything else.
 mod attack_target;
+mod break_prediction;
 mod fall_sound;
 mod interaction_actions;
 mod level_format;
 mod raw_ingress;
 mod recipe_properties;
 mod use_item;
-
-#[cfg(test)]
-mod predicted_block_notice_tests {
-    include!("predicted_block_notice_tests.rs");
-}
 
 mod block_entity_data;
 #[cfg(test)]
@@ -8250,39 +8246,6 @@ impl Game<'_> {
         );
         canceled
     }
-    /// MultiPlayerGameMode.destroyBlock: the predicted break.
-    fn predict_break(&mut self, pos: [i32; 3], state: BlockStateId, sequence: i32) {
-        self.tutorial_destroy(state, 1.0);
-        // BlockStatePredictionHandler.retainKnownServerState.
-        let here = self.player_position();
-        if let Some(r) = self.remote.as_mut() {
-            r.predictions
-                .entry(pos)
-                .and_modify(|p| p.sequence = sequence)
-                .or_insert(Prediction {
-                    sequence,
-                    state: state.0 as i32,
-                    player_pos: here,
-                });
-        }
-        // Block.playerWillDestroy's destroy event (particles and the break
-        // sound), which BaseFireBlock skips: the server's extinguish sound
-        // is all a player hears.
-        if !self.res.facts().get(state).has_class("BaseFireBlock") {
-            self.play_break_sound(pos, state);
-            self.destroy_particles(pos, state);
-        }
-        // The server's block update follows (waterlogged blocks leave water).
-        if self
-            .world
-            .set(pos[0], pos[1], pos[2], self.world.air)
-            .is_ok()
-        {
-            self.world.block_entities.remove(&(pos[0], pos[1], pos[2]));
-            self.client_block_written(pos, state, self.world.air, true);
-        }
-        self.mining = None;
-    }
     /// `Player.blockActionRestricted` for the block at `pos`: a spectator
     /// never breaks, an adventure player only with a main-hand item whose
     /// `can_break` matches the block (`ItemStack.canBreakBlockInAdventureMode`).
@@ -11711,6 +11674,10 @@ mod passage_cross_tests;
 #[cfg(test)]
 pub(crate) mod tests {
     use super::super::api_values::TryIntoApi;
+
+    mod predicted_block_notice_tests {
+        include!("predicted_block_notice_tests.rs");
+    }
 
     #[test]
     #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]

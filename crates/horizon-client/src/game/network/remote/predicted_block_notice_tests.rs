@@ -1,6 +1,6 @@
 // Applied client writes, held server updates and reconciliation through the real Game.
-use super::*;
 use crate::game::native_entity_refs::tests::{run_fresh_cases, with_client_game};
+use crate::game::remote::*;
 use horizon_core::position::BlockPos;
 use mod_api::{BlockPart, LevelDimension, LevelSide, OnBlockStateChangeEvent, Registrar};
 use std::sync::Mutex;
@@ -41,7 +41,7 @@ impl mod_api::Hooks for Mod {
     }
 }
 fn with_client(name: &str, test: impl FnOnce(&mut Game<'_>, &Observer, BlockStateId)) {
-    let selector = format!("game::remote::predicted_block_notice_tests::{name}");
+    let selector = format!("game::remote::tests::predicted_block_notice_tests::{name}");
     if run_fresh_cases(
         &selector,
         "HORIZON_PREDICTED_BLOCK_NOTICE_CHILD",
