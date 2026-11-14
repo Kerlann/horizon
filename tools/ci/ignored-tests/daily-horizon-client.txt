@@ -64,6 +64,7 @@ horizon-client game::native_give_stack_tests::a_dead_player_is_given_nothing lib
 horizon-client game::native_give_stack_tests::a_given_stack_fills_the_inventory_then_drops_for_its_player lib daily resources
 horizon-client game::native_give_stack_tests::an_snbt_item_goes_through_the_api_unchanged lib daily resources
 horizon-client game::native_give_stack_tests::item_from_snbt_refuses_what_is_not_one_item_compound lib daily resources
+horizon-client game::native_hooks::death_source_tests::mob_death_and_handle_preserve_namespaced_types lib daily resources
 horizon-client game::native_hooks::player_bed_leave::player_bed_leave_tests::a_listener_waking_the_player_again_is_told_once lib daily game-boot
 horizon-client game::native_hooks::player_bed_leave::player_bed_leave_tests::acting_missing_bed_death_and_generic_stop_are_immediate_before_clear lib daily game-boot
 horizon-client game::native_hooks::player_bed_leave::player_bed_leave_tests::bed_leave_carries_the_wake_flags_before_the_sleep_clears lib daily game-boot
