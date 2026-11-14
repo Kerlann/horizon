@@ -168,6 +168,32 @@ pub(super) fn load<'a>(
         snapshot: Arc::new(snapshot),
     })
 }
+impl Game<'_> {
+    /// Borrow this world's generation; no lock or per-reader Arc increment.
+    pub(in crate::game) fn mob_maps(&self) -> &NeoForgeMobMaps {
+        self.mob_map_snapshot().as_ref()
+    }
+    pub(in crate::game) fn mob_map_snapshot(&self) -> &Arc<NeoForgeMobMaps> {
+        if let Some(tables) = &self.world_tables {
+            &tables.data_maps.mob_maps
+        } else {
+            NeoForgeMobMaps::vanilla()
+        }
+    }
+    /// Generation workers pin one world-owned snapshot per finalization, not
+    /// a process-global last-loaded world. In-flight work retains its snapshot.
+    pub(in crate::game) fn share_mob_maps(&self) {
+        if !self.options.execution_role.is_logical_server() {
+            return;
+        }
+        let snapshot = self.mob_map_snapshot();
+        if let Some(terrain) = self.end.locator() {
+            terrain.set_mob_maps(snapshot);
+        }
+        self.levels.install_mob_map_snapshots(snapshot);
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -320,31 +346,5 @@ mod tests {
             loaded.snapshot.parrot_imitation("minecraft:zombie"),
             Some("entity.parrot.imitate.zombie")
         );
-    }
-}
-
-impl Game<'_> {
-    /// Borrow this world's generation; no lock or per-reader Arc increment.
-    pub(in crate::game) fn mob_maps(&self) -> &NeoForgeMobMaps {
-        self.mob_map_snapshot().as_ref()
-    }
-    pub(in crate::game) fn mob_map_snapshot(&self) -> &Arc<NeoForgeMobMaps> {
-        if let Some(tables) = &self.world_tables {
-            &tables.data_maps.mob_maps
-        } else {
-            NeoForgeMobMaps::vanilla()
-        }
-    }
-    /// Generation workers pin one world-owned snapshot per finalization, not
-    /// a process-global last-loaded world. In-flight work retains its snapshot.
-    pub(in crate::game) fn share_mob_maps(&self) {
-        if !self.options.execution_role.is_logical_server() {
-            return;
-        }
-        let snapshot = self.mob_map_snapshot();
-        if let Some(terrain) = self.end.locator() {
-            terrain.set_mob_maps(snapshot);
-        }
-        self.levels.install_mob_map_snapshots(snapshot);
     }
 }
