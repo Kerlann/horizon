@@ -10,4 +10,6 @@ pub enum Side {
     Client,
     /// Both installations; the server tells clients which version it expects.
     Both,
+    /// The server alone needs it: nothing to compare at join and no client install.
+    Server,
 }

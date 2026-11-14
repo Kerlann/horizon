@@ -39,5 +39,10 @@ pub mod selection;
 
 pub use content::Content;
 pub use manifest::{Capability, Manifest, Package, find};
+pub use mod_vocab::Side;
 /// The SDK's build-pinned data files and their common header.
 pub use point_shape::build_data;
+
+#[cfg(test)]
+#[path = "content_side_tests.rs"]
+mod content_side_tests;

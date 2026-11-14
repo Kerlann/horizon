@@ -101,7 +101,7 @@ characters; the others are plain text. The screen has no switch: a mod runs or n
 `horizon-mods.txt` say.
 
 Unknown keys are refused, so a typo is an error, not a silently ignored permission. The shared manifest
-uses exactly `api = "0.2"` and `capabilities = ["registries"]`, with `side = "client"` (the default) or `"both"`.
+uses exactly `api = "0.2"` and `capabilities = ["registries"]`, with `side = "client"` (the default), `"both"` or `"server"`: `client` is local content no server compares, `both` is installed on both halves and version-checked at join, and `server` needs no client install and nothing is compared at join. A `server` mod is refused by name at load if it registers registry content, client hooks or assets, because a client must know those.
 Code mods add `[native]` for exact build pins and optional raw injections ([Injections](../concepts/injections.md)); their id and version come only
 from this manifest, not Cargo metadata ([Native mods](native-mods/02-the-package.md)). Both content and code mods support `[dependencies]`: use `base = "^1.2"` for a required dependency or
 `extra = { version = "^2", optional = true }` for an optional one. Missing required dependencies, incompatible installed versions and cycles refuse startup. Content layers load after their dependencies; an absent optional dependency is ignored. Both kinds may include a fixed-name `icon.png` at the top level, with no
@@ -154,7 +154,7 @@ content is refused when it joins, with the reason.
 Every Horizon server checks loaded mods in the configuration phase (`horizon_protocol::mod_list`, channel
 `horizon:mod_list`), including when its own list is empty. Only the ids and versions of `side = "both"` mods cross
 this channel. Missing mods, extra both-side mods and version differences refuse the join, naming every id and
-version in a translated, wrapped disconnect. Client-only mods stay private and never block a join. A manifest
+version in a translated, wrapped disconnect. Client-only and server-only mods stay private and never block a join. A manifest
 with no `side` line is `client`, so a mod meant for both halves must say `side = "both"`. A vanilla or other
 non-Horizon client is refused when the server needs both-side mods, with their names and versions and an English
 fallback for clients without Horizon translations. The content registry identity check remains separate; the

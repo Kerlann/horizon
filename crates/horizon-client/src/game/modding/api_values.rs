@@ -2526,6 +2526,7 @@ impl TryIntoApi for horizon_mod_package::Side {
             Self::Client => mod_api::Side::Client,
             Self::Both => mod_api::Side::Both,
             Self::Server => mod_api::Side::Server,
+            _ => *self,
         })
     }
 }

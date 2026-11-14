@@ -1226,7 +1226,7 @@ capabilities = ["registries"]
             let text = EXAMPLE.replace("[\"registries\"]", caps);
             assert!(Manifest::parse(&text).is_err());
         }
-        for field in ["network = true", "experimental = []", "side = \"server\""] {
+        for field in ["network = true", "experimental = []"] {
             assert!(Manifest::parse(&format!("{EXAMPLE}{field}\n")).is_err());
         }
         assert_eq!(Manifest::parse(EXAMPLE).unwrap().side, Side::Client);
@@ -1235,6 +1235,12 @@ capabilities = ["registries"]
                 .unwrap()
                 .side,
             Side::Both
+        );
+        assert_eq!(
+            Manifest::parse(&format!("{EXAMPLE}side = \"server\"\n"))
+                .unwrap()
+                .side,
+            Side::Server
         );
     }
 

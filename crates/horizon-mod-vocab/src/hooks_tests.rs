@@ -863,3 +863,30 @@ fn passages_take_a_server_host(server: &mut dyn ServerHost, level: LevelRef, pas
     let id: Result<PassageId, PassageRegistrationError> = level.register_passage(server, passage);
     let _: bool = level.remove_passage(server, id.unwrap());
 }
+
+/// A `side = "server"` package is judged on the hooks it actually subscribes to: a
+/// server-only hook is fine, a client (or both-side) one refuses the package.
+#[test]
+fn uses_client_hooks_tells_server_and_client_subscriptions_apart() {
+    struct ServerOnly;
+    #[mod_api::__subscriptions]
+    impl Hooks for ServerOnly {
+        fn server_tick(&self, _: &mut dyn ServerHost, _: &mut ServerTickEvent<'_>) {}
+    }
+    struct ClientHook;
+    #[mod_api::__subscriptions]
+    impl Hooks for ClientHook {
+        fn client_tick_pre(&self, _: &mut dyn ClientHost, _: &mut ClientTickPreEvent) {}
+    }
+    install(
+        vec![
+            ModEntry::new("server_only", Box::new(ServerOnly)),
+            ModEntry::new("client_hook", Box::new(ClientHook)),
+        ]
+        .into(),
+    );
+    assert!(!crate::runtime::uses_client_hooks("server_only"));
+    assert!(crate::runtime::uses_client_hooks("client_hook"));
+    assert!(!crate::runtime::uses_client_hooks("missing"));
+    install(Vec::new().into());
+}

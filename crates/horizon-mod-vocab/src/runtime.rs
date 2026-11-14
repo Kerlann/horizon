@@ -130,6 +130,20 @@ pub(crate) fn listened(hook: generated::HookId) -> bool {
     installed().is_some_and(|installed| installed.subscribers.contains_any(hook as usize))
 }
 
+/// Whether the installed mod `id` subscribes to at least one hook that fires on a client
+/// (side `client` or `both`). A `side = "server"` mod may not: a client must know it.
+pub(crate) fn uses_client_hooks(id: &str) -> bool {
+    mods().iter().any(|entry| {
+        entry.id == id
+            && entry
+                .hooks
+                .subscribed()
+                .iter()
+                .flatten()
+                .any(|hook| generated::hook_runs_on_client(*hook))
+    })
+}
+
 pub(crate) fn enabled_listened(hook: generated::HookId) -> bool {
     installed().is_some_and(|installed| {
         installed
