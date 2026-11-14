@@ -220,6 +220,7 @@ mod tests {
     }
 
     fn as_mod<R>(id: &'static str, f: impl FnOnce() -> R) -> R {
+        mod_platform::testing::with_mods(Default::default(), || {});
         let _call = enter_native_mod(ModCall {
             id,
             hook: "world_load",
