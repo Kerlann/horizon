@@ -121,7 +121,7 @@ pub fn folder_modules(directory: &Path) -> Result<String, String> {
 const FAN_OUT_HOOK: &str = "register";
 
 /// Assemble the one `Hooks` object of a test target from the fragments in `directory`: every `*.rs` file may hold
-/// `impl Hooks for <Type>` blocks (`<Type>` a unit struct of that file), and the result is `struct Mod;` with one
+/// `impl Hooks for <Feature>Hooks` blocks (a unit struct of that file; an impl for a type not named `*Hooks` is a test double of its own, left alone), and the result is `struct Mod;` with one
 /// `impl Hooks for Mod` whose methods forward, signature copied verbatim, to the fragments. A hook method has one
 /// owner: two files defining it is an error naming both. The exception is `register`, the registration moment
 /// every feature takes part in: it forwards to each definition in file-name order.
@@ -144,7 +144,13 @@ pub fn folder_hooks(directory: &Path) -> Result<String, String> {
                 .as_ref()
                 .is_some_and(|(_, path, _)| path.segments.last().is_some_and(|s| s.ident == "Hooks"));
             let syn::Type::Path(owner) = &*item.self_ty else { continue };
-            let Some(owner) = owner.path.get_ident().filter(|_| is_hooks) else { continue };
+            let Some(owner) = owner
+                .path
+                .get_ident()
+                .filter(|owner| is_hooks && owner.to_string().ends_with("Hooks"))
+            else {
+                continue;
+            };
             for member in item.items {
                 let syn::ImplItem::Fn(method) = member else { continue };
                 methods.entry(method.sig.ident.to_string()).or_default().push(Fragment {
@@ -236,7 +242,8 @@ mod tests {
             &[
                 ("b.rs", "pub(super) struct BHooks;\nimpl Hooks for BHooks {\n fn register(&self, r: &mut dyn Registrar) {}\n fn toss(&self, _: &dyn Host, e: &mut Event<'_>) -> Flow { Flow::Cancel }\n}\n"),
                 ("a.rs", "pub(super) struct AHooks;\nimpl Hooks for AHooks { fn register(&self, r: &mut dyn Registrar) {} }\nimpl Other for AHooks { fn toss(&self) {} }\n"),
-                ("c.txt", "impl Hooks for Nope { fn toss(&self) {} }"),
+                ("c.rs", "struct Native;\nimpl Hooks for Native { fn toss(&self) {} }"),
+                ("d.txt", "impl Hooks for Nope { fn toss(&self) {} }"),
             ],
         );
         let code = folder_hooks(&root).unwrap();
@@ -248,7 +255,7 @@ mod tests {
         let a = normalized.find("< a :: AHooks as Hooks > :: register").unwrap();
         let b = normalized.find("< b :: BHooks as Hooks > :: register").unwrap();
         assert!(a < b);
-        assert!(!normalized.contains("Nope"));
+        assert!(!normalized.contains("Nope") && !normalized.contains("Native"));
         fs::remove_dir_all(root).unwrap();
     }
 
@@ -257,8 +264,8 @@ mod tests {
         let root = hook_folder(
             "folder-hooks-clash",
             &[
-                ("one.rs", "struct One;\nimpl Hooks for One { fn toss(&self) {} }"),
-                ("two.rs", "struct Two;\nimpl Hooks for Two { fn toss(&self) {} }"),
+                ("one.rs", "struct OneHooks;\nimpl Hooks for OneHooks { fn toss(&self) {} }"),
+                ("two.rs", "struct TwoHooks;\nimpl Hooks for TwoHooks { fn toss(&self) {} }"),
             ],
         );
         let error = folder_hooks(&root).unwrap_err();

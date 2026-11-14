@@ -44,7 +44,8 @@ class WireLoopbackRootTests(unittest.TestCase):
         self.assertEqual(check_wire_loopback.hook_problems("f.rs", fragment, False), [])
         self.assertEqual(check_wire_loopback.hook_problems("f.rs", "impl mod_api::Hooks for Mod {}\n", False)[0][:4],
                          "f.rs")
-        for text in ("struct Other { x: u8 }\nimpl Hooks for Other {}\n",
+        self.assertEqual(check_wire_loopback.hook_problems("f.rs", "impl Hooks for Native {}\n", False), [])
+        for text in ("struct OtherHooks { x: u8 }\nimpl Hooks for OtherHooks {}\n",
                      "fn __horizon_mod_hooks() -> Box<dyn Hooks> { todo!() }\n"):
             found = check_wire_loopback.hook_problems("f.rs", text, False)
             self.assertEqual(len(found), 1, text)

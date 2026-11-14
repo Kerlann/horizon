@@ -58,7 +58,7 @@ def hook_problems(name, text, is_root):
     for number, line in enumerate(text.splitlines(), 1):
         match = IMPL_HOOKS.match(line)
         if match and (is_root or match.group(1) == "Mod"
-                      or not re.search(rf"^\s*(?:pub(?:\([^)]*\))?\s+)?struct\s+{match.group(1)}\s*;", text, re.M)):
+                      or match.group(1).endswith("Hooks") and not re.search(rf"^\s*(?:pub(?:\([^)]*\))?\s+)?struct\s+{match.group(1)}\s*;", text, re.M)):
             found.append(f"{name}:{number}: hand-written `impl Hooks for {match.group(1)}`; {HOOKS_ADVICE}")
         if HAND_EXPORT.search(line) and not (is_root and "fn __horizon_mod_hooks() -> Box<dyn Hooks>" in line):
             found.append(f"{name}:{number}: hand-written hooks export; {HOOKS_ADVICE}")
