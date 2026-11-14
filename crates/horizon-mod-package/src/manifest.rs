@@ -166,21 +166,11 @@ pub struct RuleDetails {
     pub url: Option<String>,
     /// Where the rule holds: both sides, or only the client or the dedicated server.
     #[serde(default)]
-    pub side: RuleSide,
+    pub side: Side,
 }
 
 fn any_version() -> semver::VersionReq {
     semver::VersionReq::STAR
-}
-
-/// The side a rule holds on (NeoForge's `DependencySide`).
-#[derive(Clone, Copy, Debug, Default, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum RuleSide {
-    #[default]
-    Both,
-    Client,
-    Server,
 }
 
 impl Rule {
@@ -191,7 +181,7 @@ impl Rule {
                 version: version.clone(),
                 reason: None,
                 url: None,
-                side: RuleSide::Both,
+                side: Side::Both,
             },
             Self::Detailed(details) => details.clone(),
         }
@@ -251,7 +241,7 @@ pub struct Module {
     pub visibility: Option<String>,
 }
 
-use mod_vocab::Side;
+pub use mod_vocab::Side;
 
 /// What a content mod adds; the player sees it before turning the mod on.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, PartialOrd, Ord)]

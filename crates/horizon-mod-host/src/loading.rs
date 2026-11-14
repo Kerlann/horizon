@@ -83,9 +83,9 @@ pub fn main_with(
                 .iter()
                 .any(|arg| matches!(arg, horizon_mod_package::selection::Argument::Dedicated(_)));
             let side = if dedicated {
-                horizon_mod_package::manifest::RuleSide::Server
+                horizon_mod_package::manifest::Side::Server
             } else {
-                horizon_mod_package::manifest::RuleSide::Client
+                horizon_mod_package::manifest::Side::Client
             };
             let rules: Vec<_> = manifests
                 .iter()

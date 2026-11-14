@@ -1,5 +1,5 @@
 //! Resolve bundle dependencies without touching the staged workspace.
-use crate::manifest::RuleSide;
+use crate::manifest::Side;
 use semver::{Version, VersionReq};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
@@ -201,11 +201,11 @@ pub struct Rule {
 }
 
 /// `manifest`'s load rules that hold on `running`, the client or the dedicated server.
-pub fn rules(manifest: &crate::Manifest, running: RuleSide) -> Vec<Rule> {
+pub fn rules(manifest: &crate::Manifest, running: Side) -> Vec<Rule> {
     fn declared<'a>(
         kind: RuleKind,
         table: &'a BTreeMap<String, crate::manifest::Rule>,
-        running: RuleSide,
+        running: Side,
     ) -> impl Iterator<Item = Rule> + 'a {
         table.iter().filter_map(move |(id, rule)| {
             let rule = rule.details();
@@ -214,7 +214,7 @@ pub fn rules(manifest: &crate::Manifest, running: RuleSide) -> Vec<Rule> {
                 (Some(text), None) | (None, Some(text)) => format!(" ({text})"),
                 (None, None) => String::new(),
             };
-            (rule.side == RuleSide::Both || rule.side == running).then(|| Rule {
+            (rule.side == Side::Both || rule.side == running).then(|| Rule {
                 kind,
                 id: id.clone(),
                 requirement: rule.version,
@@ -571,8 +571,8 @@ mod tests {
              client_only={{side='client'}}\n[discouraged]\nslow='*'\n"
         ))
         .unwrap();
-        let server = rules(&user, RuleSide::Server);
-        let client = rules(&user, RuleSide::Client);
+        let server = rules(&user, Side::Server);
+        let client = rules(&user, Side::Client);
         let none = Overrides::default();
         let with = |others: &[(&'static str, &'static str)], rules: &[Rule], overrides| {
             let mut mods = vec![item("user", "1", &[])];
