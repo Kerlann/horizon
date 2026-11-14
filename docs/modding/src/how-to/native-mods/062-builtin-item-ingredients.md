@@ -92,6 +92,12 @@ not ordinary persistent NBT; compressing an NBT file does not change this rule.
 `medium`, and `large`. Numeric network ids, case variants and namespaced values
 are refused. Mob defaults are not item-component defaults.
 
+`note_block_sound` accepts an identifier string, not a sound-registry entry.
+Omitted or empty namespaces become `minecraft`; empty paths are allowed, so
+`""`, `":"`, and `"minecraft:"` decode to the same identifier. Namespace and
+path characters follow vanilla's lowercase ASCII identifier rules (including
+the forbidden namespace `..`); malformed UTF-16 strings are rejected.
+
 Component ingredient displays contain the patch, including removals. Difference
 lists retain the base list and remove only items whose default stack passes the
 subtracted predicate. Non-simple cooking ingredients are tested outside the
@@ -189,3 +195,13 @@ stored base color; a banner's item color does not imply this component, and an
 undyed shield has no base color. The other 111 registered built-ins use
 stored-value matching while their shared decoders are added incrementally in
 **#3875**. Their absence is not a load refusal.
+
+<!-- Member #4112 decoder documentation -->
+`item_name`, `block_entity_data`, and `note_block_sound` in the `minecraft` namespace. The other
+111 registered built-ins use stored-value matching while their shared decoders
+`note_block_sound` accepts an identifier string, not a sound-registry entry.
+Omitted or empty namespaces become `minecraft`; empty paths are allowed, so
+`""`, `":"`, and `"minecraft:"` decode to the same identifier. Namespace and
+path characters follow vanilla's lowercase ASCII identifier rules (including
+the forbidden namespace `..`); malformed UTF-16 strings are rejected.
+

@@ -85,6 +85,7 @@ pub const DECODED_COMPONENTS: &[&str] = &[
     "minecraft:villager_food",
     "minecraft:unbreakable",
     "minecraft:base_color",
+    "minecraft:note_block_sound",
 ];
 
 /// Validate and decode a component into the value representation shared with stacks.
@@ -179,6 +180,8 @@ pub fn decoded_component_value(id: &str, value: &Tag, reg: &Registries) -> Resul
             .ok_or_else(|| "Invalid attack_range".into());
     if id == "minecraft:base_color" {
         return dye_color(value).map(|name| Tag::String(name.into()));
+    if id == "minecraft:note_block_sound" {
+        return note_block_sound(value);
     }
     decode_component(id, value, reg)?;
     if id == "minecraft:block_entity_data" {
@@ -466,6 +469,7 @@ pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), Strin
         "minecraft:use_effects" => horizon_items::item_data::ingredient_components::use_effects(t)
             .map(|_| ())
             .map_err(str::to_owned),
+        "minecraft:note_block_sound" => note_block_sound(t).map(|_| ()),
         // TypedEntityData.codec: the type is the compound's id.
         "minecraft:block_entity_data" => match t {
             Tag::Compound(c) => match c.get(&"id".into()) {
@@ -513,6 +517,8 @@ fn potion_duration_scale(t: &Tag) -> Result<f32, String> {
 }
 /// `DataComponents.ITEM_MODEL`: `Identifier.CODEC`, without a resource lookup.
 fn identifier_value(value: &Tag) -> Result<Tag, String> {
+/// `DataComponents.NOTE_BLOCK_SOUND`: `Identifier.CODEC`, without a sound lookup.
+fn note_block_sound(value: &Tag) -> Result<Tag, String> {
     let Tag::String(value) = value else {
         return Err("Not a string".into());
     };
@@ -1704,6 +1710,61 @@ mod tests {
                     &registry
                 )
                 .is_err()
+    fn note_block_sound_identifier_codec_normalizes_and_validates() {
+        use super::{Registries, Tag, decoded_component_value};
+        let registry = Registries::default();
+        for (input, canonical) in [
+            ("unregistered/sound", "minecraft:unregistered/sound"),
+            (":unregistered/sound", "minecraft:unregistered/sound"),
+            (
+                "minecraft:unregistered/sound",
+                "minecraft:unregistered/sound",
+            ),
+            ("fixture:unregistered/sound", "fixture:unregistered/sound"),
+            ("", "minecraft:"),
+            (":", "minecraft:"),
+            ("minecraft:", "minecraft:"),
+            ("fixture:", "fixture:"),
+            (".:..", ".:.."),
+            ("a-z_0.9:/a.._-0", "a-z_0.9:/a.._-0"),
+        ] {
+            let value = Tag::String(input.into());
+            assert_eq!(
+                decoded_component_value("minecraft:note_block_sound", &value, &registry),
+                Ok(Tag::String(canonical.into())),
+                "{input:?}",
+            );
+            assert!(decode_component("minecraft:note_block_sound", &value, &registry).is_ok());
+        }
+        for input in [
+            "Minecraft:sound",
+            "minecraft:Sound",
+            "bad namespace:sound",
+            "bad/namespace:sound",
+            "..:sound",
+            "a:b:c",
+            "sound with spaces",
+            "café",
+            "sound\u{0}",
+        ] {
+            let value = Tag::String(input.into());
+            assert!(
+                decoded_component_value("minecraft:note_block_sound", &value, &registry).is_err(),
+                "{input:?}",
+            );
+            assert!(decode_component("minecraft:note_block_sound", &value, &registry).is_err());
+        }
+        for value in [
+            Tag::Int(1),
+            Tag::compound([] as [(&str, Tag); 0]),
+            Tag::List(vec![]),
+            Tag::String(horizon_core::nbt::JavaString(vec![0xd800])),
+            Tag::String(horizon_core::nbt::JavaString(vec![0xdc00])),
+            Tag::String(horizon_core::nbt::JavaString(vec![0xd83d, 0xde00])),
+        ] {
+            assert!(
+                decoded_component_value("minecraft:note_block_sound", &value, &registry).is_err(),
+                "{value:?}",
             );
         }
     }
