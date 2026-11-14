@@ -2347,6 +2347,7 @@ mod namespace_tests {
         let _ = fs::remove_dir_all(&root);
         let files = [
             ("items.json", r#"{"minecraft:diamond_hoe": {}}"#),
+            ("data/harvestmod/enchantment/tools/broken.json", "{"),
             (
                 "data/minecraft/enchantment/mending.json",
                 r#"{"supported_items": "minecraft:diamond_hoe", "max_level": 1}"#,
@@ -2375,6 +2376,7 @@ mod namespace_tests {
         };
         assert_eq!(level(&data, "minecraft:mending"), Some(1));
         assert_eq!(level(&data, "harvestmod:scythe"), Some(3));
+        assert_eq!(level(&data, "harvestmod:tools/broken"), None);
         assert_eq!(level(&data, "harvestmod:tools/sweep"), Some(1));
         let pack = vec![(
             "enchantment/harvestmod:scythe".to_owned(),

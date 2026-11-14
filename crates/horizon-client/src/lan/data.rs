@@ -113,10 +113,6 @@ const PACK_REGISTRIES: &[&str] = &[
     "minecraft:enchantment",
 ];
 
-/// Synchronized registries whose entries content mods add in their own
-/// namespaces (`data/<ns>/<registry>/`, copied into the resource root beside
-/// vanilla's). No client knows those entries, so their data is always sent.
-
 /// A registry's entries from the resource root's namespaces other than
 /// `minecraft` (`data/<ns>/<dir>/`): content mods' own, marked as no client's.
 fn mod_entries(resources: &Path, dir: &str, entries: &mut Vec<((String, String), Value, bool)>) {
@@ -1332,7 +1328,6 @@ mod tests {
             serde_json::json!({ "max_level": 1 }),
             false,
         )];
-        assert!(PACK_REGISTRIES.contains(&"minecraft:enchantment"));
         mod_entries(&root, "enchantment", &mut found);
         let files = vec![(
             "enchantment/harvestmod:scythe".to_owned(),

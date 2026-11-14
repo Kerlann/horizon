@@ -1572,6 +1572,12 @@ pub mod tests {
             std::fs::write(&path, serde_json::to_vec(value).unwrap()).unwrap();
             std::fs::read(path).unwrap()
         };
+        std::fs::create_dir_all(root.join("data/harvestmod/enchantment/tools")).unwrap();
+        std::fs::write(
+            root.join("data/harvestmod/enchantment/tools/broken.json"),
+            b"{",
+        )
+        .unwrap();
         let definition = |description: Value, max_level| {
             json!({
                 "description": description, "supported_items": "minecraft:diamond_hoe",
@@ -1626,6 +1632,7 @@ pub mod tests {
         assert!(loaded.in_tag("minecraft:in_enchanting_table", "harvestmod:scythe"));
         assert!(loaded.get("minecraft:mending").is_some());
         assert!(loaded.get("minecraft:scythe").is_none());
+        assert!(loaded.get("harvestmod:tools/broken").is_none());
 
         // A world's pack replaces the mod's definition for its id.
         let pack = write(
