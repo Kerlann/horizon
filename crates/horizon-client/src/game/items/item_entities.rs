@@ -325,9 +325,10 @@ impl Game<'_> {
                     continue;
                 }
                 let vanilla = o.can_merge(merge_id as u32, value as i32);
-                let (join, id, count) = (o.join, o.id, o.count);
-                let (orb_value, points) = (o.value, o.points() as i32);
-                if !self.orb_merges(id, points, count, 0, value as i32, 1, vanilla) {
+                let (join, id, count, age) = (o.join, o.id, o.count, o.age);
+                let orb_value = o.value;
+                if !self.orb_merges(id, orb_value, count, 0, value as i32, 1, vanilla) {
+                    self.restore_orb(join, orb_value, count, age);
                     continue;
                 }
                 let Some(i) = self.orbs.locate(join) else {
@@ -346,6 +347,14 @@ impl Game<'_> {
             }
         }
         false
+    }
+    /// Puts back what a merge hook may have written to the orb `join`: a refused merge
+    /// leaves both orbs as they were.
+    fn restore_orb(&mut self, join: crate::join_seq::JoinSeq, value: i32, count: u32, age: u32) {
+        if let Some(i) = self.orbs.locate(join) {
+            let orb = &mut self.orbs[i];
+            (orb.value, orb.count, orb.age) = (value, count, age);
+        }
     }
     /// Whether orb `into` takes orb `from` (0: a spawning orb of `from_value`),
     /// given vanilla's `canMerge` answer: the mods may flip it, then cancel the merge.
@@ -414,6 +423,7 @@ impl Game<'_> {
             if !self.orb_merges(
                 into, into_value, into_count, from, from_value, from_count, vanilla,
             ) {
+                self.restore_orb(into_join, into_value, into_count, into_age);
                 continue;
             }
             let Some(i) = self.orbs.locate(into_join) else {
@@ -437,9 +447,7 @@ impl Game<'_> {
                     .filter(|&c| c <= crate::orb_limits::MAX_COUNT)
             };
             let (Some(j), Some(count)) = (fresh, count) else {
-                self.orbs[i].value = into_value;
-                self.orbs[i].count = into_count;
-                self.orbs[i].age = into_age;
+                self.restore_orb(into_join, into_value, into_count, into_age);
                 continue;
             };
             let age = self.orbs[j].age;

@@ -239,6 +239,13 @@ impl Hooks for Mod {
             event.value = mod_api::GameRuleValue::Bool(false);
         }
     }
+    fn experience_orb_merge(
+        &self,
+        _: &mut dyn mod_api::ServerHost,
+        event: &mut mod_api::ExperienceOrbMergeEvent<'_>,
+    ) -> mod_api::Flow {
+        experience_orb_merge::listen(event)
+    }
     fn container_loot_filled(
         &self,
         _: &dyn mod_api::LevelHost,
