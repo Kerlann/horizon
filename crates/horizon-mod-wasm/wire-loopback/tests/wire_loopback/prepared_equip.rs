@@ -360,4 +360,12 @@ fn prepared_target_reads_need_no_host_round_trip_or_payload_conversion() {
 }
 
 pub(super) struct PreparedEquipHooks;
-impl PreparedEquipHooks { pub(super) fn register(&self, registrar: &mut dyn mod_api::Registrar, _cx: &mod_api::RegistrationContext) { self::register(registrar); } }
+impl PreparedEquipHooks {
+    pub(super) fn register(
+        &self,
+        registrar: &mut dyn mod_api::Registrar,
+        _cx: &mod_api::RegistrationContext,
+    ) {
+        self::register(registrar);
+    }
+}

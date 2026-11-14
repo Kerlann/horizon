@@ -12,7 +12,6 @@ include!(concat!(env!("OUT_DIR"), "/wire_loopback_hooks.rs"));
 mod boundary {
     include!(concat!(env!("OUT_DIR"), "/wire_host_generated.rs"));
 }
-use prepared_equip::slots as prepared;
 /// The generated proxies' refusal reason; the loopback refuses only on its own encode errors.
 fn wasm_call_refusal() -> String {
     "loopback refused".into()

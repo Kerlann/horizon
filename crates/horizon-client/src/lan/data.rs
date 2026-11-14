@@ -116,7 +116,6 @@ const PACK_REGISTRIES: &[&str] = &[
 /// Synchronized registries whose entries content mods add in their own
 /// namespaces (`data/<ns>/<registry>/`, copied into the resource root beside
 /// vanilla's). No client knows those entries, so their data is always sent.
-const MOD_REGISTRIES: &[&str] = &["minecraft:enchantment"];
 
 /// A registry's entries from the resource root's namespaces other than
 /// `minecraft` (`data/<ns>/<dir>/`): content mods' own, marked as no client's.
@@ -478,7 +477,7 @@ impl SyncData {
                 .into_iter()
                 .map(|(p, v)| (("minecraft".to_owned(), p), v, false))
                 .collect();
-            if MOD_REGISTRIES.contains(key) {
+            if *key == "minecraft:enchantment" {
                 mod_entries(resources, path, &mut entries);
             }
             let mut damage_entries = None;
@@ -1320,7 +1319,6 @@ mod tests {
             serde_json::json!({ "max_level": 1 }),
             false,
         )];
-        assert!(MOD_REGISTRIES.contains(&"minecraft:enchantment"));
         assert!(PACK_REGISTRIES.contains(&"minecraft:enchantment"));
         mod_entries(&root, "enchantment", &mut found);
         let files = vec![(

@@ -222,12 +222,25 @@ fn other_namespaces(root: &Path) -> Vec<String> {
     out.retain(|ns| ns != "minecraft");
     out
 }
-fn read_tag_dir_in(dir: &Path, namespace: &str, _conditions: &horizon_world::conditions::LoadConditions) -> HashMap<String, horizon_world::tag_layers::TagLayers> {
-    let Ok(folder) = horizon_world::json_folder::read(dir) else { return HashMap::new(); };
-    folder.files.iter().filter_map(|file| {
-        let v = serde_json::from_slice::<Value>(file.bytes().ok()?).ok()?;
-        Some((format!("{namespace}:{}", file.name), horizon_world::tag_layers::TagLayers::from_file(&v)))
-    }).collect()
+fn read_tag_dir_in(
+    dir: &Path,
+    namespace: &str,
+    _conditions: &horizon_world::conditions::LoadConditions,
+) -> HashMap<String, horizon_world::tag_layers::TagLayers> {
+    let Ok(folder) = horizon_world::json_folder::read(dir) else {
+        return HashMap::new();
+    };
+    folder
+        .files
+        .iter()
+        .filter_map(|file| {
+            let v = serde_json::from_slice::<Value>(file.bytes().ok()?).ok()?;
+            Some((
+                format!("{namespace}:{}", file.name),
+                horizon_world::tag_layers::TagLayers::from_file(&v),
+            ))
+        })
+        .collect()
 }
 /// Expand a tag keeping first-seen order and applying removals before its parent uses it.
 fn expand_ordered(
@@ -393,7 +406,10 @@ impl Enchantments {
                 })
                 .collect()
         };
-        let entity_tags = unordered(read_tag_dir(&data.join("tags/entity_type"), overlay.conditions));
+        let entity_tags = unordered(read_tag_dir(
+            &data.join("tags/entity_type"),
+            overlay.conditions,
+        ));
         let damage_tags = match horizon_world::damage_source::Catalog::load(root, overlay) {
             Ok(catalog) => catalog
                 .tags()
@@ -405,7 +421,10 @@ impl Enchantments {
                 })
                 .collect(),
             // Small tools/fixtures may not carry the prepared catalog.
-            Err(_) => unordered(read_tag_dir(&data.join("tags/damage_type"), overlay.conditions)),
+            Err(_) => unordered(read_tag_dir(
+                &data.join("tags/damage_type"),
+                overlay.conditions,
+            )),
         };
         // The registry lists entries sorted by id, like the data-pack loader.
         let mut files: BTreeMap<String, Value> =

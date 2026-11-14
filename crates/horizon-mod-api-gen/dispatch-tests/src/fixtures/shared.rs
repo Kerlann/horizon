@@ -4,9 +4,6 @@ use mod_api::mod_api::client::hud_layout::GuiDraw;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-// The hidden preparation method is inert for native fixture parts.
-struct EquipReadRow;
-
 #[derive(Clone, Default, PartialEq)]
 struct ItemStack {
     item: Arc<str>,
