@@ -1,4 +1,3 @@
-use super::*;
 pub(super) fn check(registrar: &mut dyn mod_api::Registrar) {
     let two = mod_api::ArmPose::Custom(registrar.register_arm_pose("wire_test:two", true, false));
     let off = mod_api::ArmPose::Custom(registrar.register_arm_pose("wire_test:off", false, true));

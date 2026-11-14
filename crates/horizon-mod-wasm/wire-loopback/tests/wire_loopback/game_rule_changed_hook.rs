@@ -1,5 +1,3 @@
-use super::*;
-
 pub(super) struct GameRuleChangedHooks;
 impl GameRuleChangedHooks {
     pub(super) fn game_rule_changed(

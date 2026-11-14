@@ -1,5 +1,3 @@
-use super::*;
-
 pub(super) struct LootFunctionHooks;
 impl LootFunctionHooks {
     pub(super) fn loot_function(&self, event: &mut mod_api::LootFunctionEvent<'_>) {

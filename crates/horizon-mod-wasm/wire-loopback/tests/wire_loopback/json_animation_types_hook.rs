@@ -1,5 +1,3 @@
-use super::*;
-
 pub(super) struct JsonAnimationTypesHooks;
 impl JsonAnimationTypesHooks {
     pub(super) fn register_json_animation_types(

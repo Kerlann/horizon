@@ -1,4 +1,3 @@
-use super::*;
 /// The region the guest declares: fractional and negative climate bounds, so the host reads
 /// every float back bit for bit.
 pub(super) fn region() -> mod_api::BiomeRegion {

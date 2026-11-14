@@ -1,5 +1,3 @@
-use super::*;
-
 pub(super) struct DatapackSyncHooks;
 impl DatapackSyncHooks {
     pub(super) fn datapack_sync(

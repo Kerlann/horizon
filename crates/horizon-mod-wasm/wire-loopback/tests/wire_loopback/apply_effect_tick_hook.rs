@@ -1,5 +1,3 @@
-use super::*;
-
 pub(super) struct ApplyEffectTickHooks;
 impl ApplyEffectTickHooks {
     pub(super) fn apply_effect_tick(

@@ -1,5 +1,3 @@
-use super::*;
-
 pub(super) struct RenderPlayerHooks;
 impl RenderPlayerHooks {
     pub(super) fn render_player_pre(

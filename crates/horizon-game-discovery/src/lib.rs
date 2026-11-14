@@ -181,7 +181,7 @@ pub fn folder_hooks(directory: &Path) -> Result<String, String> {
             if let syn::FnArg::Typed(typed) = input {
                 let argument =
                     syn::Ident::new(&format!("argument_{index}"), proc_macro2::Span::call_site());
-                typed.pat = Box::new(syn::parse_quote!(#argument));
+                *typed.pat = syn::parse_quote!(#argument);
                 arguments.push(argument);
             }
         }

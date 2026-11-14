@@ -1,5 +1,3 @@
-use super::*;
-
 pub(super) struct RenderGuiPreHooks;
 impl RenderGuiPreHooks {
     pub(super) fn subscribed(&self) -> &'static [Option<mod_api::HookId>] {

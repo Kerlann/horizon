@@ -1,5 +1,3 @@
-use super::*;
-
 pub(super) struct ItemTooltipHooks;
 impl ItemTooltipHooks {
     pub(super) fn item_tooltip(

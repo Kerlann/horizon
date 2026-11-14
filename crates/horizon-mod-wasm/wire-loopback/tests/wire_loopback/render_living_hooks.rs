@@ -1,5 +1,3 @@
-use super::*;
-
 pub(super) struct RenderLivingHooks;
 impl RenderLivingHooks {
     pub(super) fn render_living_pre(
