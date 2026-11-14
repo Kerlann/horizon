@@ -465,7 +465,15 @@ fn registration_and_attribute_records_have_declared_field_bytes() {
             PackageKind::Code,
             Side::Both,
             vec!["example".into()],
-            vec![PackageDependency::new("library".into(), "^1".into(), true)],
+            vec![PackageDependency::new(
+                "library".into(),
+                "^1".into(),
+                crate::DependencyKind::Optional,
+                crate::DependencyOrder::After,
+                crate::Side::Both,
+                None,
+                None,
+            )],
         ),
         (
             "example".to_owned(),
@@ -475,14 +483,30 @@ fn registration_and_attribute_records_have_declared_field_bytes() {
             vec!["example".to_owned()],
             // Nested tuples flatten into one field list.
             (
-                vec![PackageDependency::new("library".into(), "^1".into(), true)],
+                vec![PackageDependency::new(
+                    "library".into(),
+                    "^1".into(),
+                    crate::DependencyKind::Optional,
+                    crate::DependencyOrder::After,
+                    crate::Side::Both,
+                    None,
+                    None,
+                )],
                 PackageDetails::default(),
             ),
         ),
     );
     fields(PropertyValue::Integer(3), (1u32, 3i64));
     fields(
-        PackageDependency::new("library".into(), "^1".into(), true),
+        PackageDependency::new(
+            "library".into(),
+            "^1".into(),
+            crate::DependencyKind::Optional,
+            crate::DependencyOrder::After,
+            crate::Side::Both,
+            None,
+            None,
+        ),
         ("library".to_owned(), "^1".to_owned(), true),
     );
     let details = PackageDetails {

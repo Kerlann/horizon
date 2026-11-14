@@ -338,7 +338,11 @@ mod resource_wire_tests {
             vec![crate::PackageDependency::new(
                 "other".into(),
                 "^1".into(),
-                true,
+                crate::DependencyKind::Optional,
+                crate::DependencyOrder::Before,
+                crate::Side::Server,
+                Some("Shared library".into()),
+                Some("https://example.org/library".into()),
             )],
         )
         .with_details(crate::PackageDetails {
@@ -357,7 +361,20 @@ mod resource_wire_tests {
         assert_eq!(decoded.side(), crate::Side::Both);
         assert!(decoded.depends_on("other"));
         assert_eq!(decoded.dependencies()[0].version(), "^1");
-        assert!(decoded.dependencies()[0].optional());
+        assert_eq!(
+            decoded.dependencies()[0].kind(),
+            crate::DependencyKind::Optional
+        );
+        assert_eq!(
+            decoded.dependencies()[0].order(),
+            crate::DependencyOrder::Before
+        );
+        assert_eq!(decoded.dependencies()[0].side(), crate::Side::Server);
+        assert_eq!(decoded.dependencies()[0].reason(), Some("Shared library"));
+        assert_eq!(
+            decoded.dependencies()[0].url(),
+            Some("https://example.org/library")
+        );
         assert_eq!(decoded.name(), "Test");
         assert_eq!(decoded.homepage(), Some("https://example.org"));
         assert_eq!(decoded.runtime(), Some(crate::PackageRuntime::Wasm));
