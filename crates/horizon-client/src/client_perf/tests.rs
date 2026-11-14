@@ -208,6 +208,7 @@ fn a_client_capture_reads_back_with_its_frames_marks_and_health() {
 }
 
 #[test]
+#[ignore = "daily"]
 fn health_samples_carry_the_process_gauges_and_this_seconds_counts() {
     let mut perf = ClientPerf::new(SLOW_FRAME_MS);
     let counts = || WorldCounts {
@@ -582,6 +583,7 @@ fn the_timing_variables_ask_for_passes_and_the_detail_one_for_more() {
 }
 
 #[test]
+#[ignore = "daily"]
 fn status_grows_with_the_capture() {
     let scratch = Scratch::new("status");
     let mut perf = ClientPerf::new(SLOW_FRAME_MS);

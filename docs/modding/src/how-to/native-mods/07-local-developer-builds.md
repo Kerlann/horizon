@@ -36,7 +36,7 @@ The command returns a `developer-…` tag. Select that exact tag, prepare its re
 instance to it. Automatic updates do not replace a local unsigned base. Remove it with
 `horizon-launcher remove DEVELOPER_TAG` when no instance needs it.
 
-A native mod build needs the prebuilt SDK of the base's exact commit. For a commit without a
+A native mod build needs the prebuilt [SDK](../../reference/sdk.md) of the base's exact commit. For a commit without a
 published SDK, build it from the same checkout and name its folder; one folder holds one side:
 
 ```sh
@@ -46,6 +46,6 @@ HORIZON_LAUNCHER_DEVELOPER_SDK=SDK_FOLDER horizon-launcher native-build MODS --v
 
 The variable is read for developer bases only, and the folder is used where it is. It must be
 that commit's build for this computer, side and the launcher's Rust, as a downloaded SDK must;
-anything else is refused. Without it, `E_NATIVE_NO_RELEASE` means the commit has no available
-SDK. The native mod builder never compiles the checkout itself. For native mixins, the pinned
+anything else is refused. Without it, the launcher uses the commit's SDK release when one is
+published, and otherwise says the build has no mod tools. The native mod builder never compiles the checkout itself. For native mixins, the pinned
 source must also be available for copying the target functions.

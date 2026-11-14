@@ -90,6 +90,9 @@ pub(super) struct ModsState {
     /// `--dev-mod PATH`: content mods always on.
     pub(super) dev: Vec<PathBuf>,
     pub(super) native: std::sync::Arc<horizon_mod_package::runtime::Runtime>,
+    pub(super) installation_side: horizon_mod_package::manifest::Side,
+    pub(super) overrides_dir: PathBuf,
+    pub(super) load_notices: Arc<Mutex<Vec<horizon_mod_package::dependencies::Notice>>>,
     pub(super) selected: std::sync::Arc<[horizon_mod_package::selection::SelectedPackage]>,
     /// The content mods the loaded resources were built with: a switch the
     /// game can apply live moves it to the player's choice (`switch_mods`).
@@ -103,16 +106,13 @@ pub(super) struct ModsState {
     pub(super) live_ids: std::collections::BTreeSet<String>,
     /// The server's data comes from a root a live switch built, not the one
     /// `res` was loaded from: the world tables are built from it even with no
-    /// data pack (`build_world_tables`).
+    /// data pack (`stage_world_tables`).
     pub(super) data_switched: bool,
     /// Structured load refusals, rendered only at the existing Mods-page boundary.
     pub(super) refused: Arc<Mutex<Vec<MissingJar>>>,
     /// The entries of the mods' datapack registries this world session has published, at the
     /// generation of the load or reload that built them; `None` when no mod declared one.
     pub(super) datapack_registries: Option<Arc<mod_api::DatapackRegistrySet>>,
-    /// The entries a table load decoded and checked, until its world open or reload takes them
-    /// to publish.
-    pub(super) datapack_candidate: Option<mod_api::DatapackCandidate>,
 }
 
 impl ModsState {
@@ -491,7 +491,9 @@ pub(super) fn register_select_item_model_properties(role: ExecutionRole) {
 /// animation files may name them.
 /// Block-state
 /// definition types (`native_register_block_state_models`), so blockstate files naming one get
-/// the models the mod picks.
+/// the models the mod picks; and special item model renderers
+/// (`native_register_special_model_renderer`), so special models of their types draw what the
+/// mod answers.
 pub(super) fn register_resource_sources(role: ExecutionRole) {
     if !role.is_client() {
         return;
@@ -514,6 +516,42 @@ pub(super) fn register_resource_sources(role: ExecutionRole) {
     let mut definitions = Vec::new();
     Game::native_register_block_state_models(&RegistrationContext::new(), &mut definitions);
     horizon_client_render::mod_block_state_models::register(definitions);
+    register_special_model_renderers();
+}
+/// The native mods' special item model renderers (`native_register_special_model_renderer`),
+/// kept once at start, before resources load: their types are what a `minecraft:special` model
+/// may name besides vanilla's, or in place of one. A later registration of a type replaces the
+/// earlier one, and the log names both mods.
+fn register_special_model_renderers() {
+    let mut registry = mod_api::SpecialModelRendererRegistry::default();
+    Game::native_register_special_model_renderer(&RegistrationContext::new(), &mut registry);
+    for (kind, owner) in registry.initial_owners() {
+        if horizon_assets::item_model::SpecialModel::is_builtin_type(kind) {
+            log::warn!(
+                "Horizon: special model type {kind} registered by the game is replaced by {}'s registration",
+                owner.unwrap_or("the game")
+            );
+        }
+    }
+    let (mut renderers, replaced) = registry.into_renderers();
+    for replaced in replaced {
+        let name = |id: Option<&str>| id.unwrap_or("the game").to_owned();
+        log::warn!(
+            "Horizon: special model type {} registered by {} is replaced by {}'s registration",
+            replaced.kind,
+            name(replaced.earlier),
+            name(replaced.later)
+        );
+    }
+    // In slot order: the types' models resolve to these slots as they decode.
+    let kept = horizon_assets::item_model::register_special_model_types(
+        renderers.keys().cloned().collect(),
+    );
+    super::native_special_renderers::register(
+        kept.into_iter()
+            .filter_map(|kind| renderers.remove(&kind).map(|renderer| (kind, renderer)))
+            .collect(),
+    );
 }
 /// The client presentation registrations, kept once at start, before resources load: the
 /// dimension transition screens, the entity spectator shaders, the render pipelines and the entity
@@ -720,29 +758,20 @@ pub(super) fn content_overlay(
                 .iter()
                 .any(|missing| missing.owners.contains(&source.manifest.id))
         })
-        .filter(|source| seen.insert(source.manifest.id.as_str()))
-        .collect();
-    let dependencies: Vec<_> = packages
-        .iter()
-        .map(|source| {
-            horizon_mod_package::dependencies::from_manifest(&source.manifest.dependencies)
+        .filter(|source| {
+            let code = source.manifest.native.is_some() || source.manifest.wasm.is_some();
+            !code || seen.insert(source.manifest.id.as_str())
         })
         .collect();
-    let inputs: Vec<_> = packages
-        .iter()
-        .zip(&dependencies)
-        .map(
-            |(source, dependencies)| horizon_mod_package::dependencies::Mod {
-                id: &source.manifest.id,
-                version: &source.manifest.version,
-                has_api: false,
-                dependencies,
-            },
-        )
-        .collect();
-    let order = horizon_mod_package::dependencies::resolve_content(&inputs)
-        .map_err(|error| error.to_string())?
-        .order;
+    let manifests: Vec<_> = packages.iter().map(|source| source.manifest).collect();
+    let overrides = horizon_mod_package::dependencies::Overrides::read(&sources.overrides_dir)?;
+    let resolution = horizon_mod_package::dependencies::resolve_manifests(
+        &manifests,
+        sources.installation_side,
+        &overrides,
+    )
+    .map_err(|error| error.to_string())?;
+    let order = resolution.order;
     // Hooks are queried on the calling thread, never from a content reader.
     let native_items = &native_declared().items;
     let requests: Vec<_> = order
@@ -822,7 +851,7 @@ pub(super) fn content_overlay(
     }
     // Content validation may refuse a package. Revalidate against what really
     // loaded so dependents cannot start with a missing required content mod.
-    let loaded: Vec<_> = inputs
+    let loaded: Vec<_> = manifests
         .into_iter()
         .filter(|package| {
             mods.iter().any(|content| content.id == package.id)
@@ -833,8 +862,12 @@ pub(super) fn content_overlay(
                     .any(|native| native.id == package.id)
         })
         .collect();
-    horizon_mod_package::dependencies::resolve_content(&loaded)
-        .map_err(|error| error.to_string())?;
+    let resolved = horizon_mod_package::dependencies::resolve_manifests(
+        &loaded,
+        sources.installation_side,
+        &overrides,
+    )
+    .map_err(|error| error.to_string())?;
     let cache = here.join(".horizon-cache");
     // Content admission and the live code-dispatch boundary jointly determine
     // what loaded. Namespaces and raw startup metadata cannot answer this.
@@ -844,6 +877,7 @@ pub(super) fn content_overlay(
     )?;
     let root = mod_content::resolved_resources(root, prepared, jar_store, &mods, cache)?;
     let _ = sources.content_base.set(original_base);
+    *sources.load_notices.lock().unwrap() = resolved.warnings;
     Ok(ContentOverlay {
         root,
         mods,
@@ -1550,6 +1584,9 @@ impl Game<'_> {
         let unbuilt = not_built(&native_dir, built, &self.settings.mods.installed);
         self.settings.mods.installed.extend(unbuilt);
         self.mods.report_refusals(&mut self.settings.mods.installed);
+        self.settings
+            .mods
+            .apply_dependency_notices(&self.mods.load_notices.lock().unwrap());
     }
     /// The content mods the resources load with: the ones applied, which a
     /// switch that needs a restart doesn't change.

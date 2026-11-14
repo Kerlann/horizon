@@ -149,6 +149,14 @@ pub(super) struct CombatTracker {
     /// blast leaves it out (`getEntities(source, box)`). A source guessed
     /// from the mobs near the centre is still hurt: it may be a bystander.
     pub(super) explosion_source_named: bool,
+    /// The entity list a listening `explosion_detonate` left behind, in the
+    /// order the blast visits it: the listeners took the spared entities out
+    /// and may have added others. `None` when no mod listened, and the walks
+    /// visit every entity as before (`explosion_detonate.rs`).
+    pub(super) blast_hit_list: Option<Vec<u32>>,
+    /// `blast_hit_list`'s ids as a set, so a walk's membership check stays
+    /// constant time however large the list is.
+    pub(super) blast_hit_ids: std::collections::HashSet<u32>,
     /// The blast's direct source is in water (`Explosion.getDirectSourceEntity`
     /// `.isInWater`): paintings, item frames and cushions ignore it
     /// (`BlockAttachedEntity.ignoreExplosion`).
@@ -167,6 +175,9 @@ pub(super) struct CombatTracker {
     /// `WitherSkull.getBlockExplosionResistance`: a dangerous skull's blast
     /// caps every destroyable block's resistance at this value.
     pub(super) blast_resistance_cap: Option<f32>,
+    /// A mod blast's own damage type, calculator and effects
+    /// (`level_explode`'s settings), while it goes off.
+    pub(super) blast_settings: super::explosion_settings::BlastSettings,
     /// Charged creepers whose blast just went off and that have not dropped
     /// a head yet (`Creeper.droppedSkulls`): they are gone from the mob list,
     /// but the mobs they killed still ask for their loot.
@@ -183,6 +194,13 @@ pub(super) struct CombatTracker {
     fall_before: f64,
 }
 impl CombatTracker {
+    /// Whether the blast now hurting entities visits `id`: the storages are
+    /// the walk, unless a listening `explosion_detonate` left a list, and
+    /// then only what that list names is.
+    pub(super) fn visits(&self, id: u32) -> bool {
+        self.blast_hit_list.is_none() || self.blast_hit_ids.contains(&id)
+    }
+
     /// The attack lent by the enclosing [`Game::with_attack`] (`damage_level_of!(game, scoped)`).
     pub(super) fn attack(&self) -> &Attack {
         &self.attack
