@@ -68,7 +68,7 @@ use std::{
     sync::Arc,
     time::{Duration, Instant},
 };
-use winit::{event::MouseButton, keyboard::KeyCode};
+use winit::keyboard::KeyCode;
 use {
     horizon_core::nbt::Tag,
     horizon_mod_runtime::attachments::{Holder, ResidentAttachments},
@@ -724,7 +724,7 @@ pub(super) struct Remote {
     /// Per-hand swing policy, restored when the current input attempt ends.
     pub(in crate::game) interaction_swing: [bool; 2],
     destroy_delay: u32,
-    input: horizon_client::interaction_input::InteractionInput,
+    pub(super) input: horizon_client::interaction_input::InteractionInput,
     /// Keys whose presses send a packet (swap hands, drop, a mount's
     /// inventory): like the click queue, they wait for the tick's
     /// `handleKeybinds` phase rather than going out between window events.
@@ -9009,34 +9009,6 @@ impl Game<'_> {
         // applyAfterUseComponentSideEffects, then LivingEntityUseItemEvent.Finish.
         self.remote_use_item_finished(slot, &stack, &info);
     }
-    /// MouseHandler updates KeyMapping; handleKeybinds sends packets on a tick.
-    pub(super) fn remote_mouse(&mut self, button: MouseButton, pressed: bool) -> Result<()> {
-        use horizon_client::interaction_input::Button;
-        let input = match button {
-            MouseButton::Left => {
-                self.toggles
-                    .button(2, pressed, false, self.settings.toggle_attack);
-                self.left = self.toggles.is_down(2);
-                Some(Button::Attack)
-            }
-            MouseButton::Right => {
-                self.toggles
-                    .button(3, pressed, false, self.settings.toggle_use);
-                self.right = self.toggles.is_down(3);
-                Some(Button::Use)
-            }
-            MouseButton::Middle => Some(Button::Pick),
-            _ => None,
-        };
-        if pressed
-            && let Some(button) = input
-            && let Some(remote) = self.remote.as_mut()
-        {
-            remote.input.press(button);
-        }
-        Ok(())
-    }
-
     pub(super) fn request_remote_mining_stop(&mut self) {
         if let Some(r) = self.remote.as_mut() {
             r.stop_mining = true;
@@ -9074,6 +9046,7 @@ impl Game<'_> {
         input.tick(&mut RemoteInputWorld(self), attack, use_item);
         self.remote_queued_keys();
         if let Some(r) = self.remote.as_mut() {
+            input.merge_queued(std::mem::take(&mut r.input));
             r.input = input;
         }
     }

@@ -89,6 +89,13 @@ horizon-client game::native_recipes::tests::a_synced_vanilla_recipe_has_one_book
 horizon-client game::native_recipes::tests::synced_vanilla_recipes_keep_their_book_ids lib daily resources
 horizon-client game::native_server::network_settings_tests::server_settings_follow_the_network_config lib daily slow
 horizon-client game::natural_spawning::tests::spawn_candidates_match_the_uncached_union_while_players_move lib daily slow
+horizon-client game::remote::interaction_event_tests::mapping_press_tests::a_callback_click_survives_until_the_next_tick lib daily resources
+horizon-client game::remote::interaction_event_tests::mapping_press_tests::a_screen_drops_the_clicks_and_holds_nothing lib daily resources
+horizon-client game::remote::interaction_event_tests::mapping_press_tests::clicking_attack_on_a_block_starts_the_break_and_punches lib daily resources
+horizon-client game::remote::interaction_event_tests::mapping_press_tests::clicking_attack_on_nothing_punches_and_waits_out_the_miss_cooldown lib daily resources
+horizon-client game::remote::interaction_event_tests::mapping_press_tests::holding_use_draws_a_bow_once_and_letting_go_releases_it lib daily resources
+horizon-client game::remote::interaction_event_tests::mapping_press_tests::opening_a_screen_releases_mod_holds lib daily resources
+horizon-client game::remote::interaction_event_tests::mapping_press_tests::the_host_presses_by_name_and_refuses_the_others lib daily resources
 horizon-client game::screen_render_phase_tests::chest_render_phases_cover_panel_but_preserve_items_tooltips_and_carried_stack lib daily resources # HORIZON_TEST_RESOURCES and software Vulkan required.
 horizon-client game::server_reload::tests::datapack_publication_tests::data_map_first_open_uses_staged_membership lib daily game-boot
 horizon-client game::server_reload::tests::datapack_publication_tests::data_map_later_enabled_layer_uses_staged_membership lib daily game-boot
