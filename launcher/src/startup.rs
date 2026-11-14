@@ -4,6 +4,8 @@ use super::*;
 // dispatch, on an explicitly sized stack instead of constructing startup frames there.
 // GPUI initializes OLE, creates windows and pumps their messages on this same thread:
 // no COM or GUI state is constructed on the entry thread that waits for it.
+// 16 MiB is a generous reserve, sixteen times the 1 MiB default that the startup regression
+// test constrains the entry thread to; Windows commits a thread stack only as it grows.
 #[cfg(windows)]
 pub(super) fn run() {
     let launcher = std::thread::Builder::new()

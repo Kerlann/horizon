@@ -109,16 +109,19 @@ fn one_mib_entry_stack(source: &Path, directory: &Path) -> PathBuf {
     file.seek(SeekFrom::Start(pe + 24)).unwrap();
     let mut magic = [0; 2];
     file.read_exact(&mut magic).unwrap();
-    file.seek(SeekFrom::Start(pe + 24 + 72)).unwrap();
-    match u16::from_le_bytes(magic) {
-        0x10b => {
-            file.write_all(&1_048_576_u32.to_le_bytes()).unwrap();
-        }
-        0x20b => {
-            file.write_all(&1_048_576_u64.to_le_bytes()).unwrap();
-        }
+    let field = pe + 24 + 72;
+    let reserve: Vec<u8> = match u16::from_le_bytes(magic) {
+        0x10b => 1_048_576_u32.to_le_bytes().to_vec(),
+        0x20b => 1_048_576_u64.to_le_bytes().to_vec(),
         magic => panic!("unsupported PE optional header: {magic:#x}"),
-    }
+    };
+    // Refuse a truncated file: a write past its end would extend the copy, not patch it.
+    assert!(
+        field + reserve.len() as u64 <= file.metadata().unwrap().len(),
+        "PE optional header is shorter than its stack reserve field"
+    );
+    file.seek(SeekFrom::Start(field)).unwrap();
+    file.write_all(&reserve).unwrap();
     executable
 }
 
