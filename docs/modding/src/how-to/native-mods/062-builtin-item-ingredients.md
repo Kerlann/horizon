@@ -144,3 +144,12 @@ The scalar enum decoders accept exact persistent names only: rabbit uses
 horse uses `white`, `creamy`, `chestnut`, `brown`, `black`, `gray`, `dark_brown`;
 llama uses `creamy`, `white`, `brown`, `gray`.
 Numeric ordinals, namespaced names, case variants and null are refused.
+
+<!-- Member #4222 decoder documentation -->
+`item_name`, `block_entity_data`, `fox/variant`, and `parrot/variant` in the
+`minecraft` namespace.
+`"snow"`; `parrot/variant` accepts `"red_blue"`, `"blue"`, `"green"`,
+`"yellow_blue"`, and `"gray"`. Both reject numeric network ids, case variants
+and namespaced values. Parrot spawn eggs have no prototype `parrot/variant`;
+the mob's default variant does not supply an item component.
+The other 110 registered built-ins use stored-value matching while their shared
