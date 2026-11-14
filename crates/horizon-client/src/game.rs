@@ -7787,22 +7787,14 @@ impl Game<'_> {
                 .rules
                 .bool_at(horizon_client::gamerules::vanilla::ADVANCE_TIME)
             {
-                let t = self.world.day_time;
-                let mut target = t + 24000 - t.rem_euclid(24000);
-                // SleepFinishedTimeEvent: the mods may move the wake-up time,
-                // never before now (`setTimeAddition` refuses a lower one).
-                let mut asked = target;
-                let mut cancel = false;
-                self.native_sleep_finished_time(self.dim.id(), t, &mut asked, &mut cancel);
-                if asked >= t {
-                    target = asked;
-                }
-                // A canceled event leaves the clock alone, so `native_time_skip` is not asked.
-                if !cancel {
+                // SleepFinishedTimeEvent on the level's own clock (game/world/wake_time.rs): None
+                // when a mod canceled, so `native_time_skip` is not asked, or no time fits.
+                if let Some((clock, t, target)) = self.sleep_finished_move() {
+                    let mut cancel = false;
                     self.native_time_skip(self.dim.id(), t, target, "sleep", &mut cancel);
-                }
-                if !cancel {
-                    self.world.day_time = target;
+                    if !cancel {
+                        self.set_command_clock_time(&clock, target);
+                    }
                 }
             }
             // Level.isRaining: the rain level is above 0.2.
@@ -10353,7 +10345,7 @@ impl Game<'_> {
                     self.tick_world_icon();
                     let ticked = Instant::now();
                     let rendered = self.render_and_flip(elapsed)?;
-                    horizon_client::spans::time("pr_cursor", || self.apply_cursor_icon());
+                    self.native_frame_end()?;
                     // The frame's spans, taken every frame they are recorded so they never
                     // pile up: the slow-frame line's.
                     let frame_spans = if horizon_client::spans::recording_here() {

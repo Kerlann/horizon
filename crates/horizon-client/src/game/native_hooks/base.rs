@@ -2774,28 +2774,23 @@ impl Game<'_> {
         self.fire_lightning_strike(player, pos, cause, cancel);
     }
 
-    /// Enough players have slept through the night in level `dimension`
-    /// and the clock is about to move to the morning (NeoForge's
-    /// `SleepFinishedTimeEvent`, vanilla's `ServerLevel.tick` when it moves
-    /// the clock to `wake_up_from_sleep`): `new_time` comes in as the next
-    /// morning's day time and may be changed to wake everyone at another
-    /// time. A time before `current` (the day time now) is refused, as
-    /// `setTimeAddition` refuses one, and the morning stays. Unlike
-    /// NeoForge, which refuses a bad value as it is set, the check runs once
-    /// after every mod, so a later mod sees the value an earlier one left.
-    /// On the server, only when the `advance_time` rule is on;
-    /// `native_time_skip` then hears the jump to the time chosen here and
-    /// may still cancel it. The players wake and the weather resets as
-    /// usual either way. Set `canceled` and the clock is left where it is, as
-    /// NeoForge's cancel leaves it: `native_time_skip` is not asked either.
+    /// Enough players slept through the night in level `dimension` and the clock is about to
+    /// move to the morning (NeoForge's `SleepFinishedTimeEvent`). `adjustment` comes in as
+    /// `Marker(minecraft:wake_up_from_sleep)` and a mod may set `Absolute`, `Relative` (from
+    /// `current`) or another marker; `new_time` is the vanilla morning, read only (contract 2: in
+    /// version 1 a mod wrote it). Times are the level's own clock's; resolved once after every mod
+    /// (`game/world/wake_time.rs`): a time before `current` or past `i64::MAX`, or a marker the
+    /// clock lacks, moves to the morning. `native_time_skip` then hears the jump and may cancel
+    /// it. Set `canceled` and the clock stays, and `native_time_skip` is not asked.
     pub(in crate::game) fn native_sleep_finished_time(
         &mut self,
         dimension: &str,
         current: i64,
-        new_time: &mut i64,
+        new_time: i64,
+        adjustment: &mut ClockAdjustment,
         canceled: &mut bool,
     ) {
-        self.fire_sleep_finished_time(dimension, current, new_time, canceled);
+        self.fire_sleep_finished_time(dimension, current, new_time, adjustment, canceled);
     }
 
     /// The overworld clock is about to jump, from sleep or `/time`. Set

@@ -360,6 +360,8 @@ pub(crate) fn install_client_hooks() {
         is_ladder: |context, entity, pos, state, ladder| {
             crate::game::is_ladder(context, entity, pos, state, ladder);
         },
+        makes_open_trapdoor_above_climbable:
+            crate::game::native_trapdoor_ladder::makes_open_trapdoor_above_climbable,
         friction: |context, entity, kind, pos, state, friction| {
             crate::game::native_surface::friction(context, entity, kind, pos, state, friction);
         },
