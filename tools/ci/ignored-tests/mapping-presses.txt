@@ -1,0 +1,6 @@
+# A mod pressing the vanilla gameplay mappings on a server's client (#4176).
+horizon-client game::remote::interaction_event_tests::mapping_press_tests::holding_use_draws_a_bow_once_and_letting_go_releases_it HORIZON_TEST_RESOURCES needs
+horizon-client game::remote::interaction_event_tests::mapping_press_tests::clicking_attack_on_a_block_starts_the_break_and_punches HORIZON_TEST_RESOURCES needs
+horizon-client game::remote::interaction_event_tests::mapping_press_tests::clicking_attack_on_nothing_punches_and_waits_out_the_miss_cooldown HORIZON_TEST_RESOURCES needs
+horizon-client game::remote::interaction_event_tests::mapping_press_tests::a_screen_drops_the_clicks_and_holds_nothing HORIZON_TEST_RESOURCES needs
+horizon-client game::remote::interaction_event_tests::mapping_press_tests::the_host_presses_by_name_and_refuses_the_others HORIZON_TEST_RESOURCES needs
