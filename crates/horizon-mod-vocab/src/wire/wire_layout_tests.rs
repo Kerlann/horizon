@@ -3,7 +3,7 @@ use super::*;
 use crate::*;
 use horizon_core::nbt::{Compound, JavaString};
 
-fn install_layout_resources() {
+pub(super) fn install_layout_resources() {
     let _ = crate::wire::install_resource_access(crate::wire::ResourceAccess {
         intern: |value| {
             if value.len() > crate::wire::MAX_STATIC_STRING_BYTES {

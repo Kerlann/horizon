@@ -357,6 +357,7 @@ mod tests {
     }
 
     fn as_mod<R>(id: &'static str, f: impl FnOnce() -> R) -> R {
+        mod_platform::__private::initialize().unwrap();
         let _call = enter_native_mod(ModCall {
             id,
             hook: "world_load",
