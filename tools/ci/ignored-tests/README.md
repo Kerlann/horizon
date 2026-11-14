@@ -30,3 +30,10 @@ longer runs fails. Its package's shard runs it when that shard builds its target
 every other one; verify-static fails a row no leg runs. `python3 tools/ci/move_to_daily.py apply LIST` writes the
 attribute and the row (its docstring has the list format). The attribute is the source's mark and the row is the
 daily run's list of what must run: an attribute without a row in a package no shard covers would run nowhere.
+
+Tests that assert process-wide save admission isolate themselves, not the whole shard. For example,
+`game::visibility_unwind_tests::visibility_listener_unwind_does_not_block_an_outside_save` uses Game's
+`in_own_process` helper to run its callback, unwind and disk-save assertions in an exact-selected child
+process. It still runs through the normal parallel shard selection, without a failure-policy row or
+special runner selector. Other fixtures' outstanding leases must not be worked around by weakening
+the process-wide `passes_settled` save gate.
