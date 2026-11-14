@@ -6,8 +6,12 @@ use horizon_core::nbt::Tag;
 /// A data map a mod registers and reads, typed (NeoForge's `DataMapType<R, T>`): its id, the
 /// registry its entries are in (through [`DataMap::Entry`]), and how a value decodes.
 ///
-/// Register it in `data_map_types` with [`DataMap::ty`], then read an entry's value with
-/// [`ItemKey::data`] or [`BlockKey::data`]. A value arrives as the NBT form of the JSON a file
+/// Register a mod-defined map in `data_map_types` with [`DataMap::ty`], then read it with
+/// [`ItemKey::data`] or [`BlockKey::data`]. Engine builtins are already registered and expose
+/// canonical codec records as NBT compounds (including Float distances and Int frequencies),
+/// not the input's shorthand JSON. Only item and block query keys are exposed today.
+/// Reads are server-only; the store is shared by native and wasm hosts, not synced to clients.
+/// A mod-defined map's value arrives as the NBT form of the JSON a file
 /// held: a whole number is an `Int`, or a `Long` past `i32`, a fraction a `Double`, a boolean a
 /// `Byte`, an object a `Compound` and an array a `List`. Integers outside signed
 /// 64-bit range and `null` at any nesting depth return [`DataMapError::Undecodable`]

@@ -1,6 +1,7 @@
 //! Decode a whole data-map file before applying any replace, values or removals.
 use serde::Deserialize;
-use serde_json::Value;
+use serde::de::DeserializeOwned;
+use serde_json::{Value, value::RawValue};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 type Tags = HashMap<String, HashSet<String>>;
@@ -29,20 +30,9 @@ enum Key {
 
 /// A resource location decoded at the file/value boundary.
 pub(super) fn resource_id(raw: &str) -> Result<String, String> {
-    let (namespace, path) = raw.split_once(':').unwrap_or(("minecraft", raw));
-    let valid = |value: &str, slash| {
-        !value.is_empty()
-            && value.chars().all(|c| {
-                c.is_ascii_lowercase()
-                    || c.is_ascii_digit()
-                    || "_.-".contains(c)
-                    || (slash && c == '/')
-            })
-    };
-    if !valid(namespace, false) || !valid(path, true) {
-        return Err(format!("invalid resource location {raw:?}"));
-    }
-    Ok(format!("{namespace}:{path}"))
+    horizon_core::identifier::Identifier::parse(raw)
+        .map(|id| id.to_string())
+        .map_err(|error| format!("invalid resource location {raw:?}: {error}"))
 }
 
 impl Key {
@@ -101,7 +91,7 @@ impl<T: Clone> File<T> {
     }
 }
 
-fn entry_value(raw: &Value) -> Result<&Value, String> {
+pub(super) fn entry_value(raw: &Value) -> Result<&Value, String> {
     if let Some(object) = raw.as_object()
         && let Some(value) = object.get("value")
     {
@@ -128,7 +118,7 @@ fn decode<T>(
         if !conditions.allows_file(&raw, context) {
             continue;
         }
-        if let Some(value) = value(entry_value(&raw)?)? {
+        if let Some(value) = value(&raw)? {
             values.push((key, value));
         }
     }
@@ -152,13 +142,13 @@ fn decode<T>(
 /// Pack-order loading shared by raw mod maps and typed builtin codecs. Each
 /// value decodes before target membership, so even an unknown target cannot
 /// conceal a bad value and allow the rest of that file to apply.
-pub(super) fn load<T: Clone>(
+fn merge_versions<T: Clone>(
     id: &str,
     directory: &str,
     mut map: BTreeMap<String, T>,
     overlay: &horizon_world::loot::PackOverlay<'_>,
     tags: &Tags,
-    value: impl Fn(&Value) -> Result<Option<T>, String>,
+    prepare: impl Fn(&[u8], &str) -> Result<Option<File<T>>, String>,
     known: impl Fn(&str) -> bool,
 ) -> (BTreeMap<String, T>, bool) {
     let (namespace, path) = id.split_once(':').expect("validated data-map type ID");
@@ -166,13 +156,7 @@ pub(super) fn load<T: Clone>(
     let mut applied = false;
     if let Some((_, versions)) = overlay.files.iter().find(|(key, _)| *key == wanted) {
         for bytes in versions {
-            let file = serde_json::from_slice::<Value>(bytes).map_err(|error| error.to_string());
-            let prepared = file.and_then(|file| {
-                if !overlay.conditions.allows_file(&file, &wanted) {
-                    return Ok(None);
-                }
-                decode(file, overlay.conditions, &wanted, &value).map(Some)
-            });
+            let prepared = prepare(bytes, &wanted);
             match prepared {
                 Ok(Some(file)) => {
                     file.apply(&mut map, tags, &known, &wanted);
@@ -184,6 +168,147 @@ pub(super) fn load<T: Clone>(
         }
     }
     (map, applied)
+}
+
+pub(super) fn load<T: Clone>(
+    id: &str,
+    directory: &str,
+    map: BTreeMap<String, T>,
+    overlay: &horizon_world::loot::PackOverlay<'_>,
+    tags: &Tags,
+    value: impl Fn(&Value) -> Result<Option<T>, String>,
+    known: impl Fn(&str) -> bool,
+) -> (BTreeMap<String, T>, bool) {
+    merge_versions(
+        id,
+        directory,
+        map,
+        overlay,
+        tags,
+        |bytes, context| {
+            let file = serde_json::from_slice::<Value>(bytes).map_err(|error| error.to_string())?;
+            if !overlay.conditions.allows_file(&file, context) {
+                return Ok(None);
+            }
+            decode(file, overlay.conditions, context, &value).map(Some)
+        },
+        known,
+    )
+}
+
+type RawObject = BTreeMap<String, Box<RawValue>>;
+pub(super) struct NumberCodec<F> {
+    pub field: &'static str,
+    pub decode: F,
+}
+fn read_field<T: DeserializeOwned + Default>(
+    object: &mut RawObject,
+    field: &str,
+) -> Result<T, String> {
+    object
+        .remove(field)
+        .map(|raw| serde_json::from_str(raw.get()).map_err(|error| error.to_string()))
+        .transpose()
+        .map(|value| value.unwrap_or_default())
+}
+fn allows_raw(
+    object: &mut RawObject,
+    conditions: &horizon_world::conditions::LoadConditions,
+    context: &str,
+) -> Result<bool, String> {
+    let Some(raw) = object.remove("neoforge:conditions") else {
+        return Ok(true);
+    };
+    let value: Value = serde_json::from_str(raw.get()).map_err(|error| error.to_string())?;
+    Ok(conditions.allows_file(&serde_json::json!({"neoforge:conditions": value}), context))
+}
+fn scalar(raw: Box<RawValue>, field: &str) -> Result<Box<RawValue>, String> {
+    if !raw.get().trim_start().starts_with('{') {
+        return Ok(raw);
+    }
+    let mut object: RawObject =
+        serde_json::from_str(raw.get()).map_err(|error| error.to_string())?;
+    object
+        .remove(field)
+        .ok_or_else(|| format!("missing {field}"))
+}
+/// Only the numeric codecs use RawValue. Their decimal text never takes an
+/// f64 round trip, including ignored extra fields and conditional entries.
+pub(super) fn load_numeric<T: Clone>(
+    id: &str,
+    directory: &str,
+    map: BTreeMap<String, T>,
+    overlay: &horizon_world::loot::PackOverlay<'_>,
+    tags: &Tags,
+    codec: NumberCodec<impl Fn(&RawValue) -> Result<T, String>>,
+    known: impl Fn(&str) -> bool,
+) -> (BTreeMap<String, T>, bool) {
+    merge_versions(
+        id,
+        directory,
+        map,
+        overlay,
+        tags,
+        |bytes, context| {
+            let mut object: RawObject =
+                serde_json::from_slice(bytes).map_err(|error| error.to_string())?;
+            if !allows_raw(&mut object, overlay.conditions, context)? {
+                return Ok(None);
+            }
+            let replace = read_field(&mut object, "replace")?;
+            let entries: RawObject = read_field(&mut object, "values")?;
+            let removals: Vec<Removal> = read_field(&mut object, "remove")?;
+            let mut values = Vec::new();
+            for (key, raw) in entries {
+                let key = Key::decode(&key)?;
+                let payload = if raw.get().trim_start().starts_with('{') {
+                    let mut entry: RawObject =
+                        serde_json::from_str(raw.get()).map_err(|error| error.to_string())?;
+                    if !allows_raw(&mut entry, overlay.conditions, context)? {
+                        continue;
+                    }
+                    if let Some(value) = entry.remove("value") {
+                        let _: bool = read_field(&mut entry, "replace")?;
+                        scalar(value, codec.field)?
+                    } else {
+                        entry
+                            .remove(codec.field)
+                            .ok_or_else(|| format!("missing {}", codec.field))?
+                    }
+                } else {
+                    raw
+                };
+                values.push((key, (codec.decode)(&payload)?));
+            }
+            let remove = removals
+                .into_iter()
+                .map(|removal| {
+                    let key = match removal {
+                        Removal::Id(key) | Removal::Object { key } => key,
+                    };
+                    Key::decode(&key)
+                })
+                .collect::<Result<_, _>>()?;
+            Ok(Some(File {
+                replace,
+                values,
+                remove,
+            }))
+        },
+        known,
+    )
+}
+
+fn raw_value(raw: &Value) -> Result<Option<Value>, String> {
+    // Raw mod-defined schemas can themselves contain a `value` field. Keep
+    // their existing explicit wrapper recognition rather than guessing a codec.
+    let wrapper = raw.as_object().is_some_and(|object| {
+        object
+            .keys()
+            .all(|key| matches!(key.as_str(), "value" | "replace" | "neoforge:conditions"))
+    });
+    let value = if wrapper { entry_value(raw)? } else { raw };
+    Ok((!value.is_null()).then(|| value.clone()))
 }
 
 pub(super) fn apply_files(
@@ -199,29 +324,10 @@ pub(super) fn apply_files(
         std::mem::take(map),
         overlay,
         tags,
-        |value| Ok((!value.is_null()).then(|| value.clone())),
+        raw_value,
         |_| true,
     );
     *map = loaded;
-}
-
-pub(crate) fn merge_builtin(
-    id: &str,
-    directory: &str,
-    base: impl FnOnce() -> BTreeMap<String, Value>,
-    overlay: &horizon_world::loot::PackOverlay<'_>,
-    tags: &Tags,
-) -> Option<BTreeMap<String, Value>> {
-    let (map, applied) = load(
-        id,
-        directory,
-        base(),
-        overlay,
-        tags,
-        |value| Ok((!value.is_null()).then(|| value.clone())),
-        |_| true,
-    );
-    applied.then_some(map)
 }
 
 #[cfg(test)]
@@ -230,7 +336,7 @@ pub(super) fn apply_file(map: &mut BTreeMap<String, Value>, file: &Value, tags: 
         file.clone(),
         horizon_world::loot::PackOverlay::NONE.conditions,
         "test map",
-        |value| Ok((!value.is_null()).then(|| value.clone())),
+        raw_value,
     ) {
         Ok(file) => {
             file.apply(map, tags, |_| true, "test map");

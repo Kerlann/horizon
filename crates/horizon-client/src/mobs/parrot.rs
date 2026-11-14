@@ -111,12 +111,12 @@ fn imitate_nearby_mobs(
         return;
     }
     let area = m.bounds().inflate(Vec3::new(20.0, 20.0, 20.0));
-    let maps = crate::neoforge_mob_maps::current();
-    let imitable = |s: Species| maps.parrot_imitation(s).is_some();
+    let maps = w.mob_maps;
+    let imitable = |id: &str| maps.parrot_imitation(id).is_some();
     let mobs: Vec<_> = w
         .others
         .iter()
-        .filter(|s| s.alive && imitable(s.species) && s.bounds.intersects(area))
+        .filter(|s| s.alive && imitable(&s.kind.id) && s.bounds.intersects(area))
         .collect();
     if mobs.is_empty() {
         return;
@@ -125,7 +125,10 @@ fn imitate_nearby_mobs(
     if mob.silent {
         return;
     }
-    if let Some(sound) = maps.parrot_imitation(mob.species).filter(|s| !s.is_empty()) {
+    if let Some(sound) = maps
+        .parrot_imitation(&mob.kind.id)
+        .filter(|s| !s.is_empty())
+    {
         let at = [m.position.x, m.position.y, m.position.z];
         events.push(MobEvent::Sound(sound, at, 0.7, pitch(random)));
     }
@@ -139,13 +142,13 @@ fn imitate_nearby_mobs(
 /// from in vanilla's order. Returns the sound, its volume and its pitch; the
 /// happy ghast's imitation is silent (`""`).
 pub fn shoulder_sound(
+    maps: &crate::neoforge_mob_maps::NeoForgeMobMaps,
     random: &mut LegacyRandom,
     player_alive: bool,
     player_silent: bool,
     peaceful: bool,
-    nearby: &[(Species, bool)],
+    nearby: &[(&str, bool)],
 ) -> Option<(&'static str, f32, f32)> {
-    let maps = crate::neoforge_mob_maps::current();
     if player_alive && !player_silent && random.next_int_bound(2).unwrap_or(1) == 0 {
         let candidates: Vec<_> = nearby
             .iter()
@@ -161,7 +164,7 @@ pub fn shoulder_sound(
         }
     }
     let sound = if !peaceful && random.next_int_bound(1000).unwrap_or(1) == 0 {
-        random_imitation(&maps, random)
+        random_imitation(maps, random)
     } else {
         "entity.parrot.ambient"
     };
@@ -172,7 +175,7 @@ pub fn shoulder_sound(
 /// imitable mob instead of the parrot's own.
 pub fn ambient(m: &mut Mob, w: &MobWorld) -> &'static str {
     if w.difficulty.effective > 0.0 && m.random.next_int_bound(1000).unwrap_or(1) == 0 {
-        return random_imitation(&crate::neoforge_mob_maps::current(), &mut m.random);
+        return random_imitation(w.mob_maps, &mut m.random);
     }
     "entity.parrot.ambient"
 }
@@ -423,11 +426,32 @@ mod tests {
         assert!((m.ai.steps.next_flap - 2.3).abs() < 1.0e-6);
     }
 
+    #[test]
+    fn vanilla_shoulder_rng_checkpoint_without_data_files() {
+        // Java Random's specified 48-bit LCG, seed 4096: coin, candidate,
+        // two nextFloat calls for Parrot.getPitch, then nextInt(1_000_000).
+        // Literal checkpoint, independent of this helper's implementation.
+        let mut random = LegacyRandom::new(4096);
+        let (sound, volume, pitch) = shoulder_sound(
+            crate::neoforge_mob_maps::NeoForgeMobMaps::vanilla(),
+            &mut random,
+            true,
+            false,
+            true,
+            &[("minecraft:zombie", false)],
+        )
+        .unwrap();
+        assert_eq!((sound, volume), ("entity.parrot.imitate.zombie", 0.7));
+        assert_eq!(pitch.to_bits(), 0x3f8b_df3a);
+        assert_eq!(random.next_int_bound(1_000_000), Some(475_581));
+    }
+
     /// `ServerPlayer.playShoulderEntityAmbientSound`: with a mob to imitate
     /// and a coin flip won, the mob's voice at 0.7; otherwise the parrot's own.
     #[test]
     fn a_shoulder_parrot_imitates_or_chirps() {
-        let nearby = [(Species::Zombie, false)];
+        let maps = crate::neoforge_mob_maps::NeoForgeMobMaps::vanilla();
+        let nearby = [("minecraft:zombie", false)];
         let mut imitated = 0;
         let mut chirped = 0;
         for n in 0..64_i64 {
@@ -436,7 +460,7 @@ mod tests {
             let flip = probe.next_int_bound(2).unwrap();
             let mut random = LegacyRandom::new(seed);
             let (sound, volume, _) =
-                shoulder_sound(&mut random, true, false, true, &nearby).unwrap();
+                shoulder_sound(maps, &mut random, true, false, true, &nearby).unwrap();
             if flip == 0 {
                 assert_eq!((sound, volume), ("entity.parrot.imitate.zombie", 0.7));
                 imitated += 1;
@@ -448,14 +472,15 @@ mod tests {
         assert!(imitated > 0 && chirped > 0);
         // A silent player (or a dead one) imitates nothing and only chirps.
         let mut random = LegacyRandom::new(1);
-        let (sound, volume, _) = shoulder_sound(&mut random, true, true, true, &nearby).unwrap();
+        let (sound, volume, _) =
+            shoulder_sound(maps, &mut random, true, true, true, &nearby).unwrap();
         assert_eq!((sound, volume), ("entity.parrot.ambient", 1.0));
         // The happy ghast's imitation is silent.
-        let ghast = [(Species::HappyGhast, false)];
+        let ghast = [("minecraft:happy_ghast", false)];
         let silent = (0..64_i64).filter(|&n| {
             let seed = n.wrapping_mul(0x9E37_79B9_7F4A_7C15_u64 as i64);
             let mut r = LegacyRandom::new(seed);
-            shoulder_sound(&mut r, true, false, true, &ghast).is_none()
+            shoulder_sound(maps, &mut r, true, false, true, &ghast).is_none()
         });
         assert!(silent.count() > 0);
     }

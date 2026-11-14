@@ -1,29 +1,77 @@
-//! NeoForge's built-in mob, villager and game event data maps
-//! (`NeoForgeDataMaps`): what a world's data packs make of vanilla's tables of
-//! villager scare distances, parrot imitations, biome villager types, hero
-//! gifts, vibration frequencies and the items farmers compost. NeoForge ships
-//! vanilla's tables as these maps' data: [`vanilla_layer`] is that lowest
-//! layer, which the server's data load merges the packs' files over. A map no
-//! pack has a file for stays none, and its readers keep vanilla's table.
-//!
-//! Each server data load (a world's open, `/reload`) installs one set
-//! ([`install`]), read by the server's mobs and sculk sensors ([`current`]).
+//! Immutable, per-world built-in data maps. File codecs run before installation;
+//! simulation readers use exact registry identities and never parse JSON or lock
+//! a process-global current world. The common store owns each generation.
 use crate::mobs::{Species, parrot, render::VILLAGER_TYPES, species};
 use serde_json::{Value, json};
-use std::collections::{BTreeMap, HashMap, HashSet};
-use std::sync::{Arc, LazyLock, RwLock};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
+use std::sync::{Arc, LazyLock};
 
-/// The maps, by id, with the folder of their registry
-/// (`data/<ns>/data_maps/<folder>/<path>.json`).
-pub const MAPS: [(&str, &str); 6] = [
-    ("neoforge:acceptable_villager_distances", "entity_type"),
-    ("neoforge:parrot_imitations", "entity_type"),
-    ("neoforge:villager_types", "worldgen/biome"),
-    ("neoforge:raid_hero_gifts", "villager_profession"),
-    ("neoforge:vibration_frequencies", "game_event"),
-    ("neoforge:villager_compostables", "item"),
+#[derive(Clone, Copy, Debug)]
+pub enum Kind {
+    VillagerDistances,
+    ParrotImitations,
+    VillagerTypes,
+    RaidHeroGifts,
+    VibrationFrequencies,
+    VillagerCompostables,
+}
+impl Kind {
+    pub const fn field(self) -> &'static str {
+        match self {
+            Self::VillagerDistances => "acceptable_villager_distance",
+            Self::ParrotImitations => "sound",
+            Self::VillagerTypes => "villager_type",
+            Self::RaidHeroGifts => "loot_table",
+            Self::VibrationFrequencies => "frequency",
+            Self::VillagerCompostables => "can_villager_compost",
+        }
+    }
+}
+#[derive(Clone, Copy, Debug)]
+pub struct BuiltinMap {
+    pub id: &'static str,
+    pub directory: &'static str,
+    pub registry: &'static str,
+    pub kind: Kind,
+}
+pub const MAPS: [BuiltinMap; 6] = [
+    BuiltinMap {
+        id: "neoforge:acceptable_villager_distances",
+        directory: "entity_type",
+        registry: "minecraft:entity_type",
+        kind: Kind::VillagerDistances,
+    },
+    BuiltinMap {
+        id: "neoforge:parrot_imitations",
+        directory: "entity_type",
+        registry: "minecraft:entity_type",
+        kind: Kind::ParrotImitations,
+    },
+    BuiltinMap {
+        id: "neoforge:villager_types",
+        directory: "worldgen/biome",
+        registry: "minecraft:worldgen/biome",
+        kind: Kind::VillagerTypes,
+    },
+    BuiltinMap {
+        id: "neoforge:raid_hero_gifts",
+        directory: "villager_profession",
+        registry: "minecraft:villager_profession",
+        kind: Kind::RaidHeroGifts,
+    },
+    BuiltinMap {
+        id: "neoforge:vibration_frequencies",
+        directory: "game_event",
+        registry: "minecraft:game_event",
+        kind: Kind::VibrationFrequencies,
+    },
+    BuiltinMap {
+        id: "neoforge:villager_compostables",
+        directory: "item",
+        registry: "minecraft:item",
+        kind: Kind::VillagerCompostables,
+    },
 ];
-
 /// The professions with a hero gift (`GiveGiftToHero.GIFTS`).
 const GIFT_PROFESSIONS: [&str; 13] = [
     "armorer",
@@ -62,37 +110,10 @@ pub fn vanilla_villager_distance(s: Species) -> Option<f32> {
     })
 }
 
-/// The maps a server data load gave; a none map keeps vanilla's table.
-#[derive(Debug, Default)]
-pub struct NeoForgeMobMaps {
-    /// `neoforge:acceptable_villager_distances`, by `Species as usize`.
-    villager_distances: Option<Vec<Option<f32>>>,
-    /// `neoforge:parrot_imitations`.
-    parrot_imitations: Option<ParrotImitations>,
-    /// `neoforge:villager_types`: biome id to index into `VILLAGER_TYPES`.
-    villager_types: Option<HashMap<String, u8>>,
-    /// `neoforge:raid_hero_gifts`: profession id to loot table.
-    hero_gifts: Option<HashMap<String, String>>,
-    /// `neoforge:vibration_frequencies`: game event id to frequency.
-    vibration_frequencies: Option<HashMap<String, i32>>,
-    /// `neoforge:villager_compostables`: the items farmers compost.
-    villager_compostables: Option<HashSet<String>>,
+/// Canonical Minecraft ids may be stored by their local name internally.
+fn local_id(id: &str) -> &str {
+    id.strip_prefix("minecraft:").unwrap_or(id)
 }
-
-#[derive(Debug, Default)]
-struct ParrotImitations {
-    /// By `Species as usize`: the sound (`""` silent).
-    by_species: Vec<Option<&'static str>>,
-    /// Every entry's sound, in id order: what `getAmbient`'s rare draw picks among.
-    sounds: Vec<&'static str>,
-}
-
-/// A value's `name` field, or the bare value NeoForge's codecs also take.
-fn field<'a>(value: &'a Value, name: &str) -> &'a Value {
-    value.get(name).unwrap_or(value)
-}
-
-/// `minecraft:` for an id written without a namespace.
 fn full_id(id: &str) -> String {
     if id.contains(':') {
         id.to_owned()
@@ -100,48 +121,123 @@ fn full_id(id: &str) -> String {
         format!("minecraft:{id}")
     }
 }
-
-/// A sound event id as the mobs' sounds name it (vanilla's without `minecraft:`;
-/// [`EMPTY_SOUND`] silent), interned.
-fn mob_sound(id: &str) -> &'static str {
-    if id == EMPTY_SOUND {
-        return "";
-    }
-    crate::mobs::entity_sounds::intern_full_id(id.strip_prefix("minecraft:").unwrap_or(id))
-}
-
-/// Each vanilla species' value in an entity type map, by `Species as usize`.
-fn by_species<T: Copy>(
-    values: &BTreeMap<String, Value>,
-    decode: impl Fn(&Value) -> Option<T>,
-) -> Vec<Option<T>> {
-    let defs = species::ALL;
-    let len = defs
-        .iter()
-        .map(|d| d.species as usize + 1)
-        .max()
-        .unwrap_or(0);
-    let mut table = vec![None; len];
-    for d in defs {
-        table[d.species as usize] = values.get(species::vanilla_id(d.species)).and_then(&decode);
-    }
-    table
-}
-
-/// Every vanilla species with its entity type id.
 fn vanilla_species() -> impl Iterator<Item = (Species, String)> {
     species::ALL
         .iter()
         .map(|d| (d.species, species::vanilla_id(d.species).to_owned()))
 }
-
+fn field<'a>(value: &'a Value, name: &str) -> &'a Value {
+    value.get(name).unwrap_or(value)
+}
+fn resource(value: &Value, name: &str) -> Result<String, String> {
+    let raw = field(value, name)
+        .as_str()
+        .ok_or_else(|| format!("{name} must be an identifier"))?;
+    horizon_core::identifier::Identifier::parse(raw)
+        .map(|id| id.to_string())
+        .map_err(|e| format!("{name}: {e}"))
+}
+fn number(value: &serde_json::value::RawValue) -> Result<&str, String> {
+    let text = value.get().trim();
+    // RawValue already guarantees JSON syntax; only its value kind is unknown.
+    if matches!(text.as_bytes().first(), Some(b'-' | b'0'..=b'9')) {
+        Ok(text)
+    } else {
+        Err("value must be numeric".into())
+    }
+}
+/// Parse the original decimal straight to f32, without an f64 intermediate.
+pub fn decode_distance(value: &serde_json::value::RawValue) -> Result<f32, String> {
+    number(value)?
+        .parse()
+        .map_err(|error| format!("invalid distance: {error}"))
+}
+/// Registry lookup is part of the sound codec, before file installation.
+pub fn decode_sound(value: &Value, known: impl Fn(&str) -> bool) -> Result<&'static str, String> {
+    let id = resource(value, "sound")?;
+    if !known(&id) {
+        return Err(format!("unknown sound {id}"));
+    }
+    Ok(if id == EMPTY_SOUND {
+        ""
+    } else {
+        crate::mobs::entity_sounds::intern_full_id(local_id(&id))
+    })
+}
+pub fn decode_villager_type(value: &Value) -> Result<u8, String> {
+    let id = resource(value, "villager_type")?;
+    VILLAGER_TYPES
+        .iter()
+        .position(|name| id == full_id(name))
+        .map(|i| i as u8)
+        .ok_or_else(|| format!("unknown villager type {id}"))
+}
+pub fn decode_gift(value: &Value) -> Result<String, String> {
+    resource(value, "loot_table")
+}
+/// Gson's exact decimal intValue: truncate, retain the low 32 bits, then
+/// apply the codec's range. Work is bounded by input length, not its exponent.
+pub fn decode_frequency(value: &serde_json::value::RawValue) -> Result<i32, String> {
+    let text = number(value)?;
+    let negative = text.starts_with('-');
+    let unsigned = text.strip_prefix('-').unwrap_or(text);
+    let (mantissa, exponent) = unsigned.split_once(['e', 'E']).unwrap_or((unsigned, "0"));
+    let exponent_negative = exponent.starts_with('-');
+    let exponent = exponent
+        .trim_start_matches(['+', '-'])
+        .bytes()
+        .fold(0i128, |n, digit| {
+            n.saturating_mul(10)
+                .saturating_add(i128::from(digit - b'0'))
+        });
+    let exponent = if exponent_negative {
+        exponent.saturating_neg()
+    } else {
+        exponent
+    };
+    let before = mantissa.find('.').unwrap_or(mantissa.len());
+    let count = mantissa.bytes().filter(|byte| *byte != b'.').count() as i128;
+    let point = (before as i128).saturating_add(exponent);
+    let mut bits = 0u32;
+    if point > 0 && point < count + 32 {
+        for digit in mantissa
+            .bytes()
+            .filter(|byte| *byte != b'.')
+            .take(point.min(count) as usize)
+        {
+            bits = bits.wrapping_mul(10).wrapping_add(u32::from(digit - b'0'));
+        }
+        for _ in 0..(point - count).max(0) {
+            bits = bits.wrapping_mul(10);
+        }
+    }
+    if negative {
+        bits = bits.wrapping_neg();
+    }
+    let frequency = bits as i32;
+    if (1..=15).contains(&frequency) {
+        Ok(frequency)
+    } else {
+        Err("frequency must truncate and wrap to 1..15".into())
+    }
+}
+pub fn decode_compostable(value: &Value) -> Result<bool, String> {
+    field(value, "can_villager_compost")
+        .as_bool()
+        .ok_or_else(|| "can_villager_compost must be boolean".into())
+}
 /// Vanilla's table as map `id`'s values: the layer the packs' files merge over.
-pub fn vanilla_layer(id: &str) -> BTreeMap<String, Value> {
-    match id {
-        "neoforge:acceptable_villager_distances" => vanilla_species()
-            .filter_map(|(s, id)| Some((id, json!({ "distance": vanilla_villager_distance(s)? }))))
+pub fn vanilla_layer(kind: Kind) -> BTreeMap<String, Value> {
+    match kind {
+        Kind::VillagerDistances => vanilla_species()
+            .filter_map(|(s, id)| {
+                Some((
+                    id,
+                    json!({ "acceptable_villager_distance": vanilla_villager_distance(s)? }),
+                ))
+            })
             .collect(),
-        "neoforge:parrot_imitations" => vanilla_species()
+        Kind::ParrotImitations => vanilla_species()
             .filter_map(|(s, id)| {
                 let sound = parrot::imitation(s)?;
                 let sound = if sound.is_empty() {
@@ -152,21 +248,21 @@ pub fn vanilla_layer(id: &str) -> BTreeMap<String, Value> {
                 Some((id, json!({ "sound": sound })))
             })
             .collect(),
-        "neoforge:villager_types" => crate::mobs::finalize::BIOME_VILLAGER_TYPES
+        Kind::VillagerTypes => crate::mobs::finalize::BIOME_VILLAGER_TYPES
             .iter()
             .map(|(biome, t)| {
                 let kind = VILLAGER_TYPES[*t as usize];
                 (full_id(biome), json!({ "villager_type": full_id(kind) }))
             })
             .collect(),
-        "neoforge:raid_hero_gifts" => GIFT_PROFESSIONS
+        Kind::RaidHeroGifts => GIFT_PROFESSIONS
             .iter()
             .map(|p| {
                 let table = format!("minecraft:gameplay/hero_of_the_village/{p}_gift");
                 (full_id(p), json!({ "loot_table": table }))
             })
             .collect(),
-        "neoforge:vibration_frequencies" => crate::sculk::EVENTS
+        Kind::VibrationFrequencies => crate::sculk::EVENTS
             .iter()
             .filter(|(_, f)| *f > 0)
             .map(|(event, f)| ((*event).to_owned(), *f))
@@ -178,262 +274,210 @@ pub fn vanilla_layer(id: &str) -> BTreeMap<String, Value> {
             )
             .map(|(event, f)| (event, json!({ "frequency": f })))
             .collect(),
-        "neoforge:villager_compostables" => COMPOSTABLES
+        Kind::VillagerCompostables => COMPOSTABLES
             .iter()
             .map(|item| ((*item).to_owned(), json!({ "can_villager_compost": true })))
             .collect(),
-        _ => BTreeMap::new(),
     }
 }
 
-/// The entries of `values` `decode` reads, a bad one left out with a warning.
-fn decoded<T>(
-    map: &str,
-    values: &BTreeMap<String, Value>,
-    decode: impl Fn(&Value) -> Option<T>,
-) -> impl Iterator<Item = (String, T)> {
-    values.iter().filter_map(move |(entry, value)| {
-        let decoded = decode(value);
-        if decoded.is_none() {
-            log::warn!("Horizon: {map} value of {entry} is not one, left out: {value}");
-        }
-        Some((entry.clone(), decoded?))
-    })
+#[derive(Debug, Default)]
+pub struct NeoForgeMobMaps {
+    villager_distances: Option<HashMap<String, f32>>,
+    parrot_imitations: Option<ParrotImitations>,
+    villager_types: Option<HashMap<String, u8>>,
+    hero_gifts: Option<HashMap<String, String>>,
+    vibration_frequencies: Option<HashMap<String, i32>>,
+    villager_compostables: Option<HashMap<String, bool>>,
 }
-
+#[derive(Debug)]
+struct ParrotImitations {
+    by_id: HashMap<String, &'static str>,
+    sounds: Vec<&'static str>,
+}
+fn keyed<T>(values: BTreeMap<String, T>) -> HashMap<String, T> {
+    values
+        .into_iter()
+        .map(|(id, value)| (local_id(&id).to_owned(), value))
+        .collect()
+}
+static VANILLA_DISTANCES: LazyLock<HashMap<String, f32>> = LazyLock::new(|| {
+    vanilla_species()
+        .filter_map(|(species, id)| {
+            Some((
+                local_id(&id).to_owned(),
+                vanilla_villager_distance(species)?,
+            ))
+        })
+        .collect()
+});
+static VANILLA_IMITATIONS: LazyLock<HashMap<String, &'static str>> = LazyLock::new(|| {
+    vanilla_species()
+        .filter_map(|(species, id)| Some((local_id(&id).to_owned(), parrot::imitation(species)?)))
+        .collect()
+});
+static VANILLA: LazyLock<Arc<NeoForgeMobMaps>> = LazyLock::new(Default::default);
 impl NeoForgeMobMaps {
-    /// Map `id`'s merged values (from [`MAPS`]); an unknown id is ignored.
-    pub fn set(&mut self, id: &str, values: &BTreeMap<String, Value>) {
-        match id {
-            "neoforge:acceptable_villager_distances" => {
-                self.villager_distances = Some(by_species(values, |v| {
-                    field(v, "distance").as_f64().map(|d| d as f32)
-                }));
-            }
-            "neoforge:parrot_imitations" => {
-                let sound = |v: &Value| field(v, "sound").as_str().map(mob_sound);
-                self.parrot_imitations = Some(ParrotImitations {
-                    by_species: by_species(values, sound),
-                    sounds: decoded(id, values, sound).map(|(_, s)| s).collect(),
-                });
-            }
-            "neoforge:villager_types" => {
-                let kind = |v: &Value| {
-                    let name = field(v, "villager_type").as_str()?;
-                    let name = name.strip_prefix("minecraft:").unwrap_or(name);
-                    // Horizon's villagers know vanilla's seven types.
-                    VILLAGER_TYPES
-                        .iter()
-                        .position(|t| *t == name)
-                        .map(|i| i as u8)
-                };
-                self.villager_types = Some(decoded(id, values, kind).collect());
-            }
-            "neoforge:raid_hero_gifts" => {
-                let table = |v: &Value| field(v, "loot_table").as_str().map(full_id);
-                self.hero_gifts = Some(decoded(id, values, table).collect());
-            }
-            "neoforge:vibration_frequencies" => {
-                let frequency = |v: &Value| {
-                    let f = field(v, "frequency").as_i64()?;
-                    (1..=15).contains(&f).then_some(f as i32)
-                };
-                self.vibration_frequencies = Some(decoded(id, values, frequency).collect());
-            }
-            "neoforge:villager_compostables" => {
-                let compost = |v: &Value| field(v, "can_villager_compost").as_bool();
-                self.villager_compostables = Some(
-                    decoded(id, values, compost)
-                        .filter_map(|(item, yes)| yes.then_some(item))
-                        .collect(),
-                );
-            }
-            _ => {}
-        }
+    /// Immutable no-file snapshot, never replaced by another world's load.
+    pub fn vanilla() -> &'static Arc<Self> {
+        &VANILLA
     }
-
-    /// How close a hostile of species `s` may come before a villager panics
-    /// (`VillagerHostilesSensor.isClose`); none for a species that isn't one.
-    pub fn villager_distance(&self, s: Species) -> Option<f32> {
-        match &self.villager_distances {
-            Some(table) => table.get(s as usize).copied().flatten(),
-            None => vanilla_villager_distance(s),
-        }
+    pub fn set_distances(&mut self, values: BTreeMap<String, f32>) {
+        self.villager_distances = Some(keyed(values));
     }
-
-    /// The sound a parrot imitates species `s` with (`""` silent); none for
-    /// a species it doesn't imitate.
-    pub fn parrot_imitation(&self, s: Species) -> Option<&'static str> {
+    pub fn set_parrots(&mut self, values: BTreeMap<String, &'static str>) {
+        // Membership is vanilla union map keys. A removed vanilla entry uses
+        // the parrot's own ambient sound, including in the cached rare draw.
+        let union: BTreeSet<String> = VANILLA_IMITATIONS
+            .keys()
+            .map(|id| full_id(id))
+            .chain(values.keys().cloned())
+            .collect();
+        let by_id = keyed(values);
+        let sounds = union
+            .iter()
+            .map(|id| {
+                by_id
+                    .get(local_id(id))
+                    .copied()
+                    .unwrap_or("entity.parrot.ambient")
+            })
+            .collect();
+        self.parrot_imitations = Some(ParrotImitations { by_id, sounds });
+    }
+    pub fn set_villager_types(&mut self, values: BTreeMap<String, u8>) {
+        self.villager_types = Some(keyed(values));
+    }
+    pub fn set_gifts(&mut self, values: BTreeMap<String, String>) {
+        self.hero_gifts = Some(keyed(values));
+    }
+    pub fn set_frequencies(&mut self, values: BTreeMap<String, i32>) {
+        self.vibration_frequencies = Some(keyed(values));
+    }
+    pub fn set_compostables(&mut self, values: BTreeMap<String, bool>) {
+        self.villager_compostables = Some(keyed(values));
+    }
+    /// Exact entity type, never its template/species. Removed vanilla entries
+    /// retain vanilla distance; absent custom types are not hostile.
+    pub fn villager_distance(&self, id: &str) -> Option<f32> {
+        let id = local_id(id);
+        self.villager_distances
+            .as_ref()
+            .and_then(|table| table.get(id))
+            .or_else(|| VANILLA_DISTANCES.get(id))
+            .copied()
+    }
+    pub fn parrot_imitation(&self, id: &str) -> Option<&'static str> {
+        let id = local_id(id);
         match &self.parrot_imitations {
-            Some(p) => p.by_species.get(s as usize).copied().flatten(),
-            None => parrot::imitation(s),
+            None => VANILLA_IMITATIONS.get(id).copied(),
+            Some(map) => map.by_id.get(id).copied().or_else(|| {
+                VANILLA_IMITATIONS
+                    .contains_key(id)
+                    .then_some("entity.parrot.ambient")
+            }),
         }
     }
-
-    /// Every imitation a parrot's rare ambient draw picks among, in id order;
-    /// none for vanilla's table.
+    /// None preserves the legacy no-file random selection and draw order.
     pub fn parrot_sounds(&self) -> Option<&[&'static str]> {
         self.parrot_imitations.as_ref().map(|p| p.sounds.as_slice())
     }
-
-    /// `VillagerType.byBiome`: the index into `VILLAGER_TYPES` of a biome's
-    /// villagers, plains where the map names none.
     pub fn villager_type(&self, biome: &str) -> u8 {
         match &self.villager_types {
-            Some(types) => types.get(&full_id(biome)).copied().unwrap_or(0),
+            Some(types) => types.get(local_id(biome)).copied().unwrap_or(0),
             None => crate::mobs::finalize::villager_type(biome),
         }
     }
-
-    /// The hero gift loot table of profession `id` (`GiveGiftToHero`), the
-    /// unemployed gift where the map names none; none for vanilla's table.
     pub fn hero_gift(&self, profession: &str) -> Option<String> {
         let gifts = self.hero_gifts.as_ref()?;
         Some(
-            gifts.get(&full_id(profession)).cloned().unwrap_or_else(|| {
+            gifts.get(local_id(profession)).cloned().unwrap_or_else(|| {
                 "minecraft:gameplay/hero_of_the_village/unemployed_gift".to_owned()
             }),
         )
     }
-
-    /// `VibrationSystem.getGameEventFrequency`: 0 for an event that makes none.
     pub fn vibration_frequency(&self, event: &str) -> i32 {
         match &self.vibration_frequencies {
-            Some(frequencies) => frequencies.get(event).copied().unwrap_or(0),
+            Some(frequencies) => frequencies.get(local_id(event)).copied().unwrap_or(0),
             None => crate::sculk::frequency(event),
         }
     }
-
-    /// Whether a farmer composts `item` (`WorkAtComposter.compostItems`).
     pub fn villager_compostable(&self, item: &str) -> bool {
         match &self.villager_compostables {
-            Some(items) => items.contains(item),
-            None => COMPOSTABLES.contains(&item),
+            Some(items) => items.get(local_id(item)).copied().unwrap_or(false),
+            None => COMPOSTABLES
+                .iter()
+                .any(|known| local_id(known) == local_id(item)),
         }
     }
-}
-
-static CURRENT: LazyLock<RwLock<Arc<NeoForgeMobMaps>>> = LazyLock::new(Default::default);
-
-/// The maps the last server data load installed: vanilla's tables before one.
-pub fn current() -> Arc<NeoForgeMobMaps> {
-    CURRENT.read().unwrap_or_else(|e| e.into_inner()).clone()
-}
-
-/// Replace the installed maps with a server data load's.
-pub fn install(maps: NeoForgeMobMaps) {
-    *CURRENT.write().unwrap_or_else(|e| e.into_inner()) = Arc::new(maps);
-}
-
-/// [`NeoForgeMobMaps::vibration_frequency`] of the installed maps.
-pub fn vibration_frequency(event: &str) -> i32 {
-    current().vibration_frequency(event)
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    /// Vanilla's layer, with `edit` applied, as map `id`.
-    fn edited(id: &str, edit: impl FnOnce(&mut BTreeMap<String, Value>)) -> NeoForgeMobMaps {
-        let mut values = vanilla_layer(id);
-        edit(&mut values);
-        let mut maps = NeoForgeMobMaps::default();
-        maps.set(id, &values);
-        maps
-    }
-
     #[test]
-    fn the_vanilla_layer_reads_back_as_vanilla_tables() {
-        let mut maps = NeoForgeMobMaps::default();
-        for (id, _) in MAPS {
-            maps.set(id, &vanilla_layer(id));
-        }
-        let vanilla = NeoForgeMobMaps::default();
-        for d in species::ALL {
-            let s = d.species;
-            assert_eq!(maps.villager_distance(s), vanilla.villager_distance(s));
-            assert_eq!(maps.parrot_imitation(s), vanilla.parrot_imitation(s));
-        }
-        for biome in ["minecraft:badlands", "minecraft:grove", "minecraft:plains"] {
-            assert_eq!(maps.villager_type(biome), vanilla.villager_type(biome));
-        }
+    fn numeric_codecs_use_java_truncation_and_unrestricted_float_distance() {
+        let raw = |text: &str| serde_json::value::RawValue::from_string(text.to_owned()).unwrap();
+        assert_eq!(decode_distance(&raw("-3")), Ok(-3.0));
+        assert_eq!(decode_distance(&raw("1e500")), Ok(f32::INFINITY));
+        assert_eq!(decode_distance(&raw("1e300")), Ok(f32::INFINITY));
         assert_eq!(
-            maps.hero_gift("minecraft:cleric").as_deref(),
-            Some("minecraft:gameplay/hero_of_the_village/cleric_gift")
+            decode_distance(&raw("-0.0")).unwrap().to_bits(),
+            0x8000_0000
         );
-        assert_eq!(
-            maps.hero_gift("minecraft:nitwit").as_deref(),
-            Some("minecraft:gameplay/hero_of_the_village/unemployed_gift")
-        );
-        for event in [
-            "minecraft:step",
-            "minecraft:explode",
-            "minecraft:resonate_7",
-            "minecraft:shriek",
+        for (text, expected) in [
+            ("4294967297", 1),
+            ("4294967311", 15),
+            ("15.999999999999999999999", 15),
+            ("1.5", 1),
+            ("-4294967295", 1),
+            ("4294967297e0", 1),
         ] {
-            assert_eq!(
-                maps.vibration_frequency(event),
-                vanilla.vibration_frequency(event)
-            );
+            assert_eq!(decode_frequency(&raw(text)), Ok(expected), "{text}");
         }
-        assert!(maps.villager_compostable("minecraft:wheat_seeds"));
-        assert!(!maps.villager_compostable("minecraft:wheat"));
+        for text in [
+            "2147483648",
+            "-1",
+            "0",
+            "16",
+            "-0.5",
+            "1e500",
+            "1e-500",
+            "\"7\"",
+            "true",
+        ] {
+            assert!(decode_frequency(&raw(text)).is_err(), "{text}");
+        }
     }
-
     #[test]
-    fn pack_values_override_add_and_remove_entries() {
-        let maps = edited("neoforge:acceptable_villager_distances", |v| {
-            v.insert("minecraft:creeper".into(), json!({ "distance": 8.0 }));
-            v.remove("minecraft:pillager");
-        });
-        assert_eq!(maps.villager_distance(Species::Creeper), Some(8.0));
-        assert_eq!(maps.villager_distance(Species::Pillager), None);
-        assert_eq!(maps.villager_distance(Species::Zombie), Some(8.0));
-
-        let maps = edited("neoforge:parrot_imitations", |v| {
-            v.insert(
-                "minecraft:cow".into(),
-                json!("minecraft:entity.cow.ambient"),
-            );
-            v.insert("minecraft:blaze".into(), json!({ "sound": EMPTY_SOUND }));
-        });
+    fn exact_type_overrides_and_removed_vanilla_fallback_are_world_local() {
+        let mut first = NeoForgeMobMaps::default();
+        first.set_distances(BTreeMap::from([("test:wraith".into(), 21.0)]));
+        let second = NeoForgeMobMaps::default();
+        assert_eq!(first.villager_distance("test:wraith"), Some(21.0));
+        assert_eq!(second.villager_distance("test:wraith"), None);
+        assert_eq!(first.villager_distance("minecraft:zombie"), Some(8.0));
+        assert_eq!(first.villager_distance("minecraft:pillager"), Some(15.0));
+        assert_eq!(first.villager_distance("test:zombie_template"), None);
+        assert_eq!(first.villager_distance("minecraft:cow"), None);
+        assert!(second.parrot_sounds().is_none());
+        first.set_parrots(BTreeMap::from([("test:wraith".into(), "test:howl")]));
+        assert_eq!(first.parrot_imitation("test:wraith"), Some("test:howl"));
         assert_eq!(
-            maps.parrot_imitation(Species::Cow),
-            Some("entity.cow.ambient")
+            first.parrot_imitation("minecraft:zombie"),
+            Some("entity.parrot.ambient")
         );
-        assert_eq!(maps.parrot_imitation(Species::Blaze), Some(""));
+        assert_eq!(second.parrot_imitation("test:wraith"), None);
+        assert_eq!(
+            second.parrot_imitation("minecraft:zombie"),
+            Some("entity.parrot.imitate.zombie")
+        );
+        assert!(first.parrot_sounds().unwrap().contains(&"test:howl"));
         assert!(
-            maps.parrot_sounds()
+            first
+                .parrot_sounds()
                 .unwrap()
-                .contains(&"entity.cow.ambient")
+                .contains(&"entity.parrot.ambient")
         );
-
-        let maps = edited("neoforge:villager_types", |v| {
-            v.insert(
-                "minecraft:plains".into(),
-                json!({ "villager_type": "minecraft:snow" }),
-            );
-            v.insert("test:moon".into(), json!({ "villager_type": "test:moon" }));
-        });
-        assert_eq!(maps.villager_type("minecraft:plains"), 4);
-        assert_eq!(maps.villager_type("test:moon"), 0);
-
-        let maps = edited("neoforge:vibration_frequencies", |v| {
-            v.insert("minecraft:step".into(), json!({ "frequency": 9 }));
-            v.insert("test:boom".into(), json!(16));
-        });
-        assert_eq!(maps.vibration_frequency("minecraft:step"), 9);
-        assert_eq!(maps.vibration_frequency("test:boom"), 0);
-
-        let maps = edited("neoforge:villager_compostables", |v| {
-            v.insert(
-                "minecraft:wheat".into(),
-                json!({ "can_villager_compost": true }),
-            );
-            v.insert("minecraft:wheat_seeds".into(), json!(false));
-        });
-        assert!(maps.villager_compostable("minecraft:wheat"));
-        assert!(!maps.villager_compostable("minecraft:wheat_seeds"));
     }
 }

@@ -242,7 +242,8 @@ impl Game<'_> {
         }
         let mut remaining = 20;
         let mut amounts: Vec<(std::sync::Arc<str>, i32)> = Vec::new();
-        let maps = horizon_client::neoforge_mob_maps::current();
+        // Pin one world generation for the whole work batch, including callbacks.
+        let maps = std::sync::Arc::clone(self.mob_map_snapshot());
         let slots = villager::ext(&self.mobs[mob]).map_or(0, |e| e.inventory.len());
         'slots: for slot in (0..slots).rev() {
             if remaining <= 0 {

@@ -40,6 +40,10 @@ pub enum SpawnEvent {
 
 /// The level as finalizeSpawn reads it.
 pub trait FinalizeLevel {
+    /// The owning world's immutable builtin generation (vanilla for bare fixtures).
+    fn mob_maps(&self) -> &crate::neoforge_mob_maps::NeoForgeMobMaps {
+        crate::neoforge_mob_maps::NeoForgeMobMaps::vanilla()
+    }
     /// The biome id at a block.
     fn biome(&self, pos: [i32; 3]) -> String;
     /// The biome at a block is in a biome tag (`minecraft:...`).
@@ -1852,7 +1856,7 @@ impl<L: FinalizeLevel + ?Sized, R: RandomSource> Ctx<'_, L, R> {
     }
     fn villager_type(&mut self, m: &mut Mob) {
         let at = block(m);
-        m.extra.variant = crate::neoforge_mob_maps::current().villager_type(&self.level.biome(at));
+        m.extra.variant = self.level.mob_maps().villager_type(&self.level.biome(at));
     }
     /// `VariantUtils.selectVariantToSpawn` into `variant`, by registry name.
     fn variant(&mut self, m: &mut Mob, registry: fn(&SpawnRegistries) -> &VariantRegistry) {

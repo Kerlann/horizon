@@ -25,18 +25,31 @@ const REGISTRIES: [(&str, &str); 2] = [("minecraft:item", "item"), ("minecraft:b
 
 /// The registries `types` are for that have data maps, in `REGISTRIES` order.
 pub(crate) fn registries_of(types: &[DataMapType]) -> Vec<&'static str> {
-    REGISTRIES
+    let mut registries: Vec<_> = REGISTRIES
         .iter()
         .map(|(registry, _)| *registry)
         .filter(|registry| types.iter().any(|ty| ty.registry == *registry))
-        .collect()
+        .collect();
+    for definition in horizon_client::neoforge_mob_maps::MAPS {
+        if !registries.contains(&definition.registry) {
+            registries.push(definition.registry);
+        }
+    }
+    registries
 }
 
 /// The merged values of every registered type: registry, then type id, to the
 /// value of each entry that has one.
+pub(crate) enum MapValues {
+    Json(BTreeMap<String, Value>),
+    /// Builtin codecs own decoded values, including f32 infinities that JSON
+    /// cannot represent. Encode once, not by reparsing on every host read.
+    Decoded(BTreeMap<String, Tag>),
+}
 #[derive(Default)]
 pub(crate) struct DataMaps {
-    maps: HashMap<&'static str, HashMap<String, BTreeMap<String, Value>>>,
+    maps: HashMap<&'static str, HashMap<String, MapValues>>,
+    pub(super) mob_maps: std::sync::Arc<horizon_client::neoforge_mob_maps::NeoForgeMobMaps>,
 }
 
 impl DataMaps {
@@ -50,9 +63,14 @@ impl DataMaps {
         overlay: &horizon_world::loot::PackOverlay<'_>,
         item_tags: &HashMap<String, HashSet<String>>,
         block_tags: &HashMap<String, HashSet<String>>,
+        builtin: super::neoforge_mob_maps::Loaded,
     ) -> Self {
-        let mut maps: HashMap<&'static str, HashMap<String, BTreeMap<String, Value>>> =
-            HashMap::new();
+        let mut maps: HashMap<&'static str, HashMap<String, MapValues>> = HashMap::new();
+        for (definition, values) in builtin.values {
+            maps.entry(definition.registry)
+                .or_default()
+                .insert(definition.id.to_owned(), values);
+        }
         for ty in types {
             let Some((registry, dir)) = REGISTRIES.iter().find(|(r, _)| *r == ty.registry) else {
                 log::warn!(
@@ -91,18 +109,19 @@ impl DataMaps {
             } else {
                 block_tags
             };
-            let (ns, path) = ty.id.split_once(':').unwrap_or_default();
-            let wanted = format!("data_maps/{ns}:{dir}/{path}");
             let mut map = BTreeMap::new();
-            apply_files(&mut map, &wanted, &ty.id, overlay, tags);
-            registered.insert(ty.id.clone(), map);
+            apply_files(&mut map, dir, &ty.id, overlay, tags);
+            registered.insert(ty.id.clone(), MapValues::Json(map));
         }
-        Self { maps }
+        Self {
+            maps,
+            mob_maps: builtin.snapshot,
+        }
     }
 
-    /// Every entry map `type_id` of `registry` gives a value, with its merged
-    /// JSON; none where the map wasn't loaded.
-    pub(crate) fn values(
+    /// JSON-backed entries for engine consumers of mod-defined block maps.
+    /// Builtins have their own codecs and are read through `value` as decoded NBT.
+    pub(crate) fn json_values(
         &self,
         registry: &str,
         type_id: &str,
@@ -110,13 +129,18 @@ impl DataMaps {
         self.maps
             .get(registry)
             .and_then(|maps| maps.get(type_id))
+            .and_then(|values| match values {
+                MapValues::Json(values) => Some(values),
+                MapValues::Decoded(_) => None,
+            })
             .into_iter()
             .flatten()
             .map(|(entry, value)| (entry.as_str(), value))
     }
 
-    /// `entry`'s value in map `type_id` of `registry`, as NBT: none where the
-    /// map gives it none, refused where no mod registered the map there.
+    /// `entry`'s NBT value: canonical codec records for builtins, JSON-derived
+    /// NBT for mod-defined maps. None for missing entries; unregistered types
+    /// are refused. Builtin infinity remains NBT Float, never JSON null.
     fn value(
         &self,
         registry: &str,
@@ -128,7 +152,10 @@ impl DataMaps {
             .get(registry)
             .and_then(|maps| maps.get(type_id))
             .ok_or(mod_api::DataMapError::UnknownType)?;
-        map.get(entry).map(to_tag).transpose()
+        match map {
+            MapValues::Json(values) => values.get(entry).map(to_tag).transpose(),
+            MapValues::Decoded(values) => Ok(values.get(entry).cloned()),
+        }
     }
 }
 
@@ -149,7 +176,7 @@ impl Game<'_> {
     /// The server's merged data maps, none unless this is a server whose
     /// tables were built from packs and mods' files.
     fn loaded_data_maps(&self) -> Result<&DataMaps, mod_api::DataMapError> {
-        if self.serving.is_none() && self.options.dedicated.is_none() {
+        if !self.options.execution_role.is_logical_server() {
             return Err(mod_api::DataMapError::Unavailable);
         }
         self.world_tables
@@ -186,6 +213,25 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    fn load_types(
+        types: &[DataMapType],
+        overlay: &horizon_world::loot::PackOverlay<'_>,
+        items: &HashMap<String, HashSet<String>>,
+        blocks: &HashMap<String, HashSet<String>>,
+    ) -> DataMaps {
+        let builtin = super::super::neoforge_mob_maps::load(
+            overlay,
+            |directory| match directory {
+                "item" => Some(items),
+                "block" => Some(blocks),
+                _ => None,
+            },
+            |_, _| true,
+        )
+        .unwrap();
+        DataMaps::load(types, overlay, items, blocks, builtin)
+    }
+
     #[test]
     fn data_map_read_refuses_lossy_payloads_instead_of_successful_substitutes() {
         for value in [
@@ -198,9 +244,10 @@ mod tests {
                     "minecraft:item",
                     HashMap::from([(
                         "test:map".to_owned(),
-                        BTreeMap::from([("minecraft:stone".to_owned(), value)]),
+                        MapValues::Json(BTreeMap::from([("minecraft:stone".to_owned(), value)])),
                     )]),
                 )]),
+                ..Default::default()
             };
             assert_eq!(
                 maps.value("minecraft:item", "test:map", "minecraft:stone"),
@@ -250,7 +297,7 @@ mod tests {
             "minecraft:logs",
             &["minecraft:oak_log", "minecraft:birch_log"],
         )]);
-        DataMaps::load(
+        load_types(
             &[ty("mymod:fuel", "minecraft:item")],
             &horizon_world::loot::PackOverlay {
                 files,
@@ -262,7 +309,10 @@ mod tests {
     }
 
     fn get<'a>(maps: &'a DataMaps, entry: &str) -> Option<&'a Value> {
-        maps.maps["minecraft:item"]["mymod:fuel"].get(entry)
+        let MapValues::Json(values) = &maps.maps["minecraft:item"]["mymod:fuel"] else {
+            panic!("mod-defined map uses JSON");
+        };
+        values.get(entry)
     }
 
     #[test]
@@ -311,9 +361,85 @@ mod tests {
             ty("mymod:c", "minecraft:block"),
             ty("mymod:d", "minecraft:biome"),
         ];
-        assert_eq!(registries_of(&types), ["minecraft:item", "minecraft:block"]);
-        assert!(registries_of(&[ty("mymod:d", "minecraft:biome")]).is_empty());
-        assert!(registries_of(&[]).is_empty());
+        assert_eq!(
+            registries_of(&types),
+            [
+                "minecraft:item",
+                "minecraft:block",
+                "minecraft:entity_type",
+                "minecraft:worldgen/biome",
+                "minecraft:villager_profession",
+                "minecraft:game_event"
+            ]
+        );
+        let builtins = [
+            "minecraft:entity_type",
+            "minecraft:worldgen/biome",
+            "minecraft:villager_profession",
+            "minecraft:game_event",
+            "minecraft:item",
+        ];
+        assert_eq!(registries_of(&[ty("mymod:d", "minecraft:biome")]), builtins);
+        assert_eq!(registries_of(&[]), builtins);
+    }
+
+    #[test]
+    fn builtin_values_are_available_without_mod_registration_and_replace_as_one_generation() {
+        let f = files(&[(
+            "data_maps/neoforge:item/villager_compostables",
+            &[
+                json!({"replace": true, "values": {"test:rice": {"can_villager_compost": true}, "test:grain": false}}),
+            ],
+        )]);
+        let maps = load_types(
+            &[],
+            &horizon_world::loot::PackOverlay {
+                files: &f,
+                ..horizon_world::loot::PackOverlay::NONE
+            },
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+        assert_eq!(
+            maps.value(
+                "minecraft:item",
+                "neoforge:villager_compostables",
+                "test:grain"
+            ),
+            Ok(Some(Tag::compound([(
+                "can_villager_compost",
+                Tag::Byte(0)
+            )])))
+        );
+        assert_eq!(
+            maps.value(
+                "minecraft:item",
+                "neoforge:villager_compostables",
+                "minecraft:wheat_seeds"
+            ),
+            Ok(None)
+        );
+        assert!(maps.mob_maps.villager_compostable("test:rice"));
+        assert!(!maps.mob_maps.villager_compostable("test:grain"));
+        assert!(!maps.mob_maps.villager_compostable("minecraft:wheat_seeds"));
+        let next = load_types(
+            &[],
+            &horizon_world::loot::PackOverlay::NONE,
+            &HashMap::new(),
+            &HashMap::new(),
+        );
+        assert!(
+            next.value(
+                "minecraft:item",
+                "neoforge:villager_compostables",
+                "minecraft:wheat_seeds"
+            )
+            .unwrap()
+            .is_some()
+        );
+        assert!(next.mob_maps.villager_compostable("minecraft:wheat_seeds"));
+        assert!(!next.mob_maps.villager_compostable("test:rice"));
+        assert!(maps.mob_maps.villager_compostable("test:rice"));
     }
 
     #[test]
@@ -406,7 +532,7 @@ mod tests {
             .push(json!({"nothing": true}).to_string().into_bytes());
         let maps = load(&f);
         assert_eq!(get(&maps, "minecraft:coal"), Some(&json!(1)));
-        let maps = DataMaps::load(
+        let maps = load_types(
             &[
                 ty("minecraft:fuel", "minecraft:item"),
                 ty("mymod:x", "minecraft:biome"),
@@ -418,11 +544,11 @@ mod tests {
             &HashMap::new(),
             &HashMap::new(),
         );
-        // Only the one good type, registered once, empty.
-        assert_eq!(maps.maps.len(), 1);
+        // The one good mod type is registered once, alongside the builtins.
+        assert_eq!(maps.maps.len(), 6);
         let blocks = &maps.maps["minecraft:block"];
         assert_eq!(blocks.len(), 1);
-        assert!(blocks["mymod:a"].is_empty());
+        assert!(matches!(&blocks["mymod:a"], MapValues::Json(values) if values.is_empty()));
     }
 
     #[test]
@@ -439,7 +565,7 @@ mod tests {
         assert_eq!(get(&off, "minecraft:coal"), Some(&json!(1)));
         assert!(get(&off, "minecraft:stick").is_none());
         let enabled = horizon_world::conditions::LoadConditions::new(["provider"]);
-        let on = DataMaps::load(
+        let on = load_types(
             &[ty("mymod:fuel", "minecraft:item")],
             &horizon_world::loot::PackOverlay {
                 files: &f,
@@ -459,7 +585,7 @@ mod tests {
             "data_maps/mymod:block/hardness",
             &[json!({"values": {"#minecraft:logs": 2}})],
         )]);
-        let maps = DataMaps::load(
+        let maps = load_types(
             &[ty("mymod:hardness", "minecraft:block")],
             &horizon_world::loot::PackOverlay {
                 files: &f,
@@ -468,7 +594,9 @@ mod tests {
             &HashMap::new(),
             &blocks,
         );
-        let map = &maps.maps["minecraft:block"]["mymod:hardness"];
+        let MapValues::Json(map) = &maps.maps["minecraft:block"]["mymod:hardness"] else {
+            panic!("block map uses JSON");
+        };
         assert_eq!(map.get("minecraft:oak_log"), Some(&json!(2)));
     }
 }

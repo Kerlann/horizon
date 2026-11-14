@@ -22,6 +22,7 @@ horizon-client-lib lan::hub::tests::requeue_matches_the_scan lib daily slow
 horizon-client-lib lan::viewed_levels::tests::a_viewed_sound_reaches_a_viewer_holding_its_chunk_within_its_distance lib daily network
 horizon-client-lib lan::viewed_levels::tests::with_no_viewer_no_copy_is_built lib daily network
 horizon-client-lib launch::tests::launch_refuses_a_socket_path_too_long bin:horizon-ctl daily child-process
+horizon-client-lib mobs::villager_brain::mob_map_tests::hostile_sensor_matches_registered_ids_and_world_snapshot lib daily resources
 horizon-client-lib mobs::world::missing_data_report_tests::missing_mob_data_reports_one_counted_skip_per_test lib daily child-process
 horizon-client-lib multiplayer::tests::an_icon_up_to_1024_square_is_kept lib daily slow
 horizon-client-lib net::tests::lan_login_continues_after_authentication_failure lib daily slow
@@ -34,3 +35,4 @@ horizon-client-lib structure_blocks::tests::declared_structure_entities_keep_tem
 horizon-client-lib telemetry::tests::benchmark_reports_need_their_own_consent_and_go_dated_to_the_day lib daily child-process
 horizon-client-lib ticket_levels::tests::grid_matches_the_map lib daily slow
 horizon-client-lib ticket_levels::tiled_tests::tiles_match_scalar_levels_with_overlaps_and_portals lib daily slow
+horizon-client-lib vanillagen::structure_mobs::tests::structure_maps_reload_without_cross_world_bleed lib daily resources
