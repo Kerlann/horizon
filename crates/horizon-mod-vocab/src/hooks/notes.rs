@@ -88,8 +88,8 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
   level than the death's is placed for good. `to` is the level in place and the player's state is swapped in (as in
   `run_mod_command`), so `host.players().acting_player` and `PlayerRef::tell` reach them. Heard for Nether and End portals
   (also riding, and leaving the End as its winner), `/execute in ... run tp` and any command teleporting into another
-  level, and the death respawn. Not heard: a move within a level (`/tp`, an End gateway), a player who leaves before
-  the move ends, a respawn in the dimension of the death, and anything outside a dedicated server.
+  level, and death respawns, on dedicated and integrated servers (single player and LAN), where the world is simulated.
+  Not heard by a remote client window, for a move within a level (`/tp`, an End gateway), for a player who leaves before the move ends, or for a move ending where it started (a respawn in the death's level).
 - **`player_toggle_flight(player, name, flying, cancel)`**: a player's client started (`flying`) or stopped
   flying, once per change, for a player who may fly (creative or spectator), on a server. The player's state is swapped
   in, so `PlayerRef::tell` and the other helpers reach them. Set `cancel` to refuse it: the player keeps the state they
@@ -1143,12 +1143,12 @@ criterion resources; the private advancement world remains solely in the native 
 `crates/horizon-client/src/game/modding/native_explosions.rs`: for server mods, in the level in place; the full contract,
 with the causing-entity table, is the book's "Setting off an explosion" (how-to/world/block-experience-and-explosions.md).
 
-- `LevelRef::explode(host, source, center, radius, fire, interaction)` is `Level.explode(source, ...)` in vanilla's order.
-  The causing entity comes from `source`, never the caller: a primed TNT's owner, a living entity itself, a projectile's
-  living owner, else none; with both the damage is `minecraft:player_explosion` and a kill credits the cause.
-  `interaction` is `None`, `Block`, `Mob` (the source's `entity_mob_griefing`), `Tnt` or `Trigger` (no breaks; buttons,
-  doors and the like react); `fire` works with any. False, doing nothing, for an unavailable level, a stale `source` or
-  one in another level, an unloaded chunk, or a radius outside `0 < radius <= 32`.
+- `LevelRef::explode(host, source, center, radius, fire, interaction, settings)` is vanilla's full `Level.explode`. The
+  causing entity comes from `source`, never the caller (a primed TNT's owner, a living entity itself, a projectile's
+  living owner); with both the damage is `minecraft:player_explosion`. `interaction` is `None`, `Block`, `Mob`, `Tnt` or
+  `Trigger`; `fire` works with any. `ExplosionSettings` names a damage type, an `ExplosionCalculator` (blocks, entities,
+  knockback, an immune tag that replaces the resistance rule), particles and sound, each `None` vanilla's. No radius
+  limit. Refused with an `ExplodeError`, doing nothing; the book lists when.
 - A blast set off inside `explosion_detonate` runs that hook again, so a mod that chains blasts keeps its own guard.
 
 ### Camera shake
@@ -1718,9 +1718,9 @@ still go on each event or registrar.
 
 - `component_types(context, types)` runs once before content loads. Append namespaced component IDs; duplicates, invalid IDs and the `minecraft` namespace stop startup. `native_component`, `native_set_component` and `native_remove_component` read, set and remove registered components, including item defaults. Values use NBT and must fit the network reader limits.
 
-- [explosions](#explosions) for server mods: `LevelRef::explode(host, source, center, radius, fire, interaction)` sets one
-  off as `Level.explode` does, with an optional source entity and `ExplosionInteraction::None`, `Block`, `Mob`, `Tnt` or
-  `Trigger` for what it does to blocks.
+- [explosions](#explosions) for server mods: `LevelRef::explode(host, source, center, radius, fire, interaction, settings)`
+  sets one off as `Level.explode` does, with an optional source entity, `ExplosionInteraction::None`, `Block`, `Mob`, `Tnt`
+  or `Trigger` for what it does to blocks, and `ExplosionSettings` for its damage type, calculator, particles and sound.
 
 - Dispenser behaviours are chosen at `DispenserBlock.getDispenseMethod`, before any vanilla behaviour, for mod or vanilla items, on the authoritative server only (droppers are unaffected). The block the dispenser faces is asked first: `dispense_method` gives its part the dimension, dispenser position, facing, the selected stack and `state`, the block at `pos` moved by `facing` (air included), and the part is asked only for that block. Then, unless that part answered, the item's own part is asked by `dispense_item` with the same dimension, position, facing and stack. Either answer is `Some((remainder, event))`: a `None` remainder empties the slot, `Some(stack)` writes that remainder without consuming again, and `event` is the level event played with the smoke (1000 click, 1001 fail, 0 nothing, as `NOOP`). The first answer wins: the other part is not asked and vanilla's behaviour doesn't run. `host.dispense_default(dimension, pos, facing, stack)` drops one item normally, including items with a special vanilla behaviour: answer its remainder with 1000. Leave the answer `None` to let vanilla decide, as before.
 
@@ -2272,7 +2272,7 @@ registration path.
 
 - `interaction_key_mapping_triggered(key, hand, attempt, swing_hand, canceled)` fires while playing when an interaction key is about to act on the crosshair (NeoForge's `InputEvent.InteractionKeyMappingTriggered`): `key` is `InteractionKey::Attack` (when an attack is allowed, and each tick a held key keeps digging a block), `Use` (once for each hand tried, main first, before the hand's target and item) or `PickBlock` (only with a block or entity aimed at). `attempt` distinguishes a queued press from a held mapping. Set `canceled` to skip the action; a cancelled use ends the click, so the other hand gets no turn. Attack and use honour `swing_hand` (true on entry) as a swing request independently of cancellation: false suppresses natural swing requests, cancellation with true requests a swing without acting, and uncancelled true preserves natural no-swing outcomes. A request does not guarantee a new animation: an item can veto it, and an animation already in progress can prevent a new swing from starting during held mining. Pick only vetoes its packet and never requests a swing. The window client on any server, including single player.
 
-- `key_mapping_pre(mapping, pressed, canceled)` is asked while playing, before the game acts on a physical key or mouse button bound to a gameplay mapping (`key.jump`, `key.attack`...), once for each mapping bound to it. `pressed` is true for a press (a key's repeats too) and false for its release. Set `canceled` on a press to drop it for every mapping bound to that input: the mapping is not held, nothing acts on it, and a mouse press is not counted as a click. A cancel on a release is ignored, so what the game holds is always let go. A release is asked too, while playing: a screen that opens lets go of what it holds without asking. A key bound to two mappings (forward and sprint) is canceled as one. It is asked for the window's keys and mouse buttons, agent control's included, after the window's own shortcuts (fullscreen, screenshot, debug keys) and with no screen open. A controller's presses are not asked.
+- `key_mapping_pre(mapping, pressed, canceled)` is asked while playing, before the game acts on a physical key or mouse button bound to a gameplay mapping (`key.jump`, `key.attack`...), once for each mapping bound to it. `pressed` is true for a press (a key's repeats too) and false for its release. Set `canceled` on a press to drop it for every mapping bound to that input: the mapping is not held, nothing acts on it, and a mouse press is not counted as a click. A cancel on a release is ignored, so what the game holds is always let go. A release is asked too, while playing: a screen that opens lets go of what it holds without asking. A key bound to two mappings (forward and sprint) is canceled as one. It is asked for the window's keys and mouse buttons, agent control's included, after the window's own shortcuts (fullscreen, screenshot, debug keys) and with no screen open. A controller's presses are not asked, nor a mod's `set_mapping_down` and `click_mapping`: they set a mapping's held state and clicks, not a physical key or button.
 
 - `gui_layer_pre(layer, batch, canceled)` and `gui_layer_post(layer, batch)` fire around each vanilla HUD layer Horizon draws, in its paint order, so a mod places its own drawing below a layer (in `pre`) or above it (in `post`), NeoForge's `RegisterGuiLayersEvent` registerBelow/registerAbove, and hides a layer by setting `canceled` in `pre` (`RenderGuiLayerEvent.Pre`). Layer ids: `minecraft:crosshair`, `hotbar`, `effects`, `boss_overlay`, `vehicle_health` (riding a mount), `contextual_info_bar` (the jump bar, locator bar or experience bar with the level number), `player_health` (health, armor, food and air rows, one pass), `selected_item_name`, `sleep_overlay`, `overlay_message` (action bar), `title`, `scoreboard_sidebar`, `subtitle_overlay`, `chat` (the unfocused lines) and `tab_list`. F1 hides the layers it hides in vanilla, and then nothing fires for them. The camera overlays (drawn by the screen-effects pass) and the debug screen are not layers. A hidden layer still runs its game logic (the health rows' blink, the bubble pop sound) and `post` still fires.
 
@@ -2313,7 +2313,7 @@ registration path.
 - `native_physical_window_size()`, the window's width and height in physical pixels, independent of GUI scale. It returns no size on a server or when no window exists.
 
 
-- a player changing dimension: `player_changed_dimension(player, name, from, to)` is heard once per move of a server's player into another level, when the move has ended (a portal's exit found and the player standing there, a command's teleport landed, a respawn in another level placed for good), with `from` and `to` as dimension ids (`minecraft:overworld`, `minecraft:the_nether`, `minecraft:the_end`) and the player's state swapped in so that `PlayerRef::tell` and the other helpers reach them. A move within a level is not heard.
+- a player changing dimension: `player_changed_dimension(player, name, from, to)` is heard once per move of a server's player into another level, when the move has ended (a portal's exit found and the player standing there, a command's teleport landed, a respawn in another level placed for good), with `from` and `to` as dimension ids (`minecraft:overworld`, `minecraft:the_nether`, `minecraft:the_end`) and the player's state swapped in so that `PlayerRef::tell` and the other helpers reach them. A move within a level is not heard. Not heard by a remote client window; listeners run on the server that simulates the world.
 
 - `pickup_xp(player, dimension, orb, value, count, canceled)` runs before a server player takes an orb; with no listener the server skips swapping a guest in for it (the shared `listened` probe). Canceling leaves the orb and the pickup delay unchanged; otherwise the signed value is preserved, including zero and negative values, and the count is clamped to at least one, then one count is taken. It runs on the integrated and the dedicated server, guests included.
 

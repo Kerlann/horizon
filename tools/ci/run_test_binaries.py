@@ -23,8 +23,9 @@ output that tests and their child processes interleave on stdout; the same tests
 flags need RUSTC_BOOTSTRAP=1, set in the test processes only (never for the build), so a test's own child processes
 inherit it. The guard fails closed: each binary is also listed (`--list`), and a binary that passed but whose log
 lacks a timed record for one of its listed, not ignored tests fails the run, naming the binary and the tests.
-A test over FAIL seconds fails the run by name, with the instruction to move it to the daily run; one over WARN only
-warns. The time is libtest's elapsed (wall) time with `--jobs` binaries and each binary's test threads running at
+A test over FAIL seconds is rerun once, alone after all binary workers finish, with the same binary and environment.
+Only a second time over FAIL fails the timing guard; a failed or unmeasurable rerun also fails closed. Both times
+are printed. One over WARN only warns. The time is libtest's elapsed (wall) time with `--jobs` binaries and each binary's test threads running at
 once, not an isolated measurement, so FAIL keeps a margin over the 2 s target. A `harness = false` target runs its own main, not libtest: it runs, untimed. Only these binaries are timed: the
 documentation examples and the Python steps of `verify` are not under the guard. The run ends with the slowest five
 tests and the summed test seconds. (libtest's own `--ensure-time` was the alternative: it fails a slow test inside
@@ -214,6 +215,34 @@ def timing_verdict(times: list[tuple[float, str, str]], warn: float, fail: float
     return errors, warnings
 
 
+def confirm_slow_tests(times: list[tuple[float, str, str]], binaries: list[dict], extra_env: dict,
+                       test_args: list[str], fail: float, guard: Path | None = None) -> list[str]:
+    """Retry only hard-limit candidates, serially after the pool drains; never forgive a functional failure.
+    With `guard` the rerun is preloaded with the network guard like the first run."""
+    errors = []
+    by_label = {binary["label"]: binary for binary in binaries}
+    for first, test, label in sorted(times, reverse=True):
+        if first <= fail:
+            continue
+        # Replace filters/thread counts rather than append: libtest ORs positional filters. Keep ignored selection
+        # when this runner is used outside verify, but run exactly this test on one libtest thread.
+        selection = [arg for arg in test_args if arg in ("--ignored", "--include-ignored")]
+        args = ["-Z", "unstable-options", "--report-time", *selection, "--exact", test, "--test-threads=1"]
+        result = (network_guard.run((by_label[label], args), extra_env, True, guard, run_one) if guard
+                  else run_one(by_label[label], extra_env, args, timed=True))
+        report(result)
+        status, seconds = result.get("log", {}).get(test, (None, None))
+        measured = f"{seconds:.2f}s" if seconds is not None else "unavailable"
+        print(f"timing confirmation: {label}: {test}: first {first:.2f}s, isolated {measured}", flush=True)
+        if result["status"] != "ok" or status != "ok" or seconds is None:
+            errors.append(f"{label}: {test}: timing rerun failed or has no passing timed record "
+                          f"({result['status']}); first {first:.2f}s, isolated {measured}")
+        elif seconds > fail:
+            failures, _ = timing_verdict([(seconds, test, label)], fail, fail)
+            errors.append(f"{failures[0]} (first {first:.2f}s, isolated {seconds:.2f}s)")
+    return errors
+
+
 def main(argv: list[str]) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--network-guard", type=Path, help="Linux preload library; fail recorded inet and resolver calls, rerunning only a violating binary test by test")
@@ -285,7 +314,9 @@ def main(argv: list[str]) -> int:
     print("largest resident sets: " + ", ".join(f"{label} {kib // 1024} MiB" for kib, label in sorted(peaks)[-5:][::-1]))
     slow = []
     if limits:
-        slow, warnings = timing_verdict(times, *limits)
+        _, warnings = timing_verdict(times, *limits)
+        slow = confirm_slow_tests(times, binaries, extra_env, test_args, limits[1],
+                                  args.network_guard.resolve() if args.network_guard else None)
         print(f"{len(times)} tests timed, {sum(seconds for seconds, _, _ in times):.1f} test-seconds in total; "
               "slowest: " + ", ".join(f"{test} {seconds:.2f}s" for seconds, test, _ in sorted(times)[-5:][::-1]))
         for warning in warnings:

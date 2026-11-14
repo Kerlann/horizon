@@ -1588,6 +1588,8 @@ fn a_creative_hand_replaced_by_a_finish_listener_is_not_sent_as_a_creative_slot(
 
 #[path = "interaction_key_tests.rs"]
 mod interaction_key_tests;
+#[path = "mapping_press_tests.rs"]
+mod mapping_press_tests;
 
 #[test]
 #[ignore = "requires prepared game resources"]

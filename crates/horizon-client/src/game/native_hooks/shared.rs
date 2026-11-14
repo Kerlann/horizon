@@ -2315,7 +2315,7 @@ impl Game<'_> {
 
 /// A mob's kind as the hook points name it (`minecraft:zombie`).
 pub(super) fn mob_kind(mob: &horizon_client::mobs::Mob) -> String {
-    ["minecraft:", mob.kind.id.trim_start_matches("minecraft:")].concat()
+    crate::game::native_namespaced_id::namespaced(&mob.kind.id)
 }
 
 /// The level behaviour's answer, or `None` to try `useWithoutItem`.
