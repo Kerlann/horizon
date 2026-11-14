@@ -84,6 +84,7 @@ pub const DECODED_COMPONENTS: &[&str] = &[
     "minecraft:tropical_fish/pattern",
     "minecraft:villager_food",
     "minecraft:unbreakable",
+    "minecraft:base_color",
 ];
 
 /// Validate and decode a component into the value representation shared with stacks.
@@ -176,6 +177,8 @@ pub fn decoded_component_value(id: &str, value: &Tag, reg: &Registries) -> Resul
     if id == "minecraft:attack_range" {
         return horizon_items::properties::attack_range::normalized(value)
             .ok_or_else(|| "Invalid attack_range".into());
+    if id == "minecraft:base_color" {
+        return dye_color(value).map(|name| Tag::String(name.into()));
     }
     decode_component(id, value, reg)?;
     if id == "minecraft:block_entity_data" {
@@ -448,6 +451,9 @@ pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), Strin
                 "clayfish",
             ],
         ),
+            _ => Err("Not a string".into()),
+        },
+        "minecraft:base_color" => dye_color(t).map(|_| ()),
         "minecraft:enchantments" | "minecraft:stored_enchantments" => enchantment_map(t, reg),
         "minecraft:tooltip_display" => tooltip_display(t, reg).map(|_| ()),
         // DataComponents.ENCHANTMENT_GLINT_OVERRIDE: Codec.BOOL through NbtOps.
@@ -515,6 +521,16 @@ fn identifier_value(value: &Tag) -> Result<Tag, String> {
     let id = horizon_core::identifier::Identifier::parse(&text)
         .map_err(|error| format!("Not a valid resource location: {text} {error}"))?;
     Ok(Tag::String(id.to_string().as_str().into()))
+/// `DyeColor.CODEC`: uncompressed persistent values use exact serialized names.
+fn dye_color(t: &Tag) -> Result<&'static str, String> {
+    let Tag::String(value) = t else {
+        return Err("Not a string".into());
+    };
+    horizon_items::firework::DYE_FIREWORK_COLORS
+        .iter()
+        .find(|(name, _)| value.0.iter().copied().eq(name.encode_utf16()))
+        .map(|(name, _)| *name)
+        .ok_or_else(|| format!("Unknown element name:{}", value.to_string_lossy()))
 }
 /// `ItemEnchantments.CODEC`: registry keys and boxed-number levels in 1..=255.
 /// `UnboundedMapCodec` reports failed entries; commands do not retain its partial map.
@@ -1767,6 +1783,85 @@ mod tests {
         ] {
             assert!(decode_component("minecraft:unbreakable", &value, &registry).is_err());
             assert!(decoded_component_value("minecraft:unbreakable", &value, &registry).is_err());
+    fn base_color_codec_accepts_only_exact_dye_names() {
+        use super::{Registries, Tag, decoded_component_value};
+        let registry = Registries::default();
+        for name in [
+            "white",
+            "orange",
+            "magenta",
+            "light_blue",
+            "yellow",
+            "lime",
+            "pink",
+            "gray",
+            "light_gray",
+            "cyan",
+            "purple",
+            "blue",
+            "brown",
+            "green",
+            "red",
+            "black",
+        ] {
+            let value = Tag::String(name.into());
+            assert_eq!(
+                decoded_component_value("minecraft:base_color", &value, &registry).unwrap(),
+                value
+            );
+            assert!(decode_component("minecraft:base_color", &value, &registry).is_ok());
+            assert!(
+                decoded_component_value(
+                    "minecraft:base_color",
+                    &Tag::String(name.to_uppercase().as_str().into()),
+                    &registry
+                )
+                .is_err()
+            );
+        }
+        for value in [
+            "",
+            "silver",
+            "RED",
+            "Red",
+            " red",
+            "red ",
+            "minecraft:red",
+            "16",
+        ] {
+            assert!(
+                decoded_component_value(
+                    "minecraft:base_color",
+                    &Tag::String(value.into()),
+                    &registry
+                )
+                .is_err(),
+                "{value}"
+            );
+        }
+        let surrogate = Tag::String(horizon_core::nbt::JavaString(vec![0xD800]));
+        assert!(decoded_component_value("minecraft:base_color", &surrogate, &registry).is_err());
+        for value in [
+            Tag::Byte(0),
+            Tag::Short(0),
+            Tag::Int(14),
+            Tag::Long(14),
+            Tag::Float(14.0f32.to_bits()),
+            Tag::Double(14.0f64.to_bits()),
+            Tag::List(vec![]),
+            Tag::Compound(Default::default()),
+            Tag::ByteArray(vec![]),
+            Tag::IntArray(vec![]),
+            Tag::LongArray(vec![]),
+        ] {
+            assert_eq!(
+                decoded_component_value("minecraft:base_color", &value, &registry),
+                Err("Not a string".into())
+            );
+            assert_eq!(
+                decode_component("minecraft:base_color", &value, &registry),
+                Err("Not a string".into())
+            );
         }
     }
 

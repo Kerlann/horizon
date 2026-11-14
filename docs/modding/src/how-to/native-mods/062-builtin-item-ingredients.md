@@ -180,3 +180,12 @@ scalars and lists are rejected. Matching requires effective presence, including
 item defaults, while an explicit removal suppresses that default.
 The other 111 registered built-ins use stored-value matching while their shared
 decoders are added incrementally in **#3875**. Their absence is not a load refusal.
+
+<!-- Member #4119 decoder documentation -->
+`item_name`, `block_entity_data`, and `base_color` in the `minecraft` namespace.
+`base_color` accepts exactly the 16 lowercase dye names (for example `red` and
+`light_blue`), not numeric dye ids or uppercase names. It compares the shield's
+stored base color; a banner's item color does not imply this component, and an
+undyed shield has no base color. The other 111 registered built-ins use
+stored-value matching while their shared decoders are added incrementally in
+**#3875**. Their absence is not a load refusal.
