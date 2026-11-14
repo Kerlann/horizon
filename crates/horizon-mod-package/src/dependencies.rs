@@ -1,5 +1,7 @@
 //! Resolve bundle dependencies without touching the staged workspace.
 use crate::manifest::Side;
+mod notices;
+pub use notices::{Notice, NoticeKind};
 use semver::{Version, VersionReq};
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
@@ -28,10 +30,12 @@ pub enum Error {
     Missing {
         owner: String,
         target: String,
+        note: String,
     },
     NoApi {
         owner: String,
         target: String,
+        note: String,
     },
     CargoConflict {
         owner: String,
@@ -42,6 +46,7 @@ pub enum Error {
         target: String,
         version: String,
         requirement: String,
+        note: String,
     },
     Cycle {
         mods: Vec<String>,
@@ -64,9 +69,20 @@ impl fmt::Display for Error {
                 reason,
             } => write!(f, "{owner}: dependency {target}: {reason}"),
             Self::Duplicate(id) => write!(f, "Duplicate mod id {id:?}"),
-            Self::Missing { owner, target } => write!(f, "{owner} requires missing mod {target}"),
-            Self::NoApi { owner, target } => {
-                write!(f, "{owner} depends on {target}, which has no [api] package")
+            Self::Missing {
+                owner,
+                target,
+                note,
+            } => write!(f, "{owner} requires missing mod {target}{note}"),
+            Self::NoApi {
+                owner,
+                target,
+                note,
+            } => {
+                write!(
+                    f,
+                    "{owner} depends on {target}, which has no [api] package{note}"
+                )
             }
             Self::CargoConflict { owner, target } => {
                 write!(
@@ -79,9 +95,10 @@ impl fmt::Display for Error {
                 target,
                 version,
                 requirement,
+                note,
             } => write!(
                 f,
-                "{owner} requires {target} {requirement}, but installed version is {version}"
+                "{owner} requires {target} {requirement}, but installed version is {version}{note}"
             ),
             Self::Cycle { mods } => write!(f, "Mod dependency cycle: {}", mods.join(" -> ")),
             Self::Incompatible {
@@ -161,6 +178,8 @@ pub struct Mod<'a> {
     pub id: &'a str,
     pub version: &'a str,
     pub has_api: bool,
+    /// Code declarations also participate in physical library linking.
+    pub code: bool,
     pub dependencies: &'a [Dependency],
 }
 
@@ -169,26 +188,71 @@ pub struct Resolution {
     /// Original bundle indices, in dispatch order.
     pub order: Vec<usize>,
     /// What the load rules let through: a discouraged pair, an override applied.
-    pub warnings: Vec<String>,
+    pub warnings: Vec<Notice>,
 }
 
+/// Validate and order a mixed set of code and content declarations.
 pub fn resolve(mods: &[Mod<'_>]) -> Result<Resolution, Error> {
-    resolve_with_api(mods, true, &[], &Overrides::default())
+    resolve_all(mods, &[], &Overrides::default(), false)
 }
 
-/// Resolve content layers without requiring native API packages.
-pub fn resolve_content(mods: &[Mod<'_>]) -> Result<Resolution, Error> {
-    resolve_with_api(mods, false, &[], &Overrides::default())
+/// Physical library order, independent of manifest validation/dispatch overrides.
+///
+/// Every active code dependency still needs its API package. Version ranges and
+/// dispatch order are logical rules; actual Cargo/wasm imports and ABI validation
+/// remain the compiler/linker's responsibility and never fall back silently.
+pub fn resolve_links(mods: &[Mod<'_>]) -> Result<Resolution, Error> {
+    resolve_all(mods, &[], &Overrides::default(), true)
 }
 
-/// [`resolve`], with `rules[i]` the load rules of `mods[i]` and an instance's overrides, as the
-/// game starts its code mods.
+/// Validate the applicable installed set with its instance overrides, then return
+/// logical dispatch order and structured notices for both affected Mods rows.
 pub fn resolve_with_rules(
     mods: &[Mod<'_>],
     rules: &[Vec<Rule>],
     overrides: &Overrides,
 ) -> Result<Resolution, Error> {
-    resolve_with_api(mods, true, rules, overrides)
+    resolve_all(mods, rules, overrides, false)
+}
+
+/// Resolve one applicable installed manifest snapshot with one shared policy for
+/// native, wasm and content packages. Indices in the result refer to `manifests`.
+pub fn resolve_manifests(
+    manifests: &[&crate::Manifest],
+    running: Side,
+    overrides: &Overrides,
+) -> Result<Resolution, Error> {
+    let declared: Vec<_> = manifests
+        .iter()
+        .map(|manifest| from_manifest(&manifest.dependencies, running))
+        .collect();
+    let inputs: Vec<_> = manifests
+        .iter()
+        .zip(&declared)
+        .map(|(manifest, dependencies)| {
+            let code = manifest.native.is_some() || manifest.wasm.is_some();
+            Mod {
+                id: &manifest.id,
+                version: &manifest.version,
+                has_api: code,
+                code,
+                dependencies,
+            }
+        })
+        .collect();
+    let rules: Vec<_> = manifests
+        .iter()
+        .map(|manifest| rules(manifest, running))
+        .collect();
+    resolve_with_rules(&inputs, &rules, overrides)
+}
+
+fn diagnostic_note(reason: Option<&str>, url: Option<&str>) -> String {
+    match (reason, url) {
+        (Some(reason), Some(url)) => format!(" ({reason}, {url})"),
+        (Some(text), None) | (None, Some(text)) => format!(" ({text})"),
+        (None, None) => String::new(),
+    }
 }
 
 /// What a load rule asks of another mod.
@@ -222,11 +286,7 @@ pub fn rules(manifest: &crate::Manifest, running: Side) -> Vec<Rule> {
     ) -> impl Iterator<Item = Rule> + 'a {
         table.iter().filter_map(move |(id, rule)| {
             let rule = rule.details();
-            let note = match (rule.reason, rule.url) {
-                (Some(reason), Some(url)) => format!(" ({reason}, {url})"),
-                (Some(text), None) | (None, Some(text)) => format!(" ({text})"),
-                (None, None) => String::new(),
-            };
+            let note = diagnostic_note(rule.reason.as_deref(), rule.url.as_deref());
             (running == Side::Both || rule.side == Side::Both || rule.side == running).then(|| {
                 Rule {
                     kind,
@@ -302,11 +362,11 @@ impl Overrides {
     }
 }
 
-fn resolve_with_api(
+fn resolve_all(
     mods: &[Mod<'_>],
-    require_api: bool,
     rules: &[Vec<Rule>],
     overrides: &Overrides,
+    links: bool,
 ) -> Result<Resolution, Error> {
     let mut ids = HashMap::new();
     for (index, item) in mods.iter().enumerate() {
@@ -315,78 +375,119 @@ fn resolve_with_api(
         }
     }
     let mut edges = vec![Vec::new(); mods.len()];
+    let mut warnings = Vec::new();
+    // A target's version is parsed only when a logical rule uses it, once per resolution.
+    let mut versions = HashMap::new();
     for (index, item) in mods.iter().enumerate() {
         for dep in item.dependencies {
-            let Some(&target) = ids.get(dep.id.as_str()) else {
+            let target = ids.get(dep.id.as_str()).copied();
+            let note = diagnostic_note(dep.reason.as_deref(), dep.url.as_deref());
+            if !links && let Some(action) = overrides.get(item.id, &dep.id) {
+                warnings.push(Notice {
+                    owner: item.id.into(),
+                    target: dep.id.clone(),
+                    version: target.map(|i| mods[i].version.to_owned()),
+                    note: note.clone(),
+                    kind: match action {
+                        Override::Drop => NoticeKind::OverrideDropped,
+                        Override::Discourage => NoticeKind::OverrideDiscouraged,
+                    },
+                });
+                // These remove validation and dispatch edges only. The separate
+                // physical resolution still enforces actual library requirements.
+                continue;
+            }
+            let Some(target) = target else {
                 if dep.optional {
                     continue;
                 }
                 return Err(Error::Missing {
                     owner: item.id.into(),
                     target: dep.id.clone(),
+                    note,
                 });
             };
             let other = &mods[target];
-            if require_api && (!item.has_api || !other.has_api) {
+            if item.code && (!item.has_api || !other.has_api) {
                 return Err(Error::NoApi {
                     owner: item.id.into(),
                     target: dep.id.clone(),
+                    note,
                 });
             }
-            // A `[mod] version` may leave out minor and patch (`"1"`, `"1.2"`), as Cargo's
-            // requirements do: they count as zero.
-            let version = parse_version(other.version).map_err(|e| Error::Manifest {
-                owner: item.id.into(),
-                target: dep.id.clone(),
-                reason: format!("invalid installed version {:?}: {e}", other.version),
-            })?;
-            if !dep.requirement.matches(&version) {
-                return Err(Error::Version {
+            if !links {
+                let version = versions
+                    .entry(target)
+                    .or_insert_with(|| parse_version(other.version));
+                let version = version.as_ref().map_err(|error| Error::Manifest {
                     owner: item.id.into(),
                     target: dep.id.clone(),
-                    version: other.version.into(),
-                    requirement: dep.requirement.to_string(),
+                    reason: format!("invalid installed version {:?}: {error}", other.version),
+                })?;
+                if !dep.requirement.matches(version) {
+                    return Err(Error::Version {
+                        owner: item.id.into(),
+                        target: dep.id.clone(),
+                        version: other.version.into(),
+                        requirement: dep.requirement.to_string(),
+                        note,
+                    });
+                }
+            }
+            use mod_vocab::DependencyOrder;
+            if links || dep.order == DependencyOrder::After {
+                edges[index].push(target);
+            } else if dep.order == DependencyOrder::Before {
+                edges[target].push(index);
+            } else if dep.order != DependencyOrder::None {
+                return Err(Error::Manifest {
+                    owner: item.id.into(),
+                    target: dep.id.clone(),
+                    reason: "unsupported dependency order".into(),
                 });
             }
-            edges[index].push(target);
         }
     }
-    let mut warnings = Vec::new();
     for (index, item) in mods.iter().enumerate() {
         for rule in rules.get(index).into_iter().flatten() {
-            // A rule about a mod that isn't loaded holds nothing.
-            let Some(&target) = ids.get(rule.id.as_str()) else {
-                continue;
-            };
+            let target = ids.get(rule.id.as_str()).copied();
             let mut kind = rule.kind;
             match overrides.get(item.id, &rule.id) {
-                Some(Override::Drop) => {
-                    warnings.push(format!(
-                        "dependency override: {} -> {} dropped",
-                        item.id, rule.id
-                    ));
-                    continue;
-                }
-                Some(Override::Discourage) if kind == RuleKind::Incompatible => {
-                    warnings.push(format!(
-                        "dependency override: {} -> {} only discouraged",
-                        item.id, rule.id
-                    ));
+                Some(action) => {
+                    warnings.push(Notice {
+                        owner: item.id.into(),
+                        target: rule.id.clone(),
+                        version: target.map(|i| mods[i].version.to_owned()),
+                        note: rule.note.clone(),
+                        kind: match action {
+                            Override::Drop => NoticeKind::OverrideDropped,
+                            Override::Discourage => NoticeKind::OverrideDiscouraged,
+                        },
+                    });
+                    if action == Override::Drop || kind == RuleKind::LoadBefore {
+                        continue;
+                    }
                     kind = RuleKind::Discouraged;
                 }
-                _ => {}
+                None => {}
             }
+            let Some(target) = target else {
+                continue;
+            };
             if kind == RuleKind::LoadBefore {
                 edges[target].push(index);
                 continue;
             }
             let other = &mods[target];
-            let version = parse_version(other.version).map_err(|e| Error::Manifest {
+            let version = versions
+                .entry(target)
+                .or_insert_with(|| parse_version(other.version));
+            let version = version.as_ref().map_err(|error| Error::Manifest {
                 owner: item.id.into(),
                 target: rule.id.clone(),
-                reason: format!("invalid installed version {:?}: {e}", other.version),
+                reason: format!("invalid installed version {:?}: {error}", other.version),
             })?;
-            if !rule.requirement.matches(&version) {
+            if !rule.requirement.matches(version) {
                 continue;
             }
             if kind == RuleKind::Incompatible {
@@ -397,10 +498,13 @@ fn resolve_with_api(
                     note: rule.note.clone(),
                 });
             }
-            warnings.push(format!(
-                "{} works badly with {} {}{}",
-                item.id, rule.id, other.version, rule.note
-            ));
+            warnings.push(Notice {
+                owner: item.id.into(),
+                target: rule.id.clone(),
+                version: Some(other.version.into()),
+                note: rule.note.clone(),
+                kind: NoticeKind::Discouraged,
+            });
         }
     }
     let mut done = vec![false; mods.len()];
@@ -479,6 +583,10 @@ pub fn rewrite(
             return Err(Error::Missing {
                 owner: owner.into(),
                 target: id.clone(),
+                note: diagnostic_note(
+                    target.dependency.reason.as_deref(),
+                    target.dependency.url.as_deref(),
+                ),
             });
         }
         if target.dependency.optional {
@@ -528,6 +636,7 @@ mod tests {
             id,
             version,
             has_api: true,
+            code: true,
             dependencies,
         }
     }
@@ -548,7 +657,7 @@ mod tests {
         );
         assert_eq!(client[0].order, mod_vocab::DependencyOrder::None);
         assert!(
-            matches!(resolve(&[item("server", "1", &client)]), Err(Error::Missing { owner, target }) if owner == "server" && target == "client")
+            matches!(resolve(&[item("server", "1", &client)]), Err(Error::Missing { owner, target, .. }) if owner == "server" && target == "client")
         );
     }
 
@@ -638,29 +747,28 @@ mod tests {
                 id: &addon.id,
                 version: &addon.version,
                 has_api: false,
+                code: false,
                 dependencies: &dependencies,
             },
             Mod {
                 id: &base.id,
                 version: &base.version,
                 has_api: false,
+                code: false,
                 dependencies: &[],
             },
         ];
-        assert_eq!(resolve_content(&mods).unwrap().order, [1, 0]);
-        assert!(matches!(resolve(&mods), Err(Error::NoApi { .. })));
-        assert!(matches!(
-            resolve_content(&mods[..1]),
-            Err(Error::Missing { .. })
-        ));
+        assert_eq!(resolve(&mods).unwrap().order, [1, 0]);
+        assert!(matches!(resolve(&mods[..1]), Err(Error::Missing { .. })));
         let incompatible = Mod {
             id: "base",
             version: "2",
             has_api: false,
+            code: false,
             dependencies: &[],
         };
         assert!(matches!(
-            resolve_content(&[mods[0].clone(), incompatible]),
+            resolve(&[mods[0].clone(), incompatible]),
             Err(Error::Version { .. })
         ));
         let back = from_manifest(
@@ -668,12 +776,13 @@ mod tests {
             crate::manifest::Side::Both,
         );
         assert!(matches!(
-            resolve_content(&[
+            resolve(&[
                 mods[0].clone(),
                 Mod {
                     id: "base",
                     version: "1",
                     has_api: false,
+                    code: false,
                     dependencies: &back
                 }
             ]),
@@ -710,7 +819,13 @@ mod tests {
         assert!(with(&[("client_only", "1")], &server, &none).is_ok());
         assert!(with(&[("client_only", "1")], &client, &none).is_err());
         let slow = with(&[("slow", "3")], &server, &none).unwrap();
-        assert_eq!(slow.warnings, ["user works badly with slow 3"]);
+        assert_eq!(
+            slow.warnings
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
+            ["user works badly with slow 3"]
+        );
         // Before a present mod it doesn't depend on; an absent one is ignored.
         let mods = [item("late", "1", &[]), item("user", "1", &[])];
         let rules = [Vec::new(), server.clone()];
@@ -721,7 +836,11 @@ mod tests {
         let discourage: Overrides = toml::from_str("[user]\nbroken = 'discourage'\n").unwrap();
         let warned = with(&[("broken", "1.5")], &server, &discourage).unwrap();
         assert_eq!(
-            warned.warnings,
+            warned
+                .warnings
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
             [
                 "dependency override: user -> broken only discouraged",
                 "user works badly with broken 1.5 (Corrupts saves, https://example.com/why)"
@@ -730,7 +849,11 @@ mod tests {
         let drop: Overrides = toml::from_str("[user]\nbroken = 'drop'\n").unwrap();
         let dropped = with(&[("broken", "1.5")], &server, &drop).unwrap();
         assert_eq!(
-            dropped.warnings,
+            dropped
+                .warnings
+                .iter()
+                .map(ToString::to_string)
+                .collect::<Vec<_>>(),
             ["dependency override: user -> broken dropped"]
         );
         for refused in [
@@ -739,6 +862,102 @@ mod tests {
         ] {
             assert!(crate::Manifest::parse(&format!("{header}{refused}")).is_err());
         }
+    }
+
+    #[test]
+    fn dispatch_order_and_validation_overrides_never_replace_the_link_graph() {
+        for order in ["none", "before"] {
+            let declared = deps(&format!(
+                "[dependencies]\nbase={{version='^1',order='{order}'}}"
+            ));
+            let mods = [item("user", "1", &declared), item("base", "1", &[])];
+            assert_eq!(resolve(&mods).unwrap().order, [0, 1]);
+            assert_eq!(resolve_links(&mods).unwrap().order, [1, 0]);
+        }
+        let declared = deps(
+            "[dependencies]\nbase={version='^2',reason='Integration',url='https://example.test/base'}",
+        );
+        let mods = [item("user", "1", &declared), item("base", "1", &[])];
+        assert!(matches!(resolve(&mods), Err(Error::Version { .. })));
+        let dropped: Overrides = toml::from_str("[user]\nbase='drop'").unwrap();
+        let logical = resolve_with_rules(&mods, &[], &dropped).unwrap();
+        assert_eq!(logical.order, [0, 1]);
+        assert_eq!(logical.warnings[0].kind, NoticeKind::OverrideDropped);
+        assert_eq!(
+            logical.warnings[0].note,
+            " (Integration, https://example.test/base)"
+        );
+        assert_eq!(resolve_links(&mods).unwrap().order, [1, 0]);
+        assert_eq!(
+            resolve_with_rules(&mods[..1], &[], &dropped).unwrap().order,
+            [0]
+        );
+        assert!(
+            matches!(resolve_links(&mods[..1]), Err(Error::Missing { owner, target, .. }) if owner == "user" && target == "base")
+        );
+    }
+
+    fn manifest(id: &str, extra: &str) -> crate::Manifest {
+        crate::Manifest::parse(&format!(
+            "id='{id}'\nname='{id}'\nversion='1'\napi='0.2'\ncapabilities=['registries']\n{extra}"
+        ))
+        .unwrap()
+    }
+
+    #[test]
+    fn content_and_mixed_rules_share_refusal_without_turning_content_into_a_library() {
+        let owner = manifest(
+            "owner",
+            "[incompatible]\nother={version='*',reason='Bad interaction',url='https://example.test/why'}",
+        );
+        let plain = manifest("other", "");
+        let code = manifest(
+            "other",
+            &format!(
+                "[native]\ngame='26.3'\nhorizon='{}'\nmixins='{}'",
+                "a".repeat(40),
+                "b".repeat(40)
+            ),
+        );
+        for other in [&plain, &code] {
+            let error = resolve_manifests(&[&owner, other], Side::Client, &Overrides::default())
+                .unwrap_err();
+            assert_eq!(
+                error.to_string(),
+                "owner is incompatible with other 1 (Bad interaction, https://example.test/why)"
+            );
+        }
+        let mut dependent = manifest("dependent", "[dependencies]\nother='^1'");
+        assert_eq!(
+            resolve_manifests(&[&dependent, &code], Side::Client, &Overrides::default())
+                .unwrap()
+                .order,
+            [1, 0]
+        );
+        dependent.native = code.native.clone();
+        assert!(
+            matches!(resolve_manifests(&[&dependent, &plain], Side::Client, &Overrides::default()), Err(Error::NoApi { owner, target, .. }) if owner == "dependent" && target == "other")
+        );
+    }
+
+    #[test]
+    fn a_content_cycle_reports_its_literal_path_without_unrelated_nodes() {
+        let a = manifest("a", "[dependencies]\nb='^1'");
+        let b = manifest("b", "[dependencies]\na='^1'");
+        let free = manifest("free", "");
+        assert_eq!(
+            resolve_manifests(&[&a, &b, &free], Side::Client, &Overrides::default())
+                .unwrap_err()
+                .to_string(),
+            "Mod dependency cycle: a -> b -> a"
+        );
+        let dropped: Overrides = toml::from_str("[a]\nb='drop'").unwrap();
+        assert_eq!(
+            resolve_manifests(&[&a, &b, &free], Side::Client, &dropped)
+                .unwrap()
+                .order,
+            [0, 1, 2]
+        );
     }
 
     #[test]

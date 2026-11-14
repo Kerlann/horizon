@@ -267,17 +267,23 @@ impl ModsScreen {
             if let Some(png) = png {
                 icons.insert(key.clone(), png);
             }
-            let note = if let Some(problem) = &installed.problem {
-                Some(Text::literal(problem.clone()).with_color(RED))
+            let mut notes = Vec::new();
+            if let Some(problem) = &installed.problem {
+                notes.push(Text::literal(problem.clone()).with_color(RED));
             } else if !mods.is_on(index) {
-                Some(tr("horizon.mods.screen.off").with_color(d::GRAY))
-            } else {
-                // A loading warning: the mod runs, so its row isn't marked failed.
-                info.and_then(|i| i.warnings.first()).map(|(key, args)| {
-                    let args: Vec<_> = args.iter().map(|a| Text::literal(a.clone())).collect();
-                    Text::translate(key, &args).with_color(GOLD)
-                })
-            };
+                notes.push(tr("horizon.mods.screen.off").with_color(d::GRAY));
+            }
+            // Status does not hide load notices. Every applied override and
+            // discouraged pair remains readable in this row's scrollable panel.
+            if let Some(info) = info {
+                for (key, args) in &info.warnings {
+                    let args: Vec<_> = args.iter().map(|arg| Text::literal(arg.clone())).collect();
+                    notes.push(Text::translate(key, &args).with_color(GOLD));
+                }
+            }
+            let note = notes
+                .into_iter()
+                .reduce(|left, right| left.append(Text::literal("\n\n")).append(right));
             entries.push(Entry {
                 id: installed.id.clone(),
                 name: info.map_or_else(|| installed.title.clone(), |i| i.name.clone()),
@@ -540,7 +546,7 @@ impl ModsScreen {
         // Room for an update notice, and its spacer.
         y += 9 + 10;
         if let Some(note) = &e.note {
-            let note = lines(note.clone());
+            let note = d::label_lines(m, note, width, usize::MAX, &Style::default());
             let rows = note.len() as i32;
             out.push(Placed {
                 y,
@@ -1350,6 +1356,48 @@ mod tests {
         assert_eq!(note(english).as_deref(), Some("No jei: recipes hidden"));
         let missing = crate::lang::Language::of("en_us", Vec::<(String, String)>::new());
         assert_eq!(note(missing).as_deref(), Some("test.warn.optional"));
+    }
+
+    #[test]
+    fn all_loading_notices_remain_visible_beside_failed_and_off_status() {
+        let language = crate::lang::Language::of(
+            "en_us",
+            [
+                (
+                    "horizon.mods.screen.off".to_owned(),
+                    "Off for this launch".to_owned(),
+                ),
+                ("test.first".to_owned(), "First warning: %s".to_owned()),
+                ("test.second".to_owned(), "Second override: %s".to_owned()),
+            ],
+        );
+        let _ = crate::lang::scoped(language, || {
+            for problem in [None, Some("Refused fixture")] {
+                let (mut row, mut info) = installed("warns", "Warns", None);
+                row.problem = problem.map(str::to_owned);
+                info.warnings = vec![
+                    ("test.first".into(), vec!["other".into()]),
+                    ("test.second".into(), vec!["third".into()]),
+                ];
+                let screen = ModsScreen::new(427, 240, false, &mods(&[(row, info)]));
+                let note = screen
+                    .entries
+                    .iter()
+                    .find(|entry| entry.id == "warns")
+                    .unwrap()
+                    .note
+                    .as_ref()
+                    .unwrap()
+                    .plain();
+                assert_eq!(
+                    note,
+                    format!(
+                        "{}\\n\\nFirst warning: other\\n\\nSecond override: third",
+                        problem.unwrap_or("Off for this launch")
+                    )
+                );
+            }
+        });
     }
 
     /// `BackgroundWithPipingWidget`: the info panel is framed like the list, 2 px beyond its

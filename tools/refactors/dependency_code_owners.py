@@ -10,6 +10,7 @@ paths = [
     "crates/horizon-client/src/game/modding/mods/mod.rs",
     "launcher/src/native_mods.rs",
     "launcher/src/native_mods/internals_sync.rs",
+    "launcher/src/native_mods/registry_compile.rs",
 ]
 for filename in paths:
     path = Path(filename)

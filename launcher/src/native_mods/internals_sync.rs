@@ -60,8 +60,9 @@ fn discover_catalog(folder: &Path, game: &Path) -> Result<Vec<ListedInternal>, E
         version: &bundle.manifest.version,
         dependencies: &declared[0],
         has_api: true,
+        code: true,
     }];
-    let resolution = dependencies::resolve(&inputs).map_err(|e| e.to_string())?;
+    let resolution = dependencies::resolve_links(&inputs).map_err(|e| e.to_string())?;
     let cache = game
         .parent()
         .ok_or_else(|| "invalid discovery cache".to_owned())?
