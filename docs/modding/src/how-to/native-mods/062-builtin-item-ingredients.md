@@ -172,3 +172,11 @@ fields do not participate in equality. Its recipe and item-default values are
 prepared at load; live candidates are borrowed without allocation.
 The other 111 registered built-ins use stored-value matching while their shared
 decoders are added incrementally in **#3875**. Their absence is not a load refusal.
+
+<!-- Member #4092 decoder documentation -->
+`item_name`, `block_entity_data`, and `unbreakable` in the `minecraft` namespace.
+`unbreakable` requires an object, ignores its fields and normalizes to `{}`;
+scalars and lists are rejected. Matching requires effective presence, including
+item defaults, while an explicit removal suppresses that default.
+The other 111 registered built-ins use stored-value matching while their shared
+decoders are added incrementally in **#3875**. Their absence is not a load refusal.
