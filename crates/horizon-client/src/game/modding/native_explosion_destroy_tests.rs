@@ -68,7 +68,13 @@ fn destroy(
             input.put(&blast.radius);
             input.put(&blast.fire);
             input.put(&blast.interaction);
-            wasm_answer(game, level, "level_explosion_destroy_blocks", input, &expected);
+            wasm_answer(
+                game,
+                level,
+                "level_explosion_destroy_blocks",
+                input,
+                &expected,
+            );
         }
     }
 }
@@ -194,7 +200,11 @@ fn a_thousand_stone_blocks_turn_to_air_with_drops_decayed_by_the_rule() {
                 "{via:?}"
             );
             let expected = if decay { 0 } else { 1000 };
-            assert_eq!(dropped(game, "minecraft:cobblestone"), expected, "{via:?} {decay}");
+            assert_eq!(
+                dropped(game, "minecraft:cobblestone"),
+                expected,
+                "{via:?} {decay}"
+            );
         }
     });
 }
@@ -204,7 +214,13 @@ fn a_thousand_stone_blocks_turn_to_air_with_drops_decayed_by_the_rule() {
 fn the_keep_interaction_changes_nothing() {
     each_target(|game, via, _| {
         set(game, [1, 80, 1], "stone");
-        destroy(game, via, &[[1, 80, 1]], blast(ExplosionInteraction::None), Ok(0));
+        destroy(
+            game,
+            via,
+            &[[1, 80, 1]],
+            blast(ExplosionInteraction::None),
+            Ok(0),
+        );
         assert_eq!(name(game, [1, 80, 1]), "minecraft:stone", "{via:?}");
     });
 }
@@ -216,9 +232,19 @@ fn a_part_hears_its_block_exploded_once() {
         set(game, [2, 80, 2], "dirt");
         // A position listed twice counts once.
         let positions = [[2, 80, 2], [2, 80, 2]];
-        destroy(game, via, &positions, blast(ExplosionInteraction::Block), Ok(1));
+        destroy(
+            game,
+            via,
+            &positions,
+            blast(ExplosionInteraction::Block),
+            Ok(1),
+        );
         assert_eq!(*watch.exploded.lock().unwrap(), [[2, 80, 2]], "{via:?}");
-        assert_eq!(*watch.detonated.lock().unwrap(), [vec![[2, 80, 2]]], "{via:?}");
+        assert_eq!(
+            *watch.detonated.lock().unwrap(),
+            [vec![[2, 80, 2]]],
+            "{via:?}"
+        );
         assert_eq!(name(game, [2, 80, 2]), "minecraft:air", "{via:?}");
     });
 }
@@ -232,10 +258,20 @@ fn a_detonate_listener_spares_a_position_and_adds_none() {
         }
         watch.edit.store(true, Ordering::Relaxed);
         let positions = [[1, 80, 1], [2, 80, 1]];
-        destroy(game, via, &positions, blast(ExplosionInteraction::Block), Ok(1));
+        destroy(
+            game,
+            via,
+            &positions,
+            blast(ExplosionInteraction::Block),
+            Ok(1),
+        );
         assert_eq!(name(game, [1, 80, 1]), "minecraft:stone", "{via:?}: spared");
         assert_eq!(name(game, [2, 80, 1]), "minecraft:air", "{via:?}");
-        assert_eq!(name(game, [3, 80, 3]), "minecraft:stone", "{via:?}: added, ignored");
+        assert_eq!(
+            name(game, [3, 80, 3]),
+            "minecraft:stone",
+            "{via:?}: added, ignored"
+        );
     });
 }
 
@@ -269,7 +305,16 @@ fn drops_of_one_item_merge_at_the_first_blocks_position() {
         for p in positions {
             set(game, p, "cobblestone");
         }
-        destroy(game, via, &positions, blast(ExplosionInteraction::Block), Ok(2));
+        // Java Random seed 7: nextInt(2) is 1, so the first cell stays first.
+        game.world.random.set_seed(7);
+        destroy(
+            game,
+            via,
+            &positions,
+            blast(ExplosionInteraction::Block),
+            Ok(2),
+        );
+        assert_eq!(game.world.random.next_int(), -1_552_468_968, "{via:?}");
         let drops: Vec<_> = game
             .dropped
             .iter()
@@ -277,10 +322,14 @@ fn drops_of_one_item_merge_at_the_first_blocks_position() {
             .collect();
         assert_eq!(drops.len(), 1, "{via:?}: {drops:?}");
         let (item, count, at) = &drops[0];
-        assert_eq!((item.as_str(), *count), ("minecraft:cobblestone", 2), "{via:?}");
-        // Popped from one of the two blocks (the first after the shuffle).
+        assert_eq!(
+            (item.as_str(), *count),
+            ("minecraft:cobblestone", 2),
+            "{via:?}"
+        );
+        // Popped from the independently calculated first shuffled cell.
         let cell = [at.x.floor() as i32, at.z.floor() as i32];
-        assert!(cell == [1, 1] || cell == [8, 8], "{via:?}: {at:?}");
+        assert_eq!(cell, [1, 1], "{via:?}: {at:?}");
     });
 }
 
@@ -290,9 +339,18 @@ fn an_unloaded_position_is_skipped_and_not_counted() {
     each_target(|game, via, _| {
         set(game, [1, 80, 1], "stone");
         let positions = [[1, 80, 1], [100, 80, 100]];
-        destroy(game, via, &positions, blast(ExplosionInteraction::Block), Ok(1));
+        destroy(
+            game,
+            via,
+            &positions,
+            blast(ExplosionInteraction::Block),
+            Ok(1),
+        );
         assert_eq!(name(game, [1, 80, 1]), "minecraft:air", "{via:?}");
-        assert!(!game.world.chunks.contains_key(&(6, 6)), "{via:?}: never loaded");
+        assert!(
+            !game.world.chunks.contains_key(&(6, 6)),
+            "{via:?}: never loaded"
+        );
     });
 }
 
@@ -320,7 +378,13 @@ fn a_cancelled_start_destroys_nothing() {
     each_target(|game, via, watch| {
         set(game, [1, 80, 1], "stone");
         watch.cancel.store(true, Ordering::Relaxed);
-        destroy(game, via, &[[1, 80, 1]], blast(ExplosionInteraction::Block), Ok(0));
+        destroy(
+            game,
+            via,
+            &[[1, 80, 1]],
+            blast(ExplosionInteraction::Block),
+            Ok(0),
+        );
         assert_eq!(name(game, [1, 80, 1]), "minecraft:stone", "{via:?}");
         assert!(watch.detonated.lock().unwrap().is_empty(), "{via:?}");
     });
