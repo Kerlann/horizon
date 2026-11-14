@@ -2,7 +2,9 @@
 //! parser, and the types mods registered, with the dispatcher type each node parses as.
 
 use super::{ArgType, Text, TryIntoEngine};
-use horizon_client::command::{CommandError, Reader, args::Coordinates, snbt};
+use horizon_client::command::{
+    CommandError, Dispatcher, NodeKind, Range, Reader, args::Coordinates, snbt,
+};
 use serde_json::{Value, json};
 use std::{
     collections::{HashMap, HashSet},
@@ -175,6 +177,24 @@ pub(super) fn parser(kind: &str) -> Option<(&'static str, Value, ArgType)> {
         "dimension" => ("minecraft:dimension", Value::Null, ArgType::Dimension),
         "nbt" => ("minecraft:nbt_compound_tag", Value::Null, ArgType::Nbt),
         _ => return None,
+    })
+}
+
+/// The type of the argument node that parsed `range`: the parsed node, not the value, says which
+/// kind a position, id or string is.
+pub(super) fn parsed_type(
+    dispatcher: &Dispatcher,
+    parsed_nodes: &[(usize, Range)],
+    range: Range,
+) -> Option<ArgType> {
+    parsed_nodes.iter().find_map(|(node, parsed)| {
+        if *parsed != range {
+            return None;
+        }
+        match &dispatcher.nodes[*node].kind {
+            NodeKind::Argument { ty, .. } => Some(ty.clone()),
+            _ => None,
+        }
     })
 }
 

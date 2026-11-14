@@ -21,8 +21,8 @@ use super::{Dim, Game, commands::execute, lan::LanHost, respawn_anchor::RespawnC
 use crate::game::level_control_hooks::LevelControl;
 pub(super) use argument_kinds::{CommandArguments, command_arguments};
 use argument_kinds::{
-    UNCENTERED, argument_type, custom_value, dimension_value, nbt_value, parser, positional_value,
-    resource_parser,
+    UNCENTERED, argument_type, custom_value, dimension_value, nbt_value, parsed_type, parser,
+    positional_value, resource_parser,
 };
 use mod_api::__private::game::*;
 // Their old home, for mixin code that names them here.
@@ -2202,16 +2202,7 @@ impl Game<'_> {
         use mod_api::{CommandArgument, CommandArgumentValue as Value};
         let mut arguments = Vec::with_capacity(context.args.len());
         for argument in context.args {
-            // The parsed node, not the value, says which kind a position, id or string is.
-            let ty = context.nodes.iter().find_map(|(node, range)| {
-                if *range != argument.range {
-                    return None;
-                }
-                match &self.ui.dispatcher.0.nodes[*node].kind {
-                    horizon_client::command::NodeKind::Argument { ty, .. } => Some(ty.clone()),
-                    _ => None,
-                }
-            });
+            let ty = parsed_type(&self.ui.dispatcher.0, &context.nodes, argument.range);
             let value = match argument.value {
                 Arg::Str(text) if matches!(ty, Some(ArgType::Nbt)) => nbt_value(&text)?,
                 Arg::Str(value) => Value::String(value),
@@ -3018,9 +3009,15 @@ mod tests {
             let Some(Arg::Coords(coordinates)) = context.get(name) else {
                 panic!("{name} is a position")
             };
-            let ty = parser(kind).unwrap().2;
+            let range = context.args.iter().find(|a| a.name == name).unwrap().range;
+            let ty = parsed_type(&dispatcher, &context.nodes, range);
+            assert_eq!(
+                format!("{ty:?}"),
+                format!("{:?}", Some(parser(kind).unwrap().2)),
+                "{name}: the type comes from the parsed node"
+            );
             positional_value(
-                Some(&ty),
+                ty.as_ref(),
                 coordinates,
                 coordinates.position(origin, rotation),
                 rotation,
