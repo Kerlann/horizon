@@ -259,7 +259,7 @@ fn slot_rules_mutate_and_item_tick_can_cancel() {
     });
     let (mut may_place, mut max_stack) = (true, 64);
     dispatch_menu_slot_rules(
-        &Loop("loop"),
+        &TestHost,
         "test:menu",
         0,
         &ItemStack::default(),
@@ -721,6 +721,7 @@ mod stubs {
     #[derive(Clone, Copy)]
     pub(super) struct BlockId;
     pub(super) struct Ticks;
+    pub(super) struct ClockAdjustment;
     pub(super) struct Compound;
     pub(super) type Dispensed = (Option<super::ItemStack>, i32);
     pub(super) struct LootDrops<'a>(pub &'a ());

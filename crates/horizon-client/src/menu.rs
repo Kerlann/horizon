@@ -21,7 +21,7 @@ pub use mod_api::item::menu::{LogicalSide, MenuButtonContext};
 mod models;
 pub use models::{
     AnvilCraft, AnvilUpdate, AnvilVanilla, CarriedAccess, GrindstonePlace, GrindstoneTake,
-    SlotView, StackedOnOther,
+    SlotRules, SlotView, StackedOnOther,
 };
 use std::sync::Arc;
 
@@ -122,6 +122,9 @@ pub struct Env<'a> {
     pub limited_crafting: bool,
     /// The recipes the player knows (`ServerPlayer.getRecipeBook().contains(id)`).
     pub known_recipes: Option<&'a dyn KnownRecipes>,
+    /// The mods' `menu_slot_rules`, lent by the game with the read-only `Host` behind it (none
+    /// keeps every slot's own answer: a data-only consumer, or a click made without the game).
+    pub slot_rules: Option<&'a dyn SlotRules>,
 }
 
 /// The maps of the level a menu is in.
@@ -494,24 +497,11 @@ fn tidy(slot: &mut Option<ItemStack>) {
     }
 }
 
-/// Dispatch registered vanilla and mod menu slot placement and maximum stack rules.
-/// The slot is its backing container index. The shared application bounds the
-/// final maximum.
-#[inline(always)]
-pub fn native_menu_slot_rules(
-    context: &LoopContext,
-    menu: &str,
-    slot: usize,
-    stack: &ItemStack,
-    may_place: &mut bool,
-    max_stack: &mut u32,
-) {
-    crate::native_client_hooks::menu_slot_rules(context, menu, slot, stack, may_place, max_stack);
-}
-
-/// Apply the scoped rule to a slot's own answers, then enforce its item cap.
+/// Apply the scoped rule to a slot's own answers, then enforce its item cap. The rules are asked
+/// here, while the click plans, and only for a menu type a part answers; with none lent the
+/// slot's answers stand.
 pub fn apply_menu_slot_rules(
-    context: &LoopContext,
+    rules: Option<&dyn SlotRules>,
     menu: &str,
     slot: usize,
     stack: &ItemStack,
@@ -519,7 +509,9 @@ pub fn apply_menu_slot_rules(
     mut max_stack: u32,
     item_max: u32,
 ) -> (bool, u32) {
-    native_menu_slot_rules(context, menu, slot, stack, &mut may_place, &mut max_stack);
+    if let Some(rules) = rules.filter(|rules| rules.listens(menu)) {
+        rules.rule(menu, slot, stack, &mut may_place, &mut max_stack);
+    }
     (may_place, max_stack.clamp(1, CONTAINER_MAX).min(item_max))
 }
 
@@ -1807,7 +1799,7 @@ impl Menu {
             return (own, max.min(Self::max_stack(env, stack)));
         };
         apply_menu_slot_rules(
-            env.loop_context,
+            env.slot_rules,
             id,
             self.state.slots[s].index,
             stack,
@@ -3306,6 +3298,7 @@ pub(crate) mod tests {
             limited_crafting: false,
             can_equip: None,
             known_recipes: None,
+            slot_rules: None,
         };
         let mut menu = Menu::new(kind);
         menu.creative = true;
@@ -3454,6 +3447,7 @@ pub(crate) mod tests {
             limited_crafting: false,
             can_equip: None,
             known_recipes: None,
+            slot_rules: None,
         };
         let mut fuel = ItemStack::new("minecraft:stone", 2);
         fuel.data_mut().set_loot_component(
@@ -3502,6 +3496,7 @@ pub(crate) mod tests {
             limited_crafting: false,
             can_equip: None,
             known_recipes: None,
+            slot_rules: None,
         };
         for (input, payment) in [
             (Input::Pickup, 8),
@@ -3704,6 +3699,7 @@ pub(crate) mod tests {
         let _ = std::fs::remove_dir_all(&root);
         let (banners, station_recipes) = (Default::default(), Default::default());
         let (enchantments, names) = (Default::default(), Default::default());
+        let rules = ContextRules(loop_context);
         test(&Env {
             crafting_remainder: None,
             player: Some(7),
@@ -3721,7 +3717,33 @@ pub(crate) mod tests {
             limited_crafting: false,
             can_equip: None,
             known_recipes: None,
+            slot_rules: Some(&rules),
         });
+    }
+
+    /// The `menu_slot_rules` answers a mod menu `test:rules` gives in the tests: slot 0 takes
+    /// a stack on a server only, and holds what the `rules_mod` setting says (7 without it).
+    struct ContextRules<'a>(&'a LoopContext);
+    impl SlotRules for ContextRules<'_> {
+        fn listens(&self, menu: &str) -> bool {
+            menu == "test:rules"
+        }
+        fn rule(
+            &self,
+            menu: &str,
+            slot: usize,
+            _: &ItemStack,
+            may_place: &mut bool,
+            max_stack: &mut u32,
+        ) {
+            if menu == "test:rules" && slot == 0 {
+                *may_place = self.0.side() == LoopSide::Server;
+                *max_stack = self
+                    .0
+                    .setting("rules_mod", "stack")
+                    .map_or(7, |value| value.parse().unwrap());
+            }
+        }
     }
 
     /// `AnvilUpdateEvent`: not asked without a left input, and once per
@@ -4293,14 +4315,6 @@ pub(crate) mod tests {
             std::sync::atomic::AtomicUsize::new(0);
         let installed =
             crate::native_client_hooks::install(crate::native_client_hooks::NativeClientHooks {
-                menu_slot_rules: |context, menu, slot, _, may_place, max_stack| {
-                    if menu == "test:rules" && slot == 0 {
-                        *may_place = context.side() == LoopSide::Server;
-                        *max_stack = context
-                            .setting("rules_mod", "stack")
-                            .map_or(7, |value| value.parse().unwrap());
-                    }
-                },
                 menu_still_valid: |context, player, menu, _, eye, valid| {
                     STILL_VALID_ASKED.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     if menu == "test:rules" && player == 2 && eye[2] == 0.0 {
@@ -4321,10 +4335,14 @@ pub(crate) mod tests {
                         *amount += 1.0;
                     }
                 },
-                living_breathe: |context, _, _, can_breathe, consume, _| {
+                living_breathe: |context, _, kind, can_breathe, consume, _| {
                     if context.setting("rules_mod", "stack").is_some() {
-                        *can_breathe = false;
-                        *consume += 4;
+                        // A cod breathes on land; a salmon loses all its air at once.
+                        *can_breathe = kind == "minecraft:cod";
+                        *consume = match kind {
+                            "minecraft:salmon" => i32::MAX,
+                            _ => *consume + 4,
+                        };
                     }
                 },
                 farmland_trample: |context, _, _, _, _, cancel| {
@@ -4341,10 +4359,11 @@ pub(crate) mod tests {
                         .setting("rules_mod", "stack")
                         .map(|value| crate::text::Text::literal(&value));
                 },
-                living_drown: |context, _, _, drowning, damage, _, _| {
+                living_drown: |context, _, _, drowning, damage, bubbles, _| {
                     if context.setting("rules_mod", "stack").is_some() {
                         *drowning = true;
                         *damage += 1.0;
+                        *bubbles = 0;
                     }
                 },
                 living_fall: |context, _, _, distance, multiplier, _| {
@@ -4376,6 +4395,9 @@ pub(crate) mod tests {
                 },
                 is_ladder: |context, _, _, _, ladder| {
                     *ladder |= context.setting("rules_mod", "stack").is_some();
+                },
+                makes_open_trapdoor_above_climbable: |context, _, _, _, climbable| {
+                    *climbable |= context.setting("rules_mod", "stack").is_some();
                 },
                 friction: |context, _, kind, _, _, friction| {
                     if context.setting("rules_mod", "stack").is_some() {
@@ -4557,6 +4579,20 @@ pub(crate) mod tests {
         };
         assert!(!ladder(&before));
         assert!(ladder(&after));
+        // So does the block under an open trapdoor.
+        let trapdoor_ladder = |context: &LoopContext| {
+            let mut climbable = false;
+            crate::motion::ladder::native_makes_open_trapdoor_above_climbable(
+                context,
+                horizon_world::registry::BlockStateId(0),
+                horizon_core::position::BlockPos::new(0, 0, 0),
+                horizon_world::registry::BlockStateId(0),
+                &mut climbable,
+            );
+            climbable
+        };
+        assert!(!trapdoor_ladder(&before));
+        assert!(trapdoor_ladder(&after));
         // A block's friction reads it too; an answer that is NaN or outside 0..=2 keeps the
         // block's own.
         let friction = |context: &LoopContext, kind: &str| {
@@ -4674,13 +4710,43 @@ pub(crate) mod tests {
                 "minecraft:zombie",
                 &mut drowning,
                 &mut damage,
-                8,
+                &mut 8,
                 &mut cancel_drown,
             );
             (amount, cancel, can_breathe, consume, drowning, damage)
         };
         assert_eq!(health(&before), (2.0, false, true, 1, false, 2.0));
         assert_eq!(health(&after), (3.0, true, false, 5, true, 3.0));
+        // A listener that lets a cod breathe: on land for 300 ticks it keeps
+        // full air and takes no damage.
+        let mut air = 300;
+        for _ in 0..300 {
+            let hurt =
+                crate::breathing::own_air(&after, 1, "minecraft:cod", &mut air, false, 300, true);
+            assert_eq!(hurt, None);
+        }
+        assert_eq!(air, 300);
+        // A listener that sets `bubble_count` to 0: a drowning player takes the
+        // damage and shows no bubbles (`drown_bubbles` sends nothing for 0).
+        let gasp = crate::breathing::Breath {
+            can_breathe: false,
+            consume: 1,
+            refill: 0,
+        };
+        let mut air = -19;
+        let drowned =
+            crate::breathing::drown(&after, 3, "minecraft:player", &mut air, gasp, true).unwrap();
+        assert_eq!((drowned.damage, drowned.bubbles, air), (Some(3.0), 0, 0));
+        // A listener's `consume` of `i32::MAX` saturates instead of overflowing:
+        // a water animal past -20 only loses air, another kind drowns.
+        let mut air = -19;
+        let hurt =
+            crate::breathing::own_air(&after, 4, "minecraft:salmon", &mut air, false, 300, true);
+        assert_eq!((hurt, air), (None, i32::MIN));
+        let mut air = -19;
+        let hurt =
+            crate::breathing::own_air(&after, 4, "minecraft:salmon", &mut air, false, 6000, false);
+        assert_eq!((hurt, air), (Some(3.0), 0));
         // A server's block menu: the game's `stillValid` answer arrives first and
         // the parts on its mod menu type may change it; a vanilla menu type never
         // asks them, and a menu whose block entity is gone closes without asking.
@@ -4807,6 +4873,7 @@ pub(crate) mod tests {
             limited_crafting: false,
             can_equip: None,
             known_recipes: None,
+            slot_rules: None,
         };
         // Both a pick-up onto the cursor and a shift-click into the inventory.
         for input in [Input::Pickup, Input::QuickMove] {
@@ -4897,6 +4964,7 @@ pub(crate) mod tests {
             limited_crafting: false,
             can_equip: None,
             known_recipes: None,
+            slot_rules: None,
         };
         let menu = &mut Menu::new(mod_menu());
         {
@@ -5303,6 +5371,7 @@ pub(crate) mod tests {
             limited_crafting: false,
             can_equip: None,
             known_recipes: None,
+            slot_rules: None,
         };
 
         let mut menu = Menu::new(Kind::Inventory);
@@ -5358,6 +5427,7 @@ pub(crate) mod tests {
             limited_crafting: true,
             can_equip: None,
             known_recipes: Some(&known),
+            slot_rules: None,
         };
 
         let mut menu = Menu::new(Kind::Inventory);
@@ -5413,6 +5483,7 @@ pub(crate) mod tests {
             limited_crafting: true,
             can_equip: None,
             known_recipes: Some(&known),
+            slot_rules: None,
         };
 
         let mut menu = Menu::new(Kind::Inventory);
@@ -5472,6 +5543,7 @@ pub(crate) mod tests {
             limited_crafting: true,
             can_equip: None,
             known_recipes: Some(&known),
+            slot_rules: None,
         };
 
         let mut menu = Menu::new(Kind::Inventory);
@@ -5521,6 +5593,7 @@ pub(crate) mod tests {
             limited_crafting: false,
             can_equip: None,
             known_recipes: None,
+            slot_rules: None,
         };
         let potion = ItemStack::new("minecraft:potion", 1);
         let mut seen = Vec::new();

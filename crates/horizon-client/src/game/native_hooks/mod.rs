@@ -12,7 +12,7 @@ pub(in crate::game) use fire::{
     BlockDropsCall, BlockScreenEffectDrawCall, ConnectsToCall, EntityChangeBlockPreCall,
     ItemAfterVerticalCollisionCall, UpdateShapeCall,
 };
-use mod_api::{BlockEntityDataSource, BlockEntityRef};
+use mod_api::{BlockEntityDataSource, BlockEntityRef, ClockAdjustment};
 
 use super::native_data_maps::DataMapType;
 use super::{
@@ -80,7 +80,8 @@ use mod_api::{
     LayerDefinition, LifecycleContext, LivingRef, LoadConditions, NoteBlockChange,
     ParticleProviders, PathComputationType, Placement, PlayerRef, PoiTypeExtensions,
     RecipeBookCategory, ScreenId, ScreenOpening, ScreenshotImage, ServerReloadListeners,
-    ServerTickPhase, TicketController, ToolUse, VillagerProfessions, WorldPhase,
+    ServerTickPhase, SpecialModelRenderers, TicketController, ToolUse, VillagerProfessions,
+    WorldPhase,
 };
 use mod_api::{
     ActiveEffect, AttachmentStore, BlockClick, BlockUpdateFlags, BonemealSource, ChunkRef,
@@ -92,8 +93,8 @@ use mod_api::{
     ParticleGroup, PosedParts, RuntimeSprite, SkullModel, TaskId, TextureAtlasRegistration,
 };
 pub(crate) use mod_api::{
-    BlockRim, ClientPacket, ClientPayload, ColoredLight, ExplosionStart, ItemFished, LootDrops,
-    PanelEvent, PortalShape, ScreenView,
+    BlockRim, ClientPacket, ClientPayload, ColoredLight, ContainerLootFilled, ExplosionStart,
+    ItemFished, LootDrops, PanelEvent, PortalShape, ScreenView,
 };
 use mod_api::{
     CameraType, Despawn, Identifier, MobRef, PermissionLevel, RailShape, SoundPlay, SoundRef,

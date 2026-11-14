@@ -1,6 +1,6 @@
 //! Real-game regressions for native handles used during a guest's turn.
 
-use super::{lan::LanSettings, native_entity_refs::tests::with_game};
+use super::lan::LanSettings;
 use horizon_client::{
     lan::{Joined, NetConfig, PlayerSender, guest::Guest, hub::HubConfig},
     mobs::Mob,
@@ -14,7 +14,15 @@ use std::sync::{
 };
 
 pub(in crate::game) fn with_guests(test: impl FnOnce(&mut super::Game<'_>)) {
-    with_game(|game| {
+    let root = std::path::PathBuf::from(std::env::var_os("HORIZON_TEST_RESOURCES").unwrap());
+    with_guests_at(root, test);
+}
+
+pub(in crate::game) fn with_guests_at(
+    root: std::path::PathBuf,
+    test: impl FnOnce(&mut super::Game<'_>),
+) {
+    super::native_entity_refs::tests::with_game_at(root, |game| {
         let settings = LanSettings {
             port: 0,
             guest_commands: false,
@@ -177,7 +185,7 @@ fn refused_wire_reload_preserves_hub_and_engine_generation() {
             &[],
         );
         let error = game
-            .prepare_world_reload(&stack, &root, false)
+            .prepare_world_reload(&stack, &root)
             .err()
             .unwrap()
             .to_string();
@@ -204,7 +212,7 @@ fn refused_wire_reload_preserves_hub_and_engine_generation() {
             &[],
             &[],
         );
-        let prepared = game.prepare_world_reload(&stack, &good, false).unwrap();
+        let prepared = game.prepare_world_reload(&stack, &good).unwrap();
         game.install_world_tables(prepared);
         game.run_native_advancement_grants();
         assert!(!Arc::ptr_eq(
@@ -1059,7 +1067,11 @@ fn tick_advancement_notice_precedes_recipe_reward() {
         sync.advancements = horizon_client::lan::ServerAdvancements::load(
             &scratch,
             &horizon_world::loot::PackOverlay::NONE,
-            Default::default(),
+            // Rewards must name a recipe registered in the server's index.
+            std::collections::BTreeMap::from([(
+                "testmod:reward".into(),
+                r#"{"type":"minecraft:crafting_shapeless","ingredients":["minecraft:stone"],"result":{"id":"minecraft:diamond","count":1}}"#.into(),
+            )]),
             Default::default(),
         );
         let reload = std::env::var("HORIZON_ADVANCEMENT_ORDER_CHILD").as_deref() == Ok("reload");

@@ -117,6 +117,7 @@ impl Game<'_> {
         if let Some(host) = self.lan.as_mut() {
             host.play.entry(conn).or_default().merchant = Some(gm);
         }
+        self.player_menu_opening(conn);
     }
     /// `Entity.getDisplayName` of the merchant, the screen's title: its name
     /// (custom, else the profession's) with the show_entity hover event and
@@ -310,6 +311,7 @@ impl Game<'_> {
             limited_crafting: host.hub.limited_crafting,
             can_equip: None,
             known_recipes: Some(&g.recipe_book),
+            slot_rules: Some(self),
         };
         let mut menu = Menu::new(Kind::Merchant);
         menu.set_registry_id(Some("minecraft:merchant"));
@@ -485,6 +487,9 @@ impl Game<'_> {
             return false;
         };
         self.merchant_closed(&mut gm.merchant);
+        if window.is_some() {
+            self.player_menu_closing(conn);
+        }
         true
     }
     /// `Merchant.stillValid` for a trader: it is alive and the guest is within

@@ -193,6 +193,11 @@ pub struct EntityMemory {
     pub(super) destroying_vehicles: HashSet<super::commands::Target>,
     /// Synched entity-data entries dirtied by forced writes since the last sync.
     pub(super) forced_meta: HashMap<u32, [u64; 4]>,
+    /// `Entity.noPhysics` a native mod wrote for a kind whose own struct keeps
+    /// no field for it (the dragon, an area-effect cloud, an ominous item
+    /// spawner, a shulker bullet): the value replaces the kind's constructor
+    /// default and is never saved.
+    pub(super) no_physics: HashMap<u32, bool>,
     /// Passengers that ride a vehicle, in load order: live entity IDs or unspawned tags.
     /// Entities of types Horizon does not simulate, kept per chunk and
     /// written back unchanged.
@@ -1135,12 +1140,17 @@ impl Game<'_> {
 
     /// An entity of a type Horizon does not simulate, kept as its compound.
     fn load_other(&mut self, mut tag: Tag, kind: &str) -> Option<u32> {
+        // A missing mod's record is opaque, not a vanilla fallback entity to normalize.
+        let quarantined = super::general::quarantined_kind(kind).then(|| tag.clone());
         strip_finalize(&mut tag);
         let id = self.next_entity + 1;
         let other = Self::other_from_nbt(&tag, id, kind)?;
         self.next_entity = id;
         let uuid = with_constructor_uuid(entity_nbt::uuid(&tag));
         self.remember(id, uuid, tag);
+        if let Some(original) = quarantined {
+            self.persist.raw.insert(id, original);
+        }
         self.others.push(other);
         Some(id)
     }
@@ -1398,6 +1408,7 @@ impl Game<'_> {
         self.forget_entity_initialization(mod_api::Holder::Entity(id));
         self.entity_attachments.remove(&id);
         self.persist.raw.remove(&id);
+        self.persist.no_physics.remove(&id);
     }
     /// Detach a travelling entity without discarding its in-memory attachments.
     pub(super) fn detach_entity(&mut self, id: u32) {
@@ -1703,8 +1714,15 @@ impl Game<'_> {
                     .get(&o.id)
                     .copied()
                     .unwrap_or_else(random_uuid);
-                let mut tag = self.other_to_nbt(o, uuid);
-                write_attachments(&mut tag, o.id, &self.entity_attachments);
+                let tag = if super::general::quarantined_kind(&o.kind)
+                    && let Some(raw) = self.persist.raw.get(&o.id)
+                {
+                    raw.clone()
+                } else {
+                    let mut tag = self.other_to_nbt(o, uuid);
+                    write_attachments(&mut tag, o.id, &self.entity_attachments);
+                    tag
+                };
                 roots
                     .entry(chunk_of(o.position))
                     .or_default()
