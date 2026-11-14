@@ -163,3 +163,12 @@ strings `"red"` and `"snow"`. The `tropical_fish/pattern` codec accepts only `"k
 numeric network ids, case variants and namespaced values. Tropical fish buckets
 have no pattern component by default; the mob's default pattern is not an item default.
 The other 110 registered built-ins use stored-value matching while their shared
+
+<!-- Member #4124 decoder documentation -->
+`item_name`, `block_entity_data`, and `villager_food` in the `minecraft` namespace.
+`villager_food` requires a compound with positive integer `nutrition`: numeric
+NBT uses Java's 32-bit integer conversion before the positive check, and unknown
+fields do not participate in equality. Its recipe and item-default values are
+prepared at load; live candidates are borrowed without allocation.
+The other 111 registered built-ins use stored-value matching while their shared
+decoders are added incrementally in **#3875**. Their absence is not a load refusal.

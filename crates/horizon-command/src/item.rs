@@ -82,6 +82,7 @@ pub const DECODED_COMPONENTS: &[&str] = &[
     "minecraft:salmon/size",
     "minecraft:parrot/variant",
     "minecraft:tropical_fish/pattern",
+    "minecraft:villager_food",
 ];
 
 /// Validate and decode a component into the value representation shared with stacks.
@@ -212,6 +213,13 @@ pub fn decoded_component_value(id: &str, value: &Tag, reg: &Registries) -> Resul
         "minecraft:dyed_color" => {
             Tag::Int(horizon_core::color::rgb_color_from_tag(value).expect("validated RGB color"))
         }
+        "minecraft:villager_food" => Tag::compound([(
+            "nutrition",
+            Tag::Int(
+                int_of(value.get("nutrition").expect("validated nutrition"))
+                    .expect("validated numeric nutrition") as i32,
+            ),
+        )]),
         "minecraft:enchantments" | "minecraft:stored_enchantments" => {
             let Tag::Compound(entries) = value else {
                 unreachable!("validated enchantment map")
@@ -330,6 +338,26 @@ pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), Strin
             let v = int_of(value).ok_or("Not a number")?;
             if v <= 0 {
                 return Err(format!("Value must be positive: {v}"));
+        // `VillagerFood.CODEC`: a required positive Codec.INT; extra fields are ignored.
+        "minecraft:villager_food" => {
+            let Tag::Compound(_) = t else {
+                return Err(not_map(t));
+            };
+            let nutrition = t.get("nutrition").ok_or("Missing nutrition")?;
+            let value = int_of(nutrition).ok_or("Not a number")?;
+            if value <= 0 {
+                return Err(format!("Value must be positive: {value}"));
+            }
+            Ok(())
+        }
+        "minecraft:rarity" => match t {
+            Tag::String(s) => {
+                let s = s.to_string_lossy();
+                if ["common", "uncommon", "rare", "epic"].contains(&s.as_str()) {
+                    Ok(())
+                } else {
+                    Err(format!("Unknown element name:{s}"))
+                }
             }
             Ok(())
         }
