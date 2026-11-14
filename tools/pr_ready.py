@@ -308,10 +308,9 @@ def parity_summary(output):
     return text
 
 
-# CI's verify job (.github/workflows/ci.yml): clippy over the whole workspace, and over the server build (the game
-# without sound or controllers).
-CI_CLIPPY = "cargo clippy --workspace --all-targets --locked -- -D warnings"
-CI_CLIPPY_SERVER = "cargo clippy -p horizon-client -p horizon-game -p horizon-mod-host --all-targets --locked --no-default-features -- -D warnings"
+# CI's lint job (.github/workflows/dyna-ci.yml): collect warnings across the whole graph before rejecting them.
+CI_CLIPPY = "python3 tools/ci/check_warnings.py cargo clippy --keep-going --workspace --all-targets --locked"
+CI_CLIPPY_SERVER = "python3 tools/ci/check_warnings.py cargo clippy --keep-going -p horizon-client -p horizon-game -p horizon-mod-host --all-targets --locked --no-default-features"
 
 
 # CI installs the current stable each run (rustup toolchain install stable), and Rust ships one every six weeks
@@ -389,7 +388,7 @@ def plan(args, base, changed, crates_of, libraries, dependencies):
     clippy_crates = dependent_crates(crates, dependencies)
     clippy = CI_CLIPPY
     if clippy_crates is None or "horizon-client" in clippy_crates:
-        clippy += f" && {CI_CLIPPY_SERVER}"
+        clippy = f'status=0\n{CI_CLIPPY} || status=$?\n{CI_CLIPPY_SERVER} || status=$?\nexit "$status"'
     test_skip = None if crates is None or crates else "no crate touched"
     doc_crates = sorted(libraries if crates is None else libraries.intersection(crates))
     doc_selection = "--workspace" if crates is None else " ".join(f"-p {shlex.quote(c)}" for c in doc_crates)
@@ -436,15 +435,15 @@ def plan(args, base, changed, crates_of, libraries, dependencies):
                                  ("mod registry tests", MOD_REGISTRY, registry_skip)):
         steps.extend([
             Step(f"{name} clippy",
-                 f"CARGO_BUILD_JOBS=${{CARGO_BUILD_JOBS:-4}} cargo clippy --manifest-path {manifest}"
-                 " --all-targets --locked -- -D warnings", skip=skip),
+                 f"CARGO_BUILD_JOBS=${{CARGO_BUILD_JOBS:-4}} python3 tools/ci/check_warnings.py cargo clippy --keep-going --manifest-path {manifest}"
+                 " --all-targets --locked", skip=skip),
             Step(f"{name} tests",
                  f"CARGO_BUILD_JOBS=${{CARGO_BUILD_JOBS:-4}} cargo test --manifest-path {manifest}"
                  " --locked -- --test-threads=4", skip=skip, summary=tests_passed),
         ])
     launcher_skip = None if launcher else "launcher untouched"
     for name, command in [("launcher rustfmt", "cargo fmt --check"),
-                          ("launcher clippy", "cargo clippy --all-targets --locked $features -- -D warnings"),
+                          ("launcher clippy", "python3 ../tools/ci/check_warnings.py cargo clippy --keep-going --all-targets --locked $features"),
                           ("launcher tests", "cargo test --locked --lib --bins $features")]:
         steps.append(Step(name, f"cd launcher && {LAUNCHER_FEATURES}\nin_shell {shlex.quote(command)}", skip=launcher_skip,
                           summary=tests_passed if name == "launcher tests" else None))
@@ -569,7 +568,7 @@ def run_windows(steps, verbose, environment=None):
         elif step.name == "rustfmt":
             command = [sys.executable, "tools/ci/format_scan.py"]
         elif step.name == "clippy":
-            command = shlex.split(CI_CLIPPY)  # the server build's clippy runs in CI (Linux)
+            command = [sys.executable, *shlex.split(CI_CLIPPY)[1:]]  # server clippy runs in CI (Linux)
         elif step.name.startswith("tests"):
             command = shlex.split(step.command)
         elif step.name == "tokens.css up to date":
@@ -578,7 +577,8 @@ def run_windows(steps, verbose, environment=None):
             command = ["cargo", "fmt", "--check"]
             cwd = ROOT / "launcher"
         elif step.name == "launcher clippy":
-            command = ["cargo", "clippy", "--all-targets", "--locked", "--", "-D", "warnings"]
+            command = [sys.executable, "../tools/ci/check_warnings.py", "cargo", "clippy", "--keep-going",
+                       "--all-targets", "--locked"]
             cwd = ROOT / "launcher"
         elif step.name == "launcher tests":
             command = ["cargo", "test", "--locked", "--lib", "--bins"]
