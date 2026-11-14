@@ -136,3 +136,100 @@ fn glider_component_malformed_payloads_name_component_and_omit_recipe() {
         assert!(recipes.crafting.is_empty(), "{payload}");
     }
 }
+
+#[test]
+fn rollup_boundary_and_absence_4095() {
+    let load = load();
+    let context = load.loop_context(LoopSide::Server, []);
+    for inherited in [false, true] {
+        let mut items = Items::empty();
+        let defaults = crate::json_nbt::json_to_compound(
+            serde_json::json!({"minecraft:glider":{}})
+                .as_object()
+                .unwrap(),
+        )
+        .unwrap();
+        if inherited {
+            items.component_defaults = std::sync::Arc::new(std::collections::HashMap::from([(
+                "minecraft:elytra".into(),
+                defaults.clone(),
+            )]));
+        }
+        let positive = parse(
+            r#"{"type":"neoforge:components","items":"minecraft:elytra","components":{"minecraft:glider":{}}}"#,
+            &items,
+        );
+        let absent = parse(
+            r#"{"type":"neoforge:components","items":"minecraft:elytra","components":{"!minecraft:glider":{}}}"#,
+            &items,
+        );
+        let mut stack = ItemStack::new("minecraft:elytra", 1);
+        assert_eq!(positive.test_in(&context, &stack), inherited);
+        assert_eq!(absent.test_in(&context, &stack), !inherited);
+        (_, stack.extra) = crate::item_data::decode_components(Some(&Tag::Compound(defaults)));
+        assert!(positive.test_in(&context, &stack));
+        assert!(!absent.test_in(&context, &stack));
+        let removal = Tag::compound([("!minecraft:glider", Tag::Compound(Default::default()))]);
+        (_, stack.extra) = crate::item_data::decode_components(Some(&removal));
+        assert!(absent.test_in(&context, &stack));
+        assert!(!positive.test_in(&context, &stack));
+    }
+    let items = Items::empty();
+    for tag in [Tag::End, Tag::Byte(0), Tag::List(vec![])] {
+        let registry = horizon_command::Registries::default();
+        let error =
+            horizon_command::item::decoded_component_value("minecraft:glider", &tag, &registry)
+                .unwrap_err();
+        assert!(!error.is_empty());
+        let rule = IngredientRule::Components {
+            patch: [("minecraft:glider".into(), tag)].into_iter().collect(),
+            removed: vec![],
+            strict: false,
+        };
+        let error = components::validate(&rule, &items).unwrap_err();
+        assert!(error.contains("minecraft:glider"), "{error}");
+    }
+    for value in [
+        serde_json::Value::Null,
+        serde_json::json!(false),
+        serde_json::json!([]),
+    ] {
+        let ingredient = serde_json::json!({"type":"neoforge:components","items":"minecraft:elytra","components":{"minecraft:glider":value}});
+        let error = components::validate_recipe_components(&ingredient, &items).unwrap_err();
+        assert!(error.contains("minecraft:glider"), "{error}");
+        let recipe = |ingredient| serde_json::json!({"type":"minecraft:crafting_shapeless","ingredients":[ingredient],"result":{"id":"minecraft:diamond"}});
+        let root = tempfile::tempdir().unwrap();
+        let recipes = crate::crafting::Recipes::from_sources(
+            root.path(),
+            &items,
+            &horizon_world::loot::PackOverlay::NONE,
+            vec![
+                ("fixture:invalid_glider".into(), recipe(ingredient)),
+                (
+                    "fixture:valid".into(),
+                    recipe(serde_json::json!("minecraft:elytra")),
+                ),
+            ],
+            &load,
+        )
+        .unwrap();
+        assert_eq!(recipes.crafting.len(), 1);
+        assert!(!recipes.recipe_matches(
+            &context,
+            "fixture:invalid_glider",
+            &[Some(ItemStack::new("minecraft:elytra", 1))],
+            1
+        ));
+        assert!(recipes.recipe_matches(
+            &context,
+            "fixture:valid",
+            &[Some(ItemStack::new("minecraft:elytra", 1))],
+            1
+        ));
+        assert!(
+            recipes
+                .craft(&context, &[Some(ItemStack::new("minecraft:elytra", 1))], 1)
+                .is_some()
+        );
+    }
+}
