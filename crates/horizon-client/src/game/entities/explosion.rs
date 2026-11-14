@@ -1639,42 +1639,7 @@ impl Game<'_> {
             self.explosion_hurt_entities(center, radius, damage_type, interaction, &targets);
         self.combat.blast_hit_list = outer;
         self.combat.blast_hit_ids = outer_ids;
-        if interaction == BlockInteraction::Trigger {
-            self.explosion_trigger_blocks(&mut targets)?;
-        } else if interaction != BlockInteraction::Keep {
-            // Util.shuffle(list, level.random)
-            for i in (2..=targets.len()).rev() {
-                let swap = self.world.random.next_int_bound(i as i32).unwrap_or(0) as usize;
-                targets.swap(i - 1, swap);
-            }
-            let mut drops = ExplosionDrops::default();
-            for &pos in &targets {
-                self.explosion_hit_block(pos, radius, interaction, &start, &mut drops)?;
-            }
-            self.spawn_explosion_drops(drops);
-        }
-        if fire {
-            for &pos in &targets {
-                if self.world.random.next_int_bound(3).unwrap_or(1) == 0
-                    && self
-                        .res
-                        .facts()
-                        .is_air(self.world.block(pos[0], pos[1], pos[2]))
-                    && self
-                        .res
-                        .facts()
-                        .get(self.world.block(pos[0], pos[1] - 1, pos[2]))
-                        .solid_render
-                {
-                    // BaseFireBlock.getState: soul fire on its base blocks,
-                    // fire shaped by its neighbours elsewhere.
-                    let at = BlockPos::new(pos[0], pos[1], pos[2]);
-                    let fire =
-                        self.with_level(|b, level, ticks| b.fire_state_for(level, ticks, at));
-                    self.level_set(pos, fire)?;
-                }
-            }
-        }
+        self.explosion_block_step(&mut targets, radius, interaction, fire, &start)?;
         let effects = self.blast_effects();
         if !source.silent {
             let pitch = (1.0 + (client_float() - client_float()) * 0.2) * 0.7;
@@ -1721,6 +1686,62 @@ impl Game<'_> {
         }
     }
     /// `BlockBehaviour.onExplosionHit` (TNT: `wasExploded` primes a short fuse).
+    /// The blast's block step on `targets` (`ServerExplosion.explode` from
+    /// `interactWithBlocks` to `createFire`): a trigger blast works the
+    /// blocks it may; one that breaks blocks shuffles them with the level's
+    /// random and hits each, its drops merged across all of them and popped
+    /// after the last; then, with `fire`, a third of the cells left air above
+    /// a solid block catch fire, whatever the interaction. The number of
+    /// blocks hit: the ones that were not air when their turn came.
+    pub(super) fn explosion_block_step(
+        &mut self,
+        targets: &mut [[i32; 3]],
+        radius: f32,
+        interaction: BlockInteraction,
+        fire: bool,
+        start: &ExplosionStart<'_>,
+    ) -> Result<usize> {
+        let mut hit = 0;
+        if interaction == BlockInteraction::Trigger {
+            self.explosion_trigger_blocks(targets)?;
+        } else if interaction != BlockInteraction::Keep {
+            // Util.shuffle(list, level.random)
+            for i in (2..=targets.len()).rev() {
+                let swap = self.world.random.next_int_bound(i as i32).unwrap_or(0) as usize;
+                targets.swap(i - 1, swap);
+            }
+            let mut drops = ExplosionDrops::default();
+            for &pos in targets.iter() {
+                if self.explosion_hit_block(pos, radius, interaction, start, &mut drops)? {
+                    hit += 1;
+                }
+            }
+            self.spawn_explosion_drops(drops);
+        }
+        if fire {
+            for &pos in targets.iter() {
+                if self.world.random.next_int_bound(3).unwrap_or(1) == 0
+                    && self
+                        .res
+                        .facts()
+                        .is_air(self.world.block(pos[0], pos[1], pos[2]))
+                    && self
+                        .res
+                        .facts()
+                        .get(self.world.block(pos[0], pos[1] - 1, pos[2]))
+                        .solid_render
+                {
+                    // BaseFireBlock.getState: soul fire on its base blocks,
+                    // fire shaped by its neighbours elsewhere.
+                    let at = BlockPos::new(pos[0], pos[1], pos[2]);
+                    let fire =
+                        self.with_level(|b, level, ticks| b.fire_state_for(level, ticks, at));
+                    self.level_set(pos, fire)?;
+                }
+            }
+        }
+        Ok(hit)
+    }
     fn explosion_hit_block(
         &mut self,
         pos: [i32; 3],
@@ -1728,10 +1749,10 @@ impl Game<'_> {
         interaction: BlockInteraction,
         explosion: &ExplosionStart<'_>,
         dropped: &mut ExplosionDrops,
-    ) -> Result<()> {
+    ) -> Result<bool> {
         let state = self.world.block(pos[0], pos[1], pos[2]);
         if self.res.facts().is_air(state) {
-            return Ok(());
+            return Ok(false);
         }
         let name = self.res.facts().get(state).name.clone();
         let is_tnt = &*name == "minecraft:tnt";
@@ -1894,7 +1915,7 @@ impl Game<'_> {
                 guest,
             );
         }
-        Ok(())
+        Ok(true)
     }
     /// Build the merged entities before the events, without extra level-random
     /// draws. Each block owns only its contribution to a merged stack: canceling
