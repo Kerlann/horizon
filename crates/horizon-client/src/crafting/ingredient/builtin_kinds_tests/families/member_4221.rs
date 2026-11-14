@@ -362,3 +362,48 @@ fn rollup_rejection_and_absence_matrix_4221() {
         );
     }
 }
+
+#[test]
+fn inherited_setter_removal_4221() {
+    let load = load();
+    let context = load.loop_context(LoopSide::Server, []);
+    for inherited in [false, true] {
+        let mut items = Items::empty();
+        if inherited {
+            let Tag::Compound(defaults) =
+                Tag::compound([("minecraft:tropical_fish/pattern", Tag::String("kob".into()))])
+            else {
+                unreachable!()
+            };
+            items.component_defaults = std::sync::Arc::new(std::collections::HashMap::from([(
+                "minecraft:stone".into(),
+                defaults,
+            )]));
+        }
+        let positive = parse(
+            r#"{"type":"neoforge:components","items":"minecraft:stone","components":{"minecraft:tropical_fish/pattern":"kob"}}"#,
+            &items,
+        );
+        let absent = parse(
+            r#"{"type":"neoforge:components","items":"minecraft:stone","components":{"!minecraft:tropical_fish/pattern":{}}}"#,
+            &items,
+        );
+        let mut stack = ItemStack::new("minecraft:stone", 1);
+        assert_eq!(positive.test_in(&context, &stack), inherited);
+        assert_eq!(absent.test_in(&context, &stack), !inherited);
+        stack.data_mut().set_loot_component(
+            "minecraft:tropical_fish/pattern",
+            &Some(Tag::String("kob".into())),
+        );
+        assert!(positive.test_in(&context, &stack));
+        stack
+            .data_mut()
+            .set_loot_component("minecraft:tropical_fish/pattern", &None);
+        stack.data_mut().set_loot_component(
+            "!minecraft:tropical_fish/pattern",
+            &Some(Tag::Compound(Default::default())),
+        );
+        assert!(absent.test_in(&context, &stack));
+        assert!(!positive.test_in(&context, &stack));
+    }
+}
