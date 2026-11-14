@@ -394,16 +394,16 @@ jobs:
       - name: Lint native targets
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && (needs.changes.outputs.rust_required != 'false') }}
         id: native-lint
-        run: cargo clippy $JOBS --keep-going --workspace --all-targets -- -D warnings
+        run: python3 tools/ci/check_warnings.py cargo clippy $JOBS --keep-going --workspace --all-targets
       - name: Lint the server build without sound or controllers
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && (needs.changes.outputs.rust_required != 'false') }}
         id: server-lint
-        run: cargo clippy $JOBS --keep-going -p horizon-client -p horizon-game -p horizon-mod-host --all-targets --no-default-features -- -D warnings
+        run: python3 tools/ci/check_warnings.py cargo clippy $JOBS --keep-going -p horizon-client -p horizon-game -p horizon-mod-host --all-targets --no-default-features
       - name: The mod API builds for wasm32
         id: the_mod_api_builds_for_wasm32
         if: ${{ !cancelled() && steps.setup.outcome == 'success' && (needs.changes.outputs.rust_required != 'false') }}
         run: cargo check $JOBS --keep-going -p horizon-mod-api --target wasm32-unknown-unknown --locked
-      # The prebuilt SDK's own feature graph: a release --lib build with prefer-dynamic and warnings denied, as
+      # The prebuilt SDK's own feature graph: a release --lib build with prefer-dynamic and warnings rejected, as
       # tools/prebuilt_game.py builds it, for the host and for the Windows archive (system-allocator there,
       # cargo_features). The checks above unify test and dev features (test-support) into one host build, which hid
       # an unused import (Linux) and a unix-only binding (Windows) from everything but the SDK builds on main. Its own
@@ -414,8 +414,8 @@ jobs:
         run: |
           started=$SECONDS
           host=$(rustc -vV | awk '/^host:/ {print $2}')
-          env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS='-C prefer-dynamic -D warnings' \
-            cargo check $JOBS --keep-going --locked -p horizon-mod-host --lib --profile release --target-dir target/sdk-check --target "$host"
+          env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS='-C prefer-dynamic' \
+            python3 tools/ci/check_warnings.py cargo check $JOBS --keep-going --locked -p horizon-mod-host --lib --profile release --target-dir target/sdk-check --target "$host"
           echo "SDK library check host: $((SECONDS - started)) s" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: The prebuilt SDK's Windows library builds without warnings
         id: sdk_windows
@@ -435,8 +435,8 @@ jobs:
           # The real build is a dylib, which Cargo never LTOs; a --lib check under the release profile's thin LTO
           # builds the dependencies for linker-plugin LTO, which rustc refuses with prefer-dynamic on Windows.
           # A check generates no code, so LTO changes no warning or cfg it reports.
-          env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS='-C prefer-dynamic -D warnings' \
-            cargo check $JOBS --keep-going --locked -p horizon-mod-host --lib --profile release --target-dir target/sdk-check \
+          env -u CARGO_ENCODED_RUSTFLAGS RUSTFLAGS='-C prefer-dynamic' \
+            python3 tools/ci/check_warnings.py cargo check $JOBS --keep-going --locked -p horizon-mod-host --lib --profile release --target-dir target/sdk-check \
               --target x86_64-pc-windows-gnu --features system-allocator --config profile.release.lto=false
           echo "SDK library check windows: $((SECONDS - started)) s" | tee -a "$GITHUB_STEP_SUMMARY"
       - name: Report lint compiler cache
@@ -975,7 +975,7 @@ jobs:
         working-directory: launcher
         env:
           JOBS: ${{ needs.changes.outputs.self_hosted == 'true' && '-j2' || '' }}
-        run: cargo clippy $JOBS --keep-going --all-targets --locked -- -D warnings
+        run: python3 ../tools/ci/check_warnings.py cargo clippy $JOBS --keep-going --all-targets --locked
       - name: Test launcher library and binaries
         id: test_launcher_library_and_binaries
         if: ${{ !cancelled() && steps.setup.outcome == 'success' }}

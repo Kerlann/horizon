@@ -18,7 +18,7 @@ PACKAGES = {"horizon-core": "crates/horizon-core", "horizon-client": "crates/hor
 LIBRARIES = set(PACKAGES) - {"xtask"}
 DEPENDENCIES = {"horizon-client": {"horizon-core"}}
 MODS = ""
-CLIPPY = pr_ready.CI_CLIPPY + " && " + pr_ready.CI_CLIPPY_SERVER
+CLIPPY = f'status=0\n{pr_ready.CI_CLIPPY} || status=$?\n{pr_ready.CI_CLIPPY_SERVER} || status=$?\nexit "$status"'
 # The bash on PATH: Windows' CreateProcess looks in System32 before PATH, so a bare "bash" there is WSL's
 # (#5383), which has none of the host's paths. Git Bash on PATH runs the launcher's snippets as on Linux.
 BASH = shutil.which("bash")
@@ -404,7 +404,8 @@ class PrReadyTests(unittest.TestCase):
                                         ("Darwin", True, []), ("Linux", False, [])):
             with self.subTest(uname=uname, metal=metal):
                 self.assertEqual(self.launcher_step_arguments(command, uname, metal),
-                                 ["clippy", "--all-targets", "--locked", *features, "--", "-D", "warnings"])
+                                 ["clippy", "--keep-going", "--all-targets", "--locked", *features,
+                                  "--message-format=json-diagnostic-rendered-ansi"])
 
     def launcher_step_arguments(self, command, uname, metal):
         """Run a launcher step's shell snippet with fake uname, xcrun, pkg-config and cargo; what the fake
