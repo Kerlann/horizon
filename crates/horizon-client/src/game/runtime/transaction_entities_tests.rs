@@ -823,3 +823,36 @@ fn a_transaction_covers_its_own_level_and_another_levels_spawn_is_told_at_once()
         game.enter_level(Dim::Overworld).unwrap();
     });
 }
+
+#[test]
+#[ignore = "daily"]
+fn a_level_holds_its_spawns_for_its_own_transaction_under_another_levels() {
+    const NAME: &str = "game::transaction_entities_tests::a_level_holds_its_spawns_for_its_own_transaction_under_another_levels";
+    with_observer(NAME, |game| {
+        let overworld = game.transaction_open();
+        // As a command run `in` the nether that opens a transaction of its own does.
+        game.enter_level(Dim::Nether).unwrap();
+        let nether = game.transaction_open();
+        game.enter_level(Dim::Overworld).unwrap();
+        // The nether's transaction is the innermost; the overworld's still holds this spawn.
+        let pig = summon(game, "minecraft:pig", "{}").unwrap();
+        assert!(game.entity(pig).is_some());
+        assert!(
+            heard().joined.is_empty(),
+            "held for the overworld's transaction"
+        );
+        game.enter_level(Dim::Nether).unwrap();
+        game.transaction_close(&nether, true);
+        game.enter_level(Dim::Overworld).unwrap();
+        assert!(heard().joined.is_empty(), "still held");
+        game.transaction_close(&overworld, false);
+
+        assert_eq!(
+            game.entity(pig),
+            None,
+            "taken back with the overworld's abort"
+        );
+        game.native_joins_flush(false, 0);
+        assert_eq!(heard(), Heard::default(), "and never told");
+    });
+}

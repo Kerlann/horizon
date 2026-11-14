@@ -33,8 +33,10 @@ pub trait Hooks {
     /// other spawn between the tick's phases (it is checked after the blocks,
     /// the vehicles, the projectiles, the items and the mobs, and at the
     /// tick's end). A mod that cancels one of the others sees it removed
-    /// before it ticks again. Inside a transaction (`Host::transaction`) the
-    /// join is told at the root commit, not at the spawn call: before the
+    /// before it ticks again. Inside a transaction (`Host::transaction`) opened
+    /// in the entity's own level the join is told at that transaction's root
+    /// commit, not at the spawn call (an entity spawned in another level, as by
+    /// a command run `in` it, is told at once): before the
     /// commit the entity exists and `entity_constructing` has run, but no one
     /// is told it joined, and a listener reads the entity when the commit
     /// runs. An aborted transaction tells nothing, and the entity it spawned

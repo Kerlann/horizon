@@ -503,11 +503,13 @@ impl Game<'_> {
                     outer.chunk_marks.entry(chunk).or_insert(mark);
                 }
                 outer.after.extend(level.after);
-                // A parent in another level can't take an entity of this one back.
-                if outer.dimension == level.dimension {
-                    outer.lifetimes.merge(lifetimes);
-                } else {
-                    self.commit_entity_journal(lifetimes);
+                // The nearest enclosing transaction of this level takes its entities back; a
+                // parent in another level can't, and with none in this level they are told now.
+                match (level.dimension)
+                    .and_then(|dim| entities::open_in(&mut self.transactions, dim))
+                {
+                    Some(enclosing) => enclosing.lifetimes.merge(lifetimes),
+                    None => self.commit_entity_journal(lifetimes),
                 }
             }
             (true, None) => {
@@ -517,9 +519,12 @@ impl Game<'_> {
             (false, _) => {
                 // The entities it added go first, so nothing is put back into one.
                 let arrivals = self.roll_back_entity_journal(lifetimes);
+                let dimension = level.dimension;
                 self.roll_back(level);
-                if let Some(outer) = self.transactions.last_mut() {
-                    outer.lifetimes.keep_arrivals(arrivals);
+                if let Some(enclosing) =
+                    dimension.and_then(|dim| entities::open_in(&mut self.transactions, dim))
+                {
+                    enclosing.lifetimes.keep_arrivals(arrivals);
                 }
             }
         }

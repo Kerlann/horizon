@@ -134,6 +134,7 @@ horizon-client game::tnt::tests::tnt_primed_by_a_blast_waits_for_the_next_tick l
 horizon-client game::transaction_entities_tests::a_held_join_keeps_loaded_from_disk lib daily child-process
 horizon-client game::transaction_entities_tests::a_join_cancelled_at_commit_leaves_a_stale_handle lib daily child-process
 horizon-client game::transaction_entities_tests::a_killed_mobs_oozing_spawns_only_at_commit lib daily child-process
+horizon-client game::transaction_entities_tests::a_level_holds_its_spawns_for_its_own_transaction_under_another_levels lib daily child-process
 horizon-client game::transaction_entities_tests::a_nested_abort_takes_back_only_its_own lib daily child-process
 horizon-client game::transaction_entities_tests::a_nested_commit_goes_with_its_parents_abort lib daily child-process
 horizon-client game::transaction_entities_tests::a_pending_boat_removal_is_hidden_from_selectors_until_it_commits lib daily child-process

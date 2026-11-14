@@ -100,12 +100,15 @@ impl Drop for Telling<'_, '_> {
     }
 }
 
-/// The innermost open transaction, if it is `dimension`'s: it journals what happens in that
-/// level only. What happens in another level (a command run `in` it) is not journaled.
-fn open_in(transactions: &mut [Level], dimension: Dim) -> Option<&mut Level> {
+/// The innermost open transaction of `dimension`: it journals what happens in that level only,
+/// whatever other levels' transactions are open inside it (a command run `in` another level can
+/// open one). What happens in a level with none open (a command run `in` it from another
+/// level's transaction) is not journaled.
+pub(super) fn open_in(transactions: &mut [Level], dimension: Dim) -> Option<&mut Level> {
     transactions
-        .last_mut()
-        .filter(|level| level.dimension == Some(dimension))
+        .iter_mut()
+        .rev()
+        .find(|level| level.dimension == Some(dimension))
 }
 
 impl EntityJournal {
