@@ -11,7 +11,7 @@ mod test_stack;
 use horizon_mod_package::manifest::Package;
 
 #[test]
-#[ignore = "needs HORIZON_WASM_FIXTURE and HORIZON_WASM_STD built from this tree"]
+#[ignore = "daily"]
 fn compiled_guest_reads_predicted_like_native() {
     test_stack::on_guest_stack(|| {
         let path =
