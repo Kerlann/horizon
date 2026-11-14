@@ -724,15 +724,33 @@ impl Game<'_> {
         api_values::install_block_states(prepared.block_states);
         native_world_read::install_block_tags(prepared.tags);
         mod_api::__private::install_resolved_parts(prepared.parts);
-        self.resolve_pathfindable();
+        self.resolve_block_paths();
         self.resolve_piston_reactions();
     }
-    pub(super) fn resolve_pathfindable(&self) {
-        let asked = mod_api::__private::has_scoped_hook(mod_api::HookId::IsPathfindable);
-        let data = &self.res.rest().mob_data;
-        data.set_pathfindable(asked, |state, kind, mut pathfindable| {
-            self.native_is_pathfindable(state, kind, &mut pathfindable);
-            pathfindable
-        });
+    pub(super) fn resolve_block_paths(&self) {
+        use horizon_client::mobs::data::PartAnswers;
+        use mod_api::{__private::has_scoped_hook, HookId, PathComputationType, PathType};
+        let pathfindable: &dyn Fn(BlockStateId, PathComputationType, bool) -> bool =
+            &|state, kind, mut pathfindable| {
+                self.native_is_pathfindable(state, kind, &mut pathfindable);
+                pathfindable
+            };
+        let path_type: &dyn Fn(BlockStateId, PathType) -> PathType = &|state, mut path_type| {
+            self.native_block_path_type(state, &mut path_type);
+            path_type
+        };
+        let adjacent: &dyn Fn(BlockStateId, PathType, Option<PathType>) -> Option<PathType> =
+            &|state, path_type, mut adjacent| {
+                self.native_adjacent_block_path_type(state, path_type, &mut adjacent);
+                adjacent
+            };
+        self.res.mob_data().resolve_parts(
+            self.res.facts(),
+            &PartAnswers {
+                pathfindable: has_scoped_hook(HookId::IsPathfindable).then_some(pathfindable),
+                path_type: has_scoped_hook(HookId::BlockPathType).then_some(path_type),
+                adjacent: has_scoped_hook(HookId::AdjacentBlockPathType).then_some(adjacent),
+            },
+        );
     }
 }
