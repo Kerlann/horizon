@@ -1084,7 +1084,11 @@ impl Items {
         Ok(Self {
             items,
             block_items: Default::default(),
-            component_registry: ingredient_defaults::component_registry(root, &enchantments)?,
+            component_registry: ingredient_defaults::component_registry(
+                root,
+                &enchantments,
+                &entity_tags,
+            )?,
             component_defaults: ingredient_defaults::component_defaults(defaults)?,
             mob_visibility,
             order,

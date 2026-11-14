@@ -40,12 +40,61 @@ pub fn removed(stack: &ItemStack, id: &str) -> bool {
 /// Presence is checked by the caller, so empty decoded enchantment maps compare equal.
 pub fn component_equal(id: &str, a: &ItemStack, b: &ItemStack) -> bool {
     match id {
+        "minecraft:recipes" => recipe_keys_equal(
+            a.data().and_then(|d| d.other(id)),
+            b.data().and_then(|d| d.other(id)),
+        ),
+        "minecraft:mob_visibility" => mob_visibility_equal(
+            a.data().and_then(|d| d.other(id)),
+            b.data().and_then(|d| d.other(id)),
+        ),
+        "minecraft:cooking_fuel" => super::cooking_fuel::equal(
+            a.data().and_then(|d| d.other(id)),
+            b.data().and_then(|d| d.other(id)),
+        ),
+        "minecraft:brewing_fuel" => super::brewing_fuel::equal(
+            a.data().and_then(|d| d.other(id)),
+            b.data().and_then(|d| d.other(id)),
+        ),
+        "minecraft:compostable" => {
+            let a = a
+                .data()
+                .and_then(|d| d.other(id))
+                .and_then(|t| compostable_layers(t).ok());
+            let b = b
+                .data()
+                .and_then(|d| d.other(id))
+                .and_then(|t| compostable_layers(t).ok());
+            matches!((a,b),(Some(a),Some(b)) if a==b)
+        }
+
+        "minecraft:weapon" => {
+            let weapon = |stack: &ItemStack| {
+                stack
+                    .data()
+                    .and_then(|data| data.other(id))
+                    .and_then(|tag| crate::properties::Weapon::from_tag(tag).ok())
+            };
+            match (weapon(a), weapon(b)) {
+                (Some(a), Some(b)) => a == b,
+                _ => false,
+            }
+        }
         "minecraft:damage" => a.damage == b.damage,
         "minecraft:map_id" => map_id(a) == map_id(b),
         "minecraft:repair_cost" => {
             a.data().map_or(0, |d| d.repair_cost) == b.data().map_or(0, |d| d.repair_cost)
         }
         "minecraft:dyed_color" => dyed_color(a).is_some_and(|color| Some(color) == dyed_color(b)),
+        "minecraft:custom_model_data" => {
+            match (
+                a.data().and_then(|data| data.other(id)),
+                b.data().and_then(|data| data.other(id)),
+            ) {
+                (Some(a), Some(b)) => custom_model_data::equal(a, b),
+                _ => false,
+            }
+        }
         "minecraft:enchantments" => levels_equal(
             a.data().map_or(&[], |d| d.enchantments.as_slice()),
             b.data().map_or(&[], |d| d.enchantments.as_slice()),
@@ -58,6 +107,13 @@ pub fn component_equal(id: &str, a: &ItemStack, b: &ItemStack) -> bool {
             a.data().and_then(|d| d.other(id)).and_then(component_bool)
                 == b.data().and_then(|d| d.other(id)).and_then(component_bool)
         }
+        "minecraft:food" => match (
+            a.data().and_then(|d| d.other(id)).map(food_properties),
+            b.data().and_then(|d| d.other(id)).map(food_properties),
+        ) {
+            (Some(Ok(a)), Some(Ok(b))) => a == b,
+            _ => false,
+        },
         "minecraft:custom_name" => {
             a.data().and_then(|d| d.custom_name.as_ref())
                 == b.data().and_then(|d| d.custom_name.as_ref())
@@ -118,11 +174,34 @@ pub fn component_equal(id: &str, a: &ItemStack, b: &ItemStack) -> bool {
             a.data().and_then(|d| d.other(id)),
             b.data().and_then(|d| d.other(id)),
         ),
+        "minecraft:use_cooldown" => {
+            fn fields(stack: &ItemStack) -> Option<(f32, Option<&Tag>)> {
+                stack
+                    .data()
+                    .and_then(|d| d.other("minecraft:use_cooldown"))
+                    .and_then(crate::cooldowns::UseCooldown::fields_from_tag)
+            }
+            match (fields(a), fields(b)) {
+                (Some((a, ga)), Some((b, gb))) => {
+                    a.to_bits() == b.to_bits()
+                        && match (ga, gb) {
+                            (None, None) => true,
+                            (Some(a), Some(b)) => identifier_equal(Some(a), Some(b)),
+                            _ => false,
+                        }
+                }
+                _ => false,
+            }
+        }
         "minecraft:rarity" => rarity(a) == rarity(b),
         "minecraft:ominous_bottle_amplifier" => ominous_amplifier(a) == ominous_amplifier(b),
         // DyeColor.CODEC's canonical NbtOps value is its exact serialized name.
-        // Live stacks retain dye in `other`; borrow UTF-16 without palette scans.
-        "minecraft:dye" => match (
+        // Live stacks retain these colors in `other`; borrow UTF-16 without palette scans.
+        "minecraft:dye"
+        | "minecraft:wolf/collar"
+        | "minecraft:cat/collar"
+        | "minecraft:shulker/color"
+        | "minecraft:sheep/color" => match (
             a.data().and_then(|d| d.other(id)),
             b.data().and_then(|d| d.other(id)),
         ) {
@@ -148,6 +227,28 @@ fn dyed_color(stack: &ItemStack) -> Option<i32> {
         Some(raw) => horizon_core::color::rgb_color_from_tag(raw),
         None => data.dyed_color,
     }
+}
+
+/// `Compostable.CODEC` / `ResolvableInt.CODEC`: required layers, either any Java
+/// int or a resource key. References are keys, not registry lookups.
+fn compostable_layers(value: &Tag) -> Result<crate::properties::resolvable::Int<'_>, &'static str> {
+    if !matches!(value, Tag::Compound(_)) {
+        return Err("Not a map");
+    }
+    let layers = value.get("layers").ok_or("Missing layers")?;
+    crate::properties::resolvable::int(layers)
+        .ok_or("layers: expected a number or resource location")
+}
+
+/// Validate without materializing a normalized payload.
+pub fn validate_compostable(value: &Tag) -> Result<(), String> {
+    compostable_layers(value).map(|_| ()).map_err(str::to_owned)
+}
+
+/// Normalize only the persistent codec fields; unknown record fields are ignored.
+pub fn decoded_compostable(value: &Tag) -> Result<Tag, String> {
+    let layers = compostable_layers(value).map_err(str::to_owned)?.to_tag();
+    Ok(Tag::compound([("layers", layers)]))
 }
 
 /// Exact stored-value comparison, including the fields removed from `other` by decoding.
@@ -330,6 +431,65 @@ fn identifier_equal(a: Option<&Tag>, b: Option<&Tag>) -> bool {
     units(a).eq(units(b))
 }
 
+/// `MobVisibility.CODEC`: required holder set and inclusive boxed-float range.
+/// Registry references are resolved against the load context, never a built-in whitelist.
+pub fn decode_mob_visibility(
+    value: &Tag,
+    registry: &horizon_client_core::registries::Registries,
+) -> Result<Tag, String> {
+    let parsed = MobVisibility::parse(value)
+        .ok_or("Invalid mob_visibility fields or visibility outside [0;10]")?;
+    let targets =
+        super::component_values::holder_set(parsed.targets, "minecraft:entity_type", registry)?;
+    Ok(Tag::compound([
+        ("targeting_entity_types", targets),
+        ("visibility", Tag::Float(parsed.visibility.to_bits())),
+    ]))
+}
+
+struct MobVisibility<'a> {
+    targets: &'a Tag,
+    visibility: f32,
+}
+
+impl<'a> MobVisibility<'a> {
+    /// Borrow live persistent storage, accepting compact singleton holder sets.
+    fn parse(value: &'a Tag) -> Option<Self> {
+        let Tag::Compound(_) = value else { return None };
+        let targets = value.get("targeting_entity_types")?;
+        let visibility = match value.get("visibility")? {
+            Tag::Byte(v) => f32::from(*v),
+            Tag::Short(v) => f32::from(*v),
+            Tag::Int(v) => *v as f32,
+            Tag::Long(v) => *v as f32,
+            Tag::Float(v) => f32::from_bits(*v),
+            Tag::Double(v) => f64::from_bits(*v) as f32,
+            _ => return None,
+        };
+        // Float.compareTo distinguishes negative zero and orders NaN above 10.
+        if !visibility.is_finite() || visibility.is_sign_negative() || visibility > 10.0 {
+            return None;
+        }
+        Some(Self {
+            targets,
+            visibility,
+        })
+    }
+}
+
+fn mob_visibility_equal(a: Option<&Tag>, b: Option<&Tag>) -> bool {
+    let (Some(a), Some(b)) = (
+        a.and_then(MobVisibility::parse),
+        b.and_then(MobVisibility::parse),
+    ) else {
+        return false;
+    };
+    if a.visibility.to_bits() != b.visibility.to_bits() {
+        return false;
+    }
+    super::component_values::holder_set_equal(a.targets, b.targets)
+}
+
 fn block_entity_equal(a: Option<&Tag>, b: Option<&Tag>) -> bool {
     let (Some(Tag::Compound(a)), Some(Tag::Compound(b))) = (a, b) else {
         return a == b;
@@ -384,6 +544,25 @@ fn text_value(tag: &Tag) -> &Tag {
     } else {
         tag
     }
+}
+
+fn recipe_keys_equal(a: Option<&Tag>, b: Option<&Tag>) -> bool {
+    fn keys(value: Option<&Tag>) -> Option<&[Tag]> {
+        match value? {
+            Tag::List(values) => Some(values),
+            Tag::ByteArray(values) if values.is_empty() => Some(&[]),
+            Tag::IntArray(values) if values.is_empty() => Some(&[]),
+            Tag::LongArray(values) if values.is_empty() => Some(&[]),
+            _ => None,
+        }
+    }
+    let (Some(a), Some(b)) = (keys(a), keys(b)) else {
+        return false;
+    };
+    a.len() == b.len()
+        && a.iter()
+            .zip(b)
+            .all(|(a, b)| identifier_equal(Some(a), Some(b)))
 }
 
 #[cfg(test)]

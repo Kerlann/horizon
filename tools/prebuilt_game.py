@@ -128,7 +128,10 @@ def tracked_blobs(root: Path, commit: str, paths: tuple[str, ...] = ()):
     the bytes GitHub's archive of the commit serves, which the launcher downloads and checks against the function
     index, whatever line endings the working tree was checked out with (Git for Windows' core.autocrlf) and whatever
     it has that is not committed. Links are left out, as the launcher's download leaves them out."""
-    process = subprocess.Popen(["git", "archive", "--format=tar", commit, *(["--", *paths] if paths else [])],
+    # `git archive` converts line endings as a checkout would (core.autocrlf, core.eol); both are turned off so the
+    # bytes are the commit's on every runner.
+    process = subprocess.Popen(["git", "-c", "core.autocrlf=false", "-c", "core.eol=lf", "archive", "--format=tar",
+                                commit, *(["--", *paths] if paths else [])],
                                cwd=root, stdout=subprocess.PIPE)
     with tarfile.open(fileobj=process.stdout, mode="r|") as archive:
         for member in archive:
@@ -437,9 +440,11 @@ def build(out: Path, server: bool) -> None:
                 stem = file.name.removeprefix("lib").split(".")[0]
                 if file.is_file() and file.name.endswith(NATIVE_SUFFIXES) and stem not in bundled:
                     shutil.copy2(file, native / file.name)
-    for name, source in CARRIED.items():
-        if source is not None:
-            shutil.copy2(source, out / name)
+    # The commit's bytes, as the build data's are, not a checkout's (CRLF under Git for Windows).
+    carried = {name: source.relative_to(ROOT).as_posix() for name, source in CARRIED.items() if source is not None}
+    blobs = dict(tracked_blobs(ROOT, head(), tuple(carried.values())))
+    for name, path in carried.items():
+        (out / name).write_bytes(blobs[path])
     patches = carry_patches(staged, out)
     game = next(script for script in scripts if script["package_id"].split("#")[0].endswith("/horizon-client"))
     for manifest in BUILD_DATA:
@@ -615,7 +620,7 @@ def smoke(out: Path) -> None:
         "sha256": sha256(installed / library), "kind": "mod", "mod": "smoke", "identity": build}]}))
     if holder_mark() not in (installed / EXECUTABLE).read_bytes():
         sys.exit("smoke: holder capability missing from the executable")
-    for library in runtime_libraries(deps):
+    for library in runtime_libraries(out):
         shutil.copy2(library, installed / library.name)
     install_package(installed / "horizon-native-mods" / "smoke", starter.replace("{id}", "smoke"))
     # The same executable as shipped, with no native libraries selected.
@@ -623,7 +628,7 @@ def smoke(out: Path) -> None:
     if api.exists():
         shutil.rmtree(api)
     shutil.copytree(out / RUNTIME, api)
-    for library in runtime_libraries(deps):
+    for library in runtime_libraries(out):
         shutil.copy2(library, api / library.name)
     print(f"smoke: the starter mod and the game executable built against {out} alone, installed in {installed}")
 
@@ -645,10 +650,13 @@ def install_package(folder: Path, source: str) -> None:
     (folder / "src/lib.rs").write_text(source)
 
 
-def runtime_libraries(deps: Path) -> list[Path]:
-    """What the launcher installs beside the executable (launcher/src/native_mods/prebuilt.rs `runtime_libraries`):
-    the game's shared libraries, std, and on Windows the MinGW runtime the GNU DLLs import."""
-    libraries = [path for path in deps.iterdir() if path.suffix in (".so", ".dll", ".dylib")]
+def runtime_libraries(out: Path) -> list[Path]:
+    """What the launcher installs beside the executable (launcher/src/native_mods/prebuilt.rs `runtime_libraries`),
+    by the same rule: every shared library the identity's `runtime` slice records under `deps/`, std, and on Windows
+    the MinGW runtime the GNU DLLs import. So `start` fails when the record misses a library the game loads."""
+    runtime = json.loads((out / IDENTITY).read_text())["slices"]["runtime"]
+    libraries = [out / name for name in runtime
+                 if name.startswith("deps/") and name.endswith((".so", ".dll", ".dylib"))]
     libdir = Path(run(["rustc", "--print", "target-libdir"]).strip())
     libraries += [path for path in libdir.iterdir()
                   if path.name.startswith(("libstd-", "std-")) and path.suffix in (".so", ".dll", ".dylib")]

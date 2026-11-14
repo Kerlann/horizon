@@ -336,6 +336,21 @@ class SdkAssetTests(unittest.TestCase):
             self.assertEqual((root / "fixture.tar.xz").read_bytes(), fixture.read_bytes())
 
 
+class TrackedBlobsTests(unittest.TestCase):
+    def test_bytes_are_the_commits_whatever_the_line_ending_settings(self):
+        # Git for Windows' default (core.autocrlf=true) made the Windows leg's function index differ from the others.
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            git = ["git", "-c", "user.name=t", "-c", "user.email=t@t", "-C", folder]
+            subprocess.run([*git, "init", "-q"], check=True)
+            (root / "a.rs").write_bytes(b"fn a() {}\nfn b() {}\n")
+            subprocess.run([*git, "add", "a.rs"], check=True)
+            subprocess.run([*git, "commit", "-q", "-m", "a"], check=True)
+            subprocess.run([*git, "config", "core.autocrlf", "true"], check=True)
+            blobs = dict(prebuilt_game.tracked_blobs(root, "HEAD"))
+        self.assertEqual(blobs, {"a.rs": b"fn a() {}\nfn b() {}\n"})
+
+
 class AllocatorSelectionTests(unittest.TestCase):
     def test_package_format_comes_from_its_one_place(self):
         with tempfile.TemporaryDirectory() as directory:

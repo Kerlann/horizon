@@ -219,10 +219,7 @@ fn link_tree(slice: &Path, dir: &Path, into: &Path) -> Result<(), String> {
 /// `engine`'s), moving or linking each file; a listed file that isn't there is refused by name.
 fn lay_out(whole: &Path, build: &Path, link: bool) -> Result<Package, String> {
     let sdk = identity(whole)?;
-    let slices = sdk.slices.as_ref().ok_or_else(|| {
-        tr("This prebuilt game has no slices. Update Horizon and rebuild the mods against this game.")
-            .to_string()
-    })?;
+    let slices = sdk.slices()?;
     let package = Package::at(build);
     let mut placed = std::collections::HashMap::new();
     for (folder, names) in [
@@ -307,6 +304,14 @@ impl Identity {
 
     pub(super) fn game_features(&self) -> &[String] {
         &self.game_features
+    }
+
+    /// Which package files the `runtime` and `api` slices hold.
+    pub(super) fn slices(&self) -> Result<&Slices, String> {
+        self.slices.as_ref().ok_or_else(|| {
+            tr("This prebuilt game has no slices. Update Horizon and rebuild the mods against this game.")
+                .to_string()
+        })
     }
 }
 
@@ -781,7 +786,7 @@ pub(super) fn compile(
         &sdk,
         |edition| rustc(rust, game, out, edition, &sdk.link_args),
     )?;
-    let mut installed = runtime_libraries(rust, &deps)?;
+    let mut installed = runtime_libraries(rust, &sdk, game)?;
     for &index in &resolution.order {
         installed.push(rlibs[projects[index].bundle.manifest.id.as_str()].clone());
     }
@@ -1100,9 +1105,31 @@ fn short_hash(hex: &str) -> &str {
     hex.get(..16).unwrap_or(hex)
 }
 
-/// The runtime shipped beside the prebuilt executable, for every native build route.
-pub(super) fn runtime_libraries(rust: &Toolchain, deps: &Path) -> Result<Vec<PathBuf>, String> {
-    let mut runtime = game_dylibs(deps)?;
+/// The runtime shipped beside the prebuilt executable, for every native build route: every shared
+/// library the package's `runtime` slice records under `deps/` (taken from `game`, the package or
+/// its runtime slice), the standard library and, on Windows, the MinGW runtime the GNU DLLs import.
+/// The package's own record is the list, so a library the game gains ships without a launcher
+/// change.
+pub(super) fn runtime_libraries(
+    rust: &Toolchain,
+    sdk: &Identity,
+    game: &Path,
+) -> Result<Vec<PathBuf>, String> {
+    let mut runtime: Vec<PathBuf> = sdk
+        .slices()?
+        .runtime
+        .iter()
+        .filter(|name| {
+            name.starts_with("deps/")
+                && [".so", ".dll", ".dylib"]
+                    .iter()
+                    .any(|suffix| name.ends_with(suffix))
+        })
+        .map(|name| game.join(name))
+        .collect();
+    if runtime.is_empty() {
+        return Err(tr("The prebuilt game records no runtime libraries.").to_string());
+    }
     runtime.push(standard_library(rust)?);
     if rust.host.target == rust_toolchain::WINDOWS_X64_TARGET {
         // The SDK's GNU DLLs import libgcc, which in turn imports libwinpthread.
@@ -1120,39 +1147,6 @@ pub(super) fn runtime_libraries(rust: &Toolchain, deps: &Path) -> Result<Vec<Pat
         }
     }
     Ok(runtime)
-}
-
-/// The game's own dynamic libraries, which the executable loads from beside itself: the game and
-/// the wasm mod runtime it links (`tools/prebuilt_game.py` checks the archive holds both).
-fn game_dylibs(deps: &Path) -> Result<Vec<PathBuf>, String> {
-    let top = if library(deps, "horizon_mod_host").is_ok() {
-        "horizon_mod_host"
-    } else {
-        "horizon_client"
-    };
-    let crates = [
-        top,
-        "horizon_mod_wasm",
-        "mod_api",
-        "mod_vocab",
-        "mod_points",
-        "horizon_mod_runtime",
-        "horizon_core",
-    ];
-    crates
-        .into_iter()
-        .map(|krate| {
-            let path = library(deps, krate)?;
-            if path.extension().is_some_and(|ext| ext != "rmeta") {
-                Ok(path)
-            } else {
-                Err(trf(
-                    "The prebuilt game has no {crate}.",
-                    &[("crate", krate)],
-                ))
-            }
-        })
-        .collect()
 }
 
 #[cfg(test)]
@@ -1359,67 +1353,28 @@ mod tests {
     }
 
     #[test]
-    fn the_executable_carries_the_game_and_its_wasm_runtime() {
-        let deps = super::super::tests::dir("prebuilt-dylibs");
-        let ext = std::env::consts::DLL_EXTENSION;
-        fs::write(deps.join(format!("libhorizon_client.{ext}")), b"").unwrap();
-        fs::write(deps.join("libhorizon_mod_wasm-0123.rmeta"), b"").unwrap();
-        // Metadata alone has no code to load: the archive is incomplete.
-        assert!(game_dylibs(&deps).is_err());
-        fs::write(deps.join(format!("libhorizon_mod_wasm.{ext}")), b"").unwrap();
-        for krate in [
-            "mod_api",
-            "mod_vocab",
-            "mod_points",
-            "horizon_mod_runtime",
-            "horizon_core",
-        ] {
-            fs::write(deps.join(format!("lib{krate}.{ext}")), b"").unwrap();
-        }
-        assert_eq!(game_dylibs(&deps).unwrap().len(), 7);
-        fs::write(deps.join(format!("libhorizon_mod_host.{ext}")), b"").unwrap();
-        let names: Vec<_> = game_dylibs(&deps)
-            .unwrap()
-            .iter()
-            .map(|path| path.file_name().unwrap().to_string_lossy().into_owned())
-            .collect();
-        assert_eq!(
-            names,
-            [
-                format!("libhorizon_mod_host.{ext}"),
-                format!("libhorizon_mod_wasm.{ext}"),
-                format!("libmod_api.{ext}"),
-                format!("libmod_vocab.{ext}"),
-                format!("libmod_points.{ext}"),
-                format!("libhorizon_mod_runtime.{ext}"),
-                format!("libhorizon_core.{ext}")
-            ]
-        );
-        fs::remove_dir_all(deps).unwrap();
-    }
-
-    #[test]
-    fn prebuilt_runtime_carries_the_managed_gnu_dlls_on_windows_x64() {
+    fn the_runtime_is_every_shared_library_the_package_records_plus_the_toolchains() {
         let scratch = tempfile::tempdir().unwrap();
-        let deps = scratch.path().join("deps");
-        fs::create_dir(&deps).unwrap();
-        let game = deps.join("horizon_mod_host.dll");
-        let wasm = deps.join("horizon_mod_wasm.dll");
-        for library in [&game, &wasm] {
-            fs::write(library, b"").unwrap();
-        }
-        let mut closure = Vec::new();
-        for krate in [
-            "mod_api",
-            "mod_vocab",
-            "mod_points",
-            "horizon_mod_runtime",
-            "horizon_core",
-        ] {
-            let path = deps.join(format!("{krate}.dll"));
-            fs::write(&path, b"").unwrap();
-            closure.push(path);
-        }
+        let game = scratch.path();
+        // As a package records its runtime slice: shared libraries under deps/ (the engine slots
+        // library among them, which no fixed list carried), the identity, the executable and
+        // windows-gnu import libraries, which never ship.
+        let sdk: Identity = serde_json::from_value(serde_json::json!({
+            "commit": "test", "rustc": "test", "target": "test", "side": "client", "link_args": [],
+            "slices": {"runtime": [
+                "bin/horizon-client.exe", "deps/horizon_engine_slots.dll", "deps/horizon_mod_host.dll",
+                "deps/libhorizon_mod_host.dll.a", "deps/libmod_api.so", "deps/mod_points.dylib",
+                "horizon-prebuilt.json",
+            ], "api": []},
+        }))
+        .unwrap();
+        let recorded = [
+            "horizon_engine_slots.dll",
+            "horizon_mod_host.dll",
+            "libmod_api.so",
+            "mod_points.dylib",
+        ]
+        .map(|name| game.join("deps").join(name));
         for host in rust_toolchain::hosts() {
             let rust = Toolchain {
                 dir: scratch.path().join(host.target),
@@ -1428,21 +1383,31 @@ mod tests {
             let std = rust.target_libdir().unwrap().join("std-test.dll");
             fs::create_dir_all(std.parent().unwrap()).unwrap();
             fs::write(&std, b"").unwrap();
-            let mut expected = vec![game.clone(), wasm.clone()];
-            expected.extend(closure.clone());
+            let mut expected = recorded.to_vec();
             expected.push(std);
             if host.target == rust_toolchain::WINDOWS_X64_TARGET {
                 let bin = rust.mingw_bin();
                 fs::create_dir_all(&bin).unwrap();
                 for name in ["libgcc_s_seh-1.dll", "libwinpthread-1.dll"] {
-                    assert!(runtime_libraries(&rust, &deps).unwrap_err().contains(name));
+                    assert!(runtime_libraries(&rust, &sdk, game)
+                        .unwrap_err()
+                        .contains(name));
                     let library = bin.join(name);
                     fs::write(&library, b"").unwrap();
                     expected.push(library);
                 }
             }
-            assert_eq!(runtime_libraries(&rust, &deps).unwrap(), expected);
+            assert_eq!(runtime_libraries(&rust, &sdk, game).unwrap(), expected);
         }
+        let unsliced: Identity = serde_json::from_value(serde_json::json!({
+            "commit": "test", "rustc": "test", "target": "test", "side": "client", "link_args": [],
+        }))
+        .unwrap();
+        let rust = Toolchain {
+            dir: scratch.path().to_owned(),
+            host: &rust_toolchain::hosts()[0],
+        };
+        assert!(runtime_libraries(&rust, &unsliced, game).is_err());
     }
 
     /// What [`refusal`] says of one mod whose Cargo.toml is `cargo`.

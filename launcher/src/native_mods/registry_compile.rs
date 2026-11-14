@@ -491,7 +491,7 @@ pub(super) fn compile(
         "horizon-client"
     });
     let release = target_dir.join(rust.host.target).join("release");
-    let mut runtime = prebuilt::runtime_libraries(rust, &game.join("deps"))?;
+    let mut runtime = prebuilt::runtime_libraries(rust, &sdk, game)?;
     for &index in &resolution.order {
         let project = &projects[index];
         let library = release.join(prebuilt::dylib_name(&project.crate_name()));

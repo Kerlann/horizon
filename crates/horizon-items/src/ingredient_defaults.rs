@@ -11,7 +11,11 @@ impl Items {
         Ok(Self {
             items: HashMap::new(),
             block_items: Default::default(),
-            component_registry: component_registry(root, &enchantments)?,
+            component_registry: component_registry(
+                root,
+                &enchantments,
+                &load_tags(root, "entity_type", overlay)?,
+            )?,
             component_defaults: component_defaults(defaults)?,
             mob_visibility: HashMap::new(),
             order: Vec::new(),
@@ -95,6 +99,7 @@ pub(super) fn block_items(root: &Path) -> Result<HashMap<String, String>> {
 pub(super) fn component_registry(
     root: &Path,
     enchantments: &crate::enchant::Enchantments,
+    entity_tags: &HashMap<String, HashSet<String>>,
 ) -> Result<Arc<horizon_client_core::registries::Registries>> {
     let mut registry = horizon_client_core::registries::Registries::default();
     let path = root.join("command-registries.json");
@@ -117,5 +122,33 @@ pub(super) fn component_registry(
         .iter()
         .map(|entry| entry.id.to_string())
         .collect();
+    // The prepared entity table includes content-mod types, unlike a vanilla-only
+    // command export. Re-read it for each catalog/load, including pack reload.
+    let path = root.join("entity-types.json");
+    let entity_ids = match fs::read(&path) {
+        Ok(bytes) => {
+            let rows: serde_json::Map<String, Value> = serde_json::from_slice(&bytes)?;
+            Some(
+                rows.keys()
+                    .map(|name| {
+                        horizon_core::identifier::Identifier::parse(name).map(|id| id.to_string())
+                    })
+                    .collect::<std::result::Result<Vec<_>, _>>()?,
+            )
+        }
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error.into()),
+    };
+    let entity_ids = entity_ids.unwrap_or_else(|| registry.ids("minecraft:entity_type").to_vec());
+    let entities = registry
+        .by_registry
+        .entry("minecraft:entity_type".into())
+        .or_default();
+    entities.ids = entity_ids;
+    entities.ids.sort();
+    entities.ids.dedup();
+    // These are the current merged pack tags, not the export's stale tag names.
+    entities.tags = entity_tags.keys().cloned().collect();
+    entities.tags.sort();
     Ok(Arc::new(registry))
 }
