@@ -596,7 +596,7 @@ mod tests {
     /// A passage into another level is refused `FarLevel` however near the player is, and
     /// the player stays: crossing another level waits for clients that can follow.
     #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    #[ignore = "daily"]
     fn a_crossing_into_another_level_is_refused_far_level() {
         with_guests(|game| {
             game.enter_level(Dim::Nether).unwrap();

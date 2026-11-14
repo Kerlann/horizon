@@ -652,7 +652,7 @@ pub(in crate::game) mod tests {
     /// is not open, and the passage's own level, are refused `UnknownLevel`, with nothing
     /// registered.
     #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    #[ignore = "daily"]
     fn a_destination_level_must_be_open_and_another_level() {
         with_game(|game| {
             let level = game.level(game.dim.id()).unwrap();
@@ -682,7 +682,7 @@ pub(in crate::game) mod tests {
     /// A passage into another level is registered but not sent: neither at the tick's end
     /// nor after its chunk. The client hears only of the passage within the level.
     #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    #[ignore = "daily"]
     fn a_passage_into_another_level_is_not_sent_to_the_clients() {
         with_guests(|game| {
             game.enter_level(Dim::Nether).unwrap();
