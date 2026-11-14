@@ -1074,6 +1074,9 @@ impl Game<'_> {
         stack: ItemStack,
         thrown_by_player: bool,
     ) -> Option<ItemStack> {
+        if self.entity_ids_exhausted() {
+            return Some(stack);
+        }
         if stack.count == 0 {
             return Some(stack);
         }
