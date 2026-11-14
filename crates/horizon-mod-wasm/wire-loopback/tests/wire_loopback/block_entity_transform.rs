@@ -90,7 +90,11 @@ fn declaration_transform_round_trips_through_generated_guest_and_host() {
 
 pub(super) struct BlockEntityTransformHooks;
 impl BlockEntityTransformHooks {
-    pub(super) fn register(&self, registrar: &mut dyn mod_api::Registrar, cx: &mod_api::RegistrationContext) {
+    pub(super) fn register(
+        &self,
+        registrar: &mut dyn mod_api::Registrar,
+        cx: &mod_api::RegistrationContext,
+    ) {
         self::register(registrar);
     }
 }

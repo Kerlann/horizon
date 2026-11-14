@@ -12,7 +12,11 @@ pub(super) fn check(registrar: &mut dyn mod_api::Registrar) {
 
 pub(super) struct ArmPoseRegistrationHooks;
 impl ArmPoseRegistrationHooks {
-    pub(super) fn register(&self, registrar: &mut dyn mod_api::Registrar, cx: &mod_api::RegistrationContext) {
+    pub(super) fn register(
+        &self,
+        registrar: &mut dyn mod_api::Registrar,
+        cx: &mod_api::RegistrationContext,
+    ) {
         self::check(registrar);
     }
 }

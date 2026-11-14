@@ -138,8 +138,12 @@ pub fn folder_hooks(directory: &Path) -> Result<String, String> {
         let parsed = syn::parse_file(&text).map_err(|e| format!("{file}: {e}"))?;
         let module = syn::Ident::new(&stem, proc_macro2::Span::call_site());
         for item in parsed.items {
-            let syn::Item::Impl(item) = item else { continue };
-            let syn::Type::Path(owner) = &*item.self_ty else { continue };
+            let syn::Item::Impl(item) = item else {
+                continue;
+            };
+            let syn::Type::Path(owner) = &*item.self_ty else {
+                continue;
+            };
             let Some(owner) = owner
                 .path
                 .get_ident()
@@ -148,12 +152,17 @@ pub fn folder_hooks(directory: &Path) -> Result<String, String> {
                 continue;
             };
             for member in item.items {
-                let syn::ImplItem::Fn(method) = member else { continue };
-                methods.entry(method.sig.ident.to_string()).or_default().push(Fragment {
-                    file: file.clone(),
-                    owner: quote::quote!(#module::#owner),
-                    sig: method.sig,
-                });
+                let syn::ImplItem::Fn(method) = member else {
+                    continue;
+                };
+                methods
+                    .entry(method.sig.ident.to_string())
+                    .or_default()
+                    .push(Fragment {
+                        file: file.clone(),
+                        owner: quote::quote!(#module::#owner),
+                        sig: method.sig,
+                    });
             }
         }
     }
@@ -170,7 +179,8 @@ pub fn folder_hooks(directory: &Path) -> Result<String, String> {
         let mut arguments = Vec::new();
         for (index, input) in sig.inputs.iter_mut().enumerate() {
             if let syn::FnArg::Typed(typed) = input {
-                let argument = syn::Ident::new(&format!("argument_{index}"), proc_macro2::Span::call_site());
+                let argument =
+                    syn::Ident::new(&format!("argument_{index}"), proc_macro2::Span::call_site());
                 typed.pat = Box::new(syn::parse_quote!(#argument));
                 arguments.push(argument);
             }
@@ -188,7 +198,9 @@ pub fn folder_hooks(directory: &Path) -> Result<String, String> {
         } else if matches!(sig.output, syn::ReturnType::Default) {
             quote::quote!(#(#calls;)*)
         } else {
-            return Err(format!("hook `{name}` is defined in several files but returns a value"));
+            return Err(format!(
+                "hook `{name}` is defined in several files but returns a value"
+            ));
         };
         forwarders.push(quote::quote!(#sig { #body }));
     }
@@ -236,9 +248,18 @@ mod tests {
         let root = hook_folder(
             "folder-hooks",
             &[
-                ("b.rs", "pub(super) struct BHooks;\nimpl BHooks {\n pub(super) fn register(&self, r: &mut dyn Registrar) {}\n pub(super) fn toss(&self, _: &dyn Host, e: &mut Event<'_>) -> Flow { Flow::Cancel }\n}\n"),
-                ("a.rs", "pub(super) struct AHooks;\nimpl AHooks { fn register(&self, r: &mut dyn Registrar) {} }\nimpl Other for AHooks { fn toss(&self) {} }\nimpl Hooks for AHooks { fn ignored(&self) {} }\n"),
-                ("c.rs", "struct Native;\nimpl Hooks for Native { fn toss(&self) {} }"),
+                (
+                    "b.rs",
+                    "pub(super) struct BHooks;\nimpl BHooks {\n pub(super) fn register(&self, r: &mut dyn Registrar) {}\n pub(super) fn toss(&self, _: &dyn Host, e: &mut Event<'_>) -> Flow { Flow::Cancel }\n}\n",
+                ),
+                (
+                    "a.rs",
+                    "pub(super) struct AHooks;\nimpl AHooks { fn register(&self, r: &mut dyn Registrar) {} }\nimpl Other for AHooks { fn toss(&self) {} }\nimpl Hooks for AHooks { fn ignored(&self) {} }\n",
+                ),
+                (
+                    "c.rs",
+                    "struct Native;\nimpl Hooks for Native { fn toss(&self) {} }",
+                ),
                 ("d.txt", "impl Hooks for Nope { fn toss(&self) {} }"),
             ],
         );
@@ -260,12 +281,21 @@ mod tests {
         let root = hook_folder(
             "folder-hooks-clash",
             &[
-                ("one.rs", "struct OneHooks;\nimpl OneHooks { fn toss(&self) {} }"),
-                ("two.rs", "struct TwoHooks;\nimpl TwoHooks { fn toss(&self) {} }"),
+                (
+                    "one.rs",
+                    "struct OneHooks;\nimpl OneHooks { fn toss(&self) {} }",
+                ),
+                (
+                    "two.rs",
+                    "struct TwoHooks;\nimpl TwoHooks { fn toss(&self) {} }",
+                ),
             ],
         );
         let error = folder_hooks(&root).unwrap_err();
-        assert!(error.contains("`toss`") && error.contains("one.rs and two.rs"), "{error}");
+        assert!(
+            error.contains("`toss`") && error.contains("one.rs and two.rs"),
+            "{error}"
+        );
         fs::remove_dir_all(root).unwrap();
     }
 

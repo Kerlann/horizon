@@ -180,7 +180,11 @@ impl UseItemHandHooks {
     ) -> Option<mod_api::InteractionResult> {
         self::entity_answer(event)
     }
-    pub(super) fn register(&self, registrar: &mut dyn mod_api::Registrar, cx: &mod_api::RegistrationContext) {
+    pub(super) fn register(
+        &self,
+        registrar: &mut dyn mod_api::Registrar,
+        cx: &mod_api::RegistrationContext,
+    ) {
         self::register(registrar);
     }
 }

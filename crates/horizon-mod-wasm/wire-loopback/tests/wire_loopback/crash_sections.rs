@@ -24,7 +24,11 @@ fn wire_loopback_a_guest_crash_section_answers_through_its_proxy() {
 
 pub(super) struct CrashSectionsHooks;
 impl CrashSectionsHooks {
-    pub(super) fn register(&self, registrar: &mut dyn mod_api::Registrar, cx: &mod_api::RegistrationContext) {
+    pub(super) fn register(
+        &self,
+        registrar: &mut dyn mod_api::Registrar,
+        cx: &mod_api::RegistrationContext,
+    ) {
         self::register(registrar);
     }
 }
