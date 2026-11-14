@@ -110,3 +110,77 @@ fn unbreakable_unit_recipe_rejects_non_maps_before_publication() {
         assert!(recipes.by_type.values().all(|recipes| recipes.is_empty()));
     }
 }
+
+#[test]
+fn rollup_rejection_and_absence_matrix_4092() {
+    let items = Items::empty();
+    let load = load();
+    let context = load.loop_context(LoopSide::Server, []);
+    let positive = parse(
+        r#"{"type":"neoforge:components","items":"minecraft:stone","components":{"minecraft:unbreakable":{}}}"#,
+        &items,
+    );
+    let absent = parse(
+        r#"{"type":"neoforge:components","items":"minecraft:stone","components":{"!minecraft:unbreakable":{}}}"#,
+        &items,
+    );
+    let mut stack = ItemStack::new("minecraft:stone", 1);
+    assert!(absent.test_in(&context, &stack));
+    let payload = crate::json_nbt::json_to_compound(
+        serde_json::json!({"minecraft:unbreakable":{}})
+            .as_object()
+            .unwrap(),
+    )
+    .unwrap();
+    (_, stack.extra) = crate::item_data::decode_components(Some(&Tag::Compound(payload)));
+    assert!(!absent.test_in(&context, &stack));
+    assert!(positive.test_in(&context, &stack));
+    stack.data_mut().set_loot_component(
+        "!minecraft:unbreakable",
+        &Some(Tag::Compound(Default::default())),
+    );
+    assert!(absent.test_in(&context, &stack));
+    assert!(!positive.test_in(&context, &stack));
+    for tag in [Tag::End, Tag::Byte(0), Tag::List(vec![])] {
+        let rule = IngredientRule::Components {
+            patch: [("minecraft:unbreakable".into(), tag)]
+                .into_iter()
+                .collect(),
+            removed: vec![],
+            strict: false,
+        };
+        let error = components::validate(&rule, &items).unwrap_err();
+        assert!(error.contains("minecraft:unbreakable"), "{error}");
+    }
+    for value in [
+        serde_json::Value::Null,
+        serde_json::json!(false),
+        serde_json::json!([]),
+    ] {
+        let ingredient = serde_json::json!({"type":"neoforge:components","items":"minecraft:stone","components":{"minecraft:unbreakable":value}});
+        let error = components::validate_recipe_components(&ingredient, &items).unwrap_err();
+        assert!(error.contains("minecraft:unbreakable"), "{error}");
+        let recipe = |ingredient| serde_json::json!({"type":"minecraft:crafting_shapeless","ingredients":[ingredient],"result":{"id":"minecraft:diamond"}});
+        let root = tempfile::tempdir().unwrap();
+        let recipes = crate::crafting::Recipes::from_sources(
+            root.path(),
+            &items,
+            &horizon_world::loot::PackOverlay::NONE,
+            vec![
+                ("fixture:invalid".into(), recipe(ingredient)),
+                (
+                    "fixture:valid".into(),
+                    recipe(serde_json::json!("minecraft:stone")),
+                ),
+            ],
+            &load,
+        )
+        .unwrap();
+        assert_eq!(recipes.crafting.len(), 1);
+        assert!(
+            recipes
+                .craft(&context, &[Some(ItemStack::new("minecraft:stone", 1))], 1)
+                .is_some()
+        );
+    }
+}
