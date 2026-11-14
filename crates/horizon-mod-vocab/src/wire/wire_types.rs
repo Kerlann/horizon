@@ -836,6 +836,7 @@ mod tests {
 
     #[test]
     fn wire_checked_values_and_garbage() {
+        super::layout_tests::install_layout_resources();
         round(crate::ConfigPath::new("example/options.toml").unwrap());
         round(crate::SpawnerKey::new("example:spawner").unwrap());
         round(crate::CustomSpawners::vanilla());
