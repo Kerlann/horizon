@@ -118,7 +118,7 @@ mod auto_jump;
 pub(crate) mod environment;
 use environment::fly_into_wall_damage;
 mod fluids;
-mod ladder;
+pub mod ladder;
 pub mod surface;
 pub use fluids::{
     BubbleColumn, FluidResources, FluidTags, LAVA, PlayerFluids, RiddenBoat, WATER,
