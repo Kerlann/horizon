@@ -4,9 +4,9 @@
 use super::{
     Game,
     commands::Target,
-    minecarts::CartKind,
     explosion::{BlockInteraction, ExplosionSource},
     explosion_settings::{BlastCalculator, BlastEffects, BlastSettings, SourceCalculator},
+    minecarts::CartKind,
     native_hooks::{mod_particles_ok, sound_id},
 };
 use horizon_client::particles::{ExplosionParticle, ParticleOptions, ParticleType};
