@@ -7,7 +7,7 @@ the root may not name one of them with a hand-written `#[path = "wire_loopback/.
 appended to the root kept conflicting; a file of their own does not. The target's old place in horizon-mod-wasm's
 tests/ may not come back: nothing compiles a file there, so a test carried to it would vanish silently. The guest's one
 `Hooks` object is assembled by build.rs from the folder's files: a feature writes its hook methods in
-`impl Hooks for <Feature>Hooks` (a unit struct of its own file) and never hand-writes `impl Hooks for Mod`, a second
+`impl <Feature>Hooks { pub(super) fn <hook>(&self, ..) }` (inherent, on a unit struct of its own file) and never hand-writes `impl Hooks for Mod`, a second
 `__horizon_mod_hooks` or a `Box<dyn Hooks>` of its own. `register` is the one method several files may define; they run
 in file-name order. Without
 --base the test count is not checked (main's pushes have nothing to compare with).
@@ -33,7 +33,7 @@ FOLDER = "crates/horizon-mod-wasm/wire-loopback/tests/wire_loopback/"
 ADVICE = f"add {FOLDER}<topic>.rs; it is discovered"
 RETIRED = ("crates/horizon-mod-wasm/tests/wire_loopback.rs", "crates/horizon-mod-wasm/tests/wire_loopback")
 MODULE_LINE = re.compile(r'#\[path\s*=\s*"wire_loopback/')
-HOOKS_ADVICE = (f"put the hook methods in `impl Hooks for <Feature>Hooks` (a unit struct of that file) in "
+HOOKS_ADVICE = (f"put the hook methods in `impl <Feature>Hooks {{ pub(super) fn <hook>(&self, ..) }}` (a unit struct of that file) in "
                 f"{FOLDER}<topic>.rs; build.rs assembles the one Hooks object (`register` is the one method several "
                 "files may define; they run in file-name order)")
 IMPL_HOOKS = re.compile(r"^\s*impl(?:<[^>]*>)?\s+(?:[\w:]*::)?Hooks\s+for\s+(\w+)", re.M)
@@ -57,8 +57,7 @@ def hook_problems(name, text, is_root):
     found = []
     for number, line in enumerate(text.splitlines(), 1):
         match = IMPL_HOOKS.match(line)
-        if match and (is_root or match.group(1) == "Mod"
-                      or match.group(1).endswith("Hooks") and not re.search(rf"^\s*(?:pub(?:\([^)]*\))?\s+)?struct\s+{match.group(1)}\s*;", text, re.M)):
+        if match and (is_root or match.group(1) == "Mod" or match.group(1).endswith("Hooks")):
             found.append(f"{name}:{number}: hand-written `impl Hooks for {match.group(1)}`; {HOOKS_ADVICE}")
         if HAND_EXPORT.search(line) and not (is_root and "fn __horizon_mod_hooks() -> Box<dyn Hooks>" in line):
             found.append(f"{name}:{number}: hand-written hooks export; {HOOKS_ADVICE}")

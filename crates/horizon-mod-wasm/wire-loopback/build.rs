@@ -1,5 +1,5 @@
 //! The test target's two generated inputs: the host boundary (as horizon-mod-wasm's build.rs writes it) and one
-//! module per file of tests/wire_loopback/, and the guest's one Hooks object assembled from their `impl Hooks for <Feature>Hooks` blocks. A package of its own, so that editing a test reruns only this script:
+//! module per file of tests/wire_loopback/, and the guest's one Hooks object assembled from their `impl <Feature>Hooks` blocks. A package of its own, so that editing a test reruns only this script:
 //! horizon-mod-wasm's rerun would rebuild its library and every crate above it.
 #[path = "../../../packaging/executable_link.rs"]
 mod executable_link;

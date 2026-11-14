@@ -121,7 +121,7 @@ pub fn folder_modules(directory: &Path) -> Result<String, String> {
 const FAN_OUT_HOOK: &str = "register";
 
 /// Assemble the one `Hooks` object of a test target from the fragments in `directory`: every `*.rs` file may hold
-/// `impl Hooks for <Feature>Hooks` blocks (a unit struct of that file; an impl for a type not named `*Hooks` is a test double of its own, left alone), and the result is `struct Mod;` with one
+/// inherent `impl <Feature>Hooks { pub(super) fn <hook>(&self, ..) }` blocks (`<Feature>Hooks` a unit struct of that file; the hook signature is `Hooks`'s own, checked where the assembled impl forwards to it), and the result is `struct Mod;` with one
 /// `impl Hooks for Mod` whose methods forward, signature copied verbatim, to the fragments. A hook method has one
 /// owner: two files defining it is an error naming both. The exception is `register`, the registration moment
 /// every feature takes part in: it forwards to each definition in file-name order.
@@ -139,15 +139,11 @@ pub fn folder_hooks(directory: &Path) -> Result<String, String> {
         let module = syn::Ident::new(&stem, proc_macro2::Span::call_site());
         for item in parsed.items {
             let syn::Item::Impl(item) = item else { continue };
-            let is_hooks = item
-                .trait_
-                .as_ref()
-                .is_some_and(|(_, path, _)| path.segments.last().is_some_and(|s| s.ident == "Hooks"));
             let syn::Type::Path(owner) = &*item.self_ty else { continue };
             let Some(owner) = owner
                 .path
                 .get_ident()
-                .filter(|owner| is_hooks && owner.to_string().ends_with("Hooks"))
+                .filter(|owner| item.trait_.is_none() && owner.to_string().ends_with("Hooks"))
             else {
                 continue;
             };
@@ -199,7 +195,7 @@ pub fn folder_hooks(directory: &Path) -> Result<String, String> {
     let tokens = quote::quote!(struct Mod; impl Hooks for Mod { #(#forwarders)* });
     Ok(format!(
         "// The guest's one Hooks object, assembled by horizon_game_discovery::folder_hooks from the\n\
-         // `impl Hooks for <Feature>Hooks` blocks of tests/wire_loopback/*.rs; each hook method has one owner file.\n\
+         // `impl <Feature>Hooks` blocks of tests/wire_loopback/*.rs; each hook method has one owner file.\n\
          // `register` is the one method several files may define; they run in file-name order.\n{tokens}\n"
     ))
 }
@@ -240,8 +236,8 @@ mod tests {
         let root = hook_folder(
             "folder-hooks",
             &[
-                ("b.rs", "pub(super) struct BHooks;\nimpl Hooks for BHooks {\n fn register(&self, r: &mut dyn Registrar) {}\n fn toss(&self, _: &dyn Host, e: &mut Event<'_>) -> Flow { Flow::Cancel }\n}\n"),
-                ("a.rs", "pub(super) struct AHooks;\nimpl Hooks for AHooks { fn register(&self, r: &mut dyn Registrar) {} }\nimpl Other for AHooks { fn toss(&self) {} }\n"),
+                ("b.rs", "pub(super) struct BHooks;\nimpl BHooks {\n pub(super) fn register(&self, r: &mut dyn Registrar) {}\n pub(super) fn toss(&self, _: &dyn Host, e: &mut Event<'_>) -> Flow { Flow::Cancel }\n}\n"),
+                ("a.rs", "pub(super) struct AHooks;\nimpl AHooks { fn register(&self, r: &mut dyn Registrar) {} }\nimpl Other for AHooks { fn toss(&self) {} }\nimpl Hooks for AHooks { fn ignored(&self) {} }\n"),
                 ("c.rs", "struct Native;\nimpl Hooks for Native { fn toss(&self) {} }"),
                 ("d.txt", "impl Hooks for Nope { fn toss(&self) {} }"),
             ],
@@ -264,8 +260,8 @@ mod tests {
         let root = hook_folder(
             "folder-hooks-clash",
             &[
-                ("one.rs", "struct OneHooks;\nimpl Hooks for OneHooks { fn toss(&self) {} }"),
-                ("two.rs", "struct TwoHooks;\nimpl Hooks for TwoHooks { fn toss(&self) {} }"),
+                ("one.rs", "struct OneHooks;\nimpl OneHooks { fn toss(&self) {} }"),
+                ("two.rs", "struct TwoHooks;\nimpl TwoHooks { fn toss(&self) {} }"),
             ],
         );
         let error = folder_hooks(&root).unwrap_err();
