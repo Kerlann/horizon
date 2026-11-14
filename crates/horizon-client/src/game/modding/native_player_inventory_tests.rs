@@ -245,6 +245,17 @@ fn give_write_aborts() {
         let player = game.players().server_players()[1];
         let new = stack(game, r#"{id:"minecraft:iron_boots",count:1}"#);
         let old = stack(game, r#"{id:"minecraft:stone",count:64}"#);
+        // An empty destination exercises rollback of a successful insertion, not only
+        // suppression of the overflow drop from a completely full inventory.
+        assert_eq!(player.inventory_slots(game), Some(Vec::new()));
+        let drops = game.dropped.len();
+        let _: Result<(), ()> = game.transaction(|host, _| {
+            player.give_stack(host, new.clone()).unwrap();
+            assert_eq!(player.inventory_slots(host), Some(vec![(0, new.clone())]));
+            Err(())
+        });
+        assert_eq!(player.inventory_slots(game), Some(Vec::new()));
+        assert_eq!(game.dropped.len(), drops);
         for slot in 0..36 {
             player
                 .set_inventory_slot(game, slot, Some(old.clone()))
@@ -278,10 +289,21 @@ fn equipment_effects_wait_for_root() {
             Err(())
         });
         assert!(game.audio.capture.as_ref().unwrap().is_empty());
+        let inner = stack(game, r#"{id:"minecraft:diamond_helmet",count:1}"#);
         let _: Result<(), ()> = game.transaction(|host, _| {
-            player.set_inventory_slot(host, 36, Some(new)).unwrap();
+            player
+                .set_inventory_slot(host, 36, Some(new.clone()))
+                .unwrap();
+            let outer = player.inventory_slots(host);
+            let aborted: Result<(), ()> = host.transaction(|host, _| {
+                player.set_inventory_slot(host, 39, Some(inner)).unwrap();
+                Err(())
+            });
+            assert_eq!(aborted, Err(()));
+            assert_eq!(player.inventory_slots(host), outer);
             Ok(())
         });
+        assert_eq!(player.inventory_slots(game), Some(vec![(36, new)]));
         assert_eq!(game.audio.capture.as_ref().unwrap().len(), 1);
     });
 }
