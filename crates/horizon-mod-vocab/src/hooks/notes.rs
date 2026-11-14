@@ -2919,13 +2919,13 @@ registration path.
   was queued, not whether a player heard it. The server discards unknown sound events when it dispatches
   the queue.
 
-- `Host::config_files()`: the calling mod's own files in the game's shared `config/` folder beside `options.txt` (beside
-  `server.properties` on a dedicated server): its folder `config/<mod id>/` and the files beside it named
-  `<mod id>.<ext>` or `<mod id>-<rest>`. `ConfigFiles` reads, writes, lists and stats them through `&dyn Host` on
-  either side, at most 4 MiB a file; a write replaces the file at once. The service is bound to the mod whose hook or
-  part is running (a mod never names its id), so another mod's path, a symbolic link on the way or a call outside any
-  mod's hook is refused with a typed `ConfigFileError`. A path is a `ConfigPath`, checked once when it is made. A
-  world's `serverconfig/` copy is read only through `config_loading` ([native mods](../how-to/native-mods.md)).
+- `Host::config_files()` retains the calling mod's `config/<mod id>/`, `<mod id>.<ext>` and `<mod id>-<rest>` ownership spelling and 4 MiB `CONFIG_FILE_MAX`; a world's `serverconfig/` copy is read through `config_loading`.
+  `Host::data_files()` on both sides instead owns `<game directory>/horizon-mod-data/<mod id>/`; server-only `ServerHost::world_data_files()` owns `<world>/horizon-mod-data/<mod id>/`, copied, deleted and backed up with the save (`NoWorld` without a world).
+  All three share `ConfigFiles`, `ConfigPath`, `ConfigEntry` and typed `ConfigFileError` on native and wasm; bulk paths omit the mod id, relative to the implicit mod root. Settings remain separate, one file per key, with unchanged scanning; bulk files are never scanned.
+  Horizon's bulk cap is `DATA_FILE_MAX` (64 MiB), not the config cap. Reads, writes and stats enforce their root; writes replace bytes atomically, never leaving a partial file.
+  Checked `/`-separated paths refuse traversal, backslashes and symbolic links; another mod's files, missing calling-mod context, oversize files and unavailable operations receive typed refusals.
+  `list(&folder, after, limit)` returns lexicographically ordered names strictly after the cursor, at most `limit` entries; start with `None`, continue with the last name, and stop on an empty page.
+  `ConfigPath::root()` lists the mod's own root; `limit` must be 1 through `CONFIG_LIST_MAX` (1024), otherwise `InvalidPage` ([config and bulk storage](../how-to/mod-settings.md)).
 
 - The player-health HUD rows through `health_hud`: every frame the HUD draws them, the
   hook hears the layout's inputs (`HealthInputs`) and the screen's GUI size, and a mod that answers with

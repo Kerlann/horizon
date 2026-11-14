@@ -5,6 +5,7 @@ static ENTITY_PRE_CALLS: AtomicU32 = AtomicU32::new(0);
 static ENTITY_POST_CALLS: AtomicU32 = AtomicU32::new(0);
 
 pub mod area_macros;
+pub mod bulk_files;
 pub mod capability_registration;
 pub mod cauldron;
 pub mod datapack;
@@ -136,6 +137,8 @@ impl Hooks for Mod {
             mod_api::Command::new("wasmentities <targets:entities>"),
             mod_api::Command::new("wasmplayer <target:player>"),
             mod_api::Command::new("wasmcauldron"),
+            mod_api::Command::new("wasmbulkfiles"),
+            mod_api::Command::new("wasmbulkfilesnoworld"),
         ]);
     }
 
@@ -144,6 +147,17 @@ impl Hooks for Mod {
         host: &mut dyn mod_api::ServerHost,
         event: &mut mod_api::RunModCommandEvent<'_>,
     ) -> mod_api::Flow {
+        match event.command.literals.first().map(String::as_str) {
+            Some("wasmbulkfiles") => {
+                bulk_files::check(host);
+                return mod_api::Flow::Cancel;
+            }
+            Some("wasmbulkfilesnoworld") => {
+                bulk_files::no_world(host);
+                return mod_api::Flow::Cancel;
+            }
+            _ => {}
+        }
         if event.command.literals.first().map(String::as_str) == Some("wasmcauldron") {
             cauldron::read(host);
             return mod_api::Flow::Cancel;

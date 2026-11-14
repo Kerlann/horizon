@@ -437,7 +437,12 @@ impl Wire for crate::ConfigPath {
         out.put_str(self.as_str());
     }
     fn take(input: &mut Reader<'_>) -> Result<Self, WireError> {
-        Self::new(&input.take::<String>()?).map_err(|_| WireError::Invalid("invalid config path"))
+        let text = input.take::<String>()?;
+        if text.is_empty() {
+            Ok(Self::root())
+        } else {
+            Self::try_from(text).map_err(|_| WireError::Invalid("invalid config path"))
+        }
     }
 }
 impl Wire for crate::SpawnerKey {
@@ -837,6 +842,7 @@ mod tests {
     #[test]
     fn wire_checked_values_and_garbage() {
         round(crate::ConfigPath::new("example/options.toml").unwrap());
+        round(crate::ConfigPath::root());
         round(crate::SpawnerKey::new("example:spawner").unwrap());
         round(crate::CustomSpawners::vanilla());
         round(crate::Identifier::parse("example:thing").unwrap());
