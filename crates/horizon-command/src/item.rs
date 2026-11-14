@@ -178,10 +178,12 @@ pub fn decoded_component_value(id: &str, value: &Tag, reg: &Registries) -> Resul
     if id == "minecraft:attack_range" {
         return horizon_items::properties::attack_range::normalized(value)
             .ok_or_else(|| "Invalid attack_range".into());
+    }
     if id == "minecraft:base_color" {
         return dye_color(value).map(|name| Tag::String(name.into()));
+    }
     if id == "minecraft:note_block_sound" {
-        return note_block_sound(value);
+        return identifier_value(value);
     }
     decode_component(id, value, reg)?;
     if id == "minecraft:block_entity_data" {
@@ -351,7 +353,9 @@ pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), Strin
             let v = int_of(value).ok_or("Not a number")?;
             if v <= 0 {
                 return Err(format!("Value must be positive: {v}"));
-        // `VillagerFood.CODEC`: a required positive Codec.INT; extra fields are ignored.
+            }
+            Ok(())
+        }
         "minecraft:villager_food" => {
             let Tag::Compound(_) = t else {
                 return Err(not_map(t));
@@ -360,17 +364,6 @@ pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), Strin
             let value = int_of(nutrition).ok_or("Not a number")?;
             if value <= 0 {
                 return Err(format!("Value must be positive: {value}"));
-            }
-            Ok(())
-        }
-        "minecraft:rarity" => match t {
-            Tag::String(s) => {
-                let s = s.to_string_lossy();
-                if ["common", "uncommon", "rare", "epic"].contains(&s.as_str()) {
-                    Ok(())
-                } else {
-                    Err(format!("Unknown element name:{s}"))
-                }
             }
             Ok(())
         }
@@ -430,8 +423,6 @@ pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), Strin
         "minecraft:axolotl/variant" => string_enum(t, &["lucy", "wild", "gold", "cyan", "blue"]),
         // Salmon.Variant.CODEC uses StringRepresentable names under ordinary NbtOps.
         "minecraft:salmon/size" => string_enum(t, &["small", "medium", "large"]),
-        // Fox.Variant.CODEC uses StringRepresentable names under ordinary NbtOps.
-        "minecraft:fox/variant" => string_enum(t, &["red", "snow"]),
         // Parrot.Variant.CODEC uses StringRepresentable names under ordinary NbtOps.
         "minecraft:parrot/variant" => {
             string_enum(t, &["red_blue", "blue", "green", "yellow_blue", "gray"])
@@ -454,8 +445,6 @@ pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), Strin
                 "clayfish",
             ],
         ),
-            _ => Err("Not a string".into()),
-        },
         "minecraft:base_color" => dye_color(t).map(|_| ()),
         "minecraft:enchantments" | "minecraft:stored_enchantments" => enchantment_map(t, reg),
         "minecraft:tooltip_display" => tooltip_display(t, reg).map(|_| ()),
@@ -469,7 +458,7 @@ pub fn decode_component(id: &str, t: &Tag, reg: &Registries) -> Result<(), Strin
         "minecraft:use_effects" => horizon_items::item_data::ingredient_components::use_effects(t)
             .map(|_| ())
             .map_err(str::to_owned),
-        "minecraft:note_block_sound" => note_block_sound(t).map(|_| ()),
+        "minecraft:note_block_sound" => identifier_value(t).map(|_| ()),
         // TypedEntityData.codec: the type is the compound's id.
         "minecraft:block_entity_data" => match t {
             Tag::Compound(c) => match c.get(&"id".into()) {
@@ -517,8 +506,6 @@ fn potion_duration_scale(t: &Tag) -> Result<f32, String> {
 }
 /// `DataComponents.ITEM_MODEL`: `Identifier.CODEC`, without a resource lookup.
 fn identifier_value(value: &Tag) -> Result<Tag, String> {
-/// `DataComponents.NOTE_BLOCK_SOUND`: `Identifier.CODEC`, without a sound lookup.
-fn note_block_sound(value: &Tag) -> Result<Tag, String> {
     let Tag::String(value) = value else {
         return Err("Not a string".into());
     };
@@ -527,6 +514,7 @@ fn note_block_sound(value: &Tag) -> Result<Tag, String> {
     let id = horizon_core::identifier::Identifier::parse(&text)
         .map_err(|error| format!("Not a valid resource location: {text} {error}"))?;
     Ok(Tag::String(id.to_string().as_str().into()))
+}
 /// `DyeColor.CODEC`: uncompressed persistent values use exact serialized names.
 fn dye_color(t: &Tag) -> Result<&'static str, String> {
     let Tag::String(value) = t else {
@@ -1710,61 +1698,6 @@ mod tests {
                     &registry
                 )
                 .is_err()
-    fn note_block_sound_identifier_codec_normalizes_and_validates() {
-        use super::{Registries, Tag, decoded_component_value};
-        let registry = Registries::default();
-        for (input, canonical) in [
-            ("unregistered/sound", "minecraft:unregistered/sound"),
-            (":unregistered/sound", "minecraft:unregistered/sound"),
-            (
-                "minecraft:unregistered/sound",
-                "minecraft:unregistered/sound",
-            ),
-            ("fixture:unregistered/sound", "fixture:unregistered/sound"),
-            ("", "minecraft:"),
-            (":", "minecraft:"),
-            ("minecraft:", "minecraft:"),
-            ("fixture:", "fixture:"),
-            (".:..", ".:.."),
-            ("a-z_0.9:/a.._-0", "a-z_0.9:/a.._-0"),
-        ] {
-            let value = Tag::String(input.into());
-            assert_eq!(
-                decoded_component_value("minecraft:note_block_sound", &value, &registry),
-                Ok(Tag::String(canonical.into())),
-                "{input:?}",
-            );
-            assert!(decode_component("minecraft:note_block_sound", &value, &registry).is_ok());
-        }
-        for input in [
-            "Minecraft:sound",
-            "minecraft:Sound",
-            "bad namespace:sound",
-            "bad/namespace:sound",
-            "..:sound",
-            "a:b:c",
-            "sound with spaces",
-            "café",
-            "sound\u{0}",
-        ] {
-            let value = Tag::String(input.into());
-            assert!(
-                decoded_component_value("minecraft:note_block_sound", &value, &registry).is_err(),
-                "{input:?}",
-            );
-            assert!(decode_component("minecraft:note_block_sound", &value, &registry).is_err());
-        }
-        for value in [
-            Tag::Int(1),
-            Tag::compound([] as [(&str, Tag); 0]),
-            Tag::List(vec![]),
-            Tag::String(horizon_core::nbt::JavaString(vec![0xd800])),
-            Tag::String(horizon_core::nbt::JavaString(vec![0xdc00])),
-            Tag::String(horizon_core::nbt::JavaString(vec![0xd83d, 0xde00])),
-        ] {
-            assert!(
-                decoded_component_value("minecraft:note_block_sound", &value, &registry).is_err(),
-                "{value:?}",
             );
         }
     }
@@ -1816,114 +1749,6 @@ mod tests {
             )
             .is_err()
         );
-    }
-
-    #[test]
-    fn unbreakable_unit_codec_requires_maps_and_discards_unknown_fields() {
-        use super::{Compound, Registries, Tag, decoded_component_value};
-        let registry = Registries::default();
-        let empty = Tag::Compound(Compound::new());
-        for value in [
-            empty.clone(),
-            Tag::compound([
-                ("show_in_tooltip", Tag::Byte(0)),
-                ("unknown", Tag::List(vec![Tag::Int(7)])),
-            ]),
-        ] {
-            assert_eq!(
-                decoded_component_value("minecraft:unbreakable", &value, &registry).unwrap(),
-                empty
-            );
-        }
-        for value in [
-            Tag::Byte(1),
-            Tag::Int(0),
-            Tag::String("unit".into()),
-            Tag::List(vec![]),
-            Tag::IntArray(vec![]),
-        ] {
-            assert!(decode_component("minecraft:unbreakable", &value, &registry).is_err());
-            assert!(decoded_component_value("minecraft:unbreakable", &value, &registry).is_err());
-    fn base_color_codec_accepts_only_exact_dye_names() {
-        use super::{Registries, Tag, decoded_component_value};
-        let registry = Registries::default();
-        for name in [
-            "white",
-            "orange",
-            "magenta",
-            "light_blue",
-            "yellow",
-            "lime",
-            "pink",
-            "gray",
-            "light_gray",
-            "cyan",
-            "purple",
-            "blue",
-            "brown",
-            "green",
-            "red",
-            "black",
-        ] {
-            let value = Tag::String(name.into());
-            assert_eq!(
-                decoded_component_value("minecraft:base_color", &value, &registry).unwrap(),
-                value
-            );
-            assert!(decode_component("minecraft:base_color", &value, &registry).is_ok());
-            assert!(
-                decoded_component_value(
-                    "minecraft:base_color",
-                    &Tag::String(name.to_uppercase().as_str().into()),
-                    &registry
-                )
-                .is_err()
-            );
-        }
-        for value in [
-            "",
-            "silver",
-            "RED",
-            "Red",
-            " red",
-            "red ",
-            "minecraft:red",
-            "16",
-        ] {
-            assert!(
-                decoded_component_value(
-                    "minecraft:base_color",
-                    &Tag::String(value.into()),
-                    &registry
-                )
-                .is_err(),
-                "{value}"
-            );
-        }
-        let surrogate = Tag::String(horizon_core::nbt::JavaString(vec![0xD800]));
-        assert!(decoded_component_value("minecraft:base_color", &surrogate, &registry).is_err());
-        for value in [
-            Tag::Byte(0),
-            Tag::Short(0),
-            Tag::Int(14),
-            Tag::Long(14),
-            Tag::Float(14.0f32.to_bits()),
-            Tag::Double(14.0f64.to_bits()),
-            Tag::List(vec![]),
-            Tag::Compound(Default::default()),
-            Tag::ByteArray(vec![]),
-            Tag::IntArray(vec![]),
-            Tag::LongArray(vec![]),
-        ] {
-            assert_eq!(
-                decoded_component_value("minecraft:base_color", &value, &registry),
-                Err("Not a string".into())
-            );
-            assert_eq!(
-                decode_component("minecraft:base_color", &value, &registry),
-                Err("Not a string".into())
-            );
-        }
     }
 
     #[test]

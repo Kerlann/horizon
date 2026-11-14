@@ -230,6 +230,7 @@ pub fn component_equal(id: &str, a: &ItemStack, b: &ItemStack) -> bool {
                     .map(f32::to_bits)
             };
             bits(a) == bits(b)
+        }
         // `VillagerFood.equals`: only the decoded nutrition participates.
         "minecraft:villager_food" => {
             let nutrition = |stack: &ItemStack| {
@@ -282,6 +283,7 @@ pub fn component_equal(id: &str, a: &ItemStack, b: &ItemStack) -> bool {
                 (Some(Ok(a)), Some(Ok(b))) => a == b,
                 _ => false,
             }
+        }
         "minecraft:base_color" => {
             a.data().and_then(|d| d.base_color.as_deref())
                 == b.data().and_then(|d| d.base_color.as_deref())
