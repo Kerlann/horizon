@@ -29,7 +29,8 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
   players. A usage is words, then arguments `<name:kind>`, optional ones last in brackets:
   `Command::new("pay <player:player> <amount:integer>")`, `Command::op("eco set <player:player>
   <amount:integer>", 3)` for operators of level 3. Kinds: `word`, `text` (the rest of the line, last), `integer`,
-  `number`, `boolean`, `player`, `item`, `block_pos`, and any command argument type a mod registered
+  `number`, `boolean`, `player`, `item`, `block_pos`, `vec3`, `vec3_uncentered`, `column_pos`,
+  `rotation`, `dimension`, `nbt`, and any command argument type a mod registered
   (`Registrar::register_command_argument`): its namespaced id is the kind, as in
   `<machine:mymod:machine>`. A custom argument is one word (or the rest of the line when its type says
   `Greedy`) and delivers its type's canonical value in `run_mod_command`. The usages of one command merge into
@@ -51,7 +52,8 @@ For mods that run where the world is simulated: a dedicated server, a LAN host, 
   `position` after `execute in/at`, and named `CommandArgumentValue` values, not raw command text. Integer, number and boolean
   values retain the dispatcher's types; word and greedy text are strings. Player selectors resolve to a single live
   `PlayerRef`, items become component-bearing stacks of one, and block positions resolve source-relative/local
-  coordinates without requiring loaded chunks. `mod_id` is a loaded package id as a string; `resource:<registry>`
+  coordinates without requiring loaded chunks. `vec3` is `Vec3`, `column_pos` `ColumnPos`, `rotation`
+  `Rotation` (yaw, pitch), `dimension` `Dimension(LevelRef)` and `nbt` `Nbt(Compound)`. `mod_id` is a loaded package id as a string; `resource:<registry>`
   is `CommandArgumentValue::Id`, an id that registry holds. A custom argument is `CommandArgumentValue::Custom
   { kind, value }`: its registered type's id and what its parser returned. Missing optional arguments are absent.
   Parsing, permission and resolution failures produce feedback without calling listeners. The console resolves from the Overworld spawn's
