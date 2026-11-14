@@ -149,7 +149,7 @@ fn matrix(mods: mod_api::Mods) {
 }
 
 #[test]
-#[ignore = "requires prepared game resources"]
+#[ignore = "daily"]
 fn native_client_prediction_owns_the_hand_loop() {
     crate::game::in_own_process(
         "game::remote::interaction_event_tests::predicted_use_tests::native_client_prediction_owns_the_hand_loop",
@@ -158,7 +158,7 @@ fn native_client_prediction_owns_the_hand_loop() {
 }
 
 #[test]
-#[ignore = "requires prepared resources and compiled wasm fixture"]
+#[ignore = "daily"]
 fn wasm_client_prediction_owns_the_hand_loop() {
     crate::game::in_own_process(
         "game::remote::interaction_event_tests::predicted_use_tests::wasm_client_prediction_owns_the_hand_loop",

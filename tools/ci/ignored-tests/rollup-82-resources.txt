@@ -7,4 +7,3 @@ horizon-client game::block_entity_part_state_tests::one_position_replaced_twice_
 horizon-client game::transactions::tests::an_aborted_transaction_puts_back_what_it_and_its_committed_children_changed HORIZON_TEST_RESOURCES needs
 horizon-client game::transactions::decision::game_tests::abandoned_token_releases_real_save_gate_and_publishes_nothing HORIZON_TEST_RESOURCES needs
 horizon-client game::block_entity_part_state_tests::native_and_compiled_wasm_part_state_count_ticks HORIZON_WASM_FIXTURE needs
-horizon-client game::remote::interaction_event_tests::predicted_use_tests::native_client_prediction_owns_the_hand_loop HORIZON_TEST_RESOURCES needs
