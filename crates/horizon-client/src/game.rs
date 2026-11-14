@@ -10345,7 +10345,7 @@ impl Game<'_> {
                     self.tick_world_icon();
                     let ticked = Instant::now();
                     let rendered = self.render_and_flip(elapsed)?;
-                    horizon_client::spans::time("pr_cursor", || self.apply_cursor_icon());
+                    self.native_frame_end()?;
                     // The frame's spans, taken every frame they are recorded so they never
                     // pile up: the slow-frame line's.
                     let frame_spans = if horizon_client::spans::recording_here() {
