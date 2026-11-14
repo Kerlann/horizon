@@ -1,8 +1,6 @@
 //! Parsed native command input and the source that executes it.
 
-use crate::{
-    DimensionKey, EntityRef, Identifier, ItemStack, LevelRef, PermissionLevel, PlayerRef,
-};
+use crate::{DimensionKey, EntityRef, Identifier, ItemStack, LevelRef, PermissionLevel, PlayerRef};
 use horizon_core::nbt::Compound;
 
 /// The origin of a registered mod command, independent of `execute as`'s executor.

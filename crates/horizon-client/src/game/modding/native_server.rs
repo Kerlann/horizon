@@ -3004,7 +3004,12 @@ mod tests {
         let (tree, _, problems) = tree(&[mod_api::Command::new(POSITIONED)]);
         assert!(problems.is_empty(), "{problems:?}");
         let mut dispatcher = Dispatcher::new();
-        register_dispatcher(&mut dispatcher, &tree, "native_mod_command", &HashMap::new());
+        register_dispatcher(
+            &mut dispatcher,
+            &tree,
+            "native_mod_command",
+            &HashMap::new(),
+        );
         let registries = horizon_client::command::Registries::default();
         let (origin, rotation) = ([10.0, 70.0, -2.0], [45.0, 30.0]);
         let value = |line: &str, name: &str, kind: &str| {
