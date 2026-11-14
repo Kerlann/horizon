@@ -40,6 +40,9 @@ static HEARD: Mutex<Heard> = Mutex::new(Heard {
     left: Vec::new(),
 });
 
+/// The entity whose join the observer answers with a spawn of its own, and what it spawned.
+static ON_JOIN: Mutex<(Option<u32>, Vec<u32>)> = Mutex::new((None, Vec::new()));
+
 /// Hears construction, joins and leaves; marks each entity it constructs; keeps sheep out.
 struct Observer;
 #[mod_api::__subscriptions]
@@ -52,7 +55,7 @@ impl Hooks for Observer {
     }
     fn entity_join_level(
         &self,
-        _: &mut dyn ServerHost,
+        host: &mut dyn ServerHost,
         event: &mut EntityJoinLevelEvent<'_>,
     ) -> Flow {
         let mut heard = HEARD.lock().unwrap();
@@ -61,6 +64,19 @@ impl Hooks for Observer {
             heard.from_disk.push(event.entity);
         }
         drop(heard);
+        let answers = {
+            let mut on_join = ON_JOIN.lock().unwrap();
+            (on_join.0 == Some(event.entity)).then(|| on_join.0.take())
+        };
+        if answers.is_some() {
+            let spawned = host.summon(
+                "minecraft:overworld",
+                "minecraft:pig",
+                [1.5, 70.0, 1.5],
+                Default::default(),
+            );
+            ON_JOIN.lock().unwrap().1.extend(spawned);
+        }
         if event.kind == "minecraft:sheep" {
             Flow::Cancel
         } else {
@@ -740,5 +756,70 @@ fn a_pending_boat_removal_is_hidden_from_selectors_until_it_commits() {
             !game.level_candidates().contains(&target),
             "a commit removed it"
         );
+    });
+}
+
+#[test]
+#[ignore = "daily"]
+fn a_spawn_a_join_listener_makes_during_the_commit_joins_once_after_it() {
+    const NAME: &str = "game::transaction_entities_tests::a_spawn_a_join_listener_makes_during_the_commit_joins_once_after_it";
+    with_observer(NAME, |game| {
+        let seal = game.transaction_open();
+        let a = summon(game, "minecraft:pig", "{}").unwrap();
+        let b = summon(game, "minecraft:pig", "{}").unwrap();
+        assert!(game.entity_discard(game.entity(b).unwrap()));
+        ON_JOIN.lock().unwrap().0 = Some(a);
+        game.transaction_close(&seal, true);
+
+        let spawned = ON_JOIN.lock().unwrap().1.clone();
+        let [c] = spawned[..] else {
+            panic!("the listener spawned one entity, not {spawned:?}")
+        };
+        assert_eq!(
+            heard().joined,
+            [a, c],
+            "a, then c once, and never the removed b"
+        );
+        game.native_joins_flush(false, 0);
+        game.native_leaves_flush();
+        assert_eq!(
+            heard(),
+            Heard::default(),
+            "nothing is told twice, and b never leaves"
+        );
+        assert!(game.entity(c).is_some());
+        assert_eq!(game.entity(b), None);
+    });
+}
+
+#[test]
+#[ignore = "daily"]
+fn a_transaction_covers_its_own_level_and_another_levels_spawn_is_told_at_once() {
+    const NAME: &str = "game::transaction_entities_tests::a_transaction_covers_its_own_level_and_another_levels_spawn_is_told_at_once";
+    with_observer(NAME, |game| {
+        game.enter_level(Dim::Nether).unwrap();
+        game.world
+            .chunks
+            .insert((0, 0), Arc::new(Chunk::empty(0, 0)));
+        game.enter_level(Dim::Overworld).unwrap();
+        let seal = game.transaction_open();
+        // As `/execute in the_nether run summon …` does from inside the action.
+        game.enter_level(Dim::Nether).unwrap();
+        let pig = summon(game, "minecraft:pig", "{}").unwrap();
+        assert_eq!(heard().joined, [pig], "the nether's spawn is told at once");
+        assert!(game.entity(pig).is_some());
+        assert!(game.entity_discard(game.entity(pig).unwrap()));
+        assert_eq!(game.entity(pig), None, "and its removal happens at once");
+        assert_eq!(heard().left, [pig]);
+        let kept = summon(game, "minecraft:cow", "{}").unwrap();
+        game.enter_level(Dim::Overworld).unwrap();
+        game.transaction_close(&seal, false);
+
+        game.enter_level(Dim::Nether).unwrap();
+        assert!(
+            game.entity(kept).is_some(),
+            "an abort takes back the action's level only"
+        );
+        game.enter_level(Dim::Overworld).unwrap();
     });
 }

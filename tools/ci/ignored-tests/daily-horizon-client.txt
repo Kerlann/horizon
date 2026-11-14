@@ -139,9 +139,11 @@ horizon-client game::transaction_entities_tests::a_nested_commit_goes_with_its_p
 horizon-client game::transaction_entities_tests::a_pending_boat_removal_is_hidden_from_selectors_until_it_commits lib daily child-process
 horizon-client game::transaction_entities_tests::a_removal_then_abort_keeps_the_row_map_and_rider lib daily child-process
 horizon-client game::transaction_entities_tests::a_removal_then_commit_runs_each_effect_once lib daily child-process
+horizon-client game::transaction_entities_tests::a_spawn_a_join_listener_makes_during_the_commit_joins_once_after_it lib daily child-process
 horizon-client game::transaction_entities_tests::a_spawn_joins_at_the_root_commit lib daily child-process
 horizon-client game::transaction_entities_tests::a_spawn_then_abort_leaves_no_entity_map_or_hook lib daily child-process
 horizon-client game::transaction_entities_tests::a_spawned_then_removed_entity_never_joins_or_leaves lib daily child-process
+horizon-client game::transaction_entities_tests::a_transaction_covers_its_own_level_and_another_levels_spawn_is_told_at_once lib daily child-process
 horizon-client game::transaction_entities_tests::a_traveller_arriving_inside_an_aborted_action_stays lib daily child-process
 horizon-client game::transaction_entities_tests::an_aborted_spawn_is_in_no_tracking_pass lib daily child-process
 horizon-client game::transaction_entities_tests::an_aborted_spawn_puts_back_the_raw_record_it_wrote_over lib daily child-process
