@@ -1254,6 +1254,7 @@ pub fn main() -> horizon_client::Result<()> {
                     asks_living_destroy_block: false,
                     asks_baby_spawn: false,
                     border: None,
+                    section_writer: None,
                 }
             };
         }

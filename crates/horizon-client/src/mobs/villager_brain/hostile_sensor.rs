@@ -61,10 +61,10 @@ mod mob_map_tests {
             |world, _| {
                 let mut view = world.clone();
                 for (snapshot, expected) in [
-                    (&first, Some(Who::Mob(2))),
+                    (&first, Some(Who::Mob(3))),
                     (&second, Some(Who::Mob(3))),
-                    (&removed, None),
-                    (&first, Some(Who::Mob(2))),
+                    (&removed, Some(Who::Mob(3))),
+                    (&first, Some(Who::Mob(3))),
                     (NeoForgeMobMaps::vanilla().as_ref(), Some(Who::Mob(3))),
                 ] {
                     view.mob_maps = snapshot;
@@ -79,5 +79,39 @@ mod mob_map_tests {
                 }
             },
         ));
+        for distance in [7.0, 9.0] {
+            let candidates = [
+                Mob::new(2, seen[0].kind.clone(), Vec3::new(distance, 1.0, 0.0), 0.0)
+                    .seen(None, &items),
+                Mob::new(3, seen[1].kind.clone(), Vec3::new(9.0, 1.0, 0.0), 0.0).seen(None, &items),
+            ];
+            assert!(crate::mobs::world::with_resource_test_world(
+                std::path::Path::new(&root),
+                &candidates,
+                true,
+                true,
+                |_, _| {},
+                |world, _| {
+                    let mut view = world.clone();
+                    for (snapshot, expected) in [
+                        (&first, Some(Who::Mob(2))),
+                        (&removed, None),
+                        (NeoForgeMobMaps::vanilla().as_ref(), None),
+                    ] {
+                        view.mob_maps = snapshot;
+                        mem(&mut observer).visible_mobs.set(Visible {
+                            list: vec![Who::Mob(3), Who::Mob(2)],
+                            cache: vec![(Who::Mob(3), true), (Who::Mob(2), true)],
+                        });
+                        sense_hostiles(&mut observer, &view);
+                        assert_eq!(
+                            mem(&mut observer).nearest_hostile.get().copied(),
+                            expected,
+                            "wraith at {distance}"
+                        );
+                    }
+                },
+            ));
+        }
     }
 }

@@ -2,8 +2,12 @@
 """The Nightly, the only build Horizon ships (.github/workflows/nightly-build.yml, docs/release-flow.md "Nightly").
 
     nightly.py pick [--force]      which commit tonight's nightly builds: GitHub outputs and nightly-notes.md
+    nightly.py pick --kind snapshot   a snapshot of NIGHTLY_BASE (default main's head), a commit of main
+                                   with the gate green: built alone, published as snapshot-<date>-<short>
     nightly.py rotate              renames the current `nightly` pre-release to nightly-<its date>, frees the tag
     nightly.py prune [--days 7]    deletes the nightly-<date> pre-releases and tags older than that, nothing else
+    nightly.py prune-snapshots [--days 7]   deletes the snapshot-<date>-<short> pre-releases older than that, but
+                                   the newest; never an sdk-<sha> SDK (snapshots and nightlies reference those)
     nightly.py prune-builds [--days 7]   deletes the nightly/build-<date>-<n> branches older than that, but the
                                    newest and any a published nightly points to (Ludovic, 2026-10-27)
     nightly.py keep-source <sha> <date>  tags the nightly's commit nightly-source/<date>-<short>, for good
@@ -402,6 +406,33 @@ def pick(force: bool) -> None:
     build_set(main, prs, left_out, today, force, dry_run)
 
 
+def pick_snapshot() -> None:
+    """A snapshot (release.yml kind snapshot, docs/release-flow.md "Snapshot"): a commit of main whose gate passed
+    (checked again here, so a hand dispatch can't skip it), with its SDK published, built alone: no picked pull
+    requests, no build branch, no nightly-state record, no daily cap. Unchanged since the same day's snapshot of the
+    same commit, it is skipped (a tag is never replaced). It is published as snapshot-<date>-<short>, its own tag and version."""
+    git("fetch", "--quiet", "origin", "+refs/heads/main:refs/remotes/origin/main")
+    repo, dry_run = os.environ.get("GITHUB_REPOSITORY", ""), os.environ.get("DRY_RUN") == "true"
+    sha = train.channel_head("snapshot", os.environ.get("NIGHTLY_BASE", "").strip())
+    sdk = repo != "arismoko/horizon" or sdk_ready(sha)
+    if not sdk:
+        if not dry_run:
+            stop(repo, "", f"the snapshot stopped: {sha} has no complete published SDK (release.yml publishes it first).")
+        print(f"::warning::{sha} has no published SDK yet: a real snapshot publishes sdk-{sha} first; this dry run "
+              "carries no sdk.json")
+    today = dt.datetime.now(dt.timezone.utc).date().isoformat()
+    tag = train.build_tag("snapshot", today, sha)
+    # A tag is never replaced: the same day's snapshot of the same commit is that build already (a dry run builds).
+    build = dry_run or not gh("release", "view", tag, "--json", "tagName", check=False)
+    with open("nightly-notes.md", "w") as f:
+        f.write(f"Snapshot {today} · {sha[:7]}: main at {sha}, built to test it after merge. Not a Nightly: no "
+                "launcher offers or updates to it; a developer installs it with "
+                f"`horizon-launcher install {tag}`. Its SDK is the release sdk-{sha}.\n\n{train.DISCLAIMER}\n")
+    output(build=str(build).lower(), sha=sha, short=sha[:7], source="main", date=today, version=f"snapshot-{today}",
+           nightly=f"{today} {sha[:7]}", source_tag="", tag=tag, sdk=str(sdk).lower())
+    print(f"{'build' if build else f'skip ({tag} is already published)'}: {tag} {sha}")
+
+
 def rotate() -> None:
     """The current `nightly` becomes nightly-<its date>, so tonight's can take the tag."""
     current = gh("release", "view", "nightly", "--json", "name", check=False)
@@ -426,6 +457,28 @@ def stale(tags: list[dict], today: dt.date, days: int) -> list[str]:
 def prune(days: int) -> None:
     tags = json.loads(gh("release", "list", "--limit", "200", "--json", "tagName,isPrerelease"))
     for tag in stale(tags, dt.datetime.now(dt.timezone.utc).date(), days):
+        gh("release", "delete", tag, "--cleanup-tag", "--yes")
+        print(f"deleted {tag}")
+
+
+SNAPSHOT = re.compile(r"^snapshot-(\d{4}-\d{2}-\d{2})-[0-9a-f]{7,40}$")
+
+
+def stale_snapshots(tags: list[dict], today: dt.date, days: int) -> list[str]:
+    """The snapshot pre-releases older than `days`, never the newest one, never anything not named
+    snapshot-<date>-<short> (an sdk-<sha> SDK above all)."""
+    snapshots = [r["tagName"] for r in tags if r["isPrerelease"] and SNAPSHOT.match(r["tagName"])]
+    if not snapshots:
+        return []
+    newest = max(snapshots, key=lambda tag: SNAPSHOT.match(tag).group(1))
+    cutoff = today - dt.timedelta(days=days)
+    return [tag for tag in snapshots
+            if tag != newest and dt.date.fromisoformat(SNAPSHOT.match(tag).group(1)) < cutoff]
+
+
+def prune_snapshots(days: int) -> None:
+    tags = json.loads(gh("release", "list", "--limit", "200", "--json", "tagName,isPrerelease"))
+    for tag in stale_snapshots(tags, dt.datetime.now(dt.timezone.utc).date(), days):
         gh("release", "delete", tag, "--cleanup-tag", "--yes")
         print(f"deleted {tag}")
 
@@ -489,7 +542,9 @@ def keep_source(sha: str, today: str) -> None:
 def main() -> None:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("pick").add_argument("--force", action="store_true")
+    picker = sub.add_parser("pick")
+    picker.add_argument("--force", action="store_true")
+    picker.add_argument("--kind", choices=["nightly", "snapshot"], default="nightly")
     sub.add_parser("rotate")
     sub.add_parser("require-sdk").add_argument("sha")
     sub.add_parser("sdk-archives")
@@ -501,13 +556,17 @@ def main() -> None:
     previous.add_argument("sha")
     previous.add_argument("out", type=Path)
     sub.add_parser("prune").add_argument("--days", type=int, default=7)
+    sub.add_parser("prune-snapshots").add_argument("--days", type=int, default=7)
     sub.add_parser("prune-builds").add_argument("--days", type=int, default=7)
     keep = sub.add_parser("keep-source")
     keep.add_argument("sha")
     keep.add_argument("date")
     args = ap.parse_args()
     if args.cmd == "pick":
-        pick(args.force)
+        if args.kind == "snapshot":
+            pick_snapshot()
+        else:
+            pick(args.force)
     elif args.cmd == "require-sdk":
         require_sdk(args.sha)
     elif args.cmd == "sdk-archives":
@@ -524,6 +583,8 @@ def main() -> None:
         rotate()
     elif args.cmd == "prune-builds":
         prune_builds(args.days)
+    elif args.cmd == "prune-snapshots":
+        prune_snapshots(args.days)
     elif args.cmd == "keep-source":
         keep_source(args.sha, args.date)
     else:

@@ -80,6 +80,23 @@ fn a_mod_fits_a_build_where_what_it_uses_is_unchanged() {
 }
 
 #[test]
+fn the_copy_a_build_makes_is_judged_by_the_same_table() {
+    let dir = project_dir("fit-copied", Some(&[("fn:give", "h1")]), None);
+    let bundle = crate::native_mods::bundle_in(&dir).unwrap().unwrap();
+    let copy = crate::native_mods::tests::dir("fit-copied-to");
+    crate::native_mods::package::copy(&bundle, &copy).unwrap();
+    let target = surface(&[("fn:give", "h1")]);
+    assert_eq!(
+        judged(&copy, OTHER_BUILD, &target),
+        Verdict::Fits {
+            made_for: pin(&dir)
+        }
+    );
+    std::fs::remove_dir_all(dir).unwrap();
+    std::fs::remove_dir_all(copy).unwrap();
+}
+
+#[test]
 fn a_changed_or_removed_item_it_uses_is_named() {
     let dir = project_dir(
         "fit-misfit",

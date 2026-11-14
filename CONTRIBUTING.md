@@ -145,7 +145,8 @@ already daily tests, and the existing ones that need resources, a child process 
   panicked and the pull requests merged since the last green daily run. The fix is an ordinary pull request.
 
 Three kinds of build: a **snapshot**, from main's head on request, needs only the gate tier and no in-game tests
-(today it is checked and stops; publishing it follows); the **nightly** is published by the daily run when every part of it is green; a **release** is cut from a
+(it is published as `snapshot-<date>-<short>`, which no launcher offers, to test packages and platforms after a
+merge); the **nightly** is published by the daily run when every part of it is green; a **release** is cut from a
 nightly.
 
 Reviews on this fork read the diff, the design and CI; they do not run your change. So for anything a player or a

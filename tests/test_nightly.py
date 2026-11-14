@@ -166,7 +166,7 @@ class UntrustedBuildTests(unittest.TestCase):
     def test_no_nightly_build_is_trusted(self):
         # The train only starts `nightly build` (Nightly only since 2026-10-28); it builds nothing itself.
         release = (WORKFLOWS / "release.yml").read_text()
-        self.assertNotIn("game-build.yml", release)
+        self.assertNotIn("/game-build.yml", release)
         self.assertIn("gh workflow run nightly-build.yml", release)
         nightly_build = (WORKFLOWS / "nightly-build.yml").read_text()
         self.assertIn("trusted: false", nightly_build)
@@ -230,7 +230,7 @@ class PruneBuildsTests(unittest.TestCase):
         self.assertIn('git archive --format=tar.gz --prefix="horizon-${SHA:0:7}/" -o horizon-source.tar.gz "$SHA"',
                       pick)
         sign = build.split("\n  sign:", 1)[1].split("\n  publish:", 1)[0]
-        self.assertIn("dist/horizon-source.tar.gz", sign.split("sign_release.sh nightly", 1)[1])
+        self.assertIn("dist/horizon-source.tar.gz", sign.split('sign_release.sh "$KIND"', 1)[1])
         publish = build.split("\n  publish:", 1)[1].split("\n  answer:", 1)[0]
         self.assertIn('"dist/horizon-source.tar.gz#Source of this Nightly', publish)
         self.assertIn('nightly.py keep-source "$SHA" "$DATE"', publish)

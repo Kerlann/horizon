@@ -347,6 +347,7 @@ pub fn clear_log() -> Result<(), String> {
 /// Appends `message` (with a newline) to the build log, so a failure that happens before any
 /// command runs is still recorded.
 pub fn append_log(message: &str) -> Result<(), String> {
+    fs::create_dir_all(root()).map_err(|e| format!("{}: {e}", root().display()))?;
     let mut log = fs::OpenOptions::new()
         .create(true)
         .append(true)
@@ -2426,9 +2427,10 @@ fn copy_runtime(from: &Path, to: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+mod installation;
 /// Installs `binary` as version `version`, retaining the base's runtime helpers. Clients
 /// reference the base's prepared resources; standalone server exports still carry their own.
-mod installation;
+mod library_record;
 use installation::install;
 
 /// Copies version folder `from` into `to` but for what a new build of `target` makes its own

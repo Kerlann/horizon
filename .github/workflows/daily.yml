@@ -221,8 +221,12 @@ jobs:
     needs: [resolve, summary, sdk-publish]
     # After the SDK, which a Nightly carries the index of: published now, or already (its leg skipped the build).
     if: always() && needs.summary.outputs.green == 'true' && needs.resolve.outputs.dry_run == 'false' && (needs.sdk-publish.result == 'success' || needs.sdk-publish.result == 'skipped')
+    # GitHub checks what every called job asks for at startup, skipped ones too (tests/test_ci_call_permissions.py).
     permissions:
-      contents: read
+      # Only because release.yml holds the snapshot's SDK publish (sdk-publish.yml), which asks for it and never
+      # runs in this call (kind nightly). release.yml's nightly path writes nothing: its jobs declare read, and the
+      # Nightly is written by `nightly build`, which this only starts.
+      contents: write
       issues: read
       actions: write  # release.yml starts `nightly build`
     uses: ./.github/workflows/release.yml

@@ -8,6 +8,7 @@ impl Game<'_> {
         let player = self.player_view();
         MobWorld {
             mob_maps: self.mob_maps(),
+            section_writer: None,
             professions: self.stations().professions.as_ref(),
             loop_context: &self.loop_context,
             foreign: None,

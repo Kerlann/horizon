@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Thread per-world builtin maps through exhaustive MobWorld constructions.
+"""One-shot migration: thread builtin maps through exhaustive MobWorld constructions.
 
 Update expressions inherit the original view, never a vanilla default. The
 hookless worker view binds and preserves the source snapshot explicitly.
@@ -9,6 +9,8 @@ import re
 import subprocess
 
 root = Path('crates/horizon-client')
+if "pub mob_maps:" in (root / 'src/mobs.rs').read_text():
+    raise SystemExit('snapshot threading already applied; run only on the migration parent')
 paths = subprocess.check_output(['git', 'ls-files', str(root)], text=True).splitlines()
 for filename in paths:
     if not filename.endswith('.rs'):

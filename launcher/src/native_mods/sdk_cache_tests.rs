@@ -413,6 +413,43 @@ fn a_game_release_names_its_build_through_its_signed_index() {
         &[],
     );
     assert!(matches!(read(other), Err(Refusal::Refused { .. })));
+    // A snapshot, installed by its tag: read there, signed for its own version on its channel.
+    let snapshot = "snapshot-2026-11-13-0123456";
+    publish(
+        &base,
+        snapshot,
+        snapshot,
+        &fixture.key,
+        index.as_bytes(),
+        &[],
+    );
+    assert_eq!(read(snapshot).unwrap(), COMMIT);
+    // A snapshot is never read as a Nightly: a snapshot's index and signature served under the
+    // Nightly's tags, for a Nightly version of the same date and commit, are refused.
+    let as_nightly = "nightly-2026-11-15-0123456";
+    for tag in [horizon_release_sign::NIGHTLY, "nightly-2026-11-15"] {
+        publish(
+            &base,
+            tag,
+            &snapshot.replace("13", "15"),
+            &fixture.key,
+            index.as_bytes(),
+            &[],
+        );
+    }
+    assert!(matches!(read(as_nightly), Err(Refusal::Unsigned { .. })));
+    // A version of neither channel's full form, its own tag holding a validly signed index:
+    // no build id (a channel's tag never reads as a release).
+    for version in [
+        "snapshot-2026-11-16",
+        "nightly-2026-11-16",
+        "snapshot",
+        "snapshot-2026-11-16-XYZ1234",
+    ] {
+        publish(&base, version, version, &fixture.key, index.as_bytes(), &[]);
+        assert!(read(version).is_err(), "{version}");
+        assert!(!kept.join(version).exists(), "{version}");
+    }
     // A release, signed for its tag; one signed for another tag is refused.
     publish(
         &base,

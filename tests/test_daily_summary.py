@@ -4,6 +4,8 @@ import io
 import json
 import os
 import re
+import shutil
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -493,6 +495,18 @@ class DailyWorkflowTests(unittest.TestCase):
         self.assertEqual(steps["Pack the SDK's assets"]["run"], "python tools/prebuilt_game.py pack prebuilt dist")
         self.assertEqual(steps["actions/upload-artifact@v4"]["with"]["name"], "sdk-leg-${{ matrix.name }}")
         self.assertNotIn("env", build, "no hand-set archive name")
+
+        # The launcher and the mod tool ask for horizon_mod_package::sdk::Asset::name(kind, target, side):
+        # `{kind}-{target}{-server}.tar.xz`, the kinds named runtime, api and engine; and the release's other files
+        # are its BESIDE_ASSETS. Producer (the legs), publish check (SDK_ARCHIVES, SDK_ASSETS) and launcher agree.
+        sdk = (ROOT / "crates/horizon-mod-package/src/sdk.rs").read_text()
+        self.assertIn('format!("{}-{target}{suffix}.tar.xz", kind.name())', sdk)
+        self.assertIn('let suffix = if side == Side::Server { "-server" } else { "" };', sdk)
+        for kind in ("runtime", "api", "engine", "build-data", "api-source"):
+            self.assertIn(f'=> "{kind}",', sdk)
+        self.assertIn('pub const INDEX: &str = "sdk.json";', sdk)
+        self.assertIn('pub const BESIDE_ASSETS: [&str; 3] = [INDEX, "SHA256SUMS", "SHA256SUMS.sig"];', sdk)
+        self.assertEqual(set(nightly.SDK_ASSETS) - set(nightly.SDK_ARCHIVES), {"sdk.json", "SHA256SUMS", "SHA256SUMS.sig"})
 
     def test_the_sdk_is_signed_and_published_only_on_main(self):
         from tests.test_ci_concurrency import ROOT, yaml

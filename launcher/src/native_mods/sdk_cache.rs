@@ -732,12 +732,16 @@ fn build_of_in(
             return Ok(text.trim().to_owned());
         }
     }
-    let nightly = horizon_release_sign::is_nightly_build(version);
+    // A build of a channel (a Nightly, or a snapshot installed by its tag) is read from its
+    // channel only: the version's own prefix, checked whole, names it, never a release's title.
+    let channel = horizon_release_sign::Channel::of(version)
+        .filter(|channel| horizon_release_sign::is_build(*channel, version));
     // The Nightly being served is published as `nightly` and renamed `nightly-<date>` when the
     // next one goes out: the current tag is tried first. Its v2 signature binds the exact
-    // version, so whichever tag serves it, only that version's index is accepted.
-    let tags: Vec<String> = match horizon_release_sign::nightly_date(version) {
-        Some(date) if nightly => vec![
+    // version, so whichever tag serves it, only that version's index is accepted. A snapshot is
+    // served under its version alone.
+    let tags: Vec<String> = match (channel, horizon_release_sign::nightly_date(version)) {
+        (Some(horizon_release_sign::Channel::Nightly), Some(date)) => vec![
             horizon_release_sign::NIGHTLY.to_owned(),
             format!("nightly-{date}"),
         ],
@@ -748,7 +752,7 @@ fn build_of_in(
         build: version.to_owned(),
     };
     for tag in &tags {
-        match signed_game_index(base, tag, version, nightly, keys) {
+        match signed_game_index(base, tag, version, channel, keys) {
             Ok(found) => {
                 bytes = Some(found);
                 break;
@@ -770,7 +774,7 @@ fn build_of_in(
     })?;
     let commit = build.commit;
     let named = version.rsplit('-').next().unwrap_or_default();
-    if !super::is_revision(&commit) || (nightly && !commit.starts_with(named)) {
+    if !super::is_revision(&commit) || (channel.is_some() && !commit.starts_with(named)) {
         return Err(refused(trf(
             "its index names build {commit}, not {version}'s",
             &[("commit", &commit), ("version", version)],
@@ -781,12 +785,13 @@ fn build_of_in(
 }
 
 /// The game release `tag`'s copy of its SDK index, checked against the release's signed sums:
-/// for a Nightly, signed for exactly `version` (`SHA256SUMS.v2.sig`); for a release, for `tag`.
+/// for a build of `channel` (a Nightly or a snapshot), signed for exactly `version` on that
+/// channel (`SHA256SUMS.v2.sig`); for a release, for `tag`.
 fn signed_game_index(
     base: &Base,
     tag: &str,
     version: &str,
-    nightly: bool,
+    channel: Option<horizon_release_sign::Channel>,
     keys: &[PublicKey],
 ) -> Result<Vec<u8>, Refusal> {
     let read = |name: &str| {
@@ -809,9 +814,10 @@ fn signed_game_index(
         build: version.to_owned(),
         why,
     };
-    let signed = if nightly {
+    let signed = if let Some(channel) = channel {
         let signature = read(SIGNATURE_V2)?.map(|b| String::from_utf8_lossy(&b).into_owned());
-        horizon_release_sign::nightly_digest(
+        horizon_release_sign::build_digest(
+            channel,
             version,
             INDEX,
             sums.as_deref(),

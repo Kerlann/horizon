@@ -238,7 +238,8 @@ fn a_nightly_is_signed_for_its_channel_and_for_its_version() {
     // What a current launcher does with it.
     let sums = std::fs::read(dir.join(SUMS)).unwrap();
     let v2 = std::fs::read_to_string(dir.join(SIGNATURE_V2)).unwrap();
-    let digest = horizon_release_sign::nightly_digest(
+    let digest = horizon_release_sign::build_digest(
+        horizon_release_sign::Channel::Nightly,
         VERSION,
         "horizon-windows-x64.zip",
         Some(&sums),

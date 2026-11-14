@@ -223,13 +223,16 @@ impl Game<'_> {
     /// Load the world's data packs' content tables (`None`: the world has no
     /// packs, and `Resources.rest` stays in use). This re-reads the tables,
     /// so it runs once per world open and on `/reload`.
-    pub(super) fn build_world_tables(
+    pub(super) fn stage_world_tables(
         &mut self,
         stack: &functions::PackStack,
         reload: bool,
         root: &std::path::Path,
-        _data_switched: bool,
-    ) -> Result<(Option<WorldTables>, horizon_client::health::HealthResources)> {
+    ) -> Result<(
+        Option<WorldTables>,
+        horizon_client::health::HealthResources,
+        Option<mod_api::DatapackRegistrySet>,
+    )> {
         let phase = self.mod_phase.clone();
         let _reload = phase
             .reloading()
@@ -247,7 +250,6 @@ impl Game<'_> {
         };
         let mut data_map_types = Vec::new();
         self.native_data_map_types(&mut data_map_types);
-        self.data_map_registries = native_data_maps::registries_of(&data_map_types);
         let base = if reload {
             &self.health_resources
         } else {
@@ -289,6 +291,42 @@ impl Game<'_> {
             (&sources, &recipes),
         );
         self.prepare_professions(root, &items, &mut stations)?;
+        // The world's loaded datapack registries are a mod-declared registry's
+        // authority for the data maps' id checks, as the command ids are for
+        // the registries they list.
+        // Resolve membership against the very generation that will be published.
+        // In particular, generation exhaustion refuses preparation before any state changes.
+        let datapack_registries = self
+            .datapack_candidate(stack, &conditions)?
+            .map(
+                |candidate| match self.mods.datapack_registries.as_ref().filter(|_| reload) {
+                    Some(old) => old
+                        .reload(candidate)
+                        .map_err(|error| format!("datapack registry reload: {error:?}")),
+                    None => Ok(mod_api::DatapackRegistrySet::first(
+                        candidate,
+                        horizon_client::datapack_net::next_session(),
+                    )),
+                },
+            )
+            .transpose()?;
+        let received = horizon_client::datapack_net::received();
+        let datapack_set = if self.is_logical_server() {
+            datapack_registries.as_ref()
+        } else {
+            received.as_deref()
+        };
+        let registries = native_data_maps::WorldRegistries::new(
+            self.ui
+                .registries
+                .by_registry
+                .iter()
+                .map(|(registry, entries)| (registry.as_str(), entries.ids.as_slice())),
+            datapack_set,
+            &items,
+            root,
+            &overlay,
+        );
         let causes_suffocation = items
             .block_tags
             .get("minecraft:causes_suffocation")
@@ -361,16 +399,10 @@ impl Game<'_> {
                     .is_ok(),
             },
         )?;
-        let data_maps = native_data_maps::DataMaps::load(
-            &data_map_types,
-            &overlay,
-            &items.item_tags,
-            &items.block_tags,
-            builtin,
-        );
-        let datapack_candidate = self.datapack_candidate(stack, &conditions)?;
+        let data_maps = native_data_maps::DataMaps::load(&data_map_types, &overlay, &registries)
+            .with_builtins(builtin);
+        drop(registries);
         conditions.check_errors()?;
-        self.mods.datapack_candidate = datapack_candidate;
         Ok((
             Some(WorldTables {
                 conditions,
@@ -384,6 +416,7 @@ impl Game<'_> {
                 pack_tags,
             }),
             health,
+            datapack_registries,
         ))
     }
     /// The entries of the mods' datapack registries in the winning pack files: decoded with
@@ -447,17 +480,17 @@ impl Game<'_> {
     ) -> Result<()> {
         // A new world load: a saved base clamped into its bounds warns again (#3728).
         horizon_client::living_attributes::LOAD_CLAMPS.begin_load();
-        (self.world_tables, self.health_resources) =
-            self.build_world_tables(stack, false, root, self.mods.data_switched)?;
+        let (tables, health, registries) = self.stage_world_tables(stack, false, root)?;
+        self.world_tables = tables;
+        self.health_resources = health;
+        self.mods.datapack_registries = registries.map(Arc::new);
+        self.data_map_registries = self
+            .world_tables
+            .as_ref()
+            .map_or_else(Vec::new, |t| t.data_maps.registries());
         self.install_block_maps();
         self.install_profession_save_snapshots();
         self.share_mob_maps();
-        self.mods.datapack_registries = self.mods.datapack_candidate.take().map(|candidate| {
-            Arc::new(mod_api::DatapackRegistrySet::first(
-                candidate,
-                horizon_client::datapack_net::next_session(),
-            ))
-        });
         horizon_client::datapack_net::serve(self.mods.datapack_registries.clone());
         Ok(())
     }
@@ -505,7 +538,13 @@ impl Game<'_> {
                 sources.clone(),
             );
         }
+        self.mods.datapack_registries = datapack_registries.map(Arc::new);
+        self.health_resources = health;
         self.world_tables = tables;
+        self.data_map_registries = self
+            .world_tables
+            .as_ref()
+            .map_or_else(Vec::new, |t| t.data_maps.registries());
         self.install_block_maps();
         self.install_profession_save_snapshots();
         self.share_mob_maps();
@@ -513,12 +552,10 @@ impl Game<'_> {
         for world in self.levels.parked_worlds() {
             world.pois.clear();
         }
-        self.mods.datapack_registries = datapack_registries.map(Arc::new);
         horizon_client::datapack_net::serve(self.mods.datapack_registries.clone());
         self.send_datapack_snapshots();
         self.refresh_recipe_property_context();
         self.structure_spawns = structure_spawns;
-        self.health_resources = health;
         self.server_items = None;
         self.refresh_infiniburn();
         self.install_parts(parts);
@@ -607,7 +644,11 @@ impl Game<'_> {
                             return;
                         }
                     };
-                    loot.apply_native_table_loads(&context);
+                    if let Err(error) = loot.apply_native_table_loads(&context) {
+                        log::warn!("Horizon: native loot tables refused: {error}");
+                        self.server_loot.set(None);
+                        return;
+                    }
                     Some(Arc::new(loot))
                 }
                 Err(e) => {
@@ -667,23 +708,8 @@ impl Game<'_> {
         &mut self,
         stack: &functions::PackStack,
         root: &std::path::Path,
-        data_switched: bool,
     ) -> Result<PreparedWorldReload> {
-        let (tables, health) = self.build_world_tables(stack, true, root, data_switched)?;
-        let datapack_registries = self
-            .mods
-            .datapack_candidate
-            .take()
-            .map(|candidate| match &self.mods.datapack_registries {
-                Some(old) => old
-                    .reload(candidate)
-                    .map_err(|error| format!("datapack registry reload: {error:?}")),
-                None => Ok(mod_api::DatapackRegistrySet::first(
-                    candidate,
-                    horizon_client::datapack_net::next_session(),
-                )),
-            })
-            .transpose()?;
+        let (tables, health, datapack_registries) = self.stage_world_tables(stack, true, root)?;
         let items = tables
             .as_ref()
             .map_or_else(|| self.res.items(), |tables| &tables.items);

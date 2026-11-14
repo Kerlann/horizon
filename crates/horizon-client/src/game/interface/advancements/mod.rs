@@ -407,7 +407,7 @@ impl Game<'_> {
         let data = self.options.resources.join("data");
         // The world's packs' advancements go over the game's own, and a
         // native mod's contributed files are already among them: the tables
-        // were built for this open (`build_world_tables`), so the hook is
+        // were built for this open (`stage_world_tables`), so the hook is
         // asked once, not again here.
         let files = match &self.world_tables {
             Some(tables) => tables.files.clone(),
@@ -1280,7 +1280,7 @@ impl Game<'_> {
         self.adv.last_inventory = key;
         // Native mods hear the change before any criterion is looked at, so
         // they do with no `inventory_changed` advancement in the tree too
-        // (`native_player_inventory_changed`, API @API:player_inventory_changed@).
+        // (`native_player_inventory_changed`, API 579).
         if self.remote.is_none()
             && !self.no_player_here()
             && mod_api::__private::listened(mod_api::HookId::PlayerInventoryChanged)
@@ -3368,9 +3368,7 @@ mod structure_tag_tests {
             &[],
             &[],
         );
-        let (tables, _) = game
-            .build_world_tables(&stack, false, &root, false)
-            .unwrap();
+        let (tables, _, _) = game.stage_world_tables(&stack, false, &root).unwrap();
         game.world_tables = tables;
         assert!(game.world_tables.is_some());
         assert!(holds(&game, "#mypack:village", "minecraft:igloo"));
