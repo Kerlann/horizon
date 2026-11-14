@@ -1855,7 +1855,8 @@ impl Game<'_> {
     /// (orbs merged into it, each worth `value`) and `age` (ticks lived; an orb
     /// despawns at 6000); a `None` is left as it is.
     /// False, and nothing written, for an orb not in the server level `dimension`, a
-    /// a `count` of 0, and on a client of a server.
+    /// `count` of 0 or past `ExperienceOrb::MAX_COUNT`, a `value` a save can't hold (a
+    /// short), and on a client of a server.
     pub(super) fn set_experience_orb(
         &mut self,
         dimension: &str,
@@ -1867,6 +1868,8 @@ impl Game<'_> {
         if (self.serving.is_none() && self.options.dedicated.is_none())
             || dimension != self.dim.id()
             || count == Some(0)
+            || count.is_some_and(|c| c > crate::entities::ExperienceOrb::MAX_COUNT)
+            || value.is_some_and(|v| i16::try_from(v).is_err())
         {
             return false;
         }

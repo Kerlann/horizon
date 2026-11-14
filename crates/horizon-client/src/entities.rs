@@ -893,6 +893,8 @@ pub struct OrbMove {
     pub in_water: bool,
 }
 impl ExperienceOrb {
+    /// The most orbs one orb can count: a save holds `Count` as an int.
+    pub const MAX_COUNT: u32 = i32::MAX as u32;
     /// A fresh orb (`new ExperienceOrb(level, pos, motion, value)`): full
     /// health, no age, fall or followed player, not yet ticked.
     pub fn new(id: u32, position: Vec3, velocity: Vec3, value: i32) -> Self {
