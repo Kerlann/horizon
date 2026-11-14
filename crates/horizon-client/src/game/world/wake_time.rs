@@ -221,7 +221,7 @@ mod tests {
     /// What a second listener reads: the first moves the clock 1000 ticks on, the second sees
     /// that and sends it to noon instead, and the game resolves the last word once.
     #[test]
-    #[ignore = "needs prepared resources in HORIZON_TEST_RESOURCES"]
+    #[ignore = "daily"]
     fn a_later_listener_reads_and_replaces_the_earlier_adjustment() {
         use crate::game::chat::OVERWORLD_CLOCK;
         use std::sync::{Arc, Mutex};
