@@ -4,6 +4,14 @@
 screen is open. A multiplayer game continues running while its pause screen is open.
 The pause-change pre hook sees the old state; the post hook sees the new state.
 
+`ClientHost::gui_scale()` reads the GUI scale in effect (`Window.getGuiScale`), at least 1,
+or `None` without a window (a server, a headless run). Vanilla's `Window.calculateScale` resolves
+it from the GUI Scale option and the window size: the option is a maximum, where 0 means automatic,
+so a large window still resolves below it, and with the Unicode font forced an odd result is raised
+by one. `ClientHost::gui_options().gui_scale` is only that option. The framebuffer size stays
+`native_physical_window_size()`; divide it by this scale, rounding up, for the GUI-scaled width and
+height (`Window.getGuiScaledWidth/Height`).
+
 `ClientHost::playing()` is true while the player is in the world with nothing over it: no screen, title, sign
 editor or book, so keys and zoom apply. `ClientHost::mapping(name)` reads a vanilla key mapping (`key.forward`,
 `key.left`, `key.back`, `key.right`, `key.jump`, `key.sneak`, `key.sprint`, `key.attack`, `key.use`) as a

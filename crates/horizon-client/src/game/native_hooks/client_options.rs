@@ -26,6 +26,21 @@ impl Game<'_> {
     pub(in crate::game) fn gui_options(&self) -> ClientGuiOptions {
         gui_options_snapshot(&self.settings)
     }
+    /// The GUI scale in effect (`Window.getGuiScale`): the scale the window
+    /// applies from the GUI Scale option and its size, at least 1; none on a
+    /// server or when no window exists. `gui_options().gui_scale` is only the
+    /// option, where 0 means automatic.
+    pub(in crate::game) fn gui_scale(&self) -> Option<u32> {
+        let framebuffer = self.window.as_ref().map(|window| {
+            let size = window.inner_size();
+            [size.width, size.height]
+        });
+        resolved_gui_scale(
+            framebuffer,
+            self.settings.gui_scale,
+            self.settings.force_unicode,
+        )
+    }
     /// A snapshot of the current chat preferences.
     pub(in crate::game) fn chat_options(&self) -> ClientChatOptions {
         let s = &self.settings;
@@ -66,6 +81,12 @@ fn gui_options_snapshot(s: &horizon_client::settings::Settings) -> ClientGuiOpti
     }
 }
 
+/// `Window.getGuiScale` for a framebuffer (`None` without a window): the
+/// window's own `GuiSize` resolution, the same one it draws with.
+fn resolved_gui_scale(framebuffer: Option<[u32; 2]>, gui_scale: u32, unicode: bool) -> Option<u32> {
+    framebuffer.map(|size| horizon_client::window::GuiSize::new(size, gui_scale, unicode).scale)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -83,5 +104,24 @@ mod tests {
                 enabled
             );
         }
+    }
+
+    /// The literal `Window.calculateScale` outcomes the issue asks for: the
+    /// option is a maximum, and the 320x240 floor wins over it.
+    #[test]
+    fn gui_scale_resolves_the_option_and_the_window() {
+        assert_eq!(resolved_gui_scale(Some([1280, 720]), 0, false), Some(3));
+        assert_eq!(resolved_gui_scale(Some([1920, 1080]), 0, false), Some(4));
+        assert_eq!(resolved_gui_scale(Some([1920, 1080]), 2, false), Some(2));
+        assert_eq!(resolved_gui_scale(Some([1280, 720]), 5, false), Some(3));
+        assert_eq!(resolved_gui_scale(Some([320, 240]), 0, false), Some(1));
+        // The Unicode font raises an odd resolved scale by one.
+        assert_eq!(resolved_gui_scale(Some([1920, 1080]), 3, true), Some(4));
+    }
+
+    #[test]
+    fn gui_scale_needs_a_window() {
+        assert_eq!(resolved_gui_scale(None, 0, false), None);
+        assert_eq!(resolved_gui_scale(None, 4, true), None);
     }
 }
