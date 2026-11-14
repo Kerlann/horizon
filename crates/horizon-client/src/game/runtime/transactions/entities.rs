@@ -5,13 +5,16 @@
 //! the level the game is in, mods hear of joins and leaves at the root commit only (the joins, in
 //! the order the entities were added, before the removals' effects), and an abort tells them
 //! nothing. Construction (`entity_constructing`, a mob's finalize) stays at the spawn
-//! call.
+//! call. A transaction journals the level it was opened in only: another level's spawns, removals
+//! and anonymous records (a command run `in` it) are told and kept at once, and an abort leaves them.
+//! While a root commit tells, whatever its listeners ask for waits behind it (`Committing`).
 //!
 //! Join numbers, not ids, name what a transaction added: every kind takes one as it is put in its
 //! list, the kinds whose id comes late too, so an aborted spawn just burns its id. Bolts and
 //! thrown potions have none and are kept by their lists' lengths. A traveller that arrived from
 //! another level inside the transaction is left where it arrived: travel is not journaled.
-use super::super::{Game, commands::Target};
+use super::super::{Dim, Game, commands::Target};
+use super::Level;
 use horizon_client::join_seq::{JoinSeq, Joined as _};
 use mod_api::EntityRef;
 use std::collections::{HashMap, HashSet};
@@ -70,6 +73,41 @@ pub(in crate::game) enum Announcement {
     Leaves,
 }
 
+/// A root commit telling its joins and leaves, kept in `OpenTransactions` while it does. Whatever
+/// a listener of the commit asks for meanwhile (a spawn, a removal, a transaction of its own) is
+/// queued behind what is being told, so no flush a listener starts sees the commit's
+/// half-told batches: the entities the transaction added and removed are never announced,
+/// and each batch keeps its `loaded_from_disk` and bound.
+pub(super) struct Committing {
+    dimension: Dim,
+    /// The entities the transaction added and removed: never told to join.
+    removed: Vec<u32>,
+    /// What is left to tell, in the order it was asked for: the transaction's own
+    /// announcements, then those the listeners ask for. Entries stay, so an index is a place.
+    queue: Vec<Announcement>,
+}
+
+/// Puts back the commit a telling found (none, but for a listener's commit in another level)
+/// when it ends, however it ends.
+struct Telling<'a, 'g> {
+    game: &'a mut Game<'g>,
+    outer: Option<Committing>,
+}
+
+impl Drop for Telling<'_, '_> {
+    fn drop(&mut self) {
+        self.game.transactions.committing = self.outer.take();
+    }
+}
+
+/// The innermost open transaction, if it is `dimension`'s: it journals what happens in that
+/// level only. What happens in another level (a command run `in` it) is not journaled.
+fn open_in(transactions: &mut [Level], dimension: Dim) -> Option<&mut Level> {
+    transactions
+        .last_mut()
+        .filter(|level| level.dimension == Some(dimension))
+}
+
 impl EntityJournal {
     /// A nested commit: the parent's mark is earlier and stays.
     pub(super) fn merge(&mut self, child: Self) {
@@ -125,12 +163,16 @@ impl Game<'_> {
         }
     }
     /// Holds `announcement` for the root commit when a transaction is open in the level the game
-    /// is in: true when it waits.
+    /// is in, or for the end of the commit being told in it: true when it waits.
     pub(in crate::game) fn hold_announcement(&mut self, announcement: Announcement) -> bool {
         let dim = self.dim;
-        match self.transactions.last_mut() {
-            Some(level) if level.dimension == Some(dim) => {
-                level.lifetimes.announce(announcement);
+        if let Some(level) = open_in(&mut self.transactions, dim) {
+            level.lifetimes.announce(announcement);
+            return true;
+        }
+        match self.transactions.committing.as_mut() {
+            Some(commit) if commit.dimension == dim => {
+                commit.queue.push(announcement);
                 true
             }
             _ => false,
@@ -138,13 +180,15 @@ impl Game<'_> {
     }
     /// A spawn wrote over `was` in `persist.anon` under `key`: an abort puts it back.
     pub(in crate::game) fn journal_anon(&mut self, kept: KeptAnon) {
-        if let Some(level) = self.transactions.last_mut() {
+        let dim = self.dim;
+        if let Some(level) = open_in(&mut self.transactions, dim) {
             level.lifetimes.keep_anon(kept);
         }
     }
     /// Entity `id` arrived from another level: an abort leaves it where it is.
     pub(in crate::game) fn journal_arrival(&mut self, id: u32) {
-        if let Some(level) = self.transactions.last_mut() {
+        let dim = self.dim;
+        if let Some(level) = open_in(&mut self.transactions, dim) {
             level.lifetimes.arrivals.insert(id);
         }
     }
@@ -152,19 +196,21 @@ impl Game<'_> {
     pub(in crate::game) fn removal_pending(&self, target: &Target) -> bool {
         let id = super::super::native_entities::target_id(*target);
         self.transactions.iter().any(|level| {
-            (level.lifetimes.removals.iter())
-                .any(|removal| matches!(removal, Removal::Other(e) if Some(e.id()) == id))
+            level.dimension == Some(self.dim)
+                && (level.lifetimes.removals.iter())
+                    .any(|removal| matches!(removal, Removal::Other(e) if Some(e.id()) == id))
         })
     }
     /// `entity_remove` of `target`, which `entity` names, inside a transaction: marked now and
-    /// removed at the root commit. False, with nothing done, when none is open.
+    /// removed at the root commit. False, with nothing done, when none is open in this level.
     pub(in crate::game) fn journal_removal(
         &mut self,
         entity: EntityRef,
         target: Target,
         killed: bool,
     ) -> bool {
-        let Some(level) = self.transactions.last_mut() else {
+        let dim = self.dim;
+        let Some(level) = open_in(&mut self.transactions, dim) else {
             return false;
         };
         match target {
@@ -181,7 +227,9 @@ impl Game<'_> {
     }
     /// What `journal` left for the root commit: the joins it held, then its removals, in order,
     /// then the leaves it held. An entity added and removed in it is never announced, so it never
-    /// leaves.
+    /// leaves. What the listeners ask for meanwhile waits in the commit's queue and is told after
+    /// it, in the order it was asked for; a transaction a listener commits tells through the
+    /// running commit too.
     pub(super) fn commit_entity_journal(&mut self, journal: EntityJournal) {
         let removed: Vec<u32> = (journal.removals.iter())
             .map(|removal| match removal {
@@ -189,16 +237,66 @@ impl Game<'_> {
                 Removal::Other(entity) => entity.id(),
             })
             .collect();
-        for announcement in &journal.announcements {
+        let dimension = self.dim;
+        if let Some(commit) =
+            (self.transactions.committing.as_mut()).filter(|commit| commit.dimension == dimension)
+        {
+            commit.removed.extend(removed);
+            commit.queue.extend(journal.announcements);
+            self.remove_committed(journal.removals);
+            return;
+        }
+        let commit = Committing {
+            dimension,
+            removed,
+            queue: journal.announcements,
+        };
+        let outer = self.transactions.committing.replace(commit);
+        let telling = Telling { game: self, outer };
+        telling.game.tell_commit(journal.removals);
+    }
+    /// The step `next` of the running commit's queue, with the entities never to join.
+    fn commit_step(&self, next: usize) -> Option<(Announcement, Vec<u32>)> {
+        let commit = self.transactions.committing.as_ref()?;
+        Some((*commit.queue.get(next)?, commit.removed.clone()))
+    }
+    /// Tells the running commit's queue: the joins, then `removals`, then the rest.
+    fn tell_commit(&mut self, removals: Vec<Removal>) {
+        let mut next = 0;
+        while let Some((announcement, removed)) = self.commit_step(next) {
+            next += 1;
             if let Announcement::Joins {
                 loaded_from_disk,
                 through,
-            } = *announcement
+            } = announcement
             {
                 self.flush_joins(loaded_from_disk, 0, &removed, Some(through));
             }
         }
-        for removal in journal.removals {
+        let joined = next;
+        self.remove_committed(removals);
+        let mut next = 0;
+        while let Some((announcement, removed)) = self.commit_step(next) {
+            match announcement {
+                Announcement::Joins { .. } if next < joined => {}
+                Announcement::Joins {
+                    loaded_from_disk,
+                    through,
+                } => {
+                    self.flush_joins(loaded_from_disk, 0, &removed, Some(through));
+                }
+                Announcement::Left(id) => self.entity_left_now(id),
+                Announcement::Leaves => {
+                    self.native_removals_flush();
+                    self.leaves_now();
+                }
+            }
+            next += 1;
+        }
+    }
+    /// Runs the removals a commit holds, as a removal outside a transaction does.
+    fn remove_committed(&mut self, removals: Vec<Removal>) {
+        for removal in removals {
             match removal {
                 Removal::Mob { id, killed } => {
                     if killed {
@@ -210,13 +308,6 @@ impl Game<'_> {
                         self.remove_target_now(entity, target);
                     }
                 }
-            }
-        }
-        for announcement in journal.announcements {
-            match announcement {
-                Announcement::Joins { .. } => {}
-                Announcement::Left(id) => self.native_entity_left(id),
-                Announcement::Leaves => self.native_leaves_flush(),
             }
         }
     }

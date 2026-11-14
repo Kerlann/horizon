@@ -186,7 +186,9 @@ impl Game<'_> {
     /// Inside a transaction open in this level, construction is still told now, and the join
     /// at its root commit (`transactions/entities.rs`), with this call's `loaded_from_disk`, in
     /// insertion order and before the transaction's removals take effect; the entity is kept
-    /// until then.
+    /// until then. The same holds for a call a listener makes while that commit is told: its
+    /// joins are told after the batch being told. A `through` is the commit's own flush of one
+    /// batch, never held.
     pub(super) fn native_joins_flush(&mut self, loaded_from_disk: bool, watch: u32) -> bool {
         self.flush_joins(loaded_from_disk, watch, &[], None)
     }
@@ -204,10 +206,12 @@ impl Game<'_> {
             return true;
         }
         self.assign_pending_join_ids();
-        if self.hold_announcement(super::transactions::Announcement::Joins {
-            loaded_from_disk,
-            through: horizon_client::join_seq::JoinSeq::latest(),
-        }) {
+        if through.is_none()
+            && self.hold_announcement(super::transactions::Announcement::Joins {
+                loaded_from_disk,
+                through: horizon_client::join_seq::JoinSeq::latest(),
+            })
+        {
             let mut mark = self.persist.joined_seq;
             while let Some((slot, id, seq)) = self.next_unannounced(mark, &[], None) {
                 mark = seq;
@@ -435,6 +439,11 @@ impl Game<'_> {
         {
             return;
         }
+        self.entity_left_now(id);
+    }
+    /// [`Self::native_entity_left`] told now, though a transaction or a commit holds the rest:
+    /// the root commit's own telling.
+    pub(in crate::game) fn entity_left_now(&mut self, id: u32) {
         self.entity_section_forget(id);
         if let Ok(i) = self.persist.live.binary_search_by_key(&id, |l| l.0) {
             let (id, kind, _) = self.persist.live.remove(i);
@@ -448,7 +457,6 @@ impl Game<'_> {
     /// there in the registry and tells the rest: no allocation, and nothing
     /// runs when no mod is loaded or none was announced.
     pub(super) fn native_leaves_flush(&mut self) {
-        use super::entity::Entity;
         self.native_removals_flush();
         if self.persist.live.is_empty()
             || self.remote.is_some()
@@ -456,6 +464,12 @@ impl Game<'_> {
         {
             return;
         }
+        self.leaves_now();
+    }
+    /// [`Self::native_leaves_flush`] past its guards and told now, though a transaction or a
+    /// commit holds the rest: the root commit's own telling.
+    pub(in crate::game) fn leaves_now(&mut self) {
+        use super::entity::Entity;
         for l in &mut self.persist.live {
             l.2 = false;
         }
