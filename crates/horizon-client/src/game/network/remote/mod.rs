@@ -9057,6 +9057,7 @@ impl Game<'_> {
         input.tick(&mut RemoteInputWorld(self), attack, use_item);
         self.remote_queued_keys();
         if let Some(r) = self.remote.as_mut() {
+            input.merge_queued(std::mem::take(&mut r.input));
             r.input = input;
         }
     }
