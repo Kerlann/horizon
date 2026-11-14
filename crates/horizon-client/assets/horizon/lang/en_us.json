@@ -1256,7 +1256,7 @@
   "horizon.mods.screen.title": "Mods",
   "horizon.mods.unreadable": "Your mod list couldn't be read:\n%s",
   "horizon.mods.version": "%s (server %s, yours %s)",
-  "horizon.mods.warning.discouraged": "Loading %s with %s %s is discouraged.%s",
+  "horizon.mods.warning.discouraged": "Loading %s with %s (version %s) is discouraged.%s",
   "horizon.mods.warning.discouraged_missing": "Loading %s without %s is discouraged.%s",
   "horizon.mods.warning.override_dropped": "Override applied: %s no longer enforces its manifest rule for %s.%s",
   "horizon.mods.warning.override_discouraged": "Override applied: %s's manifest rule for %s warns instead of refusing.%s",

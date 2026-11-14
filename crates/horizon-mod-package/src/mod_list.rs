@@ -309,6 +309,16 @@ impl ModList {
             let (key, mut args) = notice.message();
             args[0] = names.get(&notice.owner).unwrap_or(&notice.owner).clone();
             args[1] = names.get(&notice.target).unwrap_or(&notice.target).clone();
+            // Line layout belongs only to the Mods page, never to refusal/log text.
+            let mut note = String::new();
+            for text in [notice.reason.as_deref(), notice.url.as_deref()]
+                .into_iter()
+                .flatten()
+            {
+                note.push('\n');
+                note.push_str(text.trim_end());
+            }
+            args.push(note);
             let message = (key, args);
             for (index, id) in [&notice.owner, &notice.target].into_iter().enumerate() {
                 if index == 1 && notice.owner == notice.target {
@@ -571,21 +581,24 @@ mod tests {
                 owner: "owner".into(),
                 target: "target".into(),
                 version: Some("1".into()),
-                note: " (reason)".into(),
+                reason: Some("reason.".into()),
+                url: Some("https://example.test/details".into()),
                 kind: NoticeKind::Discouraged,
             },
             Notice {
                 owner: "owner".into(),
                 target: "target".into(),
                 version: Some("1".into()),
-                note: " (override)".into(),
+                reason: Some("override.".into()),
+                url: None,
                 kind: NoticeKind::OverrideDropped,
             },
             Notice {
                 owner: "owner".into(),
                 target: "owner".into(),
                 version: Some("1".into()),
-                note: String::new(),
+                reason: None,
+                url: None,
                 kind: NoticeKind::OverrideDiscouraged,
             },
         ]);
@@ -599,7 +612,12 @@ mod tests {
         );
         assert_eq!(
             list.info["target"].warnings[0].1,
-            ["Owner", "Target fallback", "1", " (reason)"]
+            [
+                "Owner",
+                "Target fallback",
+                "1",
+                "\nreason.\nhttps://example.test/details"
+            ]
         );
         assert_eq!(
             list.info["target"].warnings[1].0,
@@ -607,7 +625,7 @@ mod tests {
         );
         assert_eq!(
             list.info["target"].warnings[1].1,
-            ["Owner", "Target fallback", " (override)"]
+            ["Owner", "Target fallback", "\noverride."]
         );
     }
 

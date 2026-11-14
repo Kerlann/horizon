@@ -55,7 +55,7 @@ pub enum Error {
         owner: String,
         target: String,
         version: String,
-        /// The owner's reason and link, ` (reason, url)`, or empty.
+        /// The owner's reason and link on one logical line, or empty.
         note: String,
     },
 }
@@ -248,10 +248,11 @@ pub fn resolve_manifests(
 }
 
 fn diagnostic_note(reason: Option<&str>, url: Option<&str>) -> String {
-    let reason = reason.map(|text| text.trim_end_matches(|c: char| c == '.' || c.is_whitespace()));
-    match (reason, url) {
-        (Some(reason), Some(url)) => format!("\n{reason}\n{url}"),
-        (Some(text), None) | (None, Some(text)) => format!("\n{text}"),
+    // Diagnostics remain one logical line; only the Mods-page renderer adds line breaks.
+    let reason = reason.map(|text| text.trim_end().replace(['\r', '\n'], " "));
+    match (reason.as_deref(), url) {
+        (Some(reason), Some(url)) => format!(" ({reason} {url})"),
+        (Some(text), None) | (None, Some(text)) => format!(" ({text})"),
         (None, None) => String::new(),
     }
 }
@@ -274,8 +275,9 @@ pub struct Rule {
     pub id: String,
     /// The other mod's versions the rule matches.
     pub requirement: VersionReq,
-    /// The mod's complete reason and link on separate lines, or empty.
-    pub note: String,
+    /// Author-supplied text and link, retained separately from diagnostic layout.
+    pub reason: Option<String>,
+    pub url: Option<String>,
 }
 
 /// `manifest`'s load rules that hold on `running`, the client or the dedicated server.
@@ -287,13 +289,13 @@ pub fn rules(manifest: &crate::Manifest, running: Side) -> Vec<Rule> {
     ) -> impl Iterator<Item = Rule> + 'a {
         table.iter().filter_map(move |(id, rule)| {
             let rule = rule.details();
-            let note = diagnostic_note(rule.reason.as_deref(), rule.url.as_deref());
             (running == Side::Both || rule.side == Side::Both || rule.side == running).then(|| {
                 Rule {
                     kind,
                     id: id.clone(),
                     requirement: rule.version,
-                    note,
+                    reason: rule.reason,
+                    url: rule.url,
                 }
             })
         })
@@ -308,7 +310,8 @@ pub fn rules(manifest: &crate::Manifest, running: Side) -> Vec<Rule> {
             kind: RuleKind::LoadBefore,
             id: id.clone(),
             requirement: VersionReq::STAR,
-            note: String::new(),
+            reason: None,
+            url: None,
         }))
         .collect()
 }
@@ -388,7 +391,8 @@ fn resolve_all(
                     owner: item.id.into(),
                     target: dep.id.clone(),
                     version: target.map(|i| mods[i].version.to_owned()),
-                    note: note.clone(),
+                    reason: dep.reason.clone(),
+                    url: dep.url.clone(),
                     kind: match action {
                         Override::Drop => NoticeKind::OverrideDropped,
                         Override::Discourage => NoticeKind::OverrideDiscouraged,
@@ -459,7 +463,8 @@ fn resolve_all(
                         owner: item.id.into(),
                         target: rule.id.clone(),
                         version: target.map(|i| mods[i].version.to_owned()),
-                        note: rule.note.clone(),
+                        reason: rule.reason.clone(),
+                        url: rule.url.clone(),
                         kind: match action {
                             Override::Drop => NoticeKind::OverrideDropped,
                             Override::Discourage => NoticeKind::OverrideDiscouraged,
@@ -496,14 +501,15 @@ fn resolve_all(
                     owner: item.id.into(),
                     target: rule.id.clone(),
                     version: other.version.into(),
-                    note: rule.note.clone(),
+                    note: diagnostic_note(rule.reason.as_deref(), rule.url.as_deref()),
                 });
             }
             warnings.push(Notice {
                 owner: item.id.into(),
                 target: rule.id.clone(),
                 version: Some(other.version.into()),
-                note: rule.note.clone(),
+                reason: rule.reason.clone(),
+                url: rule.url.clone(),
                 kind: NoticeKind::Discouraged,
             });
         }
@@ -630,13 +636,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn diagnostic_reason_and_link_have_separate_lines_without_join_punctuation() {
+    fn diagnostics_preserve_author_punctuation_without_forced_line_breaks() {
         assert_eq!(
             diagnostic_note(
                 Some("Keep the complete author sentence.  "),
                 Some("https://example.test/details")
             ),
-            "\nKeep the complete author sentence\nhttps://example.test/details"
+            " (Keep the complete author sentence. https://example.test/details)"
+        );
+        let notice = Notice {
+            owner: "owner".into(),
+            target: "target".into(),
+            version: Some("1.0.0".into()),
+            reason: Some("First sentence.\nSecond sentence.".into()),
+            url: Some("https://example.test/details".into()),
+            kind: NoticeKind::Discouraged,
+        };
+        assert_eq!(
+            notice.to_string(),
+            "owner works badly with target 1.0.0 (First sentence. Second sentence. https://example.test/details)"
         );
     }
     fn deps(text: &str) -> Vec<Dependency> {
@@ -909,9 +927,10 @@ mod tests {
         let logical = resolve_with_rules(&mods, &[], &dropped).unwrap();
         assert_eq!(logical.order, [0, 1]);
         assert_eq!(logical.warnings[0].kind, NoticeKind::OverrideDropped);
+        assert_eq!(logical.warnings[0].reason.as_deref(), Some("Integration"));
         assert_eq!(
-            logical.warnings[0].note,
-            "\nIntegration\nhttps://example.test/base"
+            logical.warnings[0].url.as_deref(),
+            Some("https://example.test/base")
         );
         assert_eq!(resolve_links(&mods).unwrap().order, [1, 0]);
         assert_eq!(

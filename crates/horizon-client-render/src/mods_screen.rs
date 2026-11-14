@@ -649,9 +649,14 @@ impl ModsScreen {
         }
         let width = PANEL_W - SCROLLBAR_W;
         let (items, content, pinned) = self.items(m, e, width);
-        // A pathological title/status cannot consume the entire viewport.
-        // Fall back to whole-panel scrolling when the header itself cannot fit.
-        let pinned = if pinned + 9 <= view { pinned } else { 0 };
+        // Keep at least three body lines and a third of the view useful.
+        // Otherwise the whole pane scrolls, including an unusually tall status.
+        let minimum_body = 27.max(view / 3);
+        let pinned = if pinned + minimum_body <= view {
+            pinned
+        } else {
+            0
+        };
         (items, content, width, pinned)
     }
 
@@ -1514,6 +1519,23 @@ mod tests {
                 }
             }
         });
+    }
+
+    #[test]
+    fn a_tall_failure_status_leaves_the_whole_small_pane_scrollable() {
+        let atlas = atlas();
+        let m = Measure(&atlas.font);
+        let (mut row, mut info) = installed("failed", "Failed", None);
+        row.problem = Some("A complete refusal sentence. ".repeat(12));
+        info.warnings = vec![(
+            "test.long".into(),
+            vec!["An overflowing warning. ".repeat(100)],
+        )];
+        let mut screen = ModsScreen::new(427, 100, false, &mods(&[(row, info)]));
+        screen.select(0);
+        screen.draw(&m, (0, 0), 0, 0);
+        assert_eq!(screen.panel_pinned.get(), 0);
+        assert!(screen.panel_content.get() > screen.geo().panel[3]);
     }
 
     /// `BackgroundWithPipingWidget`: the info panel is framed like the list, 2 px beyond its

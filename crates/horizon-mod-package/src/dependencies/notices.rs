@@ -13,11 +13,12 @@ pub struct Notice {
     pub owner: String,
     pub target: String,
     pub version: Option<String>,
-    pub note: String,
+    pub reason: Option<String>,
+    pub url: Option<String>,
     pub kind: NoticeKind,
 }
 impl Notice {
-    /// A translation key and literal arguments, never pre-rendered English.
+    /// A translation key and literal arguments, before the Mods-page note layout.
     pub fn message(&self) -> (String, Vec<String>) {
         let mut args = vec![self.owner.clone(), self.target.clone()];
         let key = match self.kind {
@@ -32,7 +33,6 @@ impl Notice {
             NoticeKind::OverrideDropped => "horizon.mods.warning.override_dropped",
             NoticeKind::OverrideDiscouraged => "horizon.mods.warning.override_discouraged",
         };
-        args.push(self.note.clone());
         (key.to_owned(), args)
     }
 }
@@ -54,7 +54,11 @@ impl fmt::Display for Notice {
                 if let Some(version) = &self.version {
                     write!(f, " {version}")?;
                 }
-                write!(f, "{}", self.note)
+                write!(
+                    f,
+                    "{}",
+                    super::diagnostic_note(self.reason.as_deref(), self.url.as_deref())
+                )
             }
         }
     }
